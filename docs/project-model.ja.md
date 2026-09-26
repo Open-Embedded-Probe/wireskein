@@ -13,6 +13,7 @@
 | SAS や R のような分析基盤 | 入力、分析条件、結果の関係を残し、処理を再実行して後から別の分析へ進めること |
 | OBS Studio | 共有するソースから用途別の構成を複数作り、構成を切り替えながら試すこと |
 | 動画・音声編集アプリ | 元データを保ったまま区間や処理を組み替え、複数ソースを時間上で位置合わせすること |
+| Wireshark | 取得データをフィルターで絞り、表示する列や取り出す項目を選んで後工程へ渡すこと（[表示フィルター](https://www.wireshark.org/docs/man-pages/wireshark-filter.html)、[表示列](https://www.wireshark.org/docs/wsug_html_chunked/ChUsePacketListPaneSection.html)、[TShark の項目指定](https://www.wireshark.org/docs/man-pages/tshark)） |
 
 保存方式の参考例として、Audacity 3.x の `.aup3` は、音声データや編集情報を一つの SQLite データベースに収めるプロジェクト形式である（[保存内容](https://manual.audacityteam.org/man/audacity_projects.html)、[SQLite 形式](https://manual.audacityteam.org/man/glossary.html)）。旧形式のように一つのプロジェクトが大量の小さなファイルに分かれると、コピーや受け渡しが難しくなる。WireSkein でも、元データ、設定、結果キャッシュをどこまでまとめるかを検討する。ただし、単一ファイルや SQLite の採用はまだ決めない。
 
