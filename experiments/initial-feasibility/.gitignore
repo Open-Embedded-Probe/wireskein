@@ -3,3 +3,11 @@ __pycache__/
 *.py[cod]
 result.json
 section-result.json
+extended-result.json
+overview-result.json
+features-result.json
+foundation-result.json
+mixed-time-result.json
+flash-detail.txt
+portability-result.json
+extension-result.json

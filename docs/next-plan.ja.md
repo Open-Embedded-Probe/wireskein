@@ -16,7 +16,7 @@
 
 最初の対応機器・形式・プロトコル、ライブ処理と取得後処理の優先度、性能目標は、この結果を使って決める。AI 向けの効果は出力量やトークン数だけでなく、見落としや追加の調査回数も確かめる。
 
-実データによる最初の確認と再実行手順は [初回の成立性調査](../experiments/initial-feasibility/README.ja.md) に記録する。
+実データによる最初の確認と再実行手順は [初回の成立性調査](../experiments/initial-feasibility/README.ja.md)、[追加検証](../experiments/initial-feasibility/extended-findings.ja.md)、[基礎分析の検証](../experiments/initial-feasibility/foundations.ja.md) に記録する。
 
 ### 初期実験で確認する正確性と再現性
 
