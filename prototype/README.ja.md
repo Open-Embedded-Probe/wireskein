@@ -1,20 +1,33 @@
 # 推定パイプラインのプロトタイプ（使い捨て）
 
-[プロトタイプ計画](../docs/prototype-plan.ja.md) に沿って、未知のデジタル記録から UART / I²C / SPI とその上位を推定する試作。**本番へ移植しない前提**で、測定できることを優先して書いている。結果は [findings.ja.md](findings.ja.md) に記録する。
+[プロトタイプ計画](../docs/prototype-plan.ja.md) に沿って、未知のデジタル記録から方式を推定する試作。**本番へ移植しない前提**で、測定できることを優先して書いている。結果は [findings.ja.md](findings.ja.md) に記録する。
+
+エンジンは2つある。
+
+- **段構成のエンジン（`wsproto/staged.py`、現在の主）**: 共通の下調べ → ピン分類 → 型付きストリーム → 型で受け取るプロトコルのプラグイン → スコア → 組み合わせ → 判定。
+- **総当たりのエンジン（`wsproto/pipeline.py`、比較用）**: 全チャンネル×全パラメータの仮説をエッジから直接復号し、早期打ち切りと確実な除外で絞る。
 
 ## 実行
 
 ~~~sh
 cd prototype
 uv sync
-PYTHONPATH=. uv run python m2_eval.py 300                    # L1-L3 の単線特徴だけを評価
-PYTHONPATH=. uv run python evaluate.py --synth 200 --tag v4  # 全段の評価 → ../corpus/work/eval-v4.json
-PYTHONPATH=. uv run python evaluate.py --synth 100 --stress glitch --no-real --tag glitch
-PYTHONPATH=. uv run python prune_study.py v4                 # 枝切り条件を置いたら何を失うか
-PYTHONPATH=. uv run python boundary_probe.py --probe         # 段ごとの呼び出し回数・データ量・時間（M7）
+PYTHONPATH=. uv run python evaluate.py --synth 200 --engine staged --tag s6   # 段構成（実記録8件＋生成200件）→ ../corpus/work/eval-s6.json
+PYTHONPATH=. uv run python evaluate.py --synth 200 --probe --exclude --tag v6 # 総当たり（比較用）
+PYTHONPATH=. uv run python stage_eval.py 60 [--stress freqhop|baudhop]       # 段ごとの情報量と正しさ
+PYTHONPATH=. uv run python plugin_reuse_eval.py 60                            # UART・LIN・DMX512 が共通段を共有できるか
+PYTHONPATH=. uv run python scpi_eval.py 60                                    # TX/RX の組と SCPI
+PYTHONPATH=. uv run python upper_eval.py 80                                   # 上位層（NMEA・Modbus）の支持の効果
+PYTHONPATH=. uv run python baud_segment_eval.py 60 --stress baudhop           # UART の途中切り替え
+PYTHONPATH=. uv run python large_eval.py                                      # 100 万エッジ級の実記録
+PYTHONPATH=. uv run python exclusion_audit.py 200 [--stress NAME]             # 確実な除外の規則が正解を落とさないか
+PYTHONPATH=. uv run python m2_eval.py 300                                     # 単線の特徴（L1〜L3）
+PYTHONPATH=. uv run python boundary_probe.py --probe                          # 段ごとの呼び出し回数・データ量・時間（M7）
 ~~~
 
-Rust の境界ベンチマーク（M7）。入力は `PYTHONPATH=. uv run python export_bench_input.py` で実記録の UART 線から作る。
+事前に [corpus](../corpus/README.ja.md) の `fixtures/real/` が必要（Git に含まれる）。生成データのストレス条件は `glitch`、`midstart`、`lowrate`、`jitter`、`freqhop`、`baudhop`。プロファイルは `mixed`（UART/I²C/SPI）、`uartlike`（UART/LIN/DMX512）、`duplex`（SCPI）、`upper`（NMEA/Modbus/テキスト/バイナリ）。
+
+Rust の境界ベンチマーク（M7）。入力は実記録の UART 線から作る。
 
 ~~~sh
 PYTHONPATH=. uv run python export_bench_input.py
@@ -24,19 +37,38 @@ cargo build --release -p plugin_cdylib -p bench
 ./target/release/bench ../../corpus/work/uart_edges.i64 ../../corpus/work/uart_edges.json
 ~~~
 
-事前に [corpus](../corpus/README.ja.md) の `fixtures/real/` が必要（Git に含まれる）。
+## 段構成のエンジンの流れ
+
+~~~text
+エッジ列
+ └ 共通の下調べ（survey.py）: アイドル、ビット時間（アクティブ側のラン）、文字長、クロック（局所周期）、
+                               バースト、ピン同士の相関（相対位相・2山対応）、CS 様の境界
+    └ T1 ピン分類（taxonomy.py）: 静止は除外／クロック／データ／まばら／パルス
+       └ T2 まとまり: クロック＋相関の高いピン（部分集合も）＋選択線 ／ 単独ピン
+          ├ 同期: SyncBits（サンプリング端・ひげ除去の兄弟）＋RateSegments（注釈）
+          │   └ Frames（CS / START・STOP / 間隔 3 倍・1.8 倍の兄弟）→ Words
+          │       ├ I²C（9n+1、立ち上がりのみ）  ├ SPI（8n）  ├ RVSWD（53/54/585）→ DMI → RISC-V DM
+          │       └ 未知の同期シリアル（既知の区切りで説明できない分だけ）
+          ├ 非同期: RateBlocks（ビット時間ごとのブロック）→ ブロックごとの文字長 → Chars（ブレーク付き）
+          │   ├ UART → 行・NMEA・Modbus RTU・マーカー（上位の支持を下へ返す）
+          │   ├ LIN  ├ DMX512
+          │   └ 非同期の組（TX/RX、応答の形）→ SCPI（支持を両方の UART へ返す）
+          └ パルス: PulseSymbols（幅の2つの山で短／長、空きで区切る）→ SWIO → DMI → RISC-V DM（RVSWD と共用）
+~~~
 
 ## 構成
 
-| モジュール | 段 | 内容 |
-| --- | --- | --- |
-| `wsproto/model.py`, `srio.py`, `fixture.py` | L0 | エッジ列モデル、`.sr` 読み込み、匿名化フィクスチャ |
-| `wsproto/gen.py`, `synth.py` | — | 連続時間で波形を作り、サンプル格子へ量子化する生成器。シードで決まる評価シナリオ |
-| `wsproto/features.py` | L1–L3 | 静止・アイドル・バースト、ラン幅ヒストグラム、基本時間単位の候補、周期、役割スコア（クロック様・非同期様） |
-| `wsproto/stack.py` | エンジン | 型付きストリームを受け渡す解析器を**枝切りなし**で再帰展開。スコアは Scorer に分離。線を重複なく割り当てる組み合わせ探索（分枝限定） |
-| `wsproto/analyzers/` | L5 | `uart`（全チャンネル×ボーレート候補×極性×18 形式）、`i2c`（全順序対）、`spi`（クロック×CS×端×ビット順、データ線は全線を復号して採否）、`upper`（行、NMEA、Modbus RTU、マーカー文法） |
-| `wsproto/scoring.py` | L6 | 層スコア（指標の積）と上位の支持の合成。差し替えて比較する |
-| `wsproto/pipeline.py` | L6 | 組み合わせの最良説明、主張ごとの余裕（その主張を外した最良説明との差を、割り当てが変わった線の数で割る）、判定 |
-| `wsproto/kernels.py` | コア候補 | 解析器が使う一括の数値処理。呼び出しごとに時間と入出力の大きさを数える |
-| `evaluate.py`, `prune_study.py` | 評価 | 正解との照合、誤確定・保留・復号一致、枝切りの影響 |
-| `boundary_probe.py`, `boundary-bench/` | M7 | Python 側の計測と、Rust での境界方式（ネイティブ、cdylib、WASM、別プロセス）の比較 |
+| モジュール | 内容 |
+| --- | --- |
+| `wsproto/model.py`, `srio.py`, `fixture.py` | エッジ列モデル、`.sr` 読み込み、匿名化フィクスチャ |
+| `wsproto/gen.py`, `synth.py` | 連続時間で波形を作り量子化する生成器。シードで決まる評価シナリオとストレス条件 |
+| `wsproto/features.py`, `survey.py` | 単線の特徴と、共通の下調べ（周波数・ビット数・ピンの相関） |
+| `wsproto/taxonomy.py` | T1 ピン分類、T2 まとまり（T3/T4 の旧版の段も残す） |
+| `wsproto/typed.py` | 型付きストリーム（SyncBits、Frames、Words、RateBlocks、Chars、PulseSymbols …）とその構築 |
+| `wsproto/staged.py` | 段構成のエンジンと、同期系・非同期系のプラグイン |
+| `wsproto/rvswd.py` | RVSWD・SWIO → DMI、RISC-V Debug Module |
+| `wsproto/plugins_uartlike.py`, `duplex.py` | LIN・DMX512、TX/RX の組と SCPI |
+| `wsproto/kernels.py` | コア候補の一括数値処理（呼び出しごとに計測） |
+| `wsproto/exclude.py` | 確実な除外の規則（総当たりのエンジン用） |
+| `wsproto/stack.py`, `pipeline.py`, `scoring.py`, `analyzers/` | 総当たりのエンジン、組み合わせ探索、スコア、上位解析器 |
+| `boundary-bench/` | コアとプラグインの境界方式の Rust ベンチマーク |

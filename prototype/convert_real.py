@@ -36,6 +36,22 @@ def i2c_transactions(jsonl: Path) -> list[dict]:
     return out
 
 
+def swio_reference(sr: Path) -> dict:
+    """DMI transactions from the wch-protocols SWIO decoder, if that repository is available."""
+    import sys
+    tools = Path.home() / "dev_wch/wch-protocols/captures/tools"
+    if not tools.exists():
+        return {}
+    sys.path.insert(0, str(tools))
+    try:
+        import swio as ref
+    except Exception:
+        return {}
+    frames, _ = ref.frames(str(sr), 0)
+    rows = [[d["kind"], d["addr"], d["data"]] for _, b, _ in frames if (d := ref.decode(b))]
+    return {"dmi_addr": rows} if rows else {}
+
+
 def convert(src: Path, fid: str, truth_for) -> None:
     cap = read_sr(src)
     anon, mapping = fixture.anonymize(cap, seed_of(fid))
@@ -76,12 +92,32 @@ def main() -> None:
         target = sr.parent.name
         fid = f"wch-{target}-{sr.stem.replace('_', '-')}"
         if target.startswith("v003"):
-            def truth(ch):
-                return {"buses": [{"protocol": "swio", "roles": {"dio": ch["SWIO"]}, "params": {}}],
+            expect = swio_reference(sr)
+
+            def truth(ch, expect=expect):
+                return {"buses": [{"protocol": "swio", "roles": {"dio": ch["SWIO"]}, "params": {},
+                                   **({"expect": expect, "expect_source": "wch-protocols captures/tools/swio.py (fixed 500 ns / 4 us thresholds)"} if expect else {})}],
                         "notes": "WCH single-wire SDI (SWIO); out of scope for UART/I2C/SPI, must not be confirmed as those."}
         else:
-            def truth(ch):
-                return {"buses": [{"protocol": "rvswd", "roles": {"clk": ch["SWCLK"], "dio": ch["SWDIO"]}, "params": {}}],
+            expect = {}
+            dmi = sr.with_suffix(".dmi.txt")
+            if dmi.exists():
+                rows = []
+                for line in dmi.read_text().splitlines():
+                    f = line.split()
+                    if len(f) >= 4 and f[1] in ("W", "R"):
+                        rows.append([f[1], f[2], int(f[3], 16)])
+                if rows:
+                    expect["dmi"] = rows
+            mem = sr.with_suffix(".mem.txt")
+            if mem.exists():
+                rows = [l.split()[1:5] for l in mem.read_text().splitlines() if l.strip() and not l.startswith("#")]
+                if rows:
+                    expect["mem"] = rows
+
+            def truth(ch, expect=expect):
+                return {"buses": [{"protocol": "rvswd", "roles": {"clk": ch["SWCLK"], "dio": ch["SWDIO"]}, "params": {},
+                                   **({"expect": expect, "expect_source": "wch-protocols tools/dmi_decode.py (.dmi.txt / .mem.txt)"} if expect else {})}],
                         "notes": "WCH 2-wire RVSWD with reflection glitches on SWCLK; out of scope for UART/I2C/SPI."}
         convert(sr, fid, truth)
 

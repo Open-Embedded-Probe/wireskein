@@ -25,7 +25,7 @@ from wsproto.stack import ProbeConfig
 from wsproto.scoring import DefaultScorer, LayerOnlyScorer
 
 SCORERS = {"default": DefaultScorer, "layer-only": LayerOnlyScorer}
-IN_SCOPE = {"uart", "i2c", "spi"}
+IN_SCOPE = {"uart", "i2c", "spi", "lin", "dmx512", "rvswd", "swio"}
 WORK = corpus.ROOT / "corpus/work"
 MAX_EDGES = 400_000  # exhaustive expansion on multi-million-edge clocks takes hours; reported as skipped
 
@@ -58,7 +58,8 @@ def match(bus: dict, node, rate: float) -> dict:
         want = bytes.fromhex(bus["expect"]["bytes"]) if "expect" in bus else None
         got = decoded(node)
         pm = bus["params"]
-        r["params"] = abs(node.params["baud"] / pm["baud"] - 1) <= 0.03 and node.params["idle"] == pm["idle"]
+        bauds = [x["baud"] for x in pm.get("baud_segments", [])] or [pm["baud"]]
+        r["params"] = any(abs(node.params["baud"] / b - 1) <= 0.03 for b in bauds) and node.params["idle"] == pm["idle"]
         if want is not None:
             mask = 0x7F if pm["data_bits"] == 7 else 0xFF
             r["decode"] = _ratio([b & mask for b in want], [b & mask for b in got])
@@ -69,6 +70,26 @@ def match(bus: dict, node, rate: float) -> dict:
         r["params"] = r["roles"]
         want = [(t["addr"], t["rw"], tuple(t["bytes"])) for t in bus["expect"]["transactions"]]
         r["decode"] = _ratio(want, decoded(node))
+    elif bus["protocol"] == "swio":
+        r["roles"] = nr == tr
+        r["params"] = r["roles"]
+        if "expect" in bus and "dmi_addr" in bus["expect"]:
+            want = [tuple(x) for x in bus["expect"]["dmi_addr"]]
+            r["decode"] = _ratio(want, [(x["op"], x["addr"], x["data"]) for x in node.output.items])
+        else:
+            r["decode"] = None
+    elif bus["protocol"] == "rvswd":
+        r["roles"] = nr == tr
+        r["params"] = r["roles"]
+        if "expect" in bus and "dmi" in bus["expect"]:
+            from wsproto.rvswd import DM_NAMES
+            inv = {v: k for k, v in DM_NAMES.items()}
+            addr = lambda name: inv.get(name, int(name, 16) if name.startswith("0x") else -1)  # noqa: E731
+            want = [(op, addr(nm), d) for op, nm, d in bus["expect"]["dmi"]]
+            got = [(x["op"], x["addr"], x["data"]) for x in node.output.items]
+            r["decode"] = _ratio(want, got)
+        else:
+            r["decode"] = None
     elif bus["protocol"] == "spi":
         lines_true = {tr["mosi"], *([tr["miso"]] if "miso" in tr else [])}
         lines_got = {v for k, v in nr.items() if k.startswith("data")}
@@ -97,7 +118,7 @@ def bus_channels(bus):
 
 
 def evaluate_case(args):
-    kind, ref, scorer_name, use_probe, use_excl = args
+    kind, ref, scorer_name, use_probe, use_excl, engine = args
     if kind == "real":
         from wsproto import fixture
         cap, truth = fixture.load_capture(ref), fixture.load_truth(ref)
@@ -107,8 +128,14 @@ def evaluate_case(args):
     if kind == "synth" and n_edges > MAX_EDGES and not use_probe:
         return {"id": truth["id"], "skipped": f"{n_edges} edges > {MAX_EDGES}", "seconds": 0.0, "runs": 0,
                 "n_active": 0, "buses": [], "claims": []}
-    res = pipeline.analyze(cap, scorer=SCORERS[scorer_name](), probe=ProbeConfig() if use_probe else None,
-                           exclude=use_excl)
+    if engine == "staged":
+        from wsproto import staged
+        res = staged.analyze(cap)
+        res.seconds = sum(res.seconds.values())
+        res.probe_runs = res.abandoned = res.excluded = 0
+    else:
+        res = pipeline.analyze(cap, scorer=SCORERS[scorer_name](), probe=ProbeConfig() if use_probe else None,
+                               exclude=use_excl)
     rec = {"id": truth["id"], "rate": cap.rate, "seconds": res.seconds, "runs": res.runs,
            "n_active": sum(1 for f in res.features.values() if not f.static), "buses": [], "claims": [],
            "probe_runs": res.probe_runs, "abandoned": res.abandoned, "excluded": res.excluded}
@@ -116,6 +143,11 @@ def evaluate_case(args):
     for bi, bus in enumerate(truth["buses"]):
         chans = bus_channels(bus)
         b = {"protocol": bus["protocol"], "in_scope": bus["protocol"] in IN_SCOPE, "outcome": "missed"}
+        if all(len(cap.channel(ch).edges) == 0 for ch in chans):
+            # nothing of this bus is in the capture (e.g. it ended before a mid-stream start)
+            b["outcome"], b["in_scope"] = "absent", False
+            rec["buses"].append(b)
+            continue
         if b["in_scope"]:
             # where does the best true hypothesis sit among all roots on these channels?
             true_nodes = [n for n in res.roots if (m := match(bus, n, cap.rate))["roles"] and m["params"]]
@@ -135,6 +167,11 @@ def evaluate_case(args):
                                        if abs(u.samples / want - 1) <= 0.03), None)
         for ci, c in enumerate(res.claims):
             if not (set(c.roles.values()) & chans):
+                continue
+            if not b["in_scope"] and c.protocol == "sync_unknown" and set(bus["roles"].values()) <= set(c.roles.values()):
+                b["outcome"] = "unknown-sync"
+                b["frame_bits"] = c.node.metrics.get("frame_bits")
+                claimed_correct.add(ci)
                 continue
             m = match(bus, c.node, cap.rate) if b["in_scope"] else {"roles": False, "params": False}
             if m["roles"] and m["params"]:
@@ -163,6 +200,8 @@ def summarize(records: list[dict]) -> dict:
     per_proto = {}
     for r in records:
         for b in r["buses"]:
+            if b["outcome"] == "absent":
+                continue
             key = b["protocol"] if b["in_scope"] else "out-of-scope"
             per_proto.setdefault(key, Counter())[b["outcome"]] += 1
             if b["in_scope"] and b["outcome"] in ("confirmed", "likely"):
@@ -206,14 +245,15 @@ def main() -> None:
     ap.add_argument("--tag", default="run")
     ap.add_argument("--probe", action="store_true", help="early abandonment on probe windows")
     ap.add_argument("--exclude", action="store_true", help="safe (definitional) exclusion rules before decoding")
+    ap.add_argument("--engine", default="flat", choices=["flat", "staged"])
     ap.add_argument("-j", type=int, default=max(1, mp.cpu_count() - 2))
     args = ap.parse_args()
     jobs = []
     if not args.no_real:
         for d in sorted(corpus.REAL.iterdir()):
             if args.large or "flash" not in d.name or d.name.startswith("i2cdb"):
-                jobs.append(("real", d, args.scorer, args.probe, args.exclude))
-    jobs += [("synth", (s, args.profile, args.stress), args.scorer, args.probe, args.exclude) for s in range(args.start, args.start + args.synth)]
+                jobs.append(("real", d, args.scorer, args.probe, args.exclude, args.engine))
+    jobs += [("synth", (s, args.profile, args.stress), args.scorer, args.probe, args.exclude, args.engine) for s in range(args.start, args.start + args.synth)]
     t0 = time.time()
     records = []
     with mp.Pool(args.j) as pool:

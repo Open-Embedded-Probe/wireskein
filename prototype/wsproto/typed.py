@@ -184,9 +184,14 @@ def frames_select(cap, sv: Survey, sb: SyncBits) -> Frames:
     return Frames(sb, "select", np.asarray(bounds, dtype=np.int64).reshape(-1, 2))
 
 
-def frames_gap(sb: SyncBits) -> Frames:
-    b = np.concatenate((sb.burst_start, [len(sb.t)]))
-    return Frames(sb, "gap", np.stack([b[:-1], b[1:]], 1))
+def frames_gap(sb: SyncBits, ratio: float | None = None) -> Frames:
+    """Frames at idle gaps of the sampling clock. `ratio`: an interval longer
+    than ratio x both neighbours is a gap (default: the burst split of SyncBits)."""
+    starts = sb.burst_start if ratio is None else K.burst_split(sb.t, ratio)
+    b = np.concatenate((starts, [len(sb.t)]))
+    fr = Frames(sb, "gap", np.stack([b[:-1], b[1:]], 1))
+    fr.ratio = ratio or 3.0
+    return fr
 
 
 def frames_startstop(cap, sb: SyncBits) -> Frames:
@@ -297,24 +302,35 @@ def async_segments(cap, sv: Survey, pin: str, half: int = 10, change: float = 1.
     x = np.where(inner > 1, inner, np.inf)  # 1-sample spikes are not bits
     w = 2 * half + 1
     loc = np.min(sliding_window_view(np.pad(x, (half, half), mode="edge"), w), axis=1)
+    # windows with only 1-sample spikes have no bit-time estimate: carry the neighbour
+    loc = np.where(np.isfinite(loc), loc, np.nan)
+    if np.isnan(loc).all():
+        return [(0, cap.n_samples, f.units[0].samples)] if f.units else []
+    idx = np.where(~np.isnan(loc), np.arange(len(loc)), 0)
+    np.maximum.accumulate(idx, out=idx)
+    loc = loc[idx]
+    loc = np.where(np.isnan(loc), np.nanmedian(loc), loc)
     lr = np.log(loc)
     # switch where the median of the next window differs from the previous one
-    med_prev = np.array([np.median(lr[max(0, i - w):i]) if i > 0 else lr[0] for i in range(len(lr))])
-    med_next = np.array([np.median(lr[i:i + w]) for i in range(len(lr))])
+    # medians of the next / previous w values, vectorized
+    med_next = np.median(sliding_window_view(np.pad(lr, (0, w - 1), mode="edge"), w), axis=1)
+    med_prev = np.concatenate((np.full(w, lr[0]), med_next[:-w])) if len(lr) > w else np.full(len(lr), lr[0])
     jump = np.abs(med_next - med_prev) >= np.log(change)
     cuts = []
+    cand = np.flatnonzero(jump[w:len(lr) - w]) + w
+    ci = 0
     i = w
-    while i < len(lr) - w:
-        if jump[i]:
+    while ci < len(cand):
+        i = int(cand[ci])
+        if True:
             j = i + int(np.argmax(np.abs(med_next[i:i + w] - med_prev[i:i + w])))
             # the longest idle run around j is the boundary
             lo, hi = max(1, j - half), min(len(inner), j + half)
             cand = [k for k in range(lo, hi) if level[k + 1] == f.idle_level]
             k = max(cand, key=lambda k: inner[k]) if cand else j
             cuts.append(int(start[k + 1] + length[k + 1] // 2))
-            i = j + w
-        else:
-            i += 1
+            nxt = j + w
+            ci = int(np.searchsorted(cand, nxt))
     def unit_of(s0, s1):
         sel = (start >= s0) & (start < s1)
         # active-level runs are whole bits; idle-level ones include inter-character gaps
@@ -407,3 +423,53 @@ def block_chars(cap, sv: Survey, rb: RateBlocks) -> list[tuple[tuple[int, int, f
         L = min(l for l, r in cands if r >= best - 0.02)
         out.append((blk, cands, chars(cap, async_symbols_segment(cap, sv, rb.pin, s0, s1, u), L)))
     return out
+
+
+@dataclass
+class PulseSymbols:
+    """One pin as a sequence of active-level pulses classified short/long,
+    split into frames at pauses. Thresholds come from the data: the width
+    split is between the two width clusters, a pause is a pulse-to-pulse
+    interval over 3x the typical one. Plugins map short/long to 1/0 themselves."""
+    pin: str
+    idle: int
+    start: np.ndarray        # int64 pulse start
+    width: np.ndarray        # int64 pulse width (samples)
+    short: np.ndarray        # bool width below the split
+    split: float
+    bounds: np.ndarray       # (n_frames, 2) index range into start
+
+    def nbytes(self) -> int:
+        return int(np.ceil(len(self.short) / 8)) + 4 * len(self.bounds)
+
+
+def pulse_symbols(cap, sv: Survey, pin: str) -> PulseSymbols | None:
+    ch = cap.channel(pin)
+    idle = sv.features[pin].idle_level
+    lv = K.edge_levels(ch.edges, ch.initial)
+    lead = ch.edges[lv != idle]          # pulse starts (leave idle)
+    trail = ch.edges[lv == idle]         # pulse ends
+    if len(lead) < 8:
+        return None
+    j = np.searchsorted(trail, lead, side="right")
+    ok = j < len(trail)
+    lead, width = lead[ok], trail[j[ok]] - lead[ok]
+    # the two most populated width clusters (log scale); outliers such as the
+    # long probing pulses before SWIO traffic must not move the split
+    lw = np.log(np.maximum(width, 1).astype(np.float64))
+    bins = np.arange(lw.min(), lw.max() + 0.1, 0.08)
+    if len(bins) < 3:
+        return None
+    hist, edges_ = np.histogram(lw, bins)
+    centers = (edges_[:-1] + edges_[1:]) / 2
+    order = np.argsort(hist)[::-1]
+    first = order[0]
+    second = next((i for i in order[1:] if abs(centers[i] - centers[first]) >= np.log(1.6) and hist[i] >= 0.05 * hist[first]), None)
+    if second is None:
+        return None
+    split = float(np.exp((centers[first] + centers[second]) / 2))
+    iv = np.diff(lead).astype(np.float64)
+    typical = float(np.median(iv)) if len(iv) else 1.0
+    cut = np.flatnonzero(iv > 3 * typical) + 1
+    b = np.concatenate(([0], cut, [len(lead)]))
+    return PulseSymbols(pin, idle, lead, width, width < split, split, np.stack([b[:-1], b[1:]], 1))
