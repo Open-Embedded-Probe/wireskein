@@ -106,11 +106,13 @@ def slice_capture(cap: Capture, s0: int, s1: int) -> Capture:
 
 class Engine:
     def __init__(self, analyzers: list[Analyzer], scorer: Scorer, max_depth: int = 4,
-                 probe: ProbeConfig | None = None):
+                 probe: ProbeConfig | None = None, exclusion=None):
         self.analyzers = analyzers
         self.scorer = scorer
         self.max_depth = max_depth
         self.probe = probe
+        self.exclusion = exclusion  # callable(analyzer_name, params) -> list of rule names, or None
+        self.excluded = 0
         self.runs = 0
         self.probe_runs = 0
         self.abandoned = 0
@@ -185,6 +187,11 @@ class Engine:
         return Node(a.name, params, best_roles, None, {**best_m, "_probe_score": best}, note="abandoned")
 
     def _run(self, a: Analyzer, ctx: Context, parent: Node | None, params: dict) -> Node | None:
+        if parent is None and self.exclusion is not None:
+            hit = self.exclusion(a.name, params)
+            if hit:
+                self.excluded += 1
+                return Node(a.name, params, {}, None, {"_excluded": hit}, note="excluded")
         if parent is None and self.probe and hasattr(a, "probe_channels"):
             ab = self._probe(a, ctx, params)
             if ab is not None:
