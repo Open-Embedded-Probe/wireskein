@@ -1,0 +1,51 @@
+{
+ "id": "wch-v003-target-info",
+ "source": {
+  "path": "corpus/raw/wch-linke/v003/target_info.sr",
+  "sha256": "b07bbd812539114a481533e27027feaee1e3fd10128d4be797bf4c8b70e12683"
+ },
+ "channels": {
+  "D0": {
+   "original": "SWIO",
+   "static": false
+  },
+  "D1": {
+   "original": "bit2",
+   "static": true
+  },
+  "D2": {
+   "original": "bit1",
+   "static": true
+  },
+  "D3": {
+   "original": "bit3",
+   "static": true
+  },
+  "D4": {
+   "original": "bit5",
+   "static": true
+  },
+  "D5": {
+   "original": "bit6",
+   "static": true
+  },
+  "D6": {
+   "original": "bit7",
+   "static": true
+  },
+  "D7": {
+   "original": "bit4",
+   "static": true
+  }
+ },
+ "buses": [
+  {
+   "protocol": "swio",
+   "roles": {
+    "dio": "D0"
+   },
+   "params": {}
+  }
+ ],
+ "notes": "WCH single-wire SDI (SWIO); out of scope for UART/I2C/SPI, must not be confirmed as those."
+}

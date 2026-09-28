@@ -1,0 +1,52 @@
+{
+ "id": "wch-v203-target-info",
+ "source": {
+  "path": "corpus/raw/wch-linke/v203/target_info.sr",
+  "sha256": "1d59feafa54ad7f1b1d6f8439b01582c2c163d0e28b03625250b78ef53092028"
+ },
+ "channels": {
+  "D0": {
+   "original": "bit5",
+   "static": true
+  },
+  "D1": {
+   "original": "SWDIO",
+   "static": false
+  },
+  "D2": {
+   "original": "bit6",
+   "static": true
+  },
+  "D3": {
+   "original": "bit7",
+   "static": true
+  },
+  "D4": {
+   "original": "SWCLK",
+   "static": false
+  },
+  "D5": {
+   "original": "bit2",
+   "static": true
+  },
+  "D6": {
+   "original": "bit4",
+   "static": true
+  },
+  "D7": {
+   "original": "bit3",
+   "static": true
+  }
+ },
+ "buses": [
+  {
+   "protocol": "rvswd",
+   "roles": {
+    "clk": "D4",
+    "dio": "D1"
+   },
+   "params": {}
+  }
+ ],
+ "notes": "WCH 2-wire RVSWD with reflection glitches on SWCLK; out of scope for UART/I2C/SPI."
+}

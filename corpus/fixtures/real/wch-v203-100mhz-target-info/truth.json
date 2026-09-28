@@ -1,0 +1,52 @@
+{
+ "id": "wch-v203-100mhz-target-info",
+ "source": {
+  "path": "corpus/raw/wch-linke/v203-100mhz/target_info.sr",
+  "sha256": "4dc11759a60e2714855465d48c291839d837a794d293c124993ba07914fa4ad7"
+ },
+ "channels": {
+  "D0": {
+   "original": "bit6",
+   "static": true
+  },
+  "D1": {
+   "original": "bit2",
+   "static": true
+  },
+  "D2": {
+   "original": "SWCLK",
+   "static": false
+  },
+  "D3": {
+   "original": "bit4",
+   "static": true
+  },
+  "D4": {
+   "original": "bit3",
+   "static": true
+  },
+  "D5": {
+   "original": "bit7",
+   "static": true
+  },
+  "D6": {
+   "original": "bit5",
+   "static": true
+  },
+  "D7": {
+   "original": "SWDIO",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "rvswd",
+   "roles": {
+    "clk": "D2",
+    "dio": "D7"
+   },
+   "params": {}
+  }
+ ],
+ "notes": "WCH 2-wire RVSWD with reflection glitches on SWCLK; out of scope for UART/I2C/SPI."
+}

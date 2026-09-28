@@ -1,0 +1,52 @@
+{
+ "id": "wch-l103-target-info",
+ "source": {
+  "path": "corpus/raw/wch-linke/l103/target_info.sr",
+  "sha256": "51273b2093f0ce8e10ac99af5f0fc322e7ea98982d7efdae73426173943fdd46"
+ },
+ "channels": {
+  "D0": {
+   "original": "bit4",
+   "static": true
+  },
+  "D1": {
+   "original": "SWCLK",
+   "static": false
+  },
+  "D2": {
+   "original": "bit5",
+   "static": true
+  },
+  "D3": {
+   "original": "SWDIO",
+   "static": false
+  },
+  "D4": {
+   "original": "bit3",
+   "static": true
+  },
+  "D5": {
+   "original": "bit2",
+   "static": true
+  },
+  "D6": {
+   "original": "bit7",
+   "static": true
+  },
+  "D7": {
+   "original": "bit6",
+   "static": true
+  }
+ },
+ "buses": [
+  {
+   "protocol": "rvswd",
+   "roles": {
+    "clk": "D1",
+    "dio": "D3"
+   },
+   "params": {}
+  }
+ ],
+ "notes": "WCH 2-wire RVSWD with reflection glitches on SWCLK; out of scope for UART/I2C/SPI."
+}
