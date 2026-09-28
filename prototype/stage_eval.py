@@ -81,6 +81,7 @@ def main():
                         return float(np.mean((w2.values & 1) == 0)) if len(w2.values) else 0.0, s2
                     sb = max((ack_rate(e) for e in edges), key=lambda x: x[0])[1]
                 agg[(proto, "2 SyncBits")].append(sb.nbytes())
+                agg[(proto, "rate segments")].append(len(typed.clock_rate_segments(sb).segments))
                 if proto == "spi":
                     fr = typed.frames_select(cap, tx.survey, sb) if sel else typed.frames_gap(sb)
                     agg[(proto, "3 Frames")].append(fr.nbytes())
@@ -115,16 +116,22 @@ def main():
             elif proto == "uart":
                 pin = r["data"]
                 t0 = time.perf_counter()
-                sym = typed.async_symbols(cap, tx.survey, pin)
-                agg[(proto, "2 AsyncSymbols")].append(sym.nbytes())
+                rb = typed.rate_blocks(cap, tx.survey, pin)
+                agg[(proto, "2 RateBlocks")].append(rb.nbytes())
+                agg[(proto, "blocks")].append(len(rb.blocks))
                 pm = b["params"]
-                L = 1 + pm["data_bits"] + (0 if pm["parity"] == "none" else 1) + int(pm["stop_bits"])
-                ch = typed.chars(cap, sym, L)
-                agg[(proto, "4 Chars")].append(ch.nbytes())
-                vals = ch.values[ch.ok] & ((1 << pm["data_bits"]) - 1)
+                L_true = 1 + pm["data_bits"] + (0 if pm["parity"] == "none" else 1) + int(pm["stop_bits"])
+                vals, nb = [], 0
+                for blk, cands, ch in typed.block_chars(cap, tx.survey, rb):
+                    if ch is None:
+                        continue
+                    agg[(proto, "L estimate ok")].append(int(ch.bits in (L_true, L_true - 1)))
+                    nb += ch.nbytes()
+                    vals += (ch.values[ch.ok] & ((1 << pm["data_bits"]) - 1)).tolist()
+                agg[(proto, "4 Chars")].append(nb)
                 agg[(proto, "5 bytes")].append(len(vals))
-                decode[proto].append(ratio(list(bytes.fromhex(b["expect"]["bytes"])) if "expect" in b else [],
-                                           vals.tolist()) if "expect" in b else None)
+                if "expect" in b:
+                    decode[proto].append(ratio(list(bytes.fromhex(b["expect"]["bytes"])), vals))
                 tm["path-uart"] += time.perf_counter() - t0
     print(f"{len(cases)} cases")
     print(f"T1 pin class: true class among candidates {pin_ok}/{pin_n}, top-1 {pin_top}/{pin_n}")
@@ -132,7 +139,7 @@ def main():
         print(f"T2 true group found exactly [{p}]: {ok}/{tot}")
     print("\nmedian bytes per bus along the true path (and ratio to the previous stage):")
     for proto in ("uart", "i2c", "spi", "rvswd"):
-        stages = sorted(k[1] for k in agg if k[0] == proto and k[1] != "edge candidates")
+        stages = sorted(k[1] for k in agg if k[0] == proto and k[1][0].isdigit())
         prev = None
         line = []
         for s in stages:
@@ -144,6 +151,12 @@ def main():
         e = agg.get((proto, "edge candidates"), [])
         if e:
             print(f"  sampling-edge siblings [{proto}]: {sum(x > 1 for x in e)}/{len(e)} buses kept both edges")
+    for proto in ("uart", "i2c", "spi", "rvswd"):
+        for key in ("blocks", "rate segments", "L estimate ok"):
+            v = agg.get((proto, key))
+            if v:
+                print(f"  {proto} {key}: " + (f"{sum(v)}/{len(v)}" if key == "L estimate ok" else
+                      f"1 block/segment {sum(x == 1 for x in v)}/{len(v)}, more {sum(x > 1 for x in v)}"))
     print("\ndecode agreement with ground truth:")
     for k, v in decode.items():
         if k.startswith("rvswd"):
