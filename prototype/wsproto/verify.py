@@ -65,9 +65,11 @@ def _level_at(ch: Channel, s: int) -> int:
 
 def check_square(cap, x):
     ch = _ch(cap, x["pin"])
-    p = markers._periodic(ch.edges, ch.initial, cap.rate) if ch is not None else None
+    if ch is None:
+        return None, {}, "pin not captured"
+    p = markers._periodic(ch.edges, ch.initial, cap.rate)
     if p is None:
-        return False, {"edges": int(len(ch.edges)) if ch is not None else 0}, "no steady square wave"
+        return False, {"edges": int(len(ch.edges))}, "no steady square wave"
     ferr = p["freq_hz"] / x["freq_hz"] - 1
     ok = abs(ferr) <= x["tol_freq"]
     why = [] if ok else [f"frequency {p['freq_hz']:.2f} Hz is {ferr * 100:+.2f}% off"]
@@ -161,6 +163,43 @@ def _burst_hz(ch: Channel, rate: float) -> float | None:
     return rate / float(np.mean(d)) if len(d) else None
 
 
+def _i2c_tx(t: dict) -> dict:
+    out = {"addr": t["addr"], "rw": t["rw"], "bytes": list(t.get("bytes", [])),
+           "ack": bool(t.get("addr_ack")) if t["addr"] is not None else None, "complete": t.get("complete", True)}
+    if not out["complete"]:
+        out["pending_bits"] = list(t.get("pending_bits", []))
+    return out
+
+
+def _i2c_want(t: dict) -> dict:
+    out = {"addr": t["addr"], "rw": t.get("rw"), "bytes": list(t.get("bytes", [])),
+           "ack": bool(t.get("ack", True)) if t["addr"] is not None else None, "complete": bool(t.get("complete", True))}
+    if "pending_bits" in t:
+        out["pending_bits"] = list(t["pending_bits"])
+    return out
+
+
+def _i2c_fmt(t: dict) -> str:
+    if t["addr"] is None:
+        return f"(cut in the address, bits {t.get('pending_bits', [])})"
+    s = f"0x{t['addr']:02x} {t['rw']} [{' '.join(f'{b:02x}' for b in t['bytes'])}]" + ("" if t["ack"] else " NACK")
+    if not t["complete"]:
+        s += f" incomplete (pending bits {t.get('pending_bits', [])})"
+    return s
+
+
+def _i2c_diff(want: list[dict], got: list[dict]) -> str:
+    """The first transaction that differs, both sides written out ("" if equal).
+    pending_bits is compared only when the expectation names it."""
+    for i, (w, g) in enumerate(zip(want, got)):
+        if w != {k: g.get(k) for k in w}:
+            return f"#{i} want {_i2c_fmt(w)}, got {_i2c_fmt(g)}"
+    if len(want) != len(got):
+        extra = f"missing {_i2c_fmt(want[len(got)])}" if len(want) > len(got) else f"extra {_i2c_fmt(got[len(want)])}"
+        return f"{len(want)} expected, {len(got)} decoded; #{min(len(want), len(got))} {extra}"
+    return ""
+
+
 def check_i2c(cap, x):
     scl, sda = _ch(cap, x["scl"]), _ch(cap, x["sda"])
     if scl is None or sda is None:
@@ -168,15 +207,13 @@ def check_i2c(cap, x):
     res = _decode(cap, {"protocols": ["i2c"], "pins": {x["scl"]: {"protocol": "i2c", "role": "scl"},
                                                         x["sda"]: {"protocol": "i2c", "role": "sda"}}})
     n = _best(res, "i2c", {"scl": x["scl"], "sda": x["sda"]})
-    got = {"transactions": [{"addr": t["addr"], "rw": t["rw"], "bytes": list(t.get("bytes", [])), "ack": bool(t.get("addr_ack"))}
-                            for t in (n.output.items if n else []) if "addr" in t]}
+    got = {"transactions": [_i2c_tx(t) for t in (n.output.items if n else []) if "addr" in t]}
     ok, why = True, []
     if x.get("transactions") is not None:
-        want = [{"addr": t["addr"], "rw": t["rw"], "bytes": list(t.get("bytes", [])), "ack": bool(t.get("ack", True))}
-                for t in x["transactions"]]
-        if want != got["transactions"]:
+        diff = _i2c_diff([_i2c_want(t) for t in x["transactions"]], got["transactions"])
+        if diff:
             ok = False
-            why.append("transactions differ")
+            why.append("transactions differ: " + diff)
     hz = _burst_hz(scl, cap.rate)
     got["scl_hz"] = hz
     if x.get("hz") is not None and (hz is None or abs(hz / x["hz"] - 1) > x["tol_hz"]):
@@ -225,22 +262,160 @@ def check_spi(cap, x):
     return ok, got, "; ".join(why)
 
 
+def _uart_rx(ch: Channel, n: int, u: float, idle: int, bits: int, parity: str, stop: float) -> dict:
+    """A receiver at a given bit time: each character starts at the first edge
+    leaving idle after the middle of the previous one's first stop bit, and its
+    bits are sampled at their middles. Characters before the first idle gap of
+    a whole character (the window may open inside one) are lead-in, a character
+    the window ends inside is cut; neither counts as an error."""
+    e = ch.edges
+    after = ch.initial ^ ((np.arange(len(e)) + 1) & 1)          # level after each edge
+    act = e[after != idle]
+    npar = 0 if parity == "none" else 1
+    L = 1 + bits + npar + int(np.ceil(stop))
+    first_stop = 1 + bits + npar
+    gap = L * u
+    out = {"frames": [], "lead_in": 0, "cut_at_end": False}
+    synced, i = False, 0
+    while i < len(act):
+        st = int(act[i])
+        if not synced:
+            j = int(np.searchsorted(e, st))
+            quiet = st - int(e[j - 1]) if j > 0 else (st if ch.initial == idle else 0)
+            synced = quiet >= gap
+        if st + L * u > n:
+            out["cut_at_end"] = True
+            break
+        b = ch.level_at((st + (np.arange(L) + 0.5) * u).astype(np.int64)).astype(np.int64)
+        if idle == 0:
+            b = 1 - b
+        value = int((b[1:1 + bits] << np.arange(bits)).sum())
+        stop_ok = bool(b[0] == 0 and b[first_stop] == 1 and (stop < 2 or b[first_stop + 1] == 1))
+        par_ok = True
+        if npar:
+            ones = int(b[1:1 + bits].sum()) + int(b[1 + bits])
+            par_ok = (ones % 2 == 0) if parity == "even" else (ones % 2 == 1)
+        if synced:
+            out["frames"].append((st, value, stop_ok, par_ok))
+        else:
+            out["lead_in"] += 1
+        i = int(np.searchsorted(act, st + (first_stop + 0.5) * u))
+    return out
+
+
+def _uart_bit_time(ch: Channel, frames: list, u0: float, idle: int, span_bits: int) -> float | None:
+    """Bit time from edges of the same direction inside good characters (so a
+    difference between rise and fall delays cancels): least squares on
+    d = k * u, first with short distances, then with all of them. When no
+    character is good (the rate is far off), all of them are used."""
+    e = ch.edges
+    after = ch.initial ^ ((np.arange(len(e)) + 1) & 1)
+    good = [f for f in frames if f[2] and f[3]] or frames
+    ds = []
+    for st, *_ in good:
+        a, b = np.searchsorted(e, st), np.searchsorted(e, st + (span_bits + 0.5) * u0)
+        fe, fl = e[a:b], after[a:b]
+        for lv in (0, 1):
+            x = fe[fl == lv]
+            if len(x) > 1:
+                ds.append((x[1:] - x[0]).astype(np.float64))
+    if not ds:
+        return None
+    d = np.concatenate(ds)
+    u = u0
+    for kmax in (4, None):
+        k = np.round(d / u)
+        sel = (k >= 1) & ((k <= kmax) if kmax else True)
+        if sel.any():
+            u = float((d[sel] * k[sel]).sum() / (k[sel] ** 2).sum())
+    return u
+
+
+def _uart_edge_offsets(ch: Channel, frames: list, u: float, span_bits: int) -> list[float]:
+    """Per character: the largest distance (in bits) of an edge inside it from
+    the bit grid anchored at its start edge. A transmitter keeps its edges on the
+    grid, so a large offset in one character points at the capture's time base
+    (a sampler that stalls) rather than at the line."""
+    e = ch.edges
+    out = []
+    for st, *_ in frames:
+        d = (e[(e > st) & (e < st + (span_bits + 0.5) * u)] - st) / u
+        out.append(float(np.abs(d - np.round(d)).max()) if len(d) else 0.0)
+    return out
+
+
 def check_uart(cap, x):
-    if _ch(cap, x["pin"]) is None:
+    ch = _ch(cap, x["pin"])
+    if ch is None:
         return None, {}, "pin not captured"
-    res = _decode(cap, {"protocols": ["uart"], "pins": {x["pin"]: {"protocol": "uart", "baud": x["baud"]}}})
-    n = _best(res, "uart", {"data": x["pin"]})
-    if n is None:
-        return False, {}, "nothing decoded as UART"
-    data = bytes(int(v) & 0xFF for v in n.output.items["value"]).hex()
-    got = {"baud": n.params.get("baud"), "idle": n.params.get("idle"), "data": data}
+    idle, bits, parity, stop = x.get("idle", 1), x.get("bits", 8), x.get("parity", "none"), x.get("stop", 1)
+    # the level the line rests at: the longest run
+    start, length, level = ch.runs(cap.n_samples)
+    rest = int(level[np.argmax(length)]) if len(length) else None
+    if x.get("baud"):
+        u0 = cap.rate / x["baud"]
+    else:
+        # measure only: the bit time from the runs, then refined by reading with it
+        from .features import estimate_units
+        cands = estimate_units(length[1:-1])
+        if not cands:
+            return None, {"idle": rest, "edges": int(len(ch.edges))}, "measure only: too few edges to find a bit time"
+        u0 = cands[0].samples
+        for _ in range(2):
+            rx = _uart_rx(ch, cap.n_samples, u0, idle, bits, parity, stop)
+            u0 = _uart_bit_time(ch, rx["frames"], u0, idle, 1 + bits + (parity != "none")) or u0
+    rx = _uart_rx(ch, cap.n_samples, u0, idle, bits, parity, stop)
+    frames = rx["frames"]
+    if not frames:
+        got = {"idle": rest, "lead_in": rx["lead_in"], "cut_at_end": rx["cut_at_end"], "samples_per_bit": u0}
+        if not len(ch.edges):
+            return False, got, f"no activity (constant {ch.initial})"
+        if rest != idle:
+            return False, got, f"idle level {rest}, not {idle}"
+        why = "no UART character after an idle gap of a whole character"
+        return (None, got, "measure only: " + why) if not x.get("baud") else (False, got, why)
+    u = _uart_bit_time(ch, frames, u0, idle, 1 + bits + (parity != "none"))
+    frame_err = sum(not f[2] for f in frames)
+    par_err = sum(f[2] and not f[3] for f in frames)
+    data = bytes(f[1] & 0xFF for f in frames if f[2] and f[3]).hex() if bits <= 8 else None
+    ref = cap.rate / x["baud"] if x.get("baud") else None
+    got = {"baud": cap.rate / u if u else None, "baud_error": (ref / u - 1) if u and ref else None,
+           "samples_per_bit": u if u else u0,
+           "chars": len(frames), "frame_errors": frame_err, "parity_errors": par_err,
+           "lead_in": rx["lead_in"], "cut_at_end": rx["cut_at_end"], "data": data}
+    got["idle"] = rest
+    off = _uart_edge_offsets(ch, frames, u or u0, 1 + bits + (parity != "none") + 1)
+    got["edge_offset_max"] = max(off)
+    got["edge_offset_p99"] = float(np.percentile(off, 99))
+    bad = [(f[0], o) for f, o in zip(frames, off) if not (f[2] and f[3])]
+    got["errors_at"] = [{"sample": int(t), "edge_offset": round(o, 3)} for t, o in bad[:8]]
     ok, why = True, []
+    if not x.get("baud"):
+        pass            # measure only: the rate is what is reported
+    elif u is None:
+        ok = False
+        why.append("no edges to measure the bit time")
+    elif abs(got["baud_error"]) > x.get("tol_baud", 0.03):
+        ok = False
+        why.append(f"baud {got['baud']:.0f} is {got['baud_error'] * 100:+.2f}% off {x['baud']:.0f}")
+    if x.get("max_errors") is not None and frame_err + par_err > x["max_errors"]:
+        ok = False
+        msg = f"{frame_err} framing and {par_err} parity errors"
+        skewed = [o for _, o in bad if o > 0.2]
+        if bad and len(skewed) == len(bad):
+            msg += (f" (each in a character whose edges are up to {max(skewed):.2f} bit off the bit grid,"
+                    f" elsewhere {got['edge_offset_p99']:.2f} at p99: suspect the capture time base)")
+        why.append(msg)
     if x.get("data") is not None and data != x["data"].lower():
         ok = False
         why.append("data differs")
-    if n.params.get("idle") != x.get("idle", 1):
+    if got["idle"] != idle:
         ok = False
-        why.append(f"idle level {n.params.get('idle')}")
+        why.append(f"idle level {got['idle']}")
+    if not x.get("baud") and ok and x.get("data") is None and x.get("max_errors") is None:
+        # nothing was expected: reported as unchecked with the measurement
+        return None, got, (f"measured {got['baud']:.0f} baud, " if got["baud"] else "") + \
+            f"{got['chars']} chars, {frame_err} framing / {par_err} parity errors"
     return ok, got, "; ".join(why)
 
 
