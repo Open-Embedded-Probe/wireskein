@@ -20,6 +20,7 @@ from __future__ import annotations
 import math
 import time
 from dataclasses import dataclass
+from functools import lru_cache
 
 import numpy as np
 
@@ -284,6 +285,7 @@ def _record(name, fields, nodes, dt):
 
 PLUGINS = [I2cPlugin(), SpiPlugin(), SyncUnknownPlugin(), RvswdPlugin(), UartPlugin(), LinPlugin(), DmxPlugin(),
            SwioPlugin()]
+_BASE_PLUGINS = list(PLUGINS)
 UPPER = [Lines(), Nmea(), ModbusRtu(), MarkerGrammar()]
 
 
@@ -435,9 +437,24 @@ def _hinted(hints: dict | None):
     return allowed, pins, set(h.get("exclude_pins") or [])
 
 
+@lru_cache(maxsize=8)
+def _device_packs(select: tuple[str, ...]):
+    """hints["devices"]: pack path patterns under decl/devices ("i2c/**", "!i2c/qst/**")."""
+    from . import devices as dev
+    return dev.load_packs(list(select)), dev.address_table()
+
+
+def use_declarative(on: bool = True) -> None:
+    """Swap the hand-written I2C / SPI / RVSWD plugins for the declarative ones (decl/*.toml)."""
+    global PLUGINS
+    from .declarative import load_all
+    base = [p for p in _BASE_PLUGINS if not (on and p.name in ("i2c", "spi", "rvswd"))]
+    PLUGINS = base + (load_all(["i2c", "spi", "rvswd"]) if on else [])
+
+
 def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
     """hints (all optional): {"protocols": [...], "pins": {pin: {"protocol", "role", "baud"}},
-    "exclude_pins": [...]} restrict what is tried; nothing is decided by a hint alone,
+    "exclude_pins": [...], "devices": ["i2c/**", ...]} restrict what is tried; nothing is decided by a hint alone,
     the plugins' checks still score every hypothesis."""
     t = {}
     allowed, pin_hint, excluded = _hinted(hints)
@@ -568,6 +585,19 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
         _upper(n, scorer)
     from .duplex import relations
     rels = relations(roots)
+    # device packs on top of transactions/transfers: only self-verified matches support the bus
+    from . import devices as dev
+    packs, addr_db = _device_packs(tuple((hints or {}).get("devices") or ["**"]))
+    for n in roots:
+        if n.output is None or n.analyzer not in ("i2c", "spi"):
+            continue
+        try:
+            n.devices = (dev.match_i2c(n.output.items, packs, addr_db) if n.analyzer == "i2c"
+                         else dev.match_spi(n.output.items["lines"], packs))
+        except (KeyError, TypeError):
+            n.devices = []
+        if any(m.level == "identified" for m in n.devices):
+            n.total = n.total + 0.5 * (1 - n.total) * n.total
     for n in roots:
         if n.analyzer == "i2c" and n.output is not None:
             d = i2c_device_node(n)

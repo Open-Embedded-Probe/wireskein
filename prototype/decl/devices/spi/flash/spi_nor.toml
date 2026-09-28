@@ -1,0 +1,66 @@
+# JEDEC-style SPI NOR command set (common subset). RDID returns manufacturer +
+# 2-byte device id; SFDP returns the "SFDP" signature.
+[device]
+name = "SPI NOR flash"
+bus = "spi"
+kind = "command_table"
+command_bytes = 1
+
+[[command]]
+code = 0x9F
+name = "RDID"
+response = 3
+identify = "jedec"
+
+[[command]]
+code = 0x03
+name = "READ"
+address_bytes = 3
+
+[[command]]
+code = 0x0B
+name = "FAST_READ"
+address_bytes = 3
+dummy_bytes = 1
+
+[[command]]
+code = 0x05
+name = "RDSR"
+
+[[command]]
+code = 0x06
+name = "WREN"
+length = 1
+
+[[command]]
+code = 0x04
+name = "WRDI"
+length = 1
+
+[[command]]
+code = 0x02
+name = "PAGE_PROGRAM"
+address_bytes = 3
+
+[[command]]
+code = 0x20
+name = "SECTOR_ERASE_4K"
+address_bytes = 3
+length = 4
+
+[[command]]
+code = 0x5A
+name = "READ_SFDP"
+address_bytes = 3
+dummy_bytes = 1
+identify = "sfdp"
+
+[jedec_manufacturers]
+0xEF = "Winbond"
+0xC2 = "Macronix"
+0x20 = "Micron/ST"
+0x9D = "ISSI"
+0xC8 = "GigaDevice"
+0x01 = "Spansion/Infineon"
+0x1F = "Adesto"
+0xBF = "SST/Microchip"

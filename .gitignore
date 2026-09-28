@@ -10,3 +10,4 @@ prototype/plugin-lang-bench/build-*.log
 prototype/plugin-lang-bench/stderr-*.log
 prototype/plugin-lang-bench/results.jsonl
 prototype/zerocopy-bench/target/
+prototype/.cache/

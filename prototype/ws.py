@@ -39,6 +39,11 @@ def main() -> None:
     a.add_argument("--select", nargs="*", default=[])
     a.add_argument("--hint", default=None)
     a.add_argument("--alternatives", action="store_true")
+    a.add_argument("--depth", choices=["transport", "frames", "protocol", "device"], default="protocol",
+                   help="how far up the interpretation goes in final mode")
+    a.add_argument("--declarative", action="store_true", help="use the TOML-declared I2C/SPI/RVSWD plugins")
+    a.add_argument("--devices", nargs="*", default=None, metavar="PATTERN",
+                   help='device packs to use, paths under decl/devices: "i2c/**" "i2c/sensirion/*" "!spi/**"')
     a.add_argument("--out", type=Path, default=None)
     a.add_argument("--window", nargs=2, type=float, metavar=("FROM_S", "TO_S"), default=None,
                    help="only items inside this time range (seconds)")
@@ -47,12 +52,15 @@ def main() -> None:
     hints = None
     if args.hint:
         hints = json.loads(Path(args.hint[1:]).read_text() if args.hint.startswith("@") else args.hint)
+    if args.devices is not None:
+        hints = (hints or {}) | {"devices": args.devices}
     cap = load(args.capture)
     t0 = time.perf_counter()
+    staged.use_declarative(args.declarative)
     res = staged.analyze(cap, hints)
     mode = "select" if args.select else args.mode
     window = (int(args.window[0] * cap.rate), int(args.window[1] * cap.rate)) if args.window else None
-    doc = export.export(res, cap, mode, args.select, args.alternatives, window)
+    doc = export.export(res, cap, mode, args.select, args.alternatives, window, args.depth)
     doc["analysis_seconds"] = round(time.perf_counter() - t0, 3)
     doc["hints"] = hints
     text = export.dumps(doc)

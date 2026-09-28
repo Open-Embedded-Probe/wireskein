@@ -122,7 +122,7 @@ def pin_classes(sv: Survey, cap) -> dict[str, PinClass]:
 # ---------------- T2 ----------------
 
 DATA_PAIR = 0.3
-SELECT_BOUNDARY = 0.5
+SELECT_BOUNDARY = 0.25  # candidates only; plugins re-measure on the filtered view
 
 
 def groups(sv: Survey, pins: dict[str, PinClass]) -> list[Group]:

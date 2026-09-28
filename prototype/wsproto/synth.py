@@ -211,6 +211,43 @@ class Builder:
         self.fastest = max(self.fastest, baud)
         self.t_end = max(self.t_end, t)
 
+    def add_spinor(self, idx: int) -> None:
+        """An MCU talking to a JEDEC SPI NOR flash: RDID, RDSR, WREN, READ, PP, SE, SFDP."""
+        r = self.rng
+        freq = float(r.choice([1e6, 4e6, 8e6])) * (1 + r.uniform(-0.02, 0.02))
+        mode = int(r.choice([0, 3]))
+        clk, mosi = self.wave(f"nor{idx}_clk", mode >> 1), self.wave(f"nor{idx}_mosi", 0)
+        miso, cs = self.wave(f"nor{idx}_miso", 0), self.wave(f"nor{idx}_cs", 1)
+        maker, dev = [(0xEF, 0x4018), (0xC2, 0x2017), (0xC8, 0x4016)][int(r.integers(3))]
+        seq = [("RDID", bytes([0x9F, 0, 0, 0]), bytes([0xFF, maker, dev >> 8, dev & 0xFF]))]
+        for _ in range(int(r.integers(3, 8))):
+            op = str(r.choice(["READ", "RDSR", "WREN", "PP", "SE", "SFDP"]))
+            addr = int(r.integers(0, 1 << 24)) & 0xFFFF00
+            ab = addr.to_bytes(3, "big")
+            if op == "READ":
+                n = int(r.integers(4, 32))
+                seq.append((op, bytes([0x03]) + ab + bytes(n), bytes(4) + bytes(r.integers(0, 256, n, dtype=np.uint8))))
+            elif op == "RDSR":
+                seq.append((op, bytes([0x05, 0]), bytes([0xFF, int(r.integers(0, 4))])))
+            elif op == "WREN":
+                seq.append((op, bytes([0x06]), bytes([0xFF])))
+            elif op == "PP":
+                n = int(r.integers(4, 32))
+                seq.append((op, bytes([0x02]) + ab + bytes(r.integers(0, 256, n, dtype=np.uint8)), bytes(4 + n)))
+            elif op == "SE":
+                seq.append((op, bytes([0x20]) + ab, bytes(4)))
+            else:
+                seq.append((op, bytes([0x5A, 0, 0, 0, 0]) + bytes(8), bytes(5) + b"SFDP" + bytes([6, 1, 1, 0xFF])))
+        frames = [(m, s_) for _, m, s_ in seq]
+        t = gen.spi(clk, mosi, miso, cs, r.uniform(0.1e-3, 0.5e-3), frames, freq, mode, "msb", gap=r.uniform(5, 50) / freq)
+        self.buses.append({"protocol": "spi", "roles": {"clk": f"nor{idx}_clk", "mosi": f"nor{idx}_mosi", "miso": f"nor{idx}_miso",
+                                                        "cs": f"nor{idx}_cs"},
+                           "params": {"clock_hz": freq, "mode": mode, "bit_order": "msb"},
+                           "expect": {"mosi": [f[0].hex() for f in frames], "miso": [f[1].hex() for f in frames]},
+                           "device": {"name": "SPI NOR flash", "jedec": f"{maker:02x}{dev:04x}", "commands": [x[0] for x in seq]}})
+        self.fastest = max(self.fastest, freq)
+        self.t_end = max(self.t_end, t)
+
     def add_lin(self, idx: int) -> None:
         r = self.rng
         baud = float(r.choice([9600, 19200, 10417])) * (1 + r.uniform(-0.01, 0.01))
@@ -291,7 +328,7 @@ def scenario(seed: int, profile: str = "mixed", stress: str | None = None) -> tu
     b._deferred = []
     kinds = {"mixed": ["uart", "i2c", "spi"], "uart": ["uart"], "i2c": ["i2c"], "spi": ["spi"],
              "uartlike": ["uart", "lin", "dmx"], "duplex": ["scpi", "scpi", "uart"],
-             "upper": ["uart_upper"]}[profile]
+             "upper": ["uart_upper"], "spinor": ["spinor", "spi"]}[profile]
     n_bus = int(rng.integers(1, 4)) if profile == "mixed" else 1
     for i in range(n_bus):
         getattr(b, "add_" + str(rng.choice(kinds)))(i)

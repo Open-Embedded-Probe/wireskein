@@ -48,10 +48,14 @@ class PairRelation:
     coincide: float       # share of other's edges within 1 sample of any clock edge
     boundary: float       # share of clock bursts with an edge of other near both ends (CS-like)
     other_edges_per_burst: float
+    n_bursts: int = 1
 
     @property
     def data_score(self) -> float:
-        return self.co_activity * max(self.phase_rise, self.phase_fall)
+        # a phase concentration from a handful of edges is weak evidence
+        n_inside = self.other_edges_per_burst * max(1, self.n_bursts)
+        quantity = 1.0 - np.exp(-n_inside / 8.0)
+        return self.co_activity * max(self.phase_rise, self.phase_fall) * quantity
 
     @property
     def select_score(self) -> float:
@@ -161,7 +165,7 @@ def pair_relation(cap: Capture, clk: ClockInfo, other: str) -> PairRelation:
     after = (j1 < len(de)) & (de[np.minimum(j1, len(de) - 1)] <= gap_after)
     boundary = float(np.mean(before & after))
     return PairRelation(clk.name, other, float(inside.mean()), pr, pf, coincide, boundary,
-                        float(inside.sum() / max(1, len(clk.bursts))))
+                        float(inside.sum() / max(1, len(clk.bursts))), int(len(clk.bursts)))
 
 
 def survey(cap: Capture, fs: dict[str, ChannelFeatures] | None = None) -> Survey:

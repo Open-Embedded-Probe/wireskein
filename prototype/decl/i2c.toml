@@ -1,0 +1,31 @@
+# I2C: 9-bit words (8 data bits MSB first + ACK) between START and STOP/Sr,
+# sampled on the SCL rising edge. The extra bit before STOP gives 9n+1.
+[plugin]
+name = "i2c"
+input = "frames.startstop"
+sample_edge = "rise"
+data_pins = 1
+
+[roles]
+clock = "scl"
+data = ["sda"]
+
+[word]
+bits = 9
+order = "msb"
+fields = [
+  { name = "byte", bits = "8:1" },
+  { name = "ack",  bits = "0", expect = 0, role = "ack", record = true },
+]
+
+[frame]
+length = "9n|9n+1"
+first = [
+  { name = "addr", from = "byte", bits = "7:1", role = "address" },
+  { name = "rw",   from = "byte", bits = "0", enum = { "0" = "write", "1" = "read" } },
+]
+rest = { name = "bytes", from = "byte", role = "data" }
+
+[score]
+check_weight = 0.2      # NACKs are valid I2C, so the ACK check weighs lightly
+evidence_scale = 8
