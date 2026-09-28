@@ -26,7 +26,9 @@ expectations recorded for its path.
 Test scripts import this module directly, so the calls above and the helpers
 below keep their names, arguments and meaning; anything added gets a default
 that keeps the old meaning. An incompatible change raises FORMAT. Capture meta
-"start_us" is the probe clock (us, integer) of the first sample.
+"start_us" is the probe clock (us, integer) of the first sample;
+"time_base_slipped": True means the probe knows some samples were taken late
+(OEP segment flags bit 2; absent when not).
 """
 
 from __future__ import annotations

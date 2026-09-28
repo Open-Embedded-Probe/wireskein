@@ -267,7 +267,9 @@ def _uart_rx(ch: Channel, n: int, u: float, idle: int, bits: int, parity: str, s
     leaving idle after the middle of the previous one's first stop bit, and its
     bits are sampled at their middles. Characters before the first idle gap of
     a whole character (the window may open inside one) are lead-in, a character
-    the window ends inside is cut; neither counts as an error."""
+    the window ends inside is cut; neither counts as an error. After a framing
+    error the receiver waits for the next idle gap again, so one disturbance
+    counts once (characters skipped meanwhile are resync_skipped)."""
     e = ch.edges
     after = ch.initial ^ ((np.arange(len(e)) + 1) & 1)          # level after each edge
     act = e[after != idle]
@@ -275,8 +277,8 @@ def _uart_rx(ch: Channel, n: int, u: float, idle: int, bits: int, parity: str, s
     L = 1 + bits + npar + int(np.ceil(stop))
     first_stop = 1 + bits + npar
     gap = L * u
-    out = {"frames": [], "lead_in": 0, "cut_at_end": False}
-    synced, i = False, 0
+    out = {"frames": [], "lead_in": 0, "resync_skipped": 0, "cut_at_end": False}
+    synced, lost, i = False, False, 0
     while i < len(act):
         st = int(act[i])
         if not synced:
@@ -297,8 +299,10 @@ def _uart_rx(ch: Channel, n: int, u: float, idle: int, bits: int, parity: str, s
             par_ok = (ones % 2 == 0) if parity == "even" else (ones % 2 == 1)
         if synced:
             out["frames"].append((st, value, stop_ok, par_ok))
+            if not stop_ok:
+                synced, lost = False, True
         else:
-            out["lead_in"] += 1
+            out["resync_skipped" if lost else "lead_in"] += 1
         i = int(np.searchsorted(act, st + (first_stop + 0.5) * u))
     return out
 
@@ -344,6 +348,19 @@ def _uart_edge_offsets(ch: Channel, frames: list, u: float, span_bits: int) -> l
     return out
 
 
+def _uart_measure(ch: Channel, n: int, runs: np.ndarray, u_hint: float | None, idle: int, bits: int, parity: str,
+                  stop: float) -> float | None:
+    from .features import estimate_units
+    cands = estimate_units(runs[1:-1])
+    if not cands:
+        return None
+    u = (min(cands, key=lambda c: abs(np.log(c.samples / u_hint))) if u_hint else cands[0]).samples
+    for _ in range(3):
+        rx = _uart_rx(ch, n, u, idle, bits, parity, stop)
+        u = _uart_bit_time(ch, rx["frames"], u, idle, 1 + bits + (parity != "none")) or u
+    return u
+
+
 def check_uart(cap, x):
     ch = _ch(cap, x["pin"])
     if ch is None:
@@ -352,18 +369,14 @@ def check_uart(cap, x):
     # the level the line rests at: the longest run
     start, length, level = ch.runs(cap.n_samples)
     rest = int(level[np.argmax(length)]) if len(length) else None
-    if x.get("baud"):
-        u0 = cap.rate / x["baud"]
-    else:
-        # measure only: the bit time from the runs, then refined by reading with it
-        from .features import estimate_units
-        cands = estimate_units(length[1:-1])
-        if not cands:
-            return None, {"idle": rest, "edges": int(len(ch.edges))}, "measure only: too few edges to find a bit time"
-        u0 = cands[0].samples
-        for _ in range(2):
-            rx = _uart_rx(ch, cap.n_samples, u0, idle, bits, parity, stop)
-            u0 = _uart_bit_time(ch, rx["frames"], u0, idle, 1 + bits + (parity != "none")) or u0
+    # the measured bit time does not depend on the expectation: candidates from
+    # the runs (the expected rate only picks the nearest), refined by reading
+    u = _uart_measure(ch, cap.n_samples, length, cap.rate / x["baud"] if x.get("baud") else None,
+                      idle, bits, parity, stop)
+    if not x.get("baud") and u is None:
+        return None, {"idle": rest, "edges": int(len(ch.edges))}, "measure only: too few edges to find a bit time"
+    # characters, errors and data: read as a receiver at the expected rate would
+    u0 = cap.rate / x["baud"] if x.get("baud") else u
     rx = _uart_rx(ch, cap.n_samples, u0, idle, bits, parity, stop)
     frames = rx["frames"]
     if not frames:
@@ -374,7 +387,6 @@ def check_uart(cap, x):
             return False, got, f"idle level {rest}, not {idle}"
         why = "no UART character after an idle gap of a whole character"
         return (None, got, "measure only: " + why) if not x.get("baud") else (False, got, why)
-    u = _uart_bit_time(ch, frames, u0, idle, 1 + bits + (parity != "none"))
     frame_err = sum(not f[2] for f in frames)
     par_err = sum(f[2] and not f[3] for f in frames)
     data = bytes(f[1] & 0xFF for f in frames if f[2] and f[3]).hex() if bits <= 8 else None
@@ -382,7 +394,7 @@ def check_uart(cap, x):
     got = {"baud": cap.rate / u if u else None, "baud_error": (ref / u - 1) if u and ref else None,
            "samples_per_bit": u if u else u0,
            "chars": len(frames), "frame_errors": frame_err, "parity_errors": par_err,
-           "lead_in": rx["lead_in"], "cut_at_end": rx["cut_at_end"], "data": data}
+           "lead_in": rx["lead_in"], "resync_skipped": rx["resync_skipped"], "cut_at_end": rx["cut_at_end"], "data": data}
     got["idle"] = rest
     off = _uart_edge_offsets(ch, frames, u or u0, 1 + bits + (parity != "none") + 1)
     got["edge_offset_max"] = max(off)
@@ -401,7 +413,7 @@ def check_uart(cap, x):
     if x.get("max_errors") is not None and frame_err + par_err > x["max_errors"]:
         ok = False
         msg = f"{frame_err} framing and {par_err} parity errors"
-        skewed = [o for _, o in bad if o > 0.2]
+        skewed = [o for _, o in bad if o > max(0.2, 2 * got["edge_offset_p99"])]
         if bad and len(skewed) == len(bad):
             msg += (f" (each in a character whose edges are up to {max(skewed):.2f} bit off the bit grid,"
                     f" elsewhere {got['edge_offset_p99']:.2f} at p99: suspect the capture time base)")
@@ -461,6 +473,12 @@ def verify(run_dir: str | Path) -> dict:
                 continue
             for c, cap in hit:
                 ok, got, why = CHECKS[x["kind"]](cap, x)
+                if c.get("time_base_slipped"):
+                    # the probe says some samples were taken late: the verdict
+                    # stands (it may still read fine), a failure names it
+                    got = {**got, "time_base_slipped": True}
+                    if ok is False:
+                        why = (why + "; " if why else "") + "the probe reported a time base slip in this capture"
                 results.append(Result(path, c["file"], x["kind"], ok, x, got, why))
     # marker problems anywhere in the tree fail the run: a wrong structure means
     # captures may be checked against the wrong expectations
