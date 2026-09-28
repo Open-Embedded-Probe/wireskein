@@ -155,15 +155,35 @@ def pair_relation(cap: Capture, clk: ClockInfo, other: str) -> PairRelation:
     pf = K.relative_phase_concentration(di, fall) if len(di) >= 2 and len(fall) > 2 else 0.0
     dist, _ = K.nearest_distance(de, c.edges)
     coincide = float(np.mean(dist <= 1))
-    # CS-like: an edge of `other` in the idle gap before each burst and in the gap after it
-    b0, b1 = clk.bursts[:, 0], clk.bursts[:, 1]
-    gap_before = np.concatenate(([0.0], b1[:-1]))
-    gap_after = np.concatenate((b0[1:], [float(cap.n_samples)]))
-    j0 = np.searchsorted(de, gap_before, side="left")
-    before = (j0 < len(de)) & (de[np.minimum(j0, len(de) - 1)] <= b0 + (b0 - clk.bursts[:, 0]) + 1)
-    j1 = np.searchsorted(de, b1 - 1, side="left")
-    after = (j1 < len(de)) & (de[np.minimum(j1, len(de) - 1)] <= gap_after)
-    boundary = float(np.mean(before & after))
+    # CS-like: every burst lies between two edges of `other`, with none inside it,
+    # and at the same (active) level. Several bursts may share one window (bytes
+    # with gaps under one CS), so a single CS frame counts. A lone rising edge is
+    # not a transfer (the clock going to its idle level before the first one).
+    # The span is from the burst's first clock edge to its last (not the margin
+    # around it: a CS edge may sit within half a clock of the first clock).
+    real = clk.bits >= 2
+    b = clk.bursts[real] if real.any() else clk.bursts
+    ce = c.edges
+    first = ce[np.minimum(np.searchsorted(ce, b[:, 0], side="left"), len(ce) - 1)]
+    last = ce[np.maximum(np.searchsorted(ce, b[:, 1], side="right") - 1, 0)]
+    j0 = np.searchsorted(de, first, side="left")
+    j1 = np.searchsorted(de, last, side="right")
+    framed = (j0 == j1) & (j0 > 0) & (j0 < len(de))
+    # a window holding several bursts must look like one transfer, or any slow
+    # line would frame them all: tight around them (lead + trail no longer than
+    # the clocked span) and gaps between them like those between bytes (no
+    # longer than twice the longest burst)
+    w = np.where(framed, j0, -1)
+    for k in np.unique(w[w >= 0]):
+        sel = w == k
+        if sel.sum() > 1:
+            f, l = first[sel], last[sel]
+            lead, trail = f.min() - de[k - 1], de[k] - l.max()
+            if lead + trail > l.max() - f.min() or (f[1:] - l[:-1]).max() > 2 * (l - f).max():
+                framed &= ~sel
+    lv = d.initial ^ (j0 & 1)
+    active = int(np.bincount(lv[framed], minlength=2).argmax()) if framed.any() else 0
+    boundary = float(np.mean(framed & (lv == active)))
     return PairRelation(clk.name, other, float(inside.mean()), pr, pf, coincide, boundary,
                         float(inside.sum() / max(1, len(clk.bursts))), int(len(clk.bursts)))
 

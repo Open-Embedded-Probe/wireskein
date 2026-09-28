@@ -60,26 +60,31 @@ class Ctx:
 class I2cPlugin:
     name = "i2c"
     consumes = ("frames.startstop",)
+    open_tail = True    # takes the frame a capture ended inside (others get Frames.closed())
 
     def run(self, c: Ctx, fr: typed.Frames, g):
         sb = fr.source
         # I2C samples SDA on the SCL rising edge by definition
         if len(sb.data) != 1 or len(fr.bounds) == 0 or sb.sample_edge != "rise":
             return []
-        lens = np.diff(fr.bounds, axis=1).ravel()
+        # a frame the capture ended inside (no STOP) is reported but is no
+        # evidence for I2C: it scores 0 alone and does not count with others
+        closed = len(fr.bounds) - int(fr.open_tail)
+        lens = np.diff(fr.bounds[:closed], axis=1).ravel()
         lens = lens[lens > 0]
-        if len(lens) == 0:
-            return []
-        mod9 = float(np.mean(np.isin(lens % 9, (0, 1))))
         w = typed.words(fr, 9)
-        acks = (w.values & 1) == 0
         txs = typed.i2c_from_words(fr, w)
-        addr_ack = float(np.mean([t["addr_ack"] for t in txs])) if txs else 0.0
+        if len(lens) == 0 and not txs:
+            return []
+        mod9 = float(np.mean(np.isin(lens % 9, (0, 1)))) if len(lens) else 0.0
+        acks = (w.values[w.frame_of < closed] & 1) == 0
+        whole = [t for t in txs if t.get("complete", True)]
+        addr_ack = float(np.mean([t["addr_ack"] for t in whole])) if whole else 0.0
         clk = c.sv.clocks[sb.clock].clock_score
         pair = c.sv.pairs[(sb.clock, sb.data[0])].data_score
-        nbytes = sum(1 + len(t["bytes"]) for t in txs)
+        nbytes = sum(1 + len(t["bytes"]) for t in whole)
         m = {"mod9": mod9, "ack_rate": float(acks.mean()) if len(acks) else 0.0, "addr_ack": addr_ack,
-             "transactions": len(txs), "bytes": nbytes, "clk": clk, "pair": pair, "edge": sb.sample_edge}
+             "transactions": len(whole), "bytes": nbytes, "clk": clk, "pair": pair, "edge": sb.sample_edge}
         # NACKs are valid I2C (polling a busy device), so the ACK rate only
         # weighs lightly; it matters for choosing between sibling sampling edges
         score = mod9 * (0.8 + 0.2 * m["ack_rate"]) * q(nbytes) * (0.5 + 0.5 * clk) * (0.5 + 0.5 * pair)
@@ -164,7 +169,7 @@ class SyncUnknownPlugin:
         # every known framing of the same bits counts, not only this delimiter's
         known = 0.0
         # all views of the same clock/data, with or without the select candidate
-        views = [typed.frames_gap(sb), typed.frames_startstop(c.cap, sb)]
+        views = [typed.frames_gap(sb), typed.frames_startstop(c.cap, sb).closed()]
         if sb.select:
             views.append(typed.frames_select(c.cap, c.sv, sb))
         for v in views:
@@ -378,7 +383,7 @@ def i2c_device_node(parent: Node) -> Node | None:
     """Upper layer over I2C transactions: devices on the bus. A real bus talks to
     few addresses, repeatedly, and register-map devices show "write register
     pointer, then read" pairs to the same address."""
-    txs = [t for t in parent.output.items if "addr" in t]
+    txs = [t for t in parent.output.items if t.get("addr") is not None]
     if len(txs) < 3:
         return None
     addrs = [t["addr"] for t in txs]
@@ -435,6 +440,27 @@ def _hinted(hints: dict | None):
         if info.get("protocol"):
             allowed.add(info["protocol"]) if h.get("protocols") else None
     return allowed, pins, set(h.get("exclude_pins") or [])
+
+
+def _hinted_groups(pin_hint: dict, sv, have: list) -> list:
+    """A bus whose clock and data pins are all named by the hints is tried even
+    when the survey did not group it (a few clocks only: one byte, a transfer cut
+    short). Nothing more is assumed; the plugins score it like any other group."""
+    from .taxonomy import Group
+    keys = {(g.clock, g.data, g.select) for g in have if g.kind == "sync"}
+    out = []
+    for proto, roles in SYNC_ROLES.items():
+        by = {}
+        for pn, i in pin_hint.items():
+            if i.get("protocol") == proto and i.get("role") in roles and pn in sv.active:
+                by.setdefault(roles[i["role"]], []).append(pn)
+        clk, data = by.get("clock", []), tuple(sorted(by.get("data", [])))
+        if len(clk) != 1 or clk[0] not in sv.clocks or not data:
+            continue
+        sel = by.get("select", [None])[0]
+        if (clk[0], data, sel) not in keys:
+            out.append(Group("sync", clock=clk[0], data=data, select=sel))
+    return out
 
 
 @lru_cache(maxsize=8)
@@ -494,7 +520,7 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
     t0 = time.perf_counter()
     seen = set()
     run_sync = not allowed or bool(allowed & SYNC_PROTOCOLS)
-    for g in tx.groups:
+    for g in [*tx.groups, *_hinted_groups(pin_hint, c.sv, tx.groups)]:
         if g.kind != "sync" or not run_sync or not group_ok(g):
             continue
         key = (g.clock, g.data, g.select)
@@ -521,7 +547,7 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
                     for p in by_type.get(kind, []):
                         runs += 1
                         t_p = time.perf_counter()
-                        got = p.run(c, fr, g)
+                        got = p.run(c, fr if getattr(p, "open_tail", False) else fr.closed(), g)
                         if RECORDER is not None and p.name == "i2c" and kind == "frames.startstop":
                             _record("i2c", {"bits": sb.bits[0] if len(sb.data) == 1 else sb.bits, "t": sb.t,
                                             "bounds": fr.bounds.ravel(), "sample_edge": sb.sample_edge,

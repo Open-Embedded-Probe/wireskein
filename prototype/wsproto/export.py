@@ -66,7 +66,9 @@ def layers_of(n) -> dict:
         out["words"] = _words(n, 9)
         out["transactions"] = [{"s": t.get("start"), "e": t.get("end"), "addr": t.get("addr"), "rw": t.get("rw"),
                                 "addr_ack": t.get("addr_ack"), "bytes": _hex(t.get("bytes", [])),
-                                "acks": [bool(x) for x in t.get("acks", [])]} for t in n.output.items if "addr" in t]
+                                "acks": [bool(x) for x in t.get("acks", [])],
+                                **({"complete": False, "pending_bits": t.get("pending_bits", [])} if t.get("complete") is False else {})}
+                               for t in n.output.items if "addr" in t]
     elif a == "spi":
         out["words"] = _words(n, 8)
         fr, sb = n.layers["frames"], n.layers["bits"]
