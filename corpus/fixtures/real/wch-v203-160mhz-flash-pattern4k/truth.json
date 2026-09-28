@@ -1,0 +1,52 @@
+{
+ "id": "wch-v203-160mhz-flash-pattern4k",
+ "source": {
+  "path": "corpus/raw/wch-linke/v203-160mhz/flash_pattern4k.sr",
+  "sha256": "ebe670e42b715ac654ffa5af40d8e4910a0d8786837eceea8784be32abe3024c"
+ },
+ "channels": {
+  "D0": {
+   "original": "bit3",
+   "static": true
+  },
+  "D1": {
+   "original": "bit2",
+   "static": true
+  },
+  "D2": {
+   "original": "SWCLK",
+   "static": false
+  },
+  "D3": {
+   "original": "bit6",
+   "static": true
+  },
+  "D4": {
+   "original": "bit7",
+   "static": true
+  },
+  "D5": {
+   "original": "bit5",
+   "static": true
+  },
+  "D6": {
+   "original": "bit4",
+   "static": true
+  },
+  "D7": {
+   "original": "SWDIO",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "rvswd",
+   "roles": {
+    "clk": "D2",
+    "dio": "D7"
+   },
+   "params": {}
+  }
+ ],
+ "notes": "WCH 2-wire RVSWD with reflection glitches on SWCLK; out of scope for UART/I2C/SPI."
+}

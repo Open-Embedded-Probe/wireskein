@@ -1,0 +1,51 @@
+{
+ "id": "wch-v003-flash-pattern4k",
+ "source": {
+  "path": "corpus/raw/wch-linke/v003/flash_pattern4k.sr",
+  "sha256": "ef7119553141a33d85995d6a1910161b3edc13312f7e910c9a1b0b1fdee6625c"
+ },
+ "channels": {
+  "D0": {
+   "original": "bit1",
+   "static": true
+  },
+  "D1": {
+   "original": "bit5",
+   "static": true
+  },
+  "D2": {
+   "original": "bit4",
+   "static": true
+  },
+  "D3": {
+   "original": "bit7",
+   "static": true
+  },
+  "D4": {
+   "original": "bit6",
+   "static": true
+  },
+  "D5": {
+   "original": "bit3",
+   "static": true
+  },
+  "D6": {
+   "original": "bit2",
+   "static": true
+  },
+  "D7": {
+   "original": "SWIO",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "swio",
+   "roles": {
+    "dio": "D7"
+   },
+   "params": {}
+  }
+ ],
+ "notes": "WCH single-wire SDI (SWIO); out of scope for UART/I2C/SPI, must not be confirmed as those."
+}

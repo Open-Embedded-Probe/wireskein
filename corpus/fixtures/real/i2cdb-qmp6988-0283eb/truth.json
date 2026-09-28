@@ -1,0 +1,615 @@
+{
+ "id": "i2cdb-qmp6988-0283eb",
+ "source": {
+  "path": "corpus/raw/i2cdevicedb/qmp6988__qmp6988__characterize__100k__nominal__0283eb57c7a7c010.sr",
+  "sha256": "15c5fe4a21fede5bd5000d326fe54680f7a69c739fa3901b528dba9eac77752e"
+ },
+ "channels": {
+  "D0": {
+   "original": "bit3",
+   "static": true
+  },
+  "D1": {
+   "original": "bit7",
+   "static": true
+  },
+  "D2": {
+   "original": "SDA",
+   "static": false
+  },
+  "D3": {
+   "original": "bit4",
+   "static": true
+  },
+  "D4": {
+   "original": "bit6",
+   "static": true
+  },
+  "D5": {
+   "original": "bit5",
+   "static": true
+  },
+  "D6": {
+   "original": "UART_TX",
+   "static": false
+  },
+  "D7": {
+   "original": "SCL",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D7",
+    "sda": "D2"
+   },
+   "params": {
+    "clock_hz": 100000
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": []
+     },
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       224,
+       230
+      ]
+     },
+     {
+      "addr": 115,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": []
+     },
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       209
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       92
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       241
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       0
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       242
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       1
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       243
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       0
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       244
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       0
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       245
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       0
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       160
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       82,
+       220,
+       13,
+       167,
+       244,
+       130,
+       13,
+       220,
+       12,
+       210,
+       1,
+       230,
+       252,
+       134,
+       249,
+       201,
+       250,
+       162,
+       247,
+       43,
+       12,
+       187,
+       3,
+       216,
+       187
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       244,
+       37
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       243
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       8
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       243
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       8
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       243
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       8
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       243
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       8
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       243
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       8
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       243
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       8
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       243
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       0
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       247
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       161,
+       229,
+       4,
+       106,
+       34,
+       124
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       244
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       37
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       244,
+       39
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       247
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       161,
+       227,
+       84,
+       106,
+       38,
+       36
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       247
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       161,
+       227,
+       112,
+       106,
+       38,
+       96
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       247
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       161,
+       227,
+       8,
+       106,
+       37,
+       176
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       247
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       161,
+       227,
+       176,
+       106,
+       36,
+       32
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       247
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       161,
+       227,
+       104,
+       106,
+       36,
+       0
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       247
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       161,
+       227,
+       252,
+       106,
+       33,
+       188
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       247
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       161,
+       227,
+       204,
+       106,
+       34,
+       84
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       247
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       161,
+       227,
+       220,
+       106,
+       33,
+       28
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       247
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       161,
+       226,
+       220,
+       106,
+       33,
+       52
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       247
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       161,
+       226,
+       236,
+       106,
+       31,
+       172
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       244,
+       36
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D6"
+   },
+   "params": {
+    "baud": 115200,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1,
+    "idle": 1,
+    "bit_order": "lsb"
+   }
+  }
+ ],
+ "notes": "I2CDeviceDB characterize capture; UART carries CASE/PHASE marker lines (sigrok uart 115200 8N1)."
+}

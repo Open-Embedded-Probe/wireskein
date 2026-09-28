@@ -1,0 +1,52 @@
+{
+ "id": "wch-l103-flash-pattern4k",
+ "source": {
+  "path": "corpus/raw/wch-linke/l103/flash_pattern4k.sr",
+  "sha256": "873cf150c38f8b7ddcf94fa81a9de02cb1bef654b6865eca4f5943f7489e6aed"
+ },
+ "channels": {
+  "D0": {
+   "original": "bit2",
+   "static": true
+  },
+  "D1": {
+   "original": "bit6",
+   "static": true
+  },
+  "D2": {
+   "original": "bit3",
+   "static": true
+  },
+  "D3": {
+   "original": "bit7",
+   "static": true
+  },
+  "D4": {
+   "original": "SWDIO",
+   "static": false
+  },
+  "D5": {
+   "original": "bit4",
+   "static": true
+  },
+  "D6": {
+   "original": "bit5",
+   "static": true
+  },
+  "D7": {
+   "original": "SWCLK",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "rvswd",
+   "roles": {
+    "clk": "D7",
+    "dio": "D4"
+   },
+   "params": {}
+  }
+ ],
+ "notes": "WCH 2-wire RVSWD with reflection glitches on SWCLK; out of scope for UART/I2C/SPI."
+}
