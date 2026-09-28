@@ -11,3 +11,5 @@ mixed-time-result.json
 flash-detail.txt
 portability-result.json
 extension-result.json
+i2c-wire-audit-result.json
+hypothesis-chain-result.json
