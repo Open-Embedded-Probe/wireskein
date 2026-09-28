@@ -16,7 +16,9 @@
 
 最初の対応機器・形式・プロトコル、ライブ処理と取得後処理の優先度、性能目標は、この結果を使って決める。AI 向けの効果は出力量やトークン数だけでなく、見落としや追加の調査回数も確かめる。
 
-実データによる最初の確認と再実行手順は [初回の成立性調査](../experiments/initial-feasibility/README.ja.md)、[追加検証](../experiments/initial-feasibility/extended-findings.ja.md)、[基礎分析の検証](../experiments/initial-feasibility/foundations.ja.md) に記録する。
+実データによる最初の確認と再実行手順は [初回の成立性調査](../experiments/initial-feasibility/README.ja.md)、[追加検証](../experiments/initial-feasibility/extended-findings.ja.md)、[基礎分析の検証](../experiments/initial-feasibility/foundations.ja.md)、[未知信号から上位解析までのワークフロー調査](../experiments/initial-feasibility/workflow-findings.ja.md) に記録する。
+
+候補の探索、ビット列への変換、基本・上位プロトコルの検査、警告、必要な情報だけの出力を一連の作業として試す。ペア機器の送受成功とは独立に、線上の規則違反や操作後の信号状態を確認する。候補の点数だけで確定せず、説明できた範囲、実施した検査、未解釈、取得品質を別に残す。実機の異常例と未知方式の正解付き記録を増やし、見落とし・誤警告・保留を測ってから初期仕様を決める。
 
 ### 初期実験で確認する正確性と再現性
 
