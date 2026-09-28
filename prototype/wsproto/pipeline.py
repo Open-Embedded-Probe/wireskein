@@ -47,6 +47,7 @@ class Result:
     probe_runs: int = 0
     abandoned: int = 0
     engine: object = None
+    excluded: int = 0
 
 
 def value(n: Node) -> float:
@@ -98,12 +99,19 @@ def verdict(total: float, margin: float) -> str:
     return "ambiguous"
 
 
-def analyze(cap: Capture, scorer=None, analyzers=None, probe=None) -> Result:
+def analyze(cap: Capture, scorer=None, analyzers=None, probe=None, exclude: bool = False) -> Result:
     t0 = time.perf_counter()
     fs = feat.features(cap)
     active = [n for n, f in fs.items() if not f.static]
     ctx = Context(cap, fs, active)
-    eng = Engine(analyzers or default_analyzers(), scorer or DefaultScorer(), probe=probe)
+    exclusion = None
+    if exclude:
+        from .exclude import RULES, excluded_by
+        from .survey import survey
+        sv = survey(cap, fs)
+        safe = [r for r in RULES if r.kind == "definitional"]
+        exclusion = lambda name, params: excluded_by(name, params, sv, cap, safe)  # noqa: E731
+    eng = Engine(analyzers or default_analyzers(), scorer or DefaultScorer(), probe=probe, exclusion=exclusion)
     roots = eng.expand(ctx)
     exps = explanations(roots, value)
     claims = []
@@ -119,4 +127,4 @@ def analyze(cap: Capture, scorer=None, analyzers=None, probe=None) -> Result:
             ru = max((r for r in alt_set if chans & set(r.roles.values())), key=lambda r: r.total, default=None)
             claims.append(Claim(n.analyzer, dict(n.roles), dict(n.params), n.total, margin,
                                 verdict(n.total, margin), n, ru))
-    return Result(roots, exps, claims, eng.runs, time.perf_counter() - t0, fs, eng.probe_runs, eng.abandoned, eng)
+    return Result(roots, exps, claims, eng.runs, time.perf_counter() - t0, fs, eng.probe_runs, eng.abandoned, eng, eng.excluded)

@@ -97,7 +97,7 @@ def bus_channels(bus):
 
 
 def evaluate_case(args):
-    kind, ref, scorer_name, use_probe = args
+    kind, ref, scorer_name, use_probe, use_excl = args
     if kind == "real":
         from wsproto import fixture
         cap, truth = fixture.load_capture(ref), fixture.load_truth(ref)
@@ -107,10 +107,11 @@ def evaluate_case(args):
     if kind == "synth" and n_edges > MAX_EDGES and not use_probe:
         return {"id": truth["id"], "skipped": f"{n_edges} edges > {MAX_EDGES}", "seconds": 0.0, "runs": 0,
                 "n_active": 0, "buses": [], "claims": []}
-    res = pipeline.analyze(cap, scorer=SCORERS[scorer_name](), probe=ProbeConfig() if use_probe else None)
+    res = pipeline.analyze(cap, scorer=SCORERS[scorer_name](), probe=ProbeConfig() if use_probe else None,
+                           exclude=use_excl)
     rec = {"id": truth["id"], "rate": cap.rate, "seconds": res.seconds, "runs": res.runs,
            "n_active": sum(1 for f in res.features.values() if not f.static), "buses": [], "claims": [],
-           "probe_runs": res.probe_runs, "abandoned": res.abandoned}
+           "probe_runs": res.probe_runs, "abandoned": res.abandoned, "excluded": res.excluded}
     claimed_correct = set()
     for bi, bus in enumerate(truth["buses"]):
         chans = bus_channels(bus)
@@ -204,14 +205,15 @@ def main() -> None:
     ap.add_argument("--scorer", default="default", choices=sorted(SCORERS))
     ap.add_argument("--tag", default="run")
     ap.add_argument("--probe", action="store_true", help="early abandonment on probe windows")
+    ap.add_argument("--exclude", action="store_true", help="safe (definitional) exclusion rules before decoding")
     ap.add_argument("-j", type=int, default=max(1, mp.cpu_count() - 2))
     args = ap.parse_args()
     jobs = []
     if not args.no_real:
         for d in sorted(corpus.REAL.iterdir()):
             if args.large or "flash" not in d.name or d.name.startswith("i2cdb"):
-                jobs.append(("real", d, args.scorer, args.probe))
-    jobs += [("synth", (s, args.profile, args.stress), args.scorer, args.probe) for s in range(args.start, args.start + args.synth)]
+                jobs.append(("real", d, args.scorer, args.probe, args.exclude))
+    jobs += [("synth", (s, args.profile, args.stress), args.scorer, args.probe, args.exclude) for s in range(args.start, args.start + args.synth)]
     t0 = time.time()
     records = []
     with mp.Pool(args.j) as pool:
