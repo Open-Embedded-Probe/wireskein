@@ -159,8 +159,22 @@ def _window(lay: dict, s0: int, s1: int) -> dict:
     return out
 
 
+DEPTHS = ("transport", "frames", "protocol", "device")
+LOWER = {"i2c": "transactions", "spi": "transfers", "uart": "bytes", "lin": "frames", "dmx512": "packets",
+         "rvswd": "dmi", "swio": "dmi", "sync_unknown": "summary"}
+
+
+def devices_of(n, with_candidates: bool) -> list[dict]:
+    out = []
+    for m in getattr(n, "devices", []) or []:
+        if m.level in ("identified", "consistent") or (with_candidates and m.level == "address_only"):
+            out.append({"device": m.device, "level": m.level, "evidence": m.evidence,
+                        **({"messages": m.messages} if m.level != "address_only" else {})})
+    return out
+
+
 def export(res, cap, mode: str = "final", select: list[str] | None = None, alternatives: bool = False,
-           window: tuple[int, int] | None = None) -> dict:
+           window: tuple[int, int] | None = None, depth: str = "protocol") -> dict:
     doc = {"rate": cap.rate, "n_samples": cap.n_samples, "claims": []}
     if window:
         doc["window"] = list(window)
@@ -173,7 +187,19 @@ def export(res, cap, mode: str = "final", select: list[str] | None = None, alter
         if window:
             lay = _window(lay, *window)
         if mode == "final":
-            rec["result"] = final_of(n, lay)
+            # depth: how far up the interpretation goes; lower layers stay the reference
+            if depth == "transport":
+                pass
+            elif depth == "frames":
+                k = LOWER.get(n.analyzer)
+                if k and k in lay:
+                    rec["result"] = {k: lay[k]}
+            else:
+                rec["result"] = final_of(n, lay)
+                if depth == "device":
+                    ds = devices_of(n, with_candidates=True)
+                    if ds:
+                        rec["devices"] = ds
         elif mode == "all":
             rec["layers"] = lay
             rec["evidence"] = {k: (float(v) if isinstance(v, (np.floating, float, np.integer)) else v)

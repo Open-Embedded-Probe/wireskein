@@ -128,8 +128,9 @@ def evaluate_case(args):
     if kind == "synth" and n_edges > MAX_EDGES and not use_probe and engine != "staged":
         return {"id": truth["id"], "skipped": f"{n_edges} edges > {MAX_EDGES}", "seconds": 0.0, "runs": 0,
                 "n_active": 0, "buses": [], "claims": []}
-    if engine == "staged":
+    if engine in ("staged", "declarative"):
         from wsproto import staged
+        staged.use_declarative(engine == "declarative")
         res = staged.analyze(cap)
         res.seconds = sum(res.seconds.values())
         res.probe_runs = res.abandoned = res.excluded = 0
@@ -245,7 +246,7 @@ def main() -> None:
     ap.add_argument("--tag", default="run")
     ap.add_argument("--probe", action="store_true", help="early abandonment on probe windows")
     ap.add_argument("--exclude", action="store_true", help="safe (definitional) exclusion rules before decoding")
-    ap.add_argument("--engine", default="flat", choices=["flat", "staged"])
+    ap.add_argument("--engine", default="flat", choices=["flat", "staged", "declarative"])
     ap.add_argument("--set", default=None, help="frozen fixture set under corpus/fixtures/synth (replaces --synth)")
     ap.add_argument("-j", type=int, default=max(1, mp.cpu_count() - 2))
     args = ap.parse_args()

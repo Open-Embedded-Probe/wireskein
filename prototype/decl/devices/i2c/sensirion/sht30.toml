@@ -1,0 +1,47 @@
+# Sensirion SHT3x-DIS (datasheet rev 7, 2022-12). 16-bit commands, responses in
+# 2-byte words each followed by a CRC-8 (poly 0x31, init 0xFF).
+[device]
+name = "SHT30"
+bus = "i2c"
+kind = "command_table"
+addresses = [0x44, 0x45]
+command_bytes = 2
+crc = { poly = 0x31, init = 0xFF, word = 2 }
+
+[[command]]
+code = 0x30A2
+name = "soft_reset"
+
+[[command]]
+code = 0xF32D
+name = "read_status"
+response = 3
+
+[[command]]
+code = 0x3041
+name = "clear_status"
+
+[[command]]
+code = 0x2400
+name = "single_shot_high_no_stretch"
+response = 6
+
+[[command]]
+code = 0x240B
+name = "single_shot_medium_no_stretch"
+response = 6
+
+[[command]]
+code = 0x2416
+name = "single_shot_low_no_stretch"
+response = 6
+
+[[command]]
+code = 0x2C06
+name = "single_shot_high_stretch"
+response = 6
+
+[[command]]
+code = 0xE000
+name = "fetch_data"
+response = 6

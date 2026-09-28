@@ -1,0 +1,23 @@
+# QST QMP6988 (datasheet rev C). Register map with an 8-bit pointer; chip id 0xD1 = 0x5C.
+[device]
+name = "QMP6988"
+bus = "i2c"
+kind = "register_map"
+addresses = [0x70, 0x56]
+pointer_bytes = 1
+
+[[identify]]
+register = 0xD1
+value = 0x5C
+
+[[register]]
+address = 0xE0
+name = "reset"
+
+[[register]]
+address = 0xF4
+name = "ctrl_meas"
+
+[[register]]
+address = 0xF7
+name = "press_txd2"

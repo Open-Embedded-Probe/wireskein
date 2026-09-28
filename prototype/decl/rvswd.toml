@@ -1,0 +1,44 @@
+# WCH RVSWD short frames (from wch-protocols tools/dmi_decode.py).
+# Frame boundaries need a core kernel (stop-interval re-framing); the layout is declarative.
+[plugin]
+name = "rvswd"
+input = "frames.gap"
+data_pins = 1
+
+[roles]
+clock = "clk"
+data = "dio"
+
+[frame]
+reframe = "rvswd_stop"
+
+[[layout]]
+bits = 53
+fields = [
+  { name = "addr", at = 0, width = 7, role = "address" },
+  { name = "op",   at = 7, width = 1, enum = { "0" = "R", "1" = "W" } },
+  { name = "data", at = 14, width = 32, role = "data" },
+  { name = "status", at = 48, width = 2 },
+]
+checks = [
+  { kind = "parity", bit = 8, over = [0, 7] },
+  { kind = "parity", bit = 46, over = [14, 45] },
+]
+
+[[layout]]
+bits = 54
+fields = [
+  { name = "addr", at = 1, width = 7, role = "address" },
+  { name = "data", at = 15, width = 32, role = "data" },
+  { name = "status", at = 49, width = 2 },
+]
+checks = [ { kind = "parity", bit = 47, over = [15, 46] } ]
+
+# Long (attach) form: structure only, not decoded here (fields unknown in detail).
+[[layout]]
+bits = 84
+fields = []
+
+[[layout]]
+bits = 85
+fields = []

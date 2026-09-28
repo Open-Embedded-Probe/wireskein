@@ -1,0 +1,24 @@
+# SPI: 8-bit words per data pin inside a CS window (or a clock burst).
+[plugin]
+name = "spi"
+input = ["frames.select", "frames.gap"]
+
+[roles]
+clock = "clk"
+select = "cs"
+data = "data"
+
+[word]
+bits = 8
+order = "msb"
+fields = [ { name = "byte", bits = "7:0" } ]
+
+[frame]
+length = "8n"
+per_data_pin = true
+rest = { name = "bytes", from = "byte", role = "data" }
+
+[score]
+check_weight = 0.0
+evidence_scale = 8
+terms = ["select_boundary", "degenerate", "single_frame_penalty"]   # provided by the core
