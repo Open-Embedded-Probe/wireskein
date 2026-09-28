@@ -1,0 +1,32 @@
+# Marker lines of the I2CDeviceDB characterize harness (UART, one line each).
+# CASE_BEGIN/CASE_END enclose a case; PHASE starts a section inside it that
+# lasts until the next PHASE or the end of the case; INPUT/RESULT are
+# attributes of the innermost open segment.
+[dialect]
+name = "i2cdb"
+levels = ["case", "phase"]
+
+[[marker]]
+pattern = '^CASE_BEGIN (?P<name>.+)$'
+action = "begin"
+level = "case"
+
+[[marker]]
+pattern = '^CASE_END (?P<name>.+)$'
+action = "end"
+level = "case"
+
+[[marker]]
+pattern = '^PHASE (?P<name>\S+)'
+action = "point"
+level = "phase"
+
+[[marker]]
+pattern = '^INPUT (?P<value>.+)$'
+action = "attr"
+key = "input"
+
+[[marker]]
+pattern = '^RESULT (?P<value>.+)$'
+action = "attr"
+key = "result"
