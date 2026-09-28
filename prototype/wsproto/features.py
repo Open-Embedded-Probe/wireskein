@@ -82,7 +82,9 @@ def estimate_units(runs: np.ndarray, max_mult: int = 12, top: int = 6) -> list[U
         resid = np.abs(sel / u2 - k)
         fit = float(np.mean(resid < 0.2)) * min(1.0, len(sel) / len(runs) / 0.5)
         # quantization: when a unit is only a few samples, ±1 sample is a large fraction
-        out.append(UnitCandidate(u2, fit, int(len(sel))))
+        c = UnitCandidate(u2, fit, int(len(sel)))
+        c.resid = float(np.mean(resid))
+        out.append(c)
     if not out:
         return []
     # Every integer fraction of the true unit fits too, so rank by "largest unit
@@ -90,13 +92,18 @@ def estimate_units(runs: np.ndarray, max_mult: int = 12, top: int = 6) -> list[U
     best = max(c.fit for c in out)
     good = sorted((c for c in out if c.fit >= best - 0.03), key=lambda c: -c.samples)
     rest = sorted((c for c in out if c.fit < best - 0.03), key=lambda c: (-c.fit, -c.samples))
-    kept: list[UnitCandidate] = []
+    # near-duplicates (within 6 %) are the same unit: keep the one whose runs sit
+    # closest to integer multiples, so a slightly-off peak does not win
+    merged: list[UnitCandidate] = []
     for c in good + rest:
-        if all(abs(c.samples - k.samples) / k.samples > 0.03 for k in kept):
-            kept.append(c)
-        if len(kept) >= top:
-            break
-    return kept
+        for i, k in enumerate(merged):
+            if abs(c.samples - k.samples) / k.samples <= 0.06:
+                if c.fit >= k.fit - 0.02 and getattr(c, "resid", 1) < getattr(k, "resid", 1):
+                    merged[i] = c
+                break
+        else:
+            merged.append(c)
+    return merged[:top]
 
 
 def channel_features(cap: Capture, ch: Channel) -> ChannelFeatures:

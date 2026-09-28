@@ -144,6 +144,73 @@ class Builder:
         self.fastest = max(self.fastest, freq)
         self.t_end = max(self.t_end, t)
 
+    def add_uart_upper(self, idx: int) -> None:
+        """UART carrying a known upper protocol (or none), 8N1."""
+        from .analyzers.upper import crc16_modbus
+        r = self.rng
+        baud = float(r.choice([4800, 9600, 19200, 38400, 115200])) * (1 + r.uniform(-0.01, 0.01))
+        kind = str(r.choice(["nmea", "modbus", "text", "binary"]))
+        name = f"uart{idx}_tx"
+        w = self.wave(name, 1)
+        t = r.uniform(0.5e-3, 2e-3)
+        sent, frames = b"", []
+        for _ in range(int(r.integers(3, 8))):
+            if kind == "nmea":
+                body = f"GPGGA,{int(r.integers(0, 235959)):06d},{r.uniform(0, 90):08.3f},N,{r.uniform(0, 180):09.3f},E,1,08,0.9,{r.uniform(0, 999):.1f},M,,,"
+                cs = 0
+                for ch in body.encode():
+                    cs ^= ch
+                data = f"${body}*{cs:02X}\r\n".encode()
+                gaps = 0.0
+            elif kind == "modbus":
+                pdu = bytes([int(r.integers(1, 248)), int(r.choice([3, 4, 6, 16]))]) + bytes(r.integers(0, 256, int(r.integers(4, 12)), dtype=np.uint8))
+                crc = crc16_modbus(pdu)
+                data = pdu + bytes([crc & 0xFF, crc >> 8])
+                frames.append(data.hex())
+                gaps = [0.0] * (len(data) - 1) + [45.0]  # >= 3.5 characters of silence after each frame
+            elif kind == "text":
+                data = _payload(r, int(r.integers(10, 40)), True)
+                gaps = 0.0
+            else:
+                data = _payload(r, int(r.integers(10, 40)), False)
+                gaps = 0.0
+            t = gen.uart(w, t, data, baud, gap_bits=gaps)
+            sent += data
+            t += r.uniform(20, 200) / baud * 10
+        p = {"baud": baud, "data_bits": 8, "parity": "none", "stop_bits": 1, "idle": 1, "bit_order": "lsb", "payload": kind}
+        self.buses.append({"protocol": "uart", "roles": {"data": name}, "params": p,
+                           "expect": {"bytes": sent.hex(), **({"modbus": frames} if frames else {})}})
+        self.fastest = max(self.fastest, baud)
+        self.t_end = max(self.t_end, t)
+
+    def add_scpi(self, idx: int) -> None:
+        """Host <-> instrument over two UART lines: queries get a response after a delay."""
+        r = self.rng
+        baud = float(r.choice([9600, 19200, 38400, 57600, 115200])) * (1 + r.uniform(-0.01, 0.01))
+        tx, rx = self.wave(f"scpi{idx}_tx", 1), self.wave(f"scpi{idx}_rx", 1)
+        dialog = [("*IDN?", "ACME,MODEL-1,SN0042,1.0.3"), ("*RST", None), ("CONF:VOLT:DC 10", None),
+                  ("MEAS:VOLT:DC?", "+1.23456E+00"), ("SYST:ERR?", '+0,"No error"'), ("TRIG:SOUR BUS", None),
+                  ("READ?", "-4.20000E-03"), ("MEAS:CURR:DC?", "+2.50000E-01"), ("*OPC?", "1")]
+        t = r.uniform(0.5e-3, 2e-3)
+        exchanges = []
+        for _ in range(int(r.integers(3, 9))):
+            cmd, resp = dialog[int(r.integers(len(dialog)))]
+            t = gen.uart(tx, t, (cmd + "\n").encode(), baud)
+            if resp is not None:
+                t += r.uniform(0.3e-3, 5e-3)
+                t = gen.uart(rx, t, (resp + "\n").encode(), baud)
+            exchanges.append([cmd, resp])
+            t += r.uniform(1e-3, 10e-3)
+        p = {"baud": baud, "data_bits": 8, "parity": "none", "stop_bits": 1, "idle": 1, "bit_order": "lsb"}
+        sent_tx = "".join(c + "\n" for c, _ in exchanges).encode()
+        sent_rx = "".join(x + "\n" for _, x in exchanges if x is not None).encode()
+        self.buses.append({"protocol": "uart", "roles": {"data": f"scpi{idx}_tx"}, "params": p, "expect": {"bytes": sent_tx.hex()}})
+        self.buses.append({"protocol": "uart", "roles": {"data": f"scpi{idx}_rx"}, "params": p, "expect": {"bytes": sent_rx.hex()}})
+        self.buses.append({"protocol": "scpi", "roles": {"tx": f"scpi{idx}_tx", "rx": f"scpi{idx}_rx"}, "params": {"baud": baud},
+                           "expect": {"exchanges": exchanges}})
+        self.fastest = max(self.fastest, baud)
+        self.t_end = max(self.t_end, t)
+
     def add_lin(self, idx: int) -> None:
         r = self.rng
         baud = float(r.choice([9600, 19200, 10417])) * (1 + r.uniform(-0.01, 0.01))
@@ -223,7 +290,8 @@ def scenario(seed: int, profile: str = "mixed", stress: str | None = None) -> tu
     b = Builder(rng, stress)
     b._deferred = []
     kinds = {"mixed": ["uart", "i2c", "spi"], "uart": ["uart"], "i2c": ["i2c"], "spi": ["spi"],
-             "uartlike": ["uart", "lin", "dmx"]}[profile]
+             "uartlike": ["uart", "lin", "dmx"], "duplex": ["scpi", "scpi", "uart"],
+             "upper": ["uart_upper"]}[profile]
     n_bus = int(rng.integers(1, 4)) if profile == "mixed" else 1
     for i in range(n_bus):
         getattr(b, "add_" + str(rng.choice(kinds)))(i)

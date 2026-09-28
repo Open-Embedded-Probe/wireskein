@@ -176,4 +176,21 @@ def relative_phase_concentration(x: np.ndarray, ref: np.ndarray, gap_ratio: floa
     if ok.sum() < 2:
         return 0.0
     ph = 2 * np.pi * (x[sel][ok] - ref[k[ok]]) / iv[k[ok]]
-    return float(np.hypot(np.cos(ph).mean(), np.sin(ph).mean()))
+    r1 = float(np.hypot(np.cos(ph).mean(), np.sin(ph).mean()))
+    # Bidirectional lines (RVSWD/SWD DIO: host and target drive at different
+    # phases) give two clusters; the doubled angle captures two opposite ones.
+    r2 = float(np.hypot(np.cos(2 * ph).mean(), np.sin(2 * ph).mean()))
+    return max(r1, r2)
+
+
+@kernel
+def deglitch(edges: np.ndarray, k: int) -> np.ndarray:
+    """Drop pulses shorter than k samples: an edge within k samples of the
+    previous kept edge cancels it (both edges of the short pulse go)."""
+    out: list[int] = []
+    for x in edges.tolist():
+        if out and x - out[-1] < k:
+            out.pop()
+        else:
+            out.append(x)
+    return np.asarray(out, dtype=np.int64)

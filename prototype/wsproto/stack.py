@@ -28,7 +28,7 @@ class Stream:
     meta: dict = field(default_factory=dict)
 
 
-@dataclass
+@dataclass(eq=False)  # identity: nodes link to parents and children
 class Node:
     analyzer: str
     params: dict
