@@ -8,6 +8,7 @@ Paths for --select: "<protocol>.<layer>" with wildcards, e.g. i2c.transactions,
 uart.lines, spi.transfers, rvswd.dm, *.final, i2c.* .
 
     PYTHONPATH=. uv run python ws.py segments CAPTURE [--results] [--markers JSON]
+    PYTHONPATH=. uv run python ws.py verify RUN_DIR [--junit FILE] [--json FILE]
 
 Marker lines ("# test", "## step", "##" closes; see decl/markers/) split the
 capture into a segment tree; --segment PATH on analyze restricts to one.
@@ -51,6 +52,23 @@ def segments(args) -> None:
         print(text)
 
 
+def verify_cmd(args) -> None:
+    from wsproto import verify
+    rep = verify.verify(args.run)
+    if not args.log:
+        rep.pop("log")
+    for r in rep["results"]:
+        mark = {True: "OK", False: "NG", None: "--"}[r["ok"]]
+        print(f"{mark}  {r['path']}  {r['check']}  {r['capture'] or ''}  {r['reason']}")
+    s = rep["summary"]
+    print(f"{s['ok']} ok, {s['ng']} ng, {s['unchecked']} unchecked ({s['segments']} segments, {s['captures']} captures)")
+    if args.json:
+        args.json.write_text(export.dumps(rep))
+    if args.junit:
+        args.junit.write_text(verify.junit(rep))
+    sys.exit(1 if s["ng"] else 0)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(prog="ws")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -82,9 +100,16 @@ def main() -> None:
     sg.add_argument("--events", action="store_true", help="include text lines (commands, responses, child markers) as events")
     sg.add_argument("--declarative", action="store_true")
     sg.add_argument("--out", type=Path, default=None)
+    vf = sub.add_parser("verify", help="check a recorded run (wsproto/runlog.py) against its expectations")
+    vf.add_argument("run", type=Path, help="run directory with run.json")
+    vf.add_argument("--junit", type=Path, default=None, help="also write JUnit XML")
+    vf.add_argument("--json", type=Path, default=None, help="write the full report (with measured values)")
+    vf.add_argument("--log", action="store_true", help="include the host log (markers, commands, replies) in --json")
     args = ap.parse_args()
     if args.cmd == "segments":
         return segments(args)
+    if args.cmd == "verify":
+        return verify_cmd(args)
 
     hints = None
     if args.hint:
