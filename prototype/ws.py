@@ -40,6 +40,8 @@ def main() -> None:
     a.add_argument("--hint", default=None)
     a.add_argument("--alternatives", action="store_true")
     a.add_argument("--out", type=Path, default=None)
+    a.add_argument("--window", nargs=2, type=float, metavar=("FROM_S", "TO_S"), default=None,
+                   help="only items inside this time range (seconds)")
     args = ap.parse_args()
 
     hints = None
@@ -49,7 +51,8 @@ def main() -> None:
     t0 = time.perf_counter()
     res = staged.analyze(cap, hints)
     mode = "select" if args.select else args.mode
-    doc = export.export(res, cap, mode, args.select, args.alternatives)
+    window = (int(args.window[0] * cap.rate), int(args.window[1] * cap.rate)) if args.window else None
+    doc = export.export(res, cap, mode, args.select, args.alternatives, window)
     doc["analysis_seconds"] = round(time.perf_counter() - t0, 3)
     doc["hints"] = hints
     text = export.dumps(doc)

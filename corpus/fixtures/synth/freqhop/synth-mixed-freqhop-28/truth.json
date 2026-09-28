@@ -1,0 +1,137 @@
+{
+ "id": "synth-mixed-freqhop-28",
+ "generator": {
+  "seed": 28,
+  "profile": "mixed",
+  "stress": "freqhop",
+  "t_start": 0.0,
+  "rate": 200000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 25.356334672347025
+ },
+ "channels": {
+  "D0": {
+   "original": "decoy1_burst_clock",
+   "static": false
+  },
+  "D1": {
+   "original": "spi1_miso",
+   "static": false
+  },
+  "D2": {
+   "original": "spi1_clk",
+   "static": false
+  },
+  "D3": {
+   "original": "spi0_cs",
+   "static": false
+  },
+  "D4": {
+   "original": "spi1_mosi",
+   "static": false
+  },
+  "D5": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D6": {
+   "original": "spi1_cs",
+   "static": false
+  },
+  "D7": {
+   "original": "decoy2_random",
+   "static": false
+  },
+  "D8": {
+   "original": "spi0_miso",
+   "static": false
+  },
+  "D9": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D10": {
+   "original": "decoy0_burst_clock",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D9",
+    "mosi": "D5",
+    "miso": "D8",
+    "cs": "D3"
+   },
+   "params": {
+    "clock_hz": 505314.17053115135,
+    "mode": 3,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "mosi": [
+     "97c841",
+     "85329450b13c5988",
+     "a6634f54"
+    ],
+    "miso": [
+     "b7d7e0",
+     "8f5bf6d3624efec8",
+     "0f179bea"
+    ]
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D2",
+    "mosi": "D4",
+    "miso": "D1",
+    "cs": "D6"
+   },
+   "params": {
+    "clock_hz": 7887575.337066162,
+    "mode": 0,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "cacfe815",
+     "bef95347f572",
+     "ce30",
+     "ab42ab4bbb0580e6",
+     "77fbf4153bf96dff",
+     "0fea",
+     "581c18ef1808bc"
+    ],
+    "miso": [
+     "bbae1a4d",
+     "2ffb80e248d6",
+     "88de",
+     "726b31b883b6f7f5",
+     "2e87a7566f188f8d",
+     "265e",
+     "80139b86115813"
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "burst_clock",
+   "channel": "D10",
+   "freq": 866662.6457830551
+  },
+  {
+   "kind": "burst_clock",
+   "channel": "D0",
+   "freq": 981944.983683385
+  },
+  {
+   "kind": "random",
+   "channel": "D7",
+   "toggle_rate": 15368.476755106687
+  }
+ ]
+}

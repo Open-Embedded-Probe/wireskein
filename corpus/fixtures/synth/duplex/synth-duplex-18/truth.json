@@ -1,0 +1,65 @@
+{
+ "id": "synth-duplex-18",
+ "generator": {
+  "seed": 18,
+  "profile": "duplex",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 8000000.0,
+  "jitter_samples": 0.02,
+  "oversample_vs_fastest": 69.14378695911466
+ },
+ "channels": {
+  "D0": {
+   "original": "uart0_tx",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy1_burst_clock",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy0_clock",
+   "static": false
+  },
+  "D3": {
+   "original": "decoy2_static",
+   "static": true
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 115700.92342108006,
+    "data_bits": 7,
+    "parity": "none",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "2b70463d25592d133e1a70482a4131797600235c1f3c551f2765613c3c1e573643316e24491d59001c7f5c6a7f1c7b6c732d021e53575d7a720255666e5c58771311050e562a4c1d7c0f2e100b44030b0617035a707406685913285f"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "clock",
+   "channel": "D2",
+   "freq": 1000000.0
+  },
+  {
+   "kind": "burst_clock",
+   "channel": "D1",
+   "freq": 273938.3272880126
+  },
+  {
+   "kind": "static",
+   "channel": "D3"
+  }
+ ]
+}

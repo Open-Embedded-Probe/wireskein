@@ -1,0 +1,57 @@
+{
+ "id": "synth-upper-3",
+ "generator": {
+  "seed": 3,
+  "profile": "upper",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 4000000.0,
+  "jitter_samples": 0.02,
+  "oversample_vs_fastest": 34.90595986006919
+ },
+ "channels": {
+  "D0": {
+   "original": "decoy1_static",
+   "static": true
+  },
+  "D1": {
+   "original": "decoy0_clock",
+   "static": false
+  },
+  "D2": {
+   "original": "uart0_tx",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D2"
+   },
+   "params": {
+    "baud": 114593.61140719742,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1,
+    "idle": 1,
+    "bit_order": "lsb",
+    "payload": "nmea"
+   },
+   "expect": {
+    "bytes": "2447504747412c3133373336362c303030382e3437322c4e2c30303037372e3936332c452c312c30382c302e392c3437382e362c4d2c2c2c2a33320d0a2447504747412c3136333134362c303031302e3233302c4e2c30303037302e3432312c452c312c30382c302e392c3531362e322c4d2c2c2c2a33420d0a2447504747412c3137333333302c303035322e3831322c4e2c30303133322e3831312c452c312c30382c302e392c3935352e332c4d2c2c2c2a33370d0a2447504747412c3037353530342c303036322e3635392c4e2c30303035322e3639302c452c312c30382c302e392c312e352c4d2c2c2c2a33440d0a2447504747412c3135333033302c303032362e3835362c4e2c30303035362e3531372c452c312c30382c302e392c3839302e382c4d2c2c2c2a33450d0a2447504747412c3035373733332c303036392e3539352c4e2c30303030352e3436322c452c312c30382c302e392c3730362e332c4d2c2c2c2a33380d0a2447504747412c3131313230392c303030382e3137372c4e2c30303131382e3839302c452c312c30382c302e392c3933302e352c4d2c2c2c2a33390d0a"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "clock",
+   "channel": "D1",
+   "freq": 1000000.0
+  },
+  {
+   "kind": "static",
+   "channel": "D0"
+  }
+ ]
+}

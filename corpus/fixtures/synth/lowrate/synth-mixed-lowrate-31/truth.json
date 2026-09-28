@@ -1,0 +1,119 @@
+{
+ "id": "synth-mixed-lowrate-31",
+ "generator": {
+  "seed": 31,
+  "profile": "mixed",
+  "stress": "lowrate",
+  "t_start": 0.0,
+  "rate": 8000000.0,
+  "jitter_samples": 0.02,
+  "oversample_vs_fastest": 7.945105418915103
+ },
+ "channels": {
+  "D0": {
+   "original": "uart1_tx",
+   "static": false
+  },
+  "D1": {
+   "original": "spi0_miso",
+   "static": false
+  },
+  "D2": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D3": {
+   "original": "decoy0_random",
+   "static": false
+  },
+  "D4": {
+   "original": "spi0_cs",
+   "static": false
+  },
+  "D5": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D6": {
+   "original": "decoy1_pwm",
+   "static": false
+  },
+  "D7": {
+   "original": "decoy2_random",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D5",
+    "mosi": "D2",
+    "miso": "D1",
+    "cs": "D4"
+   },
+   "params": {
+    "clock_hz": 1006909.2325640145,
+    "mode": 0,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "9028",
+     "6c2e",
+     "33415a4de4",
+     "2c6ba510738180b4",
+     "7be9a4",
+     "cb",
+     "a1",
+     "1f"
+    ],
+    "miso": [
+     "1220",
+     "4018",
+     "de751c9769",
+     "3076551ddac5c435",
+     "c88735",
+     "13",
+     "8c",
+     "1f"
+    ]
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 923357.007369688,
+    "data_bits": 8,
+    "parity": "even",
+    "stop_bits": 1.0,
+    "idle": 0,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "434153455f424547494e2044657669636520446574656374696f6e0a74656d703d32332e352068756d3d34312e320a4f4b0d0a74656d703d32332e352068756d3d34312e320a4552524f522031320d0a74656d703d32332e352068756d3d34312e320a4552524f522031320d0a72656164793e204552524f522031320d0a72656164793e20"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "random",
+   "channel": "D3",
+   "toggle_rate": 21454.06785008686
+  },
+  {
+   "kind": "pwm",
+   "channel": "D6",
+   "freq": 13489.590208798145,
+   "duty": 0.89527749119631
+  },
+  {
+   "kind": "random",
+   "channel": "D7",
+   "toggle_rate": 38116.471437680884
+  }
+ ]
+}

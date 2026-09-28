@@ -1,0 +1,56 @@
+{
+ "id": "synth-mixed-glitch-47",
+ "generator": {
+  "seed": 47,
+  "profile": "mixed",
+  "stress": "glitch",
+  "t_start": 0.0,
+  "rate": 100000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 100.13947210082137
+ },
+ "channels": {
+  "D0": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D1": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D2": {
+   "original": "spi0_miso",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D0",
+    "mosi": "D1",
+    "miso": "D2"
+   },
+   "params": {
+    "clock_hz": 998607.2215291794,
+    "mode": 3,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "b4ed48330a6985",
+     "bf2986731d",
+     "e09e00cb10d811",
+     "c4f6272390e661"
+    ],
+    "miso": [
+     "311b96dba7e98a",
+     "53c2ea4a4d",
+     "2abbc78d80ecd6",
+     "63794446a24606"
+    ]
+   }
+  }
+ ],
+ "decoys": []
+}

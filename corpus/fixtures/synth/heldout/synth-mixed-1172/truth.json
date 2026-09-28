@@ -1,0 +1,204 @@
+{
+ "id": "synth-mixed-1172",
+ "generator": {
+  "seed": 1172,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 100000000.0,
+  "jitter_samples": 0.02,
+  "oversample_vs_fastest": 12.455484292805963
+ },
+ "channels": {
+  "D0": {
+   "original": "spi2_clk",
+   "static": false
+  },
+  "D1": {
+   "original": "spi0_cs",
+   "static": false
+  },
+  "D2": {
+   "original": "i2c1_scl",
+   "static": false
+  },
+  "D3": {
+   "original": "spi0_miso",
+   "static": false
+  },
+  "D4": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D5": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D6": {
+   "original": "decoy0_static",
+   "static": true
+  },
+  "D7": {
+   "original": "spi2_mosi",
+   "static": false
+  },
+  "D8": {
+   "original": "i2c1_sda",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D4",
+    "mosi": "D5",
+    "miso": "D3",
+    "cs": "D1"
+   },
+   "params": {
+    "clock_hz": 99451.2263473181,
+    "mode": 1,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "f444fc",
+     "cc86",
+     "a9510371de"
+    ],
+    "miso": [
+     "d01b1b",
+     "8c69",
+     "df964ecb19"
+    ]
+   }
+  },
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D2",
+    "sda": "D8"
+   },
+   "params": {
+    "clock_hz": 987291.3003420605
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 33,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       160,
+       199
+      ]
+     },
+     {
+      "addr": 33,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       215,
+       248,
+       203
+      ]
+     },
+     {
+      "addr": 114,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       89
+      ]
+     },
+     {
+      "addr": 33,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       89,
+       171,
+       238
+      ]
+     },
+     {
+      "addr": 9,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       141,
+       5,
+       210
+      ]
+     },
+     {
+      "addr": 33,
+      "rw": "read",
+      "addr_ack": false,
+      "bytes": []
+     },
+     {
+      "addr": 33,
+      "rw": "read",
+      "addr_ack": false,
+      "bytes": []
+     },
+     {
+      "addr": 33,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       113
+      ]
+     },
+     {
+      "addr": 33,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       250,
+       82
+      ]
+     },
+     {
+      "addr": 33,
+      "rw": "write",
+      "addr_ack": false,
+      "bytes": []
+     }
+    ]
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D0",
+    "mosi": "D7"
+   },
+   "params": {
+    "clock_hz": 8028591.875609203,
+    "mode": 1,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "24",
+     "cd120b48be17a6",
+     "ee57cf7c"
+    ],
+    "miso": [
+     "",
+     "",
+     ""
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "static",
+   "channel": "D6"
+  }
+ ]
+}

@@ -1,0 +1,58 @@
+{
+ "id": "synth-upper-53",
+ "generator": {
+  "seed": 53,
+  "profile": "upper",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 1000000.0,
+  "jitter_samples": 0.02,
+  "oversample_vs_fastest": 25.92814771133718
+ },
+ "channels": {
+  "D0": {
+   "original": "uart0_tx",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy1_burst_clock",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy0_clock",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 38568.123382093596,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1,
+    "idle": 1,
+    "bit_order": "lsb",
+    "payload": "nmea"
+   },
+   "expect": {
+    "bytes": "2447504747412c3232303137302c303030392e3433342c4e2c30303131392e3935392c452c312c30382c302e392c3831382e342c4d2c2c2c2a33390d0a2447504747412c3137343933342c303036392e3139312c4e2c30303035322e3532392c452c312c30382c302e392c3330312e302c4d2c2c2c2a33440d0a2447504747412c3233353535362c303035362e3635362c4e2c30303033322e3738332c452c312c30382c302e392c3737392e382c4d2c2c2c2a33340d0a2447504747412c3131353237342c303030372e3231322c4e2c30303134352e3032302c452c312c30382c302e392c3337332e352c4d2c2c2c2a33450d0a2447504747412c3136363235332c303030312e3833322c4e2c30303132332e3931342c452c312c30382c302e392c3838392e312c4d2c2c2c2a33350d0a"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "clock",
+   "channel": "D2",
+   "freq": 12000000.0
+  },
+  {
+   "kind": "burst_clock",
+   "channel": "D1",
+   "freq": 991485.4859293589
+  }
+ ]
+}

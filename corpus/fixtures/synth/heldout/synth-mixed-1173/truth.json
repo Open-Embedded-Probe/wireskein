@@ -1,0 +1,138 @@
+{
+ "id": "synth-mixed-1173",
+ "generator": {
+  "seed": 1173,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 8000000.0,
+  "jitter_samples": 0.02,
+  "oversample_vs_fastest": 80.43554581478315
+ },
+ "channels": {
+  "D0": {
+   "original": "decoy2_random",
+   "static": false
+  },
+  "D1": {
+   "original": "i2c0_sda",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy1_static",
+   "static": true
+  },
+  "D3": {
+   "original": "i2c0_scl",
+   "static": false
+  },
+  "D4": {
+   "original": "decoy0_static",
+   "static": true
+  }
+ },
+ "buses": [
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D3",
+    "sda": "D1"
+   },
+   "params": {
+    "clock_hz": 99458.5157465257
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 13,
+      "rw": "read",
+      "addr_ack": false,
+      "bytes": []
+     },
+     {
+      "addr": 107,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       44,
+       96
+      ]
+     },
+     {
+      "addr": 63,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       68,
+       132,
+       79,
+       195,
+       80,
+       85
+      ]
+     },
+     {
+      "addr": 108,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       150,
+       184
+      ]
+     },
+     {
+      "addr": 63,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       204,
+       38,
+       132,
+       212,
+       105
+      ]
+     },
+     {
+      "addr": 63,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       219,
+       97,
+       83,
+       113
+      ]
+     },
+     {
+      "addr": 114,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       238,
+       111,
+       57,
+       25,
+       120,
+       120
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "static",
+   "channel": "D4"
+  },
+  {
+   "kind": "static",
+   "channel": "D2"
+  },
+  {
+   "kind": "random",
+   "channel": "D0",
+   "toggle_rate": 42041.534107411295
+  }
+ ]
+}

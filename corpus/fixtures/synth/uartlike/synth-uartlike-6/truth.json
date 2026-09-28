@@ -1,0 +1,97 @@
+{
+ "id": "synth-uartlike-6",
+ "generator": {
+  "seed": 6,
+  "profile": "uartlike",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 1000000.0,
+  "jitter_samples": 0.1,
+  "oversample_vs_fastest": 52.24710620353433
+ },
+ "channels": {
+  "D0": {
+   "original": "lin0",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy2_static",
+   "static": true
+  },
+  "D2": {
+   "original": "decoy0_clock",
+   "static": false
+  },
+  "D3": {
+   "original": "decoy1_random",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "lin",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 19139.816014008324
+   },
+   "expect": {
+    "frames": [
+     [
+      22,
+      "2005df5f6da1"
+     ],
+     [
+      59,
+      "a950"
+     ],
+     [
+      25,
+      "c97e75c1297c"
+     ],
+     [
+      40,
+      "7ee2b173181e"
+     ],
+     [
+      37,
+      "14"
+     ],
+     [
+      51,
+      "d9fe46025cf5b3"
+     ],
+     [
+      58,
+      "6578b6d364"
+     ],
+     [
+      47,
+      "0c33"
+     ],
+     [
+      15,
+      "8cb8"
+     ]
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "clock",
+   "channel": "D2",
+   "freq": 100000.0
+  },
+  {
+   "kind": "random",
+   "channel": "D3",
+   "toggle_rate": 9398.182302023693
+  },
+  {
+   "kind": "static",
+   "channel": "D1"
+  }
+ ]
+}

@@ -1,0 +1,255 @@
+{
+ "id": "synth-mixed-78",
+ "generator": {
+  "seed": 78,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 8000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 77.00024648525887
+ },
+ "channels": {
+  "D0": {
+   "original": "i2c0_scl",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy1_burst_clock",
+   "static": false
+  },
+  "D2": {
+   "original": "i2c1_scl",
+   "static": false
+  },
+  "D3": {
+   "original": "uart2_tx",
+   "static": false
+  },
+  "D4": {
+   "original": "i2c0_sda",
+   "static": false
+  },
+  "D5": {
+   "original": "i2c1_sda",
+   "static": false
+  },
+  "D6": {
+   "original": "decoy0_static",
+   "static": true
+  }
+ },
+ "buses": [
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D0",
+    "sda": "D4"
+   },
+   "params": {
+    "clock_hz": 100181.16520272393
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 110,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       86,
+       97,
+       32,
+       82,
+       167,
+       148
+      ]
+     },
+     {
+      "addr": 110,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       182,
+       27,
+       181,
+       160,
+       222,
+       81
+      ]
+     },
+     {
+      "addr": 110,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       76,
+       239
+      ]
+     },
+     {
+      "addr": 110,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       123
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D2",
+    "sda": "D5"
+   },
+   "params": {
+    "clock_hz": 103895.77131459626
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 92,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       205
+      ]
+     },
+     {
+      "addr": 82,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       109,
+       152,
+       209
+      ]
+     },
+     {
+      "addr": 82,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       66,
+       32,
+       159
+      ]
+     },
+     {
+      "addr": 82,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       74,
+       106,
+       74,
+       102,
+       47,
+       222
+      ]
+     },
+     {
+      "addr": 82,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       84
+      ]
+     },
+     {
+      "addr": 82,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       226,
+       251,
+       67
+      ]
+     },
+     {
+      "addr": 82,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       225,
+       124,
+       38,
+       0
+      ]
+     },
+     {
+      "addr": 82,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       106,
+       39,
+       143,
+       18,
+       172
+      ]
+     },
+     {
+      "addr": 82,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       244,
+       11,
+       108,
+       154,
+       244
+      ]
+     },
+     {
+      "addr": 82,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       201
+      ]
+     },
+     {
+      "addr": 82,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       145,
+       226,
+       205
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D3"
+   },
+   "params": {
+    "baud": 75434.84506281483,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "2447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a74656d703d32332e352068756d3d34312e320a72656164793e202447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "static",
+   "channel": "D6"
+  },
+  {
+   "kind": "burst_clock",
+   "channel": "D1",
+   "freq": 576449.6011576225
+  }
+ ]
+}

@@ -1,0 +1,146 @@
+{
+ "id": "synth-mixed-1167",
+ "generator": {
+  "seed": 1167,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 100000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 100.2408206706495
+ },
+ "channels": {
+  "D0": {
+   "original": "decoy0_static",
+   "static": true
+  },
+  "D1": {
+   "original": "i2c1_scl",
+   "static": false
+  },
+  "D2": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D3": {
+   "original": "spi0_cs",
+   "static": false
+  },
+  "D4": {
+   "original": "i2c1_sda",
+   "static": false
+  },
+  "D5": {
+   "original": "spi0_mosi",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D2",
+    "mosi": "D5",
+    "cs": "D3"
+   },
+   "params": {
+    "clock_hz": 997597.5788203018,
+    "mode": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "mosi": [
+     "9ae2aaef",
+     "9f6c56",
+     "55d665d513d0e6",
+     "5e225b90",
+     "8d74a40885ab"
+    ],
+    "miso": [
+     "",
+     "",
+     "",
+     "",
+     ""
+    ]
+   }
+  },
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D1",
+    "sda": "D4"
+   },
+   "params": {
+    "clock_hz": 101518.61182612328
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 62,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       146,
+       117,
+       34,
+       10
+      ]
+     },
+     {
+      "addr": 69,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       201,
+       99,
+       74,
+       233,
+       107,
+       108
+      ]
+     },
+     {
+      "addr": 23,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       185,
+       39,
+       6,
+       221,
+       3,
+       150
+      ]
+     },
+     {
+      "addr": 69,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       134,
+       24,
+       30,
+       89
+      ]
+     },
+     {
+      "addr": 69,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       125,
+       154
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "static",
+   "channel": "D0"
+  }
+ ]
+}

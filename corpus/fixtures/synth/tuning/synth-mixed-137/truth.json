@@ -1,0 +1,94 @@
+{
+ "id": "synth-mixed-137",
+ "generator": {
+  "seed": 137,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 8000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 16.046888967147364
+ },
+ "channels": {
+  "D0": {
+   "original": "spi0_miso",
+   "static": false
+  },
+  "D1": {
+   "original": "uart1_tx",
+   "static": false
+  },
+  "D2": {
+   "original": "spi0_cs",
+   "static": false
+  },
+  "D3": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D4": {
+   "original": "spi0_clk",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D4",
+    "mosi": "D3",
+    "miso": "D0",
+    "cs": "D2"
+   },
+   "params": {
+    "clock_hz": 498539.00132158457,
+    "mode": 1,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "18e4",
+     "ffa117",
+     "a0ebcb7de6f6a7e8",
+     "4917a873e1f6b3",
+     "3bc5152efed5b46e",
+     "1b7ea0bf88a3",
+     "696c",
+     "e97d8e9f4f81a0",
+     "374a7397",
+     "f110"
+    ],
+    "miso": [
+     "2783",
+     "87854d",
+     "1e2ac8d4eae362ee",
+     "087fc235b40793",
+     "91661a78c88d3106",
+     "a9addc935f1b",
+     "4733",
+     "8175d6867b98a6",
+     "17219679",
+     "17cd"
+    ]
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D1"
+   },
+   "params": {
+    "baud": 74236.42543581876,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 2.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "4f4b0d0a4f4b0d0a2447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a72656164793e202447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a"
+   }
+  }
+ ],
+ "decoys": []
+}

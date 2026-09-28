@@ -1,0 +1,114 @@
+{
+ "id": "synth-mixed-1027",
+ "generator": {
+  "seed": 1027,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 2000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 19.44801484432843
+ },
+ "channels": {
+  "D0": {
+   "original": "i2c1_scl",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy2_clock",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy1_clock",
+   "static": false
+  },
+  "D3": {
+   "original": "i2c1_sda",
+   "static": false
+  },
+  "D4": {
+   "original": "decoy0_clock",
+   "static": false
+  },
+  "D5": {
+   "original": "uart0_tx",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D5"
+   },
+   "params": {
+    "baud": 9612.511115733003,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1.0,
+    "idle": 0,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "566d561c9c59f26d7c31a60ae334fb70883fb1d8daec46af2b794b82c7b04e85d84f787391c7c160618a6ac2bdfb1b9e2830de4d477a208849b9274d7cdd7d1645512295cfbd1100580feeb9d33253c105bc50fd889066021354c38aa5ad4e99325448b4499b0a2297264d7fbdd78b01c9cd2e48774c9f9c4001617929064747ec3ec9b7c9"
+   }
+  },
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D0",
+    "sda": "D3"
+   },
+   "params": {
+    "clock_hz": 102838.25963775703
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 66,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       112,
+       50
+      ]
+     },
+     {
+      "addr": 100,
+      "rw": "read",
+      "addr_ack": false,
+      "bytes": []
+     },
+     {
+      "addr": 66,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       2,
+       38,
+       139,
+       214
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "clock",
+   "channel": "D4",
+   "freq": 100000.0
+  },
+  {
+   "kind": "clock",
+   "channel": "D2",
+   "freq": 12000000.0
+  },
+  {
+   "kind": "clock",
+   "channel": "D1",
+   "freq": 12000000.0
+  }
+ ]
+}

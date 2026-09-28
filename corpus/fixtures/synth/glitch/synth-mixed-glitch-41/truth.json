@@ -1,0 +1,129 @@
+{
+ "id": "synth-mixed-glitch-41",
+ "generator": {
+  "seed": 41,
+  "profile": "mixed",
+  "stress": "glitch",
+  "t_start": 0.0,
+  "rate": 50000000.0,
+  "jitter_samples": 0.1,
+  "oversample_vs_fastest": 6.34492754038452
+ },
+ "channels": {
+  "D0": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D1": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D2": {
+   "original": "spi0_miso",
+   "static": false
+  },
+  "D3": {
+   "original": "spi0_cs",
+   "static": false
+  },
+  "D4": {
+   "original": "i2c1_scl",
+   "static": false
+  },
+  "D5": {
+   "original": "i2c1_sda",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D1",
+    "mosi": "D0",
+    "miso": "D2",
+    "cs": "D3"
+   },
+   "params": {
+    "clock_hz": 7880310.638972225,
+    "mode": 3,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "31b7eb8270ef08d6",
+     "63f123",
+     "971d84bb6254fa55",
+     "56c13c",
+     "b444",
+     "cbe4fb808dd588ed",
+     "5178d8c3916387",
+     "5f3a8e",
+     "ff8d86c72e4a",
+     "3318a58e13bb3159",
+     "0795",
+     "0eed"
+    ],
+    "miso": [
+     "1a6f3d9ab34ddf10",
+     "4cb42e",
+     "134870dc5998ff6b",
+     "62e6e5",
+     "e0c6",
+     "9aa936ef22b5f80e",
+     "31e05428141aff",
+     "af7369",
+     "cc56642c6858",
+     "28277020d62364d6",
+     "e04a",
+     "016b"
+    ]
+   }
+  },
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D4",
+    "sda": "D5"
+   },
+   "params": {
+    "clock_hz": 1049429.4187702155
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 108,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       181,
+       181,
+       225,
+       81,
+       82
+      ]
+     },
+     {
+      "addr": 114,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       181,
+       220,
+       39,
+       142,
+       97
+      ]
+     },
+     {
+      "addr": 108,
+      "rw": "write",
+      "addr_ack": false,
+      "bytes": []
+     }
+    ]
+   }
+  }
+ ],
+ "decoys": []
+}

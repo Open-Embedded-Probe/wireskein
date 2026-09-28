@@ -1,0 +1,10 @@
+{
+ "rate": 50000000.0,
+ "n_samples": 997070,
+ "channels": [
+  {
+   "name": "D0",
+   "initial": 0
+  }
+ ]
+}

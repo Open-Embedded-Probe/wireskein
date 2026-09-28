@@ -1,0 +1,66 @@
+{
+ "id": "synth-upper-5",
+ "generator": {
+  "seed": 5,
+  "profile": "upper",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 1000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 25.88226257909121
+ },
+ "channels": {
+  "D0": {
+   "original": "decoy2_random",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy0_static",
+   "static": true
+  },
+  "D2": {
+   "original": "decoy1_random",
+   "static": false
+  },
+  "D3": {
+   "original": "uart0_tx",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D3"
+   },
+   "params": {
+    "baud": 38636.49852651763,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1,
+    "idle": 1,
+    "bit_order": "lsb",
+    "payload": "binary"
+   },
+   "expect": {
+    "bytes": "ed10c2fa0a67ce0d8f02264785762462c423b48a4200a5627b0c90b818268101caff5536e4307fa908b9586fbf8a6343304464f943287f2d2133d0a174645397c6a0adc1367e7e8a8987f50f8c3b8efc8c4ce733da7d4597758c5cbdd130e147d9d82f7c5bbe1ebedebe4b4f57ff8b313a85"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "static",
+   "channel": "D1"
+  },
+  {
+   "kind": "random",
+   "channel": "D2",
+   "toggle_rate": 159.86421098274954
+  },
+  {
+   "kind": "random",
+   "channel": "D0",
+   "toggle_rate": 25217.861881127857
+  }
+ ]
+}

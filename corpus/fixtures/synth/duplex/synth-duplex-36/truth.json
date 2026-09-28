@@ -1,0 +1,115 @@
+{
+ "id": "synth-duplex-36",
+ "generator": {
+  "seed": 36,
+  "profile": "duplex",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 1000000.0,
+  "jitter_samples": 0.02,
+  "oversample_vs_fastest": 104.37910578499056
+ },
+ "channels": {
+  "D0": {
+   "original": "scpi0_tx",
+   "static": false
+  },
+  "D1": {
+   "original": "scpi0_rx",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy0_random",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 9580.461458061249,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "4d4541533a564f4c543a44433f0a2a4f50433f0a535953543a4552523f0a2a5253540a4d4541533a564f4c543a44433f0a434f4e463a564f4c543a44432031300a434f4e463a564f4c543a44432031300a535953543a4552523f0a"
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D1"
+   },
+   "params": {
+    "baud": 9580.461458061249,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "2b312e3233343536452b30300a310a2b302c224e6f206572726f72220a2b312e3233343536452b30300a2b302c224e6f206572726f72220a"
+   }
+  },
+  {
+   "protocol": "scpi",
+   "roles": {
+    "tx": "D0",
+    "rx": "D1"
+   },
+   "params": {
+    "baud": 9580.461458061249
+   },
+   "expect": {
+    "exchanges": [
+     [
+      "MEAS:VOLT:DC?",
+      "+1.23456E+00"
+     ],
+     [
+      "*OPC?",
+      "1"
+     ],
+     [
+      "SYST:ERR?",
+      "+0,\"No error\""
+     ],
+     [
+      "*RST",
+      null
+     ],
+     [
+      "MEAS:VOLT:DC?",
+      "+1.23456E+00"
+     ],
+     [
+      "CONF:VOLT:DC 10",
+      null
+     ],
+     [
+      "CONF:VOLT:DC 10",
+      null
+     ],
+     [
+      "SYST:ERR?",
+      "+0,\"No error\""
+     ]
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "random",
+   "channel": "D2",
+   "toggle_rate": 1164.229035097823
+  }
+ ]
+}

@@ -1,0 +1,127 @@
+{
+ "id": "synth-duplex-9",
+ "generator": {
+  "seed": 9,
+  "profile": "duplex",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 4000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 34.870899736772486
+ },
+ "channels": {
+  "D0": {
+   "original": "decoy2_static",
+   "static": true
+  },
+  "D1": {
+   "original": "decoy1_random",
+   "static": false
+  },
+  "D2": {
+   "original": "scpi0_tx",
+   "static": false
+  },
+  "D3": {
+   "original": "decoy0_static",
+   "static": true
+  },
+  "D4": {
+   "original": "scpi0_rx",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D2"
+   },
+   "params": {
+    "baud": 114708.82684973773,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "524541443f0a2a4f50433f0a4d4541533a435552523a44433f0a2a4f50433f0a2a49444e3f0a2a4f50433f0a434f4e463a564f4c543a44432031300a"
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D4"
+   },
+   "params": {
+    "baud": 114708.82684973773,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "2d342e3230303030452d30330a310a2b322e3530303030452d30310a310a41434d452c4d4f44454c2d312c534e303034322c312e302e330a310a"
+   }
+  },
+  {
+   "protocol": "scpi",
+   "roles": {
+    "tx": "D2",
+    "rx": "D4"
+   },
+   "params": {
+    "baud": 114708.82684973773
+   },
+   "expect": {
+    "exchanges": [
+     [
+      "READ?",
+      "-4.20000E-03"
+     ],
+     [
+      "*OPC?",
+      "1"
+     ],
+     [
+      "MEAS:CURR:DC?",
+      "+2.50000E-01"
+     ],
+     [
+      "*OPC?",
+      "1"
+     ],
+     [
+      "*IDN?",
+      "ACME,MODEL-1,SN0042,1.0.3"
+     ],
+     [
+      "*OPC?",
+      "1"
+     ],
+     [
+      "CONF:VOLT:DC 10",
+      null
+     ]
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "static",
+   "channel": "D3"
+  },
+  {
+   "kind": "random",
+   "channel": "D1",
+   "toggle_rate": 49388.26327003938
+  },
+  {
+   "kind": "static",
+   "channel": "D0"
+  }
+ ]
+}

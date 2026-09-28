@@ -1,0 +1,48 @@
+{
+ "id": "synth-upper-31",
+ "generator": {
+  "seed": 31,
+  "profile": "upper",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 1000000.0,
+  "jitter_samples": 0.1,
+  "oversample_vs_fastest": 52.537596231213755
+ },
+ "channels": {
+  "D0": {
+   "original": "uart0_tx",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy0_static",
+   "static": true
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 19033.988452746868,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1,
+    "idle": 1,
+    "bit_order": "lsb",
+    "payload": "binary"
+   },
+   "expect": {
+    "bytes": "a902ac5a23e86bad1e5281b2c107270ab32a482f90281c0d40188afad5db149b33415a4de43c664dde751c97693acad18950dcfb2c6ba510738180b47be9a46cc88735a79ee48e1acb681a8c1365"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "static",
+   "channel": "D1"
+  }
+ ]
+}

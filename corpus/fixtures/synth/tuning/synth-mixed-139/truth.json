@@ -1,0 +1,140 @@
+{
+ "id": "synth-mixed-139",
+ "generator": {
+  "seed": 139,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 16000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 16.594337220778574
+ },
+ "channels": {
+  "D0": {
+   "original": "i2c0_scl",
+   "static": false
+  },
+  "D1": {
+   "original": "spi1_mosi",
+   "static": false
+  },
+  "D2": {
+   "original": "i2c0_sda",
+   "static": false
+  },
+  "D3": {
+   "original": "spi1_clk",
+   "static": false
+  },
+  "D4": {
+   "original": "spi1_cs",
+   "static": false
+  },
+  "D5": {
+   "original": "spi1_miso",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D0",
+    "sda": "D2"
+   },
+   "params": {
+    "clock_hz": 964184.3351215995
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 72,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": []
+     },
+     {
+      "addr": 83,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       72,
+       20,
+       175,
+       32,
+       248
+      ]
+     },
+     {
+      "addr": 72,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       32
+      ]
+     },
+     {
+      "addr": 72,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       68,
+       6,
+       110,
+       200
+      ]
+     },
+     {
+      "addr": 72,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       228,
+       75,
+       196,
+       188,
+       7
+      ]
+     },
+     {
+      "addr": 72,
+      "rw": "read",
+      "addr_ack": false,
+      "bytes": []
+     }
+    ]
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D3",
+    "mosi": "D1",
+    "miso": "D5",
+    "cs": "D4"
+   },
+   "params": {
+    "clock_hz": 506404.5373408338,
+    "mode": 3,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "a0",
+     "4af6be273ca7c98b",
+     "3ffb2c54518fe7",
+     "3160ffb9337641",
+     "c5ce"
+    ],
+    "miso": [
+     "d2",
+     "3b389d459b3e2289",
+     "9b4c3affb8bf38",
+     "4271cb888b29cf",
+     "e82a"
+    ]
+   }
+  }
+ ],
+ "decoys": []
+}

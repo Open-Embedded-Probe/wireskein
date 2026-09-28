@@ -1,0 +1,183 @@
+{
+ "id": "synth-mixed-glitch-5",
+ "generator": {
+  "seed": 5,
+  "profile": "mixed",
+  "stress": "glitch",
+  "t_start": 0.0,
+  "rate": 4000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 7.862734871243106
+ },
+ "channels": {
+  "D0": {
+   "original": "spi2_mosi",
+   "static": false
+  },
+  "D1": {
+   "original": "spi2_clk",
+   "static": false
+  },
+  "D2": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D3": {
+   "original": "spi0_cs",
+   "static": false
+  },
+  "D4": {
+   "original": "spi0_miso",
+   "static": false
+  },
+  "D5": {
+   "original": "i2c1_scl",
+   "static": false
+  },
+  "D6": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D7": {
+   "original": "decoy0_random",
+   "static": false
+  },
+  "D8": {
+   "original": "i2c1_sda",
+   "static": false
+  },
+  "D9": {
+   "original": "spi2_cs",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D6",
+    "mosi": "D2",
+    "miso": "D4",
+    "cs": "D3"
+   },
+   "params": {
+    "clock_hz": 100061.30224416856,
+    "mode": 3,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "32b39168ce",
+     "90",
+     "7fa9",
+     "bdb5",
+     "304464",
+     "d95535cc78861fd8"
+    ],
+    "miso": [
+     "b527970bb4",
+     "81",
+     "6df7",
+     "08b9",
+     "43287f",
+     "0e7fa01dd0a17464"
+    ]
+   }
+  },
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D5",
+    "sda": "D8"
+   },
+   "params": {
+    "clock_hz": 100555.96116920724
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 109,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       173,
+       31
+      ]
+     },
+     {
+      "addr": 105,
+      "rw": "write",
+      "addr_ack": false,
+      "bytes": []
+     },
+     {
+      "addr": 109,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       238,
+       52,
+       135,
+       83
+      ]
+     },
+     {
+      "addr": 109,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       178,
+       148
+      ]
+     },
+     {
+      "addr": 109,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       37,
+       204,
+       133
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D1",
+    "mosi": "D0",
+    "cs": "D9"
+   },
+   "params": {
+    "clock_hz": 508728.84123684006,
+    "mode": 1,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "a344d0f1a212",
+     "7931bd761cef",
+     "0b91",
+     "869a9ea79b37",
+     "9f7a"
+    ],
+    "miso": [
+     "",
+     "",
+     "",
+     "",
+     ""
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "random",
+   "channel": "D7",
+   "toggle_rate": 9781.871252751524
+  }
+ ]
+}

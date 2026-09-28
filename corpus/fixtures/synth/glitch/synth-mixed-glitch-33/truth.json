@@ -1,0 +1,132 @@
+{
+ "id": "synth-mixed-glitch-33",
+ "generator": {
+  "seed": 33,
+  "profile": "mixed",
+  "stress": "glitch",
+  "t_start": 0.0,
+  "rate": 4000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 17.33651427959506
+ },
+ "channels": {
+  "D0": {
+   "original": "i2c0_scl",
+   "static": false
+  },
+  "D1": {
+   "original": "i2c0_sda",
+   "static": false
+  },
+  "D2": {
+   "original": "uart1_tx",
+   "static": false
+  },
+  "D3": {
+   "original": "uart2_tx",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D0",
+    "sda": "D1"
+   },
+   "params": {
+    "clock_hz": 104081.0377496082
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 71,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       237
+      ]
+     },
+     {
+      "addr": 71,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       106,
+       61,
+       129,
+       12,
+       14
+      ]
+     },
+     {
+      "addr": 71,
+      "rw": "read",
+      "addr_ack": false,
+      "bytes": []
+     },
+     {
+      "addr": 71,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       38,
+       102,
+       219,
+       18,
+       164
+      ]
+     },
+     {
+      "addr": 71,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       26,
+       53,
+       116,
+       64,
+       65,
+       63
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D2"
+   },
+   "params": {
+    "baud": 57643.42591511971,
+    "data_bits": 7,
+    "parity": "even",
+    "stop_bits": 2.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "4809192a611e55317a2e461a2205294334110a0a59103e1a1c131d020f224503112a0b7c194118"
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D3"
+   },
+   "params": {
+    "baud": 230726.88866342456,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1.0,
+    "idle": 0,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "7c60ef4c8eeef1a798161f301bf7f9ce60be7e5353c73a01669a86aa1fe8d1cc95a85603ebb541b464a10974465a372b762faab8b8a2c20680ce6a36243c05cad39679d770b5c5a6187f538f23bee06d05c6a6ef"
+   }
+  }
+ ],
+ "decoys": []
+}

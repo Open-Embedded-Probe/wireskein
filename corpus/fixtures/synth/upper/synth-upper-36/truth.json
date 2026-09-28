@@ -1,0 +1,67 @@
+{
+ "id": "synth-upper-36",
+ "generator": {
+  "seed": 36,
+  "profile": "upper",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 1000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 104.37910578499056
+ },
+ "channels": {
+  "D0": {
+   "original": "uart0_tx",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy0_burst_clock",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy2_clock",
+   "static": false
+  },
+  "D3": {
+   "original": "decoy1_clock",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 9580.461458061249,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1,
+    "idle": 1,
+    "bit_order": "lsb",
+    "payload": "nmea"
+   },
+   "expect": {
+    "bytes": "2447504747412c3039353138322c303036312e3437302c4e2c30303039312e3939352c452c312c30382c302e392c3533342e392c4d2c2c2c2a33390d0a2447504747412c3035333439332c303031322e3739332c4e2c30303035392e3135322c452c312c30382c302e392c3430382e312c4d2c2c2c2a33440d0a2447504747412c3035383035382c303038342e3039382c4e2c30303033392e3032392c452c312c30382c302e392c3237392e342c4d2c2c2c2a33380d0a2447504747412c3030313832352c303032342e3233332c4e2c30303133372e3031362c452c312c30382c302e392c3931392e302c4d2c2c2c2a33350d0a2447504747412c3131343236332c303030312e3931392c4e2c30303038322e3930382c452c312c30382c302e392c3535392e372c4d2c2c2c2a33410d0a2447504747412c3039343631392c303033382e3235372c4e2c30303032392e3735332c452c312c30382c302e392c38352e322c4d2c2c2c2a30310d0a2447504747412c3039343133312c303037312e3432392c4e2c30303035302e3935332c452c312c30382c302e392c3631332e392c4d2c2c2c2a33430d0a"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "burst_clock",
+   "channel": "D1",
+   "freq": 899427.5238346604
+  },
+  {
+   "kind": "clock",
+   "channel": "D3",
+   "freq": 115200.0
+  },
+  {
+   "kind": "clock",
+   "channel": "D2",
+   "freq": 1000000.0
+  }
+ ]
+}

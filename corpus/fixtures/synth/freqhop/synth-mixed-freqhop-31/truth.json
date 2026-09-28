@@ -1,0 +1,152 @@
+{
+ "id": "synth-mixed-freqhop-31",
+ "generator": {
+  "seed": 31,
+  "profile": "mixed",
+  "stress": "freqhop",
+  "t_start": 0.0,
+  "rate": 50000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 12.451215471753946
+ },
+ "channels": {
+  "D0": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D1": {
+   "original": "spi1_clk",
+   "static": false
+  },
+  "D2": {
+   "original": "spi1_miso",
+   "static": false
+  },
+  "D3": {
+   "original": "decoy1_pwm",
+   "static": false
+  },
+  "D4": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D5": {
+   "original": "spi0_miso",
+   "static": false
+  },
+  "D6": {
+   "original": "spi1_cs",
+   "static": false
+  },
+  "D7": {
+   "original": "spi1_mosi",
+   "static": false
+  },
+  "D8": {
+   "original": "decoy2_static",
+   "static": true
+  },
+  "D9": {
+   "original": "spi0_cs",
+   "static": false
+  },
+  "D10": {
+   "original": "decoy0_static",
+   "static": true
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D0",
+    "mosi": "D4",
+    "miso": "D5",
+    "cs": "D9"
+   },
+   "params": {
+    "clock_hz": 1006909.2325640145,
+    "mode": 0,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "9028",
+     "6c2e",
+     "33415a4de4",
+     "2c6ba510738180b4",
+     "7be9a4",
+     "cb",
+     "a1",
+     "1f"
+    ],
+    "miso": [
+     "1220",
+     "4018",
+     "de751c9769",
+     "3076551ddac5c435",
+     "c88735",
+     "13",
+     "8c",
+     "1f"
+    ]
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D1",
+    "mosi": "D7",
+    "miso": "D2",
+    "cs": "D6"
+   },
+   "params": {
+    "clock_hz": 4015672.2139639216,
+    "mode": 1,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "53b7a855",
+     "ba78cf",
+     "91",
+     "32b6",
+     "1b94",
+     "b14e763f",
+     "171c3015f0",
+     "8068e6c09c",
+     "9c8373ca6961",
+     "bc6641ddc1d940"
+    ],
+    "miso": [
+     "32e8a90a",
+     "9fe321",
+     "9a",
+     "3e62",
+     "4ca5",
+     "f695208d",
+     "8d1f08aa01",
+     "b7059774ce",
+     "bbc70afc6284",
+     "9dd3ebac10f2c5"
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "static",
+   "channel": "D10"
+  },
+  {
+   "kind": "pwm",
+   "channel": "D3",
+   "freq": 31536.434343810954,
+   "duty": 0.8977944213884123
+  },
+  {
+   "kind": "static",
+   "channel": "D8"
+  }
+ ]
+}

@@ -1,0 +1,98 @@
+{
+ "id": "synth-mixed-71",
+ "generator": {
+  "seed": 71,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 50000000.0,
+  "jitter_samples": 0.02,
+  "oversample_vs_fastest": 6.291704429357324
+ },
+ "channels": {
+  "D0": {
+   "original": "spi1_mosi",
+   "static": false
+  },
+  "D1": {
+   "original": "uart2_tx",
+   "static": false
+  },
+  "D2": {
+   "original": "spi1_clk",
+   "static": false
+  },
+  "D3": {
+   "original": "uart0_tx",
+   "static": false
+  },
+  "D4": {
+   "original": "spi1_cs",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D3"
+   },
+   "params": {
+    "baud": 231602.62606272203,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "41542b474d520d0a41542b474d520d0a434153455f424547494e2044657669636520446574656374696f6e0a2447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a"
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D2",
+    "mosi": "D0",
+    "cs": "D4"
+   },
+   "params": {
+    "clock_hz": 7946972.169687145,
+    "mode": 0,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "7c250e22df07ba",
+     "677d20",
+     "771ccedeaa",
+     "877acc628204dc68"
+    ],
+    "miso": [
+     "",
+     "",
+     "",
+     ""
+    ]
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D1"
+   },
+   "params": {
+    "baud": 9584.866908766873,
+    "data_bits": 7,
+    "parity": "odd",
+    "stop_bits": 2.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "434153455f424547494e2044657669636520446574656374696f6e0a4552524f522031320d0a434153455f424547494e2044657669636520446574656374696f6e0a41542b474d520d0a2447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a4f4b0d0a72656164793e2074656d703d32332e352068756d3d34312e320a72656164793e20434153455f424547494e2044657669636520446574656374696f6e0a72656164793e20"
+   }
+  }
+ ],
+ "decoys": []
+}

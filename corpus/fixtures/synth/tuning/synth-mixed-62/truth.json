@@ -1,0 +1,156 @@
+{
+ "id": "synth-mixed-62",
+ "generator": {
+  "seed": 62,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 100000000.0,
+  "jitter_samples": 0.1,
+  "oversample_vs_fastest": 12.403449110461775
+ },
+ "channels": {
+  "D0": {
+   "original": "i2c0_scl",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy0_static",
+   "static": true
+  },
+  "D2": {
+   "original": "spi1_miso",
+   "static": false
+  },
+  "D3": {
+   "original": "i2c0_sda",
+   "static": false
+  },
+  "D4": {
+   "original": "spi1_mosi",
+   "static": false
+  },
+  "D5": {
+   "original": "spi1_cs",
+   "static": false
+  },
+  "D6": {
+   "original": "spi1_clk",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D0",
+    "sda": "D3"
+   },
+   "params": {
+    "clock_hz": 411227.89537351887
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 40,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       131
+      ]
+     },
+     {
+      "addr": 91,
+      "rw": "write",
+      "addr_ack": false,
+      "bytes": []
+     },
+     {
+      "addr": 91,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       30,
+       237,
+       112
+      ]
+     },
+     {
+      "addr": 78,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       123,
+       217,
+       176,
+       82
+      ]
+     },
+     {
+      "addr": 91,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       144,
+       175
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D6",
+    "mosi": "D4",
+    "miso": "D2",
+    "cs": "D5"
+   },
+   "params": {
+    "clock_hz": 8062273.574828014,
+    "mode": 2,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "76f943a301b1b245",
+     "534aa2887ade4085",
+     "7c",
+     "f72be1",
+     "a1e309867bca1c5f",
+     "439f0e770d7d5a90",
+     "e3ed582bb6",
+     "63",
+     "cc5670dde36dd452",
+     "5a",
+     "9942e31eee486e",
+     "da1a",
+     "17920e78cf9ac2",
+     "9f"
+    ],
+    "miso": [
+     "cd066820f144babf",
+     "07db3eeb1dd79960",
+     "88",
+     "647e29",
+     "0de64b7bc08797c7",
+     "0ddadb53d555a0c4",
+     "5c0a078c3b",
+     "66",
+     "a4742be06d5e241b",
+     "ab",
+     "8acfa9c8ebcc7b",
+     "b76f",
+     "a68a0c1702889b",
+     "d5"
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "static",
+   "channel": "D1"
+  }
+ ]
+}

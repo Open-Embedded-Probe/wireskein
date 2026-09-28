@@ -1,0 +1,121 @@
+{
+ "id": "synth-mixed-1091",
+ "generator": {
+  "seed": 1091,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 2000000.0,
+  "jitter_samples": 0.1,
+  "oversample_vs_fastest": 4.876261882415834
+ },
+ "channels": {
+  "D0": {
+   "original": "i2c1_scl",
+   "static": false
+  },
+  "D1": {
+   "original": "uart0_tx",
+   "static": false
+  },
+  "D2": {
+   "original": "i2c1_sda",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D1"
+   },
+   "params": {
+    "baud": 115286.39420860811,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "78974c38807943af20c5f85578060fd898c5a386dbc31b98005156a2b2844b4c32fb0344ef370955380c46d627dfd3ebbdd3da140ecfa752b9f22e39bdf93609e3427dba7f38057787ebcbba78bdd47923a525689e2cb4c95444e629d738904df9dc12c7349754bcf195f79a889acbf9de82d4e8d9ebca365f3ed85629042a221b630e65522f0a4c5a3fac9cfdba"
+   }
+  },
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D0",
+    "sda": "D2"
+   },
+   "params": {
+    "clock_hz": 410150.2438193793
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 88,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       111,
+       42
+      ]
+     },
+     {
+      "addr": 88,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       223
+      ]
+     },
+     {
+      "addr": 88,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       239,
+       193,
+       208,
+       227,
+       250
+      ]
+     },
+     {
+      "addr": 88,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       167,
+       41,
+       85,
+       243
+      ]
+     },
+     {
+      "addr": 88,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       174,
+       237,
+       213,
+       214
+      ]
+     },
+     {
+      "addr": 88,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       50,
+       42,
+       233
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "decoys": []
+}

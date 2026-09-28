@@ -1,0 +1,154 @@
+{
+ "id": "synth-mixed-1113",
+ "generator": {
+  "seed": 1113,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 50000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 6.2541930811187845
+ },
+ "channels": {
+  "D0": {
+   "original": "spi1_clk",
+   "static": false
+  },
+  "D1": {
+   "original": "spi0_cs",
+   "static": false
+  },
+  "D2": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D3": {
+   "original": "decoy1_burst_clock",
+   "static": false
+  },
+  "D4": {
+   "original": "decoy0_random",
+   "static": false
+  },
+  "D5": {
+   "original": "uart2_tx",
+   "static": false
+  },
+  "D6": {
+   "original": "spi0_miso",
+   "static": false
+  },
+  "D7": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D8": {
+   "original": "spi1_cs",
+   "static": false
+  },
+  "D9": {
+   "original": "spi1_mosi",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D7",
+    "mosi": "D2",
+    "miso": "D6",
+    "cs": "D1"
+   },
+   "params": {
+    "clock_hz": 1015932.6416814281,
+    "mode": 0,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "3ad36a",
+     "93c5",
+     "05c86317",
+     "6f85e3da5c",
+     "609459",
+     "c6b48909",
+     "65",
+     "a91a7b8c",
+     "63",
+     "d942c1",
+     "20236d695d"
+    ],
+    "miso": [
+     "9d3128",
+     "1e0d",
+     "220269eb",
+     "cba7e03cc7",
+     "00af3e",
+     "883bb613",
+     "9f",
+     "f1137d00",
+     "89",
+     "b76f7b",
+     "2fde054b37"
+    ]
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D0",
+    "mosi": "D9",
+    "cs": "D8"
+   },
+   "params": {
+    "clock_hz": 7994636.454532952,
+    "mode": 2,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "mosi": [
+     "fc75",
+     "129642afa7d7",
+     "ce",
+     "f5df"
+    ],
+    "miso": [
+     "",
+     "",
+     "",
+     ""
+    ]
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D5"
+   },
+   "params": {
+    "baud": 9619.124544315266,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "2447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a74656d703d32332e352068756d3d34312e320a"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "random",
+   "channel": "D4",
+   "toggle_rate": 47607.86814550728
+  },
+  {
+   "kind": "burst_clock",
+   "channel": "D3",
+   "freq": 78039.39757818574
+  }
+ ]
+}

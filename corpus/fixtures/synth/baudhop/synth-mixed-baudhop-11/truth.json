@@ -1,0 +1,56 @@
+{
+ "id": "synth-mixed-baudhop-11",
+ "generator": {
+  "seed": 11,
+  "profile": "mixed",
+  "stress": "baudhop",
+  "t_start": 0.0,
+  "rate": 16000000.0,
+  "jitter_samples": 0.1,
+  "oversample_vs_fastest": 31.93517264851515
+ },
+ "channels": {
+  "D0": {
+   "original": "uart0_tx",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 250507.49178811678,
+    "data_bits": 8,
+    "parity": "even",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb",
+    "baud_segments": [
+     {
+      "from": 0.0003267570370775543,
+      "baud": 250507.49178811678
+     },
+     {
+      "from": 0.002653523239997891,
+      "baud": 250507.49178811678
+     },
+     {
+      "from": 0.004867994147035536,
+      "baud": 501014.98357623356
+     },
+     {
+      "from": 0.005473743149819914,
+      "baud": 501014.98357623356
+     }
+    ]
+   },
+   "expect": {
+    "bytes": "59d022c14ca7c5f2e745c18d1ba3e8d200d4ce7bdb05d8a334ea281ae30601ea6b16ffc288fefb69004b81e49af0c8fe23bab17ccba7"
+   }
+  }
+ ],
+ "decoys": []
+}

@@ -1,0 +1,135 @@
+{
+ "id": "synth-mixed-baudhop-38",
+ "generator": {
+  "seed": 38,
+  "profile": "mixed",
+  "stress": "baudhop",
+  "t_start": 0.0,
+  "rate": 1000000.0,
+  "jitter_samples": 0.02,
+  "oversample_vs_fastest": 9.78437089300018
+ },
+ "channels": {
+  "D0": {
+   "original": "decoy2_clock",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy1_clock",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy0_pwm",
+   "static": false
+  },
+  "D3": {
+   "original": "i2c0_scl",
+   "static": false
+  },
+  "D4": {
+   "original": "i2c0_sda",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D3",
+    "sda": "D4"
+   },
+   "params": {
+    "clock_hz": 102203.81166411101
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 35,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       141,
+       213,
+       179,
+       127
+      ]
+     },
+     {
+      "addr": 35,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": []
+     },
+     {
+      "addr": 35,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": []
+     },
+     {
+      "addr": 35,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       55,
+       84,
+       213,
+       193,
+       133,
+       89
+      ]
+     },
+     {
+      "addr": 35,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       95,
+       149,
+       157,
+       138
+      ]
+     },
+     {
+      "addr": 35,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       199,
+       153,
+       70,
+       224,
+       32
+      ]
+     },
+     {
+      "addr": 35,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       234
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "pwm",
+   "channel": "D2",
+   "freq": 25521.564783547507,
+   "duty": 0.8487491751788769
+  },
+  {
+   "kind": "clock",
+   "channel": "D1",
+   "freq": 1000000.0
+  },
+  {
+   "kind": "clock",
+   "channel": "D0",
+   "freq": 1000000.0
+  }
+ ]
+}

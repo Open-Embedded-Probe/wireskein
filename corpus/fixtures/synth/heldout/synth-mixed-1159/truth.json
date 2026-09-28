@@ -1,0 +1,145 @@
+{
+ "id": "synth-mixed-1159",
+ "generator": {
+  "seed": 1159,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 100000000.0,
+  "jitter_samples": 0.02,
+  "oversample_vs_fastest": 199.04076763302547
+ },
+ "channels": {
+  "D0": {
+   "original": "spi0_miso",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy0_clock",
+   "static": false
+  },
+  "D2": {
+   "original": "i2c1_sda",
+   "static": false
+  },
+  "D3": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D4": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D5": {
+   "original": "i2c1_scl",
+   "static": false
+  },
+  "D6": {
+   "original": "spi0_cs",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D3",
+    "mosi": "D4",
+    "miso": "D0",
+    "cs": "D6"
+   },
+   "params": {
+    "clock_hz": 502409.63793091645,
+    "mode": 2,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "9aeba6cb54b99124",
+     "c7abb95455712025",
+     "82fd",
+     "efc550",
+     "a104c1c4ee17fbfa",
+     "b25711a5",
+     "e2c6cfee1ca0",
+     "5e06373b35d751a2",
+     "476aa088",
+     "8d"
+    ],
+    "miso": [
+     "15cfbb8b0ea08af3",
+     "1dea1a162c0abefd",
+     "e61f",
+     "d743dc",
+     "bc4e0fba9c2f0af4",
+     "04e3fd3b",
+     "4e7b8e4c72e3",
+     "0b2fba8210f5d13f",
+     "b0084062",
+     "39"
+    ]
+   }
+  },
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D5",
+    "sda": "D2"
+   },
+   "params": {
+    "clock_hz": 410262.3873792961
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 55,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       35,
+       118,
+       84,
+       131,
+       128,
+       187
+      ]
+     },
+     {
+      "addr": 55,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": []
+     },
+     {
+      "addr": 55,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       64,
+       201
+      ]
+     },
+     {
+      "addr": 55,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       27,
+       142,
+       217,
+       193,
+       92
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "clock",
+   "channel": "D1",
+   "freq": 100000.0
+  }
+ ]
+}

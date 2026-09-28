@@ -1,0 +1,65 @@
+{
+ "id": "synth-mixed-jitter-27",
+ "generator": {
+  "seed": 27,
+  "profile": "mixed",
+  "stress": "jitter",
+  "t_start": 0.0,
+  "rate": 4000000.0,
+  "jitter_samples": 0.3,
+  "oversample_vs_fastest": 8.123081879282267
+ },
+ "channels": {
+  "D0": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy0_random",
+   "static": false
+  },
+  "D2": {
+   "original": "spi0_mosi",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D0",
+    "mosi": "D2"
+   },
+   "params": {
+    "clock_hz": 492423.9419772325,
+    "mode": 1,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "019d9002b1f8",
+     "58fb",
+     "dcbfcf",
+     "c4897c4c9ea64767",
+     "ec7f8b2ec669",
+     "0cf7f101c8bf35"
+    ],
+    "miso": [
+     "",
+     "",
+     "",
+     "",
+     "",
+     ""
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "random",
+   "channel": "D1",
+   "toggle_rate": 13490.271452441857
+  }
+ ]
+}

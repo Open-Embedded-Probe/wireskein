@@ -1,0 +1,108 @@
+{
+ "id": "synth-duplex-30",
+ "generator": {
+  "seed": 30,
+  "profile": "duplex",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 1000000.0,
+  "jitter_samples": 0.02,
+  "oversample_vs_fastest": 52.1572850629244
+ },
+ "channels": {
+  "D0": {
+   "original": "scpi0_tx",
+   "static": false
+  },
+  "D1": {
+   "original": "scpi0_rx",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy0_pwm",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 19172.777087487673,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "545249473a534f5552204255530a2a5253540a4d4541533a435552523a44433f0a524541443f0a545249473a534f5552204255530a545249473a534f5552204255530a"
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D1"
+   },
+   "params": {
+    "baud": 19172.777087487673,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "2b322e3530303030452d30310a2d342e3230303030452d30330a"
+   }
+  },
+  {
+   "protocol": "scpi",
+   "roles": {
+    "tx": "D0",
+    "rx": "D1"
+   },
+   "params": {
+    "baud": 19172.777087487673
+   },
+   "expect": {
+    "exchanges": [
+     [
+      "TRIG:SOUR BUS",
+      null
+     ],
+     [
+      "*RST",
+      null
+     ],
+     [
+      "MEAS:CURR:DC?",
+      "+2.50000E-01"
+     ],
+     [
+      "READ?",
+      "-4.20000E-03"
+     ],
+     [
+      "TRIG:SOUR BUS",
+      null
+     ],
+     [
+      "TRIG:SOUR BUS",
+      null
+     ]
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "pwm",
+   "channel": "D2",
+   "freq": 30746.819774032258,
+   "duty": 0.7193603282848465
+  }
+ ]
+}

@@ -1,0 +1,50 @@
+{
+ "id": "synth-uartlike-55",
+ "generator": {
+  "seed": 55,
+  "profile": "uartlike",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 2000000.0,
+  "jitter_samples": 0.02,
+  "oversample_vs_fastest": 8.0
+ },
+ "channels": {
+  "D0": {
+   "original": "decoy0_pwm",
+   "static": false
+  },
+  "D1": {
+   "original": "dmx0",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "dmx512",
+   "roles": {
+    "data": "D1"
+   },
+   "params": {
+    "baud": 250000.0
+   },
+   "expect": {
+    "packets": [
+     "7ca1e2de05ebb538be90e6379b72f8c798a5e73a60f5c1966869247ec468f2565b37d3c0deaa8682869348b4c0b30e1e",
+     "7adc24c83b605a11c28ea6b0856ab87d1088e45a4ce6a056bd741766b939179a05e9e2032a3cd30a0d3ff06a0a1b0a57161c38b14448ea14aeebb87de5",
+     "4143ba9617903b403e20f7817fc94cc4b86612fb4b1eb1a7bb07ce5e7ab82790fcb37e6ea11b8b89c151eb856761ba019939b00eb77c7bb3ad9d2d06fe5f",
+     "8f0b79cc1d3a9296b8ec06df0911209525cc83b12eaf482dec",
+     "7b04bd146af530c5ebdc9a58e1dd8e556d95ca1444ae9776cd"
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "pwm",
+   "channel": "D0",
+   "freq": 29924.94603285829,
+   "duty": 0.29434932264688096
+  }
+ ]
+}

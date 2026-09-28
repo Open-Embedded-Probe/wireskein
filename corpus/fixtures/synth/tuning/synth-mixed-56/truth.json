@@ -1,0 +1,150 @@
+{
+ "id": "synth-mixed-56",
+ "generator": {
+  "seed": 56,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 50000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 12.47796933376357
+ },
+ "channels": {
+  "D0": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D1": {
+   "original": "spi1_miso",
+   "static": false
+  },
+  "D2": {
+   "original": "spi0_miso",
+   "static": false
+  },
+  "D3": {
+   "original": "spi1_clk",
+   "static": false
+  },
+  "D4": {
+   "original": "decoy0_pwm",
+   "static": false
+  },
+  "D5": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D6": {
+   "original": "spi0_cs",
+   "static": false
+  },
+  "D7": {
+   "original": "spi1_cs",
+   "static": false
+  },
+  "D8": {
+   "original": "spi1_mosi",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D0",
+    "mosi": "D5",
+    "miso": "D2",
+    "cs": "D6"
+   },
+   "params": {
+    "clock_hz": 509616.02135538554,
+    "mode": 0,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "2e2e4c9b",
+     "af2b81",
+     "9192d242d33c36",
+     "2c06e99fbf",
+     "ac33a9",
+     "f8615a54da33c959",
+     "fbea404968",
+     "7d5a40",
+     "9cc74567b87e98b5",
+     "82a8db19c1",
+     "d54b1fc2"
+    ],
+    "miso": [
+     "df645a29",
+     "35b8c8",
+     "861dd507287fef",
+     "c66d568c6d",
+     "6de6bd",
+     "ed85317fc0bdea32",
+     "21e266b781",
+     "9709a9",
+     "d794563966fcf1ef",
+     "7a7aa95d42",
+     "5d1a4bea"
+    ]
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D3",
+    "mosi": "D8",
+    "miso": "D1",
+    "cs": "D7"
+   },
+   "params": {
+    "clock_hz": 4007062.2600992676,
+    "mode": 1,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "11765bc63c08",
+     "44432d4f2b",
+     "6bf98962",
+     "ea3d",
+     "5455ec7c29",
+     "f8788d751fea",
+     "c3943877",
+     "acdde57a81",
+     "ac",
+     "cb3e67bf15",
+     "bbe6afb84198",
+     "95193afbc8c420",
+     "063398d5",
+     "4a87e716"
+    ],
+    "miso": [
+     "7aa67856e6ae",
+     "c3ee692c86",
+     "47d422b3",
+     "15d9",
+     "9ca3d67434",
+     "746cacd82114",
+     "cbaf3e01",
+     "b8a35cff84",
+     "f7",
+     "ae8cb0c652",
+     "40274182e423",
+     "a26e0ee8a10d41",
+     "058e477c",
+     "da9a9ad6"
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "pwm",
+   "channel": "D4",
+   "freq": 49593.4152525877,
+   "duty": 0.7168095324373593
+  }
+ ]
+}

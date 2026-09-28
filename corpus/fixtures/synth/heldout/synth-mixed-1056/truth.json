@@ -1,0 +1,168 @@
+{
+ "id": "synth-mixed-1056",
+ "generator": {
+  "seed": 1056,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 50000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 12.392156686032349
+ },
+ "channels": {
+  "D0": {
+   "original": "spi2_clk",
+   "static": false
+  },
+  "D1": {
+   "original": "spi2_cs",
+   "static": false
+  },
+  "D2": {
+   "original": "spi1_mosi",
+   "static": false
+  },
+  "D3": {
+   "original": "spi2_mosi",
+   "static": false
+  },
+  "D4": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D5": {
+   "original": "decoy0_static",
+   "static": true
+  },
+  "D6": {
+   "original": "spi1_cs",
+   "static": false
+  },
+  "D7": {
+   "original": "spi2_miso",
+   "static": false
+  },
+  "D8": {
+   "original": "spi1_clk",
+   "static": false
+  },
+  "D9": {
+   "original": "spi0_cs",
+   "static": false
+  },
+  "D10": {
+   "original": "spi0_clk",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D10",
+    "mosi": "D4",
+    "cs": "D9"
+   },
+   "params": {
+    "clock_hz": 99842.28234771325,
+    "mode": 0,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "c0ed",
+     "b01c",
+     "ee4cf69582",
+     "a428f8354e",
+     "a334f0",
+     "349e0635b2",
+     "0b94",
+     "2205eb85d002",
+     "c6",
+     "af"
+    ],
+    "miso": [
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     ""
+    ]
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D8",
+    "mosi": "D2",
+    "cs": "D6"
+   },
+   "params": {
+    "clock_hz": 4034810.1841188646,
+    "mode": 3,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "mosi": [
+     "8d6db15a",
+     "8e",
+     "61",
+     "583e",
+     "c8cb"
+    ],
+    "miso": [
+     "",
+     "",
+     "",
+     "",
+     ""
+    ]
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D0",
+    "mosi": "D3",
+    "miso": "D7",
+    "cs": "D1"
+   },
+   "params": {
+    "clock_hz": 985849.1637682825,
+    "mode": 2,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "e20712070647a5",
+     "d45ab7",
+     "f314",
+     "f61c3b3103cb",
+     "fa097f00824f38",
+     "69e6132cc4",
+     "41f32f"
+    ],
+    "miso": [
+     "0575196d76d23b",
+     "cc03e5",
+     "7ac0",
+     "da1026e5b20f",
+     "4826bd2d7d25d4",
+     "3f8939b0b7",
+     "5638bd"
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "static",
+   "channel": "D5"
+  }
+ ]
+}

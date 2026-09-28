@@ -1,0 +1,149 @@
+{
+ "id": "synth-mixed-baudhop-3",
+ "generator": {
+  "seed": 3,
+  "profile": "mixed",
+  "stress": "baudhop",
+  "t_start": 0.0,
+  "rate": 20000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 4.924223103794774
+ },
+ "channels": {
+  "D0": {
+   "original": "uart2_tx",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy0_random",
+   "static": false
+  },
+  "D2": {
+   "original": "spi1_mosi",
+   "static": false
+  },
+  "D3": {
+   "original": "spi1_clk",
+   "static": false
+  },
+  "D4": {
+   "original": "spi1_cs",
+   "static": false
+  },
+  "D5": {
+   "original": "spi1_miso",
+   "static": false
+  },
+  "D6": {
+   "original": "uart0_tx",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D6"
+   },
+   "params": {
+    "baud": 38631.37878927851,
+    "data_bits": 8,
+    "parity": "odd",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb",
+    "baud_segments": [
+     {
+      "from": 0.0010622923366535014,
+      "baud": 38631.37878927851
+     },
+     {
+      "from": 0.02550406037140936,
+      "baud": 77262.75757855702
+     },
+     {
+      "from": 0.050288065125426634,
+      "baud": 77262.75757855702
+     }
+    ]
+   },
+   "expect": {
+    "bytes": "434153455f424547494e2044657669636520446574656374696f6e0a41542b474d520d0a434153455f424547494e2044657669636520446574656374696f6e0a74656d703d32332e352068756d3d34312e320a4552524f522031320d0a"
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D3",
+    "mosi": "D2",
+    "miso": "D5",
+    "cs": "D4"
+   },
+   "params": {
+    "clock_hz": 4061554.397197665,
+    "mode": 3,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "mosi": [
+     "abf7033c4f5a930d",
+     "46",
+     "98eee1dd659608",
+     "75a04b"
+    ],
+    "miso": [
+     "135d7bdc58619a96",
+     "dc",
+     "61cdf14c4741cd",
+     "87d45e"
+    ]
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 924717.5437479722,
+    "data_bits": 8,
+    "parity": "even",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb",
+    "baud_segments": [
+     {
+      "from": 0.000754862160286711,
+      "baud": 924717.5437479722
+     },
+     {
+      "from": 0.0023857250855660378,
+      "baud": 924717.5437479722
+     },
+     {
+      "from": 0.004833899070935885,
+      "baud": 1849435.0874959445
+     },
+     {
+      "from": 0.005361853873528967,
+      "baud": 1849435.0874959445
+     },
+     {
+      "from": 0.0064032224399611475,
+      "baud": 1849435.0874959445
+     }
+    ]
+   },
+   "expect": {
+    "bytes": "589cec725b60ebc3942c416ad46bc57e395a9cbaa4cde7c41747381564b03df3232445be79f4e168bc6d0f44667a22cc410b97f865f79f4215be35364f7ee4c2a3b4f04e3f4533b6cacd8269e52fb7d6ebae528c58fe308badb5d099b002b002daae829edfb0308a6228298e6a94e1114919d1d9993439f62af8aabc2ce143f59c10a1"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "random",
+   "channel": "D1",
+   "toggle_rate": 14780.394188246197
+  }
+ ]
+}

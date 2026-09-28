@@ -1,0 +1,58 @@
+{
+ "id": "synth-uartlike-46",
+ "generator": {
+  "seed": 46,
+  "profile": "uartlike",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 1000000.0,
+  "jitter_samples": 0.1,
+  "oversample_vs_fastest": 96.81554849639657
+ },
+ "channels": {
+  "D0": {
+   "original": "lin0",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "lin",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 10328.919430097734
+   },
+   "expect": {
+    "frames": [
+     [
+      16,
+      "dc97"
+     ],
+     [
+      8,
+      "c83165cd9712bf15"
+     ],
+     [
+      45,
+      "d0adfdceb6de"
+     ],
+     [
+      14,
+      "08688275ac"
+     ],
+     [
+      43,
+      "022e77920613c87f"
+     ],
+     [
+      30,
+      "4d307fc669c51f"
+     ]
+    ]
+   }
+  }
+ ],
+ "decoys": []
+}

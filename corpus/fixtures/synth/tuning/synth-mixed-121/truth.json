@@ -1,0 +1,146 @@
+{
+ "id": "synth-mixed-121",
+ "generator": {
+  "seed": 121,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 8000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 77.48739180956512
+ },
+ "channels": {
+  "D0": {
+   "original": "i2c0_sda",
+   "static": false
+  },
+  "D1": {
+   "original": "i2c0_scl",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D1",
+    "sda": "D0"
+   },
+   "params": {
+    "clock_hz": 103242.60261154475
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 41,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       54,
+       113,
+       253,
+       99
+      ]
+     },
+     {
+      "addr": 41,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       171,
+       35,
+       241,
+       151,
+       107
+      ]
+     },
+     {
+      "addr": 41,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       64
+      ]
+     },
+     {
+      "addr": 41,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       82,
+       221,
+       209,
+       142
+      ]
+     },
+     {
+      "addr": 41,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       70,
+       164,
+       152
+      ]
+     },
+     {
+      "addr": 41,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": []
+     },
+     {
+      "addr": 41,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       50,
+       250
+      ]
+     },
+     {
+      "addr": 41,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       9,
+       208,
+       72,
+       123,
+       244,
+       211
+      ]
+     },
+     {
+      "addr": 41,
+      "rw": "write",
+      "addr_ack": false,
+      "bytes": []
+     },
+     {
+      "addr": 41,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       45,
+       78,
+       30,
+       61,
+       155
+      ]
+     },
+     {
+      "addr": 41,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       160,
+       84
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "decoys": []
+}

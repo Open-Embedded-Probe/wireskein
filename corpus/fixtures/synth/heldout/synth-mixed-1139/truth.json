@@ -1,0 +1,87 @@
+{
+ "id": "synth-mixed-1139",
+ "generator": {
+  "seed": 1139,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 50000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 47.80559976434284
+ },
+ "channels": {
+  "D0": {
+   "original": "i2c0_sda",
+   "static": false
+  },
+  "D1": {
+   "original": "i2c0_scl",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D1",
+    "sda": "D0"
+   },
+   "params": {
+    "clock_hz": 1045902.5772393702
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 29,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       82
+      ]
+     },
+     {
+      "addr": 38,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       230,
+       235,
+       192,
+       243
+      ]
+     },
+     {
+      "addr": 29,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       106
+      ]
+     },
+     {
+      "addr": 41,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       78,
+       80,
+       106,
+       47
+      ]
+     },
+     {
+      "addr": 29,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       23,
+       108,
+       213
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "decoys": []
+}

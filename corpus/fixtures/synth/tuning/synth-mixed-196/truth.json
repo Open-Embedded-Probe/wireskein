@@ -1,0 +1,110 @@
+{
+ "id": "synth-mixed-196",
+ "generator": {
+  "seed": 196,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 50000000.0,
+  "jitter_samples": 0.1,
+  "oversample_vs_fastest": 99.0994899541154
+ },
+ "channels": {
+  "D0": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D1": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy0_burst_clock",
+   "static": false
+  },
+  "D3": {
+   "original": "spi0_miso",
+   "static": false
+  },
+  "D4": {
+   "original": "decoy1_burst_clock",
+   "static": false
+  },
+  "D5": {
+   "original": "spi0_cs",
+   "static": false
+  },
+  "D6": {
+   "original": "decoy2_pwm",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D1",
+    "mosi": "D0",
+    "miso": "D3",
+    "cs": "D5"
+   },
+   "params": {
+    "clock_hz": 504543.4645844371,
+    "mode": 1,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "e013eb130b",
+     "79",
+     "be0c23ee64",
+     "9cf3cd6e08",
+     "1637ab7299",
+     "c4c5390356c4",
+     "f6c5",
+     "862385",
+     "e4e37d55",
+     "b5fd099d",
+     "6f5f6a9e",
+     "55e114131f2dc4",
+     "64c552b0c4",
+     "9c6a"
+    ],
+    "miso": [
+     "18ea3d5e88",
+     "77",
+     "6d5f6fd403",
+     "62111c20b7",
+     "9b37e7062d",
+     "39b1e3c52773",
+     "efb0",
+     "ab1460",
+     "2fcda05e",
+     "d5ec1402",
+     "a20ef62c",
+     "d46109a8c3a1a9",
+     "0578aaf06a",
+     "1923"
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "burst_clock",
+   "channel": "D2",
+   "freq": 728767.3767368624
+  },
+  {
+   "kind": "burst_clock",
+   "channel": "D4",
+   "freq": 842745.0180062647
+  },
+  {
+   "kind": "pwm",
+   "channel": "D6",
+   "freq": 1186.7030083407712,
+   "duty": 0.09497000994514775
+  }
+ ]
+}

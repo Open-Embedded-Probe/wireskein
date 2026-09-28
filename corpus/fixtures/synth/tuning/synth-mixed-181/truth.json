@@ -1,0 +1,142 @@
+{
+ "id": "synth-mixed-181",
+ "generator": {
+  "seed": 181,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 50000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 6.262714324123716
+ },
+ "channels": {
+  "D0": {
+   "original": "uart2_tx",
+   "static": false
+  },
+  "D1": {
+   "original": "spi0_miso",
+   "static": false
+  },
+  "D2": {
+   "original": "spi1_mosi",
+   "static": false
+  },
+  "D3": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D4": {
+   "original": "spi1_cs",
+   "static": false
+  },
+  "D5": {
+   "original": "spi1_clk",
+   "static": false
+  },
+  "D6": {
+   "original": "spi0_clk",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D6",
+    "mosi": "D3",
+    "miso": "D1"
+   },
+   "params": {
+    "clock_hz": 7983758.704656553,
+    "mode": 2,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "5c413b",
+     "0d3d1ce7",
+     "01e92a5606d3e30c",
+     "5ddc8f7556f4cf71",
+     "ba5550dd107b08",
+     "1f86335f8cf9af",
+     "56bd4a222c420e",
+     "82ab55",
+     "c39a838e77",
+     "93dfed7c0d88e2"
+    ],
+    "miso": [
+     "f1f68d",
+     "b2bf1d5d",
+     "d2fd5393d78f0a36",
+     "9af5ae7c4f63a3e4",
+     "953d30f7602028",
+     "c0d7521bf50309",
+     "0162dc54e79764",
+     "c23511",
+     "2bacb56ad4",
+     "0af578566b50c0"
+    ]
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D5",
+    "mosi": "D2",
+    "cs": "D4"
+   },
+   "params": {
+    "clock_hz": 987051.0997295791,
+    "mode": 3,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "b9ba29",
+     "74",
+     "a25d",
+     "63e3c3df03",
+     "caffd879d54e01",
+     "2b37",
+     "8d983a1690cffd",
+     "854c",
+     "aaad",
+     "7cca2f29083ae9ac",
+     "2e62640ae36df8"
+    ],
+    "miso": [
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     ""
+    ]
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 457201.75113889715,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "9aa067e6fbd2c48706b749b598c0059e143539a6f543cbc2e0597489561f5a98a64ed324f1d6e65b1102b81acc069c1319b856ba50d4474c0607"
+   }
+  }
+ ],
+ "decoys": []
+}

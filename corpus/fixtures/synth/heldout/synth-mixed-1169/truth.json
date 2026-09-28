@@ -1,0 +1,132 @@
+{
+ "id": "synth-mixed-1169",
+ "generator": {
+  "seed": 1169,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 200000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 24.77576075054753
+ },
+ "channels": {
+  "D0": {
+   "original": "uart2_tx",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy2_random",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy0_static",
+   "static": true
+  },
+  "D3": {
+   "original": "uart0_tx",
+   "static": false
+  },
+  "D4": {
+   "original": "spi1_clk",
+   "static": false
+  },
+  "D5": {
+   "original": "spi1_cs",
+   "static": false
+  },
+  "D6": {
+   "original": "spi1_mosi",
+   "static": false
+  },
+  "D7": {
+   "original": "decoy1_static",
+   "static": true
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D3"
+   },
+   "params": {
+    "baud": 9682.665718332208,
+    "data_bits": 7,
+    "parity": "odd",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "2447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a2447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a41542b474d520d0a72656164793e2041542b474d520d0a74656d703d32332e352068756d3d34312e320a41542b474d520d0a41542b474d520d0a72656164793e202447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a"
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D4",
+    "mosi": "D6",
+    "cs": "D5"
+   },
+   "params": {
+    "clock_hz": 8072406.010603735,
+    "mode": 3,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "mosi": [
+     "07501119a0d6a110",
+     "fcb1",
+     "d7924bd1d25b",
+     "558b",
+     "6575",
+     "e17435bee9277b",
+     "1b",
+     "32"
+    ],
+    "miso": [
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     ""
+    ]
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 232336.79694903552,
+    "data_bits": 7,
+    "parity": "none",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "1e3a2f720e6b7d440a03681e112d256b2c090834243b5b601c4a70275d4e6b6600074c0d1904"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "static",
+   "channel": "D2"
+  },
+  {
+   "kind": "static",
+   "channel": "D7"
+  },
+  {
+   "kind": "random",
+   "channel": "D1",
+   "toggle_rate": 7757.493602212803
+  }
+ ]
+}

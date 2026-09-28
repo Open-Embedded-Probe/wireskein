@@ -1,0 +1,94 @@
+{
+ "id": "synth-mixed-1157",
+ "generator": {
+  "seed": 1157,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 200000000.0,
+  "jitter_samples": 0.02,
+  "oversample_vs_fastest": 24.841325660304932
+ },
+ "channels": {
+  "D0": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy0_pwm",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy2_static",
+   "static": true
+  },
+  "D3": {
+   "original": "decoy1_static",
+   "static": true
+  },
+  "D4": {
+   "original": "spi0_cs",
+   "static": false
+  },
+  "D5": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D6": {
+   "original": "spi0_miso",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D0",
+    "mosi": "D5",
+    "miso": "D6",
+    "cs": "D4"
+   },
+   "params": {
+    "clock_hz": 8051100.11981321,
+    "mode": 3,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "6e0921ce",
+     "43756ebf2fc8",
+     "2de6",
+     "9ec6c3fcff4191",
+     "03",
+     "da3ab2ab27",
+     "1e"
+    ],
+    "miso": [
+     "4803a7c3",
+     "0c9e45782bf3",
+     "bac2",
+     "f2e33661b7048a",
+     "5d",
+     "fdaaa9b664",
+     "6d"
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "pwm",
+   "channel": "D1",
+   "freq": 44622.958682218305,
+   "duty": 0.510861533981285
+  },
+  {
+   "kind": "static",
+   "channel": "D3"
+  },
+  {
+   "kind": "static",
+   "channel": "D2"
+  }
+ ]
+}

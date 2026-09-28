@@ -1,0 +1,8 @@
+[package]
+name = "eng-quickjs"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+common = { path = "../common" }
+rquickjs = { version = "0.9" }

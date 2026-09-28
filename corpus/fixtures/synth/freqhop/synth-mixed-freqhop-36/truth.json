@@ -1,0 +1,128 @@
+{
+ "id": "synth-mixed-freqhop-36",
+ "generator": {
+  "seed": 36,
+  "profile": "mixed",
+  "stress": "freqhop",
+  "t_start": 0.0,
+  "rate": 8000000.0,
+  "jitter_samples": 0.02,
+  "oversample_vs_fastest": 34.450864883777434
+ },
+ "channels": {
+  "D0": {
+   "original": "uart0_tx",
+   "static": false
+  },
+  "D1": {
+   "original": "i2c1_scl",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy1_static",
+   "static": true
+  },
+  "D3": {
+   "original": "decoy2_static",
+   "static": true
+  },
+  "D4": {
+   "original": "i2c1_sda",
+   "static": false
+  },
+  "D5": {
+   "original": "decoy0_clock",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 232214.77971565002,
+    "data_bits": 8,
+    "parity": "odd",
+    "stop_bits": 1.0,
+    "idle": 0,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "4552524f522031320d0a41542b474d520d0a41542b474d520d0a74656d703d32332e352068756d3d34312e320a4552524f522031320d0a72656164793e204f4b0d0a4552524f522031320d0a41542b474d520d0a4552524f522031320d0a"
+   }
+  },
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D1",
+    "sda": "D4"
+   },
+   "params": {
+    "clock_hz": 100341.11697973165
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 47,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": []
+     },
+     {
+      "addr": 47,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       251,
+       159
+      ]
+     },
+     {
+      "addr": 47,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       57,
+       22
+      ]
+     },
+     {
+      "addr": 17,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       251,
+       166,
+       58
+      ]
+     },
+     {
+      "addr": 47,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       67
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "clock",
+   "channel": "D5",
+   "freq": 115200.0
+  },
+  {
+   "kind": "static",
+   "channel": "D2"
+  },
+  {
+   "kind": "static",
+   "channel": "D3"
+  }
+ ]
+}

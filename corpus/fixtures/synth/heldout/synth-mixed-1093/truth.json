@@ -1,0 +1,348 @@
+{
+ "id": "synth-mixed-1093",
+ "generator": {
+  "seed": 1093,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 10000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 25.25465921729323
+ },
+ "channels": {
+  "D0": {
+   "original": "decoy0_burst_clock",
+   "static": false
+  },
+  "D1": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D2": {
+   "original": "i2c1_scl",
+   "static": false
+  },
+  "D3": {
+   "original": "i2c1_sda",
+   "static": false
+  },
+  "D4": {
+   "original": "i2c2_sda",
+   "static": false
+  },
+  "D5": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D6": {
+   "original": "i2c2_scl",
+   "static": false
+  },
+  "D7": {
+   "original": "decoy1_clock",
+   "static": false
+  },
+  "D8": {
+   "original": "spi0_cs",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D5",
+    "mosi": "D1",
+    "cs": "D8"
+   },
+   "params": {
+    "clock_hz": 101067.01291803173,
+    "mode": 2,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "mosi": [
+     "61",
+     "8ef1",
+     "16f07dea",
+     "0e88af0c6d9a4d",
+     "1ee9e70788c44845",
+     "4ec26b85e1",
+     "6615a18c",
+     "e40aeb70",
+     "ae752fb02a9124",
+     "fbb5fd6401"
+    ],
+    "miso": [
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     ""
+    ]
+   }
+  },
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D2",
+    "sda": "D3"
+   },
+   "params": {
+    "clock_hz": 395966.5388457295
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 87,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       48,
+       146,
+       72
+      ]
+     },
+     {
+      "addr": 87,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       168
+      ]
+     },
+     {
+      "addr": 87,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       11,
+       88,
+       77,
+       244,
+       13
+      ]
+     },
+     {
+      "addr": 87,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       142,
+       214,
+       120,
+       154
+      ]
+     },
+     {
+      "addr": 110,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       25,
+       173,
+       196
+      ]
+     },
+     {
+      "addr": 87,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       41,
+       173,
+       69,
+       209,
+       128
+      ]
+     },
+     {
+      "addr": 15,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       72,
+       230,
+       70,
+       76,
+       45
+      ]
+     },
+     {
+      "addr": 87,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       46,
+       139,
+       235,
+       253
+      ]
+     },
+     {
+      "addr": 52,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       109,
+       41,
+       22,
+       115,
+       83
+      ]
+     },
+     {
+      "addr": 87,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       149,
+       147,
+       202,
+       185,
+       208,
+       116
+      ]
+     },
+     {
+      "addr": 87,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       190,
+       96,
+       71,
+       85
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D6",
+    "sda": "D4"
+   },
+   "params": {
+    "clock_hz": 95481.81187682692
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 111,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       254,
+       235,
+       185,
+       174
+      ]
+     },
+     {
+      "addr": 111,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       25,
+       54
+      ]
+     },
+     {
+      "addr": 12,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       144,
+       99,
+       89,
+       200,
+       24
+      ]
+     },
+     {
+      "addr": 99,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       102,
+       20,
+       117,
+       67,
+       68
+      ]
+     },
+     {
+      "addr": 12,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       93
+      ]
+     },
+     {
+      "addr": 111,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       60,
+       123,
+       124,
+       156
+      ]
+     },
+     {
+      "addr": 111,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       189,
+       159,
+       175,
+       29
+      ]
+     },
+     {
+      "addr": 28,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": []
+     },
+     {
+      "addr": 111,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": []
+     },
+     {
+      "addr": 111,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       199,
+       78
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "burst_clock",
+   "channel": "D0",
+   "freq": 507886.58970473986
+  },
+  {
+   "kind": "clock",
+   "channel": "D7",
+   "freq": 32768.0
+  }
+ ]
+}

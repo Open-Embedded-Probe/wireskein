@@ -1,0 +1,117 @@
+{
+ "id": "synth-duplex-43",
+ "generator": {
+  "seed": 43,
+  "profile": "duplex",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 1000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 17.52098119057506
+ },
+ "channels": {
+  "D0": {
+   "original": "decoy2_static",
+   "static": true
+  },
+  "D1": {
+   "original": "scpi0_rx",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy0_burst_clock",
+   "static": false
+  },
+  "D3": {
+   "original": "scpi0_tx",
+   "static": false
+  },
+  "D4": {
+   "original": "decoy1_pwm",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D3"
+   },
+   "params": {
+    "baud": 57074.42917283212,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "4d4541533a435552523a44433f0a4d4541533a435552523a44433f0a524541443f0a4d4541533a564f4c543a44433f0a"
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D1"
+   },
+   "params": {
+    "baud": 57074.42917283212,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "2b322e3530303030452d30310a2b322e3530303030452d30310a2d342e3230303030452d30330a2b312e3233343536452b30300a"
+   }
+  },
+  {
+   "protocol": "scpi",
+   "roles": {
+    "tx": "D3",
+    "rx": "D1"
+   },
+   "params": {
+    "baud": 57074.42917283212
+   },
+   "expect": {
+    "exchanges": [
+     [
+      "MEAS:CURR:DC?",
+      "+2.50000E-01"
+     ],
+     [
+      "MEAS:CURR:DC?",
+      "+2.50000E-01"
+     ],
+     [
+      "READ?",
+      "-4.20000E-03"
+     ],
+     [
+      "MEAS:VOLT:DC?",
+      "+1.23456E+00"
+     ]
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "burst_clock",
+   "channel": "D2",
+   "freq": 14036.947736128797
+  },
+  {
+   "kind": "pwm",
+   "channel": "D4",
+   "freq": 15791.726503383747,
+   "duty": 0.906578614817253
+  },
+  {
+   "kind": "static",
+   "channel": "D0"
+  }
+ ]
+}

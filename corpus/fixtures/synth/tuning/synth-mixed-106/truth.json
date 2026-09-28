@@ -1,0 +1,149 @@
+{
+ "id": "synth-mixed-106",
+ "generator": {
+  "seed": 106,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 8000000.0,
+  "jitter_samples": 0.1,
+  "oversample_vs_fastest": 8.122557471636581
+ },
+ "channels": {
+  "D0": {
+   "original": "decoy0_pwm",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy1_random",
+   "static": false
+  },
+  "D2": {
+   "original": "i2c1_scl",
+   "static": false
+  },
+  "D3": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D4": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D5": {
+   "original": "i2c1_sda",
+   "static": false
+  },
+  "D6": {
+   "original": "spi0_miso",
+   "static": false
+  },
+  "D7": {
+   "original": "decoy2_burst_clock",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D3",
+    "mosi": "D4",
+    "miso": "D6"
+   },
+   "params": {
+    "clock_hz": 984911.4675932374,
+    "mode": 0,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "mosi": [
+     "75",
+     "ba4c",
+     "5fb7240ec863",
+     "c1",
+     "2f68",
+     "15d286",
+     "c22f8bb64e4924",
+     "020589809b"
+    ],
+    "miso": [
+     "f5",
+     "8a37",
+     "c150cba2b6ed",
+     "ea",
+     "b866",
+     "593e42",
+     "fe753766640624",
+     "fa11f903c8"
+    ]
+   }
+  },
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D2",
+    "sda": "D5"
+   },
+   "params": {
+    "clock_hz": 95824.11830708121
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 105,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       226,
+       16,
+       36,
+       253,
+       100,
+       40
+      ]
+     },
+     {
+      "addr": 117,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       227,
+       26,
+       226
+      ]
+     },
+     {
+      "addr": 105,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       138,
+       106,
+       174,
+       197
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "pwm",
+   "channel": "D0",
+   "freq": 1525.530322838956,
+   "duty": 0.38302164149984114
+  },
+  {
+   "kind": "random",
+   "channel": "D1",
+   "toggle_rate": 23703.23175484913
+  },
+  {
+   "kind": "burst_clock",
+   "channel": "D7",
+   "freq": 259396.1336351314
+  }
+ ]
+}

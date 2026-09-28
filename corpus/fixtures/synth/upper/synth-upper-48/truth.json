@@ -1,0 +1,73 @@
+{
+ "id": "synth-upper-48",
+ "generator": {
+  "seed": 48,
+  "profile": "upper",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 1000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 207.93504004364593
+ },
+ "channels": {
+  "D0": {
+   "original": "decoy2_random",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy1_random",
+   "static": false
+  },
+  "D2": {
+   "original": "uart0_tx",
+   "static": false
+  },
+  "D3": {
+   "original": "decoy0_pwm",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D2"
+   },
+   "params": {
+    "baud": 4809.194255042817,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1,
+    "idle": 1,
+    "bit_order": "lsb",
+    "payload": "modbus"
+   },
+   "expect": {
+    "bytes": "ac1044a1d0db1239f5dc4e4deb921099747cce920be635255ea6341a04efe7cb09aabd744661",
+    "modbus": [
+     "ac1044a1d0db1239f5dc4e4deb",
+     "921099747cce920be635255ea634",
+     "1a04efe7cb09aabd744661"
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "pwm",
+   "channel": "D3",
+   "freq": 33619.04816931082,
+   "duty": 0.6889855506123711
+  },
+  {
+   "kind": "random",
+   "channel": "D1",
+   "toggle_rate": 15315.419832791704
+  },
+  {
+   "kind": "random",
+   "channel": "D0",
+   "toggle_rate": 1138.7542319354845
+  }
+ ]
+}

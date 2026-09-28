@@ -1,0 +1,142 @@
+{
+ "id": "synth-mixed-1186",
+ "generator": {
+  "seed": 1186,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 200000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 24.582069093952132
+ },
+ "channels": {
+  "D0": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D1": {
+   "original": "spi2_cs",
+   "static": false
+  },
+  "D2": {
+   "original": "spi2_mosi",
+   "static": false
+  },
+  "D3": {
+   "original": "spi2_miso",
+   "static": false
+  },
+  "D4": {
+   "original": "spi0_cs",
+   "static": false
+  },
+  "D5": {
+   "original": "spi2_clk",
+   "static": false
+  },
+  "D6": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D7": {
+   "original": "uart1_tx",
+   "static": false
+  },
+  "D8": {
+   "original": "spi0_miso",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D0",
+    "mosi": "D6",
+    "miso": "D8",
+    "cs": "D4"
+   },
+   "params": {
+    "clock_hz": 8136011.6284599295,
+    "mode": 1,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "60b0907e879524",
+     "cea0",
+     "37"
+    ],
+    "miso": [
+     "3478c962c169cd",
+     "d1bd",
+     "94"
+    ]
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D7"
+   },
+   "params": {
+    "baud": 19082.84036076407,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "74656d703d32332e352068756d3d34312e320a4f4b0d0a2447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a4f4b0d0a4552524f522031320d0a74656d703d32332e352068756d3d34312e320a74656d703d32332e352068756d3d34312e320a4f4b0d0a"
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D5",
+    "mosi": "D2",
+    "miso": "D3",
+    "cs": "D1"
+   },
+   "params": {
+    "clock_hz": 98392.68925369521,
+    "mode": 1,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "97",
+     "3375c831a9ac4b",
+     "9f27b93fc906de37",
+     "53a3190a9f6802c6",
+     "6225",
+     "fb",
+     "c405c4a9c2",
+     "5b",
+     "887cc9",
+     "21603d",
+     "8c3ea0e3dafeb6a4",
+     "1535e7",
+     "19eada0d"
+    ],
+    "miso": [
+     "e0",
+     "3d04de2be0812b",
+     "9899539ba1194448",
+     "fd4df157dadb9aeb",
+     "dd51",
+     "51",
+     "858228b47b",
+     "3b",
+     "c9486d",
+     "9769f4",
+     "be73deb7c8a79113",
+     "f0acb1",
+     "eec5c1ee"
+    ]
+   }
+  }
+ ],
+ "decoys": []
+}

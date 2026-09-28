@@ -1,0 +1,66 @@
+{
+ "id": "synth-uartlike-27",
+ "generator": {
+  "seed": 27,
+  "profile": "uartlike",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 16000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 16.059802118909456
+ },
+ "channels": {
+  "D0": {
+   "original": "decoy2_random",
+   "static": false
+  },
+  "D1": {
+   "original": "uart0_tx",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy1_burst_clock",
+   "static": false
+  },
+  "D3": {
+   "original": "decoy0_burst_clock",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D1"
+   },
+   "params": {
+    "baud": 996276.2854444487,
+    "data_bits": 7,
+    "parity": "none",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "31786a676a1d404e51436e5a091822747b4e68401d0a4628181132440b1e5a0a2e16174a4757087279161333241d3c3a2b3c620919164e296b44241f39140f045317092674523d164b7d507a2b483e0f452b23125156431a546a6e6b0776311f7d474d5f180a79"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "burst_clock",
+   "channel": "D3",
+   "freq": 44703.89712688412
+  },
+  {
+   "kind": "burst_clock",
+   "channel": "D2",
+   "freq": 474662.80373713473
+  },
+  {
+   "kind": "random",
+   "channel": "D0",
+   "toggle_rate": 8789.278426244513
+  }
+ ]
+}

@@ -1,0 +1,67 @@
+{
+ "id": "synth-upper-75",
+ "generator": {
+  "seed": 75,
+  "profile": "upper",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 1000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 26.2235907047325
+ },
+ "channels": {
+  "D0": {
+   "original": "decoy2_pwm",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy1_static",
+   "static": true
+  },
+  "D2": {
+   "original": "uart0_tx",
+   "static": false
+  },
+  "D3": {
+   "original": "decoy0_burst_clock",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D2"
+   },
+   "params": {
+    "baud": 38133.603107965406,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1,
+    "idle": 1,
+    "bit_order": "lsb",
+    "payload": "nmea"
+   },
+   "expect": {
+    "bytes": "2447504747412c3136313437342c303038332e3938352c4e2c30303133352e3236382c452c312c30382c302e392c3932352e392c4d2c2c2c2a33450d0a2447504747412c3136343231332c303030312e3133342c4e2c30303037342e3339382c452c312c30382c302e392c3832322e322c4d2c2c2c2a33330d0a2447504747412c3230343532342c303031322e3531312c4e2c30303137372e3439352c452c312c30382c302e392c3939322e382c4d2c2c2c2a33430d0a2447504747412c3030313733312c303033362e3131392c4e2c30303132302e3038342c452c312c30382c302e392c3833362e352c4d2c2c2c2a33330d0a"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "burst_clock",
+   "channel": "D3",
+   "freq": 356611.1137727761
+  },
+  {
+   "kind": "static",
+   "channel": "D1"
+  },
+  {
+   "kind": "pwm",
+   "channel": "D0",
+   "freq": 9328.800708017372,
+   "duty": 0.9464933930408771
+  }
+ ]
+}

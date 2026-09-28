@@ -1,0 +1,110 @@
+{
+ "id": "synth-mixed-1085",
+ "generator": {
+  "seed": 1085,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 20000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 19.831107633336014
+ },
+ "channels": {
+  "D0": {
+   "original": "spi0_cs",
+   "static": false
+  },
+  "D1": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy0_static",
+   "static": true
+  },
+  "D3": {
+   "original": "uart1_tx",
+   "static": false
+  },
+  "D4": {
+   "original": "decoy1_clock",
+   "static": false
+  },
+  "D5": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D6": {
+   "original": "spi0_miso",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D1",
+    "mosi": "D5",
+    "miso": "D6",
+    "cs": "D0"
+   },
+   "params": {
+    "clock_hz": 1008516.5372397092,
+    "mode": 1,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "328e586b92ff54",
+     "56dc564499",
+     "a2fcbb0d",
+     "6677fd",
+     "38aa92f14b69a85a",
+     "5fd68e35b789d1bf",
+     "e7",
+     "2cbbcdce00",
+     "cabe2e53642ab2"
+    ],
+    "miso": [
+     "137220d05fa166",
+     "4cd8591018",
+     "7cfe963b",
+     "a24734",
+     "16381d57a57c6731",
+     "04a4e931bbb18238",
+     "b8",
+     "961b0307f0",
+     "bdb16943df0b61"
+    ]
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D3"
+   },
+   "params": {
+    "baud": 252488.93231715108,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 2.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "41542b474d520d0a41542b474d520d0a2447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a434153455f424547494e2044657669636520446574656374696f6e0a4552524f522031320d0a72656164793e204552524f522031320d0a41542b474d520d0a72656164793e20"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "static",
+   "channel": "D2"
+  },
+  {
+   "kind": "clock",
+   "channel": "D4",
+   "freq": 100000.0
+  }
+ ]
+}

@@ -1,0 +1,98 @@
+{
+ "id": "synth-mixed-1004",
+ "generator": {
+  "seed": 1004,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 4000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 17.387974024722027
+ },
+ "channels": {
+  "D0": {
+   "original": "decoy1_clock",
+   "static": false
+  },
+  "D1": {
+   "original": "uart0_tx",
+   "static": false
+  },
+  "D2": {
+   "original": "uart1_tx",
+   "static": false
+  },
+  "D3": {
+   "original": "uart2_tx",
+   "static": false
+  },
+  "D4": {
+   "original": "decoy0_static",
+   "static": true
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D1"
+   },
+   "params": {
+    "baud": 19061.175308274658,
+    "data_bits": 8,
+    "parity": "odd",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "1c667b8fdb9a3d525b383546a1ffff6b025932d3bf08027c5abe49a46b67ceb95554affcf63551f1c764943ae99a0514f602035226fd73fbbff2a2563564928ad49cceb6860494f27b98cb401f85be"
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D2"
+   },
+   "params": {
+    "baud": 230044.0519587184,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "2447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a72656164793e204552524f522031320d0a74656d703d32332e352068756d3d34312e320a74656d703d32332e352068756d3d34312e320a74656d703d32332e352068756d3d34312e320a72656164793e20"
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D3"
+   },
+   "params": {
+    "baud": 75280.07279956009,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 2.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "41542b474d520d0a2447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a41542b474d520d0a41542b474d520d0a4552524f522031320d0a74656d703d32332e352068756d3d34312e320a4552524f522031320d0a4f4b0d0a41542b474d520d0a41542b474d520d0a434153455f424547494e2044657669636520446574656374696f6e0a4f4b0d0a72656164793e204552524f522031320d0a"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "static",
+   "channel": "D4"
+  },
+  {
+   "kind": "clock",
+   "channel": "D0",
+   "freq": 115200.0
+  }
+ ]
+}

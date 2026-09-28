@@ -1,0 +1,100 @@
+{
+ "id": "synth-mixed-24",
+ "generator": {
+  "seed": 24,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 25000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 25.195633986872718
+ },
+ "channels": {
+  "D0": {
+   "original": "spi1_cs",
+   "static": false
+  },
+  "D1": {
+   "original": "spi1_mosi",
+   "static": false
+  },
+  "D2": {
+   "original": "spi1_clk",
+   "static": false
+  },
+  "D3": {
+   "original": "decoy0_static",
+   "static": true
+  },
+  "D4": {
+   "original": "uart0_tx",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D4"
+   },
+   "params": {
+    "baud": 250373.689096636,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "4f4b0d0a434153455f424547494e2044657669636520446574656374696f6e0a41542b474d520d0a41542b474d520d0a4552524f522031320d0a434153455f424547494e2044657669636520446574656374696f6e0a4f4b0d0a4552524f522031320d0a434153455f424547494e2044657669636520446574656374696f6e0a4f4b0d0a4f4b0d0a4552524f522031320d0a4f4b0d0a74656d703d32332e352068756d3d34312e320a"
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D2",
+    "mosi": "D1",
+    "cs": "D0"
+   },
+   "params": {
+    "clock_hz": 992235.4013010887,
+    "mode": 3,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "mosi": [
+     "d539341425792dda",
+     "441da3abbd9f7b",
+     "893404345d49fe",
+     "d14cfcd96d83",
+     "0675ad0b",
+     "9dc0d27e",
+     "ab0020aaea15aa",
+     "ff6a",
+     "0f",
+     "ef89a7b4",
+     "a9c717cc19b707ac"
+    ],
+    "miso": [
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     ""
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "static",
+   "channel": "D3"
+  }
+ ]
+}

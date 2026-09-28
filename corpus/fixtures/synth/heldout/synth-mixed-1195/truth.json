@@ -1,0 +1,226 @@
+{
+ "id": "synth-mixed-1195",
+ "generator": {
+  "seed": 1195,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 4000000.0,
+  "jitter_samples": 0.02,
+  "oversample_vs_fastest": 4.201243638996911
+ },
+ "channels": {
+  "D0": {
+   "original": "i2c1_scl",
+   "static": false
+  },
+  "D1": {
+   "original": "uart2_tx",
+   "static": false
+  },
+  "D2": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D3": {
+   "original": "decoy0_random",
+   "static": false
+  },
+  "D4": {
+   "original": "i2c1_sda",
+   "static": false
+  },
+  "D5": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D6": {
+   "original": "spi0_miso",
+   "static": false
+  },
+  "D7": {
+   "original": "spi0_cs",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D5",
+    "mosi": "D2",
+    "miso": "D6",
+    "cs": "D7"
+   },
+   "params": {
+    "clock_hz": 100717.32404790557,
+    "mode": 1,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "88bb1ed4e06bb7b7",
+     "47ce8bf499937ad3",
+     "c301d591b296a74d",
+     "4681",
+     "01a7d9",
+     "e2a79dad",
+     "800c9b0c3e484b",
+     "9d12691d60876a",
+     "c2732b",
+     "b1",
+     "f1f73d16863a"
+    ],
+    "miso": [
+     "4a171fe0e42c12aa",
+     "e73b699f7dfe07de",
+     "054ced402775439a",
+     "84e3",
+     "e95cae",
+     "353bad8b",
+     "8445def3b7686d",
+     "b03d73bc4d4c4c",
+     "8c3c95",
+     "c7",
+     "e5f674553dd8"
+    ]
+   }
+  },
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D0",
+    "sda": "D4"
+   },
+   "params": {
+    "clock_hz": 952099.0315512957
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 76,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       250,
+       173,
+       238,
+       41,
+       235,
+       232
+      ]
+     },
+     {
+      "addr": 76,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       212,
+       144,
+       31,
+       53
+      ]
+     },
+     {
+      "addr": 76,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       63,
+       13
+      ]
+     },
+     {
+      "addr": 76,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       7,
+       142,
+       205,
+       203
+      ]
+     },
+     {
+      "addr": 20,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       5,
+       105,
+       241,
+       146,
+       92,
+       122
+      ]
+     },
+     {
+      "addr": 76,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       158,
+       248,
+       27,
+       104,
+       253
+      ]
+     },
+     {
+      "addr": 76,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       169,
+       33,
+       167,
+       194
+      ]
+     },
+     {
+      "addr": 76,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       17,
+       108,
+       183
+      ]
+     },
+     {
+      "addr": 86,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       183
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D1"
+   },
+   "params": {
+    "baud": 916232.819060358,
+    "data_bits": 8,
+    "parity": "even",
+    "stop_bits": 1.0,
+    "idle": 0,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "3c749a95043a01dcbb865cf76c2d7f5b17eff77298ebd86f6d7253be7773e7b4b05d210233fc68532de783be0d04f76df02a3f0fd493b974398c9ea60e9caac8efdebfdbd9d565e1359916dd44f15c719f88debc"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "random",
+   "channel": "D3",
+   "toggle_rate": 14388.550990869868
+  }
+ ]
+}

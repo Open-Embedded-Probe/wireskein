@@ -1,0 +1,144 @@
+{
+ "id": "synth-mixed-136",
+ "generator": {
+  "seed": 136,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 50000000.0,
+  "jitter_samples": 0.1,
+  "oversample_vs_fastest": 54.6728337717982
+ },
+ "channels": {
+  "D0": {
+   "original": "i2c2_sda",
+   "static": false
+  },
+  "D1": {
+   "original": "uart1_tx",
+   "static": false
+  },
+  "D2": {
+   "original": "uart0_tx",
+   "static": false
+  },
+  "D3": {
+   "original": "i2c2_scl",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D2"
+   },
+   "params": {
+    "baud": 914530.9754511283,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "41542b474d520d0a74656d703d32332e352068756d3d34312e320a72656164793e204f4b0d0a2447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a2447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a4f4b0d0a2447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a4f4b0d0a434153455f424547494e2044657669636520446574656374696f6e0a"
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D1"
+   },
+   "params": {
+    "baud": 19096.24284962863,
+    "data_bits": 8,
+    "parity": "odd",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "a870db6b4fe6fceadc879cc8f80ada830e101a627bf0f365821057625077b874ea05dc909d7076ab9a0ba80b764d321526c3ec0b8642e6"
+   }
+  },
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D3",
+    "sda": "D0"
+   },
+   "params": {
+    "clock_hz": 102101.62956505192
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 28,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       197
+      ]
+     },
+     {
+      "addr": 28,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       109,
+       21,
+       44
+      ]
+     },
+     {
+      "addr": 28,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": []
+     },
+     {
+      "addr": 28,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       194,
+       120
+      ]
+     },
+     {
+      "addr": 28,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       71,
+       208,
+       204,
+       57,
+       66,
+       62
+      ]
+     },
+     {
+      "addr": 28,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       86,
+       153
+      ]
+     },
+     {
+      "addr": 28,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       255
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "decoys": []
+}

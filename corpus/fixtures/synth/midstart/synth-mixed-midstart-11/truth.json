@@ -1,0 +1,58 @@
+{
+ "id": "synth-mixed-midstart-11",
+ "generator": {
+  "seed": 11,
+  "profile": "mixed",
+  "stress": "midstart",
+  "t_start": 0.003953778724676326,
+  "rate": 2000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 7.983793162128787
+ },
+ "channels": {
+  "D0": {
+   "original": "decoy0_clock",
+   "static": false
+  },
+  "D1": {
+   "original": "uart0_tx",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy1_pwm",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D1"
+   },
+   "params": {
+    "baud": 250507.49178811678,
+    "data_bits": 8,
+    "parity": "even",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "94dd382159d022c14ca7c5f2b1f3bcfa5cc3339f90244b04b8dd562cf02ce4ae105204b18c8a4ea334ea281ae30601ea6b16ffc288"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "clock",
+   "channel": "D0",
+   "freq": 115200.0
+  },
+  {
+   "kind": "pwm",
+   "channel": "D2",
+   "freq": 31493.442808396383,
+   "duty": 0.17925929880201957
+  }
+ ]
+}

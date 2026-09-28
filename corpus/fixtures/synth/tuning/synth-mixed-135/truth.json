@@ -1,0 +1,160 @@
+{
+ "id": "synth-mixed-135",
+ "generator": {
+  "seed": 135,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 10000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 9.61468853726608
+ },
+ "channels": {
+  "D0": {
+   "original": "i2c0_sda",
+   "static": false
+  },
+  "D1": {
+   "original": "spi1_cs",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy1_burst_clock",
+   "static": false
+  },
+  "D3": {
+   "original": "spi1_miso",
+   "static": false
+  },
+  "D4": {
+   "original": "spi1_clk",
+   "static": false
+  },
+  "D5": {
+   "original": "decoy0_clock",
+   "static": false
+  },
+  "D6": {
+   "original": "i2c0_scl",
+   "static": false
+  },
+  "D7": {
+   "original": "spi1_mosi",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D6",
+    "sda": "D0"
+   },
+   "params": {
+    "clock_hz": 1040075.2932599398
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 39,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       164,
+       232,
+       168,
+       128,
+       9,
+       222
+      ]
+     },
+     {
+      "addr": 39,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       28,
+       227,
+       230,
+       177,
+       57
+      ]
+     },
+     {
+      "addr": 39,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       66,
+       54,
+       183,
+       184,
+       123,
+       43
+      ]
+     },
+     {
+      "addr": 39,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       133,
+       181
+      ]
+     },
+     {
+      "addr": 39,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       107,
+       93
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D4",
+    "mosi": "D7",
+    "miso": "D3",
+    "cs": "D1"
+   },
+   "params": {
+    "clock_hz": 99955.53957462712,
+    "mode": 0,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "mosi": [
+     "5f",
+     "a4262f2691fe",
+     "e8b66d09",
+     "60f1cb8fc91f",
+     "b8548a27098c"
+    ],
+    "miso": [
+     "69",
+     "a352a0554adb",
+     "4fffb610",
+     "257a953eb7fa",
+     "4e145e1bc0c3"
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "clock",
+   "channel": "D5",
+   "freq": 100000.0
+  },
+  {
+   "kind": "burst_clock",
+   "channel": "D2",
+   "freq": 783206.4732411408
+  }
+ ]
+}

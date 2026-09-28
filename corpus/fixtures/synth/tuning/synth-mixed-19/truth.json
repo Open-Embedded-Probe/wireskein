@@ -1,0 +1,154 @@
+{
+ "id": "synth-mixed-19",
+ "generator": {
+  "seed": 19,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 1000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 10.231361796690262
+ },
+ "channels": {
+  "D0": {
+   "original": "decoy0_random",
+   "static": false
+  },
+  "D1": {
+   "original": "i2c0_sda",
+   "static": false
+  },
+  "D2": {
+   "original": "i2c0_scl",
+   "static": false
+  },
+  "D3": {
+   "original": "uart1_tx",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D2",
+    "sda": "D1"
+   },
+   "params": {
+    "clock_hz": 97738.69987898282
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 111,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       254
+      ]
+     },
+     {
+      "addr": 95,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       237,
+       173
+      ]
+     },
+     {
+      "addr": 111,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       171,
+       158,
+       214
+      ]
+     },
+     {
+      "addr": 56,
+      "rw": "write",
+      "addr_ack": false,
+      "bytes": []
+     },
+     {
+      "addr": 111,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       198,
+       128,
+       138,
+       141
+      ]
+     },
+     {
+      "addr": 111,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       228,
+       139,
+       70
+      ]
+     },
+     {
+      "addr": 111,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": []
+     },
+     {
+      "addr": 14,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       66,
+       110,
+       106,
+       33,
+       197
+      ]
+     },
+     {
+      "addr": 111,
+      "rw": "write",
+      "addr_ack": false,
+      "bytes": []
+     },
+     {
+      "addr": 111,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": []
+     }
+    ]
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D3"
+   },
+   "params": {
+    "baud": 38065.004409055764,
+    "data_bits": 8,
+    "parity": "even",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "4f4b0d0a4552524f522031320d0a41542b474d520d0a2447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a74656d703d32332e352068756d3d34312e320a74656d703d32332e352068756d3d34312e320a74656d703d32332e352068756d3d34312e320a41542b474d520d0a"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "random",
+   "channel": "D0",
+   "toggle_rate": 3041.628110717288
+  }
+ ]
+}

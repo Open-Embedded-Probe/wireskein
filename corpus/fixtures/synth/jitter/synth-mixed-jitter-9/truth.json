@@ -1,0 +1,144 @@
+{
+ "id": "synth-mixed-jitter-9",
+ "generator": {
+  "seed": 9,
+  "profile": "mixed",
+  "stress": "jitter",
+  "t_start": 0.0,
+  "rate": 50000000.0,
+  "jitter_samples": 0.3,
+  "oversample_vs_fastest": 6.224318920719872
+ },
+ "channels": {
+  "D0": {
+   "original": "spi1_clk",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy1_clock",
+   "static": false
+  },
+  "D2": {
+   "original": "spi1_cs",
+   "static": false
+  },
+  "D3": {
+   "original": "spi0_cs",
+   "static": false
+  },
+  "D4": {
+   "original": "spi1_mosi",
+   "static": false
+  },
+  "D5": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D6": {
+   "original": "decoy0_random",
+   "static": false
+  },
+  "D7": {
+   "original": "spi0_mosi",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D5",
+    "mosi": "D7",
+    "cs": "D3"
+   },
+   "params": {
+    "clock_hz": 8033007.4080165,
+    "mode": 1,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "18c242dc176294b8",
+     "ac0958032a74ce06",
+     "247cef6fdaef88",
+     "f084d8e6",
+     "3b",
+     "00",
+     "2e08e34a25b2b9",
+     "f930dc",
+     "eb63cb50ce3e6dfa",
+     "5b93f9f77c21",
+     "4cb1a1bd94",
+     "16cc24"
+    ],
+    "miso": [
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     ""
+    ]
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D0",
+    "mosi": "D4",
+    "cs": "D2"
+   },
+   "params": {
+    "clock_hz": 101651.24020713568,
+    "mode": 3,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "mosi": [
+     "ac98f8160cbe2298",
+     "534fbd",
+     "d4215396ab",
+     "eb",
+     "8f2ef131423a5877",
+     "a3",
+     "17da",
+     "761256241783fd21",
+     "7994e1399922",
+     "3c78672d",
+     "162b848db7"
+    ],
+    "miso": [
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     ""
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "random",
+   "channel": "D6",
+   "toggle_rate": 16116.109474442897
+  },
+  {
+   "kind": "clock",
+   "channel": "D1",
+   "freq": 32768.0
+  }
+ ]
+}

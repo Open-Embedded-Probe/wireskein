@@ -1,0 +1,107 @@
+{
+ "id": "synth-mixed-1043",
+ "generator": {
+  "seed": 1043,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 8000000.0,
+  "jitter_samples": 0.1,
+  "oversample_vs_fastest": 8.619297387458301
+ },
+ "channels": {
+  "D0": {
+   "original": "uart1_tx",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy0_static",
+   "static": true
+  },
+  "D2": {
+   "original": "spi2_mosi",
+   "static": false
+  },
+  "D3": {
+   "original": "spi2_cs",
+   "static": false
+  },
+  "D4": {
+   "original": "spi2_clk",
+   "static": false
+  },
+  "D5": {
+   "original": "uart0_tx",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D5"
+   },
+   "params": {
+    "baud": 57482.743491895344,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 2.0,
+    "idle": 0,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "72656164793e2074656d703d32332e352068756d3d34312e320a74656d703d32332e352068756d3d34312e320a72656164793e20434153455f424547494e2044657669636520446574656374696f6e0a"
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 928149.8990440422,
+    "data_bits": 7,
+    "parity": "even",
+    "stop_bits": 2.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "2447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a72656164793e2072656164793e2072656164793e204f4b0d0a434153455f424547494e2044657669636520446574656374696f6e0a"
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D4",
+    "mosi": "D2",
+    "cs": "D3"
+   },
+   "params": {
+    "clock_hz": 492873.5257524592,
+    "mode": 2,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "e6",
+     "2b29a859bc56",
+     "22c247d8ebfe96",
+     "5be80538d3"
+    ],
+    "miso": [
+     "",
+     "",
+     "",
+     ""
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "static",
+   "channel": "D1"
+  }
+ ]
+}

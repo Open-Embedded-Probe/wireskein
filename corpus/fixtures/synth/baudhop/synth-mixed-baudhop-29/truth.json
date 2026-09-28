@@ -1,0 +1,143 @@
+{
+ "id": "synth-mixed-baudhop-29",
+ "generator": {
+  "seed": 29,
+  "profile": "mixed",
+  "stress": "baudhop",
+  "t_start": 0.0,
+  "rate": 20000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 10.846521997934692
+ },
+ "channels": {
+  "D0": {
+   "original": "uart0_tx",
+   "static": false
+  },
+  "D1": {
+   "original": "spi2_mosi",
+   "static": false
+  },
+  "D2": {
+   "original": "spi2_cs",
+   "static": false
+  },
+  "D3": {
+   "original": "spi2_clk",
+   "static": false
+  },
+  "D4": {
+   "original": "spi2_miso",
+   "static": false
+  },
+  "D5": {
+   "original": "uart1_tx",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 921954.5216341348,
+    "data_bits": 8,
+    "parity": "even",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb",
+    "baud_segments": [
+     {
+      "from": 0.0009088903296625848,
+      "baud": 921954.5216341348
+     },
+     {
+      "from": 0.0026852146471999915,
+      "baud": 1843909.0432682696
+     }
+    ]
+   },
+   "expect": {
+    "bytes": "434153455f424547494e2044657669636520446574656374696f6e0a4f4b0d0a2447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a"
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D5"
+   },
+   "params": {
+    "baud": 9647.492274905988,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1.0,
+    "idle": 0,
+    "bit_order": "lsb",
+    "baud_segments": [
+     {
+      "from": 0.000641421101804736,
+      "baud": 9647.492274905988
+     },
+     {
+      "from": 0.13000863907112056,
+      "baud": 9647.492274905988
+     },
+     {
+      "from": 0.31961067647829466,
+      "baud": 19294.984549811976
+     },
+     {
+      "from": 0.38768890761205255,
+      "baud": 19294.984549811976
+     },
+     {
+      "from": 0.5002672922359274,
+      "baud": 19294.984549811976
+     }
+    ]
+   },
+   "expect": {
+    "bytes": "4f4b0d0a41542b474d520d0a434153455f424547494e2044657669636520446574656374696f6e0a4552524f522031320d0a74656d703d32332e352068756d3d34312e320a2447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a41542b474d520d0a4552524f522031320d0a4f4b0d0a2447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a4f4b0d0a72656164793e2072656164793e202447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a434153455f424547494e2044657669636520446574656374696f6e0a"
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D3",
+    "mosi": "D1",
+    "miso": "D4",
+    "cs": "D2"
+   },
+   "params": {
+    "clock_hz": 506015.83329931233,
+    "mode": 3,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "6ec0889de28e",
+     "d601c0",
+     "7bcaac5e",
+     "770c36ee1990",
+     "126fe597e7a95632",
+     "9d5f66d4a2a47384",
+     "7543eb4cf7",
+     "29706af34ed101"
+    ],
+    "miso": [
+     "aaa37a7c04ff",
+     "fb7598",
+     "abc57056",
+     "742fa0a7f751",
+     "c576962564e040e1",
+     "8379d40ddabc18f4",
+     "6767337c8f",
+     "958abef5a12a3b"
+    ]
+   }
+  }
+ ],
+ "decoys": []
+}

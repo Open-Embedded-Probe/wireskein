@@ -1,0 +1,120 @@
+{
+ "id": "synth-duplex-21",
+ "generator": {
+  "seed": 21,
+  "profile": "duplex",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 2000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 34.64887261733167
+ },
+ "channels": {
+  "D0": {
+   "original": "scpi0_tx",
+   "static": false
+  },
+  "D1": {
+   "original": "scpi0_rx",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy1_random",
+   "static": false
+  },
+  "D3": {
+   "original": "decoy2_static",
+   "static": true
+  },
+  "D4": {
+   "original": "decoy0_burst_clock",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 57721.93577806576,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "2a49444e3f0a434f4e463a564f4c543a44432031300a4d4541533a564f4c543a44433f0a2a4f50433f0a2a5253540a"
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D1"
+   },
+   "params": {
+    "baud": 57721.93577806576,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "41434d452c4d4f44454c2d312c534e303034322c312e302e330a2b312e3233343536452b30300a310a"
+   }
+  },
+  {
+   "protocol": "scpi",
+   "roles": {
+    "tx": "D0",
+    "rx": "D1"
+   },
+   "params": {
+    "baud": 57721.93577806576
+   },
+   "expect": {
+    "exchanges": [
+     [
+      "*IDN?",
+      "ACME,MODEL-1,SN0042,1.0.3"
+     ],
+     [
+      "CONF:VOLT:DC 10",
+      null
+     ],
+     [
+      "MEAS:VOLT:DC?",
+      "+1.23456E+00"
+     ],
+     [
+      "*OPC?",
+      "1"
+     ],
+     [
+      "*RST",
+      null
+     ]
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "burst_clock",
+   "channel": "D4",
+   "freq": 701921.6773750766
+  },
+  {
+   "kind": "random",
+   "channel": "D2",
+   "toggle_rate": 9320.109439537535
+  },
+  {
+   "kind": "static",
+   "channel": "D3"
+  }
+ ]
+}

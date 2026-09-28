@@ -1,0 +1,116 @@
+{
+ "id": "synth-duplex-41",
+ "generator": {
+  "seed": 41,
+  "profile": "duplex",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 8000000.0,
+  "jitter_samples": 0.02,
+  "oversample_vs_fastest": 69.07430001221518
+ },
+ "channels": {
+  "D0": {
+   "original": "scpi0_rx",
+   "static": false
+  },
+  "D1": {
+   "original": "scpi0_tx",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy0_static",
+   "static": true
+  },
+  "D3": {
+   "original": "decoy1_random",
+   "static": false
+  },
+  "D4": {
+   "original": "decoy2_burst_clock",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D1"
+   },
+   "params": {
+    "baud": 115817.31553682443,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "4d4541533a435552523a44433f0a2a4f50433f0a535953543a4552523f0a4d4541533a564f4c543a44433f0a"
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 115817.31553682443,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "2b322e3530303030452d30310a310a2b302c224e6f206572726f72220a2b312e3233343536452b30300a"
+   }
+  },
+  {
+   "protocol": "scpi",
+   "roles": {
+    "tx": "D1",
+    "rx": "D0"
+   },
+   "params": {
+    "baud": 115817.31553682443
+   },
+   "expect": {
+    "exchanges": [
+     [
+      "MEAS:CURR:DC?",
+      "+2.50000E-01"
+     ],
+     [
+      "*OPC?",
+      "1"
+     ],
+     [
+      "SYST:ERR?",
+      "+0,\"No error\""
+     ],
+     [
+      "MEAS:VOLT:DC?",
+      "+1.23456E+00"
+     ]
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "static",
+   "channel": "D2"
+  },
+  {
+   "kind": "random",
+   "channel": "D3",
+   "toggle_rate": 46400.67178500858
+  },
+  {
+   "kind": "burst_clock",
+   "channel": "D4",
+   "freq": 67897.65149938955
+  }
+ ]
+}

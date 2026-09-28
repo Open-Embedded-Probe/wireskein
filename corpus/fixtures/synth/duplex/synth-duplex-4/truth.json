@@ -1,0 +1,48 @@
+{
+ "id": "synth-duplex-4",
+ "generator": {
+  "seed": 4,
+  "profile": "duplex",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 4000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 53.40670407358272
+ },
+ "channels": {
+  "D0": {
+   "original": "decoy0_random",
+   "static": false
+  },
+  "D1": {
+   "original": "uart0_tx",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D1"
+   },
+   "params": {
+    "baud": 74896.9641430948,
+    "data_bits": 7,
+    "parity": "odd",
+    "stop_bits": 2.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "041036145e5a2d2c11590c2d447d235f14463b385f3e3f0b3e7a1456451177660a5d6b7f2652721800093b7404431f5b795337673b503f2427686c005a413c3f7704083939027c454f234e4433614b6c0a0c6f0209184c6461672c0861792e403d766a704513786239695c457a6b0a6e7b2f3c"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "random",
+   "channel": "D0",
+   "toggle_rate": 35377.18880700282
+  }
+ ]
+}

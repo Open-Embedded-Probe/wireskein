@@ -1,0 +1,144 @@
+{
+ "id": "synth-mixed-1029",
+ "generator": {
+  "seed": 1029,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 1000000.0,
+  "jitter_samples": 0.02,
+  "oversample_vs_fastest": 9.973880336926838
+ },
+ "channels": {
+  "D0": {
+   "original": "spi0_miso",
+   "static": false
+  },
+  "D1": {
+   "original": "spi1_miso",
+   "static": false
+  },
+  "D2": {
+   "original": "spi1_cs",
+   "static": false
+  },
+  "D3": {
+   "original": "spi0_cs",
+   "static": false
+  },
+  "D4": {
+   "original": "spi1_mosi",
+   "static": false
+  },
+  "D5": {
+   "original": "decoy1_static",
+   "static": true
+  },
+  "D6": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D7": {
+   "original": "decoy0_static",
+   "static": true
+  },
+  "D8": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D9": {
+   "original": "spi1_clk",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D6",
+    "mosi": "D8",
+    "miso": "D0",
+    "cs": "D3"
+   },
+   "params": {
+    "clock_hz": 98196.7861446658,
+    "mode": 3,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "mosi": [
+     "b7",
+     "1078",
+     "0b898a2347e705",
+     "be5a3c799723f1",
+     "058f5c020dcd"
+    ],
+    "miso": [
+     "60",
+     "8ffe",
+     "7fbc9bc3436ddf",
+     "014d57569e3c91",
+     "2f05e328204a"
+    ]
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D9",
+    "mosi": "D4",
+    "miso": "D1",
+    "cs": "D2"
+   },
+   "params": {
+    "clock_hz": 100261.88065417687,
+    "mode": 3,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "mosi": [
+     "4a8a",
+     "0b70d0cb06215d",
+     "f5e7cc",
+     "0ac47b9ddc3c",
+     "16",
+     "661ae95b9c20",
+     "3c806dd3",
+     "23b6",
+     "3c7f9b1cd0b2",
+     "96b9c61adb",
+     "1559084572",
+     "76bd227c21b6b35b",
+     "192ba5",
+     "541362f2f0"
+    ],
+    "miso": [
+     "2102",
+     "d84f5eb62298f6",
+     "ae8688",
+     "05c91b6c578f",
+     "de",
+     "4550327e19b7",
+     "ba222806",
+     "a68d",
+     "61df89c007cf",
+     "3c8eb12b4c",
+     "6cc23e637b",
+     "a8efb17009989f2e",
+     "9fe345",
+     "fcd4fcceb6"
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "static",
+   "channel": "D7"
+  },
+  {
+   "kind": "static",
+   "channel": "D5"
+  }
+ ]
+}

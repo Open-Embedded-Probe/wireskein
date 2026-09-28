@@ -1,0 +1,58 @@
+{
+ "id": "synth-uartlike-50",
+ "generator": {
+  "seed": 50,
+  "profile": "uartlike",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 2000000.0,
+  "jitter_samples": 0.02,
+  "oversample_vs_fastest": 8.0
+ },
+ "channels": {
+  "D0": {
+   "original": "dmx0",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy1_random",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy0_random",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "dmx512",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 250000.0
+   },
+   "expect": {
+    "packets": [
+     "7f5a6bd59e4ee3d27977438ca069173ec0f533f9ad4a33d4c11fa13c3faf5647aac49ca537b2d3ab708ca5109ea0aef5",
+     "43c84f0367e600676d1c84a7a15516447ba336b0123697fc367352a0549cb665243ff62e77b415",
+     "dc490a20f9edf6ff987f881ca275404ca2000dfc07f1538e9c613594b1428e732a2e60e493517089744bdc03",
+     "36da85998f95851e96cb936b1b12698cc5d3ac5fbdfc4cf4c7c7ddb425433145fe70b80ffe1fdb8ab2065e3c1f8349ebce49ea3e",
+     "1924d872377bbc38b87fe854a9185d766b2791c572576028f49b1c79a9a2bc95135fc9c7dadd1b7f1c05f71f32e3"
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "random",
+   "channel": "D2",
+   "toggle_rate": 1932.9272367329384
+  },
+  {
+   "kind": "random",
+   "channel": "D1",
+   "toggle_rate": 8926.54213847563
+  }
+ ]
+}

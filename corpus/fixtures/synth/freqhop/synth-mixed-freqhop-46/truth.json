@@ -1,0 +1,172 @@
+{
+ "id": "synth-mixed-freqhop-46",
+ "generator": {
+  "seed": 46,
+  "profile": "mixed",
+  "stress": "freqhop",
+  "t_start": 0.0,
+  "rate": 10000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 9.989100312461803
+ },
+ "channels": {
+  "D0": {
+   "original": "i2c1_sda",
+   "static": false
+  },
+  "D1": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D2": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D3": {
+   "original": "decoy0_random",
+   "static": false
+  },
+  "D4": {
+   "original": "spi0_miso",
+   "static": false
+  },
+  "D5": {
+   "original": "i2c1_scl",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D1",
+    "mosi": "D2",
+    "miso": "D4"
+   },
+   "params": {
+    "clock_hz": 495451.39511837275,
+    "mode": 0,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "b53315a1d0adfd",
+     "08688275ac",
+     "0613c87f6e",
+     "04",
+     "17f4",
+     "56",
+     "633e",
+     "069b27",
+     "cc15ca",
+     "a1"
+    ],
+    "miso": [
+     "b6de8bc62f1213",
+     "e9dcb2b9b4",
+     "d5e67ecb4d",
+     "c1",
+     "9e21",
+     "3e",
+     "f410",
+     "bf6f6e",
+     "fa83c1",
+     "e1"
+    ]
+   }
+  },
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D5",
+    "sda": "D0"
+   },
+   "params": {
+    "clock_hz": 1001091.1580820346
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 43,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       147,
+       71,
+       40,
+       10,
+       25,
+       226
+      ]
+     },
+     {
+      "addr": 43,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       65,
+       119,
+       85
+      ]
+     },
+     {
+      "addr": 43,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       223
+      ]
+     },
+     {
+      "addr": 43,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       20,
+       96,
+       173,
+       96,
+       78
+      ]
+     },
+     {
+      "addr": 43,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       89
+      ]
+     },
+     {
+      "addr": 43,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       34,
+       108,
+       201,
+       173,
+       31,
+       84
+      ]
+     },
+     {
+      "addr": 43,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       116
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "random",
+   "channel": "D3",
+   "toggle_rate": 33898.52083764071
+  }
+ ]
+}

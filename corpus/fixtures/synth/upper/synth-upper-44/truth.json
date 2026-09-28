@@ -1,0 +1,39 @@
+{
+ "id": "synth-upper-44",
+ "generator": {
+  "seed": 44,
+  "profile": "upper",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 4000000.0,
+  "jitter_samples": 0.1,
+  "oversample_vs_fastest": 104.67304749894029
+ },
+ "channels": {
+  "D0": {
+   "original": "uart0_tx",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 38214.230841425495,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1,
+    "idle": 1,
+    "bit_order": "lsb",
+    "payload": "nmea"
+   },
+   "expect": {
+    "bytes": "2447504747412c3232383638372c303031342e3630392c4e2c30303135342e3331332c452c312c30382c302e392c3136322e392c4d2c2c2c2a33410d0a2447504747412c3039343934362c303035352e3438382c4e2c30303137312e3838392c452c312c30382c302e392c3431312e302c4d2c2c2c2a33340d0a2447504747412c3135393931342c303038332e3430372c4e2c30303132382e3830332c452c312c30382c302e392c31392e342c4d2c2c2c2a30390d0a"
+   }
+  }
+ ],
+ "decoys": []
+}

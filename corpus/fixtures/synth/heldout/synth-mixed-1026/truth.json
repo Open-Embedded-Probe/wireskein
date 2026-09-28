@@ -1,0 +1,59 @@
+{
+ "id": "synth-mixed-1026",
+ "generator": {
+  "seed": 1026,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 24000000.0,
+  "jitter_samples": 0.02,
+  "oversample_vs_fastest": 26.201722437002804
+ },
+ "channels": {
+  "D0": {
+   "original": "uart1_tx",
+   "static": false
+  },
+  "D1": {
+   "original": "uart0_tx",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D1"
+   },
+   "params": {
+    "baud": 915970.3167493497,
+    "data_bits": 8,
+    "parity": "odd",
+    "stop_bits": 1.0,
+    "idle": 0,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "41542b474d520d0a4552524f522031320d0a434153455f424547494e2044657669636520446574656374696f6e0a2447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a72656164793e20434153455f424547494e2044657669636520446574656374696f6e0a2447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a"
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 38224.201917854145,
+    "data_bits": 8,
+    "parity": "odd",
+    "stop_bits": 1.0,
+    "idle": 0,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "1e36bda4dda7be4336d795a759ff915901dc31eab3863ca2e82b0f61c49778694626d50433a7d984f498c7123ad5accee281b20295ffb9e453d2aea5bc7f9a60234a"
+   }
+  }
+ ],
+ "decoys": []
+}

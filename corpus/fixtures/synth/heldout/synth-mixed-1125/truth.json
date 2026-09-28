@@ -1,0 +1,128 @@
+{
+ "id": "synth-mixed-1125",
+ "generator": {
+  "seed": 1125,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 50000000.0,
+  "jitter_samples": 0.1,
+  "oversample_vs_fastest": 12.449536038688974
+ },
+ "channels": {
+  "D0": {
+   "original": "spi0_miso",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy1_clock",
+   "static": false
+  },
+  "D2": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D3": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D4": {
+   "original": "decoy0_random",
+   "static": false
+  },
+  "D5": {
+   "original": "decoy2_clock",
+   "static": false
+  },
+  "D6": {
+   "original": "uart1_tx",
+   "static": false
+  },
+  "D7": {
+   "original": "spi0_cs",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D3",
+    "mosi": "D2",
+    "miso": "D0",
+    "cs": "D7"
+   },
+   "params": {
+    "clock_hz": 4016213.925130768,
+    "mode": 0,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "mosi": [
+     "2742af3a1dd5e21d",
+     "1a5763ae",
+     "d16efbeebc8419",
+     "b2e07983726446",
+     "b06e051c0007ba",
+     "870182",
+     "29c9",
+     "0d8b179b8f1f",
+     "33f2f753670a7f35",
+     "38e56a88c6836d",
+     "2f415f",
+     "8f",
+     "9599cf2156f1"
+    ],
+    "miso": [
+     "9e9ff8a500a76b7a",
+     "db6dfe0a",
+     "21cff6b28dc567",
+     "99d4c362f872d1",
+     "28936049be03d8",
+     "8a8a17",
+     "e99e",
+     "8764ea6e5847",
+     "6d9e6da334215714",
+     "46f24ab7c1417b",
+     "1241a4",
+     "e6",
+     "3199ed90bd1a"
+    ]
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D6"
+   },
+   "params": {
+    "baud": 249648.29833435733,
+    "data_bits": 8,
+    "parity": "odd",
+    "stop_bits": 2.0,
+    "idle": 0,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "4552524f522031320d0a41542b474d520d0a4552524f522031320d0a4552524f522031320d0a4552524f522031320d0a2447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a434153455f424547494e2044657669636520446574656374696f6e0a434153455f424547494e2044657669636520446574656374696f6e0a72656164793e2041542b474d520d0a"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "random",
+   "channel": "D4",
+   "toggle_rate": 42013.014281730495
+  },
+  {
+   "kind": "clock",
+   "channel": "D1",
+   "freq": 115200.0
+  },
+  {
+   "kind": "clock",
+   "channel": "D5",
+   "freq": 115200.0
+  }
+ ]
+}

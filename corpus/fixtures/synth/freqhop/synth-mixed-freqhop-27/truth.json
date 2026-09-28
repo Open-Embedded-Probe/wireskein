@@ -1,0 +1,73 @@
+{
+ "id": "synth-mixed-freqhop-27",
+ "generator": {
+  "seed": 27,
+  "profile": "mixed",
+  "stress": "freqhop",
+  "t_start": 0.0,
+  "rate": 8000000.0,
+  "jitter_samples": 0.1,
+  "oversample_vs_fastest": 16.246163758564535
+ },
+ "channels": {
+  "D0": {
+   "original": "decoy1_static",
+   "static": true
+  },
+  "D1": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy0_burst_clock",
+   "static": false
+  },
+  "D3": {
+   "original": "spi0_mosi",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D1",
+    "mosi": "D3"
+   },
+   "params": {
+    "clock_hz": 492423.9419772325,
+    "mode": 1,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "019d9002b1f8",
+     "58fb",
+     "dcbfcf",
+     "c4897c4c9ea64767",
+     "ec7f8b2ec669",
+     "0cf7f101c8bf35"
+    ],
+    "miso": [
+     "",
+     "",
+     "",
+     "",
+     "",
+     ""
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "burst_clock",
+   "channel": "D2",
+   "freq": 970368.456918617
+  },
+  {
+   "kind": "static",
+   "channel": "D0"
+  }
+ ]
+}

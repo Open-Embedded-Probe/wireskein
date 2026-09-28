@@ -1,0 +1,87 @@
+{
+ "id": "synth-mixed-baudhop-30",
+ "generator": {
+  "seed": 30,
+  "profile": "mixed",
+  "stress": "baudhop",
+  "t_start": 0.0,
+  "rate": 50000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 25.20553957231937
+ },
+ "channels": {
+  "D0": {
+   "original": "uart0_tx",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy0_burst_clock",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy2_static",
+   "static": true
+  },
+  "D3": {
+   "original": "decoy1_random",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 247961.36508276645,
+    "data_bits": 8,
+    "parity": "even",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb",
+    "baud_segments": [
+     {
+      "from": 0.0007876187411646513,
+      "baud": 247961.36508276645
+     },
+     {
+      "from": 0.0026942429210418317,
+      "baud": 247961.36508276645
+     },
+     {
+      "from": 0.012542801907008053,
+      "baud": 1983690.9206621316
+     },
+     {
+      "from": 0.013118728310995698,
+      "baud": 1983690.9206621316
+     },
+     {
+      "from": 0.014011506110366717,
+      "baud": 1983690.9206621316
+     }
+    ]
+   },
+   "expect": {
+    "bytes": "110eeb27d36018ca6b598da9b1f89805b6d1899313261817757f4ce1db1ff79c27f12223c8346f8d03b8ca94a94b53d330d6a8f055c3dfad9534a4be52c885d5ae39e1a660e2f684bdb9a5931b99fc36bf521b863ba2e9"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "burst_clock",
+   "channel": "D1",
+   "freq": 282600.17327513255
+  },
+  {
+   "kind": "random",
+   "channel": "D3",
+   "toggle_rate": 4745.581272640527
+  },
+  {
+   "kind": "static",
+   "channel": "D2"
+  }
+ ]
+}
