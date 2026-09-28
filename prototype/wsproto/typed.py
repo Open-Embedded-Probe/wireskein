@@ -56,6 +56,26 @@ class AsyncSymbols:
         return _nb(self.level.astype(np.int8), self.units.astype(np.int16)) + 4 * len(self.start)
 
 
+@dataclass
+class RateBlocks:
+    """An async line split into blocks of one bit time each (a layer of its
+    own: everything after it is the same per-block processing)."""
+    pin: str
+    idle: int
+    blocks: list[tuple[int, int, float]]   # (start_sample, end_sample, unit)
+
+    def nbytes(self) -> int:
+        return 20 * len(self.blocks)
+
+
+@dataclass
+class RateSegments:
+    """Annotation for a clocked stream: where the clock rate changes. The
+    stream itself is not split, because bits are taken at clock edges anyway."""
+    clock: str
+    segments: list[tuple[int, int, float]]  # (first edge index, last+1, median interval)
+
+
 # ---------------- T3 / T4 outputs ----------------
 
 @dataclass
@@ -338,3 +358,42 @@ def async_symbols_segment(cap, sv: Survey, pin: str, s0: int, s1: int, unit: flo
     sel = (start >= s0) & (start < s1)
     units = np.clip(np.round(length[sel] / unit), 0, 32767).astype(np.int16)
     return AsyncSymbols(pin, unit, sv.features[pin].idle_level, level[sel].astype(np.int8), units, start[sel])
+
+
+def rate_blocks(cap, sv: Survey, pin: str) -> RateBlocks:
+    return RateBlocks(pin, sv.features[pin].idle_level, async_segments(cap, sv, pin))
+
+
+def clock_rate_segments(sb: SyncBits, change: float = 1.5) -> RateSegments:
+    """Annotate where the sampling-edge interval changes by `change` or more
+    between bursts (inside a burst the rate is taken as constant)."""
+    t = sb.t
+    b = np.concatenate((sb.burst_start, [len(t)]))
+    segs = []
+    for a, z in zip(b[:-1], b[1:]):
+        if z - a < 2:
+            continue
+        med = float(np.median(np.diff(t[a:z])))
+        if segs and max(med, segs[-1][2]) / min(med, segs[-1][2]) < change:
+            segs[-1] = (segs[-1][0], int(z), segs[-1][2])
+        else:
+            segs.append((int(a), int(z), med))
+    return RateSegments(sb.clock, segs)
+
+
+def block_chars(cap, sv: Survey, rb: RateBlocks) -> list[tuple[tuple[int, int, float], list, "Chars | None"]]:
+    """Common per-block processing: estimate the character length inside each
+    block, then build characters. The smallest length among the tied best is
+    used (a 2-stop-bit line decodes correctly with 1 stop bit)."""
+    from .survey import char_length
+    out = []
+    for blk in rb.blocks:
+        s0, s1, u = blk
+        cands = char_length(cap, rb.pin, rb.idle, u, s0, s1)
+        if not cands:
+            out.append((blk, [], None))
+            continue
+        best = cands[0][1]
+        L = min(l for l, r in cands if r >= best - 0.02)
+        out.append((blk, cands, chars(cap, async_symbols_segment(cap, sv, rb.pin, s0, s1, u), L)))
+    return out

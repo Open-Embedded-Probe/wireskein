@@ -104,31 +104,37 @@ def clock_info(cap: Capture, f: ChannelFeatures) -> ClockInfo | None:
     return ClockInfo(f.name, period, score, f.idle_level or 0, bursts, bits, mod8, mod9, words[:6])
 
 
-def async_info(cap: Capture, f: ChannelFeatures) -> AsyncInfo:
+def char_length(cap: Capture, pin: str, idle: int, unit: float, s0: int = 0, s1: int | None = None) -> list[tuple[int, float]]:
     """Character length L (bits incl. start and stop) from the stop-bit test
-    alone: chain frames of L bits from each start edge and check that the
-    start sample is active and the sample at L-0.5 bits is idle. A wrong L
-    lands the stop sample in a data bit (random) or in the next start bit
-    (fails on back-to-back characters). Uses the top unit candidates."""
-    if not f.units or f.idle_level is None:
-        return AsyncInfo(f.name, None, [], f.idle_level)
-    ch = cap.channel(f.name)
-    idle = f.idle_level
+    alone: chain frames of L bits from each start edge in [s0, s1) and check that
+    the start sample is active and the sample at L-0.5 bits is idle. A wrong L
+    lands the stop sample in a data bit (random) or in the next start bit (fails
+    on back-to-back characters). Shared by the whole-line survey and by every
+    rate block. Returns [(L, pass rate)] best first."""
+    ch = cap.channel(pin)
+    s1 = cap.n_samples if s1 is None else s1
     lv = K.edge_levels(ch.edges, ch.initial)
-    starts = ch.edges[lv != idle].astype(np.float64)
+    e = ch.edges
+    starts = e[(lv != idle) & (e >= s0) & (e < s1)].astype(np.float64)
     if len(starts) < 4:
-        return AsyncInfo(f.name, f.units[0].samples, [], idle)
-    u = f.units[0].samples
-    grid = K.sample_grid(ch.edges, ch.initial, starts, (np.arange(14) + 0.5) * u, cap.n_samples)
+        return []
+    grid = K.sample_grid(e, ch.initial, starts, (np.arange(14) + 0.5) * unit, cap.n_samples)
     if idle == 0:
         grid = 1 - grid
     rates = []
     for L in range(8, 14):
-        idx = K.chain(starts, starts + (L - 0.5) * u)
+        idx = K.chain(starts, starts + (L - 0.5) * unit)
         ok = (grid[idx, 0] == 0) & (grid[idx, L - 1] == 1)
         rates.append((L, float(ok.mean()) if len(idx) else 0.0))
     rates.sort(key=lambda x: (-round(x[1], 2), x[0]))
-    return AsyncInfo(f.name, u, rates[:4], idle)
+    return rates[:4]
+
+
+def async_info(cap: Capture, f: ChannelFeatures) -> AsyncInfo:
+    if not f.units or f.idle_level is None:
+        return AsyncInfo(f.name, None, [], f.idle_level)
+    u = f.units[0].samples
+    return AsyncInfo(f.name, u, char_length(cap, f.name, f.idle_level, u), f.idle_level)
 
 
 def pair_relation(cap: Capture, clk: ClockInfo, other: str) -> PairRelation:
