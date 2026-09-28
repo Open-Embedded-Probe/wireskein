@@ -1,0 +1,38 @@
+{
+ "id": "synth-duplex-8",
+ "generator": {
+  "seed": 8,
+  "profile": "duplex",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 1000000.0,
+  "jitter_samples": 0.02,
+  "oversample_vs_fastest": 17.193550728614913
+ },
+ "channels": {
+  "D0": {
+   "original": "uart0_tx",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 58161.34292352529,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1.0,
+    "idle": 0,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "29387e63dc786c5f4310470a974f611b948aebf019450da9843d269cb3c2f43dd95da12ce2110879c1dbc5ff36b71a17fe3604a2a551e4d6e5d83e4824487068a1dfb6"
+   }
+  }
+ ],
+ "decoys": []
+}

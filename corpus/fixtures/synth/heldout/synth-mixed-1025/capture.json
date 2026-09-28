@@ -1,0 +1,50 @@
+{
+ "rate": 100000000.0,
+ "n_samples": 3740828,
+ "channels": [
+  {
+   "name": "D0",
+   "initial": 1
+  },
+  {
+   "name": "D1",
+   "initial": 1
+  },
+  {
+   "name": "D2",
+   "initial": 1
+  },
+  {
+   "name": "D3",
+   "initial": 1
+  },
+  {
+   "name": "D4",
+   "initial": 0
+  },
+  {
+   "name": "D5",
+   "initial": 0
+  },
+  {
+   "name": "D6",
+   "initial": 1
+  },
+  {
+   "name": "D7",
+   "initial": 0
+  },
+  {
+   "name": "D8",
+   "initial": 0
+  },
+  {
+   "name": "D9",
+   "initial": 1
+  },
+  {
+   "name": "D10",
+   "initial": 1
+  }
+ ]
+}

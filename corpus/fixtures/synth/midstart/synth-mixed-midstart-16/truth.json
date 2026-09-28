@@ -1,0 +1,161 @@
+{
+ "id": "synth-mixed-midstart-16",
+ "generator": {
+  "seed": 16,
+  "profile": "mixed",
+  "stress": "midstart",
+  "t_start": 0.0008899000617746736,
+  "rate": 50000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 12.425923190309852
+ },
+ "channels": {
+  "D0": {
+   "original": "decoy0_static",
+   "static": true
+  },
+  "D1": {
+   "original": "i2c0_scl",
+   "static": false
+  },
+  "D2": {
+   "original": "spi1_mosi",
+   "static": true
+  },
+  "D3": {
+   "original": "spi1_miso",
+   "static": true
+  },
+  "D4": {
+   "original": "i2c0_sda",
+   "static": false
+  },
+  "D5": {
+   "original": "decoy1_random",
+   "static": false
+  },
+  "D6": {
+   "original": "spi1_clk",
+   "static": true
+  }
+ },
+ "buses": [
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D1",
+    "sda": "D4"
+   },
+   "params": {
+    "clock_hz": 959407.3825461525
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 56,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       76,
+       223
+      ]
+     },
+     {
+      "addr": 13,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       206,
+       178
+      ]
+     },
+     {
+      "addr": 56,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       83,
+       169,
+       47,
+       41,
+       228,
+       101
+      ]
+     },
+     {
+      "addr": 56,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       143,
+       104,
+       104,
+       190,
+       35,
+       224
+      ]
+     },
+     {
+      "addr": 56,
+      "rw": "write",
+      "addr_ack": false,
+      "bytes": []
+     },
+     {
+      "addr": 56,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       205,
+       129
+      ]
+     },
+     {
+      "addr": 24,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       246
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D6",
+    "mosi": "D2",
+    "miso": "D3"
+   },
+   "params": {
+    "clock_hz": 4023845.8933169376,
+    "mode": 0,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "a1",
+     "66c4",
+     "26b3a9b874"
+    ],
+    "miso": [
+     "f3",
+     "ac33",
+     "9e60cb07e0"
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "static",
+   "channel": "D0"
+  },
+  {
+   "kind": "random",
+   "channel": "D5",
+   "toggle_rate": 7277.11547949394
+  }
+ ]
+}

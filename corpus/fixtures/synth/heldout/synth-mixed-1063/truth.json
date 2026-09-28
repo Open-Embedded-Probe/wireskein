@@ -1,0 +1,127 @@
+{
+ "id": "synth-mixed-1063",
+ "generator": {
+  "seed": 1063,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 50000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 6.219144582825818
+ },
+ "channels": {
+  "D0": {
+   "original": "spi1_cs",
+   "static": false
+  },
+  "D1": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D2": {
+   "original": "spi1_miso",
+   "static": false
+  },
+  "D3": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D4": {
+   "original": "spi1_mosi",
+   "static": false
+  },
+  "D5": {
+   "original": "spi1_clk",
+   "static": false
+  },
+  "D6": {
+   "original": "spi0_miso",
+   "static": false
+  },
+  "D7": {
+   "original": "spi0_cs",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D1",
+    "mosi": "D3",
+    "miso": "D6",
+    "cs": "D7"
+   },
+   "params": {
+    "clock_hz": 495970.08681290137,
+    "mode": 3,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "34c22cddcaaf48d8",
+     "ed73b627016be9",
+     "5b4813b939",
+     "37de97d834017c",
+     "38cb8c252f8eb153",
+     "d66639cb5f6f021b",
+     "cb65b808ff7996",
+     "e8326b83ed7af4",
+     "9f3ba601f531eb",
+     "54039676",
+     "1b8b75a84b7e90",
+     "106382ed",
+     "63",
+     "dcae90"
+    ],
+    "miso": [
+     "ebcbb213198c0359",
+     "ceb1ef2291c907",
+     "ecbc14b2b3",
+     "193a88d72310c2",
+     "1e7c044ad3225ca0",
+     "5eb62aad08e1cc20",
+     "4c914c4d07e6f8",
+     "03816dd3d59971",
+     "430fc3155b0c05",
+     "f8ca4ec6",
+     "0d3c5547feecb8",
+     "5d0e4583",
+     "f4",
+     "d08068"
+    ]
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D5",
+    "mosi": "D4",
+    "miso": "D2",
+    "cs": "D0"
+   },
+   "params": {
+    "clock_hz": 8039690.8825813625,
+    "mode": 2,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "cecd96e18941cf43",
+     "917d6be4407f0c",
+     "365308915e1fcf7a",
+     "5499ebca0a",
+     "653985cafd98"
+    ],
+    "miso": [
+     "940278c7e3ab8428",
+     "421b03ebe8bc35",
+     "5644644075fd9a0f",
+     "f89eb14275",
+     "1c48c8303bc5"
+    ]
+   }
+  }
+ ],
+ "decoys": []
+}

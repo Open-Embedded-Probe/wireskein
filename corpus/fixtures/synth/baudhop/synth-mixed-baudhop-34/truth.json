@@ -1,0 +1,70 @@
+{
+ "id": "synth-mixed-baudhop-34",
+ "generator": {
+  "seed": 34,
+  "profile": "mixed",
+  "stress": "baudhop",
+  "t_start": 0.0,
+  "rate": 8000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 104.70539184890653
+ },
+ "channels": {
+  "D0": {
+   "original": "decoy0_random",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy1_static",
+   "static": true
+  },
+  "D2": {
+   "original": "uart0_tx",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D2"
+   },
+   "params": {
+    "baud": 19101.213076840097,
+    "data_bits": 7,
+    "parity": "none",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb",
+    "baud_segments": [
+     {
+      "from": 0.001785300617664153,
+      "baud": 19101.213076840097
+     },
+     {
+      "from": 0.05338272907123194,
+      "baud": 76404.85230736039
+     },
+     {
+      "from": 0.06459269377231247,
+      "baud": 76404.85230736039
+     }
+    ]
+   },
+   "expect": {
+    "bytes": "4916487f4f4a5f05233b4824700e5376490e162a4f4f4e69492e1a3b1e0f022d6555265f7c2f5623244a2306541047697075614d45330e7841653f3e5a6f6255236c62445314090a210a52"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "random",
+   "channel": "D0",
+   "toggle_rate": 6714.33891302656
+  },
+  {
+   "kind": "static",
+   "channel": "D1"
+  }
+ ]
+}

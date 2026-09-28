@@ -1,0 +1,147 @@
+{
+ "id": "synth-mixed-22",
+ "generator": {
+  "seed": 22,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 50000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 50.175621546367005
+ },
+ "channels": {
+  "D0": {
+   "original": "i2c0_sda",
+   "static": false
+  },
+  "D1": {
+   "original": "spi1_clk",
+   "static": false
+  },
+  "D2": {
+   "original": "uart2_tx",
+   "static": false
+  },
+  "D3": {
+   "original": "i2c0_scl",
+   "static": false
+  },
+  "D4": {
+   "original": "spi1_cs",
+   "static": false
+  },
+  "D5": {
+   "original": "spi1_mosi",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D3",
+    "sda": "D0"
+   },
+   "params": {
+    "clock_hz": 383542.3349304512
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 81,
+      "rw": "write",
+      "addr_ack": false,
+      "bytes": []
+     },
+     {
+      "addr": 30,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       132,
+       12,
+       88,
+       122,
+       233
+      ]
+     },
+     {
+      "addr": 30,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       164,
+       26
+      ]
+     },
+     {
+      "addr": 30,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       47,
+       99
+      ]
+     },
+     {
+      "addr": 30,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": []
+     }
+    ]
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D1",
+    "mosi": "D5",
+    "cs": "D4"
+   },
+   "params": {
+    "clock_hz": 996499.8630618913,
+    "mode": 2,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "0df3e5d0ffac",
+     "14ad4c",
+     "45",
+     "6f",
+     "f258aaa8bf",
+     "62",
+     "a362b58cae59f1b6"
+    ],
+    "miso": [
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     ""
+    ]
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D2"
+   },
+   "params": {
+    "baud": 921460.4652333017,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "2bb0518149bec67dc6ab1fe2b6c63fda08d99b2438c441f5759467282af3ae6ae5eb43974a2bc3b29080eccc64cb7e41ddf7bc106033da1e31852edd928a410166a5c0550c111fadf64c1521e92dc578a93a0985758dd1b4149e8d0d6c35ec5fe751eb"
+   }
+  }
+ ],
+ "decoys": []
+}

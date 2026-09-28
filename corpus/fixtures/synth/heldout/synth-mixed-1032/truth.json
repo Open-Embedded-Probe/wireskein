@@ -1,0 +1,160 @@
+{
+ "id": "synth-mixed-1032",
+ "generator": {
+  "seed": 1032,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 100000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 12.310560662421816
+ },
+ "channels": {
+  "D0": {
+   "original": "spi1_miso",
+   "static": false
+  },
+  "D1": {
+   "original": "spi1_mosi",
+   "static": false
+  },
+  "D2": {
+   "original": "spi0_cs",
+   "static": false
+  },
+  "D3": {
+   "original": "decoy0_clock",
+   "static": false
+  },
+  "D4": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D5": {
+   "original": "decoy2_clock",
+   "static": false
+  },
+  "D6": {
+   "original": "spi1_clk",
+   "static": false
+  },
+  "D7": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D8": {
+   "original": "spi0_miso",
+   "static": false
+  },
+  "D9": {
+   "original": "spi1_cs",
+   "static": false
+  },
+  "D10": {
+   "original": "decoy1_static",
+   "static": true
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D4",
+    "mosi": "D7",
+    "miso": "D8",
+    "cs": "D2"
+   },
+   "params": {
+    "clock_hz": 4079438.663278084,
+    "mode": 0,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "4739bf0824e4",
+     "635979a99b32",
+     "be49f876d7e206ed",
+     "5efd0fea",
+     "f210",
+     "1d838ba2",
+     "808f",
+     "2be4afc266ee7615",
+     "25085c2592732f",
+     "88a7abdfae8506",
+     "2b3a5037274f"
+    ],
+    "miso": [
+     "71d98f3fde51",
+     "ea9b4a0e2424",
+     "a490e00bb4a36c0b",
+     "f48e8cf2",
+     "b7e4",
+     "ed1862bb",
+     "5593",
+     "5933ac164dd58be8",
+     "447bcebd35b5fa",
+     "90e90aa63ba985",
+     "2c46331f17bf"
+    ]
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D6",
+    "mosi": "D1",
+    "miso": "D0",
+    "cs": "D9"
+   },
+   "params": {
+    "clock_hz": 8123106.878897206,
+    "mode": 3,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "e793",
+     "8e08c05cc0589554",
+     "ced4077b",
+     "0840",
+     "bcbecf",
+     "4889493941f187",
+     "604d3676e616",
+     "b6413e8e85",
+     "461984e6ef9f",
+     "7285ea017586f3",
+     "607e82"
+    ],
+    "miso": [
+     "c7ae",
+     "541ea17dc86f83d8",
+     "2eccf38e",
+     "a397",
+     "f06fcf",
+     "6d2856263fa9e1",
+     "81ce42b38e18",
+     "dc5224ddc4",
+     "98f568689da8",
+     "dd437e10f9c189",
+     "b2579a"
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "clock",
+   "channel": "D3",
+   "freq": 115200.0
+  },
+  {
+   "kind": "static",
+   "channel": "D10"
+  },
+  {
+   "kind": "clock",
+   "channel": "D5",
+   "freq": 32768.0
+  }
+ ]
+}

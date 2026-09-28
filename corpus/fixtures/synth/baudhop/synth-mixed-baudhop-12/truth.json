@@ -1,0 +1,124 @@
+{
+ "id": "synth-mixed-baudhop-12",
+ "generator": {
+  "seed": 12,
+  "profile": "mixed",
+  "stress": "baudhop",
+  "t_start": 0.0,
+  "rate": 20000000.0,
+  "jitter_samples": 0.02,
+  "oversample_vs_fastest": 4.920616346187702
+ },
+ "channels": {
+  "D0": {
+   "original": "spi1_clk",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy1_static",
+   "static": true
+  },
+  "D2": {
+   "original": "spi1_cs",
+   "static": false
+  },
+  "D3": {
+   "original": "spi1_mosi",
+   "static": false
+  },
+  "D4": {
+   "original": "decoy2_static",
+   "static": true
+  },
+  "D5": {
+   "original": "decoy0_static",
+   "static": true
+  },
+  "D6": {
+   "original": "uart0_tx",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D6"
+   },
+   "params": {
+    "baud": 74414.72620788675,
+    "data_bits": 7,
+    "parity": "none",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb",
+    "baud_segments": [
+     {
+      "from": 0.0014068023369910125,
+      "baud": 74414.72620788675
+     },
+     {
+      "from": 0.027932818647121195,
+      "baud": 74414.72620788675
+     },
+     {
+      "from": 0.05817013418309627,
+      "baud": 297658.904831547
+     },
+     {
+      "from": 0.06018090602688335,
+      "baud": 297658.904831547
+     }
+    ]
+   },
+   "expect": {
+    "bytes": "41542b474d520d0a74656d703d32332e352068756d3d34312e320a4552524f522031320d0a72656164793e2072656164793e204552524f522031320d0a"
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D0",
+    "mosi": "D3",
+    "cs": "D2"
+   },
+   "params": {
+    "clock_hz": 4064531.471854172,
+    "mode": 0,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "8879edfc07b2",
+     "8be9",
+     "86",
+     "a8c5bb3ef5",
+     "b6f78991315d3b",
+     "05f701"
+    ],
+    "miso": [
+     "",
+     "",
+     "",
+     "",
+     "",
+     ""
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "static",
+   "channel": "D5"
+  },
+  {
+   "kind": "static",
+   "channel": "D1"
+  },
+  {
+   "kind": "static",
+   "channel": "D4"
+  }
+ ]
+}

@@ -6,9 +6,21 @@
 | --- | --- | --- |
 | `raw/` | 管理外 | 兄弟リポジトリから集めた元の `.sr` と付随ファイル。`collect.py` で再作成でき、`raw/manifest.json` に出所・参照元コミット・SHA-256 を残す |
 | `fixtures/real/<id>/` | 管理する | `raw/` を匿名化・変換したフィクスチャ（下記） |
+| `fixtures/synth/<set>/<id>/` | 管理する | 生成データを固定したもの（`prototype/export_synth.py`）。どの言語で作り直しても、同じ入力で回帰試験ができる |
 | `work/` | 管理外 | 評価結果など再生成できる出力 |
 
-生成データ（UART / I²C / SPI と囮信号）は `prototype/wsproto/synth.py` がシード値から毎回作る。本番実装へ移るときに、決めたシードの範囲をフィクスチャとして書き出して固定する。
+生成データは `prototype/wsproto/synth.py` がシード値から作り、評価に使うセットを `fixtures/synth/` に固定した（`manifest.json` にセットとシードの範囲）。
+
+| セット | 件数 | 内容 |
+| --- | ---: | --- |
+| `tuning` | 200 | UART/I²C/SPI と囮（シード 0〜199。プロトタイプの調整に使った） |
+| `heldout` | 200 | 同じ条件でシード 1000〜1199（調整に使っていない） |
+| `glitch` `midstart` `lowrate` `jitter` `freqhop` `baudhop` | 各 50 | ストレス条件 |
+| `uartlike` | 60 | UART / LIN / DMX512 |
+| `duplex` | 60 | SCPI（TX/RX の組）と UART |
+| `upper` | 80 | UART の上の NMEA / Modbus RTU / テキスト / バイナリ |
+
+評価: `cd prototype && PYTHONPATH=. uv run python evaluate.py --set heldout --engine staged`
 
 ## 集め直す・変換し直す
 

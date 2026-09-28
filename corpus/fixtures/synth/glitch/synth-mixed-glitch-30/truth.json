@@ -1,0 +1,49 @@
+{
+ "id": "synth-mixed-glitch-30",
+ "generator": {
+  "seed": 30,
+  "profile": "mixed",
+  "stress": "glitch",
+  "t_start": 0.0,
+  "rate": 8000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 32.26309065256879
+ },
+ "channels": {
+  "D0": {
+   "original": "decoy0_pwm",
+   "static": false
+  },
+  "D1": {
+   "original": "uart0_tx",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D1"
+   },
+   "params": {
+    "baud": 247961.36508276645,
+    "data_bits": 8,
+    "parity": "even",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "90750d1c110eeb27d36018666b8c44b62e467397be2bee2c90560b40ea64c66555b874acb528355511a98efdef130e301c1d7ffeb057b5d1be38fccd1288f8198a5a6911b7773843f58fab17a0ce7fc1328def0426f0991404cf"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "pwm",
+   "channel": "D0",
+   "freq": 2990.6255908879352,
+   "duty": 0.5090351038199271
+  }
+ ]
+}

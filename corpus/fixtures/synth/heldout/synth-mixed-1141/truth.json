@@ -1,0 +1,133 @@
+{
+ "id": "synth-mixed-1141",
+ "generator": {
+  "seed": 1141,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 16000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 17.32189939772649
+ },
+ "channels": {
+  "D0": {
+   "original": "decoy2_pwm",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy1_clock",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy0_pwm",
+   "static": false
+  },
+  "D3": {
+   "original": "spi1_clk",
+   "static": false
+  },
+  "D4": {
+   "original": "spi1_cs",
+   "static": false
+  },
+  "D5": {
+   "original": "spi1_mosi",
+   "static": false
+  },
+  "D6": {
+   "original": "uart2_tx",
+   "static": false
+  },
+  "D7": {
+   "original": "spi1_miso",
+   "static": false
+  },
+  "D8": {
+   "original": "uart0_tx",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D8"
+   },
+   "params": {
+    "baud": 251780.45606434258,
+    "data_bits": 8,
+    "parity": "even",
+    "stop_bits": 2.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "72656164793e2074656d703d32332e352068756d3d34312e320a2447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a"
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D3",
+    "mosi": "D5",
+    "miso": "D7",
+    "cs": "D4"
+   },
+   "params": {
+    "clock_hz": 509896.04042563454,
+    "mode": 0,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "mosi": [
+     "6df8e826555677",
+     "7b136c2db943af",
+     "340006e3a5ea",
+     "5e6f"
+    ],
+    "miso": [
+     "ea42b4a70affe7",
+     "c4a797d863c0b7",
+     "ffdeaa14f919",
+     "db4d"
+    ]
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D6"
+   },
+   "params": {
+    "baud": 923686.2328215583,
+    "data_bits": 7,
+    "parity": "odd",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "74656d703d32332e352068756d3d34312e320a4f4b0d0a4552524f522031320d0a4552524f522031320d0a41542b474d520d0a72656164793e204f4b0d0a4552524f522031320d0a4552524f522031320d0a4552524f522031320d0a4552524f522031320d0a72656164793e204f4b0d0a72656164793e2041542b474d520d0a2447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "pwm",
+   "channel": "D2",
+   "freq": 40245.63263201597,
+   "duty": 0.8089964553869816
+  },
+  {
+   "kind": "clock",
+   "channel": "D1",
+   "freq": 32768.0
+  },
+  {
+   "kind": "pwm",
+   "channel": "D0",
+   "freq": 25516.22542134978,
+   "duty": 0.7240374323783025
+  }
+ ]
+}

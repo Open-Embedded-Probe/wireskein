@@ -1,0 +1,108 @@
+{
+ "id": "synth-mixed-1178",
+ "generator": {
+  "seed": 1178,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 12000000.0,
+  "jitter_samples": 0.02,
+  "oversample_vs_fastest": 51.636154874388225
+ },
+ "channels": {
+  "D0": {
+   "original": "i2c1_scl",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy0_burst_clock",
+   "static": false
+  },
+  "D2": {
+   "original": "uart0_tx",
+   "static": false
+  },
+  "D3": {
+   "original": "i2c1_sda",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D2"
+   },
+   "params": {
+    "baud": 232395.30575410943,
+    "data_bits": 8,
+    "parity": "even",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "41542b474d520d0a72656164793e204552524f522031320d0a2447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a4f4b0d0a2447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a41542b474d520d0a74656d703d32332e352068756d3d34312e320a434153455f424547494e2044657669636520446574656374696f6e0a2447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a"
+   }
+  },
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D0",
+    "sda": "D3"
+   },
+   "params": {
+    "clock_hz": 97281.17305062157
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 41,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       113,
+       173,
+       11
+      ]
+     },
+     {
+      "addr": 41,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       169,
+       193,
+       18
+      ]
+     },
+     {
+      "addr": 26,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       136,
+       185,
+       201
+      ]
+     },
+     {
+      "addr": 41,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       205
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "burst_clock",
+   "channel": "D1",
+   "freq": 80736.8664806822
+  }
+ ]
+}

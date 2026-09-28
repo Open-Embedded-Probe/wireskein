@@ -1,0 +1,111 @@
+{
+ "id": "synth-mixed-140",
+ "generator": {
+  "seed": 140,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 200000000.0,
+  "jitter_samples": 0.02,
+  "oversample_vs_fastest": 49.58923534171007
+ },
+ "channels": {
+  "D0": {
+   "original": "decoy2_random",
+   "static": false
+  },
+  "D1": {
+   "original": "spi0_miso",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy0_random",
+   "static": false
+  },
+  "D3": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D4": {
+   "original": "spi0_cs",
+   "static": false
+  },
+  "D5": {
+   "original": "uart1_tx",
+   "static": false
+  },
+  "D6": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D7": {
+   "original": "decoy1_static",
+   "static": true
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D6",
+    "mosi": "D3",
+    "miso": "D1",
+    "cs": "D4"
+   },
+   "params": {
+    "clock_hz": 4033133.373036259,
+    "mode": 2,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "3bc5fc77abef",
+     "fd69",
+     "6c23c7",
+     "59d1a30c6721",
+     "672a458f9195"
+    ],
+    "miso": [
+     "f9071838e3c9",
+     "b9ca",
+     "18cc49",
+     "a423dab383bf",
+     "9af54c1f3a04"
+    ]
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D5"
+   },
+   "params": {
+    "baud": 1005550.9223733475,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "74656d703d32332e352068756d3d34312e320a434153455f424547494e2044657669636520446574656374696f6e0a41542b474d520d0a4f4b0d0a4552524f522031320d0a434153455f424547494e2044657669636520446574656374696f6e0a2447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a434153455f424547494e2044657669636520446574656374696f6e0a4f4b0d0a2447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "random",
+   "channel": "D2",
+   "toggle_rate": 39377.85473305244
+  },
+  {
+   "kind": "static",
+   "channel": "D7"
+  },
+  {
+   "kind": "random",
+   "channel": "D0",
+   "toggle_rate": 15359.17456504665
+  }
+ ]
+}

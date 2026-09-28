@@ -1,0 +1,64 @@
+{
+ "id": "synth-uartlike-20",
+ "generator": {
+  "seed": 20,
+  "profile": "uartlike",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 4000000.0,
+  "jitter_samples": 0.02,
+  "oversample_vs_fastest": 16.0
+ },
+ "channels": {
+  "D0": {
+   "original": "dmx0",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy0_static",
+   "static": true
+  },
+  "D2": {
+   "original": "decoy2_pwm",
+   "static": false
+  },
+  "D3": {
+   "original": "decoy1_static",
+   "static": true
+  }
+ },
+ "buses": [
+  {
+   "protocol": "dmx512",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 250000.0
+   },
+   "expect": {
+    "packets": [
+     "f5b50d7671321ee59205291f9fdad03f33a9c9857d80",
+     "2303235828f856124849d0084ce1551935199ba9eb647dfca60d08eec76e",
+     "363fdd72075bf98c98a0e2a31c9e8d67f8c13e45812d89b3bf9c474dac93288eb58bc612f5536c367c3f760da91ba89da4b0b6ce4c4605e14ac734"
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "static",
+   "channel": "D1"
+  },
+  {
+   "kind": "static",
+   "channel": "D3"
+  },
+  {
+   "kind": "pwm",
+   "channel": "D2",
+   "freq": 31075.628264062456,
+   "duty": 0.54594325665748
+  }
+ ]
+}

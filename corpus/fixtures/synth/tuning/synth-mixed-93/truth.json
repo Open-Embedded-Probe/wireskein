@@ -1,0 +1,170 @@
+{
+ "id": "synth-mixed-93",
+ "generator": {
+  "seed": 93,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 200000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 24.91852800027741
+ },
+ "channels": {
+  "D0": {
+   "original": "spi1_cs",
+   "static": false
+  },
+  "D1": {
+   "original": "spi0_cs",
+   "static": false
+  },
+  "D2": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D3": {
+   "original": "spi0_miso",
+   "static": false
+  },
+  "D4": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D5": {
+   "original": "spi1_clk",
+   "static": false
+  },
+  "D6": {
+   "original": "i2c2_sda",
+   "static": false
+  },
+  "D7": {
+   "original": "spi1_mosi",
+   "static": false
+  },
+  "D8": {
+   "original": "i2c2_scl",
+   "static": false
+  },
+  "D9": {
+   "original": "spi1_miso",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D4",
+    "mosi": "D2",
+    "miso": "D3",
+    "cs": "D1"
+   },
+   "params": {
+    "clock_hz": 3993497.092584884,
+    "mode": 2,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "f42dd7",
+     "b2d8ea76",
+     "fbc66208c9eaed0f",
+     "a98e82e3372d4c26",
+     "807c25",
+     "5484ada86b1ca83c",
+     "9f70edee2f2607",
+     "b6ab"
+    ],
+    "miso": [
+     "8a64b2",
+     "28c8a3c3",
+     "6b913efa0c2c4bfe",
+     "5c0886324299acb1",
+     "439d25",
+     "e9c81a4a50462831",
+     "4639960b73313f",
+     "0db4"
+    ]
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D5",
+    "mosi": "D7",
+    "miso": "D9",
+    "cs": "D0"
+   },
+   "params": {
+    "clock_hz": 8026156.280088996,
+    "mode": 1,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "e5f2",
+     "2c4d",
+     "678cac8be7",
+     "69e8384954",
+     "221f7f19bf",
+     "e94ed4c35bb1b1",
+     "a9"
+    ],
+    "miso": [
+     "b45b",
+     "ac34",
+     "9fd80b23df",
+     "213ec6c0da",
+     "567fe53b1b",
+     "f540010153722c",
+     "2d"
+    ]
+   }
+  },
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D8",
+    "sda": "D6"
+   },
+   "params": {
+    "clock_hz": 1010002.8912535908
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 36,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       176
+      ]
+     },
+     {
+      "addr": 55,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       175
+      ]
+     },
+     {
+      "addr": 36,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       215,
+       176,
+       32,
+       164,
+       203,
+       48
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "decoys": []
+}

@@ -1,0 +1,154 @@
+{
+ "id": "synth-mixed-1096",
+ "generator": {
+  "seed": 1096,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 200000000.0,
+  "jitter_samples": 0.02,
+  "oversample_vs_fastest": 24.621113078445838
+ },
+ "channels": {
+  "D0": {
+   "original": "spi1_mosi",
+   "static": false
+  },
+  "D1": {
+   "original": "spi0_cs",
+   "static": false
+  },
+  "D2": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D3": {
+   "original": "decoy0_static",
+   "static": true
+  },
+  "D4": {
+   "original": "decoy1_burst_clock",
+   "static": false
+  },
+  "D5": {
+   "original": "spi1_clk",
+   "static": false
+  },
+  "D6": {
+   "original": "spi0_miso",
+   "static": false
+  },
+  "D7": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D8": {
+   "original": "spi1_cs",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D2",
+    "mosi": "D7",
+    "miso": "D6",
+    "cs": "D1"
+   },
+   "params": {
+    "clock_hz": 3958847.8118996294,
+    "mode": 3,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "244c2b",
+     "43438b",
+     "b6",
+     "747e2d3c768b86c3",
+     "903f41962b",
+     "03",
+     "e366e48afc51",
+     "5a5b6b3951382d3d",
+     "bca53ca2521ff723",
+     "f35b",
+     "9f5f5fef84648e",
+     "e4583a4406e695",
+     "4d8e45f03b",
+     "902b"
+    ],
+    "miso": [
+     "f37f44",
+     "198201",
+     "59",
+     "a09361d8e320c029",
+     "9415752366",
+     "54",
+     "b5f0df749b40",
+     "e4db55bc899a3b93",
+     "0c86769b3128e0c7",
+     "24ca",
+     "d6808a4661ce2f",
+     "58fc43ce9a4cf9",
+     "8c4f5aacbc",
+     "268f"
+    ]
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D5",
+    "mosi": "D0",
+    "cs": "D8"
+   },
+   "params": {
+    "clock_hz": 8123109.599585359,
+    "mode": 2,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "e73449a4dbe4ee",
+     "4ce3677b0122",
+     "cf3f",
+     "b20f070d6e3bce21",
+     "59c20368ae94d898",
+     "20024063d512",
+     "c6b6201b435a38",
+     "105c67a19de069",
+     "d40c",
+     "d23f1fcf9536",
+     "b0",
+     "2bd85693788223"
+    ],
+    "miso": [
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     ""
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "static",
+   "channel": "D3"
+  },
+  {
+   "kind": "burst_clock",
+   "channel": "D4",
+   "freq": 513191.6397423396
+  }
+ ]
+}

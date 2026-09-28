@@ -119,13 +119,13 @@ def bus_channels(bus):
 
 def evaluate_case(args):
     kind, ref, scorer_name, use_probe, use_excl, engine = args
-    if kind == "real":
+    if kind in ("real", "fixture"):
         from wsproto import fixture
         cap, truth = fixture.load_capture(ref), fixture.load_truth(ref)
     else:
         cap, truth = synth.scenario(*ref)
     n_edges = sum(len(c.edges) for c in cap.channels)
-    if kind == "synth" and n_edges > MAX_EDGES and not use_probe:
+    if kind == "synth" and n_edges > MAX_EDGES and not use_probe and engine != "staged":
         return {"id": truth["id"], "skipped": f"{n_edges} edges > {MAX_EDGES}", "seconds": 0.0, "runs": 0,
                 "n_active": 0, "buses": [], "claims": []}
     if engine == "staged":
@@ -246,6 +246,7 @@ def main() -> None:
     ap.add_argument("--probe", action="store_true", help="early abandonment on probe windows")
     ap.add_argument("--exclude", action="store_true", help="safe (definitional) exclusion rules before decoding")
     ap.add_argument("--engine", default="flat", choices=["flat", "staged"])
+    ap.add_argument("--set", default=None, help="frozen fixture set under corpus/fixtures/synth (replaces --synth)")
     ap.add_argument("-j", type=int, default=max(1, mp.cpu_count() - 2))
     args = ap.parse_args()
     jobs = []
@@ -253,7 +254,12 @@ def main() -> None:
         for d in sorted(corpus.REAL.iterdir()):
             if args.large or "flash" not in d.name or d.name.startswith("i2cdb"):
                 jobs.append(("real", d, args.scorer, args.probe, args.exclude, args.engine))
-    jobs += [("synth", (s, args.profile, args.stress), args.scorer, args.probe, args.exclude, args.engine) for s in range(args.start, args.start + args.synth)]
+    if args.set:
+        base = corpus.ROOT / "corpus/fixtures/synth" / args.set
+        jobs += [("fixture", d, args.scorer, args.probe, args.exclude, args.engine) for d in sorted(base.iterdir())]
+    else:
+        jobs += [("synth", (s, args.profile, args.stress), args.scorer, args.probe, args.exclude, args.engine)
+                 for s in range(args.start, args.start + args.synth)]
     t0 = time.time()
     records = []
     with mp.Pool(args.j) as pool:

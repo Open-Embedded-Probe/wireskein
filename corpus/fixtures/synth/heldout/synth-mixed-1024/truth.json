@@ -1,0 +1,124 @@
+{
+ "id": "synth-mixed-1024",
+ "generator": {
+  "seed": 1024,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 50000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 12.62445398511458
+ },
+ "channels": {
+  "D0": {
+   "original": "decoy2_pwm",
+   "static": false
+  },
+  "D1": {
+   "original": "spi1_clk",
+   "static": false
+  },
+  "D2": {
+   "original": "spi1_mosi",
+   "static": false
+  },
+  "D3": {
+   "original": "uart0_tx",
+   "static": false
+  },
+  "D4": {
+   "original": "decoy1_static",
+   "static": true
+  },
+  "D5": {
+   "original": "spi1_cs",
+   "static": false
+  },
+  "D6": {
+   "original": "decoy0_pwm",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D3"
+   },
+   "params": {
+    "baud": 31168.94488384268,
+    "data_bits": 8,
+    "parity": "even",
+    "stop_bits": 2.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "72656164793e2074656d703d32332e352068756d3d34312e320a74656d703d32332e352068756d3d34312e320a74656d703d32332e352068756d3d34312e320a74656d703d32332e352068756d3d34312e320a41542b474d520d0a4552524f522031320d0a4552524f522031320d0a74656d703d32332e352068756d3d34312e320a"
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D1",
+    "mosi": "D2",
+    "cs": "D5"
+   },
+   "params": {
+    "clock_hz": 3960567.329007236,
+    "mode": 1,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "e29791d7",
+     "1b57",
+     "897c99",
+     "30f0bc",
+     "0c",
+     "af7b4928ab",
+     "9a47c6e4631a",
+     "9458",
+     "f5861c01",
+     "e9c080bac1",
+     "e55f96482070cd",
+     "8780",
+     "be293311"
+    ],
+    "miso": [
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     ""
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "pwm",
+   "channel": "D6",
+   "freq": 18222.104106058956,
+   "duty": 0.3424815487901736
+  },
+  {
+   "kind": "static",
+   "channel": "D4"
+  },
+  {
+   "kind": "pwm",
+   "channel": "D0",
+   "freq": 22845.423138515365,
+   "duty": 0.1493153319980395
+  }
+ ]
+}

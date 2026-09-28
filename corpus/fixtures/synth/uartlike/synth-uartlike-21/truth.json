@@ -1,0 +1,56 @@
+{
+ "id": "synth-uartlike-21",
+ "generator": {
+  "seed": 21,
+  "profile": "uartlike",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 4000000.0,
+  "jitter_samples": 0.1,
+  "oversample_vs_fastest": 15.966200502066433
+ },
+ "channels": {
+  "D0": {
+   "original": "decoy0_random",
+   "static": false
+  },
+  "D1": {
+   "original": "uart0_tx",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy1_static",
+   "static": true
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D1"
+   },
+   "params": {
+    "baud": 250529.23514785487,
+    "data_bits": 8,
+    "parity": "even",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "4f1d47f2ce72c61c039f51b323f350f5c2ccd7d5d9b0469238892b21cea303a81c"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "random",
+   "channel": "D0",
+   "toggle_rate": 8823.222686094048
+  },
+  {
+   "kind": "static",
+   "channel": "D2"
+  }
+ ]
+}

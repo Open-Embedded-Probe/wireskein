@@ -1,0 +1,30 @@
+{
+ "rate": 20000000.0,
+ "n_samples": 67322,
+ "channels": [
+  {
+   "name": "D0",
+   "initial": 0
+  },
+  {
+   "name": "D1",
+   "initial": 0
+  },
+  {
+   "name": "D2",
+   "initial": 1
+  },
+  {
+   "name": "D3",
+   "initial": 0
+  },
+  {
+   "name": "D4",
+   "initial": 1
+  },
+  {
+   "name": "D5",
+   "initial": 1
+  }
+ ]
+}

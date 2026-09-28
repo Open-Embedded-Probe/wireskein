@@ -1,0 +1,27 @@
+# WASM plugin for eng-wasm. Standalone crate (own [workspace]), NOT a member of
+# the plugin-lang-bench workspace. Build:
+#   cargo build --release --target wasm32-unknown-unknown
+# -> target/wasm32-unknown-unknown/release/wasm_plugin.wasm (loaded by eng-wasm)
+[package]
+name = "wasm_plugin"
+version = "0.0.1"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[workspace]
+
+[profile.release]
+opt-level = 3
+panic = "abort"
+# line tables -> DWARF in the .wasm so wasmtime can print file:line in traps
+debug = "line-tables-only"
+strip = false
+
+# size comparison only: no DWARF, no name section
+[profile.release-stripped]
+inherits = "release"
+debug = false
+strip = true

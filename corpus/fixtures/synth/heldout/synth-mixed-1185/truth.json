@@ -1,0 +1,272 @@
+{
+ "id": "synth-mixed-1185",
+ "generator": {
+  "seed": 1185,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 200000000.0,
+  "jitter_samples": 0.02,
+  "oversample_vs_fastest": 49.89191366178326
+ },
+ "channels": {
+  "D0": {
+   "original": "decoy0_static",
+   "static": true
+  },
+  "D1": {
+   "original": "spi0_cs",
+   "static": false
+  },
+  "D2": {
+   "original": "spi0_miso",
+   "static": false
+  },
+  "D3": {
+   "original": "decoy1_clock",
+   "static": false
+  },
+  "D4": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D5": {
+   "original": "decoy2_static",
+   "static": true
+  },
+  "D6": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D7": {
+   "original": "i2c1_sda",
+   "static": false
+  },
+  "D8": {
+   "original": "i2c2_sda",
+   "static": false
+  },
+  "D9": {
+   "original": "i2c1_scl",
+   "static": false
+  },
+  "D10": {
+   "original": "i2c2_scl",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D4",
+    "mosi": "D6",
+    "miso": "D2",
+    "cs": "D1"
+   },
+   "params": {
+    "clock_hz": 4008665.6398028308,
+    "mode": 0,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "mosi": [
+     "d8894d233e871202",
+     "ae3f13872daede",
+     "49839442a100e1ad",
+     "fe203dbd636c3d",
+     "cc1ef1f2973ef9",
+     "29",
+     "5ab3041f",
+     "cffd",
+     "54ccb560a0",
+     "c3b8aed8"
+    ],
+    "miso": [
+     "ae3995fe786fc8d3",
+     "22fcf69f7bc818",
+     "6302dcce2a11ad7b",
+     "d5928b3e1811f1",
+     "29c5ff368f6e6d",
+     "4f",
+     "ca3148af",
+     "e56f",
+     "d1981b83a8",
+     "6789a822"
+    ]
+   }
+  },
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D9",
+    "sda": "D7"
+   },
+   "params": {
+    "clock_hz": 414053.2311601086
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 117,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       92,
+       201,
+       175,
+       174,
+       7
+      ]
+     },
+     {
+      "addr": 117,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       18,
+       94,
+       122
+      ]
+     },
+     {
+      "addr": 117,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       68,
+       70
+      ]
+     },
+     {
+      "addr": 74,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       95,
+       7,
+       130,
+       62,
+       232,
+       202
+      ]
+     },
+     {
+      "addr": 117,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       213,
+       90,
+       89,
+       7
+      ]
+     },
+     {
+      "addr": 117,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       112,
+       39
+      ]
+     },
+     {
+      "addr": 117,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       146,
+       36,
+       41,
+       154
+      ]
+     },
+     {
+      "addr": 56,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       54,
+       52,
+       126,
+       147,
+       140,
+       61
+      ]
+     },
+     {
+      "addr": 117,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       76,
+       223,
+       240,
+       140,
+       147,
+       213
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D10",
+    "sda": "D8"
+   },
+   "params": {
+    "clock_hz": 101849.77981970167
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 8,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": []
+     },
+     {
+      "addr": 26,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       181,
+       193,
+       50
+      ]
+     },
+     {
+      "addr": 8,
+      "rw": "read",
+      "addr_ack": false,
+      "bytes": []
+     },
+     {
+      "addr": 8,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": []
+     }
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "static",
+   "channel": "D0"
+  },
+  {
+   "kind": "clock",
+   "channel": "D3",
+   "freq": 100000.0
+  },
+  {
+   "kind": "static",
+   "channel": "D5"
+  }
+ ]
+}

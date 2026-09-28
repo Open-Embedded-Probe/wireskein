@@ -1,0 +1,130 @@
+{
+ "id": "synth-mixed-178",
+ "generator": {
+  "seed": 178,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 10000000.0,
+  "jitter_samples": 0.1,
+  "oversample_vs_fastest": 10.15273133672777
+ },
+ "channels": {
+  "D0": {
+   "original": "spi1_mosi",
+   "static": false
+  },
+  "D1": {
+   "original": "spi1_clk",
+   "static": false
+  },
+  "D2": {
+   "original": "spi0_miso",
+   "static": false
+  },
+  "D3": {
+   "original": "spi1_cs",
+   "static": false
+  },
+  "D4": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D5": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D6": {
+   "original": "spi0_cs",
+   "static": false
+  },
+  "D7": {
+   "original": "decoy0_burst_clock",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D4",
+    "mosi": "D5",
+    "miso": "D2",
+    "cs": "D6"
+   },
+   "params": {
+    "clock_hz": 98013.08354841814,
+    "mode": 0,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "c328bacdeb996663",
+     "7f",
+     "5b0899bf575a28a4",
+     "3936",
+     "1b",
+     "57a6c2e5",
+     "16b2f393",
+     "397ce4",
+     "32c0",
+     "ca6f40aed9d285b0",
+     "bf72a12dd368",
+     "014f2c9831"
+    ],
+    "miso": [
+     "593082bd7681a1ae",
+     "74",
+     "7006abeb90d7228c",
+     "8e12",
+     "69",
+     "777bbaba",
+     "ab40a460",
+     "b7ba8b",
+     "9d9d",
+     "0e5d10aaf14c887d",
+     "79507117aaa1",
+     "5b1414f31b"
+    ]
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D1",
+    "mosi": "D0",
+    "cs": "D3"
+   },
+   "params": {
+    "clock_hz": 984956.6257923855,
+    "mode": 1,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "6ec9f1a8",
+     "9ef8783d72de7e",
+     "87b287f5",
+     "d9",
+     "e40ccc387d33d8",
+     "7b5ad3"
+    ],
+    "miso": [
+     "",
+     "",
+     "",
+     "",
+     "",
+     ""
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "burst_clock",
+   "channel": "D7",
+   "freq": 670993.839943357
+  }
+ ]
+}

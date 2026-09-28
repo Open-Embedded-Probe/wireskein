@@ -1,0 +1,121 @@
+{
+ "id": "synth-mixed-156",
+ "generator": {
+  "seed": 156,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 2000000.0,
+  "jitter_samples": 0.1,
+  "oversample_vs_fastest": 8.622972168578412
+ },
+ "channels": {
+  "D0": {
+   "original": "spi2_miso",
+   "static": false
+  },
+  "D1": {
+   "original": "uart0_tx",
+   "static": false
+  },
+  "D2": {
+   "original": "spi2_mosi",
+   "static": false
+  },
+  "D3": {
+   "original": "uart1_tx",
+   "static": false
+  },
+  "D4": {
+   "original": "spi2_cs",
+   "static": false
+  },
+  "D5": {
+   "original": "spi2_clk",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D1"
+   },
+   "params": {
+    "baud": 9522.680397110427,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "f87732bcc4c263f750ede8379fe509fb0c4de515c9c7ec4ed9ab769501a40b4e58b4d5abef0da75784cd9c7a7ab373"
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D3"
+   },
+   "params": {
+    "baud": 231938.58925903513,
+    "data_bits": 8,
+    "parity": "odd",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "56006bae02fa7bbcdd79960a4aa21802034a74337e877fa62b2847b92c647965b5dda5d60b081618a72720dea0604f034f1b454e8bcbb7150cb120"
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D5",
+    "mosi": "D2",
+    "miso": "D0",
+    "cs": "D4"
+   },
+   "params": {
+    "clock_hz": 99881.35127681661,
+    "mode": 3,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "6a34fe",
+     "4087",
+     "51ac0d215c",
+     "98a6",
+     "d5e96adefef1",
+     "070234fc3496",
+     "2a69bc70561f64",
+     "f0bcbb83224c",
+     "9b",
+     "880243",
+     "903d",
+     "4b",
+     "5a"
+    ],
+    "miso": [
+     "397412",
+     "b1be",
+     "080e92dd08",
+     "e36a",
+     "7b818a8b9b81",
+     "079c846f855c",
+     "27d7ad7a2ab36d",
+     "953c621d9c65",
+     "9e",
+     "f5a136",
+     "8bc2",
+     "00",
+     "60"
+    ]
+   }
+  }
+ ],
+ "decoys": []
+}

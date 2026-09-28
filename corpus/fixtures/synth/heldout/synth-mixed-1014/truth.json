@@ -1,0 +1,136 @@
+{
+ "id": "synth-mixed-1014",
+ "generator": {
+  "seed": 1014,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 4000000.0,
+  "jitter_samples": 0.1,
+  "oversample_vs_fastest": 9.820742576700301
+ },
+ "channels": {
+  "D0": {
+   "original": "i2c0_scl",
+   "static": false
+  },
+  "D1": {
+   "original": "i2c0_sda",
+   "static": false
+  },
+  "D2": {
+   "original": "i2c1_sda",
+   "static": false
+  },
+  "D3": {
+   "original": "i2c1_scl",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D0",
+    "sda": "D1"
+   },
+   "params": {
+    "clock_hz": 103979.6480698504
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 73,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       40,
+       215,
+       55,
+       165,
+       172,
+       149
+      ]
+     },
+     {
+      "addr": 73,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       86,
+       247,
+       134,
+       74
+      ]
+     },
+     {
+      "addr": 75,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": []
+     },
+     {
+      "addr": 73,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       218,
+       181,
+       131
+      ]
+     },
+     {
+      "addr": 73,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       192,
+       52
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D3",
+    "sda": "D2"
+   },
+   "params": {
+    "clock_hz": 407301.1759304225
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 60,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       142
+      ]
+     },
+     {
+      "addr": 70,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": []
+     },
+     {
+      "addr": 104,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       78,
+       243,
+       33,
+       196,
+       182
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "decoys": []
+}

@@ -1,0 +1,65 @@
+{
+ "id": "synth-upper-2",
+ "generator": {
+  "seed": 2,
+  "profile": "upper",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 2000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 17.431362589995988
+ },
+ "channels": {
+  "D0": {
+   "original": "decoy1_burst_clock",
+   "static": false
+  },
+  "D1": {
+   "original": "uart0_tx",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy0_clock",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D1"
+   },
+   "params": {
+    "baud": 114735.72359442615,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1,
+    "idle": 1,
+    "bit_order": "lsb",
+    "payload": "modbus"
+   },
+   "expect": {
+    "bytes": "1704692c2dd053f182babf03da037a646446cbc98b33abf7a304162dcabf39593dea046f5f18a2186e3aef04a4192f0acfc8ef9499",
+    "modbus": [
+     "1704692c2dd053f182babf03",
+     "da037a646446cbc98b33abf7",
+     "a304162dcabf39593d",
+     "ea046f5f18a2186e3a",
+     "ef04a4192f0acfc8ef9499"
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "clock",
+   "channel": "D2",
+   "freq": 100000.0
+  },
+  {
+   "kind": "burst_clock",
+   "channel": "D0",
+   "freq": 777808.3030479626
+  }
+ ]
+}

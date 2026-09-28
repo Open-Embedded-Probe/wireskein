@@ -1,0 +1,183 @@
+{
+ "id": "synth-mixed-166",
+ "generator": {
+  "seed": 166,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 50000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 6.254553273066922
+ },
+ "channels": {
+  "D0": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D1": {
+   "original": "spi1_cs",
+   "static": false
+  },
+  "D2": {
+   "original": "spi1_mosi",
+   "static": false
+  },
+  "D3": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D4": {
+   "original": "spi1_miso",
+   "static": false
+  },
+  "D5": {
+   "original": "i2c2_sda",
+   "static": false
+  },
+  "D6": {
+   "original": "spi1_clk",
+   "static": false
+  },
+  "D7": {
+   "original": "spi0_miso",
+   "static": false
+  },
+  "D8": {
+   "original": "i2c2_scl",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D3",
+    "mosi": "D0",
+    "miso": "D7"
+   },
+   "params": {
+    "clock_hz": 100821.10623859186,
+    "mode": 0,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "620d",
+     "28f4",
+     "db",
+     "57620f",
+     "797b8278"
+    ],
+    "miso": [
+     "1c09",
+     "81ee",
+     "cb",
+     "b31c1b",
+     "20cbba71"
+    ]
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D6",
+    "mosi": "D2",
+    "miso": "D4",
+    "cs": "D1"
+   },
+   "params": {
+    "clock_hz": 7994176.053357442,
+    "mode": 0,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "b1b7b677a964",
+     "5476e7dc",
+     "077b25b02f75cfd1",
+     "afebb3c15990",
+     "ba2574d516579f",
+     "2a",
+     "fbd89dbc43",
+     "eefb870c",
+     "963ffb",
+     "337f8efef51d3c",
+     "c4"
+    ],
+    "miso": [
+     "35875916e116",
+     "9918803d",
+     "2b3f48a51ea0a502",
+     "8bfc6a4c9adc",
+     "c1f90fe89cda2f",
+     "0b",
+     "bdc6181c98",
+     "b53dae54",
+     "071d13",
+     "db94ed23908fa7",
+     "4c"
+    ]
+   }
+  },
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D8",
+    "sda": "D5"
+   },
+   "params": {
+    "clock_hz": 969099.281767803
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 21,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       84,
+       32,
+       84,
+       92,
+       51
+      ]
+     },
+     {
+      "addr": 99,
+      "rw": "read",
+      "addr_ack": false,
+      "bytes": []
+     },
+     {
+      "addr": 99,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       187,
+       164
+      ]
+     },
+     {
+      "addr": 99,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": []
+     },
+     {
+      "addr": 99,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       242,
+       62,
+       66,
+       61,
+       46
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "decoys": []
+}

@@ -1,0 +1,133 @@
+{
+ "id": "synth-mixed-154",
+ "generator": {
+  "seed": 154,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 4000000.0,
+  "jitter_samples": 0.02,
+  "oversample_vs_fastest": 10.30464057947941
+ },
+ "channels": {
+  "D0": {
+   "original": "i2c0_sda",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy0_burst_clock",
+   "static": false
+  },
+  "D2": {
+   "original": "i2c0_scl",
+   "static": false
+  },
+  "D3": {
+   "original": "decoy1_random",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D2",
+    "sda": "D0"
+   },
+   "params": {
+    "clock_hz": 388174.6257084961
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 81,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       2
+      ]
+     },
+     {
+      "addr": 81,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       88,
+       103,
+       14
+      ]
+     },
+     {
+      "addr": 81,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       245,
+       218,
+       7,
+       190,
+       78,
+       60
+      ]
+     },
+     {
+      "addr": 81,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       207,
+       55
+      ]
+     },
+     {
+      "addr": 81,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       171,
+       17,
+       111,
+       167,
+       105,
+       87
+      ]
+     },
+     {
+      "addr": 57,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": []
+     },
+     {
+      "addr": 81,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       129
+      ]
+     },
+     {
+      "addr": 115,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       239
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "burst_clock",
+   "channel": "D1",
+   "freq": 495764.4946650477
+  },
+  {
+   "kind": "random",
+   "channel": "D3",
+   "toggle_rate": 22803.586511112357
+  }
+ ]
+}

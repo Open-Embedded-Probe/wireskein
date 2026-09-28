@@ -1,0 +1,142 @@
+{
+ "id": "synth-mixed-186",
+ "generator": {
+  "seed": 186,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 4000000.0,
+  "jitter_samples": 0.1,
+  "oversample_vs_fastest": 38.56427269204417
+ },
+ "channels": {
+  "D0": {
+   "original": "decoy0_static",
+   "static": true
+  },
+  "D1": {
+   "original": "i2c0_sda",
+   "static": false
+  },
+  "D2": {
+   "original": "i2c0_scl",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D2",
+    "sda": "D1"
+   },
+   "params": {
+    "clock_hz": 103722.94667507634
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 88,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       65,
+       132,
+       130,
+       158
+      ]
+     },
+     {
+      "addr": 60,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       71,
+       237,
+       129,
+       122
+      ]
+     },
+     {
+      "addr": 79,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       244
+      ]
+     },
+     {
+      "addr": 93,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       180,
+       4,
+       204
+      ]
+     },
+     {
+      "addr": 79,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       225,
+       28
+      ]
+     },
+     {
+      "addr": 79,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       153,
+       251,
+       93,
+       31,
+       250,
+       66
+      ]
+     },
+     {
+      "addr": 79,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       206,
+       39,
+       42,
+       102
+      ]
+     },
+     {
+      "addr": 79,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       80,
+       81,
+       241,
+       14,
+       175,
+       98
+      ]
+     },
+     {
+      "addr": 79,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       60
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "static",
+   "channel": "D0"
+  }
+ ]
+}

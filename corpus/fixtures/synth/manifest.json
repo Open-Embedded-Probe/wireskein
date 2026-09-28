@@ -1,0 +1,104 @@
+{
+ "generator": "prototype/wsproto/synth.py (seeded)",
+ "sets": {
+  "tuning": {
+   "profile": "mixed",
+   "stress": null,
+   "seeds": [
+    0,
+    200
+   ],
+   "count": 200
+  },
+  "heldout": {
+   "profile": "mixed",
+   "stress": null,
+   "seeds": [
+    1000,
+    1200
+   ],
+   "count": 200
+  },
+  "glitch": {
+   "profile": "mixed",
+   "stress": "glitch",
+   "seeds": [
+    0,
+    50
+   ],
+   "count": 50
+  },
+  "midstart": {
+   "profile": "mixed",
+   "stress": "midstart",
+   "seeds": [
+    0,
+    50
+   ],
+   "count": 50
+  },
+  "lowrate": {
+   "profile": "mixed",
+   "stress": "lowrate",
+   "seeds": [
+    0,
+    50
+   ],
+   "count": 50
+  },
+  "jitter": {
+   "profile": "mixed",
+   "stress": "jitter",
+   "seeds": [
+    0,
+    50
+   ],
+   "count": 50
+  },
+  "freqhop": {
+   "profile": "mixed",
+   "stress": "freqhop",
+   "seeds": [
+    0,
+    50
+   ],
+   "count": 50
+  },
+  "baudhop": {
+   "profile": "mixed",
+   "stress": "baudhop",
+   "seeds": [
+    0,
+    50
+   ],
+   "count": 50
+  },
+  "uartlike": {
+   "profile": "uartlike",
+   "stress": null,
+   "seeds": [
+    0,
+    60
+   ],
+   "count": 60
+  },
+  "duplex": {
+   "profile": "duplex",
+   "stress": null,
+   "seeds": [
+    0,
+    60
+   ],
+   "count": 60
+  },
+  "upper": {
+   "profile": "upper",
+   "stress": null,
+   "seeds": [
+    0,
+    80
+   ],
+   "count": 80
+  }
+ }
+}

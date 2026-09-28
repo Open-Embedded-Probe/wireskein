@@ -1,0 +1,160 @@
+{
+ "id": "synth-mixed-freqhop-13",
+ "generator": {
+  "seed": 13,
+  "profile": "mixed",
+  "stress": "freqhop",
+  "t_start": 0.0,
+  "rate": 50000000.0,
+  "jitter_samples": 0.02,
+  "oversample_vs_fastest": 6.1731996189258975
+ },
+ "channels": {
+  "D0": {
+   "original": "spi2_clk",
+   "static": false
+  },
+  "D1": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D2": {
+   "original": "spi1_cs",
+   "static": false
+  },
+  "D3": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D4": {
+   "original": "spi1_mosi",
+   "static": false
+  },
+  "D5": {
+   "original": "spi2_mosi",
+   "static": false
+  },
+  "D6": {
+   "original": "spi0_cs",
+   "static": false
+  },
+  "D7": {
+   "original": "spi2_miso",
+   "static": false
+  },
+  "D8": {
+   "original": "spi1_clk",
+   "static": false
+  },
+  "D9": {
+   "original": "decoy0_pwm",
+   "static": false
+  },
+  "D10": {
+   "original": "spi2_cs",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D3",
+    "mosi": "D1",
+    "cs": "D6"
+   },
+   "params": {
+    "clock_hz": 8099527.48761099,
+    "mode": 3,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "mosi": [
+     "c773219d7c",
+     "a8",
+     "1204e8219f141cfc",
+     "f7bb4a4915fda2",
+     "04499ce6dfaf18",
+     "051f33705d30"
+    ],
+    "miso": [
+     "",
+     "",
+     "",
+     "",
+     "",
+     ""
+    ]
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D8",
+    "mosi": "D4",
+    "cs": "D2"
+   },
+   "params": {
+    "clock_hz": 3938773.851814931,
+    "mode": 3,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "aa2e818d2f7b933e",
+     "b863061113",
+     "8e",
+     "807e1952a244c015",
+     "62"
+    ],
+    "miso": [
+     "",
+     "",
+     "",
+     "",
+     ""
+    ]
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D0",
+    "mosi": "D5",
+    "miso": "D7",
+    "cs": "D10"
+   },
+   "params": {
+    "clock_hz": 3979462.98162546,
+    "mode": 3,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "mosi": [
+     "f3a31c",
+     "f28ecbb5a7",
+     "c56d386b1081",
+     "7fa68f36c4aef40d",
+     "52a087",
+     "1753e3ad2b"
+    ],
+    "miso": [
+     "444e19",
+     "f2ef33729f",
+     "1cc65f6674b0",
+     "c2d673bc5e31b5ed",
+     "c34897",
+     "3535e829bb"
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "pwm",
+   "channel": "D9",
+   "freq": 49400.776377637536,
+   "duty": 0.7783114772254834
+  }
+ ]
+}

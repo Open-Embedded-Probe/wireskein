@@ -1,0 +1,69 @@
+{
+ "id": "synth-upper-39",
+ "generator": {
+  "seed": 39,
+  "profile": "upper",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 1000000.0,
+  "jitter_samples": 0.1,
+  "oversample_vs_fastest": 8.673731860234586
+ },
+ "channels": {
+  "D0": {
+   "original": "decoy1_pwm",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy2_random",
+   "static": false
+  },
+  "D2": {
+   "original": "uart0_tx",
+   "static": false
+  },
+  "D3": {
+   "original": "decoy0_pwm",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D2"
+   },
+   "params": {
+    "baud": 115290.62877589975,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1,
+    "idle": 1,
+    "bit_order": "lsb",
+    "payload": "text"
+   },
+   "expect": {
+    "bytes": "72656164793e20434153455f424547494e2044657669636520446574656374696f6e0a41542b474d520d0a4552524f522031320d0a41542b474d520d0a434153455f424547494e2044657669636520446574656374696f6e0a74656d703d32332e352068756d3d34312e320a72656164793e202447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a434153455f424547494e2044657669636520446574656374696f6e0a41542b474d520d0a"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "pwm",
+   "channel": "D3",
+   "freq": 28459.562628121937,
+   "duty": 0.9284777298828512
+  },
+  {
+   "kind": "pwm",
+   "channel": "D0",
+   "freq": 6356.517434237595,
+   "duty": 0.817935268852515
+  },
+  {
+   "kind": "random",
+   "channel": "D1",
+   "toggle_rate": 13941.871414723973
+  }
+ ]
+}

@@ -1,0 +1,59 @@
+{
+ "id": "synth-mixed-1142",
+ "generator": {
+  "seed": 1142,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 1000000.0,
+  "jitter_samples": 0.1,
+  "oversample_vs_fastest": 104.62491633903225
+ },
+ "channels": {
+  "D0": {
+   "original": "uart0_tx",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy1_pwm",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy0_pwm",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 9557.95268461239,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "434153455f424547494e2044657669636520446574656374696f6e0a41542b474d520d0a72656164793e204552524f522031320d0a74656d703d32332e352068756d3d34312e320a4552524f522031320d0a41542b474d520d0a"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "pwm",
+   "channel": "D2",
+   "freq": 40103.71824774822,
+   "duty": 0.637055692567571
+  },
+  {
+   "kind": "pwm",
+   "channel": "D1",
+   "freq": 7503.673201556779,
+   "duty": 0.094567478690049
+  }
+ ]
+}

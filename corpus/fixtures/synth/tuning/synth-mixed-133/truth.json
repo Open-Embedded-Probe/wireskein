@@ -1,0 +1,120 @@
+{
+ "id": "synth-mixed-133",
+ "generator": {
+  "seed": 133,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 1000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 10.055971908970486
+ },
+ "channels": {
+  "D0": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D1": {
+   "original": "spi0_miso",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy2_pwm",
+   "static": false
+  },
+  "D3": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D4": {
+   "original": "uart1_tx",
+   "static": false
+  },
+  "D5": {
+   "original": "spi0_cs",
+   "static": false
+  },
+  "D6": {
+   "original": "decoy0_clock",
+   "static": false
+  },
+  "D7": {
+   "original": "decoy1_static",
+   "static": true
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D0",
+    "mosi": "D3",
+    "miso": "D1",
+    "cs": "D5"
+   },
+   "params": {
+    "clock_hz": 99443.3963273052,
+    "mode": 2,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "mosi": [
+     "9d9fa1d2b5",
+     "5f70ff40a3",
+     "9ee9acb0968e",
+     "b1468bd204",
+     "7fa7",
+     "fdbf",
+     "defc18a7209780",
+     "2b361d0164c0",
+     "296a559775cd"
+    ],
+    "miso": [
+     "321c80dfab",
+     "92f4978aee",
+     "a0ef2e36f8fa",
+     "412d25920c",
+     "5a73",
+     "3210",
+     "69d13ee7ed8240",
+     "c5b4af35f1ae",
+     "7634cfbd4d75"
+    ]
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D4"
+   },
+   "params": {
+    "baud": 38595.74256917283,
+    "data_bits": 8,
+    "parity": "even",
+    "stop_bits": 2.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "99ae97634af1293204947746b35674055f3469c1739c9a971993c04a762724d8b17cd6091277547c1ed7cd"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "clock",
+   "channel": "D6",
+   "freq": 1000000.0
+  },
+  {
+   "kind": "static",
+   "channel": "D7"
+  },
+  {
+   "kind": "pwm",
+   "channel": "D2",
+   "freq": 15618.50953254118,
+   "duty": 0.1553981563950066
+  }
+ ]
+}

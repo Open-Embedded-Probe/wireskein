@@ -1,0 +1,300 @@
+{
+ "id": "synth-mixed-131",
+ "generator": {
+  "seed": 131,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 16000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 16.230581871766443
+ },
+ "channels": {
+  "D0": {
+   "original": "decoy0_clock",
+   "static": false
+  },
+  "D1": {
+   "original": "i2c1_sda",
+   "static": false
+  },
+  "D2": {
+   "original": "i2c1_scl",
+   "static": false
+  },
+  "D3": {
+   "original": "i2c0_sda",
+   "static": false
+  },
+  "D4": {
+   "original": "i2c0_scl",
+   "static": false
+  },
+  "D5": {
+   "original": "decoy1_static",
+   "static": true
+  }
+ },
+ "buses": [
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D4",
+    "sda": "D3"
+   },
+   "params": {
+    "clock_hz": 100323.34087101393
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 24,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       228,
+       228,
+       147
+      ]
+     },
+     {
+      "addr": 75,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       178,
+       24,
+       184,
+       220,
+       33
+      ]
+     },
+     {
+      "addr": 89,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       203
+      ]
+     },
+     {
+      "addr": 75,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       119,
+       162,
+       202
+      ]
+     },
+     {
+      "addr": 96,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       159,
+       190,
+       199
+      ]
+     },
+     {
+      "addr": 75,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       167
+      ]
+     },
+     {
+      "addr": 65,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       219
+      ]
+     },
+     {
+      "addr": 75,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       169,
+       224,
+       38,
+       124
+      ]
+     },
+     {
+      "addr": 75,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       38,
+       49,
+       141,
+       229
+      ]
+     },
+     {
+      "addr": 75,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       244
+      ]
+     },
+     {
+      "addr": 75,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       233,
+       76,
+       132
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D2",
+    "sda": "D1"
+   },
+   "params": {
+    "clock_hz": 985793.3699735346
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 80,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       73,
+       245,
+       229,
+       208,
+       233
+      ]
+     },
+     {
+      "addr": 80,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       202,
+       86,
+       135
+      ]
+     },
+     {
+      "addr": 80,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       154,
+       70,
+       245
+      ]
+     },
+     {
+      "addr": 80,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       25,
+       0,
+       22,
+       160,
+       101
+      ]
+     },
+     {
+      "addr": 80,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       85,
+       65,
+       7,
+       165,
+       189
+      ]
+     },
+     {
+      "addr": 80,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       202,
+       61
+      ]
+     },
+     {
+      "addr": 80,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       240,
+       182
+      ]
+     },
+     {
+      "addr": 80,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       233,
+       208,
+       156,
+       117,
+       80
+      ]
+     },
+     {
+      "addr": 93,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       88
+      ]
+     },
+     {
+      "addr": 47,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       120
+      ]
+     },
+     {
+      "addr": 80,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       241,
+       205,
+       66,
+       209,
+       241,
+       146
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "clock",
+   "channel": "D0",
+   "freq": 115200.0
+  },
+  {
+   "kind": "static",
+   "channel": "D5"
+  }
+ ]
+}

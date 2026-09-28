@@ -1,0 +1,75 @@
+{
+ "id": "synth-mixed-jitter-21",
+ "generator": {
+  "seed": 21,
+  "profile": "mixed",
+  "stress": "jitter",
+  "t_start": 0.0,
+  "rate": 8000000.0,
+  "jitter_samples": 0.3,
+  "oversample_vs_fastest": 15.866844683891756
+ },
+ "channels": {
+  "D0": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D1": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy0_burst_clock",
+   "static": false
+  },
+  "D3": {
+   "original": "decoy1_burst_clock",
+   "static": false
+  },
+  "D4": {
+   "original": "spi0_cs",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D0",
+    "mosi": "D1",
+    "cs": "D4"
+   },
+   "params": {
+    "clock_hz": 504196.02380816854,
+    "mode": 2,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "0848",
+     "ce72c61c039f51b3",
+     "c2ccd7ea202b0dad",
+     "1f397b32972cb2c1"
+    ],
+    "miso": [
+     "",
+     "",
+     "",
+     ""
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "burst_clock",
+   "channel": "D2",
+   "freq": 701921.6773750766
+  },
+  {
+   "kind": "burst_clock",
+   "channel": "D3",
+   "freq": 229458.27730101728
+  }
+ ]
+}

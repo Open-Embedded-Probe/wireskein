@@ -1,0 +1,119 @@
+{
+ "id": "synth-duplex-1",
+ "generator": {
+  "seed": 1,
+  "profile": "duplex",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 1000000.0,
+  "jitter_samples": 0.02,
+  "oversample_vs_fastest": 25.809145009467134
+ },
+ "channels": {
+  "D0": {
+   "original": "scpi0_tx",
+   "static": false
+  },
+  "D1": {
+   "original": "scpi0_rx",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy0_static",
+   "static": true
+  },
+  "D3": {
+   "original": "decoy1_random",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 38745.95611877832,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "2a4f50433f0a434f4e463a564f4c543a44432031300a4d4541533a435552523a44433f0a4d4541533a435552523a44433f0a524541443f0a2a5253540a535953543a4552523f0a"
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D1"
+   },
+   "params": {
+    "baud": 38745.95611877832,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "310a2b322e3530303030452d30310a2b322e3530303030452d30310a2d342e3230303030452d30330a2b302c224e6f206572726f72220a"
+   }
+  },
+  {
+   "protocol": "scpi",
+   "roles": {
+    "tx": "D0",
+    "rx": "D1"
+   },
+   "params": {
+    "baud": 38745.95611877832
+   },
+   "expect": {
+    "exchanges": [
+     [
+      "*OPC?",
+      "1"
+     ],
+     [
+      "CONF:VOLT:DC 10",
+      null
+     ],
+     [
+      "MEAS:CURR:DC?",
+      "+2.50000E-01"
+     ],
+     [
+      "MEAS:CURR:DC?",
+      "+2.50000E-01"
+     ],
+     [
+      "READ?",
+      "-4.20000E-03"
+     ],
+     [
+      "*RST",
+      null
+     ],
+     [
+      "SYST:ERR?",
+      "+0,\"No error\""
+     ]
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "static",
+   "channel": "D2"
+  },
+  {
+   "kind": "random",
+   "channel": "D3",
+   "toggle_rate": 14092.397023503392
+  }
+ ]
+}

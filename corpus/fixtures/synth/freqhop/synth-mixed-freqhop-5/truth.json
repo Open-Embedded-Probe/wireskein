@@ -1,0 +1,140 @@
+{
+ "id": "synth-mixed-freqhop-5",
+ "generator": {
+  "seed": 5,
+  "profile": "mixed",
+  "stress": "freqhop",
+  "t_start": 0.0,
+  "rate": 24000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 6.122149198289416
+ },
+ "channels": {
+  "D0": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D1": {
+   "original": "spi1_clk",
+   "static": false
+  },
+  "D2": {
+   "original": "spi0_miso",
+   "static": false
+  },
+  "D3": {
+   "original": "spi0_cs",
+   "static": false
+  },
+  "D4": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D5": {
+   "original": "spi1_cs",
+   "static": false
+  },
+  "D6": {
+   "original": "spi1_mosi",
+   "static": false
+  },
+  "D7": {
+   "original": "spi1_miso",
+   "static": false
+  },
+  "D8": {
+   "original": "uart2_tx",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D4",
+    "mosi": "D0",
+    "miso": "D2",
+    "cs": "D3"
+   },
+   "params": {
+    "clock_hz": 100061.30224416856,
+    "mode": 3,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "32b39168ce",
+     "90",
+     "7fa9",
+     "bdb5",
+     "304464",
+     "d95535cc78861fd8"
+    ],
+    "miso": [
+     "b527970bb4",
+     "81",
+     "6df7",
+     "08b9",
+     "43287f",
+     "0e7fa01dd0a17464"
+    ]
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D1",
+    "mosi": "D6",
+    "miso": "D7",
+    "cs": "D5"
+   },
+   "params": {
+    "clock_hz": 3920191.9493738925,
+    "mode": 0,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "e2eb82",
+     "0601",
+     "b083",
+     "43c9d372a9",
+     "08d2",
+     "95e7",
+     "2336624a8c",
+     "50a6b8030b8155",
+     "83"
+    ],
+    "miso": [
+     "c02064",
+     "4ace",
+     "8aae",
+     "694c87ccd6",
+     "3868",
+     "0d40",
+     "d467abf7e8",
+     "f3c2e7ee6c1a0b",
+     "73"
+    ]
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D8"
+   },
+   "params": {
+    "baud": 249402.3768532166,
+    "data_bits": 8,
+    "parity": "even",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "c30440604b6310cf8c29ea1c83292227694d3a5cebf97fb6742f497c50e9e92283b24dfc9f6908637601daba09bce332000a8152cacdee5f2726521e784ee2d8fa485396fb0e5e4c8d8c90d2022efb920274be1e0a1c6daa3b462fb1c46a"
+   }
+  }
+ ],
+ "decoys": []
+}

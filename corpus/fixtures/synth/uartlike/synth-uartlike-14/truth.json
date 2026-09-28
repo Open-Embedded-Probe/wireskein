@@ -1,0 +1,48 @@
+{
+ "id": "synth-uartlike-14",
+ "generator": {
+  "seed": 14,
+  "profile": "uartlike",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 4000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 16.044621161036474
+ },
+ "channels": {
+  "D0": {
+   "original": "uart0_tx",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy0_clock",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 249304.73333417127,
+    "data_bits": 8,
+    "parity": "even",
+    "stop_bits": 1.0,
+    "idle": 0,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "1552e9171f6160b76a469bc2175f98777e711fcc41ab8c92f1ce9fdd70fb0e1aa062fe7719b6528cd943"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "clock",
+   "channel": "D1",
+   "freq": 1000000.0
+  }
+ ]
+}

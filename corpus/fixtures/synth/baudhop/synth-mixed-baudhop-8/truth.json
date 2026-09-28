@@ -1,0 +1,132 @@
+{
+ "id": "synth-mixed-baudhop-8",
+ "generator": {
+  "seed": 8,
+  "profile": "mixed",
+  "stress": "baudhop",
+  "t_start": 0.0,
+  "rate": 200000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 50.55567045967932
+ },
+ "channels": {
+  "D0": {
+   "original": "spi1_cs",
+   "static": false
+  },
+  "D1": {
+   "original": "uart0_tx",
+   "static": false
+  },
+  "D2": {
+   "original": "spi1_clk",
+   "static": false
+  },
+  "D3": {
+   "original": "spi1_mosi",
+   "static": false
+  },
+  "D4": {
+   "original": "uart2_tx",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D1"
+   },
+   "params": {
+    "baud": 38260.769923956876,
+    "data_bits": 7,
+    "parity": "even",
+    "stop_bits": 2.0,
+    "idle": 1,
+    "bit_order": "lsb",
+    "baud_segments": [
+     {
+      "from": 0.000988187371621038,
+      "baud": 38260.769923956876
+     },
+     {
+      "from": 0.04567544109996665,
+      "baud": 306086.159391655
+     },
+     {
+      "from": 0.05018012268019648,
+      "baud": 306086.159391655
+     }
+    ]
+   },
+   "expect": {
+    "bytes": "4f4b0d0a4f4b0d0a2447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a41542b474d520d0a2447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a4f4b0d0a4552524f522031320d0a"
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D2",
+    "mosi": "D3",
+    "cs": "D0"
+   },
+   "params": {
+    "clock_hz": 3956034.9646536685,
+    "mode": 1,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "28d52758e9794cd7",
+     "3233a0bdcd",
+     "12"
+    ],
+    "miso": [
+     "",
+     "",
+     ""
+    ]
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D4"
+   },
+   "params": {
+    "baud": 458718.1927705802,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb",
+    "baud_segments": [
+     {
+      "from": 0.0017143619875585442,
+      "baud": 458718.1927705802
+     },
+     {
+      "from": 0.005618592310789407,
+      "baud": 458718.1927705802
+     },
+     {
+      "from": 0.010075504695752281,
+      "baud": 1834872.7710823207
+     },
+     {
+      "from": 0.010908852820777767,
+      "baud": 1834872.7710823207
+     },
+     {
+      "from": 0.012195907810699487,
+      "baud": 1834872.7710823207
+     }
+    ]
+   },
+   "expect": {
+    "bytes": "434153455f424547494e2044657669636520446574656374696f6e0a72656164793e204f4b0d0a434153455f424547494e2044657669636520446574656374696f6e0a74656d703d32332e352068756d3d34312e320a4552524f522031320d0a74656d703d32332e352068756d3d34312e320a434153455f424547494e2044657669636520446574656374696f6e0a4f4b0d0a41542b474d520d0a41542b474d520d0a"
+   }
+  }
+ ],
+ "decoys": []
+}

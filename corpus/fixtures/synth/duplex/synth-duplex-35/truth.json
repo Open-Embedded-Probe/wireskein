@@ -1,0 +1,89 @@
+{
+ "id": "synth-duplex-35",
+ "generator": {
+  "seed": 35,
+  "profile": "duplex",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 2000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 104.25320609353376
+ },
+ "channels": {
+  "D0": {
+   "original": "scpi0_rx",
+   "static": false
+  },
+  "D1": {
+   "original": "scpi0_tx",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D1"
+   },
+   "params": {
+    "baud": 19184.062293543688,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "2a4f50433f0a4d4541533a564f4c543a44433f0a535953543a4552523f0a2a4f50433f0a"
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 19184.062293543688,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "310a2b312e3233343536452b30300a2b302c224e6f206572726f72220a310a"
+   }
+  },
+  {
+   "protocol": "scpi",
+   "roles": {
+    "tx": "D1",
+    "rx": "D0"
+   },
+   "params": {
+    "baud": 19184.062293543688
+   },
+   "expect": {
+    "exchanges": [
+     [
+      "*OPC?",
+      "1"
+     ],
+     [
+      "MEAS:VOLT:DC?",
+      "+1.23456E+00"
+     ],
+     [
+      "SYST:ERR?",
+      "+0,\"No error\""
+     ],
+     [
+      "*OPC?",
+      "1"
+     ]
+    ]
+   }
+  }
+ ],
+ "decoys": []
+}

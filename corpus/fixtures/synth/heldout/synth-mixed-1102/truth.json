@@ -1,0 +1,275 @@
+{
+ "id": "synth-mixed-1102",
+ "generator": {
+  "seed": 1102,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 50000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 48.450827842732046
+ },
+ "channels": {
+  "D0": {
+   "original": "i2c0_sda",
+   "static": false
+  },
+  "D1": {
+   "original": "i2c1_scl",
+   "static": false
+  },
+  "D2": {
+   "original": "i2c0_scl",
+   "static": false
+  },
+  "D3": {
+   "original": "i2c1_sda",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D2",
+    "sda": "D0"
+   },
+   "params": {
+    "clock_hz": 1031974.1112019067
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 13,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       96,
+       148
+      ]
+     },
+     {
+      "addr": 13,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       182,
+       23,
+       98,
+       190
+      ]
+     },
+     {
+      "addr": 50,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       250,
+       181,
+       145
+      ]
+     },
+     {
+      "addr": 13,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       69,
+       232,
+       153,
+       41,
+       15,
+       253
+      ]
+     },
+     {
+      "addr": 13,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       133,
+       250,
+       112,
+       117,
+       88
+      ]
+     },
+     {
+      "addr": 13,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       215
+      ]
+     },
+     {
+      "addr": 13,
+      "rw": "read",
+      "addr_ack": false,
+      "bytes": []
+     },
+     {
+      "addr": 13,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       115,
+       237,
+       74,
+       229,
+       214
+      ]
+     },
+     {
+      "addr": 13,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       133,
+       185
+      ]
+     },
+     {
+      "addr": 13,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       146,
+       136,
+       126,
+       176,
+       152
+      ]
+     },
+     {
+      "addr": 13,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       236
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D1",
+    "sda": "D3"
+   },
+   "params": {
+    "clock_hz": 104671.64061270568
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 34,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       224
+      ]
+     },
+     {
+      "addr": 39,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       62,
+       179,
+       150,
+       91,
+       165
+      ]
+     },
+     {
+      "addr": 39,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       66
+      ]
+     },
+     {
+      "addr": 39,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       142,
+       200,
+       225,
+       143,
+       200
+      ]
+     },
+     {
+      "addr": 39,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": []
+     },
+     {
+      "addr": 39,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       38,
+       158,
+       58,
+       224
+      ]
+     },
+     {
+      "addr": 39,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       197,
+       147
+      ]
+     },
+     {
+      "addr": 39,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       70
+      ]
+     },
+     {
+      "addr": 39,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       109,
+       248,
+       108,
+       64,
+       47
+      ]
+     },
+     {
+      "addr": 39,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       76,
+       193,
+       66
+      ]
+     },
+     {
+      "addr": 39,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       221
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "decoys": []
+}

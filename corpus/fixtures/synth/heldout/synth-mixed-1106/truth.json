@@ -1,0 +1,72 @@
+{
+ "id": "synth-mixed-1106",
+ "generator": {
+  "seed": 1106,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 200000000.0,
+  "jitter_samples": 0.1,
+  "oversample_vs_fastest": 25.323296358417657
+ },
+ "channels": {
+  "D0": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D1": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy0_burst_clock",
+   "static": false
+  },
+  "D3": {
+   "original": "spi0_cs",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D0",
+    "mosi": "D1",
+    "cs": "D3"
+   },
+   "params": {
+    "clock_hz": 7897865.947989764,
+    "mode": 3,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "d7e2",
+     "2b6a68ef835d65",
+     "06f1c8cf065e54be",
+     "2d9b68db945a",
+     "158a967991",
+     "9c1f29",
+     "35c4f6d1ac"
+    ],
+    "miso": [
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     ""
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "burst_clock",
+   "channel": "D2",
+   "freq": 742357.9051381839
+  }
+ ]
+}

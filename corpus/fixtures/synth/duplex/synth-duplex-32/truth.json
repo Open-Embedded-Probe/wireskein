@@ -1,0 +1,66 @@
+{
+ "id": "synth-duplex-32",
+ "generator": {
+  "seed": 32,
+  "profile": "duplex",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 1000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 52.00820280834819
+ },
+ "channels": {
+  "D0": {
+   "original": "decoy1_clock",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy2_static",
+   "static": true
+  },
+  "D2": {
+   "original": "decoy0_pwm",
+   "static": false
+  },
+  "D3": {
+   "original": "uart0_tx",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D3"
+   },
+   "params": {
+    "baud": 19227.736126261283,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "5b402fb4a136daabfc69368f458981d4846759edd4acaf754837979ab7fe2b51349812dd08f7f580d2e8e200ea0d3b5daa00e1478fdc37f0450c7e9a9bdf37618422ad89ef913638d7044cbcd48a39dc9116a968c5f2233418e7347ed17d2d577ec22a14f686ec46591422a367814fb72061"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "pwm",
+   "channel": "D2",
+   "freq": 44132.19332638262,
+   "duty": 0.06882127768780096
+  },
+  {
+   "kind": "clock",
+   "channel": "D0",
+   "freq": 100000.0
+  },
+  {
+   "kind": "static",
+   "channel": "D1"
+  }
+ ]
+}

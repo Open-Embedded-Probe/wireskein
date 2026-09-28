@@ -1,0 +1,176 @@
+{
+ "id": "synth-mixed-152",
+ "generator": {
+  "seed": 152,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 12000000.0,
+  "jitter_samples": 0.02,
+  "oversample_vs_fastest": 29.530262385433982
+ },
+ "channels": {
+  "D0": {
+   "original": "uart0_tx",
+   "static": false
+  },
+  "D1": {
+   "original": "i2c1_sda",
+   "static": false
+  },
+  "D2": {
+   "original": "i2c1_scl",
+   "static": false
+  },
+  "D3": {
+   "original": "i2c2_scl",
+   "static": false
+  },
+  "D4": {
+   "original": "decoy0_clock",
+   "static": false
+  },
+  "D5": {
+   "original": "decoy1_static",
+   "static": true
+  },
+  "D6": {
+   "original": "i2c2_sda",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 114161.9374247661,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1.0,
+    "idle": 0,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "d29d4c5f060cda8378056653c6c2f739267a8a18411e63c871e4142c95cdd82095f878c0d71db06c607b5b15ae8d1186cb3c8b99919d933011794d277192fc440f053c"
+   }
+  },
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D2",
+    "sda": "D1"
+   },
+   "params": {
+    "clock_hz": 406362.79635358363
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 97,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       67,
+       94,
+       170
+      ]
+     },
+     {
+      "addr": 97,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       85,
+       57,
+       255
+      ]
+     },
+     {
+      "addr": 42,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       33,
+       198
+      ]
+     },
+     {
+      "addr": 97,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       251,
+       141,
+       190
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D3",
+    "sda": "D6"
+   },
+   "params": {
+    "clock_hz": 395316.2780150515
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 105,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       37,
+       29,
+       132,
+       157
+      ]
+     },
+     {
+      "addr": 105,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       226,
+       234,
+       165,
+       101,
+       77,
+       164
+      ]
+     },
+     {
+      "addr": 105,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       118,
+       177,
+       175,
+       164,
+       231,
+       185
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "clock",
+   "channel": "D4",
+   "freq": 100000.0
+  },
+  {
+   "kind": "static",
+   "channel": "D5"
+  }
+ ]
+}

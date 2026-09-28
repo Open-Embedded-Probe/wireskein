@@ -1,0 +1,80 @@
+{
+ "id": "synth-mixed-1012",
+ "generator": {
+  "seed": 1012,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 2000000.0,
+  "jitter_samples": 0.02,
+  "oversample_vs_fastest": 17.510882134512133
+ },
+ "channels": {
+  "D0": {
+   "original": "uart2_tx",
+   "static": false
+  },
+  "D1": {
+   "original": "uart1_tx",
+   "static": false
+  },
+  "D2": {
+   "original": "uart0_tx",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D2"
+   },
+   "params": {
+    "baud": 19099.55958510861,
+    "data_bits": 7,
+    "parity": "none",
+    "stop_bits": 2.0,
+    "idle": 0,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "75624a214b0a062d0c341d7d1249375b047b2c33771272714c0b0c3b444317647e486a340f600a51712f741f50680d0421652f7d57037e0679396858070a51285c584219654d"
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D1"
+   },
+   "params": {
+    "baud": 19030.01215018664,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "668128795763a7be8d33840fdb5f9c03cde04af0e0d8ed8a060477a064213807ee59d9be"
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 114214.69144939347,
+    "data_bits": 8,
+    "parity": "odd",
+    "stop_bits": 1.0,
+    "idle": 0,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "424d1f90801965fb00cdc4f2db059760524e69d7d0fa3096089fd359b7ef5134ecc9feaf35d6a560c993de2d0b85e93110c1c9de8a245087a2c8560a912060ae5d4bc205acb814e4b5451c113c4b86d3"
+   }
+  }
+ ],
+ "decoys": []
+}

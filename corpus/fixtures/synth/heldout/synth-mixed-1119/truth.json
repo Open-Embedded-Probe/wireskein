@@ -1,0 +1,167 @@
+{
+ "id": "synth-mixed-1119",
+ "generator": {
+  "seed": 1119,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 8000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 7.948753267978191
+ },
+ "channels": {
+  "D0": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D1": {
+   "original": "spi2_mosi",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy0_clock",
+   "static": false
+  },
+  "D3": {
+   "original": "spi0_miso",
+   "static": false
+  },
+  "D4": {
+   "original": "spi1_miso",
+   "static": false
+  },
+  "D5": {
+   "original": "spi2_clk",
+   "static": false
+  },
+  "D6": {
+   "original": "spi1_clk",
+   "static": false
+  },
+  "D7": {
+   "original": "spi1_cs",
+   "static": false
+  },
+  "D8": {
+   "original": "spi2_cs",
+   "static": false
+  },
+  "D9": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D10": {
+   "original": "spi1_mosi",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D9",
+    "mosi": "D0",
+    "miso": "D3"
+   },
+   "params": {
+    "clock_hz": 101634.75653110235,
+    "mode": 3,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "62807bee3c",
+     "60afc3b712",
+     "3dbe44",
+     "96fa33c4fb0c8f7d"
+    ],
+    "miso": [
+     "170ff2f373",
+     "9e5f6b3313",
+     "94fd51",
+     "d717bc98dc9dcf0e"
+    ]
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D6",
+    "mosi": "D10",
+    "miso": "D4",
+    "cs": "D7"
+   },
+   "params": {
+    "clock_hz": 1006447.1408652547,
+    "mode": 1,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "74fad7b0922d9933",
+     "af03926130e7",
+     "bbd17270",
+     "89",
+     "fa5a60bf"
+    ],
+    "miso": [
+     "855d2952a7b7986f",
+     "1e770ffc59c8",
+     "10806183",
+     "b2",
+     "2bcb0610"
+    ]
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D5",
+    "mosi": "D1",
+    "cs": "D8"
+   },
+   "params": {
+    "clock_hz": 508114.07807902107,
+    "mode": 1,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "166cbee2b8c8c370",
+     "fddb1a82156581",
+     "4ab8d4d1684694",
+     "9cc197",
+     "937322476d7d",
+     "43d05e",
+     "71105d0e14205d0c",
+     "0a3cf9a1d8948bdf",
+     "ee8a0b81",
+     "29403d5de4",
+     "0abaacb1efa47170",
+     "a7876be2e712"
+    ],
+    "miso": [
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     ""
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "clock",
+   "channel": "D2",
+   "freq": 1000000.0
+  }
+ ]
+}

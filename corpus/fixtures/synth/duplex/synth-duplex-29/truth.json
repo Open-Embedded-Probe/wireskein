@@ -1,0 +1,58 @@
+{
+ "id": "synth-duplex-29",
+ "generator": {
+  "seed": 29,
+  "profile": "duplex",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 1000000.0,
+  "jitter_samples": 0.1,
+  "oversample_vs_fastest": 104.15349687657637
+ },
+ "channels": {
+  "D0": {
+   "original": "decoy1_burst_clock",
+   "static": false
+  },
+  "D1": {
+   "original": "uart0_tx",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy0_pwm",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D1"
+   },
+   "params": {
+    "baud": 9601.213881325719,
+    "data_bits": 8,
+    "parity": "even",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "4f4b0d0a74656d703d32332e352068756d3d34312e320a72656164793e204552524f522031320d0a4552524f522031320d0a"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "pwm",
+   "channel": "D2",
+   "freq": 26927.62987730134,
+   "duty": 0.4854752533317389
+  },
+  {
+   "kind": "burst_clock",
+   "channel": "D0",
+   "freq": 146234.76329898665
+  }
+ ]
+}

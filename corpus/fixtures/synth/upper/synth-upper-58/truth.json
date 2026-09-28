@@ -1,0 +1,75 @@
+{
+ "id": "synth-upper-58",
+ "generator": {
+  "seed": 58,
+  "profile": "upper",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 1000000.0,
+  "jitter_samples": 0.1,
+  "oversample_vs_fastest": 51.690656361944036
+ },
+ "channels": {
+  "D0": {
+   "original": "uart0_tx",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy1_pwm",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy2_random",
+   "static": false
+  },
+  "D3": {
+   "original": "decoy0_static",
+   "static": true
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 19345.85610594462,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1,
+    "idle": 1,
+    "bit_order": "lsb",
+    "payload": "modbus"
+   },
+   "expect": {
+    "bytes": "3406a36b40fb2897fc2393a2f7634c101d67ccf805e9cdec9d429f04320457f3b79904bffa97044661a106fecf42f1cc2a8fb01b8f7c84032388db860aa37106a4db7e174901acebcf816e100e",
+    "modbus": [
+     "3406a36b40fb2897fc2393a2f763",
+     "4c101d67ccf805e9cdec9d42",
+     "9f04320457f3b79904bffa97044661",
+     "a106fecf42f1cc2a8fb01b8f7c",
+     "84032388db860aa3",
+     "7106a4db7e174901acebcf816e100e"
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "static",
+   "channel": "D3"
+  },
+  {
+   "kind": "pwm",
+   "channel": "D1",
+   "freq": 2301.7903494187603,
+   "duty": 0.402255491440239
+  },
+  {
+   "kind": "random",
+   "channel": "D2",
+   "toggle_rate": 6962.257832531792
+  }
+ ]
+}

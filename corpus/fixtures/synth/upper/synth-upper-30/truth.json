@@ -1,0 +1,68 @@
+{
+ "id": "synth-upper-30",
+ "generator": {
+  "seed": 30,
+  "profile": "upper",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 1000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 208.6291402516976
+ },
+ "channels": {
+  "D0": {
+   "original": "uart0_tx",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy0_random",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy2_clock",
+   "static": false
+  },
+  "D3": {
+   "original": "decoy1_pwm",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 4793.194271871918,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1,
+    "idle": 1,
+    "bit_order": "lsb",
+    "payload": "nmea"
+   },
+   "expect": {
+    "bytes": "2447504747412c3133393832392c303037302e3434332c4e2c30303135362e3136342c452c312c30382c302e392c3332362e312c4d2c2c2c2a33370d0a2447504747412c3033363739332c303035332e3234342c4e2c30303034352e3033312c452c312c30382c302e392c3634332e352c4d2c2c2c2a33370d0a2447504747412c3039343130322c303033352e3139332c4e2c30303038362e3232342c452c312c30382c302e392c3736362e352c4d2c2c2c2a33370d0a2447504747412c3035383532382c303034352e3632302c4e2c30303135382e3933362c452c312c30382c302e392c3135352e352c4d2c2c2c2a33460d0a2447504747412c3137353439302c303030382e3439302c4e2c30303137332e3735392c452c312c30382c302e392c3433342e302c4d2c2c2c2a33410d0a2447504747412c3032363436382c303038332e3539392c4e2c30303034322e3237352c452c312c30382c302e392c3331392e342c4d2c2c2c2a33350d0a"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "random",
+   "channel": "D1",
+   "toggle_rate": 23898.795843517775
+  },
+  {
+   "kind": "pwm",
+   "channel": "D3",
+   "freq": 15075.95460590074,
+   "duty": 0.34456562989020345
+  },
+  {
+   "kind": "clock",
+   "channel": "D2",
+   "freq": 1000000.0
+  }
+ ]
+}

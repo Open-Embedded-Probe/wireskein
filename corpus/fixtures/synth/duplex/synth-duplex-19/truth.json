@@ -1,0 +1,105 @@
+{
+ "id": "synth-duplex-19",
+ "generator": {
+  "seed": 19,
+  "profile": "duplex",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 1000000.0,
+  "jitter_samples": 0.02,
+  "oversample_vs_fastest": 25.821732976571386
+ },
+ "channels": {
+  "D0": {
+   "original": "scpi0_rx",
+   "static": false
+  },
+  "D1": {
+   "original": "scpi0_tx",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D1"
+   },
+   "params": {
+    "baud": 38727.06765681922,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "2a49444e3f0a2a4f50433f0a4d4541533a435552523a44433f0a524541443f0a4d4541533a564f4c543a44433f0a4d4541533a435552523a44433f0a4d4541533a564f4c543a44433f0a524541443f0a"
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 38727.06765681922,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "41434d452c4d4f44454c2d312c534e303034322c312e302e330a310a2b322e3530303030452d30310a2d342e3230303030452d30330a2b312e3233343536452b30300a2b322e3530303030452d30310a2b312e3233343536452b30300a2d342e3230303030452d30330a"
+   }
+  },
+  {
+   "protocol": "scpi",
+   "roles": {
+    "tx": "D1",
+    "rx": "D0"
+   },
+   "params": {
+    "baud": 38727.06765681922
+   },
+   "expect": {
+    "exchanges": [
+     [
+      "*IDN?",
+      "ACME,MODEL-1,SN0042,1.0.3"
+     ],
+     [
+      "*OPC?",
+      "1"
+     ],
+     [
+      "MEAS:CURR:DC?",
+      "+2.50000E-01"
+     ],
+     [
+      "READ?",
+      "-4.20000E-03"
+     ],
+     [
+      "MEAS:VOLT:DC?",
+      "+1.23456E+00"
+     ],
+     [
+      "MEAS:CURR:DC?",
+      "+2.50000E-01"
+     ],
+     [
+      "MEAS:VOLT:DC?",
+      "+1.23456E+00"
+     ],
+     [
+      "READ?",
+      "-4.20000E-03"
+     ]
+    ]
+   }
+  }
+ ],
+ "decoys": []
+}

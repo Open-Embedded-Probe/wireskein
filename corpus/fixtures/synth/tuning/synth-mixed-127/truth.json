@@ -1,0 +1,110 @@
+{
+ "id": "synth-mixed-127",
+ "generator": {
+  "seed": 127,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 4000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 4.357767023801974
+ },
+ "channels": {
+  "D0": {
+   "original": "i2c1_sda",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy0_pwm",
+   "static": false
+  },
+  "D2": {
+   "original": "i2c1_scl",
+   "static": false
+  },
+  "D3": {
+   "original": "uart0_tx",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D3"
+   },
+   "params": {
+    "baud": 917901.296272182,
+    "data_bits": 8,
+    "parity": "odd",
+    "stop_bits": 2.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "72656164793e20434153455f424547494e2044657669636520446574656374696f6e0a4552524f522031320d0a72656164793e2072656164793e2074656d703d32332e352068756d3d34312e320a2447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a"
+   }
+  },
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D2",
+    "sda": "D0"
+   },
+   "params": {
+    "clock_hz": 101538.5740200919
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 105,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       241,
+       133
+      ]
+     },
+     {
+      "addr": 29,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       115,
+       50,
+       87,
+       226
+      ]
+     },
+     {
+      "addr": 29,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       111,
+       35,
+       225,
+       210
+      ]
+     },
+     {
+      "addr": 29,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       63
+      ]
+     }
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "pwm",
+   "channel": "D1",
+   "freq": 47205.36072713954,
+   "duty": 0.873333150857419
+  }
+ ]
+}

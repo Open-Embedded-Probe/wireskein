@@ -1,0 +1,147 @@
+{
+ "id": "synth-mixed-1087",
+ "generator": {
+  "seed": 1087,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 24000000.0,
+  "jitter_samples": 0.1,
+  "oversample_vs_fastest": 6.090400059744166
+ },
+ "channels": {
+  "D0": {
+   "original": "spi1_miso",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy0_pwm",
+   "static": false
+  },
+  "D2": {
+   "original": "spi1_mosi",
+   "static": false
+  },
+  "D3": {
+   "original": "spi1_cs",
+   "static": false
+  },
+  "D4": {
+   "original": "i2c0_sda",
+   "static": false
+  },
+  "D5": {
+   "original": "i2c0_scl",
+   "static": false
+  },
+  "D6": {
+   "original": "spi1_clk",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D5",
+    "sda": "D4"
+   },
+   "params": {
+    "clock_hz": 99246.98420943604
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 13,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       106,
+       101
+      ]
+     },
+     {
+      "addr": 15,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       62,
+       130
+      ]
+     },
+     {
+      "addr": 15,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       79,
+       192,
+       216,
+       100,
+       112
+      ]
+     },
+     {
+      "addr": 15,
+      "rw": "write",
+      "addr_ack": false,
+      "bytes": []
+     },
+     {
+      "addr": 15,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       178,
+       172
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D6",
+    "mosi": "D2",
+    "miso": "D0",
+    "cs": "D3"
+   },
+   "params": {
+    "clock_hz": 3940627.834718652,
+    "mode": 3,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "3a55fb",
+     "a944876a42f5db",
+     "0e",
+     "34",
+     "59",
+     "3cf94f5228d39f",
+     "e1da31",
+     "0cc19fe06361d7eb"
+    ],
+    "miso": [
+     "f56f53",
+     "4c193a47062344",
+     "ec",
+     "73",
+     "64",
+     "25e8898be38caa",
+     "6f0c91",
+     "f5ffd183a92371f8"
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "pwm",
+   "channel": "D1",
+   "freq": 48189.694626820965,
+   "duty": 0.05502656489309046
+  }
+ ]
+}

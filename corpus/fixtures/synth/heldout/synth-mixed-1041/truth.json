@@ -1,0 +1,121 @@
+{
+ "id": "synth-mixed-1041",
+ "generator": {
+  "seed": 1041,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 8000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 15.758047665691592
+ },
+ "channels": {
+  "D0": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D1": {
+   "original": "spi0_cs",
+   "static": false
+  },
+  "D2": {
+   "original": "spi0_miso",
+   "static": false
+  },
+  "D3": {
+   "original": "uart2_tx",
+   "static": false
+  },
+  "D4": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D5": {
+   "original": "uart1_tx",
+   "static": false
+  },
+  "D6": {
+   "original": "decoy0_clock",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D0",
+    "mosi": "D4",
+    "miso": "D2",
+    "cs": "D1"
+   },
+   "params": {
+    "clock_hz": 507677.1037707668,
+    "mode": 1,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "3a7c",
+     "2accdf2c6684",
+     "7a6620",
+     "337b027e8e062f",
+     "77c7b2ae60",
+     "118fe5e8ed",
+     "6dab",
+     "616754"
+    ],
+    "miso": [
+     "815a",
+     "01fee5a88178",
+     "b1cfd9",
+     "1c26e518cd4d73",
+     "dacba568fc",
+     "ea653f6dd6",
+     "4e02",
+     "2f3456"
+    ]
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D5"
+   },
+   "params": {
+    "baud": 250288.91050761825,
+    "data_bits": 8,
+    "parity": "odd",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "41f376d3b080d6fcba42d0f4031b3b1bd0303273f745d6ba1baa3c64b530744df11a87e4eeb524d2a3bcead27ebe89eaf664adc896891ebca4d73be4fc62ad1b252777a09bd835f50f935166c5de1aa1c4"
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D3"
+   },
+   "params": {
+    "baud": 38707.11192927333,
+    "data_bits": 8,
+    "parity": "odd",
+    "stop_bits": 2.0,
+    "idle": 0,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "4b95e9db64fe2b7c1bc9803cfe5a5c5cd16cdeabfd651f73d58218a2e4c45f5c62d9df6b328b47cd0d96b8e5"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "clock",
+   "channel": "D6",
+   "freq": 115200.0
+  }
+ ]
+}

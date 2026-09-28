@@ -1,0 +1,137 @@
+{
+ "id": "synth-mixed-freqhop-15",
+ "generator": {
+  "seed": 15,
+  "profile": "mixed",
+  "stress": "freqhop",
+  "t_start": 0.0,
+  "rate": 50000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 12.578283838553691
+ },
+ "channels": {
+  "D0": {
+   "original": "spi0_miso",
+   "static": false
+  },
+  "D1": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D2": {
+   "original": "spi0_cs",
+   "static": false
+  },
+  "D3": {
+   "original": "spi1_cs",
+   "static": false
+  },
+  "D4": {
+   "original": "spi1_clk",
+   "static": false
+  },
+  "D5": {
+   "original": "uart2_tx",
+   "static": false
+  },
+  "D6": {
+   "original": "spi1_mosi",
+   "static": false
+  },
+  "D7": {
+   "original": "spi0_mosi",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D1",
+    "mosi": "D7",
+    "miso": "D0",
+    "cs": "D2"
+   },
+   "params": {
+    "clock_hz": 3975105.081246857,
+    "mode": 3,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "a46601b83b907477",
+     "5768a444",
+     "5828"
+    ],
+    "miso": [
+     "aa486958d18117b2",
+     "bd10d7f9",
+     "f300"
+    ]
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D4",
+    "mosi": "D6",
+    "cs": "D3"
+   },
+   "params": {
+    "clock_hz": 3972959.729728651,
+    "mode": 3,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "2c61a4c3",
+     "b4e089c88c26f1ca",
+     "25e9d3",
+     "1597fd77ef",
+     "f6",
+     "d2",
+     "37",
+     "a1d64913dce1a4",
+     "23aa",
+     "b48ffa",
+     "26a9",
+     "1752ef",
+     "3c44"
+    ],
+    "miso": [
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     ""
+    ]
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D5"
+   },
+   "params": {
+    "baud": 231289.70586641063,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1.0,
+    "idle": 0,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "bebee535e0ebee30062665fe6d07a51c7718d595227a81d89d6a9451d253bd9879ed1f4562859933c09ceca1a50bfa324f94f124f1e58a6057a85adb0e94d52cfb9a5bcf"
+   }
+  }
+ ],
+ "decoys": []
+}

@@ -1,0 +1,47 @@
+{
+ "id": "synth-uartlike-2",
+ "generator": {
+  "seed": 2,
+  "profile": "uartlike",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 4000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 16.0
+ },
+ "channels": {
+  "D0": {
+   "original": "dmx0",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy0_burst_clock",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "dmx512",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 250000.0
+   },
+   "expect": {
+    "packets": [
+     "63ea694c1eb1ef691f1971d0fd6f",
+     "d5e4ba552530a099692c2dd053",
+     "e4481a309f9e56e1e0161e0e6de4e78e7a646446cbc98b33b2874da8b98e424e79a4f08f82d59942017b6a26162dcabf39e4c06ed413c0ad581157ab4d8afb"
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "burst_clock",
+   "channel": "D1",
+   "freq": 686234.1740865291
+  }
+ ]
+}

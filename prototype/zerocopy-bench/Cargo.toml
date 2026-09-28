@@ -1,0 +1,11 @@
+[package]
+name = "zerocopy-bench"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+rquickjs = { version = "0.9", features = ["classes"] }
+memmap2 = "0.9"
+
+[profile.release]
+opt-level = 3

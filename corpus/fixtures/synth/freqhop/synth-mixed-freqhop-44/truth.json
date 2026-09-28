@@ -1,0 +1,157 @@
+{
+ "id": "synth-mixed-freqhop-44",
+ "generator": {
+  "seed": 44,
+  "profile": "mixed",
+  "stress": "freqhop",
+  "t_start": 0.0,
+  "rate": 16000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 4.0559521854483185
+ },
+ "channels": {
+  "D0": {
+   "original": "spi1_miso",
+   "static": false
+  },
+  "D1": {
+   "original": "uart0_tx",
+   "static": false
+  },
+  "D2": {
+   "original": "spi1_mosi",
+   "static": false
+  },
+  "D3": {
+   "original": "decoy0_pwm",
+   "static": false
+  },
+  "D4": {
+   "original": "spi1_cs",
+   "static": false
+  },
+  "D5": {
+   "original": "spi2_clk",
+   "static": false
+  },
+  "D6": {
+   "original": "spi1_clk",
+   "static": false
+  },
+  "D7": {
+   "original": "spi2_cs",
+   "static": false
+  },
+  "D8": {
+   "original": "spi2_mosi",
+   "static": false
+  },
+  "D9": {
+   "original": "decoy1_static",
+   "static": true
+  },
+  "D10": {
+   "original": "spi2_miso",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D1"
+   },
+   "params": {
+    "baud": 249528.85363910566,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 2.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "9eac845627be021477482e4d37d1bddad06bd816ab25a7aa6e55168fc038b13d2fd48bf0e5befd6d961334b140"
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D6",
+    "mosi": "D2",
+    "miso": "D0",
+    "cs": "D4"
+   },
+   "params": {
+    "clock_hz": 98919.14920216214,
+    "mode": 3,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "mosi": [
+     "6cd74f",
+     "483834907f3a",
+     "543765cdc3"
+    ],
+    "miso": [
+     "2ab1ce",
+     "e22ab2142766",
+     "6ae615984d"
+    ]
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D5",
+    "mosi": "D8",
+    "miso": "D10",
+    "cs": "D7"
+   },
+   "params": {
+    "clock_hz": 3944819.679434033,
+    "mode": 3,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "ad",
+     "f7",
+     "178cb91d79eebf",
+     "36412a0f6db229",
+     "841819d6109fe9f6",
+     "5bd1da",
+     "d3c39d797f8cc0",
+     "13ce",
+     "d53ee53897",
+     "679c414bc314c8d2",
+     "efd261ebb614"
+    ],
+    "miso": [
+     "ed",
+     "02",
+     "c8ee229b4d7dff",
+     "9ccba5e2cacaa2",
+     "15d5f6d2fcac1380",
+     "36f3d3",
+     "c217af1ee38fdb",
+     "d565",
+     "610038f508",
+     "9b4c64c3694fb3d8",
+     "482e2b3024e4"
+    ]
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "pwm",
+   "channel": "D3",
+   "freq": 33081.228938227876,
+   "duty": 0.715617774943488
+  },
+  {
+   "kind": "static",
+   "channel": "D9"
+  }
+ ]
+}

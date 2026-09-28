@@ -1,0 +1,49 @@
+{
+ "id": "synth-upper-79",
+ "generator": {
+  "seed": 79,
+  "profile": "upper",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 1000000.0,
+  "jitter_samples": 0.02,
+  "oversample_vs_fastest": 210.13366355363942
+ },
+ "channels": {
+  "D0": {
+   "original": "uart0_tx",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy0_clock",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 4758.875770253426,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1,
+    "idle": 1,
+    "bit_order": "lsb",
+    "payload": "binary"
+   },
+   "expect": {
+    "bytes": "ace6229d1e8d64165f6298a93d1bb4adbcff5f0e1c94bcb98c7f0283102d80cc6d0a6a9e1ab8781544c6761c97746eec41b7930a19e3494e182516ddd850e046d4d531084d71d657383213c1f65146fdf1c57367119af193400ff7d1ea"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "clock",
+   "channel": "D1",
+   "freq": 32768.0
+  }
+ ]
+}

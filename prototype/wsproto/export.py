@@ -132,14 +132,46 @@ def final_of(n, lay: dict) -> dict:
     return {}
 
 
-def export(res, cap, mode: str = "final", select: list[str] | None = None, alternatives: bool = False) -> dict:
+def _window(lay: dict, s0: int, s1: int) -> dict:
+    """Keep only the items inside [s0, s1): what a GUI needs for the visible range."""
+    out = {}
+    for k, v in lay.items():
+        if isinstance(v, list) and v and isinstance(v[0], dict) and "s" in v[0]:
+            out[k] = [x for x in v if x.get("s") is not None and s0 <= x["s"] < s1]
+        elif isinstance(v, dict) and "t" in v and isinstance(v["t"], list):
+            t = np.asarray(v["t"])
+            sel = (t >= s0) & (t < s1)
+            w = dict(v)
+            w["t"] = t[sel].tolist()
+            if "values" in v:
+                w["values"] = [list(np.asarray(row)[sel]) for row in v["values"]]
+            out[k] = w
+        elif isinstance(v, dict) and "s" in v and isinstance(v["s"], list):
+            st = np.asarray(v["s"])
+            sel = (st >= s0) & (st < s1)
+            w = {kk: (list(np.asarray(vv)[sel]) if isinstance(vv, list) and len(vv) == len(st) else vv) for kk, vv in v.items()}
+            if "hex" in v:
+                b = bytes.fromhex(v["hex"])
+                w["hex"] = bytes(x for x, m in zip(b, sel) if m).hex()
+            out[k] = w
+        else:
+            out[k] = v
+    return out
+
+
+def export(res, cap, mode: str = "final", select: list[str] | None = None, alternatives: bool = False,
+           window: tuple[int, int] | None = None) -> dict:
     doc = {"rate": cap.rate, "n_samples": cap.n_samples, "claims": []}
+    if window:
+        doc["window"] = list(window)
     for c in res.claims:
         n = c.node
         rec = {"protocol": c.protocol, "roles": c.roles, "verdict": c.verdict, "score": round(float(c.total), 4),
                "margin": round(float(c.margin), 4),
                "params": {k: (float(v) if isinstance(v, (np.floating, float)) else v) for k, v in c.params.items()}}
         lay = layers_of(n)
+        if window:
+            lay = _window(lay, *window)
         if mode == "final":
             rec["result"] = final_of(n, lay)
         elif mode == "all":

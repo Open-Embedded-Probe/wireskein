@@ -1,0 +1,135 @@
+{
+ "id": "synth-mixed-1081",
+ "generator": {
+  "seed": 1081,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 16000000.0,
+  "jitter_samples": 0.1,
+  "oversample_vs_fastest": 16.267453849404497
+ },
+ "channels": {
+  "D0": {
+   "original": "uart1_tx",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy2_pwm",
+   "static": false
+  },
+  "D2": {
+   "original": "decoy1_static",
+   "static": true
+  },
+  "D3": {
+   "original": "decoy0_static",
+   "static": true
+  },
+  "D4": {
+   "original": "i2c0_scl",
+   "static": false
+  },
+  "D5": {
+   "original": "i2c0_sda",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D4",
+    "sda": "D5"
+   },
+   "params": {
+    "clock_hz": 983558.960616674
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       207
+      ]
+     },
+     {
+      "addr": 83,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       153,
+       235
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       138,
+       129,
+       96,
+       107
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": []
+     },
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       207
+      ]
+     },
+     {
+      "addr": 112,
+      "rw": "write",
+      "addr_ack": false,
+      "bytes": []
+     }
+    ]
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 58027.72621889265,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "052768015412ff94a2787b3ffaf4050d52d34b96cc5a8c9d4da2ae98bfeca706561b6751e3de02b6356a5649c5618c02894171ab3a2cd6e4104cfa48503324a8dbda1c62ccd24d0a840d795cb777d4df7e799c598d7ad776268e"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "static",
+   "channel": "D3"
+  },
+  {
+   "kind": "static",
+   "channel": "D2"
+  },
+  {
+   "kind": "pwm",
+   "channel": "D1",
+   "freq": 11549.682373107302,
+   "duty": 0.40035498971818806
+  }
+ ]
+}

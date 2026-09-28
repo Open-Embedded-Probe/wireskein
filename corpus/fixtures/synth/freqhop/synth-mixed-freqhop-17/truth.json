@@ -1,0 +1,159 @@
+{
+ "id": "synth-mixed-freqhop-17",
+ "generator": {
+  "seed": 17,
+  "profile": "mixed",
+  "stress": "freqhop",
+  "t_start": 0.0,
+  "rate": 50000000.0,
+  "jitter_samples": 0.1,
+  "oversample_vs_fastest": 49.35874014819241
+ },
+ "channels": {
+  "D0": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D1": {
+   "original": "spi0_clk",
+   "static": false
+  },
+  "D2": {
+   "original": "uart2_tx",
+   "static": false
+  },
+  "D3": {
+   "original": "i2c1_scl",
+   "static": false
+  },
+  "D4": {
+   "original": "spi0_miso",
+   "static": false
+  },
+  "D5": {
+   "original": "decoy0_random",
+   "static": false
+  },
+  "D6": {
+   "original": "i2c1_sda",
+   "static": false
+  },
+  "D7": {
+   "original": "spi0_cs",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D1",
+    "mosi": "D0",
+    "miso": "D4",
+    "cs": "D7"
+   },
+   "params": {
+    "clock_hz": 100230.97818946277,
+    "mode": 0,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "mosi": [
+     "48309c6d29995aa3",
+     "a755c90cdf05",
+     "7f4da9",
+     "c4",
+     "b7a214d5bebc",
+     "8072b6bf18",
+     "d570d82d0312"
+    ],
+    "miso": [
+     "61fb809c317d4f17",
+     "8aebd89548d3",
+     "69f60a",
+     "ca",
+     "ac3d6a092583",
+     "0428a77cb8",
+     "9957382a86c2"
+    ]
+   }
+  },
+  {
+   "protocol": "i2c",
+   "roles": {
+    "scl": "D3",
+    "sda": "D6"
+   },
+   "params": {
+    "clock_hz": 1012991.8196834502
+   },
+   "expect": {
+    "transactions": [
+     {
+      "addr": 39,
+      "rw": "write",
+      "addr_ack": false,
+      "bytes": []
+     },
+     {
+      "addr": 39,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       244,
+       87,
+       3,
+       158,
+       11,
+       141
+      ]
+     },
+     {
+      "addr": 8,
+      "rw": "write",
+      "addr_ack": true,
+      "bytes": [
+       105,
+       140
+      ]
+     },
+     {
+      "addr": 39,
+      "rw": "read",
+      "addr_ack": true,
+      "bytes": [
+       21,
+       89,
+       63,
+       240
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D2"
+   },
+   "params": {
+    "baud": 31374.576285964267,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 2.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "2447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a434153455f424547494e2044657669636520446574656374696f6e0a74656d703d32332e352068756d3d34312e320a4f4b0d0a74656d703d32332e352068756d3d34312e320a4552524f522031320d0a434153455f424547494e2044657669636520446574656374696f6e0a"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "random",
+   "channel": "D5",
+   "toggle_rate": 28328.878004315902
+  }
+ ]
+}

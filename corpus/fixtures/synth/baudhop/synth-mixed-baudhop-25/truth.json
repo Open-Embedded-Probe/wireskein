@@ -1,0 +1,102 @@
+{
+ "id": "synth-mixed-baudhop-25",
+ "generator": {
+  "seed": 25,
+  "profile": "mixed",
+  "stress": "baudhop",
+  "t_start": 0.0,
+  "rate": 4000000.0,
+  "jitter_samples": 0.02,
+  "oversample_vs_fastest": 16.121602944524096
+ },
+ "channels": {
+  "D0": {
+   "original": "uart1_tx",
+   "static": false
+  },
+  "D1": {
+   "original": "decoy0_pwm",
+   "static": false
+  },
+  "D2": {
+   "original": "uart0_tx",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D2"
+   },
+   "params": {
+    "baud": 31072.87404028926,
+    "data_bits": 8,
+    "parity": "even",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb",
+    "baud_segments": [
+     {
+      "from": 0.0019835519220365726,
+      "baud": 31072.87404028926
+     },
+     {
+      "from": 0.0419082559126394,
+      "baud": 31072.87404028926
+     },
+     {
+      "from": 0.11820553726706624,
+      "baud": 62145.74808057852
+     },
+     {
+      "from": 0.12935900523312324,
+      "baud": 62145.74808057852
+     }
+    ]
+   },
+   "expect": {
+    "bytes": "434153455f424547494e2044657669636520446574656374696f6e0a4f4b0d0a74656d703d32332e352068756d3d34312e320a72656164793e204552524f522031320d0a4f4b0d0a74656d703d32332e352068756d3d34312e320a72656164793e20434153455f424547494e2044657669636520446574656374696f6e0a"
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 31014.285720876862,
+    "data_bits": 8,
+    "parity": "odd",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb",
+    "baud_segments": [
+     {
+      "from": 0.001241120843615942,
+      "baud": 31014.285720876862
+     },
+     {
+      "from": 0.06749107528152591,
+      "baud": 248114.2857670149
+     },
+     {
+      "from": 0.07031993668250432,
+      "baud": 248114.2857670149
+     }
+    ]
+   },
+   "expect": {
+    "bytes": "d80b903f0436ea579cef518f362d43694b7e0b981d34754c52a0c0cd9dff938e40357ebe3c21fa0be39b2d5bbe95ed85667e0262b04fb78db753bcc8a48d70de0efc9c5088e0"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "pwm",
+   "channel": "D1",
+   "freq": 4112.219114465676,
+   "duty": 0.7156006124038538
+  }
+ ]
+}

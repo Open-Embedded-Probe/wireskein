@@ -1,0 +1,119 @@
+{
+ "id": "synth-mixed-baudhop-31",
+ "generator": {
+  "seed": 31,
+  "profile": "mixed",
+  "stress": "baudhop",
+  "t_start": 0.0,
+  "rate": 50000000.0,
+  "jitter_samples": 0.1,
+  "oversample_vs_fastest": 6.768779518773569
+ },
+ "channels": {
+  "D0": {
+   "original": "uart1_tx",
+   "static": false
+  },
+  "D1": {
+   "original": "spi0_miso",
+   "static": false
+  },
+  "D2": {
+   "original": "spi0_mosi",
+   "static": false
+  },
+  "D3": {
+   "original": "decoy0_pwm",
+   "static": false
+  },
+  "D4": {
+   "original": "spi0_cs",
+   "static": false
+  },
+  "D5": {
+   "original": "spi0_clk",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D5",
+    "mosi": "D2",
+    "miso": "D1",
+    "cs": "D4"
+   },
+   "params": {
+    "clock_hz": 1006909.2325640145,
+    "mode": 0,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "9028",
+     "6c2e",
+     "33415a4de4",
+     "2c6ba510738180b4",
+     "7be9a4",
+     "cb",
+     "a1",
+     "1f"
+    ],
+    "miso": [
+     "1220",
+     "4018",
+     "de751c9769",
+     "3076551ddac5c435",
+     "c88735",
+     "13",
+     "8c",
+     "1f"
+    ]
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D0"
+   },
+   "params": {
+    "baud": 923357.007369688,
+    "data_bits": 8,
+    "parity": "even",
+    "stop_bits": 1.0,
+    "idle": 0,
+    "bit_order": "lsb",
+    "baud_segments": [
+     {
+      "from": 0.0004553867196861555,
+      "baud": 923357.007369688
+     },
+     {
+      "from": 0.0017725212742756786,
+      "baud": 923357.007369688
+     },
+     {
+      "from": 0.004319343719556009,
+      "baud": 7386856.058957504
+     },
+     {
+      "from": 0.00449736414588075,
+      "baud": 7386856.058957504
+     }
+    ]
+   },
+   "expect": {
+    "bytes": "434153455f424547494e2044657669636520446574656374696f6e0a72656164793e204f4b0d0a2447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a4552524f522031320d0a4f4b0d0a4552524f522031320d0a4552524f522031320d0a4552524f522031320d0a72656164793e204f4b0d0a2447504747412c3132333531392c343830372e3033382c4e2c30313133312e3030302c452c312c30382c302e392c3534352e342c4d2c34362e392c4d2c2c2a34370d0a"
+   }
+  }
+ ],
+ "decoys": [
+  {
+   "kind": "pwm",
+   "channel": "D3",
+   "freq": 3511.7542002481605,
+   "duty": 0.5281741620027213
+  }
+ ]
+}

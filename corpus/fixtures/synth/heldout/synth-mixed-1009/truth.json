@@ -1,0 +1,114 @@
+{
+ "id": "synth-mixed-1009",
+ "generator": {
+  "seed": 1009,
+  "profile": "mixed",
+  "stress": null,
+  "t_start": 0.0,
+  "rate": 20000000.0,
+  "jitter_samples": 0.0,
+  "oversample_vs_fastest": 19.851800256490492
+ },
+ "channels": {
+  "D0": {
+   "original": "spi2_clk",
+   "static": false
+  },
+  "D1": {
+   "original": "spi2_cs",
+   "static": false
+  },
+  "D2": {
+   "original": "uart1_tx",
+   "static": false
+  },
+  "D3": {
+   "original": "uart0_tx",
+   "static": false
+  },
+  "D4": {
+   "original": "spi2_mosi",
+   "static": false
+  }
+ },
+ "buses": [
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D3"
+   },
+   "params": {
+    "baud": 913302.8621489331,
+    "data_bits": 8,
+    "parity": "even",
+    "stop_bits": 1.0,
+    "idle": 0,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "c8b67a7f99b19451c46835078ab25885ef6879c1c60e10136ad1b7bfeb35afba1c1db9b41e3981d9f021dcea3dd83b20cf4b49f9d995ceb486fd4aa3a5947815eb9e3e1daf6357be8210e9934afe3cd04adba907167fa6fa7556911734f3558136cd3889e3"
+   }
+  },
+  {
+   "protocol": "uart",
+   "roles": {
+    "data": "D2"
+   },
+   "params": {
+    "baud": 57301.53173909948,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1.0,
+    "idle": 1,
+    "bit_order": "lsb"
+   },
+   "expect": {
+    "bytes": "41542b474d520d0a72656164793e2041542b474d520d0a4f4b0d0a74656d703d32332e352068756d3d34312e320a434153455f424547494e2044657669636520446574656374696f6e0a4552524f522031320d0a4f4b0d0a4f4b0d0a74656d703d32332e352068756d3d34312e320a41542b474d520d0a41542b474d520d0a4f4b0d0a41542b474d520d0a"
+   }
+  },
+  {
+   "protocol": "spi",
+   "roles": {
+    "clk": "D0",
+    "mosi": "D4",
+    "cs": "D1"
+   },
+   "params": {
+    "clock_hz": 1007465.3049897102,
+    "mode": 3,
+    "bit_order": "msb"
+   },
+   "expect": {
+    "mosi": [
+     "9a6f63d21ead5743",
+     "6ff875f630deba07",
+     "eebaa3",
+     "779b71b938f8d7e9",
+     "0cd488",
+     "366d",
+     "3f",
+     "bb812b8a7636b0",
+     "7f1a",
+     "20",
+     "d4197ca76a19",
+     "3da99f0a1d"
+    ],
+    "miso": [
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     ""
+    ]
+   }
+  }
+ ],
+ "decoys": []
+}
