@@ -1,0 +1,38 @@
+# Classic CAN data/remote frames, standard and extended identifiers. One line
+# (bus level, recessive = 1). Bit stuffing (a complement after 5 equal bits)
+# from SOF to the end of the CRC; CRC-15 over the destuffed bits.
+[plugin]
+name = "can"
+input = "nrzbits"
+
+[roles]
+data = "data"
+
+[[sequence]]
+order = "msb"
+stuffing = { after = 5, from = "sof", to = "crc" }
+fields = [
+  { name = "sof",   width = 1, expect = 0, hide = true },
+  { name = "id_a",  width = 11, hide = true },
+  { name = "rtr_srr", width = 1, hide = true },
+  { name = "ide",   width = 1 },
+  { name = "id_b",  width = 18, when = "ide", hide = true },
+  { name = "rtr",   width = 1, when = "ide", hide = true },
+  { name = "r1",    width = 1, when = "ide", hide = true },
+  { name = "r0",    width = 1, hide = true },
+  { name = "dlc",   width = 4 },
+  { name = "data",  width = "0 if (rtr if ide else rtr_srr) else 8 * min(dlc, 8)" },
+  { name = "crc",   width = 15, hide = true },
+  { name = "crc_delim", width = 1, expect = 1, hide = true },
+  { name = "ack",   width = 1, enum = { "0" = true, "1" = false } },
+  { name = "ack_delim", width = 1, expect = 1, hide = true },
+]
+derive = [
+  { name = "id", expr = "(id_a << 18) | id_b if ide else id_a" },
+]
+checks = [
+  { kind = "crc", field = "crc", from = "sof", to = "data", poly = 0x4599, width = 15 },
+]
+
+[score]
+terms = ["degenerate"]

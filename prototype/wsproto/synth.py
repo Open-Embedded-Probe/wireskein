@@ -272,6 +272,39 @@ class Builder:
         self.fastest = max(self.fastest, 250000.0)
         self.t_end = max(self.t_end, t)
 
+    def add_swd(self, idx: int) -> None:
+        r = self.rng
+        freq = float(r.choice([100e3, 1e6, 4e6, 10e6])) * (1 + r.uniform(-0.02, 0.02))
+        clk, dio = self.wave(f"swd{idx}_clk", 0), self.wave(f"swd{idx}_dio", 0)
+        packets = []
+        for _ in range(int(r.integers(4, 20))):
+            ack = int(r.choice([1, 1, 1, 1, 1, 2, 4]))
+            packets.append({"apndp": int(r.integers(0, 2)), "rnw": int(r.integers(0, 2)), "a": int(r.integers(0, 4)),
+                            "ack": ack, "data": int(r.integers(0, 2**32)) if ack == 1 else None})
+        idle = int(r.choice([0, 0, 2, 8]))
+        t = gen.swd(clk, dio, r.uniform(0.1e-3, 0.5e-3), packets, freq, idle_clocks=idle, gap=r.uniform(5, 100) / freq)
+        self.buses.append({"protocol": "swd", "roles": {"swclk": f"swd{idx}_clk", "swdio": f"swd{idx}_dio"},
+                           "params": {"clock_hz": freq, "idle_clocks": idle},
+                           "expect": {"packets": [[p["apndp"], p["rnw"], p["a"], p["ack"], p["data"]] for p in packets]}})
+        self.fastest = max(self.fastest, freq)
+        self.t_end = max(self.t_end, t)
+
+    def add_can(self, idx: int) -> None:
+        r = self.rng
+        rate = float(r.choice([125e3, 250e3, 500e3, 1e6])) * (1 + r.uniform(-0.005, 0.005))
+        name = f"can{idx}"
+        w = self.wave(name, 1)
+        frames = []
+        for _ in range(int(r.integers(3, 15))):
+            ext = bool(r.random() < 0.3)
+            frames.append({"id": int(r.integers(0, 2**29 if ext else 2**11)), "ext": ext,
+                           "data": [int(x) for x in r.integers(0, 256, int(r.integers(0, 9)))], "ack": bool(r.random() < 0.9)})
+        t = gen.can(w, r.uniform(0.2e-3, 1e-3), frames, rate, ifs_bits=float(r.choice([3, 3, 10, 50])))
+        self.buses.append({"protocol": "can", "roles": {"data": name}, "params": {"bitrate": rate},
+                           "expect": {"frames": [[f["id"], f["ext"], bytes(f["data"]).hex()] for f in frames]}})
+        self.fastest = max(self.fastest, rate)
+        self.t_end = max(self.t_end, t)
+
     def add_decoy(self, idx: int) -> None:
         r = self.rng
         kind = str(r.choice(["static", "static", "pwm", "clock", "random", "burst_clock"]))
@@ -328,8 +361,9 @@ def scenario(seed: int, profile: str = "mixed", stress: str | None = None) -> tu
     b._deferred = []
     kinds = {"mixed": ["uart", "i2c", "spi"], "uart": ["uart"], "i2c": ["i2c"], "spi": ["spi"],
              "uartlike": ["uart", "lin", "dmx"], "duplex": ["scpi", "scpi", "uart"],
-             "upper": ["uart_upper"], "spinor": ["spinor", "spi"]}[profile]
-    n_bus = int(rng.integers(1, 4)) if profile == "mixed" else 1
+             "upper": ["uart_upper"], "spinor": ["spinor", "spi"],
+             "swd": ["swd"], "can": ["can"], "swdcan": ["swd", "can", "spi", "uart"]}[profile]
+    n_bus = int(rng.integers(1, 4)) if profile in ("mixed", "swdcan") else 1
     for i in range(n_bus):
         getattr(b, "add_" + str(rng.choice(kinds)))(i)
     for i in range(int(rng.integers(0, 4))):

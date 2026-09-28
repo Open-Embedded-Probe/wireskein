@@ -225,3 +225,88 @@ def dmx(w: Wave, t: float, packets: list[bytes], baud: float = 250000.0) -> floa
         t = uart(w, t, bytes([0]) + slots, baud, stop_bits=2, gap_bits=0.3)
         t += 60e-6
     return t
+
+
+def swd(clk: Wave, dio: Wave, t: float, packets: list[dict], freq: float, idle_clocks: int = 0,
+        gap: float = 20e-6, line_reset: bool = True) -> float:
+    """ARM SWD packets. Each packet: {"apndp", "rnw", "a" (0..3), "ack" (1 OK / 2 WAIT / 4 FAULT), "data"}.
+
+    Bits change just after the falling edge and are sampled on the rising edge
+    (both directions, as logic analyzers see them). Turnaround cycles float high
+    (pull-up). idle_clocks > 0 keeps the clock running with SWDIO low between
+    packets (no gap in the clock), otherwise the clock stops for `gap`.
+    """
+    h = 0.5 / freq
+
+    def clock(bits):
+        nonlocal t
+        for v in bits:
+            # data changes just after the falling edge, is stable at the rising edge
+            dio.set(t + h * 0.1, v)
+            clk.set(t + h, 1)
+            clk.set(t + h * 2, 0)
+            t += 2 * h
+
+    def lsb(v, n):
+        return [(v >> i) & 1 for i in range(n)]
+
+    if line_reset:
+        clock([1] * 56 + [0, 0])
+        t += gap
+    for p in packets:
+        hdr = [p["apndp"], p["rnw"], p["a"] & 1, p["a"] >> 1]
+        req = [1] + hdr + [sum(hdr) & 1, 0, 1]
+        bits = req + [1] + lsb(p["ack"], 3)
+        if p["ack"] == 1:
+            d = lsb(p["data"], 32) + [sum(lsb(p["data"], 32)) & 1]
+            bits += d + [1] if p["rnw"] else [1] + d
+        else:
+            bits += [1]
+        clock(bits + [0] * idle_clocks)
+        if not idle_clocks:
+            dio.set(t, 0)
+            t += gap
+    return t
+
+
+def can_crc15(bits) -> int:
+    crc = 0
+    for b in bits:
+        nxt = b ^ ((crc >> 14) & 1)
+        crc = (crc << 1) & 0x7FFF
+        if nxt:
+            crc ^= 0x4599
+    return crc
+
+
+def can(w: Wave, t: float, frames: list[dict], bitrate: float, ifs_bits: float = 3.0) -> float:
+    """Classic CAN data frames {"id", "ext", "data", "ack"} on one line (TX and RX
+    wired together as on the bus, recessive = 1). Stuffing after 5 equal bits
+    from SOF to the end of the CRC."""
+    bt = 1.0 / bitrate
+
+    def msb(v, n):
+        return [(v >> (n - 1 - i)) & 1 for i in range(n)]
+
+    for f in frames:
+        d = bytes(f["data"])
+        if f["ext"]:
+            head = [0] + msb(f["id"] >> 18, 11) + [1, 1] + msb(f["id"] & 0x3FFFF, 18) + [0, 0, 0]
+        else:
+            head = [0] + msb(f["id"], 11) + [0, 0, 0]
+        body = head + msb(len(d), 4) + [b for x in d for b in msb(x, 8)]
+        body += msb(can_crc15(body), 15)
+        stuffed, run, last = [], 0, None
+        for b in body:
+            stuffed.append(b)
+            run = run + 1 if b == last else 1
+            last = b
+            if run == 5:
+                stuffed.append(1 - b)
+                last, run = 1 - b, 1
+        tail = [1, 0 if f.get("ack", True) else 1, 1] + [1] * 7
+        for b in stuffed + tail:
+            w.set(t, b)
+            t += bt
+        t += ifs_bits * bt
+    return t

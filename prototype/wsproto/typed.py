@@ -475,3 +475,52 @@ def pulse_symbols(cap, sv: Survey, pin: str) -> PulseSymbols | None:
     cut = np.flatnonzero(iv > 3 * typical) + 1
     b = np.concatenate(([0], cut, [len(lead)]))
     return PulseSymbols(pin, idle, lead, width, width < split, split, np.stack([b[:-1], b[1:]], 1))
+
+
+@dataclass
+class NrzBits:
+    """An async line as bits: each run of one level becomes round(length/unit)
+    bits (the receiver resynchronizes on every edge, as CAN does). Frames start
+    after an idle run of `idle_bits` or more; idle runs are kept only up to
+    `idle_bits + 2` bits so a frame may read a few idle bits at its end."""
+    pin: str
+    idle: int
+    units: list[float]          # bit time per rate block
+    bits: np.ndarray            # int8
+    t: np.ndarray               # int64 sample of each bit
+    bounds: np.ndarray          # (n_frames, 2) [first, next_start)
+    rate: float                 # sample rate
+
+    def bitrate(self) -> float:
+        return self.rate / float(np.median(self.units))
+
+    def nbytes(self) -> int:
+        return int(np.ceil(len(self.bits) / 8)) + 4 * len(self.bounds)
+
+
+def nrz_bits(cap, sv: Survey, rb: RateBlocks, idle_bits: int = 10) -> NrzBits | None:
+    start, length, level = cap.channel(rb.pin).runs(cap.n_samples)
+    bits, ts, bounds = [], [], []
+    n = 0
+    for s0, s1, u in rb.blocks:
+        sel = (start >= s0) & (start < s1)
+        st, ln, lv = start[sel], length[sel], level[sel]
+        k = np.maximum(1, np.round(ln / u)).astype(np.int64)
+        is_idle = lv == rb.idle
+        long_idle = is_idle & (k >= idle_bits)
+        k = np.where(long_idle, np.minimum(k, idle_bits + 2), k)
+        first = np.cumsum(np.concatenate(([0], k[:-1]))) + n
+        # a frame starts at the first bit after a long idle run
+        starts = first[1:][long_idle[:-1]]
+        b = np.repeat(lv.astype(np.int8), k)
+        off = np.arange(len(b)) - np.repeat(first - n, k)
+        tt = np.repeat(st, k) + (off * u).astype(np.int64)
+        bits.append(b)
+        ts.append(tt)
+        end = n + len(b)
+        bounds += list(zip(starts.tolist(), starts[1:].tolist() + [end]))
+        n = end
+    if not bounds:
+        return None
+    return NrzBits(rb.pin, rb.idle, [u for _, _, u in rb.blocks], np.concatenate(bits), np.concatenate(ts),
+                   np.array(bounds, dtype=np.int64), cap.rate)

@@ -25,7 +25,7 @@ from wsproto.stack import ProbeConfig
 from wsproto.scoring import DefaultScorer, LayerOnlyScorer
 
 SCORERS = {"default": DefaultScorer, "layer-only": LayerOnlyScorer}
-IN_SCOPE = {"uart", "i2c", "spi", "lin", "dmx512", "rvswd", "swio"}
+IN_SCOPE = {"uart", "i2c", "spi", "lin", "dmx512", "rvswd", "swio", "swd", "can"}
 WORK = corpus.ROOT / "corpus/work"
 MAX_EDGES = 400_000  # exhaustive expansion on multi-million-edge clocks takes hours; reported as skipped
 
@@ -90,6 +90,20 @@ def match(bus: dict, node, rate: float) -> dict:
             r["decode"] = _ratio(want, got)
         else:
             r["decode"] = None
+    elif bus["protocol"] == "swd":
+        r["roles"] = nr == tr
+        r["params"] = r["roles"]
+        ack = {1: "OK", 2: "WAIT", 4: "FAULT"}
+        want = [("AP" if a else "DP", "R" if w else "W", x, ack[k], d) for a, w, x, k, d in bus["expect"]["packets"]]
+        got = [(p["apndp"], p["rnw"], p["a"], p["ack"], p.get("data")) for p in node.output.items]
+        r["decode"] = _ratio(want, got)
+    elif bus["protocol"] == "can":
+        r["roles"] = nr.get("data") == tr["data"]
+        r["params"] = abs(node.params["bitrate"] / bus["params"]["bitrate"] - 1) <= 0.03
+        want = [(i, bool(e), d) for i, e, d in bus["expect"]["frames"]]
+        got = [(f["id"], bool(f["ide"]), bytes.fromhex(f"{f['data']:0{2 * f['dlc']}x}") .hex() if f["dlc"] else "")
+               for f in node.output.items if f["ok"]]
+        r["decode"] = _ratio(want, got)
     elif bus["protocol"] == "spi":
         lines_true = {tr["mosi"], *([tr["miso"]] if "miso" in tr else [])}
         lines_got = {v for k, v in nr.items() if k.startswith("data")}
