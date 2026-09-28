@@ -78,27 +78,30 @@ def _rising(ch) -> np.ndarray:
 
 
 def clock_info(cap: Capture, f: ChannelFeatures) -> ClockInfo | None:
-    if not f.period:
-        return None
+    """Clock bursts are split from neighbouring intervals only, so a clock whose
+    frequency changes between (or within) bursts is handled the same way."""
     ch = cap.channel(f.name)
     r = _rising(ch)
     if len(r) < 4:
         return None
-    gap = np.flatnonzero(np.diff(r) > 4 * f.period)
-    starts = np.concatenate(([0], gap + 1))
-    ends = np.concatenate((gap, [len(r) - 1]))
+    starts = K.burst_split(r)
+    ends = np.concatenate((starts[1:] - 1, [len(r) - 1]))
     bits = (ends - starts + 1).astype(np.int64)
-    bursts = np.stack([r[starts] - f.period, r[ends] + f.period], 1)
+    iv = np.diff(r).astype(np.float64)
+    # half a local interval of margin around each burst
+    m0 = np.array([iv[s] if s < len(iv) else iv[-1] for s in starts]) / 2
+    m1 = np.array([iv[e - 1] if e > 0 else iv[0] for e in ends]) / 2
+    bursts = np.stack([r[starts] - m0, r[ends] + m1], 1)
     mod8 = float(np.mean(bits % 8 == 0))
     mod9 = float(np.mean(np.isin(bits % 9, (0, 1))))
-    vals, cnt = np.unique(bits, return_counts=True)
     words = []
     for w in range(4, 65):
         share = float(np.mean(bits % w == 0))
         if share >= 0.8 and bits.min() >= w:
             words.append(w)
-    return ClockInfo(f.name, float(f.period), f.scores.get("clock", 0.0), f.idle_level or 0, bursts, bits, mod8, mod9,
-                     words[:6])
+    score = max(f.scores.get("clock", 0.0), f.scores.get("clock_local", 0.0))
+    period = float(np.median(iv)) if len(iv) else float(f.period or 0)
+    return ClockInfo(f.name, period, score, f.idle_level or 0, bursts, bits, mod8, mod9, words[:6])
 
 
 def async_info(cap: Capture, f: ChannelFeatures) -> AsyncInfo:
@@ -137,16 +140,19 @@ def pair_relation(cap: Capture, clk: ClockInfo, other: str) -> PairRelation:
     rise = _rising(c)
     fall = c.edges[K.edge_levels(c.edges, c.initial) == 0]
     di = de[inside]
-    pr = K.phase_concentration(di, rise, clk.period) if len(di) >= 2 and len(rise) else 0.0
-    pf = K.phase_concentration(di, fall, clk.period) if len(di) >= 2 and len(fall) else 0.0
+    # phase inside the surrounding clock interval (frequency independent)
+    pr = K.relative_phase_concentration(di, rise) if len(di) >= 2 and len(rise) > 2 else 0.0
+    pf = K.relative_phase_concentration(di, fall) if len(di) >= 2 and len(fall) > 2 else 0.0
     dist, _ = K.nearest_distance(de, c.edges)
     coincide = float(np.mean(dist <= 1))
-    # CS-like: an edge of `other` within 8 half periods before the burst start and after its end
-    near = 4 * clk.period
-    j0 = np.searchsorted(de, clk.bursts[:, 0] - near)
-    before = (j0 < len(de)) & (de[np.minimum(j0, len(de) - 1)] <= clk.bursts[:, 0] + clk.period)
-    j1 = np.searchsorted(de, clk.bursts[:, 1] - clk.period)
-    after = (j1 < len(de)) & (de[np.minimum(j1, len(de) - 1)] <= clk.bursts[:, 1] + near)
+    # CS-like: an edge of `other` in the idle gap before each burst and in the gap after it
+    b0, b1 = clk.bursts[:, 0], clk.bursts[:, 1]
+    gap_before = np.concatenate(([0.0], b1[:-1]))
+    gap_after = np.concatenate((b0[1:], [float(cap.n_samples)]))
+    j0 = np.searchsorted(de, gap_before, side="left")
+    before = (j0 < len(de)) & (de[np.minimum(j0, len(de) - 1)] <= b0 + (b0 - clk.bursts[:, 0]) + 1)
+    j1 = np.searchsorted(de, b1 - 1, side="left")
+    after = (j1 < len(de)) & (de[np.minimum(j1, len(de) - 1)] <= gap_after)
     boundary = float(np.mean(before & after))
     return PairRelation(clk.name, other, float(inside.mean()), pr, pf, coincide, boundary,
                         float(inside.sum() / max(1, len(clk.bursts))))

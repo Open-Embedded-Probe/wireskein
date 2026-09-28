@@ -139,3 +139,41 @@ def merge_events(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     """Time-ordered (sample, source) events of two edge lists; source 0 before 1 on ties."""
     ev = np.concatenate([np.stack([a, np.zeros(len(a), np.int64)], 1), np.stack([b, np.ones(len(b), np.int64)], 1)])
     return ev[np.lexsort((ev[:, 1], ev[:, 0]))] if len(ev) else ev
+
+
+@kernel
+def burst_split(t: np.ndarray, ratio: float = 3.0) -> np.ndarray:
+    """Indices where a new burst starts in a sorted edge list, decided only from
+    neighbouring intervals (no global period): an interval longer than `ratio`
+    times both the previous and the next interval is a gap."""
+    if len(t) < 3:
+        return np.zeros(1, np.int64)
+    iv = np.diff(t).astype(np.float64)
+    prev = np.concatenate(([np.inf], iv[:-1]))
+    nxt = np.concatenate((iv[1:], [np.inf]))
+    ref = np.minimum(prev, nxt)
+    gap = iv > ratio * ref
+    return np.concatenate(([0], np.flatnonzero(gap) + 1)).astype(np.int64)
+
+
+@kernel
+def relative_phase_concentration(x: np.ndarray, ref: np.ndarray, gap_ratio: float = 3.0) -> float:
+    """Phase of each x inside its surrounding ref interval, 0..1 = from the
+    previous ref edge to the next one. Frequency independent: the interval
+    itself is the unit. x inside gap intervals is ignored."""
+    if len(ref) < 3 or len(x) < 2:
+        return 0.0
+    j = np.searchsorted(ref, x, side="right")
+    sel = (j > 0) & (j < len(ref))
+    if sel.sum() < 2:
+        return 0.0
+    iv = np.diff(ref).astype(np.float64)
+    prev = np.concatenate(([np.inf], iv[:-1]))
+    nxt = np.concatenate((iv[1:], [np.inf]))
+    gap = iv > gap_ratio * np.minimum(prev, nxt)
+    k = j[sel] - 1
+    ok = ~gap[k]
+    if ok.sum() < 2:
+        return 0.0
+    ph = 2 * np.pi * (x[sel][ok] - ref[k[ok]]) / iv[k[ok]]
+    return float(np.hypot(np.cos(ph).mean(), np.sin(ph).mean()))
