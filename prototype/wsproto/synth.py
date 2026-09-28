@@ -28,8 +28,9 @@ def _payload(rng: np.random.Generator, n: int, text: bool) -> bytes:
 
 
 class Builder:
-    def __init__(self, rng: np.random.Generator):
+    def __init__(self, rng: np.random.Generator, stress: str | None = None):
         self.rng = rng
+        self.stress = stress
         self.waves: dict[str, gen.Wave] = {}
         self.buses: list[dict] = []
         self.decoys: list[dict] = []
@@ -56,7 +57,14 @@ class Builder:
         w = self.wave(name, cfg["idle"])
         t = r.uniform(0.2e-3, 2e-3)
         sent = b""
-        for _ in range(int(r.integers(2, 6))):
+        segments = []
+        hop = float(r.choice([2, 4, 8])) if self.stress == "baudhop" else 1.0
+        n_chunks = int(r.integers(2, 6))
+        for ci in range(n_chunks):
+            if self.stress == "baudhop" and ci == n_chunks // 2 and n_chunks > 1:
+                cfg = dict(cfg, baud=cfg["baud"] * hop)
+                t += 50 / cfg["baud"] * 10
+            segments.append({"from": t, "baud": cfg["baud"]})
             data = _payload(r, int(r.integers(4, 40)), text)
             if cfg["data_bits"] == 7:
                 data = bytes(b & 0x7F for b in data)
@@ -64,7 +72,10 @@ class Builder:
             t = gen.uart(w, t, data, cfg["baud"], cfg["data_bits"], cfg["parity"], cfg["stop_bits"], gap_bits=gaps)
             sent += data
             t += r.uniform(10, 200) / cfg["baud"] * 10
-        self.buses.append({"protocol": "uart", "roles": {"data": name}, "params": cfg,
+        params = dict(cfg, baud=segments[0]["baud"])
+        if hop != 1.0:
+            params["baud_segments"] = segments
+        self.buses.append({"protocol": "uart", "roles": {"data": name}, "params": params,
                            "expect": {"bytes": sent.hex()}})
         self.fastest = max(self.fastest, cfg["baud"])
         self.t_end = max(self.t_end, t)
@@ -84,7 +95,13 @@ class Builder:
                 tr["bytes"] = []
             txs.append(tr)
         stretch = {int(k): float(r.uniform(2, 50)) / freq for k in r.integers(0, 60, 3)} if r.random() < 0.3 else None
-        t = gen.i2c(scl, sda, r.uniform(0.2e-3, 1e-3), txs, freq, stretch=stretch, gap=r.uniform(20e-6, 500e-6))
+        if self.stress == "freqhop":
+            t = r.uniform(0.2e-3, 1e-3)
+            for tr in txs:
+                f_i = freq * float(np.exp(r.uniform(np.log(0.25), np.log(4))))
+                t = gen.i2c(scl, sda, t, [tr], f_i, gap=r.uniform(20e-6, 500e-6))
+        else:
+            t = gen.i2c(scl, sda, r.uniform(0.2e-3, 1e-3), txs, freq, stretch=stretch, gap=r.uniform(20e-6, 500e-6))
         self.buses.append({"protocol": "i2c", "roles": {"scl": scl_name(idx), "sda": sda_name(idx)},
                            "params": {"clock_hz": freq},
                            "expect": {"transactions": [{"addr": x["addr"], "rw": x["rw"], "addr_ack": x.get("nack_at") != 0,
@@ -108,8 +125,14 @@ class Builder:
             n = int(r.integers(1, 9))
             frames.append((bytes(r.integers(0, 256, n, dtype=np.uint8)),
                            bytes(r.integers(0, 256, n, dtype=np.uint8)) if has_miso else b""))
-        t = gen.spi(clk, mosi, miso, cs, r.uniform(0.1e-3, 0.5e-3), frames, freq, mode, order,
-                    gap=r.uniform(5, 200) / freq)
+        if self.stress == "freqhop":
+            t = r.uniform(0.1e-3, 0.5e-3)
+            for fr in frames:
+                f_i = freq * float(np.exp(r.uniform(np.log(0.25), np.log(4))))
+                t = gen.spi(clk, mosi, miso, cs, t, [fr], f_i, mode, order, gap=r.uniform(5, 200) / freq)
+        else:
+            t = gen.spi(clk, mosi, miso, cs, r.uniform(0.1e-3, 0.5e-3), frames, freq, mode, order,
+                        gap=r.uniform(5, 200) / freq)
         roles = {"clk": clk_name(idx), "mosi": f"spi{idx}_mosi"}
         if has_miso:
             roles["miso"] = f"spi{idx}_miso"
@@ -166,12 +189,14 @@ STRESS = {
     "midstart": {"cut": 0.3},          # capture starts 0-30 % into the traffic
     "lowrate": {"oversample": [3, 4]}, # barely resolvable
     "jitter": {"jitter": 0.3},         # timing jitter in samples (std)
+    "freqhop": {},                     # SPI / I2C clock changes per frame (x0.25..x4)
+    "baudhop": {},                     # UART baud rate switches mid-stream (x2/x4/x8)
 }
 
 
 def scenario(seed: int, profile: str = "mixed", stress: str | None = None) -> tuple[Capture, dict]:
     rng = np.random.default_rng(seed)
-    b = Builder(rng)
+    b = Builder(rng, stress)
     b._deferred = []
     kinds = {"mixed": ["uart", "i2c", "spi"], "uart": ["uart"], "i2c": ["i2c"], "spi": ["spi"]}[profile]
     n_bus = int(rng.integers(1, 4)) if profile == "mixed" else 1

@@ -148,8 +148,27 @@ def channel_features(cap: Capture, ch: Channel) -> ChannelFeatures:
         distinct = float(len(np.unique(k)))
 
     f = ChannelFeatures(ch.name, len(e), False, idle, duty, bursts, hist, units, period, conc, distinct)
+    f._rise_iv = np.diff(rising).astype(np.float64) if len(rising) > 1 else None
     f.scores = role_scores(f, ilen, ilev)
     return f
+
+
+def local_clock(f: "ChannelFeatures") -> float:
+    """Frequency-independent clock-likeness: inside bursts, each rising-to-rising
+    interval should be close to its neighbour (ratio within 10 %). The period may
+    change between bursts or slowly within one (multi-speed clocks such as
+    RVSWD's attach vs. transfer speed). Gaps (> 3x both neighbours) are left out."""
+    iv = getattr(f, "_rise_iv", None)
+    if iv is None or len(iv) < 16:
+        return 0.0
+    prev = np.concatenate(([np.inf], iv[:-1]))
+    nxt = np.concatenate((iv[1:], [np.inf]))
+    inb = ~(iv > 3 * np.minimum(prev, nxt))
+    r = iv[1:] / iv[:-1]
+    both = inb[1:] & inb[:-1]
+    if both.sum() < 8:
+        return 0.0
+    return float(np.mean(np.abs(np.log(r[both])) < np.log(1.1) + 1.0 / np.maximum(iv[1:][both], 1)))
 
 
 def role_scores(f: ChannelFeatures, ilen: np.ndarray, ilev: np.ndarray) -> dict:
@@ -165,6 +184,7 @@ def role_scores(f: ChannelFeatures, ilen: np.ndarray, ilev: np.ndarray) -> dict:
             spread = (np.mean(np.abs(hi - mh) <= max(1, 0.15 * mh)) + np.mean(np.abs(lo - ml) <= max(1, 0.15 * ml))) / 2
             clock = f.period_conc * spread
     s["clock"] = float(clock)
+    s["clock_local"] = local_clock(f)
     # async-like: many distinct integer multiples of one unit, idle level holds long gaps
     asy = 0.0
     if f.units:
