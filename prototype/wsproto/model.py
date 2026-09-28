@@ -19,17 +19,14 @@ class Channel:
     edges: np.ndarray  # int64, strictly increasing
 
     def level_at(self, samples: np.ndarray) -> np.ndarray:
-        n = np.searchsorted(self.edges, samples, side="right")
-        return (self.initial ^ (n & 1)).astype(np.int8)
+        from . import kernels
+        return kernels.level_at(self.edges, self.initial, np.asarray(samples))
 
     def runs(self, n_samples: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Return (start, length, level) of each constant-level run, including the
         partial first and last runs."""
-        bounds = np.concatenate(([0], self.edges, [n_samples]))
-        start = bounds[:-1]
-        length = np.diff(bounds)
-        level = (self.initial ^ (np.arange(len(start)) & 1)).astype(np.int8)
-        return start, length, level
+        from . import kernels
+        return kernels.runs(self.edges, self.initial, n_samples)
 
 
 @dataclass

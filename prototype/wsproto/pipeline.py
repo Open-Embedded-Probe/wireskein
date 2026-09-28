@@ -46,6 +46,7 @@ class Result:
     features: dict
     probe_runs: int = 0
     abandoned: int = 0
+    engine: object = None
 
 
 def value(n: Node) -> float:
@@ -118,4 +119,4 @@ def analyze(cap: Capture, scorer=None, analyzers=None, probe=None) -> Result:
             ru = max((r for r in alt_set if chans & set(r.roles.values())), key=lambda r: r.total, default=None)
             claims.append(Claim(n.analyzer, dict(n.roles), dict(n.params), n.total, margin,
                                 verdict(n.total, margin), n, ru))
-    return Result(roots, exps, claims, eng.runs, time.perf_counter() - t0, fs, eng.probe_runs, eng.abandoned)
+    return Result(roots, exps, claims, eng.runs, time.perf_counter() - t0, fs, eng.probe_runs, eng.abandoned, eng)

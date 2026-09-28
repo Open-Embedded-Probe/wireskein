@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from .. import kernels as K
 from ..stack import Context, Node, Stream
 
 STANDARD = [300, 1200, 2400, 4800, 9600, 14400, 19200, 31250, 38400, 57600, 74880, 115200, 230400, 250000,
@@ -52,7 +53,7 @@ class Uart:
         nbits = 1 + p["data_bits"] + n_par          # start + data + parity
         frame = nbits + p["stop_bits"]               # in bit times
         e = ch.edges
-        after = ch.initial ^ ((np.arange(len(e)) + 1) & 1)
+        after = K.edge_levels(e, ch.initial)
         starts = e[after == 1 - idle].astype(np.float64)
         if len(starts) == 0:
             return {"data": p["ch"]}, None, {"frames": 0}
@@ -62,9 +63,7 @@ class Uart:
         if key not in self._cache:
             if len(self._cache) > 8:
                 self._cache.clear()
-            offs = (np.arange(13) + 0.5) * T
-            pos = np.minimum(np.floor(starts[:, None] + offs[None, :]).astype(np.int64), cap.n_samples - 1)
-            full = ch.level_at(pos.ravel()).reshape(pos.shape)
+            full = K.sample_grid(e, ch.initial, starts, (np.arange(13) + 0.5) * T, cap.n_samples)
             self._cache[key] = full if idle == 1 else 1 - full
         lv = self._cache[key][:, :nbits + p["stop_bits"]]
         start_ok = lv[:, 0] == 0
@@ -79,20 +78,12 @@ class Uart:
         # Greedy chain: a start edge can open a frame only after the previous
         # frame's stop-bit center (standard UART receiver behaviour).
         busy_until = starts + (nbits + 0.5) * T
-        nxt = np.searchsorted(starts, busy_until, side="left")
-        chosen = []
-        i, n_st = 0, len(starts)
-        nl = nxt.tolist()
-        while i < n_st:
-            chosen.append(i)
-            i = nl[i]
-        idx = np.asarray(chosen, dtype=np.int64)
+        idx = K.chain(starts, busy_until)
         fs = starts[idx]
         fe = fs + frame * T
         ok = start_ok[idx] & stop_ok[idx] & parity_ok[idx]
         # Edge coverage: edges inside a well-formed frame that fall on a bit boundary.
-        k = np.searchsorted(fs, e, side="right") - 1
-        inside = (k >= 0) & (e < fe[np.maximum(k, 0)])
+        inside, k = K.in_windows(np.stack([fs, fe], 1), e.astype(np.float64))
         ph = (e - fs[np.maximum(k, 0)]) / T
         # Tolerance: 0.1 bit, widened only as far as sample quantization requires.
         tol = min(0.3, max(0.1, 0.75 / T))

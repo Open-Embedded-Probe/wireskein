@@ -10,11 +10,13 @@ analyzers and scorers are meant to be swappable (future plugin boundary).
 from __future__ import annotations
 
 import itertools
+import time
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Protocol
 
 import numpy as np
 
+from . import kernels
 from .features import ChannelFeatures
 from .model import Capture, Channel
 
@@ -113,6 +115,25 @@ class Engine:
         self.probe_runs = 0
         self.abandoned = 0
         self._windows: dict = {}
+        # per analyzer: calls, wall seconds, kernel seconds, input elements, output elements
+        self.stats: dict[str, list] = {}
+        self.score_calls = 0
+        self.score_seconds = 0.0
+
+    def _call(self, a, ctx, parent, params, tag=""):
+        k0, t0 = kernels.kernel_seconds(), time.perf_counter()
+        roles, out, m = a.run(ctx, parent, params)
+        st = self.stats.setdefault(a.name + tag, [0, 0.0, 0.0, 0, 0])
+        st[0] += 1
+        st[1] += time.perf_counter() - t0
+        st[2] += kernels.kernel_seconds() - k0
+        if parent is None and hasattr(a, "probe_channels"):
+            st[3] += sum(len(ctx.capture.channel(c).edges) for c in a.probe_channels(params))
+        elif parent is not None and parent.output is not None:
+            st[3] += _count(parent.output.items)
+        if out is not None:
+            st[4] += _count(out.items)
+        return roles, out, m
 
     def windows(self, ctx: Context, chans: tuple[str, ...]) -> list[Context]:
         if chans in self._windows:
@@ -150,7 +171,7 @@ class Engine:
         best, best_m, best_roles = -1.0, None, None
         for w in wins:
             self.probe_runs += 1
-            roles, _, m = a.run(w, None, params)
+            roles, _, m = self._call(a, w, None, params, tag=".probe")
             if roles is None:
                 continue
             s = self.scorer.layer(Node(a.name, params, roles, None, dict(m)))
@@ -169,7 +190,7 @@ class Engine:
             if ab is not None:
                 return ab
         self.runs += 1
-        roles, out, metrics = a.run(ctx, parent, params)
+        roles, out, metrics = self._call(a, ctx, parent, params)
         if roles is None:
             return None
         node = Node(a.name, params, roles, out, metrics, parent)
@@ -185,8 +206,11 @@ class Engine:
     def _score(self, node: Node) -> None:
         for c in node.children:
             self._score(c)
+        t0 = time.perf_counter()
         node.layer_score = self.scorer.layer(node)
         node.total = self.scorer.combine(node)
+        self.score_calls += 1
+        self.score_seconds += time.perf_counter() - t0
 
 
 # --- explanations: channel-disjoint sets of root hypotheses -----------------
@@ -256,6 +280,16 @@ def explanations(roots: list[Node], value, top: int = 5, per_channel_set: int = 
             seen.add(k)
             out.append((s, ns))
     return out[:top]
+
+
+def _count(items) -> int:
+    if isinstance(items, dict):
+        v = items.get("value")
+        return int(len(v)) if v is not None else 0
+    try:
+        return len(items)
+    except TypeError:
+        return 0
 
 
 def pairs(names: list[str]):
