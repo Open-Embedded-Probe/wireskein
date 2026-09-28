@@ -3,3 +3,4 @@ corpus/work/
 __pycache__/
 *.py[cod]
 .venv/
+prototype/boundary-bench/target/

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from .. import kernels as K
 from ..stack import Context, Stream
 
 LINE_ACCEPT = 0.5
@@ -23,25 +24,11 @@ def _windows(ch, n, active):
 
 
 def _in(win, x):
-    k = np.searchsorted(win[:, 0], x, side="right") - 1
-    return (k >= 0) & (x < win[np.maximum(k, 0), 1]), k
+    return K.in_windows(win, x)
 
 
 def _pack(bits: np.ndarray, seg_len: np.ndarray, order: str) -> np.ndarray:
-    """Pack sampled bits into bytes per segment (frame), dropping incomplete
-    trailing bits of each segment. Vectorized over all segments."""
-    if len(bits) == 0:
-        return np.zeros(0, np.int64)
-    seg_start = np.concatenate(([0], np.cumsum(seg_len)[:-1]))
-    seg_id = np.repeat(np.arange(len(seg_len)), seg_len)
-    pos = np.arange(len(bits)) - seg_start[seg_id]
-    keep = pos < (seg_len // 8 * 8)[seg_id]
-    pos, b, sid = pos[keep], bits[keep], seg_id[keep]
-    shift = 7 - (pos % 8) if order == "msb" else pos % 8
-    byte_offset = np.concatenate(([0], np.cumsum(seg_len // 8)[:-1]))
-    byte_id = byte_offset[sid] + pos // 8
-    n_bytes = int((seg_len // 8).sum())
-    return np.bincount(byte_id, weights=b << shift, minlength=n_bytes).astype(np.int64)
+    return K.pack_bits(bits, seg_len, order)
 
 
 def line_score(m: dict) -> float:
@@ -79,7 +66,7 @@ class Spi:
         if p["cs"]:
             roles["cs"] = p["cs"]
         ce = clk.edges
-        after = clk.initial ^ ((np.arange(len(ce)) + 1) & 1)
+        after = K.edge_levels(ce, clk.initial)
         want = 1 if p["sample_edge"] == "rise" else 0
         samp = ce[after == want]
         cpol = ctx.features[p["clk"]].idle_level or 0
@@ -121,19 +108,14 @@ class Spi:
             allb = _pack(bits, seg_len, p["bit_order"])
             de = data.edges
             if len(de):
-                j = np.searchsorted(samp, de)
-                dist = np.minimum(np.abs(de - samp[np.clip(j, 0, len(samp) - 1)]),
-                                  np.abs(de - samp[np.clip(j - 1, 0, len(samp) - 1)]))
+                dist, j = K.nearest_distance(de, samp)
                 d_in, _ = _in(win, de)
                 setup_ok = float(np.mean(dist[d_in] >= 0.25 * half)) if d_in.any() else 0.0
                 data_in = float(d_in.mean())
                 # Phase concentration of data changes within the clock period:
                 # a real data line shifts at a fixed phase (after the shift edge),
                 # an unrelated line changes at uniformly random phases.
-                sp = samp[np.clip(j - 1, 0, len(samp) - 1)]
-                ph = 2 * np.pi * ((de - sp) / (2 * half))
-                sel = d_in & (j > 0)
-                phase_conc = float(np.hypot(np.cos(ph[sel]).mean(), np.sin(ph[sel]).mean())) if sel.sum() >= 2 else 0.0
+                phase_conc = K.phase_concentration(de[d_in], samp, 2 * half) if d_in.sum() >= 2 else 0.0
             else:
                 setup_ok, data_in, phase_conc = 0.0, 0.0, 0.0  # a static line carries no evidence
             m = {"clock_like": ctx.features[d].scores.get("clock", 0.0), "setup_ok": setup_ok, "phase_conc": phase_conc, "data_in_frames": data_in, "bytes": int(len(allb)),

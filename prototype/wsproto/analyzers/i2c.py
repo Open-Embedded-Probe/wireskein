@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from .. import kernels as K
 from ..stack import Context, Stream, pairs
 
 
@@ -23,12 +24,9 @@ class I2c:
         cap = ctx.capture
         scl, sda = cap.channel(p["scl"]), cap.channel(p["sda"])
         roles = {"scl": p["scl"], "sda": p["sda"]}
-        ev_s = np.stack([scl.edges, np.zeros(len(scl.edges), np.int64)], 1)
-        ev_d = np.stack([sda.edges, np.ones(len(sda.edges), np.int64)], 1)
-        ev = np.concatenate([ev_s, ev_d])
+        ev = K.merge_events(scl.edges, sda.edges)
         if len(ev) == 0:
             return roles, None, {"starts": 0}
-        ev = ev[np.lexsort((ev[:, 1], ev[:, 0]))]
         c, d = scl.initial, sda.initial
         txs, cur, bits = [], None, []
         starts = stops = 0
