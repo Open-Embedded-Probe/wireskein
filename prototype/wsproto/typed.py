@@ -85,6 +85,13 @@ class Frames:
     delimiter: str              # "select" / "startstop" / "gap"
     bounds: np.ndarray          # (n_frames, 2) [first, last+1) index into source.t
     events: list = field(default_factory=list)  # startstop: ("S"/"Sr"/"P", time)
+    open_tail: bool = False     # startstop: the last frame has no STOP/Sr (the capture ended inside it)
+
+    def closed(self) -> "Frames":
+        """Without the open last frame (for consumers that only take whole frames)."""
+        if not self.open_tail:
+            return self
+        return Frames(self.source, self.delimiter, self.bounds[:-1], self.events)
 
     def nbytes(self) -> int:
         # the bits inside frames (packed, all data pins) + the frame table + events
@@ -219,7 +226,12 @@ def frames_startstop(cap, sb: SyncBits) -> Frames:
                 bounds.append((open_at, p))
             events.append(("P", tt))
             open_at = None
-    return Frames(sb, "startstop", np.asarray(bounds, dtype=np.int64).reshape(-1, 2), events)
+    # a START never closed (a bus left stuck, a window too short) is kept: where
+    # the traffic stopped is often what a fault test asks for
+    open_tail = open_at is not None and open_at < len(sb.t)
+    if open_tail:
+        bounds.append((open_at, len(sb.t)))
+    return Frames(sb, "startstop", np.asarray(bounds, dtype=np.int64).reshape(-1, 2), events, open_tail)
 
 
 def words(fr: Frames, size: int, row: int = 0, drop_tail: int = 0) -> Words:
@@ -271,18 +283,28 @@ def chars(cap, sym: AsyncSymbols, L: int) -> Chars:
 
 def i2c_from_words(fr: Frames, w: Words) -> list[dict]:
     """I2C transactions from 9-bit words (8 data MSB first + ACK) per START..STOP/Sr frame.
-    Frames here exclude the extra clock pulse before STOP (bits % 9 == 1 tail)."""
+    Frames here exclude the extra clock pulse before STOP (bits % 9 == 1 tail).
+    An open last frame (no STOP) gives complete=False, with the bits clocked after
+    its last whole byte in pending_bits."""
     out = []
     for i in range(len(fr.bounds)):
         v = w.values[w.frame_of == i]
+        a, b = fr.bounds[i]
+        t = fr.source.t
+        last_open = fr.open_tail and i == len(fr.bounds) - 1
         if len(v) == 0:
+            if last_open:  # stopped inside the address byte
+                out.append({"addr": None, "rw": None, "addr_ack": False, "bytes": [], "acks": [], "start": int(t[a]),
+                            "end": int(t[b - 1]), "complete": False, "pending_bits": [int(x) for x in fr.source.bits[0][a:b]]})
             continue
         data = [int(x >> 1) for x in v]
         acks = [int(x & 1) == 0 for x in v]
-        a, b = fr.bounds[i]
-        t = fr.source.t
         out.append({"addr": data[0] >> 1, "rw": "read" if data[0] & 1 else "write", "addr_ack": acks[0],
                     "bytes": data[1:], "acks": acks[1:], "start": int(t[a]), "end": int(t[max(a, b - 1)])})
+        if last_open:
+            n = int(w.leftover_bits[i])
+            out[-1]["complete"] = False
+            out[-1]["pending_bits"] = [int(x) for x in fr.source.bits[0][b - n:b]] if n else []
     return out
 
 
