@@ -419,8 +419,8 @@ class StagedResult:
     runs: int = 0
 
 
-SYNC_PROTOCOLS = {"i2c", "spi", "rvswd", "sync_unknown"}
-ASYNC_PROTOCOLS = {"uart", "lin", "dmx512"}
+SYNC_PROTOCOLS = {"i2c", "spi", "rvswd", "swd", "sync_unknown"}
+ASYNC_PROTOCOLS = {"uart", "lin", "dmx512", "can"}
 PULSE_PROTOCOLS = {"swio"}
 SYNC_ROLES = {"i2c": {"scl": "clock", "sda": "data"}, "spi": {"clk": "clock", "mosi": "data", "miso": "data", "cs": "select"},
               "rvswd": {"clk": "clock", "dio": "data"}}
@@ -449,7 +449,10 @@ def use_declarative(on: bool = True) -> None:
     global PLUGINS
     from .declarative import load_all
     base = [p for p in _BASE_PLUGINS if not (on and p.name in ("i2c", "spi", "rvswd"))]
-    PLUGINS = base + (load_all(["i2c", "spi", "rvswd"]) if on else [])
+    PLUGINS = base + (load_all(["i2c", "spi", "rvswd"]) if on else []) + load_all(DECLARED_ONLY)
+
+
+DECLARED_ONLY = ["swd", "can"]   # no hand-written counterpart; always loaded from decl/
 
 
 def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
@@ -562,6 +565,14 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
                 rb = typed.rate_blocks(view_cap, c.sv, g.pin)
             if not rb.blocks:
                 continue
+            if by_type.get("nrzbits"):
+                nb = typed.nrz_bits(view_cap, c.sv, rb)
+                for p in by_type["nrzbits"] if nb is not None else []:
+                    runs += 1
+                    for n in p.run(Ctx(view_cap, c.tx, c.sv), nb, g):
+                        n.params["deglitch"] = k
+                        n.layers = {"blocks": rb, "bits": nb}
+                        roots.append(n)
             blocks = typed.block_chars(view_cap, c.sv, rb)
             for p in by_type.get("chars", []):
                 runs += 1
@@ -611,12 +622,17 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
                 n.total = n.layer_score + 0.5 * (1 - n.layer_score) * d.total * n.layer_score
     t["upper"] = time.perf_counter() - t0
     t0 = time.perf_counter()
-    exps = explanations(roots, value)
+    # unknown-sync only explains what no known protocol explains better: a
+    # free-running clock "sampling" a known bus's pins must not win by pin count
+    known = [n for n in roots if n.analyzer != "sync_unknown" and n.output is not None]
+    roots_pack = [n for n in roots if n.analyzer != "sync_unknown" or not any(
+        k.total >= n.total and set(k.roles.values()) & set(n.roles.values()) for k in known)]
+    exps = explanations(roots_pack, value)
     claims = []
     if exps:
         best_score, best = exps[0]
         for n in best:
-            alt = explanations(roots, value, top=1, exclude=lambda r, n=n: equivalent(r, n))
+            alt = explanations(roots_pack, value, top=1, exclude=lambda r, n=n: equivalent(r, n))
             alt_score, alt_set = alt[0] if alt else (0.0, [])
             margin = (best_score - alt_score) / max(1, changed_channels(best, alt_set))
             chans = set(n.roles.values())
@@ -629,3 +645,5 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
     res = StagedResult(roots, exps, claims, t, tx.survey.features, tx, runs)
     res.relations = rels
     return res
+
+use_declarative(False)   # installs the declared-only plugins (swd, can) by default

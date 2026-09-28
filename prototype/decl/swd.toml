@@ -1,0 +1,40 @@
+# ARM SWD (ADIv5): 8-bit request, turnaround, 3-bit ACK, then 32 data bits +
+# parity only when ACK = OK; the turnaround's side depends on RnW. LSB first.
+# The clock may keep running with idle cycles between packets, so packets are
+# found by scanning each burst for a request whose fixed bits and parity hold.
+[plugin]
+name = "swd"
+input = "frames.gap"
+data_pins = 1
+
+[roles]
+clock = "swclk"
+data = "swdio"
+
+[frame]
+scan = true
+
+[[sequence]]
+order = "lsb"
+fields = [
+  { name = "start",  width = 1, expect = 1, hide = true },
+  { name = "apndp",  width = 1, enum = { "0" = "DP", "1" = "AP" } },
+  { name = "rnw",    width = 1, enum = { "0" = "W", "1" = "R" } },
+  { name = "a",      width = 2 },
+  { name = "parity", width = 1, hide = true },
+  { name = "stop",   width = 1, expect = 0, hide = true },
+  { name = "park",   width = 1, expect = 1, hide = true },
+  { name = "trn1",   width = 1, hide = true },
+  { name = "ack",    width = 3, valid = [1, 2, 4], enum = { "1" = "OK", "2" = "WAIT", "4" = "FAULT" } },
+  { name = "trn2",   width = 1, hide = true, when = "ack != 1 or rnw == 0" },
+  { name = "data",   width = 32, when = "ack == 1" },
+  { name = "dpar",   width = 1, hide = true, when = "ack == 1" },
+  { name = "trn3",   width = 1, hide = true, when = "ack == 1 and rnw == 1" },
+]
+checks = [
+  { kind = "parity", field = "parity", over = ["apndp", "rnw", "a"] },
+  { kind = "parity", field = "dpar", over = ["data"] },
+]
+
+[score]
+terms = ["degenerate"]
