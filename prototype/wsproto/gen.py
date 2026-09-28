@@ -184,3 +184,44 @@ def random_toggles(w: Wave, t0: float, t1: float, rate_hz: float, rng: np.random
     n = rng.poisson((t1 - t0) * rate_hz)
     for t in np.sort(rng.uniform(t0, t1, n)):
         w.set(float(t), 1 - w.level)
+
+
+def lin_pid(ident: int) -> int:
+    b = [(ident >> i) & 1 for i in range(6)]
+    p0 = b[0] ^ b[1] ^ b[2] ^ b[4]
+    p1 = 1 - (b[1] ^ b[3] ^ b[4] ^ b[5])
+    return ident | (p0 << 6) | (p1 << 7)
+
+
+def lin_checksum(data: bytes, pid: int | None) -> int:
+    s = pid or 0
+    for x in data:
+        s += x
+        s = (s & 0xFF) + (s >> 8)
+    return (~s) & 0xFF
+
+
+def lin(w: Wave, t: float, frames: list[tuple[int, bytes]], baud: float = 19200.0) -> float:
+    """LIN frames: break (13 bits low) + delimiter + sync 0x55 + PID + data + enhanced checksum."""
+    bt = 1.0 / baud
+    for ident, data in frames:
+        w.set(t, 0)
+        t += 13 * bt
+        w.set(t, 1)
+        t += 1 * bt
+        pid = lin_pid(ident)
+        t = uart(w, t, bytes([0x55, pid]) + data + bytes([lin_checksum(data, pid)]), baud, gap_bits=0.5)
+        t += 20 * bt
+    return t
+
+
+def dmx(w: Wave, t: float, packets: list[bytes], baud: float = 250000.0) -> float:
+    """DMX512 packets: break (>= 88 us low) + MAB (12 us high) + start code 0x00 + slots, 8N2."""
+    for slots in packets:
+        w.set(t, 0)
+        t += 110e-6
+        w.set(t, 1)
+        t += 12e-6
+        t = uart(w, t, bytes([0]) + slots, baud, stop_bits=2, gap_bits=0.3)
+        t += 60e-6
+    return t

@@ -116,6 +116,11 @@ def channel_features(cap: Capture, ch: Channel) -> ChannelFeatures:
     t_hi = pool_len[top][pool_lev[top] == 1].sum()
     t_lo = pool_len[top][pool_lev[top] == 0].sum()
     idle = 1 if t_hi >= t_lo else 0
+    # A line at rest at both ends of the capture shows its idle level there;
+    # the longest runs can be breaks (LIN, DMX512) at the active level.
+    final = ch.initial ^ (len(e) & 1)
+    if ch.initial == final:
+        idle = int(ch.initial)
     med = float(np.median(ilen)) if len(ilen) else float(n)
     bursts = _bursts(ch, gap=max(64 * med, 64))
     hist = {}
@@ -125,7 +130,12 @@ def channel_features(cap: Capture, ch: Channel) -> ChannelFeatures:
             b = np.floor(np.log2(r)).astype(int)
             vals, cnt = np.unique(b, return_counts=True)
             hist[lv] = {int(v): int(c) for v, c in zip(vals, cnt)}
-    units = estimate_units(ilen)
+    # Runs at the active level (start bit + zero bits) are always whole bits;
+    # idle-level runs include the gaps between characters, which need not be.
+    act = ilen[ilev != idle]
+    units = estimate_units(act) if len(act) >= 20 else estimate_units(ilen)
+    if not units:
+        units = estimate_units(ilen)
 
     # after edge k the level is initial ^ ((k + 1) & 1)
     rising = e[(ch.initial ^ ((np.arange(len(e)) + 1) & 1)) == 1]
