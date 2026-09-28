@@ -144,6 +144,30 @@ class Builder:
         self.fastest = max(self.fastest, freq)
         self.t_end = max(self.t_end, t)
 
+    def add_lin(self, idx: int) -> None:
+        r = self.rng
+        baud = float(r.choice([9600, 19200, 10417])) * (1 + r.uniform(-0.01, 0.01))
+        name = f"lin{idx}"
+        w = self.wave(name, 1)
+        frames = [(int(r.integers(0, 60)), bytes(r.integers(0, 256, int(r.integers(1, 9)), dtype=np.uint8)))
+                  for _ in range(int(r.integers(3, 10)))]
+        t = gen.lin(w, r.uniform(0.5e-3, 2e-3), frames, baud)
+        self.buses.append({"protocol": "lin", "roles": {"data": name}, "params": {"baud": baud},
+                           "expect": {"frames": [[i, d.hex()] for i, d in frames]}})
+        self.fastest = max(self.fastest, baud)
+        self.t_end = max(self.t_end, t)
+
+    def add_dmx(self, idx: int) -> None:
+        r = self.rng
+        name = f"dmx{idx}"
+        w = self.wave(name, 1)
+        packets = [bytes(r.integers(0, 256, int(r.integers(8, 64)), dtype=np.uint8)) for _ in range(int(r.integers(2, 6)))]
+        t = gen.dmx(w, r.uniform(0.2e-3, 1e-3), packets)
+        self.buses.append({"protocol": "dmx512", "roles": {"data": name}, "params": {"baud": 250000.0},
+                           "expect": {"packets": [p.hex() for p in packets]}})
+        self.fastest = max(self.fastest, 250000.0)
+        self.t_end = max(self.t_end, t)
+
     def add_decoy(self, idx: int) -> None:
         r = self.rng
         kind = str(r.choice(["static", "static", "pwm", "clock", "random", "burst_clock"]))
@@ -198,7 +222,8 @@ def scenario(seed: int, profile: str = "mixed", stress: str | None = None) -> tu
     rng = np.random.default_rng(seed)
     b = Builder(rng, stress)
     b._deferred = []
-    kinds = {"mixed": ["uart", "i2c", "spi"], "uart": ["uart"], "i2c": ["i2c"], "spi": ["spi"]}[profile]
+    kinds = {"mixed": ["uart", "i2c", "spi"], "uart": ["uart"], "i2c": ["i2c"], "spi": ["spi"],
+             "uartlike": ["uart", "lin", "dmx"]}[profile]
     n_bus = int(rng.integers(1, 4)) if profile == "mixed" else 1
     for i in range(n_bus):
         getattr(b, "add_" + str(rng.choice(kinds)))(i)

@@ -114,9 +114,10 @@ class Chars:
     values: np.ndarray          # int64 raw data+parity bits
     ok: np.ndarray              # bool stop/start ok
     start: np.ndarray           # int64
+    breaks: np.ndarray = field(default_factory=lambda: np.zeros(0, np.int64))  # start of active runs >= 1 character
 
     def nbytes(self) -> int:
-        return int(len(self.values) * 2) + 4 * len(self.start)
+        return int(len(self.values) * 2) + 4 * len(self.start) + 4 * len(self.breaks)
 
 
 # ---------------- builders ----------------
@@ -235,8 +236,13 @@ def words(fr: Frames, size: int, row: int = 0, drop_tail: int = 0) -> Words:
 def chars(cap, sym: AsyncSymbols, L: int) -> Chars:
     """UART characters from the symbol stream: a character starts at a run that
     leaves the idle level; bits are read from the quantized runs."""
+    # A run at the active level longer than a whole character is a break
+    # (LIN, DMX512, "send break"): record it and treat it as idle for framing.
+    level = sym.level.copy()
+    brk = (level != sym.idle) & (sym.units >= L)
+    level[brk] = sym.idle
     # expand runs into a bit string (bounded) and walk it
-    lv = np.repeat(sym.level, np.minimum(sym.units, L + 2).astype(np.int64))
+    lv = np.repeat(level, np.minimum(sym.units, L + 2).astype(np.int64))
     if sym.idle == 0:
         lv = 1 - lv
     t_bit = np.repeat(sym.start, np.minimum(sym.units, L + 2).astype(np.int64))
@@ -252,7 +258,8 @@ def chars(cap, sym: AsyncSymbols, L: int) -> Chars:
             i += L
         else:
             i += 1
-    return Chars(sym.pin, L, np.asarray(vals, np.int64), np.asarray(ok, bool), np.asarray(st, np.int64))
+    return Chars(sym.pin, L, np.asarray(vals, np.int64), np.asarray(ok, bool), np.asarray(st, np.int64),
+                 sym.start[brk].astype(np.int64))
 
 
 # ---------------- protocol on words ----------------
@@ -310,7 +317,10 @@ def async_segments(cap, sv: Survey, pin: str, half: int = 10, change: float = 1.
             i += 1
     def unit_of(s0, s1):
         sel = (start >= s0) & (start < s1)
-        runs = length[sel][1:-1] if sel.sum() > 2 else length[sel]
+        # active-level runs are whole bits; idle-level ones include inter-character gaps
+        act = sel & (level != f.idle_level)
+        act[0] = act[-1] = False
+        runs = length[act] if act.sum() >= 12 else (length[sel][1:-1] if sel.sum() > 2 else length[sel])
         cands = estimate_units(runs, top=8)
         if not cands:
             return None
