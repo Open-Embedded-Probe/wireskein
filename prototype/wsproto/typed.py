@@ -279,8 +279,10 @@ def i2c_from_words(fr: Frames, w: Words) -> list[dict]:
             continue
         data = [int(x >> 1) for x in v]
         acks = [int(x & 1) == 0 for x in v]
+        a, b = fr.bounds[i]
+        t = fr.source.t
         out.append({"addr": data[0] >> 1, "rw": "read" if data[0] & 1 else "write", "addr_ack": acks[0],
-                    "bytes": data[1:]})
+                    "bytes": data[1:], "acks": acks[1:], "start": int(t[a]), "end": int(t[max(a, b - 1)])})
     return out
 
 
