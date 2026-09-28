@@ -398,22 +398,65 @@ class StagedResult:
     runs: int = 0
 
 
-def analyze(cap: Capture) -> StagedResult:
+SYNC_PROTOCOLS = {"i2c", "spi", "rvswd", "sync_unknown"}
+ASYNC_PROTOCOLS = {"uart", "lin", "dmx512"}
+PULSE_PROTOCOLS = {"swio"}
+SYNC_ROLES = {"i2c": {"scl": "clock", "sda": "data"}, "spi": {"clk": "clock", "mosi": "data", "miso": "data", "cs": "select"},
+              "rvswd": {"clk": "clock", "dio": "data"}}
+
+
+def _hinted(hints: dict | None):
+    """Normalize hints: allowed protocols, per-pin protocol/role/baud, excluded pins."""
+    h = hints or {}
+    allowed = set(h.get("protocols") or [])
+    pins = h.get("pins") or {}
+    for info in pins.values():
+        if info.get("protocol"):
+            allowed.add(info["protocol"]) if h.get("protocols") else None
+    return allowed, pins, set(h.get("exclude_pins") or [])
+
+
+def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
+    """hints (all optional): {"protocols": [...], "pins": {pin: {"protocol", "role", "baud"}},
+    "exclude_pins": [...]} restrict what is tried; nothing is decided by a hint alone,
+    the plugins' checks still score every hypothesis."""
     t = {}
+    allowed, pin_hint, excluded = _hinted(hints)
+    if excluded:
+        cap = Capture(cap.rate, cap.n_samples, [x for x in cap.channels if x.name not in excluded])
     t0 = time.perf_counter()
     tx = classify(cap)
     t["classify"] = time.perf_counter() - t0
     c = Ctx(cap, tx, tx.survey)
     by_type: dict[str, list] = {}
     for p in PLUGINS:
+        if allowed and p.name not in allowed:
+            continue
         for k in p.consumes:
             by_type.setdefault(k, []).append(p)
+    async_pins = {pn for pn, i in pin_hint.items() if i.get("protocol") in ASYNC_PROTOCOLS | PULSE_PROTOCOLS}
+    sync_pins = {pn for pn, i in pin_hint.items() if i.get("protocol") in SYNC_PROTOCOLS}
+
+    def group_ok(g) -> bool:
+        pins = {g.clock, *g.data, *([g.select] if g.select else [])}
+        if pins & async_pins:
+            return False
+        for pn, i in pin_hint.items():
+            role = SYNC_ROLES.get(i.get("protocol", ""), {}).get(i.get("role", ""))
+            if role == "clock" and pn != g.clock and pn in pins:
+                return False
+            if role == "clock" and g.clock in pin_hint and SYNC_ROLES.get(pin_hint[g.clock].get("protocol", ""), {}).get(pin_hint[g.clock].get("role", "")) != "clock":
+                return False
+            if role == "select" and pn in pins and pn != g.select:
+                return False
+        return True
     roots: list[Node] = []
     runs = 0
     t0 = time.perf_counter()
     seen = set()
+    run_sync = not allowed or bool(allowed & SYNC_PROTOCOLS)
     for g in tx.groups:
-        if g.kind != "sync":
+        if g.kind != "sync" or not run_sync or not group_ok(g):
             continue
         key = (g.clock, g.data, g.select)
         if key in seen:
@@ -438,22 +481,40 @@ def analyze(cap: Capture) -> StagedResult:
                 for kind, fr in streams:
                     for p in by_type.get(kind, []):
                         runs += 1
-                        roots.extend(p.run(c, fr, g))
+                        for n in p.run(c, fr, g):
+                            # the engine keeps the typed inputs (references) for
+                            # consumers that want intermediate layers (GUI)
+                            n.layers = {"bits": fr.source, "frames": fr}
+                            roots.append(n)
     t["sync"] = time.perf_counter() - t0
     t0 = time.perf_counter()
+    run_async = not allowed or bool(allowed & ASYNC_PROTOCOLS)
+    run_pulse = not allowed or bool(allowed & PULSE_PROTOCOLS)
     for g in tx.groups:
-        if g.kind != "single":
+        if g.kind != "single" or g.pin in sync_pins:
             continue
         pc = tx.pins[g.pin]
-        if not ({"data", "sparse"} & set(pc.candidates)):
+        if not ({"data", "sparse"} & set(pc.candidates)) and g.pin not in async_pins:
             continue
-        ps = typed.pulse_symbols(cap, c.sv, g.pin) if "pulse" in pc.candidates or "data" in pc.candidates else None
+        hinted = pin_hint.get(g.pin, {})
+        if hinted.get("protocol") in ASYNC_PROTOCOLS and not run_pulse:
+            pass
+        want_pulse = run_pulse and hinted.get("protocol") not in ASYNC_PROTOCOLS
+        ps = typed.pulse_symbols(cap, c.sv, g.pin) if want_pulse and ("pulse" in pc.candidates or "data" in pc.candidates) else None
         if ps is not None:
             for p in by_type.get("pulses", []):
                 runs += 1
-                roots.extend(p.run(c, ps, g))
+                for n in p.run(c, ps, g):
+                    n.layers = {"pulses": ps}
+                    roots.append(n)
+        if not run_async or hinted.get("protocol") in PULSE_PROTOCOLS:
+            continue
         for view_cap, k in single_views(cap, c.sv, g.pin):
-            rb = typed.rate_blocks(view_cap, c.sv, g.pin)
+            if hinted.get("baud"):
+                # a given baud rate replaces rate segmentation and unit estimation
+                rb = typed.RateBlocks(g.pin, c.sv.features[g.pin].idle_level, [(0, cap.n_samples, cap.rate / hinted["baud"])])
+            else:
+                rb = typed.rate_blocks(view_cap, c.sv, g.pin)
             if not rb.blocks:
                 continue
             blocks = typed.block_chars(view_cap, c.sv, rb)
@@ -461,6 +522,7 @@ def analyze(cap: Capture) -> StagedResult:
                 runs += 1
                 for n in p.run(Ctx(view_cap, c.tx, c.sv), rb, blocks):
                     n.params["deglitch"] = k
+                    n.layers = {"blocks": rb, "chars": blocks}
                     roots.append(n)
     t["async"] = time.perf_counter() - t0
     t0 = time.perf_counter()
