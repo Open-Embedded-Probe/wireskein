@@ -20,8 +20,13 @@ expectations recorded for its path.
             rec.command("PWM 64"); rec.reply("PWM duty=64")
             t = rec.armed()
             data = capture.read_all(n)
-            rec.capture(data, 2_000_000, ["PA1"], t)
+            rec.capture(data, 2_000_000, ["PA1"], t, start_us=seg.start_us)
     rec.close()
+
+Test scripts import this module directly, so the calls above and the helpers
+below keep their names, arguments and meaning; anything added gets a default
+that keeps the old meaning. An incompatible change raises FORMAT. Capture meta
+"start_us" is the probe clock (us, integer) of the first sample.
 """
 
 from __future__ import annotations
@@ -41,6 +46,9 @@ class Recorder:
         self.t0 = time.monotonic()
         self.doc = {"format": FORMAT, "meta": meta, "log": [], "captures": [], "expect": {}}
         self.path: list[str] = []
+        self._occ: list[tuple[str, int]] = []           # the open headings: (name, occurrence under its parent)
+        self._seen: dict[tuple, int] = {}               # (parent occurrences, name) -> times opened
+        self._expect: dict[tuple, dict] = {}            # expectations by occurrence path, rendered in close()
 
     def now(self) -> float:
         return time.monotonic() - self.t0
@@ -55,17 +63,24 @@ class Recorder:
             raise ValueError(f"bad heading name {name!r}")
         self._log("marker", "#" * level + (" " + name if name else ""))
         del self.path[level - 1:]
+        del self._occ[level - 1:]
         if name:
             self.path += [""] * (level - 1 - len(self.path)) + [name]
+            self._occ += [("", 0)] * (level - 1 - len(self._occ))
+            k = (tuple(self._occ), name)
+            self._seen[k] = self._seen.get(k, 0) + 1
+            self._occ.append((name, self._seen[k] - 1))
 
     @contextmanager
     def section(self, level: int, name: str, expect: list | None = None, **rules):
         """A heading closed explicitly, so its quiet tail belongs to it.
-        expect / rules are stored for this section's path (see verify.py)."""
+        expect / rules are stored for this occurrence of the section. The key in
+        run.json is the segment path as markers.py writes it: a name repeated
+        under the same parent gets its index ("duty=64[0]", "duty=64[1]"), so
+        each repetition keeps its own expectations."""
         self.heading(level, name)
         if expect is not None or rules:
-            key = "/".join(self.path)
-            self.doc["expect"].setdefault(key, {"checks": [], **rules})["checks"] += list(expect or [])
+            self._expect.setdefault(tuple(self._occ), {"checks": [], **rules})["checks"] += list(expect or [])
         try:
             yield self
         finally:
@@ -93,7 +108,14 @@ class Recorder:
                                      "samples": len(data), **meta})
         return name
 
+    def _key(self, occ: tuple) -> str:
+        parts = []
+        for i, (name, k) in enumerate(occ):
+            parts.append(name + (f"[{k}]" if self._seen[(occ[:i], name)] > 1 else ""))
+        return "/".join(parts)
+
     def close(self) -> Path:
+        self.doc["expect"] = {self._key(occ): spec for occ, spec in self._expect.items()}
         p = self.dir / "run.json"
         p.write_text(json.dumps(self.doc, indent=1))
         return p
@@ -130,7 +152,10 @@ def only_moving(pins: list[str]) -> dict:
 
 def i2c(scl: str, sda: str, transactions: list[dict] | None = None, hz: float | None = None, tol_hz: float = 0.1,
         released: bool = True) -> dict:
-    """transactions: [{"addr": 0x42, "rw": "write", "bytes": [..], "ack": True}], compared in order."""
+    """transactions: [{"addr": 0x42, "rw": "write", "bytes": [..], "ack": True}], compared in order.
+    Optional per transaction: "complete" (default True; False for the last one
+    when the window ends before its STOP) and "pending_bits" (bits clocked after
+    the last whole byte, compared only when given)."""
     return {"kind": "i2c", "scl": scl, "sda": sda, "transactions": transactions, "hz": hz, "tol_hz": tol_hz,
             "released": released}
 
@@ -142,9 +167,18 @@ def spi(clk: str, mosi: str | None = None, miso: str | None = None, cs: str | No
             "miso_bytes": miso_bytes, "hz": hz, "tol_hz": tol_hz, "bit_order": bit_order}
 
 
-def uart(pin: str, baud: float, data: str | None = None, tol_baud: float = 0.03, idle: int = 1) -> dict:
-    """data: expected bytes as hex."""
-    return {"kind": "uart", "pin": pin, "baud": baud, "data": data, "tol_baud": tol_baud, "idle": idle}
+def uart(pin: str, baud: float | None, data: str | None = None, tol_baud: float = 0.03, idle: int = 1, bits: int = 8,
+         parity: str = "none", stop: float = 1, max_errors: int | None = None) -> dict:
+    """The bit time measured from the edges must be within tol_baud (relative)
+    of baud; pass the rate the transmitter should really produce (e.g. F_CPU /
+    BRR), not the nominal one. data: expected bytes as hex (the characters after
+    the first idle gap; a window opening or ending inside a character is not an
+    error). parity: "none" / "even" / "odd"; stop: 1, 1.5 or 2. max_errors:
+    framing + parity errors allowed (None: not checked, only reported).
+    baud=None measures only: the bit time is found from the edges and the result
+    is "unchecked" with the measured values, unless data / max_errors / idle fail."""
+    return {"kind": "uart", "pin": pin, "baud": baud, "data": data, "tol_baud": tol_baud, "idle": idle, "bits": bits,
+            "parity": parity, "stop": stop, "max_errors": max_errors}
 
 
 def pulses(pin: str, count: int | None = None, period_s: float | None = None, tol: float = 0.05) -> dict:
