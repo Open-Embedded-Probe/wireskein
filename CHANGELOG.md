@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 0.0.1
 - (EN) First beta. The prototype is now the `wireskein` package on PyPI (`pip install --pre wireskein`, Python 3.13+, numpy only). Public modules are `wireskein.runlog` (recording a test run, standard library only), `wireskein.verify` (checking a recorded run) and `wireskein.analyze` (decoding a capture, beta), with a `wireskein` command (`analyze`, `segments`, `verify`). The `wsproto` import and `prototype/ws.py` are gone; evaluation scripts moved to `research/` and are not packaged.
 - (JA) 最初のβ版。プロトタイプを PyPI の `wireskein` package にした（`pip install --pre wireskein`、Python 3.13 以上、依存は numpy だけ）。公開の module は `wireskein.runlog`（テストの実行の記録。標準ライブラリだけ）、`wireskein.verify`（記録の照合）、`wireskein.analyze`（キャプチャの復号。β）。コマンドは `wireskein`（`analyze`、`segments`、`verify`）。`wsproto` の import と `prototype/ws.py` はなくなった。評価のスクリプトは `research/` に移し、package には入れない。
 - (EN) Checks: `square`, `level`, `starts`, `ends`, `only_moving`, `pulses`, `i2c`, `spi` and `uart`. The UART check measures the bit rate from the edges, takes the format (`bits`, `parity`, `stop`), does not count characters cut by the window as errors, and with `baud=None` only measures. An I2C transaction cut at the window end is reported with `complete: false` and `pending_bits`. A capture whose meta has `time_base_slipped: true` keeps its verdict, and a failure's reason names the slip.
