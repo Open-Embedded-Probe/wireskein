@@ -7,12 +7,12 @@ WireSkein は、ロジックアナライザのキャプチャを読むツール�
 - **実機のテストの記録を照合する。** テストは、送ったコマンド、キャプチャ、各ステップの線の上であるべき姿（1 kHz の方形波、0x42 への I2C の書き込み、F_CPU / BRR の UART など）を記録します。`wireskein verify` は、その期待とキャプチャを照らし合わせます。結果は、測定値付きの OK / NG として、テキスト、JSON、JUnit XML で出します。
 - **中身の分からないキャプチャを復号する。** `wireskein analyze` は、どのピンが I2C、SPI、UART、RVSWD / SWIO、SWD、CAN かを見つけて復号します。その上の層（NMEA、Modbus、既知の I2C / SPI デバイス）も試します。
 
-状態: **β 版**（`0.1.0b1`）です。互換のない変更が入ることがあります（[安定性](#安定性)を参照）。
+状態: **β 版**です。互換のない変更が入ることがあります（[安定性](#安定性)を参照）。
 
 ## 入れ方
 
 ```sh
-pip install --pre wireskein        # または uv add --prerelease=allow wireskein
+pip install wireskein              # または uv add wireskein
 ```
 
 Python 3.13 以上が要ります。依存は numpy だけです。
@@ -100,7 +100,7 @@ uv build
 pytest-embedded-arduino-cli と同じく、GitHub Actions で出します。
 
 1. `CHANGELOG.md` の `## Unreleased` を更新します。
-2. `Release` の workflow を手で実行し、版（例 `0.1.0b1`）を入れます。
+2. `Release` の workflow を手で実行し、版（例 `0.0.2`）を入れます。
 3. 残りは workflow が行います。
    - `pyproject.toml` と `src/wireskein/__init__.py` の版を書き換える
    - 変更履歴を新しい版の見出しの下へ移す

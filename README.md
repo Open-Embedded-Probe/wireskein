@@ -7,12 +7,12 @@ WireSkein reads logic-analyzer captures. It has two uses:
 - **Checking recorded hardware test runs.** A test records what it sent, the captures, and what each step should look like on the wire (a 1 kHz square wave, an I2C write to 0x42, a UART at F_CPU / BRR). `wireskein verify` checks every capture against these expectations and reports OK / NG with measured values, as text, JSON and JUnit XML.
 - **Decoding unknown captures.** `wireskein analyze` finds which pins carry I2C, SPI, UART, RVSWD / SWIO, SWD or CAN, and decodes them. Upper layers (NMEA, Modbus, known I2C / SPI devices) are tried on top.
 
-Status: **beta** (`0.1.0b1`). Breaking changes may still happen; see [Stability](#stability).
+Status: **beta**. Breaking changes may still happen; see [Stability](#stability).
 
 ## Install
 
 ```sh
-pip install --pre wireskein        # or: uv add --prerelease=allow wireskein
+pip install wireskein              # or: uv add wireskein
 ```
 
 Python 3.13 or newer. The only dependency is numpy.
@@ -139,7 +139,7 @@ uv build
 Releases use GitHub Actions, the same way as pytest-embedded-arduino-cli.
 
 1. Update the `## Unreleased` section of `CHANGELOG.md`.
-2. Run the `Release` workflow manually and enter the version, for example `0.1.0b1`.
+2. Run the `Release` workflow manually and enter the version, for example `0.0.2`.
 3. The workflow does the rest. It updates the version in `pyproject.toml` and `src/wireskein/__init__.py`, moves the changelog entries under the new version, runs the tests, builds, commits, tags `v<version>`, creates a GitHub Release, and publishes to PyPI.
 
 PyPI publishing uses Trusted Publishing.

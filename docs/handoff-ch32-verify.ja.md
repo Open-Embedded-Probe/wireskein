@@ -1,6 +1,6 @@
 # 引き継ぎ: ArduinoCore-CH32 のテストに `ws verify` を組み込む
 
-> **2026-09-29 追記:** この文書は、package 化より前のものです。文中の `prototype/`、`wsproto`、`ws.py`、`PYTHONPATH=.` は、今は次のとおりです。`pip install --pre wireskein` で入れ、`from wireskein.runlog import ...` で記録し、`wireskein verify` で照合します。合成の例は `tests/demo_run.py` にあります。引き継ぎの手順は、[pytest-embedded-wireskein](https://github.com/Open-Embedded-Probe/pytest-embedded-wireskein) に置き換わります。
+> **2026-09-29 追記:** この文書は、package 化より前のものです。文中の `prototype/`、`wsproto`、`ws.py`、`PYTHONPATH=.` は、今は次のとおりです。`pip install wireskein` で入れ、`from wireskein.runlog import ...` で記録し、`wireskein verify` で照合します。合成の例は `tests/demo_run.py` にあります。引き継ぎの手順は、[pytest-embedded-wireskein](https://github.com/Open-Embedded-Probe/pytest-embedded-wireskein) に置き換わります。
 
 作成 2026-09-28（wireskein のコミット `9c2a534` の時点）。実機を接続したマシンの新しいセッションで、ArduinoCore-CH32 の修正を依頼するためのメモです。読み手は、この会話の履歴を持たない作業者（Claude Code のセッションを含む）です。
 
