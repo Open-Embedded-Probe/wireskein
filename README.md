@@ -76,10 +76,12 @@ If a capture has the meta `time_base_slipped: true` (the probe knows some sample
 ### Python API
 
 ```python
-from wireskein.verify import verify, junit
+from wireskein.verify import verify, junit, dumps, lines, summary_line
 
 report = verify("out/run1")          # dict: results (with measured values), summary, log
-xml = junit(report)
+xml = junit(report)                  # JUnit XML
+text = dumps(report)                 # JSON
+print(summary_line(report), *lines(report), sep="\n")   # NG and unchecked lines, as the CLI prints them
 ```
 
 For pytest, [pytest-embedded-wireskein](https://github.com/Open-Embedded-Probe/pytest-embedded-wireskein) gives each test a `ws_run` recorder and runs `verify` after the test.
