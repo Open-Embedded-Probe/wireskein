@@ -1,7 +1,7 @@
 """A recorded run shaped like the ArduinoCore-CH32 x035 trace tests, with bugs
-injected, then `ws verify` on it.
+injected (used by tests/test_verify.py; also a script):
 
-    PYTHONPATH=. uv run python verify_demo.py OUT_DIR
+    uv run python tests/demo_run.py OUT_DIR && uv run wireskein verify OUT_DIR
 
 Steps follow tests/manual/oep_periph_trace and oep_i2c_trace (rates, sample
 counts, commands, replies): PWM at 2 MHz x 40 000 samples (x035 measures
@@ -32,8 +32,8 @@ def dense(waves: dict, names: list[str], rate: float, n: int) -> bytes:
     return out.tobytes()
 
 
-def main(out: Path) -> None:
-    rec = Recorder(out, target="x035", note="synthetic (verify_demo.py)")
+def main(out: Path) -> Path:
+    rec = Recorder(out, target="x035", note="synthetic (tests/demo_run.py)")
     with rec.section(1, "test_pwm"):
         for duty in (64, 128, 192, 255, 0):
             want = [square("PA1", 1003.5, duty / 255, tol_freq=0.01, tol_duty=0.01) if duty not in (0, 255)
@@ -93,8 +93,8 @@ def main(out: Path) -> None:
     rec.heading(1, "test_misc")
     rec.heading(3, "orphan-phase")
     rec.heading(1)
-    print(rec.close())
+    return rec.close()
 
 
 if __name__ == "__main__":
-    main(Path(sys.argv[1]))
+    print(main(Path(sys.argv[1])))

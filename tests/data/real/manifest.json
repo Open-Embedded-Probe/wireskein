@@ -1,0 +1,144 @@
+[
+ {
+  "name": "x035-spi-mode2-one-cs-frame",
+  "source": "ArduinoCore-CH32 periph-x035/c0018.bin",
+  "rate": 20000000.0,
+  "bits": [
+   "PA5",
+   "PA7",
+   "PA6",
+   "PA4"
+  ],
+  "samples": 130048,
+  "start_us": 2557281538,
+  "segment": "test_spi/1000000Hz mode2",
+  "expect": [
+   {
+    "kind": "spi",
+    "clk": "PA5",
+    "mosi": "PA7",
+    "miso": "PA6",
+    "cs": "PA4",
+    "mode": 2,
+    "mosi_bytes": "a55a0f01",
+    "miso_bytes": null,
+    "hz": 750000.0,
+    "tol_hz": 0.1,
+    "bit_order": "msb"
+   },
+   {
+    "kind": "only_moving",
+    "pins": [
+     "PA5",
+     "PA7",
+     "PA6",
+     "PA4"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "x035-spi-peer-4mhz-mode0",
+  "source": "ArduinoCore-CH32 periph-x035/c0027.bin",
+  "rate": 20000000.0,
+  "bits": [
+   "PA5",
+   "PA7",
+   "PA6",
+   "PA4"
+  ],
+  "samples": 130048,
+  "start_us": 2560813580,
+  "segment": "test_spi_peer/4000000Hz mode0",
+  "expect": [
+   {
+    "kind": "spi",
+    "clk": "PA5",
+    "mosi": "PA7",
+    "miso": "PA6",
+    "cs": "PA4",
+    "mode": 0,
+    "mosi_bytes": "a55a0f01",
+    "miso_bytes": "3c96c30f",
+    "hz": 3000000.0,
+    "tol_hz": 0.1,
+    "bit_order": "msb"
+   },
+   {
+    "kind": "only_moving",
+    "pins": [
+     "PA5",
+     "PA7",
+     "PA6",
+     "PA4"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "x035-i2c-target-left-mid-byte",
+  "source": "ArduinoCore-CH32 i2c-stuck-x035/c0007.bin",
+  "rate": 1000000.0,
+  "bits": [
+   "PC16",
+   "PC17"
+  ],
+  "samples": 65024,
+  "start_us": 2636360661,
+  "segment": null,
+  "expect": []
+ },
+ {
+  "name": "v003-uart-115200-time-base-slip",
+  "source": "ArduinoCore-CH32 uart-begin-v003/c0006.bin",
+  "rate": 2000000.0,
+  "bits": [
+   "PD5",
+   "PD6"
+  ],
+  "samples": 40000,
+  "start_us": 30131242,
+  "time_base_slipped": true,
+  "segment": "uart f_cpu=24000000/115200 8N1/wire",
+  "expect": [
+   {
+    "kind": "uart",
+    "pin": "PD5",
+    "baud": 115384.61538461539,
+    "data": null,
+    "tol_baud": 0.015,
+    "idle": 1,
+    "bits": 8,
+    "parity": "none",
+    "stop": 1,
+    "max_errors": 0
+   }
+  ]
+ },
+ {
+  "name": "x035-uart-brr-below-16",
+  "source": "ArduinoCore-CH32 uart-sweep-x035-rev/c0009.bin",
+  "rate": 9216000.0,
+  "bits": [
+   "PB0",
+   "PB1"
+  ],
+  "samples": 184320,
+  "start_us": 657592175,
+  "segment": "f_cpu=6000kHz/baud=460800/wire",
+  "expect": [
+   {
+    "kind": "uart",
+    "pin": "PB0",
+    "baud": null,
+    "data": null,
+    "tol_baud": 0.03,
+    "idle": 1,
+    "bits": 8,
+    "parity": "none",
+    "stop": 1,
+    "max_errors": null
+   }
+  ]
+ }
+]
