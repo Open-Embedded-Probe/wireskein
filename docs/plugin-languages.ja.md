@@ -1,8 +1,8 @@
 # WireSkein — プラグインの記述言語の調査
 
-2026-09-28 作成。WireSkein のコアが型付きストリーム（SyncBits＋Frames、Words、Chars＋ブレーク、PulseSymbols、時刻付きバイト列、トランザクション）を渡し、プラグインが区切り方・解釈を決めて「復号結果＋スコアの指標」を返す、という形（[プロトタイプ README](../prototype/README.ja.md) の「段構成のエンジンの流れ」、[優先度の調査](protocol-priority.ja.md) 5〜6 節）を前提に、プラグインを**何で書かせるか**を整理する。
+2026-09-28 作成。WireSkein のコアが型付きストリーム（SyncBits＋Frames、Words、Chars＋ブレーク、PulseSymbols、時刻付きバイト列、トランザクション）を渡し、プラグインが区切り方・解釈を決めて「復号結果＋スコアの指標」を返す、という形（[プロトタイプ README](../research/README.ja.md) の「段構成のエンジンの流れ」、[優先度の調査](protocol-priority.ja.md) 5〜6 節）を前提に、プラグインを**何で書かせるか**を整理する。
 
-言語ごとの速度・メモリ・呼び出し費用の実測は別のベンチマーク（`prototype/plugin-lang-bench/`、対象は QuickJS・Lua 5.4・LuaJIT・Rhai・Starlark・CPython・WASM）が担う。この文書は既存ツールの先例と候補の見取り図、推奨の組み合わせ、ベンチマークで確かめるべき点を扱う。
+言語ごとの速度・メモリ・呼び出し費用の実測は別のベンチマーク（`research/plugin-lang-bench/`、対象は QuickJS・Lua 5.4・LuaJIT・Rhai・Starlark・CPython・WASM）が担う。この文書は既存ツールの先例と候補の見取り図、推奨の組み合わせ、ベンチマークで確かめるべき点を扱う。
 
 表記の約束:
 
@@ -136,7 +136,7 @@ refute  = ["length mismatch"]
 - **API は 1 つの型定義から 3 層へ出す。** 型付きストリームとレコードの型を WIT（または独自の IDL）で定め、そこから TypeScript の `.d.ts`、Lua の型注記（文書）、WASM の束縛、宣言記述のスキーマを生成する（Binary Ninja の「C ABI を 1 つ」に相当）（**解釈**）。
 - **大きな配列はコアが持ち、プラグインへは読み取り専用の窓で渡す。** スクリプトには型付き配列（QuickJS の外部 ArrayBuffer、Lua の userdata）、WASM には「範囲を読むホスト関数」か、線形メモリへの必要分だけの複製。1 標本ずつのコールバックは作らない。
 - **64 bit の時刻はスクリプトへ直接渡さない方がよい。** 語・文字の時刻は「区間内の相対 u32＋区間の基点」で渡すと、JS（倍精度・BigInt）でも Luau でも誤らない（**解釈**）。
-- **CPython は内蔵しない。** 試作（`prototype/wsproto`）と外部プロセスの開発用の口（標準入出力で JSON/Arrow を往復）に留める。配布と隔離の費用が効果を上回る（**解釈**）。
+- **CPython は内蔵しない。** 試作（`src/wireskein/_engine`）と外部プロセスの開発用の口（標準入出力で JSON/Arrow を往復）に留める。配布と隔離の費用が効果を上回る（**解釈**）。
 - Rhai・Starlark・Rune・Koto・Roto は、学習量か 2 進データの扱いで上の 2 候補に劣る見込み。Starlark は「宣言記述の中の式」だけに使う選択肢はある（**解釈**）。
 - Spicy 風の独自 DSL は作らない。宣言記述（条件無し）とスクリプトの 2 段で足り、第 3 の言語を AI に覚えさせる費用を避ける（**解釈**）。
 
@@ -154,7 +154,7 @@ refute  = ["length mismatch"]
 
 | 段階 | 作るもの | 終わりの条件 |
 | --- | --- | --- |
-| 1 | 型定義（IDL）と宣言記述のスキーマ。I²C・SPI・RVSWD を宣言だけで再現 | `prototype/wsproto/staged.py` の同期系プラグインと同じ結果・同じスコア |
+| 1 | 型定義（IDL）と宣言記述のスキーマ。I²C・SPI・RVSWD を宣言だけで再現 | `src/wireskein/_engine/staged.py` の同期系プラグインと同じ結果・同じスコア |
 | 2 | 層 2 の処理系を 1 つ（ベンチマーク結果で決定）。UART 上位（行・NMEA・Modbus RTU）と SCPI を移植 | AI に型定義と雛形だけを渡して、新しい上位（例: LIN の診断フレーム）を書かせ、`wsk plugin check` を通るまでの往復回数を記録 |
 | 3 | 層 3（WASM）の口。未知の同期シリアルの探索を移す | 同じ入力でネイティブ比の時間と、打ち切り（燃料）の動作を確認 |
 | 4 | 配布形式（1 ファイルのパッケージ: 宣言＋スクリプトまたは `.wasm`＋例＋期待値） | Windows・macOS・Linux・ブラウザで同じパッケージが動く |
@@ -163,7 +163,7 @@ refute  = ["length mismatch"]
 
 ## 5. ベンチマーク結果との照合項目
 
-別途のベンチマーク（`prototype/plugin-lang-bench/SPEC.md` の t1〜t5）の結果は、次の基準で読む。基準値は目安であり、結果を見て改める（**解釈**）。
+別途のベンチマーク（`research/plugin-lang-bench/SPEC.md` の t1〜t5）の結果は、次の基準で読む。基準値は目安であり、結果を見て改める（**解釈**）。
 
 | 項目 | SPEC の欄 | 判定の目安 | 推奨への影響 |
 | --- | --- | --- | --- |
@@ -178,7 +178,7 @@ refute  = ["length mismatch"]
 
 ベンチマークで測らない点（別途確かめる）: Windows/macOS でのビルドと配布物の大きさ、ブラウザ（wasm32）で同じ処理系が動くか、実行の打ち切り（燃料・割り込み）の効き方、TypeScript の型除去と行番号の対応。
 
-## ベンチマーク結果（2026-09-28、`prototype/plugin-lang-bench`）
+## ベンチマーク結果（2026-09-28、`research/plugin-lang-bench`）
 
 Rust のホストから各処理系を組み込み、同じ入力（実記録の SHT30＝I²C＋UART、1,000 万サンプル／L103 の書き込み時＝RVSWD、3,000 万サンプル）で同じ課題を行った。サンプルは 16 bit の密なファイルを copy-on-write でメモリマップし（`Arc<Mmap>`）、エッジ列は `Arc<[u32]>`、I²C の入力（ビット列・時刻・区切り）は Rust のカーネルで作ってから渡した。全処理系で T2・T3 の結果が参照と一致した。課題の定義は `plugin-lang-bench/SPEC.md`。数値は各処理系を順に走らせた一斉の測定（負荷の低い状態）で、各エージェントが並行ビルド中に測った値は最大 10 倍ぶれたため使わない。Linux（WSL2、x86-64）のみで測定。
 
