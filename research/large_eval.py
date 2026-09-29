@@ -2,8 +2,9 @@
 import time
 from difflib import SequenceMatcher
 
-from wsproto import corpus, fixture, staged
-from wsproto.rvswd import DM_NAMES
+import corpus
+from wireskein._engine import fixture, staged
+from wireskein._engine.rvswd import DM_NAMES
 
 inv = {v: k for k, v in DM_NAMES.items()}
 for d in sorted(corpus.REAL.iterdir()):

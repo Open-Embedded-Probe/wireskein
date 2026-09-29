@@ -1,0 +1,44 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "wireskein"
+version = "0.1.0b1"
+description = "Logic-analyzer captures to protocol decodes, and waveform checks of recorded hardware test runs"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.13"
+authors = [
+  { name = "TANAKA Masayuki" },
+]
+dependencies = [
+  "numpy>=2.0",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Topic :: Scientific/Engineering :: Electronic Design Automation (EDA)",
+  "Topic :: Software Development :: Testing",
+]
+
+[project.scripts]
+wireskein = "wireskein.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Open-Embedded-Probe/wireskein"
+Repository = "https://github.com/Open-Embedded-Probe/wireskein"
+
+[dependency-groups]
+dev = ["pytest>=8"]
+research = ["mini-racer>=0.14.1"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/wireskein"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/wireskein", "tests", "README.md", "README.ja.md", "CHANGELOG.md", "LICENSE"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

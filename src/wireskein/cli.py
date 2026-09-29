@@ -1,17 +1,18 @@
-"""Command-line front end of the prototype (staged engine).
+"""The `wireskein` command.
 
-    PYTHONPATH=. uv run python ws.py analyze CAPTURE [--mode final|all|select] [--select PATH ...]
-                                          [--hint JSON|@file.json] [--alternatives] [--out FILE]
+    wireskein analyze CAPTURE [--mode final|all|select] [--select PATH ...]
+                              [--hint JSON|@file.json] [--alternatives] [--out FILE]
+    wireskein segments CAPTURE [--results] [--markers JSON]
+    wireskein verify RUN_DIR [--junit FILE] [--json FILE]
 
 CAPTURE is a fixture directory (corpus/fixtures/real/<id>) or a sigrok .sr file.
 Paths for --select: "<protocol>.<layer>" with wildcards, e.g. i2c.transactions,
 uart.lines, spi.transfers, rvswd.dm, *.final, i2c.* .
 
-    PYTHONPATH=. uv run python ws.py segments CAPTURE [--results] [--markers JSON]
-    PYTHONPATH=. uv run python ws.py verify RUN_DIR [--junit FILE] [--json FILE]
-
 Marker lines ("# test", "## step", "##" closes; see decl/markers/) split the
 capture into a segment tree; --segment PATH on analyze restricts to one.
+
+RUN_DIR is a run recorded with wireskein.runlog; verify exits 1 when a check fails.
 
 Hints restrict what is tried; the result is still scored by the plugins' checks:
     --hint '{"protocols": ["i2c", "uart"]}'
@@ -26,8 +27,9 @@ import sys
 import time
 from pathlib import Path
 
-from wsproto import export, fixture, markers, staged
-from wsproto.srio import read_sr
+from . import __version__
+from ._engine import export, fixture, markers, staged
+from ._engine.srio import read_sr
 
 
 def load(path: Path):
@@ -53,7 +55,7 @@ def segments(args) -> None:
 
 
 def verify_cmd(args) -> None:
-    from wsproto import verify
+    from . import verify
     rep = verify.verify(args.run)
     if not args.log:
         rep.pop("log")
@@ -70,7 +72,8 @@ def verify_cmd(args) -> None:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(prog="ws")
+    ap = argparse.ArgumentParser(prog="wireskein")
+    ap.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = ap.add_subparsers(dest="cmd", required=True)
     a = sub.add_parser("analyze")
     a.add_argument("capture", type=Path)
@@ -100,7 +103,7 @@ def main() -> None:
     sg.add_argument("--events", action="store_true", help="include text lines (commands, responses, child markers) as events")
     sg.add_argument("--declarative", action="store_true")
     sg.add_argument("--out", type=Path, default=None)
-    vf = sub.add_parser("verify", help="check a recorded run (wsproto/runlog.py) against its expectations")
+    vf = sub.add_parser("verify", help="check a recorded run (wireskein.runlog) against its expectations")
     vf.add_argument("run", type=Path, help="run directory with run.json")
     vf.add_argument("--junit", type=Path, default=None, help="also write JUnit XML")
     vf.add_argument("--json", type=Path, default=None, help="write the full report (with measured values)")

@@ -7,7 +7,7 @@ from collections import defaultdict
 
 import numpy as np
 
-from wsproto import staged, synth
+from wireskein._engine import staged, synth
 
 n = int(sys.argv[1]) if len(sys.argv) > 1 else 80
 rows = defaultdict(list)

@@ -11,13 +11,14 @@ implied by the mode, CS polarity active-low, and bit order).
 import sys
 from collections import Counter, defaultdict
 
-from wsproto import corpus, synth
-from wsproto.analyzers.i2c import I2c
-from wsproto.analyzers.spi import Spi
-from wsproto.analyzers.uart import Uart
-from wsproto.exclude import RULES
-from wsproto.stack import Context
-from wsproto.survey import survey
+import corpus
+from wireskein._engine import synth
+from wireskein._engine.analyzers.i2c import I2c
+from wireskein._engine.analyzers.spi import Spi
+from wireskein._engine.analyzers.uart import Uart
+from wireskein._engine.exclude import RULES
+from wireskein._engine.stack import Context
+from wireskein._engine.survey import survey
 
 
 def is_true(proto, p, bus, cap):

@@ -14,10 +14,11 @@ import sys
 
 import numpy as np
 
-from wsproto import corpus, pipeline, synth
-from wsproto.exclude import RULES
-from wsproto.stack import ProbeConfig
-from wsproto.survey import survey
+import corpus
+from wireskein._engine import pipeline, synth
+from wireskein._engine.exclude import RULES
+from wireskein._engine.stack import ProbeConfig
+from wireskein._engine.survey import survey
 
 SAFE = [r for r in RULES if r.kind == "definitional"]  # audited: zero true losses incl. stress profiles
 

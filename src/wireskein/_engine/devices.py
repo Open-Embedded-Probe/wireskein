@@ -18,13 +18,16 @@ turns address-only matches into claims.
 
 from __future__ import annotations
 
+import os
 import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parents[1] / "decl" / "devices"   # <bus>/<vendor or class>/<pack>.toml
-I2CDB = Path.home() / "dev/I2CDeviceDB/chips"
+# I2CDeviceDB (https://github.com/tanakamasayuki/I2CDeviceDB) chips/ folder, for
+# address-only candidates; optional
+I2CDB = Path(os.environ["WIRESKEIN_I2CDB"]) if os.environ.get("WIRESKEIN_I2CDB") else None
 
 
 def crc8(data: bytes, poly: int, init: int) -> int:
@@ -93,7 +96,7 @@ def _match(rel: Path, pattern: str) -> bool:
     return pr.full_match(pattern)
 
 
-CACHE = Path(__file__).resolve().parents[1] / ".cache" / "device-headers.json"
+CACHE = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "wireskein" / "device-headers.json"
 
 
 def _headers(root: Path, rels: list[Path]) -> dict[str, dict]:
@@ -117,8 +120,11 @@ def _headers(root: Path, rels: list[Path]) -> dict[str, dict]:
             raise ValueError(f"{r}: device.bus = {h['bus']!r} but the pack is under {r.parts[0]}/")
         out[str(r)] = h
     if dirty:
-        CACHE.parent.mkdir(exist_ok=True)
-        CACHE.write_text(json.dumps(cache))
+        try:
+            CACHE.parent.mkdir(parents=True, exist_ok=True)
+            CACHE.write_text(json.dumps(cache))
+        except OSError:
+            pass    # only a speed-up
     return out
 
 
@@ -129,7 +135,7 @@ def load_packs(select: list[str] | None = None, root: Path = HERE) -> PackSet:
 def address_table() -> dict[int, list[str]]:
     """Bus address -> chip names from I2CDeviceDB (address-only candidates)."""
     out: dict[int, list[str]] = {}
-    if not I2CDB.exists():
+    if I2CDB is None or not I2CDB.exists():
         return out
     for p in sorted(I2CDB.glob("*.yaml")):
         txt = p.read_text()

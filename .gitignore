@@ -3,11 +3,18 @@ corpus/work/
 __pycache__/
 *.py[cod]
 .venv/
-prototype/boundary-bench/target/
-prototype/plugin-lang-bench/target*/
-prototype/plugin-lang-bench/wasm-plugin/target/
-prototype/plugin-lang-bench/build-*.log
-prototype/plugin-lang-bench/stderr-*.log
-prototype/plugin-lang-bench/results.jsonl
-prototype/zerocopy-bench/target/
-prototype/.cache/
+research/boundary-bench/target/
+research/plugin-lang-bench/target*/
+research/plugin-lang-bench/wasm-plugin/target/
+research/plugin-lang-bench/build-*.log
+research/plugin-lang-bench/stderr-*.log
+research/plugin-lang-bench/results.jsonl
+research/zerocopy-bench/target/
+.cache/
+
+# packaging
+build/
+dist/
+*.egg-info/
+uv.lock
+.pytest_cache/

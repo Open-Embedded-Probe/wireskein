@@ -8,8 +8,9 @@ import json
 import sys
 import time
 
-from wsproto import corpus, kernels, pipeline, synth
-from wsproto.stack import ProbeConfig
+import corpus
+from wireskein._engine import kernels, pipeline, synth
+from wireskein._engine.stack import ProbeConfig
 
 use_probe = "--probe" in sys.argv
 seeds = [int(a) for a in sys.argv[1:] if a.isdigit()] or list(range(20))

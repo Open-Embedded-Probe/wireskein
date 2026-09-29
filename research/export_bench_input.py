@@ -7,7 +7,8 @@ import sys
 
 import numpy as np
 
-from wsproto import corpus, features, fixture
+import corpus
+from wireskein._engine import features, fixture
 
 fid = sys.argv[1] if len(sys.argv) > 1 else "i2cdb-sht30-1b9dbf"
 d = corpus.REAL / fid

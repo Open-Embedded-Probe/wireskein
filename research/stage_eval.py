@@ -12,8 +12,9 @@ from difflib import SequenceMatcher
 
 import numpy as np
 
-from wsproto import corpus, synth, typed
-from wsproto.taxonomy import classify
+import corpus
+from wireskein._engine import synth, typed
+from wireskein._engine.taxonomy import classify
 
 TRUE_CLASS = {("uart", "data"): "data", ("i2c", "scl"): "clock", ("i2c", "sda"): "data", ("spi", "clk"): "clock",
               ("spi", "mosi"): "data", ("spi", "miso"): "data", ("spi", "cs"): "sparse",

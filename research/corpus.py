@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from . import fixture, synth
+from wireskein._engine import fixture, synth
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[1]
 REAL = ROOT / "corpus/fixtures/real"
 
 

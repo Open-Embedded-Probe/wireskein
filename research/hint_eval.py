@@ -7,7 +7,8 @@ import time
 from collections import Counter
 
 from evaluate import match
-from wsproto import corpus, staged, synth
+import corpus
+from wireskein._engine import staged, synth
 
 
 def hints_from(truth, level):

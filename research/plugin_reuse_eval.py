@@ -7,9 +7,9 @@ import sys
 from collections import Counter
 from difflib import SequenceMatcher
 
-from wsproto import plugins_uartlike as P
-from wsproto import synth, typed
-from wsproto.taxonomy import classify
+from wireskein._engine import plugins_uartlike as P
+from wireskein._engine import synth, typed
+from wireskein._engine.taxonomy import classify
 
 n = int(sys.argv[1]) if len(sys.argv) > 1 else 60
 res = Counter()

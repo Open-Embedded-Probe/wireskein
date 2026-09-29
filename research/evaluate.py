@@ -20,9 +20,10 @@ from pathlib import Path
 
 import numpy as np
 
-from wsproto import corpus, pipeline, synth
-from wsproto.stack import ProbeConfig
-from wsproto.scoring import DefaultScorer, LayerOnlyScorer
+import corpus
+from wireskein._engine import pipeline, synth
+from wireskein._engine.stack import ProbeConfig
+from wireskein._engine.scoring import DefaultScorer, LayerOnlyScorer
 
 SCORERS = {"default": DefaultScorer, "layer-only": LayerOnlyScorer}
 IN_SCOPE = {"uart", "i2c", "spi", "lin", "dmx512", "rvswd", "swio", "swd", "can"}
@@ -82,7 +83,7 @@ def match(bus: dict, node, rate: float) -> dict:
         r["roles"] = nr == tr
         r["params"] = r["roles"]
         if "expect" in bus and "dmi" in bus["expect"]:
-            from wsproto.rvswd import DM_NAMES
+            from wireskein._engine.rvswd import DM_NAMES
             inv = {v: k for k, v in DM_NAMES.items()}
             addr = lambda name: inv.get(name, int(name, 16) if name.startswith("0x") else -1)  # noqa: E731
             want = [(op, addr(nm), d) for op, nm, d in bus["expect"]["dmi"]]
@@ -134,7 +135,7 @@ def bus_channels(bus):
 def evaluate_case(args):
     kind, ref, scorer_name, use_probe, use_excl, engine = args
     if kind in ("real", "fixture"):
-        from wsproto import fixture
+        from wireskein._engine import fixture
         cap, truth = fixture.load_capture(ref), fixture.load_truth(ref)
     else:
         cap, truth = synth.scenario(*ref)
@@ -143,7 +144,7 @@ def evaluate_case(args):
         return {"id": truth["id"], "skipped": f"{n_edges} edges > {MAX_EDGES}", "seconds": 0.0, "runs": 0,
                 "n_active": 0, "buses": [], "claims": []}
     if engine in ("staged", "declarative"):
-        from wsproto import staged
+        from wireskein._engine import staged
         staged.use_declarative(engine == "declarative")
         res = staged.analyze(cap)
         res.seconds = sum(res.seconds.values())

@@ -19,8 +19,8 @@ from pathlib import Path
 
 import numpy as np
 
-from . import markers
-from .model import Capture, Channel, edges_from_dense
+from ._engine import markers
+from ._engine.model import Capture, Channel, edges_from_dense
 from .runlog import FORMAT
 
 
@@ -142,7 +142,7 @@ def check_pulses(cap, x):
 
 
 def _decode(cap, hints):
-    from . import staged
+    from ._engine import staged
     return staged.analyze(cap, hints)
 
 
@@ -350,7 +350,7 @@ def _uart_edge_offsets(ch: Channel, frames: list, u: float, span_bits: int) -> l
 
 def _uart_measure(ch: Channel, n: int, runs: np.ndarray, u_hint: float | None, idle: int, bits: int, parity: str,
                   stop: float) -> float | None:
-    from .features import estimate_units
+    from ._engine.features import estimate_units
     cands = estimate_units(runs[1:-1])
     if not cands:
         return None

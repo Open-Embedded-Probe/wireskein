@@ -7,7 +7,8 @@ from collections import Counter
 
 import numpy as np
 
-from wsproto import corpus, devices, fixture, staged, synth
+import corpus
+from wireskein._engine import devices, fixture, staged, synth
 
 staged.use_declarative(True)
 

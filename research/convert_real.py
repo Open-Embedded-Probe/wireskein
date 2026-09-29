@@ -11,8 +11,8 @@ import json
 import zlib
 from pathlib import Path
 
-from wsproto import fixture
-from wsproto.srio import read_sr
+from wireskein._engine import fixture
+from wireskein._engine.srio import read_sr
 
 ROOT = Path(__file__).resolve().parents[1]
 RAW = ROOT / "corpus/raw"

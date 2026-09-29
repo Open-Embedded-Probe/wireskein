@@ -5,7 +5,7 @@
 import sys
 from collections import Counter
 
-from wsproto import staged, synth
+from wireskein._engine import staged, synth
 
 n = int(sys.argv[1]) if len(sys.argv) > 1 else 60
 c = Counter()
