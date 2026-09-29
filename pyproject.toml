@@ -38,7 +38,7 @@ research = ["mini-racer>=0.14.1"]
 packages = ["src/wireskein"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src/wireskein", "tests", "README.md", "README.ja.md", "CHANGELOG.md", "LICENSE"]
+only-include = ["src/wireskein", "tests", "README.md", "README.ja.md", "CHANGELOG.md", "LICENSE", "pyproject.toml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

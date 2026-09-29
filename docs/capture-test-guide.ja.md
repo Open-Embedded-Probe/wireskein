@@ -35,7 +35,7 @@ WireSkein は本来、未知の信号から方式を推定する道具です。�
 ## 2. マーカー
 
 マーカーの書式と区間の規則は、[ワークベンチのモデル](workbench-model.ja.md) の「マーカーで長い記録を実験の文脈に結び付ける」に従います。
-この節では、それを CH32 のテストにどう当てはめるかを決めます。区間に分ける処理と照合はプロトタイプに実装済みです（`wsproto/markers.py`、`wsproto/runlog.py`、`wsproto/verify.py`、`ws.py verify`）。
+この節では、それを CH32 のテストにどう当てはめるかを決めます。区間に分ける処理と照合はプロトタイプに実装済みです（`src/wireskein/_engine/markers.py`、`src/wireskein/runlog.py`、`src/wireskein/verify.py`、`wireskein verify`）。
 
 ### 2.1 マーカーは PC 側のログに書く
 
@@ -50,9 +50,9 @@ WireSkein は本来、未知の信号から方式を推定する道具です。�
 
 - 時刻はすべて PC の時計です。キャプチャは、開始（`arm`）した時刻で、どの区間に入るかが決まります。
 - **CH32 のファームウェアは変えなくてよい。** マーカーは CH32 に送らないので、`#` の行の扱いは関係ありません。
-- 見出しのマーカーでない行（コマンドと応答）は、区間の中のイベントとして時刻付きで残ります。主に GUI 向けで、CLI の照合結果には既定で出しません（`ws.py verify --json 出力 --log` で含める）。
+- 見出しのマーカーでない行（コマンドと応答）は、区間の中のイベントとして時刻付きで残ります。主に GUI 向けで、CLI の照合結果には既定で出しません（`wireskein verify --json 出力 --log` で含める）。
 
-**マーカーを波形の中に置く場合**（今後、長い記録やストリーミングで、コマンドをキャプチャする UART で送る場合）も、書式は同じです（`ws.py segments` で読めます）。そのときは、CH32 のコマンド処理に次の規則が必要です。今の `tests/sketches/testcmd.h` の `tc_ready()` は、`#` の行に `unknown cmd` や `ERR` を返します。
+**マーカーを波形の中に置く場合**（今後、長い記録やストリーミングで、コマンドをキャプチャする UART で送る場合）も、書式は同じです（`wireskein segments` で読めます）。そのときは、CH32 のコマンド処理に次の規則が必要です。今の `tests/sketches/testcmd.h` の `tc_ready()` は、`#` の行に `unknown cmd` や `ERR` を返します。
 
 - `#` で始まる行はコメントとして捨て、応答もエコーもしない。
 - コマンドの行は `#` で始めない。
@@ -103,7 +103,7 @@ PWM duty=64                ← 応答（イベント）
 期待は、見出しのパスをキーにして `run.json` に記録します。見出しの名前は、人が読めて区間を特定できれば十分です（`duty=64` など）。
 
 ```python
-from wsproto.runlog import Recorder, square, level, only_moving, i2c
+from wireskein.runlog import Recorder, square, level, only_moving, i2c
 
 with rec.section(2, f"duty={duty}", expect=[square("PA1", 1003.5, duty / 255, tol_freq=0.01, tol_duty=0.01),
                                             only_moving(["PA1"])]):
@@ -146,7 +146,7 @@ uart("PB0", None)                        # 測るだけ（8N1 として読む）
 
 ### 2.4.1 `runlog` の呼び方は固定する
 
-テスト側は `wsproto.runlog` を直接 import します。このため、次の呼び方と意味は変えません。互換のない変更をするときは `FORMAT`（今は `wireskein-run/0`）を上げ、`ws verify` は古い形式をはっきりしたエラーで断ります。
+テスト側は `wireskein.runlog` を直接 import します。このため、次の呼び方と意味は変えません。互換のない変更をするときは `FORMAT`（今は `wireskein-run/0`）を上げ、`wireskein verify` は古い形式をはっきりしたエラーで断ります。
 
 - 標準ライブラリだけで動くこと
 - `Recorder(out, **meta)`、`heading`、`section(level, name, expect=None, **rules)`、`command`、`reply`、`note`、`armed`、`capture(data, rate, bits, armed_at, **meta)`、`close`
@@ -205,7 +205,7 @@ WS2812 と tone() は受け手がいないので、キャプチャでの解析�
   ├─ ステップごとに: section("## 条件", expect=[...]) の中で
   │     コマンドを送る → 応答を待つ → キャプチャを arm → armed() → wait → read_all → capture(...)
   ├─ close() → run.json と c0001.bin …
-  └─ ws.py verify <出力> [--junit report.xml] [--json report.json]
+  └─ wireskein verify <出力> [--junit report.xml] [--json report.json]
         区間の木 → 区間ごとのキャプチャ → 検査 → 項目ごとの OK/NG と測定値。NG が 1 つでもあれば終了コード 1
 NG のキャプチャは .bin のまま残る（PulseView で見るなら oep_client の to_sr で .sr にする）
 ```
@@ -240,7 +240,7 @@ with rec.section(1, "test_pwm"):
 rec.close()
 ```
 
-`prototype/verify_demo.py` は、この形の記録を合成して `ws verify` にかける例です。x035 の条件（PWM は 2 MHz で 4 万サンプル、I2C は 1 MHz で 6 万サンプル、SPI は 5 MHz で 4 チャンネル）で、わざと入れた次の 4 件がすべて NG になり、ほかの 13 項目は OK でした。
+`tests/demo_run.py` は、この形の記録を合成して `wireskein verify` にかける例です。x035 の条件（PWM は 2 MHz で 4 万サンプル、I2C は 1 MHz で 6 万サンプル、SPI は 5 MHz で 4 チャンネル）で、わざと入れた次の 4 件がすべて NG になり、ほかの 13 項目は OK でした。
 
 - duty 192 が 70% になっていた
 - tone のステップで別のピンが動いた
@@ -251,13 +251,13 @@ rec.close()
 
 | 機能 | 状態 |
 | --- | --- |
-| 見出し型のマーカーで区間の木を作る。連番、名前のない見出しでの閉じ、階層の飛びなどの問題の記録 | 実装済み（`wsproto/markers.py`） |
-| 記録器（ログ、キャプチャ、期待を 1 つのディレクトリに書く） | 実装済み（`wsproto/runlog.py`、標準ライブラリだけ） |
-| 期待と照合して、項目ごとの OK/NG と測定値を出す | 実装済み（`ws.py verify`、JUnit XML、JSON） |
+| 見出し型のマーカーで区間の木を作る。連番、名前のない見出しでの閉じ、階層の飛びなどの問題の記録 | 実装済み（`src/wireskein/_engine/markers.py`） |
+| 記録器（ログ、キャプチャ、期待を 1 つのディレクトリに書く） | 実装済み（`src/wireskein/runlog.py`、標準ライブラリだけ） |
+| 期待と照合して、項目ごとの OK/NG と測定値を出す | 実装済み（`wireskein verify`、JUnit XML、JSON） |
 | プローブが報告する時間軸の乱れ（キャプチャの meta の `time_base_slipped: true`、OEP の区画の flags bit2） | 実装済み。判定は変えず、測定値に `time_base_slipped` を入れ、NG のときは理由に「the probe reported a time base slip in this capture」を足す |
 | 検査: 方形波、一定のレベル、始まりと終わりのレベル、動いてよいピン以外の静止、パルスの数と周期、I2C、SPI、UART | 実装済み（x035 の実機の記録で、PWM、tone、TOGGLE、MILLIS、SPI、I2C を確認。v003 では SPI 以外を確認） |
 | I2C の途中で止まったトランザクション（`complete`、`pending_bits`） | 実装済み |
 | 取りこぼしたキャプチャの途中までのデータ（`capture(..., incomplete=True)` の meta で印を付ける） | 未実装（OEP v1 の one-shot では、完了しないと segment が報告されない。取りこぼしが問題になった時点で、テスト側で記録し、照合での扱いを決める。それまでは `note("capture incomplete")` だけで、その区間は「no capture inside the segment」の NG） |
-| 1 本の長い記録の中のマーカー（UART の文字列）で区間に分ける | 実装済み（`ws.py segments`、`analyze --segment`） |
+| 1 本の長い記録の中のマーカー（UART の文字列）で区間に分ける | 実装済み（`wireskein segments`、`analyze --segment`） |
 | I2C の tLOW と tHIGH、SPI の CS のタイミング、WS2812 のビットの幅などの時間の測定 | 未実装 |
 | キャプチャの時間軸の印（P4 側）、`start_us` を使った時刻合わせ | 未実装（OEP のキャプチャの仕様に印がない） |

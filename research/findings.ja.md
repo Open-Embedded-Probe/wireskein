@@ -125,7 +125,7 @@ RVSWD（CLK+DIO）は物理層では同期シリアルで、SPI 寄りの方式�
 
 ## 共通の下調べ、確実な除外、最良優先（2026-09-28）
 
-### 共通の下調べ（`wsproto/survey.py`）
+### 共通の下調べ（`src/wireskein/_engine/survey.py`）
 
 周波数・ビット数・線の相関を、プロトコルの解析器ではなく共通の段で1回だけ推定するようにした。
 
@@ -137,7 +137,7 @@ RVSWD（CLK+DIO）は物理層では同期シリアルで、SPI 寄りの方式�
 
 最初の文字長の推定（アイドルから離れる端の間隔の最小値）は、文字内部の変化を拾って 8N1 を 7 と読んだ。停止ビットの検査に替えて解決した。
 
-### 確実に違うものだけを除く（`wsproto/exclude.py`、`exclusion_audit.py`）
+### 確実に違うものだけを除く（`src/wireskein/_engine/exclude.py`、`exclusion_audit.py`）
 
 復号せず、共通の下調べだけで判定する規則を置いた。各規則が正解の仮説を1件でも除いたかを、通常 208 件＋4種のストレス（各 150 件）で監査した。
 
@@ -428,7 +428,7 @@ Debug Module の段では、L103（RVSWD）の参照と同じ `REGW 0x7c0 = 0x30
 
 ## 後段に合わせた結果の取り出しと、分析前のヒント
 
-### 取り出し方（`wsproto/export.py`、`ws.py`）
+### 取り出し方（`src/wireskein/_engine/export.py`、`wireskein` コマンド）
 
 後段によって欲しいデータが違う。GUI は波形に重ねる中間の段（ビット、フレーム、語、文字）と確定データの両方を、元の記録のサンプル位置付きで欲しい。CLI や AI の分析は確定データだけで足りることが多い。そこで3つのモードにした。
 
@@ -474,7 +474,7 @@ Debug Module の段では、L103（RVSWD）の参照と同じ `REGW 0x7c0 = 0x30
 
 ## 宣言的なフレーミング記述、デバイスの定義、どこまで見るか
 
-### 宣言的なフレーミング記述（`decl/*.toml`、`wsproto/declarative.py`）
+### 宣言的なフレーミング記述（`decl/*.toml`、`src/wireskein/_engine/declarative.py`）
 
 I²C・SPI・RVSWD のプラグインを、コードなしの TOML で書き直した（合わせて約 100 行）。語の幅・ビット順・欄の切り出し・固定値の検査・長さの規則（`9n|9n+1`、`8n`、53/54 ビットの固定配置とパリティ）・欄の役割を書く。方式固有のコードとして残ったのは RVSWD のフレームの切り直しだけで、これもコアのカーネルを名前で呼ぶ（`reframe = "rvswd_stop"`）。スコアの一部も、コアが提供する証拠の項目を名前で呼ぶ（`terms = ["select_boundary", "degenerate", "single_frame_penalty"]`）。
 
@@ -497,7 +497,7 @@ I²C・SPI・RVSWD のプラグインを、コードなしの TOML で書き直�
 - **組の候補は緩く取り、判定は見え方ごとに測り直す。** グリッチ入りの記録では、クロックの偽のバーストのために CS の境界の一致が 0.4 になり、T2 で CS の候補から外れていた（CS なしの SPI として誤確定）。T2 の閾値を 0.25 にし、プラグインがひげを除いた見え方で測り直す形にした。
 - **ピン同士の相関に証拠の量を掛けた**（バースト中の変化の回数で 1−exp(−n/8)）。変化が数回の線の位相の集中度は、偶然で高くなる。
 
-### デバイスの定義（`decl/devices/*.toml`、`wsproto/devices.py`、`device_eval.py`）
+### デバイスの定義（`decl/devices/*.toml`、`src/wireskein/_engine/devices.py`、`device_eval.py`）
 
 データシートの書き方に合わせて、定義を3つの型に分けた。
 
@@ -519,11 +519,11 @@ I²C・SPI・RVSWD のプラグインを、コードなしの TOML で書き直�
 
 **アドレスだけの判定は曖昧すぎる。** I2CDeviceDB の 83 機種では、71 のアドレスのうち 53 を 2〜5 機種が共有している（`0x44` は INA226・SHT30・SHT40、`0x70` は PCA9548A・QMP6988・TCA9548A）。
 
-実行: `PYTHONPATH=. uv run python device_eval.py`（宣言的なプラグイン、各 60 件）。
+実行: `uv run python device_eval.py`（宣言的なプラグイン、各 60 件）。
 
 ### どこまで見るか（出力の深さ）
 
-`ws.py analyze ... --depth transport|frames|protocol|device`。
+`wireskein analyze ... --depth transport|frames|protocol|device`。
 
 | 深さ | 内容 | QMP6988 の記録の大きさ |
 | --- | --- | ---: |
@@ -608,7 +608,7 @@ TOML の行数は SWD 約 40 行、CAN 約 45 行。方式固有の Python は 0
   - 構文を持つもの（SCPI）
 - 式は、これ以上広げない。ループと、フレームをまたぐ変数は入れない。
 
-## マーカーで区間に分ける（`wsproto/markers.py`、`decl/markers/*.toml`、`ws.py segments`）
+## マーカーで区間に分ける（`src/wireskein/_engine/markers.py`、`decl/markers/*.toml`、`wireskein segments`）
 
 それまでマーカーは、UART の行がマーカーの書式に合うかを数える上位プロトコルの一つで、方式を判定する証拠に使うだけだった。行の時刻は捨てており、区間には分けていなかった。[ワークベンチのモデル](../docs/workbench-model.ja.md) の見出し型の規則で、区間の木を作るようにした。
 
@@ -636,7 +636,7 @@ TOML の行数は SWD 約 40 行、CAN 約 45 行。方式固有の Python は 0
 - 区間のパスを glob で選ぶと、`[0]` が文字クラスとして解釈された。`[` は文字どおりに扱うようにした。
 - テスト側の規則を決めた。CH32 のファームウェアは `#` で始まる行をコメントとして捨て、応答もエコーもしない。コマンドの行は `#` で始めない。
 
-## 意図した信号の照合（`ws verify`、`wsproto/runlog.py`、`wsproto/verify.py`）
+## 意図した信号の照合（`wireskein verify`、`src/wireskein/runlog.py`、`src/wireskein/verify.py`）
 
 ArduinoCore-CH32 のキャプチャを使うテスト（`tests/manual/oep_*`）を調べた。前提が2つ違っていた。
 
@@ -653,7 +653,7 @@ ArduinoCore-CH32 のキャプチャを使うテスト（`tests/manual/oep_*`）�
   - マーカーの構造の問題は、期待の有無に関係なく NG にする。
 - 出力は、1行ずつの OK/NG と、JSON（測定値付き）と、JUnit XML。NG があれば終了コード 1。
 
-`verify_demo.py`（x035 の条件で合成）の結果:
+`tests/demo_run.py`（x035 の条件で合成）の結果:
 
 | ステップ | 仕込み | 結果 |
 | --- | --- | --- |
