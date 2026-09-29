@@ -59,16 +59,14 @@ def verify_cmd(args) -> None:
     rep = verify.verify(args.run)
     if not args.log:
         rep.pop("log")
-    for r in rep["results"]:
-        mark = {True: "OK", False: "NG", None: "--"}[r["ok"]]
-        print(f"{mark}  {r['path']}  {r['check']}  {r['capture'] or ''}  {r['reason']}")
-    s = rep["summary"]
-    print(f"{s['ok']} ok, {s['ng']} ng, {s['unchecked']} unchecked ({s['segments']} segments, {s['captures']} captures)")
+    for line in verify.lines(rep, ok=True):
+        print(line)
+    print(verify.summary_line(rep))
     if args.json:
-        args.json.write_text(export.dumps(rep))
+        args.json.write_text(verify.dumps(rep))
     if args.junit:
         args.junit.write_text(verify.junit(rep))
-    sys.exit(1 if s["ng"] else 0)
+    sys.exit(1 if rep["summary"]["ng"] else 0)
 
 
 def main() -> None:

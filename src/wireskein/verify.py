@@ -496,6 +496,30 @@ def verify(run_dir: str | Path) -> dict:
             "tree_issues": tree.issues, "log": ev}
 
 
+def dumps(report: dict) -> str:
+    """The report as JSON (numpy values converted)."""
+    from ._engine.export import dumps as _dumps
+    return _dumps(report)
+
+
+def lines(report: dict, ok: bool = False) -> list[str]:
+    """One line per result, as `wireskein verify` prints them ("OK"/"NG"/"--",
+    path, check, capture, reason); only NG and unchecked unless ok=True."""
+    out = []
+    for r in report["results"]:
+        if r["ok"] is True and not ok:
+            continue
+        mark = {True: "OK", False: "NG", None: "--"}[r["ok"]]
+        out.append(f"{mark}  {r['path']}  {r['check']}  {r['capture'] or ''}  {r['reason']}".rstrip())
+    return out
+
+
+def summary_line(report: dict) -> str:
+    s = report["summary"]
+    return (f"{s['ok']} ok, {s['ng']} ng, {s['unchecked']} unchecked "
+            f"({s['segments']} segments, {s['captures']} captures)")
+
+
 def junit(report: dict) -> str:
     from xml.sax.saxutils import escape, quoteattr
     rs = report["results"]
