@@ -17,8 +17,8 @@ from pathlib import Path
 
 import numpy as np
 
-from wsproto import gen
-from wsproto.runlog import Recorder, i2c, level, only_moving, spi, square
+from wireskein._engine import gen
+from wireskein.runlog import Recorder, i2c, level, only_moving, spi, square
 
 rng = np.random.default_rng(5)
 

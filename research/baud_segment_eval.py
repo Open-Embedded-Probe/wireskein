@@ -7,8 +7,9 @@ from difflib import SequenceMatcher
 
 import numpy as np
 
-from wsproto import corpus, synth, typed
-from wsproto.taxonomy import classify
+import corpus
+from wireskein._engine import synth, typed
+from wireskein._engine.taxonomy import classify
 
 n = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else 60
 stress = sys.argv[sys.argv.index("--stress") + 1] if "--stress" in sys.argv else "baudhop"

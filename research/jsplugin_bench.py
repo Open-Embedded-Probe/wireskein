@@ -15,7 +15,8 @@ from pathlib import Path
 
 import numpy as np
 
-from wsproto import corpus, fixture, staged
+import corpus
+from wireskein._engine import fixture, staged
 
 HERE = Path(__file__).parent / "jsplugins"
 

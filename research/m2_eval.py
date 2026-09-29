@@ -3,7 +3,8 @@
 import sys
 from collections import Counter
 
-from wsproto import corpus, features
+import corpus
+from wireskein._engine import features
 
 n = int(sys.argv[1]) if len(sys.argv) > 1 else 200
 stats = Counter()

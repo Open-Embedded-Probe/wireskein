@@ -5,7 +5,8 @@ import sys
 
 import numpy as np
 
-from wsproto import corpus, fixture
+import corpus
+from wireskein._engine import fixture
 
 out = corpus.ROOT / "corpus/work/zerocopy"
 out.mkdir(parents=True, exist_ok=True)

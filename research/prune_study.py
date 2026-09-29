@@ -10,7 +10,7 @@ import json
 import sys
 from collections import defaultdict
 
-from wsproto.corpus import ROOT
+from corpus import ROOT
 
 tag = sys.argv[1] if len(sys.argv) > 1 else "v4"
 d = json.load(open(ROOT / f"corpus/work/eval-{tag}.json"))
