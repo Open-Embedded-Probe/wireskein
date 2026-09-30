@@ -15,7 +15,7 @@ from ._engine.export import dumps, export
 from ._engine.model import Capture, Channel
 from ._engine.srio import read_sr, write_sr
 
-__all__ = ["Capture", "Channel", "load", "save", "analyze", "export", "dumps"]
+__all__ = ["Capture", "Channel", "load", "save", "as_logic", "analyze", "export", "dumps"]
 
 
 def load(path: str | Path) -> Capture:
@@ -48,6 +48,23 @@ def save(path: str | Path, cap: Capture, **meta) -> Path:
         from ._engine.vcdio import write_vcd
         return write_vcd(path, cap, **meta)
     return fileio.save(path, cap, **meta)
+
+
+def as_logic(cap: Capture, thresholds: dict) -> Capture:
+    """The capture with these analog channels also read as logic (name -> volts,
+    or (low, high) for hysteresis), so the decoders see them: a UART or I2C line
+    captured by an ADC. The analog channels stay as they are."""
+    from ._engine import analog
+    names = {c.name for c in cap.channels}
+    extra = []
+    for name, th in thresholds.items():
+        trace = next((a for a in cap.analog if a.name == name), None)
+        if trace is None:
+            raise ValueError(f"{name}: not an analog channel in this capture")
+        if name in names:
+            raise ValueError(f"{name}: already a logic channel")
+        extra.append(analog.to_logic(trace, cap.meta.get("tick_hz", cap.rate), th))
+    return Capture(cap.rate, cap.n_samples, cap.channels + extra, cap.meta, cap.analog)
 
 
 def analyze(cap: Capture, hints: dict | None = None, declarative: bool = False):

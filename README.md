@@ -251,8 +251,9 @@ A `.sr` has one sample rate for all channels, so slow channels are repeated to t
 ## Decoding a capture
 
 ```sh
-wireskein analyze capture.wireskein                             # .wireskein, sigrok .sr, or a fixture directory
+wireskein analyze capture.wireskein          # a WireSkein file, a sigrok .sr, a VCD, or a fixture directory
 wireskein analyze capture.sr --hint '{"protocols": ["i2c"]}'
+wireskein analyze m.wireskein --threshold TX=1.0,2.3        # also decode an analog channel, read as logic
 wireskein analyze capture.sr --mode all --out result.json
 wireskein segments capture.sr --results                   # a capture with marker lines on a UART
 ```
