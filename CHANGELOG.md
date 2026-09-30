@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 0.0.11
 - (EN) `align` reports the matched edges out of those that overlap the reference (a logic channel may cover only part of the analog track), notes when the overlap is short, and gives the scale's uncertainty from the fit (`overlap_edges`, `overlap_s`, `scale_ppm_uncertainty`). Found on the V003 jig: 65/671 read as a poor match, but the logic had 32.5 ms of edges and all 65 there matched.
 - (JA) `align` は、突き合わせたエッジの数を、基準と重なる範囲のエッジに対して出す（ロジックのチャンネルがアナログの一部しか覆わないことがある）。重なりが短ければそう伝え、直線の当てはめから倍率の不確かさを出す（`overlap_edges`、`overlap_s`、`scale_ppm_uncertainty`）。V003 の治具で見つかった: 65/671 は合わないように見えたが、ロジックのエッジは 32.5 ms 分で、そこでは 65 本すべてが合っていた。
 - (EN) `capture` notes a channel that got fewer samples than asked (the probe's buffer limit).

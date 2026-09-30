@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "wireskein"
-version = "0.0.10"
+version = "0.0.11"
 description = "Logic-analyzer captures to protocol decodes, and waveform checks of recorded hardware test runs"
 readme = "README.md"
 license = "MIT"
