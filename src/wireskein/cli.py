@@ -55,11 +55,11 @@ def info(args) -> None:
     head, chans = fileformat.read(args.file)
     tick = fileformat.tick_hz(head)
     print(f"{args.file}: {fileformat.FORMAT}, tick {float(tick):g} Hz ({tick}), {head['ticks']} ticks "
-          f"({head['ticks'] / float(tick):.6g} s)")
+          f"({head['ticks'] / float(tick):.6g} s), id {head.get('id', '-')}")
     for c in chans:
         if isinstance(c, fileformat.AnalogChannel):
             conv = (f"raw {c.width}-bit" + (f" ({c.value_bits} valid)" if c.value_bits else "")
-                    + (f", V = (raw - {c.zero:g}) x {c.scale_nv:g} nV" if c.zero is not None and c.scale_nv is not None
+                    + (f", {c.unit} = (raw - {c.zero:g}) x {c.scale_nv:g} n{c.unit}" if c.zero is not None and c.scale_nv is not None
                        else ", no volt conversion")) if c.encoding == "analog" else f"float32 {c.unit}"
             print(f"  {c.name:12s} {c.n:>12d} samples  {c.encoding:10s} {float(c.rate_hz):g} Hz from tick "
                   f"{float(c.t0_ticks):g}  {conv}")
@@ -70,14 +70,32 @@ def info(args) -> None:
             print(f"  {'':12s} acquisition: {json.dumps(c.acquisition, ensure_ascii=False)}")
     for c in fileformat.skipped(head):
         print(f"  {c['name']:12s} encoding {c['encoding']!r}: not read by this version")
-    if head.get("meta"):
-        print("meta: " + json.dumps(head["meta"], ensure_ascii=False, default=str))
+    meta = head.get("meta") or {}
+    if meta:
+        print("meta: " + json.dumps(meta, ensure_ascii=False, default=str))
+    for line in _meta_notes(meta, tick):
+        print("  " + line)
     for name, data in fileformat.attachments(args.file).items():
         print(f"attach/{name}: {len(data)} bytes")
     for k, n in enumerate(fileformat.notes(args.file), 1):
         extra = {x: v for x, v in n.items() if x not in ("time", "content")}
         body = n["content"] if isinstance(n["content"], str) else json.dumps(n["content"], ensure_ascii=False)
         print(f"note {k} {n['time']}" + (f" {json.dumps(extra, ensure_ascii=False)}" if extra else "") + f": {body}")
+
+
+def _meta_notes(meta: dict, tick) -> list[str]:
+    """What the meta keys with a set meaning say about this capture (docs/wireskein-format.ja.md §3.3)."""
+    out = []
+    if meta.get("time_base_slipped"):
+        out.append("time_base_slipped: the probe knows some samples were taken late (its sampling fell behind, "
+                   "e.g. at its buffer limit), so times in this capture may be stretched there; verify still "
+                   "decides, and a failed check says the probe reported a slip")
+    if isinstance(meta.get("trigger_index"), int):
+        out.append(f"trigger_index {meta['trigger_index']}: the trigger at logic sample {meta['trigger_index']} "
+                   f"({meta['trigger_index'] / float(tick) * 1e6:.3f} us from the start)")
+    if isinstance(meta.get("start_uncertainty_ns"), (int, float)):
+        out.append(f"start_ns is the probe clock of the first sample, +- {meta['start_uncertainty_ns'] / 1000:g} us")
+    return out
 
 
 def note_cmd(args) -> None:
