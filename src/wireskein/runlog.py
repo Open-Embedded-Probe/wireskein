@@ -142,27 +142,37 @@ class Recorder:
 
 
 # ---- expectation helpers (plain dicts; verify.py is the reference for their meaning) ----
+#
+# threshold: the logic checks also run on analog channels, read as logic at
+# this voltage (one value, or (low, high) for hysteresis). Without it, an
+# analog channel in a logic check is left unchecked.
+
+def _t(x: dict, threshold) -> dict:
+    if threshold is not None:
+        x["threshold"] = list(threshold) if isinstance(threshold, (list, tuple)) else float(threshold)
+    return x
+
 
 def square(pin: str, freq_hz: float, duty: float | None = None, tol_freq: float = 0.02, tol_duty: float = 0.01,
-           max_jitter: float | None = None) -> dict:
+           max_jitter: float | None = None, threshold=None) -> dict:
     """A steady square wave (PWM, tone): frequency within tol_freq (relative),
     duty within tol_duty (absolute), optional period spread limit (relative)."""
-    return {"kind": "square", "pin": pin, "freq_hz": freq_hz, "duty": duty, "tol_freq": tol_freq,
-            "tol_duty": tol_duty, "max_jitter": max_jitter}
+    return _t({"kind": "square", "pin": pin, "freq_hz": freq_hz, "duty": duty, "tol_freq": tol_freq,
+               "tol_duty": tol_duty, "max_jitter": max_jitter}, threshold)
 
 
-def level(pin: str, value: int) -> dict:
+def level(pin: str, value: int, threshold=None) -> dict:
     """The pin stays at value for the whole capture (duty 0 / 255, idle lines)."""
-    return {"kind": "level", "pin": pin, "value": int(value)}
+    return _t({"kind": "level", "pin": pin, "value": int(value)}, threshold)
 
 
-def ends(levels: dict[str, int]) -> dict:
+def ends(levels: dict[str, int], threshold=None) -> dict:
     """Levels at the end of the capture (a bus released, a pin returned)."""
-    return {"kind": "ends", "levels": {k: int(v) for k, v in levels.items()}}
+    return _t({"kind": "ends", "levels": {k: int(v) for k, v in levels.items()}}, threshold)
 
 
-def starts(levels: dict[str, int]) -> dict:
-    return {"kind": "starts", "levels": {k: int(v) for k, v in levels.items()}}
+def starts(levels: dict[str, int], threshold=None) -> dict:
+    return _t({"kind": "starts", "levels": {k: int(v) for k, v in levels.items()}}, threshold)
 
 
 def only_moving(pins: list[str]) -> dict:
@@ -171,24 +181,24 @@ def only_moving(pins: list[str]) -> dict:
 
 
 def i2c(scl: str, sda: str, transactions: list[dict] | None = None, hz: float | None = None, tol_hz: float = 0.1,
-        released: bool = True) -> dict:
+        released: bool = True, threshold=None) -> dict:
     """transactions: [{"addr": 0x42, "rw": "write", "bytes": [..], "ack": True}], compared in order.
     Optional per transaction: "complete" (default True; False for the last one
     when the window ends before its STOP) and "pending_bits" (bits clocked after
     the last whole byte, compared only when given)."""
-    return {"kind": "i2c", "scl": scl, "sda": sda, "transactions": transactions, "hz": hz, "tol_hz": tol_hz,
-            "released": released}
+    return _t({"kind": "i2c", "scl": scl, "sda": sda, "transactions": transactions, "hz": hz, "tol_hz": tol_hz,
+               "released": released}, threshold)
 
 
 def spi(clk: str, mosi: str | None = None, miso: str | None = None, cs: str | None = None, mode: int | None = None,
         mosi_bytes: str | None = None, miso_bytes: str | None = None, hz: float | None = None, tol_hz: float = 0.1,
-        bit_order: str = "msb") -> dict:
-    return {"kind": "spi", "clk": clk, "mosi": mosi, "miso": miso, "cs": cs, "mode": mode, "mosi_bytes": mosi_bytes,
-            "miso_bytes": miso_bytes, "hz": hz, "tol_hz": tol_hz, "bit_order": bit_order}
+        bit_order: str = "msb", threshold=None) -> dict:
+    return _t({"kind": "spi", "clk": clk, "mosi": mosi, "miso": miso, "cs": cs, "mode": mode, "mosi_bytes": mosi_bytes,
+               "miso_bytes": miso_bytes, "hz": hz, "tol_hz": tol_hz, "bit_order": bit_order}, threshold)
 
 
 def uart(pin: str, baud: float | None, data: str | None = None, tol_baud: float = 0.03, idle: int = 1, bits: int = 8,
-         parity: str = "none", stop: float = 1, max_errors: int | None = None) -> dict:
+         parity: str = "none", stop: float = 1, max_errors: int | None = None, threshold=None) -> dict:
     """The bit time measured from the edges must be within tol_baud (relative)
     of baud; pass the rate the transmitter should really produce (e.g. F_CPU /
     BRR), not the nominal one. data: expected bytes as hex (the characters after
@@ -197,10 +207,21 @@ def uart(pin: str, baud: float | None, data: str | None = None, tol_baud: float 
     framing + parity errors allowed (None: not checked, only reported).
     baud=None measures only: the bit time is found from the edges and the result
     is "unchecked" with the measured values, unless data / max_errors / idle fail."""
-    return {"kind": "uart", "pin": pin, "baud": baud, "data": data, "tol_baud": tol_baud, "idle": idle, "bits": bits,
-            "parity": parity, "stop": stop, "max_errors": max_errors}
+    return _t({"kind": "uart", "pin": pin, "baud": baud, "data": data, "tol_baud": tol_baud, "idle": idle, "bits": bits,
+               "parity": parity, "stop": stop, "max_errors": max_errors}, threshold)
 
 
-def pulses(pin: str, count: int | None = None, period_s: float | None = None, tol: float = 0.05) -> dict:
+def pulses(pin: str, count: int | None = None, period_s: float | None = None, tol: float = 0.05,
+           threshold=None) -> dict:
     """Rising edges counted, optional period (TOGGLE / MILLIS style tests)."""
-    return {"kind": "pulses", "pin": pin, "count": count, "period_s": period_s, "tol": tol}
+    return _t({"kind": "pulses", "pin": pin, "count": count, "period_s": period_s, "tol": tol}, threshold)
+
+
+def voltage(pin: str, volts: float | None = None, tol: float = 0.05, min_v: float | None = None,
+            max_v: float | None = None, ripple: float | None = None) -> dict:
+    """An analog channel's level: the mean within volts +- tol (absolute, V),
+    every sample within [min_v, max_v], peak-to-peak at most ripple (V). Only
+    what is given is checked; a channel without a conversion to volts is left
+    unchecked."""
+    return {"kind": "voltage", "pin": pin, "volts": volts, "tol": tol, "min_v": min_v, "max_v": max_v,
+            "ripple": ripple}

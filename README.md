@@ -70,6 +70,9 @@ Headings split the run into a tree of segments. `#` is a test, `##` is a step, a
 | `i2c(scl, sda, transactions, hz, tol_hz, released)` | Transactions (address, direction, bytes, ACK, `complete`), SCL rate, and a released bus at the end |
 | `spi(clk, mosi, miso, cs, mode, mosi_bytes, miso_bytes, hz)` | Mode, bytes on both lines, SCK rate, and CS high at the end |
 | `uart(pin, baud, data, tol_baud, idle, bits, parity, stop, max_errors)` | Bit rate measured from the edges, data, idle level, and framing / parity errors. `baud=None` only measures |
+| `voltage(pin, volts, tol, min_v, max_v, ripple)` | An analog channel: mean within `volts` ± `tol` (V), every sample within `min_v`..`max_v`, peak-to-peak at most `ripple`. Only what is given is checked |
+
+The logic checks (`square`, `level`, `starts` / `ends`, `pulses`, `i2c`, `spi`, `uart`) also run on analog channels when given `threshold=`: one voltage, or `(low, high)` for hysteresis (a noisy slow edge then makes one edge). Edges are placed where the line between two samples crosses the threshold; the resolution is one ADC sample, added to the tolerances. Without `threshold=`, an analog channel in a logic check is unchecked, and the reason says so.
 
 Pins and roles are given, so these checks are verification, not discovery. `docs/capture-test-guide.ja.md` explains how to choose capture windows and tolerances, with examples from real runs.
 

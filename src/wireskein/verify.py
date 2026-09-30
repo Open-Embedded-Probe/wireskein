@@ -19,8 +19,8 @@ from pathlib import Path
 
 import numpy as np
 
-from ._engine import markers
-from ._engine.model import Capture, Channel
+from ._engine import analog, markers
+from ._engine.model import AnalogTrace, Capture, Channel
 from .runlog import FORMAT
 
 
@@ -481,9 +481,59 @@ def check_uart(cap, x):
     return ok, got, "; ".join(why)
 
 
+def _analog(cap: Capture, pin: str) -> AnalogTrace | None:
+    return next((a for a in cap.analog if a.name == pin), None)
+
+
+def check_voltage(cap, x):
+    a = _analog(cap, x["pin"])
+    if a is None:
+        return None, {}, "not an analog channel in this capture" if _ch(cap, x["pin"]) else "pin not captured"
+    got = analog.levels(a)
+    if got is None:
+        return None, {"samples": int(len(a.values))}, "no conversion to volts in the file"
+    if not got["samples"]:
+        return False, got, "no samples"
+    ok, why = True, []
+    if x.get("volts") is not None and abs(got["mean_v"] - x["volts"]) > x["tol"]:
+        ok = False
+        why.append(f"mean {got['mean_v']:.4f} V vs {x['volts']:.4f} +- {x['tol']:g} V")
+    if x.get("min_v") is not None and got["min_v"] < x["min_v"]:
+        ok = False
+        why.append(f"min {got['min_v']:.4f} V < {x['min_v']:g} V")
+    if x.get("max_v") is not None and got["max_v"] > x["max_v"]:
+        ok = False
+        why.append(f"max {got['max_v']:.4f} V > {x['max_v']:g} V")
+    if x.get("ripple") is not None and got["p2p_v"] > x["ripple"]:
+        ok = False
+        why.append(f"peak-to-peak {got['p2p_v']:.4f} V > {x['ripple']:g} V")
+    return ok, got, "; ".join(why)
+
+
+LOGIC = {"square", "level", "ends", "starts", "pulses", "i2c", "spi", "uart"}   # checks that read logic levels
+
+
+def _as_logic(cap: Capture, x: dict) -> tuple[Capture | None, str]:
+    """For a logic check naming analog channels: the capture with those read as
+    logic at x["threshold"] (None and why when there is no threshold)."""
+    if x["kind"] not in LOGIC:
+        return cap, ""
+    names = {c.name for c in cap.channels}
+    wanted = [a for a in cap.analog if a.name in _pins_of(x) and a.name not in names]
+    if not wanted:
+        return cap, ""
+    if x.get("threshold") is None:
+        return None, (", ".join(a.name for a in wanted) + " analog: give threshold= (volts) to read it as logic")
+    try:
+        extra = [analog.to_logic(a, cap.meta.get("tick_hz", cap.rate), x["threshold"]) for a in wanted]
+    except ValueError as e:
+        return None, str(e)
+    return Capture(cap.rate, cap.n_samples, cap.channels + extra, cap.meta, cap.analog), ""
+
+
 CHECKS = {"square": check_square, "level": check_level, "ends": check_ends, "starts": check_starts,
           "only_moving": check_only_moving, "pulses": check_pulses, "i2c": check_i2c, "spi": check_spi,
-          "uart": check_uart}
+          "uart": check_uart, "voltage": check_voltage}
 
 
 def _pins_of(x: dict) -> set[str]:
@@ -516,7 +566,8 @@ def verify(run_dir: str | Path) -> dict:
         loaded = [(c, load_capture(run_dir, c)) for c in inside]
         for x in spec["checks"]:
             pins = _pins_of(x)
-            hit = [(c, cap) for c, cap in loaded if pins <= set(cap_ch.name for cap_ch in cap.channels)] or \
+            hit = [(c, cap) for c, cap in loaded
+                   if pins <= {ch.name for ch in cap.channels} | {a.name for a in cap.analog}] or \
                   ([(c, cap) for c, cap in loaded] if x["kind"] == "only_moving" else [])
             if not hit:
                 skipped = {c["name"]: c["encoding"] for _, cap in loaded for c in cap.meta.get("skipped_channels", [])}
@@ -527,6 +578,10 @@ def verify(run_dir: str | Path) -> dict:
                 results.append(Result(path, None, x["kind"], None, x, reason=why))
                 continue
             for c, cap in hit:
+                cap, why = _as_logic(cap, x)
+                if cap is None:
+                    results.append(Result(path, c["file"], x["kind"], None, x, reason=why))
+                    continue
                 ok, got, why = CHECKS[x["kind"]](cap, x)
                 if cap.meta.get("time_base_slipped"):
                     # the probe says some samples were taken late: the verdict

@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Checks on analog channels: `voltage(pin, volts, tol, min_v, max_v, ripple)` (mean, range and peak-to-peak in volts), and `threshold=` on the logic checks (`square`, `level`, `starts`, `ends`, `pulses`, `i2c`, `spi`, `uart`) to read an analog channel as logic: one voltage or `(low, high)` with hysteresis, edges interpolated between samples, one ADC sample of resolution. An analog channel in a logic check without `threshold=` is unchecked with the reason.
+- (JA) アナログのチャンネルの検査: `voltage(pin, volts, tol, min_v, max_v, ripple)`（電圧の平均、範囲、ピークからピーク）と、ロジックの検査（`square`、`level`、`starts`、`ends`、`pulses`、`i2c`、`spi`、`uart`）の `threshold=`（アナログのチャンネルをロジックとして読む。1 つの電圧か、ヒステリシスの `(low, high)`。エッジはサンプルの間を補間し、分解能は ADC の 1 サンプル）。`threshold=` のないロジックの検査にアナログのチャンネルを渡すと、理由付きで未検査。
 
 ## 0.0.9
 - (EN) `wireskein gui` ships wireskein-web 0.0.3: the trigger is drawn as a dashed line marked T, with its time in the summary.
