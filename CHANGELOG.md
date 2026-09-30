@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 0.0.2
 - (EN) Capture files `.wsc` (`wireskein.wsc`, standard library only): each channel at its own sample rate (`step` ticks per sample), so a probe that decimates some channels stores only the samples it took. `wsc.from_interleaved()` splits a probe's sample stream by bits per sample and bit positions. The analysis uses each channel's own sample width wherever it assumed one tick.
 - (JA) キャプチャのファイル `.wsc`（`wireskein.wsc`、標準ライブラリだけ）: 各チャンネルを自分のサンプルレート（`step` 刻みに 1 サンプル）で持つ。一部のチャンネルを間引くプローブは、取ったサンプルだけを保存する。`wsc.from_interleaved()` はプローブのサンプルの並びを、1 サンプルのビット数とビット位置で切り分ける。解析は、1 刻みを前提にしていた所で、各チャンネルのサンプルの幅を使う。
 - (EN) Attachments and notes in a `.wsc`: `wsc.attach()` stores a named free-form file (text, JSON, bytes; replaceable), `wsc.note()` appends a timestamped entry to an append-only log; both work on an existing file without rewriting the channels, and go along through conversions. Commands `wireskein info`, `note` and `attach`; `Recorder.capture(..., attachments={...})`.
