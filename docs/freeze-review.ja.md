@@ -139,3 +139,21 @@ OEP と連動する項目（10）は、dev_oep の決定を待ちます。
 2. 決めたことを、仕様（wireskein-format、記録の形式、verify の説明）に書く。
 3. 実装する（wireskein、wireskein-web、pytest-embedded-wireskein）。互換のない変更は、はっきり壊れる形（古い名前は誤りにする）で入れる。
 4. ArduinoCore-CH32 の tracekit.py と dev_oep に、変わる呼び方を知らせる。
+
+## 実装の状況（2026-09-30）
+
+| 項目 | 状態 |
+| --- | --- |
+| 1. 形式の版（`wireskein/1`、`/0` を断る、`wireskein/sr-extra.json`） | 実装済み（wireskein 6acf678、wireskein-web 35f28c1） |
+| 2. `trigger_index` を仕様に、`start_us` をやめる | 実装済み（6acf678。古いプローブの µs は `start_ns` にして入れる） |
+| 3. 分数の範囲（2⁵³ − 1、浮動小数点は分母 10⁹）、`analog` の `unit` | 実装済み（6acf678） |
+| 4. `capture.json` の `id`、合わせ込みは `capture_id` | 実装済み（6acf678、wireskein-web 35f28c1） |
+| 5. `wireskein-run/3`（キーの付け方、キャプチャの `path`、`**rules` をやめる） | 実装済み（84e4f14。仕様は [記録の形式](run-format.ja.md)） |
+| 6. `tol_period`、`tol_v`、結果の `status`、未検査は既定で失敗 | 実装済み（84e4f14、d2593fa、wireskein-web 3bbc45c） |
+| 7. CLI（単位付きの時間、`--max-offset`、数の単位、`Request` をキーワードで、`ws.py`） | 実装済み（a46f32f） |
+| 8. wireskein-web（説明、`exports` は入口だけ、名前の対応表） | 実装済み（35f28c1） |
+| 9. pytest-embedded-wireskein（公開の API だけを使う、`--wireskein-unchecked`、Python 3.11） | 実装済み（ba744d2）。wireskein 0.1.0 が要る |
+| E. Python 3.11 以上 | 実装済み（a46f32f。3.11、3.12、3.13 で全テストを確かめた。CI も 3 つの版で試す） |
+| 10. OEP と連動するもの | `oep-client-python>=0.0.10` は実装済み（a46f32f）。OEP の凍結（`oep.fixture.logic` への改名など）は、oep-client の新しい版が出てから追随する |
+
+リリースの順番: wireskein-web → wireskein（同梱のビューアを上げてから）→ pytest-embedded-wireskein。凍結の最初の版は、どれも 0.1.0 を想定しています（仕様 §8 もそう書いています）。
