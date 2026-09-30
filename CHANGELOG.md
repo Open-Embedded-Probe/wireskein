@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 0.0.9
 - (EN) `wireskein gui` ships wireskein-web 0.0.3: the trigger is drawn as a dashed line marked T, with its time in the summary.
 - (JA) `wireskein gui` は wireskein-web 0.0.3 を同梱する: トリガの位置を T の付いた破線で示し、その時刻を概要に出す。
 
