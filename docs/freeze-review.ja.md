@@ -1,5 +1,7 @@
 # 凍結の前に決めること（wireskein / wireskein-web / pytest-embedded-wireskein）
 
+**まだ凍結していません。** ここで決めたことは、凍結に向けて先に入れるものです。凍結の時期は、利用者が決めます。それまでは、ほかにも互換のない変更がありえます。
+
 作成 2026-09-30。ArduinoCore-CH32 のセッションが洗い出した 10 項目を、コードで確かめて、案を付けたものです。
 
 **決定（2026-09-30）: A〜E はすべて案のとおり。** A: 凍結で `wireskein/1`（`/0` は読まない）。B: `capture.json` に `id`。C: `tol_period`、`tol_v` に改名。D: 未検査は既定で失敗（`measured` は失敗にしない）。E: Python 3.11 以上。印のない項目も案のとおりに進めます。**決めてから文書（仕様）に書き、そのあと実装します。** 「要判断」の印の項目は、利用者が選びます。印のないものは、案のまま進めてよいと考えるものです。
@@ -152,8 +154,8 @@ OEP と連動する項目（10）は、dev_oep の決定を待ちます。
 | 6. `tol_period`、`tol_v`、結果の `status`、未検査は既定で失敗 | 実装済み（84e4f14、d2593fa、wireskein-web 3bbc45c） |
 | 7. CLI（単位付きの時間、`--max-offset`、数の単位、`Request` をキーワードで、`ws.py`） | 実装済み（a46f32f） |
 | 8. wireskein-web（説明、`exports` は入口だけ、名前の対応表） | 実装済み（35f28c1） |
-| 9. pytest-embedded-wireskein（公開の API だけを使う、`--wireskein-unchecked`、Python 3.11） | 実装済み（ba744d2）。wireskein 0.1.0 が要る |
+| 9. pytest-embedded-wireskein（公開の API だけを使う、`--wireskein-unchecked`、Python 3.11） | 実装済み（ba744d2）。wireskein 0.0.13 が要る |
 | E. Python 3.11 以上 | 実装済み（a46f32f。3.11、3.12、3.13 で全テストを確かめた。CI も 3 つの版で試す） |
 | 10. OEP と連動するもの | `oep-client-python>=0.0.10` は実装済み（a46f32f）。OEP の凍結（`oep.fixture.logic` への改名など）は、oep-client の新しい版が出てから追随する |
 
-リリースの順番: wireskein-web → wireskein（同梱のビューアを上げてから）→ pytest-embedded-wireskein。凍結の最初の版は、どれも 0.1.0 を想定しています（仕様 §8 もそう書いています）。
+リリースの順番: wireskein-web → wireskein（同梱のビューアを上げてから）→ pytest-embedded-wireskein。版の番号は、いつもどおり次の番号です（wireskein 0.0.13、wireskein-web 0.0.6、pytest-embedded-wireskein 0.0.4 の見込み）。凍結したときの番号は、そのときに決めます。
