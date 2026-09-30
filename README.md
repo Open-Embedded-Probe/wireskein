@@ -207,6 +207,15 @@ wireskein align m.wireskein --reference SYNC --via SYNC_A --threshold 1.0,2.3 --
 
 In Python, `wireskein.align.find()` / `apply()` / `save()` / `load()`. A periodic signal is ambiguous when the start may be off by more than its period: give `--window`, or align on an irregular marker pulse.
 
+Captures from two probes taken at the same time line up the same way, from a signal both saw (wired to a pin of each):
+
+```sh
+wireskein align B.wireskein --to A.wireskein --reference SYNC --via SYNC --save
+# B.wireskein onto A.wireskein: tick 0 at +3699.999 us, clock -79.98 +- 0.02 ppm, 264/264 edges matched, residual 0.031 us
+```
+
+The result goes into B's `alignment.json` (with A's identity); neither file's samples change. The viewer's "Add another probe's file" then draws B's channels on A's time axis (`align.between()` in Python).
+
 In a recorded run, pass the same thing to `rec.capture(t, tick_hz, channels=[...])`.
 
 A WireSkein file can also carry anything else about the capture: acquisition settings, a wiring note, analysis results. Attachments are named files (text, JSON or bytes) and can be replaced. Notes form an append-only log, one entry per call, with its time. Both can be added to an existing file without rewriting the channels:
