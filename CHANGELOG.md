@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 0.0.13
 - (EN) `wireskein gui` ships wireskein-web 0.0.6: it reads `wireskein/1` (with the capture id) and shows the four check statuses.
 - (JA) `wireskein gui` は wireskein-web 0.0.6 を同梱する: `wireskein/1`（キャプチャの ID 付き）を読み、照合の 4 つの状態を示す。
 - (EN) **Breaking CLI:** `align --window` is `--max-offset`; `analyze --window FROM TO` and `--max-offset` take units (`1ms`, `300us`; a plain number is seconds); counts take only k / K, M and G (a lowercase `m`, which would read as milli, is an error that says so).
