@@ -68,7 +68,9 @@ def write_vcd(path: Path, cap: Capture, **meta) -> Path:
     for a in cap.analog:
         v = a.volts()
         analog.append((next(ids), a, v if v is not None else a.values.astype(np.float64), v is not None))
-    extra = {"format": "wireskein-vcd-extra/0", "tick_hz": [tick.numerator, tick.denominator], "ticks": cap.n_samples,
+    meta.pop("capture_id", None)
+    extra = {"format": "wireskein-vcd-extra/1", "id": cap.meta.get("capture_id"),
+             "tick_hz": [tick.numerator, tick.denominator], "ticks": cap.n_samples,
              "channels": {c.name: {"step": c.step, "phase": c.phase, **({"acquisition": c.acquisition} if c.acquisition else {})}
                           for _, c in logic},
              "analog": {a.name: {"rate_hz": [a.rate_hz.numerator, a.rate_hz.denominator],
@@ -134,6 +136,8 @@ def read_vcd(path: Path) -> Capture:
                 extra = json.loads(c[len(MARK):])
             except ValueError:
                 extra = {}
+    if extra.get("format") != "wireskein-vcd-extra/1":
+        extra = {}                                       # another version's, or none: read as a plain VCD
     ts = re.search(r"\$timescale\s+(.*?)\$end", head, re.S)
     unit = Fraction(1, 10**9)
     if ts:
@@ -252,6 +256,8 @@ def read_vcd(path: Path) -> Capture:
                     bits.append((x, v[width - 1 - k]))
                 logic(f"{base}[{k}]", bits)
     meta = {"vcd_file": str(path), "tick_hz": tick, **extra.get("meta", {})}
+    if extra.get("id"):
+        meta["capture_id"] = extra["id"]
     if xz:
         meta["vcd_x_or_z"] = xz
     if skipped:

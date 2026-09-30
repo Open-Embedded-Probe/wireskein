@@ -163,7 +163,7 @@ uart("PB0", None)                        # 測るだけ（8N1 として読む）
 
 PC の時計と、キャプチャの開始時刻の対応は ms の精度です（`arm` の要求が P4 に届くまでの遅れがある）。区間の割り当てには十分ですが、コマンドとキャプチャの中の変化点のずれを µs で測る用途には使えません。精度が要る場合は、次のどちらかにします。
 
-- **P4 のキャプチャの印を使う。** OEP には、UART や console のストリームに付ける `mark` がありますが、キャプチャの時間軸に付ける印は今の `oep.if.capture` にありません。付けるなら OEP の仕様への追加提案になります。クライアントの `Segment` が持つ `start_us` を記録に残すことが、その第一歩です。キャプチャの追加情報の名前は `start_us`（プローブの時計で最初のサンプルの時刻、µs、整数）に決めます: `rec.capture(t, rate, interleaved=data, names=[...], start_us=seg.start_us)`。時刻合わせを実装するときも、この名前を読みます。
+- **P4 のキャプチャの印を使う。** OEP には、UART や console のストリームに付ける `mark` がありますが、キャプチャの時間軸に付ける印は今の `oep.if.capture` にありません。付けるなら OEP の仕様への追加提案になります。クライアントの `Segment` が持つ `start_ns` と `start_uncertainty_ns` を記録に残すことが、その第一歩です（ファイルの形式 §3.3。以前の `start_us` はやめました）: `rec.capture(t, rate, interleaved=data, names=[...], start_ns=seg.start_ns, start_uncertainty_ns=seg.start_uncertainty_ns)`。
 - **CH32 か P4 が、目印のピンを動かす。** 今の `reset_trace` の GPIO マーカーと同じやり方です。
 
 ## 3. テストの組み方
@@ -267,4 +267,4 @@ rec.close()
 | 取りこぼしたキャプチャの途中までのデータ（`capture(..., incomplete=True)` の meta で印を付ける） | 未実装（OEP v1 の one-shot では、完了しないと segment が報告されない。取りこぼしが問題になった時点で、テスト側で記録し、照合での扱いを決める。それまでは `note("capture incomplete")` だけで、その区間は「no capture inside the segment」の NG） |
 | 1 本の長い記録の中のマーカー（UART の文字列）で区間に分ける | 実装済み（`wireskein segments`、`analyze --segment`） |
 | I2C の tLOW と tHIGH、SPI の CS のタイミング、WS2812 のビットの幅などの時間の測定 | 未実装 |
-| キャプチャの時間軸の印（P4 側）、`start_us` を使った時刻合わせ | 未実装（OEP のキャプチャの仕様に印がない） |
+| キャプチャの時間軸の印（P4 側）、`start_ns` を使った時刻合わせ | 未実装（OEP のキャプチャの仕様に印がない） |

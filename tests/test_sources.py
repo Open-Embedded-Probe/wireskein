@@ -117,7 +117,8 @@ def test_oep_source_against_a_stand_in(tmp_path, monkeypatch):
     assert head["tick_hz"] == [20_000_000, 1]
     assert [fileformat.unpack(c) for c in chans] == [row.tobytes() for row in fake.levels]
     meta = head["meta"]
-    assert meta["source"] == "oep:/dev/ttyACM9" and meta["start_us"] == 123 and meta["time_base_slipped"] is True
+    assert meta["source"] == "oep:/dev/ttyACM9" and meta["start_ns"] == 123_000 and "start_us" not in meta
+    assert meta["time_base_slipped"] is True
     assert meta["trigger_index"] == 4 and meta["probe_channels"] == {"SDA": 47, "SCL": 48, "INT": 5}
 
 

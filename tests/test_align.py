@@ -132,7 +132,7 @@ def test_another_file(tmp_path):
     assert e["matched"] >= 0.95 * e["overlap_edges"]
     assert e["residual_ticks"] < 3                                     # A ticks: 50 ns each
     doc = align.save_between(b, a, e)
-    assert doc["files"]["A.wireskein"]["capture_sha256"] == align.capture_sha256(a)
+    assert doc["files"]["A.wireskein"]["capture_id"] == fileformat.read_header(a)["id"]
     align.save(b, {"format": align.FORMAT, "channels": {}})           # an in-file alignment saved later
     assert "A.wireskein" in align.load(b)["files"]                    # keeps the one to A
 

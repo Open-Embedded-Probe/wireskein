@@ -19,7 +19,8 @@ expectations recorded for its path.
             rec.command("PWM 64"); rec.reply("PWM duty=64")
             armed = rec.armed()                       # time.monotonic() right after arming
             data = capture.read_all(n)
-            rec.capture(armed, 2_000_000, interleaved=data, names=["PA1", "PA0"], start_us=seg.start_us)
+            rec.capture(armed, 2_000_000, interleaved=data, names=["PA1", "PA0"],
+                        start_ns=seg.start_ns, start_uncertainty_ns=seg.start_uncertainty_ns)
     rec.close()
 
 A capture comes either as the probe's sample stream (`interleaved`, with
@@ -28,8 +29,8 @@ A capture comes either as the probe's sample stream (`interleaved`, with
 with its own step). Test scripts import this module directly, so these calls
 and the helpers below keep their names, arguments and meaning; anything added
 gets a default that keeps the old meaning. An incompatible change raises
-FORMAT. Capture meta "start_us" is the probe clock (us, integer) of the first
-sample; "time_base_slipped": True means the probe knows some samples were taken
+FORMAT. Capture meta "start_ns" is the probe clock (ns since its boot) of the
+first sample, "start_uncertainty_ns" how far off that may be; "time_base_slipped": True means the probe knows some samples were taken
 late (OEP segment flags bit 2; absent when not).
 """
 
@@ -115,7 +116,7 @@ class Recorder:
         """Store one capture as cNNNN.wireskein. armed: time.monotonic() when it was
         armed (Recorder.armed(), or the capture client's own stamp). Give either
         interleaved + names (+ width / positions / n for other sample layouts)
-        or channels. meta goes into the capture file (start_us, time_base_slipped, ...);
+        or channels. meta goes into the capture file (start_ns, start_uncertainty_ns, trigger_index, time_base_slipped, ...);
         attachments are free-form files stored with it (see wireskein.fileformat.attach)."""
         if (interleaved is None) == (channels is None):
             raise ValueError("give either interleaved (with names) or channels")

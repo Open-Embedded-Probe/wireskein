@@ -109,3 +109,15 @@ def test_not_a_vcd(tmp_path):
     (tmp_path / "x.vcd").write_text("hello\n")
     with pytest.raises(ValueError, match="not a WireSkein file, a sigrok session"):
         load(tmp_path / "x.vcd")
+
+
+def test_the_capture_id_survives_conversions(tmp_path):
+    p = source(tmp_path)
+    cid = fileformat.read_header(p)["id"]
+    for src, dst in (("a.wireskein", "b.sr"), ("b.sr", "c.wireskein"), ("c.wireskein", "d.vcd"),
+                     ("d.vcd", "e.wireskein")):
+        assert cli("convert", tmp_path / src, tmp_path / dst).returncode == 0
+    assert fileformat.read_header(tmp_path / "e.wireskein")["id"] == cid
+    import zipfile
+    with zipfile.ZipFile(tmp_path / "b.sr") as z:
+        assert "wireskein/sr-extra.json" in z.namelist() and "wireskein.json" not in z.namelist()

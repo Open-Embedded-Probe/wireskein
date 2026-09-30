@@ -201,7 +201,9 @@ def test_identified_by_content_not_name(tmp_path):
     raw = p.read_bytes()
     assert raw[:4] == b"PK\x03\x04" and raw[30:44] == b"wireskein.json"   # the first entry, stored
     with zipfile.ZipFile(p) as z:
-        assert json.loads(z.read("wireskein.json")) == {"format": "wireskein/0"}
+        assert json.loads(z.read("wireskein.json")) == {"format": "wireskein/1"}
+        head = json.loads(z.read("capture.json"))
+        assert len(head["id"]) == 32 and int(head["id"], 16) >= 0
         assert "format" not in json.loads(z.read("capture.json"))
     assert fileformat.sniff(p) == "wireskein"
     assert load(p).channel("P0")
@@ -218,6 +220,12 @@ def test_other_files_are_refused(tmp_path):
         z.writestr("capture.json", json.dumps({"format": "wireskein-capture/0", "tick_hz": [1, 1], "ticks": 0,
                                                "channels": [], "meta": {}}))
     (tmp_path / "text.wireskein").write_text("hello")
+    beta = tmp_path / "beta.wireskein"                                     # wireskein 0.0.8-0.0.12
+    with zipfile.ZipFile(beta, "w") as z:
+        z.writestr("wireskein.json", '{"format": "wireskein/0"}')
+        z.writestr("capture.json", '{"tick_hz": [1, 1], "ticks": 0, "channels": [], "meta": {}}')
+    with pytest.raises(ValueError, match="a beta WireSkein file"):
+        load(beta)
     newer = tmp_path / "new.wireskein"
     with zipfile.ZipFile(newer, "w") as z:
         z.writestr("wireskein.json", '{"format": "wireskein/9"}')

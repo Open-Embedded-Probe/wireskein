@@ -71,7 +71,7 @@ with rec.section(1, "test_pwm"):
             rec.reply(reply_line)               # デバイスの応答
             t = rec.armed()                     # キャプチャを開始した直後の time.monotonic()
             data = read_capture()               # プローブのサンプル。1 サンプル 1 バイト、ビット k がピン k
-            rec.capture(t, rate, interleaved=data, names=["PA1", "PA0"], start_us=segment_start_us)
+            rec.capture(t, rate, interleaved=data, names=["PA1", "PA0"], start_ns=seg.start_ns, start_uncertainty_ns=seg.start_uncertainty_ns)
 rec.close()
 ```
 
@@ -112,7 +112,7 @@ wireskein capture --source sigrok:fx2lafw --channels SDA=D0,SCL=D1 --rate 12M --
   - OEP のプローブでは、ロジックとアナログを組（capture-group）で一緒に始めます。
   - アナログの各チャンネルは、自分のレートと開始時刻（プローブの推定値と不確かさ）、生の値、入力範囲、基準電圧、プローブの出荷時の較正を持ちます。
   - sigrok では、アナログはデバイスの 1 つのレートで取ります。
-- ファイルには、機器が実際に使ったレートを入れます。取得元が知っている情報（プローブの `start_us`、`time_base_slipped` の印、トリガーの位置）も入れます。
+- ファイルには、機器が実際に使ったレートを入れます。取得元が知っている情報（プローブの時計での最初のサンプルの時刻 `start_ns` とその不確かさ `start_uncertainty_ns`、`time_base_slipped` の印、トリガの位置 `trigger_index`）も入れます。
 - Python からは `wireskein.sources.capture(取得元, Request(...), 出力先)` です。
 - 別の package から、entry point の `wireskein.sources` で取得元を足せます。
 
@@ -148,7 +148,7 @@ from wireskein import fileformat as wf
 wf.write("c.wireskein", 100_000_000, [
     wf.Channel("PA5", wf.pack(pa5_samples), n),                 # samples: 1 サンプル 1 バイト（0 か 1）
     wf.Channel("PB0", wf.pack(pb0_samples), n // 32, step=32),  # 1/32 のレートで取ったチャンネル
-], start_us=segment_start_us)
+], start_ns=seg.start_ns, start_uncertainty_ns=seg.start_uncertainty_ns)
 channels = wf.from_interleaved(data, ["PA5", "PA7"], width=8)    # プローブの並び: 1 サンプル width ビット、ビット k がチャンネル k
 ```
 
