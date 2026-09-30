@@ -11,6 +11,7 @@
     wireskein gui [FILE | DIR] [--port N] [--no-browser]   the viewer in the browser (localhost only)
     wireskein note FILE.wireskein TEXT [--json] [--kind K]
     wireskein attach FILE.wireskein NAME [SRC | --text TEXT] [--replace]
+    wireskein annotate FILE.wireskein [--save] [--hint JSON]   decoding results as rows for the viewer
     wireskein align FILE.wireskein --reference LOGIC --via ANALOG --threshold V|LOW,HIGH
                     [--window 300us] [--apply-to A,B] [--save]   analog tracks onto the logic ticks
 
@@ -98,6 +99,21 @@ def _seconds(text: str) -> float:
     if not m:
         raise ValueError(f"not a time: {text!r}")
     return float(m.group(1)) * {"ns": 1e-9, "us": 1e-6, "µs": 1e-6, "ms": 1e-3, "s": 1.0, None: 1.0}[m.group(2)]
+
+
+def annotate_cmd(args) -> None:
+    from . import annotate
+    from .analyze import load
+    hints = json.loads(Path(args.hint[1:]).read_text() if args.hint.startswith("@") else args.hint) if args.hint else None
+    doc = annotate.build(load(args.file), hints)
+    for r in doc["rows"]:
+        bad = sum(i["level"] != "ok" for i in r["items"])
+        print(f"{r['name']:24s} under {r.get('near', '-'):8s} {len(r['items']):6d} items" + (f", {bad} not ok" if bad else ""))
+    if not doc["rows"]:
+        print("nothing decoded")
+    if args.save:
+        annotate.save(args.file, doc)
+        print(f"saved as {annotate.ENTRY}")
 
 
 def align_cmd(args) -> None:
@@ -284,6 +300,10 @@ def main() -> None:
     at.add_argument("src", type=Path, nargs="?", default=None)
     at.add_argument("--text", default=None)
     at.add_argument("--replace", action="store_true")
+    an = sub.add_parser("annotate", help="decoding results as rows for the viewer (decode/annotations.json)")
+    an.add_argument("file", type=Path)
+    an.add_argument("--save", action="store_true", help="store them in the file")
+    an.add_argument("--hint", default=None, help="as for analyze: JSON or @file.json")
     al = sub.add_parser("align", help="align analog tracks to the logic ticks by a signal on both (attach/alignment.json)")
     al.add_argument("file", type=Path)
     al.add_argument("--reference", required=True, help="the logic channel")
@@ -294,7 +314,7 @@ def main() -> None:
     al.add_argument("--save", action="store_true", help="store it in the file as attach/alignment.json")
     args = ap.parse_args()
     files = {"info": info, "note": note_cmd, "attach": attach_cmd, "convert": convert, "capture": capture_cmd,
-             "gui": gui_cmd, "align": align_cmd}
+             "gui": gui_cmd, "align": align_cmd, "annotate": annotate_cmd}
     if args.cmd in files:
         try:
             return files[args.cmd](args)
