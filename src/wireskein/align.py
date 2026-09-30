@@ -194,7 +194,7 @@ def between(ref_cap: Capture, reference: str, cap: Capture, via: str, threshold=
     """How this capture's ticks map onto another capture's (wireskein-format §5.1.1): the
     same signal on `reference` (a logic channel of ref_cap) and `via` (a channel of cap;
     analog needs a threshold). Returns the entry for alignment.json["files"] (without
-    capture_sha256). The start may be off by anything within window_ticks (reference
+    capture_id). The start may be off by anything within window_ticks (reference
     ticks; default: the reference capture's length); the two clocks by max_ppm.
     Raises ValueError when the edges do not tell one answer."""
     r_t, r_pol, r_w = _edges(ref_cap, reference, None)
@@ -264,20 +264,19 @@ def between(ref_cap: Capture, reference: str, cap: Capture, via: str, threshold=
             "offset_us": off / tick_ref * 1e6, **({"threshold_v": list(analog.thresholds(threshold))} if threshold else {})}
 
 
-def capture_sha256(path: str | Path) -> str:
-    """The identity of a WireSkein file for alignment.json["files"]: SHA-256 of its capture.json."""
-    import hashlib
+def capture_id(path: str | Path) -> str:
+    """The id of the capture in a WireSkein file (wireskein-format §3), which alignment.json["files"] refers to."""
     from . import fileformat
-    data = fileformat.get(path, "capture.json")
-    if data is None:
-        raise ValueError(f"{path}: holds no capture")
-    return hashlib.sha256(data).hexdigest()
+    cid = fileformat.read_header(path).get("id")
+    if not cid:
+        raise ValueError(f"{path}: its capture has no id")
+    return cid
 
 
 def save_between(path: str | Path, reference_path: str | Path, entry: dict) -> dict:
     """Add (or replace) the alignment of `path` to `reference_path` in path's alignment.json."""
     doc = load(path) or {"format": FORMAT, "channels": {}}
-    doc.setdefault("files", {})[Path(reference_path).name] = {"capture_sha256": capture_sha256(reference_path), **entry}
+    doc.setdefault("files", {})[Path(reference_path).name] = {"capture_id": capture_id(reference_path), **entry}
     save(path, doc)
     return doc
 

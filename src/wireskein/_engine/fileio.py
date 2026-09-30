@@ -25,6 +25,7 @@ def load(path: str | Path) -> Capture:
     tick = fileformat.tick_hz(head)
     return Capture(float(tick), int(head["ticks"]), out,
                    meta={**head.get("meta", {}), "file": str(path), "tick_hz": tick, "extras": fileformat.extras(path),
+                         "capture_id": head.get("id"),
                          "skipped_channels": fileformat.skipped(head)}, analog=analog)
 
 
@@ -60,7 +61,9 @@ def save(path: str | Path, cap: Capture, **meta) -> Path:
     import zipfile
     refuse_if_skipped(cap, path)
     tick = cap.meta.get("tick_hz", cap.rate)
+    meta.pop("capture_id", None)
     path = fileformat.write(path, tick, [to_channel(c, cap.n_samples) for c in cap.channels] + [to_analog(a) for a in cap.analog],
+                     capture_id=cap.meta.get("capture_id"),
                      **meta)
     if cap.meta.get("extras"):
         with zipfile.ZipFile(path, "a", zipfile.ZIP_DEFLATED) as z:

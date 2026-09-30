@@ -4,7 +4,8 @@ each channel at its own sample rate, and what goes with it.
 Standard library only, like wireskein.runlog, so anything holding samples can
 save them without numpy. A .wireskein is a zip:
 
-    wireskein.json  {"format": "wireskein/0"}: what the file is (first entry, stored)
+    wireskein.json  {"format": "wireskein/1"}: what the file is (first entry, stored)
+    capture.json    also the capture id, carried through conversions
     capture.json    tick clock, channels, capture metadata
     ch/0.bits       channel 0: one bit per sample, least significant bit first
     ch/1.bits       ...
@@ -25,7 +26,7 @@ gaps, so a viewer can show exactly the samples that exist.
     wf.write("c.wireskein", 100_000_000,
              [wf.Channel("PA5", wf.pack(samples_pa5), n),                   # samples: 0/1 per byte
               wf.Channel("PB0", wf.pack(samples_pb0), n // 32, step=32)],
-             start_us=seg_start_us)
+             start_ns=seg.start_ns, start_uncertainty_ns=seg.start_uncertainty_ns)
     wf.write("c.wireskein", 20_000_000, wf.from_interleaved(data, ["PA5", "PA7"]))  # 1 byte per sample, bit k = channel k
 
     wf.attach("c.wireskein", "probe.json", {"fw": "1.2", "plan": {...}})   # later, to an existing file
@@ -40,13 +41,15 @@ import datetime
 import json
 import math
 import os
+import re
+import secrets
 import sys
 import zipfile
 from dataclasses import dataclass, field
 from fractions import Fraction
 from pathlib import Path
 
-FORMAT = "wireskein/0"
+FORMAT = "wireskein/1"
 SUFFIX = ".wireskein"
 IDENT = "wireskein.json"          # what the file is; the first entry, stored (wireskein-format §2.1)
 CAPTURE = "capture.json"
@@ -131,10 +134,25 @@ class AnalogChannel:
         return [(v - self.zero) * self.scale_nv * 1e-9 for v in self.values()]
 
 
+MAX_TERM = 2**53 - 1          # a fraction's numerator and denominator stay exact as JavaScript numbers (§3)
+
+
 def _fraction(x) -> Fraction:
+    """A fraction from (num, den), an int, a Fraction, or a float (denominator at most 10^9)."""
     if isinstance(x, (list, tuple)):
         return Fraction(*x)
-    return Fraction(x).limit_denominator(10**12) if isinstance(x, float) else Fraction(x)
+    return Fraction(x).limit_denominator(10**9) if isinstance(x, float) else Fraction(x)
+
+
+def _terms(f: Fraction, what: str) -> list[int]:
+    if abs(f.numerator) > MAX_TERM or f.denominator > MAX_TERM:
+        raise ValueError(f"{what} {f}: numerator and denominator must be at most 2^53 - 1")
+    return [f.numerator, f.denominator]
+
+
+def new_id() -> str:
+    """A capture id (wireskein-format §3): 128 random bits as 32 lowercase hex digits."""
+    return secrets.token_hex(16)
 
 
 def _packed(values, code: str) -> bytes:
@@ -145,12 +163,14 @@ def _packed(values, code: str) -> bytes:
 
 
 def analog_raw(name: str, values, rate_hz, width: int = 16, t0_ticks=0, value_bits: int | None = None,
-               zero: float | None = None, scale_nv: float | None = None, **acquisition) -> AnalogChannel:
-    """Raw ADC values (unsigned integers) -> an "analog" channel. acquisition:
-    pin, attenuation_db, reference={"source": "vdd", "mv": 3300}, vrefint_raw, ..."""
+               zero: float | None = None, scale_nv: float | None = None, unit: str = "V",
+               **acquisition) -> AnalogChannel:
+    """Raw ADC values (unsigned integers) -> an "analog" channel; (raw - zero) * scale_nv * 1e-9 is in
+    `unit` (V unless a sensor says otherwise). acquisition: pin, attenuation_db,
+    reference={"source": "vdd", "mv": 3300}, vrefint_raw, ..."""
     data = _packed(values, _TYPECODE[width])
     return AnalogChannel(name, data, len(data) // (width // 8), rate_hz, t0_ticks, "analog", width, value_bits,
-                         zero, scale_nv, acquisition=acquisition)
+                         zero, scale_nv, unit, acquisition=acquisition)
 
 
 def analog_volts(name: str, values, rate_hz, t0_ticks=0, unit: str = "V", **acquisition) -> AnalogChannel:
@@ -221,13 +241,17 @@ def from_interleaved(data: bytes | bytearray | memoryview, names: list[str], wid
 # ---------------- files ----------------
 
 def write(path: str | Path, tick_hz: int | float | Fraction | tuple[int, int], channels: list[Channel | AnalogChannel],
-          attachments: dict[str, str | bytes | dict | list] | None = None, **meta) -> Path:
+          attachments: dict[str, str | bytes | dict | list] | None = None, *, capture_id: str | None = None,
+          **meta) -> Path:
     """Write a .wireskein file (any name; SUFFIX is the usual one). tick_hz is the tick clock (a Fraction keeps an exact rate
     such as 160 MHz / 3). meta: small JSON-able facts about the capture, e.g.
-    start_us (probe clock of tick 0), time_base_slipped, probe, trigger.
-    attachments: free-form files stored as attach/<name> (see attach())."""
+    start_ns / start_uncertainty_ns (probe clock of tick 0), trigger_index, time_base_slipped, probe.
+    attachments: free-form files stored as attach/<name> (see attach()). capture_id: the capture's id
+    (a new one when not given; a conversion passes the original's on)."""
     path = Path(path)
-    tick = Fraction(*tick_hz) if isinstance(tick_hz, tuple) else Fraction(tick_hz).limit_denominator(10**9)
+    tick = _fraction(tick_hz)
+    if capture_id is not None and not re.fullmatch(r"[0-9a-f]{32}", capture_id):
+        raise ValueError(f"capture id {capture_id!r}: 32 lowercase hex digits")
     names = [c.name for c in channels]
     if len(set(names)) != len(names):
         raise ValueError(f"channel names repeat: {names}")
@@ -235,13 +259,13 @@ def write(path: str | Path, tick_hz: int | float | Fraction | tuple[int, int], c
     for k, c in enumerate(channels):
         if isinstance(c, AnalogChannel):
             e = {"name": c.name, "file": f"ch/{k}.{'f32' if c.encoding == 'analog-f32' else 'raw'}",
-                 "encoding": c.encoding, "n": c.n, "rate_hz": [c.rate_hz.numerator, c.rate_hz.denominator],
-                 "t0_ticks": [c.t0_ticks.numerator, c.t0_ticks.denominator]}
+                 "encoding": c.encoding, "n": c.n, "rate_hz": _terms(c.rate_hz, f"{c.name} rate_hz"),
+                 "t0_ticks": _terms(c.t0_ticks, f"{c.name} t0_ticks")}
             if c.encoding == "analog":
                 e["width"] = c.width
                 e.update({k2: v for k2, v in (("value_bits", c.value_bits), ("zero", c.zero), ("scale_nv", c.scale_nv))
                           if v is not None})
-            elif c.unit != "V":
+            if c.unit != "V":
                 e["unit"] = c.unit
             files.append((e["file"], c.data))
         else:
@@ -251,7 +275,7 @@ def write(path: str | Path, tick_hz: int | float | Fraction | tuple[int, int], c
             e["acquisition"] = c.acquisition
         entries.append(e)
     ends = [c.end(tick) if isinstance(c, AnalogChannel) else c.end for c in channels]
-    head = {"tick_hz": [tick.numerator, tick.denominator], "ticks": max(ends, default=0),
+    head = {"id": capture_id or new_id(), "tick_hz": _terms(tick, "tick_hz"), "ticks": max(ends, default=0),
             "channels": entries, "meta": meta}
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
         z.writestr(zipfile.ZipInfo(IDENT, (1980, 1, 1, 0, 0, 0)), json.dumps({"format": FORMAT}), zipfile.ZIP_STORED)
@@ -416,6 +440,9 @@ def _check(z: zipfile.ZipFile, path) -> None:
     if IDENT not in z.namelist():
         raise ValueError(f"{path}: not a WireSkein file (no {IDENT})")
     fmt = json.loads(z.read(IDENT)).get("format")
+    if fmt == "wireskein/0":
+        raise ValueError(f"{path}: a beta WireSkein file (wireskein/0, from wireskein 0.0.8-0.0.12); "
+                         f"this version reads {FORMAT!r} only")
     if fmt != FORMAT:
         raise ValueError(f"{path}: format {fmt!r}, this version reads {FORMAT!r} (a newer wireskein may read it)")
 

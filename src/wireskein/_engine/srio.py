@@ -50,6 +50,8 @@ def read_sr(path: Path) -> Capture:
             parts = sorted((n for n in z.namelist() if n.startswith(f"analog-1-{idx}-")), key=lambda n: int(n.rsplit("-", 1)[1]))
             avals[idx] = np.frombuffer(b"".join(z.read(n) for n in parts), "<f4")
         extra = json.loads(z.read(EXTRA)) if EXTRA in z.namelist() else {}
+        if extra.get("format") != "wireskein-sr-extra/1":
+            extra = {}
         rawfiles = {a["file"]: z.read(a["file"]) for a in extra.get("analog", {}).values() if a.get("file") in z.namelist()}
         listed = set(extra.get("extras", []))
         carried = {n: z.read(n) for n in z.namelist() if n.startswith(("attach/", "notes/")) or n in listed}
@@ -63,6 +65,8 @@ def read_sr(path: Path) -> Capture:
         meta["tick_hz"] = Fraction(*extra["tick_hz"])
         rate = float(meta["tick_hz"])
     meta.update(extra.get("meta", {}))
+    if extra.get("id"):
+        meta["capture_id"] = extra["id"]
     if carried:
         meta["extras"] = carried
     # Every declared probe becomes a channel, named or not, when none is named:
@@ -100,7 +104,7 @@ def read_sr(path: Path) -> Capture:
     return Capture(rate, n_ticks, channels, meta=meta, analog=analog)
 
 
-EXTRA = "wireskein.json"
+EXTRA = "wireskein/sr-extra.json"          # wireskein-format §6
 CHUNK = 4 << 20             # ticks per logic-1-N / analog-1-K-N file
 
 
@@ -130,7 +134,8 @@ def write_sr(path: Path, cap: Capture, **meta) -> Path:
              f"total probes={n_ch}", f"samplerate={round(tick)} Hz", f"total analog={len(held)}"]
     lines += [f"probe{k + 1}={c.name}" for k, c in enumerate(cap.channels)]
     lines += [f"analog{idx}={a.name}" for idx, a, *_ in held] + [f"unitsize={unitsize}", ""]
-    extra = {"format": "wireskein-sr-extra/0", "tick_hz": [tick.numerator, tick.denominator],
+    meta.pop("capture_id", None)
+    extra = {"format": "wireskein-sr-extra/1", "id": cap.meta.get("capture_id"), "tick_hz": [tick.numerator, tick.denominator],
              "channels": {c.name: {"step": c.step, "phase": c.phase, **({"acquisition": c.acquisition} if c.acquisition else {})}
                           for c in cap.channels if c.step != 1 or c.phase or c.acquisition},
              "analog": {}, "meta": meta, "extras": sorted(cap.meta.get("extras", {}))}

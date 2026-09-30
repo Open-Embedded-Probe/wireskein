@@ -257,8 +257,8 @@ def _times(meta: dict, seg) -> None:
         meta["start_ns"] = seg.start_ns
         if getattr(seg, "start_uncertainty_ns", None) is not None:
             meta["start_uncertainty_ns"] = seg.start_uncertainty_ns
-    elif getattr(seg, "start_us", None) is not None:
-        meta["start_us"] = seg.start_us
+    elif getattr(seg, "start_us", None) is not None:  # an older probe's us time: the file keeps ns (spec §3.3)
+        meta["start_ns"] = seg.start_us * 1000
 
 
 def _accuracy(cfg) -> dict:

@@ -71,7 +71,7 @@ with rec.section(1, "test_pwm"):
             rec.reply(reply_line)               # what the device answered
             t = rec.armed()                     # time.monotonic() right after arming the capture
             data = read_capture()               # the probe's samples: one byte per sample, bit k = pin k
-            rec.capture(t, rate, interleaved=data, names=["PA1", "PA0"], start_us=segment_start_us)
+            rec.capture(t, rate, interleaved=data, names=["PA1", "PA0"], start_ns=seg.start_ns, start_uncertainty_ns=seg.start_uncertainty_ns)
 rec.close()
 ```
 
@@ -145,7 +145,7 @@ wireskein capture --source sigrok:fx2lafw --channels SDA=D0,SCL=D1 --rate 12M --
 
 `--channels` names each logic channel (`NAME=ID`). `--analog NAME=ID[@FRONTEND],...` adds analog channels (`--analog-rate`, `--analog-samples`; by default as long as the logic capture). On an OEP probe, logic and analog are started together (capture-group); each analog channel keeps its own rate and start (the probe's estimate, with its uncertainty), raw values, input range, reference and the probe's factory calibration. With sigrok, analog ids ride at the device's one rate.
 
- The file keeps the rate the device actually used, plus what the source knows: the probe's `start_us`, a `time_base_slipped` mark, the trigger position. From Python: `wireskein.sources.capture(source, Request(...), out)`. Other packages can add sources through the `wireskein.sources` entry point group.
+ The file keeps the rate the device actually used, plus what the source knows: the probe's `start_ns` and `start_uncertainty_ns` (the probe clock of the first sample), a `time_base_slipped` mark, the trigger position (`trigger_index`). From Python: `wireskein.sources.capture(source, Request(...), out)`. Other packages can add sources through the `wireskein.sources` entry point group.
 
 ## Viewing captures in the browser
 
@@ -181,7 +181,7 @@ from wireskein import fileformat as wf
 wf.write("c.wireskein", 100_000_000, [
     wf.Channel("PA5", wf.pack(pa5_samples), n),                 # samples: one byte per sample, 0 or 1
     wf.Channel("PB0", wf.pack(pb0_samples), n // 32, step=32),  # a channel kept at 1/32 of the rate
-], start_us=segment_start_us)
+], start_ns=seg.start_ns, start_uncertainty_ns=seg.start_uncertainty_ns)
 channels = wf.from_interleaved(data, ["PA5", "PA7"], width=8)    # a probe's stream: width bits per sample, bit k = channel k
 ```
 
