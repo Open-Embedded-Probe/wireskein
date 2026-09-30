@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) `wireskein gui` ships wireskein-web 0.0.4: analog channels are drawn on the aligned time when the file has an alignment from `wireskein align` (a checkbox switches back to the probe's times).
+- (JA) `wireskein gui` は wireskein-web 0.0.4 を同梱する: `wireskein align` の合わせ込みがファイルにあれば、アナログのチャンネルを合わせた時刻で描く（チェックボックスで、プローブの時刻に戻せる）。
 - (EN) `wireskein align FILE --reference LOGIC --via ANALOG --threshold V|LOW,HIGH [--window T] [--apply-to ...] [--save]` and `wireskein.align`: the offset and time scale of an analog track against the logic ticks, from a signal on both (edges matched, then a line fit), stored as `attach/alignment.json` (spec §5.1). The stored samples and times are not changed; `align.apply()` gives the aligned capture. An ambiguous result (a periodic signal and a wide window) is refused with the reason.
 - (JA) `wireskein align ファイル --reference ロジック --via アナログ --threshold V|LOW,HIGH [--window T] [--apply-to ...] [--save]` と `wireskein.align`: 両方で取った信号から、アナログのトラックのロジックの刻みに対するオフセットと時間の倍率を求める（エッジを突き合わせて直線で合わせる）。`attach/alignment.json` に入れる（仕様 §5.1）。記録したサンプルと時刻は変えない。`align.apply()` で合わせた後のキャプチャを得る。答えが 1 つに決まらないとき（周期的な信号で探す範囲が広い）は、理由を出して断る。
 - (EN) Checks on analog channels: `voltage(pin, volts, tol, min_v, max_v, ripple)` (mean, range and peak-to-peak in volts), and `threshold=` on the logic checks (`square`, `level`, `starts`, `ends`, `pulses`, `i2c`, `spi`, `uart`) to read an analog channel as logic: one voltage or `(low, high)` with hysteresis, edges interpolated between samples, one ADC sample of resolution. An analog channel in a logic check without `threshold=` is unchecked with the reason.
