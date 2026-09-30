@@ -139,3 +139,27 @@ def test_recorder_attachments(tmp_path):
     rec.capture(rec.armed(), 1e6, interleaved=bytes(10), names=["P0"], attachments={"setup.txt": "10 kΩ pull-up"})
     rec.close()
     assert wsc.attachments(tmp_path / "c0001.wsc") == {"setup.txt": "10 kΩ pull-up".encode()}
+
+
+def test_unknown_encoding_is_refused(tmp_path):
+    import json
+    import subprocess
+    import sys
+    import zipfile
+    fast, pwm = signals()
+    write(tmp_path / "a.wsc", fast, pwm)
+    with zipfile.ZipFile(tmp_path / "a.wsc") as z:
+        items = {n: z.read(n) for n in z.namelist()}
+    head = json.loads(items["capture.json"])
+    head["channels"].append({"name": "VBUS", "file": "ch/2.a16", "encoding": "analog", "n": 10, "step": 1, "phase": 0})
+    items["capture.json"] = json.dumps(head).encode()
+    items["ch/2.a16"] = bytes(20)
+    with zipfile.ZipFile(tmp_path / "b.wsc", "w") as z:
+        for n, d in items.items():
+            z.writestr(n, d)
+    with pytest.raises(ValueError, match=r"VBUS \('analog'\)"):
+        wsc.read(tmp_path / "b.wsc")
+    with pytest.raises(ValueError, match="does not read"):
+        wscio.load(tmp_path / "b.wsc")
+    r = subprocess.run([sys.executable, "-m", "wireskein", "info", str(tmp_path / "b.wsc")], capture_output=True, text=True)
+    assert r.returncode != 0 and "VBUS ('analog')" in r.stderr

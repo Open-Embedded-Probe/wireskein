@@ -40,6 +40,7 @@ from pathlib import Path
 
 FORMAT = "wireskein-capture/0"
 SUFFIX = ".wsc"
+ENCODINGS = {"bits"}     # what this version reads; others (analog, ...) are refused, see docs/wsc-format.ja.md
 
 
 @dataclass
@@ -223,6 +224,11 @@ def read_header(path: str | Path) -> dict:
         head = json.loads(z.read("capture.json"))
     if head.get("format") != FORMAT:
         raise ValueError(f"{path}: format {head.get('format')!r}, expected {FORMAT!r}")
+    unknown = [f"{c.get('name')} ({c.get('encoding')!r})" for c in head.get("channels", [])
+               if c.get("encoding") not in ENCODINGS]
+    if unknown:
+        raise ValueError(f"{path}: channel encodings this wireskein does not read: {', '.join(unknown)} "
+                         f"(it reads {', '.join(sorted(ENCODINGS))}; a newer wireskein may)")
     return head
 
 

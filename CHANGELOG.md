@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Reading a `.wsc` refuses a file with a channel `encoding` this version does not know (only `bits` so far), instead of reading it as logic; `docs/wsc-format.ja.md` is the format spec. New encodings (analog, reserved) will not change the format version. The `info` / `note` / `attach` / `convert` commands print the error without a traceback.
+- (JA) `.wsc` を読むとき、この版が知らないチャンネルの `encoding`（今は `bits` だけ）を含むファイルを、ロジックとして読まずに断る。形式の仕様は `docs/wsc-format.ja.md`。新しい `encoding`（予約したアナログなど）では形式の版を変えない。`info`、`note`、`attach`、`convert` のコマンドは、エラーをトレースバックなしで出す。
 
 ## 0.0.2
 - (EN) Capture files `.wsc` (`wireskein.wsc`, standard library only): each channel at its own sample rate (`step` ticks per sample), so a probe that decimates some channels stores only the samples it took. `wsc.from_interleaved()` splits a probe's sample stream by bits per sample and bit positions. The analysis uses each channel's own sample width wherever it assumed one tick.
