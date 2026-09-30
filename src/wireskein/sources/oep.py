@@ -1,6 +1,6 @@
 """oep:<target> - an OEP probe through oep-client-python (one shot).
 
-Logic channels go to oep.fixture.capture, analog ones to oep.fixture.analog;
+Logic channels go to oep.fixture.logic (oep.fixture.capture before OEP v1), analog ones to oep.fixture.analog;
 with both, oep.fixture.capture-group starts them together (the trigger, if
 any, on a logic channel). Channel ids are the probe's channel numbers; a
 track's channels are its plan roles 0..C-1 in the order given. The lock is
