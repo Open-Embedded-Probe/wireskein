@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 0.0.10
 - (EN) `wireskein gui` ships wireskein-web 0.0.4: analog channels are drawn on the aligned time when the file has an alignment from `wireskein align` (a checkbox switches back to the probe's times).
 - (JA) `wireskein gui` は wireskein-web 0.0.4 を同梱する: `wireskein align` の合わせ込みがファイルにあれば、アナログのチャンネルを合わせた時刻で描く（チェックボックスで、プローブの時刻に戻せる）。
 - (EN) `wireskein align FILE --reference LOGIC --via ANALOG --threshold V|LOW,HIGH [--window T] [--apply-to ...] [--save]` and `wireskein.align`: the offset and time scale of an analog track against the logic ticks, from a signal on both (edges matched, then a line fit), stored as `attach/alignment.json` (spec §5.1). The stored samples and times are not changed; `align.apply()` gives the aligned capture. An ambiguous result (a periodic signal and a wide window) is refused with the reason.
