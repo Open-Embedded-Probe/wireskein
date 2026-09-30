@@ -72,7 +72,7 @@ def find(cap: Capture, reference: str, via: str, threshold, window_ticks: float 
     channels from one ADC share its clock). max_ppm: how far the ADC's rate
     may be off. Raises ValueError when the edges do
     not tell one answer (too few, or a periodic signal whose period is shorter
-    than the window: then give a smaller window, or use a marker pulse)."""
+    than the window: then give a smaller window (--max-offset), or use a marker pulse)."""
     tick_hz = cap.meta.get("tick_hz", cap.rate)
     tick = float(tick_hz)
     ref = cap.channel(reference)
@@ -127,7 +127,7 @@ def find(cap: Capture, reference: str, via: str, threshold, window_ticks: float 
         raise ValueError(f"the edges of {via} and {reference} do not agree on any offset")
     if rival >= 0.8 * count:
         raise ValueError(f"ambiguous: another offset fits about as well ({rival} vs {count} edges; a periodic "
-                         f"signal: give a smaller window, or align on a marker pulse)")
+                         f"signal: give a smaller --max-offset, or align on a marker pulse)")
     off = b * width
     # 2. refine: match every edge with the model, fit offset and scale, and match again with the new model
     tol = 1.5 * width
@@ -227,7 +227,7 @@ def between(ref_cap: Capture, reference: str, cap: Capture, via: str, threshold=
     rival = next((values[i] for i in order[1:] if abs(values[i] - best) > 2), None)
     if counts[order[0]] < 2 or (rival is not None and counts[values == rival][0] >= 0.8 * counts[order[0]]):
         raise ValueError(f"ambiguous: the first {len(head)} edges of {via} fit several offsets (a periodic signal: "
-                         f"give a smaller window, or align on an irregular marker pulse)")
+                         f"give a smaller --max-offset, or align on an irregular marker pulse)")
     off, scale = float(np.median(d[np.abs(bins - best) <= 1])), s0
     # 2. refine over more and more of the edges; the tolerance grows with how uncertain the extrapolation is
     order_t = np.argsort(t)

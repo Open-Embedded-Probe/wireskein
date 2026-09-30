@@ -13,7 +13,7 @@
     wireskein attach FILE.wireskein NAME [SRC | --text TEXT] [--replace]
     wireskein annotate FILE.wireskein [--save] [--hint JSON]   decoding results as rows for the viewer
     wireskein align FILE.wireskein --reference LOGIC --via ANALOG --threshold V|LOW,HIGH
-                    [--window 300us] [--apply-to A,B] [--save]   analog tracks onto the logic ticks
+                    [--max-offset 300us] [--apply-to A,B] [--save]   analog tracks onto the logic ticks
     wireskein align B.wireskein --to A.wireskein --reference A_LOGIC --via B_CHANNEL [--save]
                                                                another probe's capture onto A's ticks
 
@@ -147,7 +147,7 @@ def align_cmd(args) -> None:
     th = [float(v) for v in args.threshold.split(",")] if args.threshold else None
     if args.to:                                               # onto another file's ticks (spec §5.1.1)
         ref = load(args.to)
-        window = _seconds(args.window) * ref.rate if args.window else None
+        window = _seconds(args.max_offset) * ref.rate if args.max_offset else None
         e = align.between(ref, args.reference, cap, args.via, (th if len(th) > 1 else th[0]) if th else None,
                           window, args.max_ppm)
         print(f"{args.file} onto {Path(args.to).name}: tick 0 at {e['offset_us']:+.3f} us, clock "
@@ -159,7 +159,7 @@ def align_cmd(args) -> None:
         return
     if th is None:
         raise ValueError("give --threshold (the analog channel is read as logic)")
-    window = _seconds(args.window) * cap.rate if args.window else None
+    window = _seconds(args.max_offset) * cap.rate if args.max_offset else None
     apply_to = args.apply_to.split(",") if args.apply_to else None
     a = align.find(cap, args.reference, args.via, th if len(th) > 1 else th[0], window, apply_to)
     c = a["channels"][args.via]
@@ -192,12 +192,13 @@ def capture_cmd(args) -> None:
     if not rate or not samples:
         need = "--rate and --samples" if logic else "--analog-rate (or --rate) and --analog-samples (or --samples)"
         raise ValueError(f"give {need}")
-    req = sources.Request(logic, sources.parse_count(rate), sources.parse_count(samples),
-                          sources.parse_trigger(args.trigger) if args.trigger else None,
-                          sources.parse_count(args.pretrigger) if args.pretrigger else None, args.timeout,
-                          sources.parse_analog(args.analog) if args.analog else [],
-                          sources.parse_count(args.analog_rate) if args.analog_rate else None,
-                          sources.parse_count(args.analog_samples) if args.analog_samples else None)
+    req = sources.Request(
+        channels=logic, rate=sources.parse_count(rate), samples=sources.parse_count(samples),
+        trigger=sources.parse_trigger(args.trigger) if args.trigger else None,
+        pretrigger=sources.parse_count(args.pretrigger) if args.pretrigger else None, timeout=args.timeout,
+        analog=sources.parse_analog(args.analog) if args.analog else [],
+        analog_rate=sources.parse_count(args.analog_rate) if args.analog_rate else None,
+        analog_samples=sources.parse_count(args.analog_samples) if args.analog_samples else None)
     out = sources.capture(args.source, req, args.output)
     if args.note:
         from . import fileformat
@@ -286,8 +287,8 @@ def main() -> None:
     a.add_argument("--out", type=Path, default=None)
     a.add_argument("--threshold", action="append", metavar="NAME=V|NAME=LOW,HIGH",
                    help="also decode this analog channel, read as logic at V (repeatable)")
-    a.add_argument("--window", nargs=2, type=float, metavar=("FROM_S", "TO_S"), default=None,
-                   help="only items inside this time range (seconds)")
+    a.add_argument("--window", nargs=2, type=_seconds, metavar=("FROM", "TO"), default=None,
+                   help="only items inside this time range (e.g. 1ms 5ms; a plain number is seconds)")
     a.add_argument("--segment", default=None, metavar="PATH",
                    help='only items inside a marker segment, e.g. "session/pwm/1kHz-25[1]" (glob; first match)')
     a.add_argument("--markers", default=None, metavar="JSON",
@@ -357,7 +358,8 @@ def main() -> None:
     al.add_argument("--via", required=True, help="this file's channel with the same signal")
     al.add_argument("--threshold", default=None, help="volts for an analog --via: V, or LOW,HIGH for hysteresis")
     al.add_argument("--max-ppm", type=float, default=200, help="with --to: how far the two clocks may differ")
-    al.add_argument("--window", default=None, help="how far off the start may be (e.g. 300us; default from the probe)")
+    al.add_argument("--max-offset", default=None,
+                    help="how far off the start may be (e.g. 300us; a plain number is seconds; default from the probe)")
     al.add_argument("--apply-to", default=None, help="analog channels that get the result (default: all)")
     al.add_argument("--save", action="store_true", help="store it in the file as attach/alignment.json")
     args = ap.parse_args()
@@ -397,7 +399,7 @@ def main() -> None:
             sys.exit("no marker stream found (give --markers)")
         hit = markers.select(found["tree"], args.segment)
         if not hit:
-            sys.exit(f"no segment matches {args.segment!r}; see: ws.py segments CAPTURE")
+            sys.exit(f"no segment matches {args.segment!r}; see: wireskein segments CAPTURE")
         window = (hit[0].begin, hit[0].end)
         seg_events = markers.events_in(res, cap, found, window)
     else:
