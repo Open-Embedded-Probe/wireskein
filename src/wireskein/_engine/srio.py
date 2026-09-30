@@ -45,6 +45,7 @@ def read_sr(path: Path) -> Capture:
         )
         raw = b"".join(z.read(n) for n in chunks)
         extra = json.loads(z.read(EXTRA)) if EXTRA in z.namelist() else {}
+        carried = {n: z.read(n) for n in z.namelist() if n.startswith(("attach/", "notes/"))}
     dtype = {1: np.uint8, 2: np.uint16, 4: np.uint32}[unitsize]
     data = np.frombuffer(raw, dtype=dtype)
     steps = extra.get("channels", {})
@@ -53,6 +54,8 @@ def read_sr(path: Path) -> Capture:
         meta["tick_hz"] = Fraction(*extra["tick_hz"])
         rate = float(meta["tick_hz"])
     meta.update(extra.get("meta", {}))
+    if carried:
+        meta["extras"] = carried
     # Every probe the file declares becomes a channel, named or not: unnamed
     # probes are real (usually static) inputs and are useful negatives.
     channels = []
@@ -91,6 +94,8 @@ def write_sr(path: Path, cap: Capture, **meta) -> Path:
         z.writestr("version", "2")
         z.writestr("metadata", "\n".join(lines))
         z.writestr(EXTRA, json.dumps(extra, indent=1))
+        for name, data in cap.meta.get("extras", {}).items():      # attachments and notes of a .wsc
+            z.writestr(name, data)
         for part, s0 in enumerate(range(0, cap.n_samples, CHUNK), start=1):
             s1 = min(s0 + CHUNK, cap.n_samples)
             out = np.zeros(s1 - s0, dtype)

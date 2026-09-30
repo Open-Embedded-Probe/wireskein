@@ -69,6 +69,29 @@ channels = wsc.from_interleaved(data, ["PA5", "PA7"], width=8)    # プローブ
 
 テストの記録では、同じものを `rec.capture(t, tick_hz, channels=[...])` に渡します。
 
+`.wsc` には、キャプチャについてのほかの情報も入れられます（取得の設定、配線のメモ、分析の結果など）。
+
+- **添付**: 名前付きのファイルです（テキスト、JSON、bytes）。後から差し替えられます。
+- **メモ**: 追記専用の記録です。1 回の呼び出しで 1 件、時刻付きで足します。
+
+どちらも、既存のファイルに、チャンネルのデータを書き直さずに足せます。
+
+```python
+wsc.attach("c.wsc", "probe.json", {"fw": "1.2", "plan": plan})   # dict / list は JSON、str はテキスト、bytes はそのまま
+wsc.note("c.wsc", "PA5 がうるさい。次は線を短く")
+wsc.note("c.wsc", {"i2c": transactions}, kind="analysis")
+wsc.attachments("c.wsc"), wsc.notes("c.wsc")
+```
+
+```sh
+wireskein info c.wsc                                  # チャンネルとレート、メタ情報、添付、メモ
+wireskein note c.wsc "リフローの後に取り直し"
+wireskein attach c.wsc setup.txt --text "SDA/SCL に 10k のプルアップ"
+wireskein attach c.wsc scope.png scope.png            # どんなファイルでも
+```
+
+テストの記録では、`rec.capture(..., attachments={...})` でキャプチャと一緒に添付を保存します。添付とメモは、`.sr` への変換と、`.sr` からの戻しでも持ち運ばれます。
+
 形式の変換は、コマンドで行います（形式は拡張子で決まります）。
 
 ```sh

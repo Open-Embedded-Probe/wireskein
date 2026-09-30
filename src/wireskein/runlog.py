@@ -110,11 +110,13 @@ class Recorder:
 
     def capture(self, armed: float, tick_hz: int | float | Fraction, *, interleaved: bytes | None = None,
                 names: list[str] | None = None, width: int = 8, positions: list[int] | None = None,
-                n: int | None = None, channels: list[wsc.Channel] | None = None, **meta) -> str:
+                n: int | None = None, channels: list[wsc.Channel] | None = None,
+                attachments: dict | None = None, **meta) -> str:
         """Store one capture as cNNNN.wsc. armed: time.monotonic() when it was
         armed (Recorder.armed(), or the capture client's own stamp). Give either
         interleaved + names (+ width / positions / n for other sample layouts)
-        or channels. meta goes into the capture file (start_us, time_base_slipped, ...)."""
+        or channels. meta goes into the capture file (start_us, time_base_slipped, ...);
+        attachments are free-form files stored with it (see wireskein.wsc.attach)."""
         if (interleaved is None) == (channels is None):
             raise ValueError("give either interleaved (with names) or channels")
         if channels is None:
@@ -122,7 +124,7 @@ class Recorder:
                 raise ValueError("interleaved needs names")
             channels = wsc.from_interleaved(interleaved, names, width, positions, n)
         name = f"c{len(self.doc['captures']) + 1:04d}{wsc.SUFFIX}"
-        wsc.write(self.dir / name, tick_hz, channels, **meta)
+        wsc.write(self.dir / name, tick_hz, channels, attachments, **meta)
         self.doc["captures"].append({"file": name, "t0": armed - self.t0, "channels": [c.name for c in channels]})
         return name
 

@@ -107,3 +107,35 @@ def test_convert_wsc_sr_wsc_keeps_the_real_rate(tmp_path):
     assert [(ch.name, ch.step) for ch in c.channels] == [("FAST", 1), ("SLOW", STEP)]
     assert all(np.array_equal(x.edges, y.edges) and x.initial == y.initial for x, y in zip(a.channels, c.channels))
     assert wsc.read(tmp_path / "c.wsc")[1][1].n == N // STEP        # only the samples that were taken
+
+
+def test_attachments_and_notes_survive_conversion(tmp_path):
+    import subprocess
+    import sys
+    fast, pwm = signals()
+    write(tmp_path / "a.wsc", fast, pwm)
+    wsc.attach(tmp_path / "a.wsc", "probe.json", {"fw": "1.2"})
+    wsc.attach(tmp_path / "a.wsc", "readme.txt", "first")
+    with pytest.raises(FileExistsError):
+        wsc.attach(tmp_path / "a.wsc", "readme.txt", "again")
+    wsc.attach(tmp_path / "a.wsc", "readme.txt", "replaced", replace=True)
+    assert wsc.note(tmp_path / "a.wsc", "noisy PA5") == 1
+    assert wsc.note(tmp_path / "a.wsc", {"i2c": [66]}, kind="analysis") == 2
+    run = lambda *a: subprocess.run([sys.executable, "-m", "wireskein", *map(str, a)], capture_output=True, text=True, check=True)
+    run("note", tmp_path / "a.wsc", "from the CLI")
+    run("convert", tmp_path / "a.wsc", tmp_path / "b.sr")
+    run("convert", tmp_path / "b.sr", tmp_path / "c.wsc")
+    assert wsc.attachments(tmp_path / "c.wsc") == {"probe.json": b'{\n "fw": "1.2"\n}', "readme.txt": b"replaced"}
+    assert [(n["content"], n.get("kind")) for n in wsc.notes(tmp_path / "c.wsc")] == \
+        [("noisy PA5", None), ({"i2c": [66]}, "analysis"), ("from the CLI", None)]
+    out = run("info", tmp_path / "c.wsc").stdout
+    assert "SLOW" in out and "step 32" in out and "attach/probe.json" in out and "note 3" in out
+    assert wsc.read(tmp_path / "c.wsc")[1][1].step == STEP                     # the channels are untouched
+
+
+def test_recorder_attachments(tmp_path):
+    from wireskein.runlog import Recorder
+    rec = Recorder(tmp_path)
+    rec.capture(rec.armed(), 1e6, interleaved=bytes(10), names=["P0"], attachments={"setup.txt": "10 kΩ pull-up"})
+    rec.close()
+    assert wsc.attachments(tmp_path / "c0001.wsc") == {"setup.txt": "10 kΩ pull-up".encode()}

@@ -6,6 +6,9 @@ save them without numpy. A .wsc is a zip:
     capture.json    format, tick clock, channels, capture metadata
     ch/0.bits       channel 0: one bit per sample, least significant bit first
     ch/1.bits       ...
+    attach/<name>   free-form files: acquisition settings, analysis results,
+                    anything (text, JSON, bytes); attach() adds or replaces one
+    notes/<n>.json  an append-only log: note() adds one entry, with its time
 
 Time is counted in ticks of one clock (tick_hz, a fraction). Channel k has a
 sample every `step` ticks, the first at tick `phase`: a probe that decimates
@@ -19,11 +22,17 @@ gaps, so a viewer can show exactly the samples that exist.
                wsc.Channel("PB0", wsc.pack(samples_pb0), n // 32, step=32)],
               start_us=seg_start_us)
     wsc.write("c.wsc", 20_000_000, wsc.from_interleaved(data, ["PA5", "PA7"]))  # 1 byte per sample, bit k = channel k
+
+    wsc.attach("c.wsc", "probe.json", {"fw": "1.2", "plan": {...}})   # later, to an existing file
+    wsc.note("c.wsc", "PA5 looked noisy; re-captured with a shorter wire")
+    wsc.note("c.wsc", {"kind": "analysis", "i2c": [...]})
 """
 
 from __future__ import annotations
 
+import datetime
 import json
+import os
 import zipfile
 from dataclasses import dataclass
 from fractions import Fraction
@@ -113,10 +122,12 @@ def from_interleaved(data: bytes | bytearray | memoryview, names: list[str], wid
 
 # ---------------- files ----------------
 
-def write(path: str | Path, tick_hz: int | float | Fraction | tuple[int, int], channels: list[Channel], **meta) -> Path:
+def write(path: str | Path, tick_hz: int | float | Fraction | tuple[int, int], channels: list[Channel],
+          attachments: dict[str, str | bytes | dict | list] | None = None, **meta) -> Path:
     """Write a .wsc. tick_hz is the tick clock (a Fraction keeps an exact rate
-    such as 160 MHz / 3). meta: anything JSON-able about the capture, e.g.
-    start_us (probe clock of tick 0), time_base_slipped, probe, trigger."""
+    such as 160 MHz / 3). meta: small JSON-able facts about the capture, e.g.
+    start_us (probe clock of tick 0), time_base_slipped, probe, trigger.
+    attachments: free-form files stored as attach/<name> (see attach())."""
     path = Path(path)
     tick = Fraction(*tick_hz) if isinstance(tick_hz, tuple) else Fraction(tick_hz).limit_denominator(10**9)
     names = [c.name for c in channels]
@@ -131,7 +142,80 @@ def write(path: str | Path, tick_hz: int | float | Fraction | tuple[int, int], c
         z.writestr("capture.json", json.dumps(head, indent=1))
         for k, c in enumerate(channels):
             z.writestr(f"ch/{k}.bits", c.bits)
+        for name, data in (attachments or {}).items():
+            z.writestr(_attach_name(name), _encode(data))
     return path
+
+
+# ---------------- attachments and notes ----------------
+
+ATTACH, NOTES = "attach/", "notes/"
+
+
+def _attach_name(name: str) -> str:
+    if not name or name.startswith("/") or ".." in name.split("/"):
+        raise ValueError(f"bad attachment name {name!r}")
+    return ATTACH + name
+
+
+def _encode(data) -> bytes:
+    if isinstance(data, (bytes, bytearray, memoryview)):
+        return bytes(data)
+    if isinstance(data, str):
+        return data.encode()
+    return json.dumps(data, indent=1, ensure_ascii=False, default=str).encode()
+
+
+def attach(path: str | Path, name: str, data: str | bytes | dict | list, replace: bool = False) -> None:
+    """Store a free-form file in an existing .wsc as attach/<name>: str as
+    UTF-8 text, dict / list as JSON, bytes as they are. The channel data is
+    not rewritten unless an existing attachment is replaced (replace=True)."""
+    entry = _attach_name(name)
+    with zipfile.ZipFile(path) as z:
+        exists = entry in z.namelist()
+    if exists and not replace:
+        raise FileExistsError(f"{path}: {entry} exists (replace=True to overwrite)")
+    if exists:
+        _rewrite(path, drop=entry)
+    with zipfile.ZipFile(path, "a", zipfile.ZIP_DEFLATED) as z:
+        z.writestr(entry, _encode(data))
+
+
+def note(path: str | Path, content: str | dict | list, **fields) -> int:
+    """Append one entry to the capture's log (never rewrites the others):
+    {"time": ISO 8601, "content": ..., **fields}. Returns its number."""
+    with zipfile.ZipFile(path) as z:
+        n = sum(1 for x in z.namelist() if x.startswith(NOTES)) + 1
+    entry = {"time": datetime.datetime.now().astimezone().isoformat(timespec="seconds"), "content": content, **fields}
+    with zipfile.ZipFile(path, "a", zipfile.ZIP_DEFLATED) as z:
+        z.writestr(f"{NOTES}{n:04d}.json", json.dumps(entry, ensure_ascii=False, default=str))
+    return n
+
+
+def attachments(path: str | Path) -> dict[str, bytes]:
+    with zipfile.ZipFile(path) as z:
+        return {x[len(ATTACH):]: z.read(x) for x in z.namelist() if x.startswith(ATTACH)}
+
+
+def notes(path: str | Path) -> list[dict]:
+    with zipfile.ZipFile(path) as z:
+        return [json.loads(z.read(x)) for x in sorted(x for x in z.namelist() if x.startswith(NOTES))]
+
+
+def extras(path: str | Path) -> dict[str, bytes]:
+    """attach/ and notes/ entries as they are stored (to carry them into another file)."""
+    with zipfile.ZipFile(path) as z:
+        return {x: z.read(x) for x in z.namelist() if x.startswith((ATTACH, NOTES))}
+
+
+def _rewrite(path: str | Path, drop: str) -> None:
+    path = Path(path)
+    tmp = path.with_name(path.name + ".tmp")
+    with zipfile.ZipFile(path) as src, zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as dst:
+        for info in src.infolist():
+            if info.filename != drop:
+                dst.writestr(info, src.read(info))
+    os.replace(tmp, path)
 
 
 def read_header(path: str | Path) -> dict:
