@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) `wireskein gui` ships wireskein-web 0.0.5: decoding annotations, markers, the run's checks, notes from the viewer, and other probes' captures on the same time axis.
+- (JA) `wireskein gui` は wireskein-web 0.0.5 を同梱する: 復号の注釈、マーカー、run の照合結果、ビューアからのメモ、別のプローブのキャプチャを同じ時間軸に。
 - (EN) Annotation rows carry the analysis's `verdict` and `score` (spec §5.3), so a viewer can show which rows are only "likely" (random pulses may pass as a slow UART).
 - (JA) 注釈の行に、判定の `verdict` と `score` を入れる（仕様 §5.3）。ビューアは、"likely" どまりの行をそうと示せる（ランダムなパルスが遅い UART に見えることがある）。
 - (EN) `wireskein gui`'s list page: check captures and "Open the checked ones together" (the first is the time reference; the others are drawn on its time, aligned by `wireskein align --to`).
