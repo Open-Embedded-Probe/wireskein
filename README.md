@@ -187,6 +187,8 @@ Convert between formats on the command line (the format follows the extension):
 ```sh
 wireskein convert c0001.wireskein c0001.sr     # for PulseView: one rate, slow channels repeated
 wireskein convert c0001.sr c0001.wireskein     # back: channels get their real rate again
+wireskein convert c0001.wireskein c0001.vcd    # GTKWave etc.: only the changes, each channel at its own rate
+wireskein convert saleae.vcd s.wireskein       # a VCD from elsewhere: the tick is the common divisor of its times
 wireskein convert corpus/fixtures/real/<id> capture.sr
 ```
 

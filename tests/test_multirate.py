@@ -221,7 +221,7 @@ def test_other_files_are_refused(tmp_path):
     newer = tmp_path / "new.wireskein"
     with zipfile.ZipFile(newer, "w") as z:
         z.writestr("wireskein.json", '{"format": "wireskein/9"}')
-    for p, why in ((old, "neither"), (tmp_path / "text.wireskein", "neither"), (newer, "wireskein/9")):
+    for p, why in ((old, "not a WireSkein file"), (tmp_path / "text.wireskein", "not a WireSkein file"), (newer, "wireskein/9")):
         with pytest.raises(ValueError, match=why):
             load(p)
     with pytest.raises(ValueError, match="not a WireSkein file"):
