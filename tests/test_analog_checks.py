@@ -106,3 +106,31 @@ def test_a_threshold_needs_volts():
     a = AnalogTrace("R", np.array([1, 2, 3]), Fraction(1000))
     with pytest.raises(ValueError, match="no conversion to volts"):
         to_logic(a, 1000, 1.5)
+
+
+def test_analyze_decodes_an_adc_line(tmp_path):
+    """analyze --threshold: a UART seen only by an ADC is found and decoded like a logic line."""
+    import json
+    import subprocess
+    import sys
+    rate, baud = 1_000_000, 57_600
+    bits = [1] * 400
+    for byte in b"hello adc\n" * 6:
+        bits += [0] + [(byte >> k) & 1 for k in range(8)] + [1, 1]
+    bits += [1] * 400
+    per = rate / baud
+    idx = (np.arange(int(len(bits) * per)) / per).astype(int)
+    v = np.array(bits)[idx] * 3.3 + RNG.normal(0, 0.05, len(idx))
+    p = tmp_path / "a.wireskein"
+    fileformat.write(p, rate, [fileformat.Channel("IDLE", fileformat.pack(bytes(1000)), 1000),
+                               fileformat.analog_volts("TX", v.tolist(), rate)])
+    r = subprocess.run([sys.executable, "-m", "wireskein", "analyze", str(p), "--threshold", "TX=1.0,2.3"],
+                       capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    doc = json.loads(r.stdout)
+    (claim,) = [c for c in doc["claims"] if c["protocol"] == "uart"]
+    assert claim["roles"] == {"data": "TX"}
+    assert "hello adc" in json.dumps(claim["result"])
+    r = subprocess.run([sys.executable, "-m", "wireskein", "analyze", str(p), "--threshold", "NOPE=1"],
+                       capture_output=True, text=True)
+    assert r.returncode != 0 and r.stderr.startswith("wireskein analyze: NOPE: not an analog channel")

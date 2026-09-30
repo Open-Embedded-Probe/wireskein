@@ -227,8 +227,9 @@ wireskein convert corpus/fixtures/real/<id> capture.sr
 ## キャプチャを復号する
 
 ```sh
-wireskein analyze capture.wireskein                             # .wireskein、sigrok の .sr、または fixture のディレクトリ
+wireskein analyze capture.wireskein          # WireSkein のファイル、sigrok の .sr、VCD、fixture のディレクトリ
 wireskein analyze capture.sr --hint '{"protocols": ["i2c"]}'
+wireskein analyze m.wireskein --threshold TX=1.0,2.3        # アナログのチャンネルも、ロジックとして読んで復号する
 wireskein segments capture.sr --results                   # UART にマーカーの行を流したキャプチャ
 ```
 

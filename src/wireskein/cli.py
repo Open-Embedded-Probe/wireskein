@@ -94,6 +94,28 @@ def attach_cmd(args) -> None:
     fileformat.attach(args.file, args.name, data, replace=args.replace)
 
 
+def _thresholds(items: list[str] | None) -> dict:
+    """["RX=1.65", "SDA=1.0,2.3"] -> {"RX": 1.65, "SDA": (1.0, 2.3)}."""
+    out = {}
+    for it in items or []:
+        name, sep, v = it.partition("=")
+        if not sep:
+            raise ValueError(f"--threshold {it!r}: give NAME=V or NAME=LOW,HIGH")
+        vals = [float(x) for x in v.split(",")]
+        out[name] = vals[0] if len(vals) == 1 else tuple(vals)
+    return out
+
+
+def _load_for_decoding(path, args):
+    """load(), with the analog channels named by --threshold read as logic too."""
+    cap = load(path)
+    th = _thresholds(getattr(args, "threshold", None))
+    if th:
+        from .analyze import as_logic
+        cap = as_logic(cap, th)
+    return cap
+
+
 def _seconds(text: str) -> float:
     """"300us", "1.5ms", "2s", "0.001" -> seconds."""
     import re
@@ -107,7 +129,7 @@ def annotate_cmd(args) -> None:
     from . import annotate
     from .analyze import load
     hints = json.loads(Path(args.hint[1:]).read_text() if args.hint.startswith("@") else args.hint) if args.hint else None
-    doc = annotate.build(load(args.file), hints)
+    doc = annotate.build(_load_for_decoding(args.file, args), hints)
     for r in doc["rows"]:
         bad = sum(i["level"] != "ok" for i in r["items"])
         print(f"{r['name']:24s} under {r.get('near', '-'):8s} {len(r['items']):6d} items" + (f", {bad} not ok" if bad else ""))
@@ -217,7 +239,7 @@ def convert(args) -> None:
 
 def segments(args) -> None:
     hints = json.loads(Path(args.hint[1:]).read_text() if args.hint and args.hint.startswith("@") else args.hint) if args.hint else None
-    cap = load(args.capture)
+    cap = _load_for_decoding(args.capture, args)
     staged.use_declarative(args.declarative)
     res = staged.analyze(cap, hints)
     found = markers.find(res, cap, hint=json.loads(args.markers) if args.markers else None)
@@ -262,6 +284,8 @@ def main() -> None:
     a.add_argument("--devices", nargs="*", default=None, metavar="PATTERN",
                    help='device packs to use, paths under decl/devices: "i2c/**" "i2c/sensirion/*" "!spi/**"')
     a.add_argument("--out", type=Path, default=None)
+    a.add_argument("--threshold", action="append", metavar="NAME=V|NAME=LOW,HIGH",
+                   help="also decode this analog channel, read as logic at V (repeatable)")
     a.add_argument("--window", nargs=2, type=float, metavar=("FROM_S", "TO_S"), default=None,
                    help="only items inside this time range (seconds)")
     a.add_argument("--segment", default=None, metavar="PATH",
@@ -273,6 +297,8 @@ def main() -> None:
     sg = sub.add_parser("segments", help="the marker segment tree with per-segment activity and decoded items")
     sg.add_argument("capture", type=Path)
     sg.add_argument("--hint", default=None)
+    sg.add_argument("--threshold", action="append", metavar="NAME=V|NAME=LOW,HIGH",
+                    help="also decode this analog channel, read as logic at V (repeatable)")
     sg.add_argument("--markers", default=None, metavar="JSON")
     sg.add_argument("--results", action="store_true", help="include the decoded items of each segment")
     sg.add_argument("--events", action="store_true", help="include text lines (commands, responses, child markers) as events")
@@ -320,6 +346,8 @@ def main() -> None:
     an.add_argument("file", type=Path)
     an.add_argument("--save", action="store_true", help="store them in the file")
     an.add_argument("--hint", default=None, help="as for analyze: JSON or @file.json")
+    an.add_argument("--threshold", action="append", metavar="NAME=V|NAME=LOW,HIGH",
+                    help="also decode this analog channel, read as logic at V (repeatable)")
     al = sub.add_parser("align", help="align analog tracks to the logic ticks by a signal on both (attach/alignment.json)")
     al.add_argument("file", type=Path)
     al.add_argument("--to", default=None, help="another WireSkein file to align this one onto (its --reference)")
@@ -340,7 +368,10 @@ def main() -> None:
                 zipfile.BadZipFile) as e:
             sys.exit(f"wireskein {args.cmd}: {e}")
     if args.cmd == "segments":
-        return segments(args)
+        try:
+            return segments(args)
+        except (ValueError, FileNotFoundError, zipfile.BadZipFile) as e:
+            sys.exit(f"wireskein segments: {e}")
     if args.cmd == "verify":
         return verify_cmd(args)
 
@@ -349,7 +380,10 @@ def main() -> None:
         hints = json.loads(Path(args.hint[1:]).read_text() if args.hint.startswith("@") else args.hint)
     if args.devices is not None:
         hints = (hints or {}) | {"devices": args.devices}
-    cap = load(args.capture)
+    try:
+        cap = _load_for_decoding(args.capture, args)
+    except (ValueError, FileNotFoundError, zipfile.BadZipFile) as e:
+        sys.exit(f"wireskein analyze: {e}")
     t0 = time.perf_counter()
     staged.use_declarative(args.declarative)
     res = staged.analyze(cap, hints)
