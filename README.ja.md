@@ -178,6 +178,15 @@ wireskein align m.wireskein --reference SYNC --via SYNC_A --threshold 1.0,2.3 --
 
 Python からは `wireskein.align.find()` / `apply()` / `save()` / `load()` です。周期的な信号は、開始のずれがその周期より大きくなりうると、答えが 1 つに決まりません。`--window` を与えるか、不規則な目印のパルスで合わせます。
 
+2 つのプローブで同時に取ったキャプチャも、同じ方法で合わせられます。両方が見た信号（それぞれのピンにつなぐ）を使います。
+
+```sh
+wireskein align B.wireskein --to A.wireskein --reference SYNC --via SYNC --save
+# B.wireskein onto A.wireskein: tick 0 at +3699.999 us, clock -79.98 +- 0.02 ppm, 264/264 edges matched, residual 0.031 us
+```
+
+結果は、B の `alignment.json` に（A を見分ける情報と一緒に）入ります。どちらのファイルのサンプルも変えません。ビューアの「Add another probe's file」で、B のチャンネルを A の時間軸に並べて表示できます（Python からは `align.between()`）。
+
 テストの記録では、同じものを `rec.capture(t, tick_hz, channels=[...])` に渡します。
 
 WireSkein のファイルには、キャプチャについてのほかの情報も入れられます（取得の設定、配線のメモ、分析の結果など）。
