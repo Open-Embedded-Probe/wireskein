@@ -264,8 +264,8 @@ def verify_cmd(args) -> None:
     if args.json:
         args.json.write_text(verify.dumps(rep))
     if args.junit:
-        args.junit.write_text(verify.junit(rep))
-    sys.exit(1 if rep["summary"]["ng"] else 0)
+        args.junit.write_text(verify.junit(rep, args.allow_unchecked))
+    sys.exit(1 if verify.failed(rep, args.allow_unchecked) else 0)
 
 
 def main() -> None:
@@ -309,6 +309,8 @@ def main() -> None:
     vf.add_argument("--junit", type=Path, default=None, help="also write JUnit XML")
     vf.add_argument("--json", type=Path, default=None, help="write the full report (with measured values)")
     vf.add_argument("--log", action="store_true", help="include the host log (markers, commands, replies) in --json")
+    vf.add_argument("--allow-unchecked", action="store_true",
+                    help="checks that could not be made (a pin not captured, ...) do not fail the run")
     cv = sub.add_parser("convert", help="convert a capture between formats (read by content; written as .sr when OUT ends in .sr, else WireSkein)")
     cv.add_argument("input", type=Path)
     cv.add_argument("output", type=Path)

@@ -24,15 +24,26 @@ from ._engine.model import AnalogTrace, Capture, Channel
 from .runlog import FORMAT
 
 
+MEASURED = "measured"             # a check function's verdict for "only measure" (uart(baud=None) with nothing else)
+STATUSES = ("ok", "ng", "unchecked", "measured")      # docs/run-format.ja.md §3
+
+
 @dataclass
 class Result:
     path: str
     capture: str | None
     check: str
-    ok: bool | None               # None: could not be checked (pin not captured, nothing decoded)
+    ok: bool | None               # True: ok, False: ng, None: unchecked or measured (see status)
     expected: dict = field(default_factory=dict)
     measured: dict = field(default_factory=dict)
     reason: str = ""
+    status: str = ""
+
+    def __post_init__(self):
+        if self.ok == MEASURED:
+            self.ok, self.status = None, "measured"
+        elif not self.status:
+            self.status = {True: "ok", False: "ng", None: "unchecked"}[self.ok]
 
 
 def load_capture(run_dir: Path, c: dict) -> Capture:
@@ -133,7 +144,7 @@ def check_pulses(cap, x):
     if x.get("period_s") is not None and len(rises) >= 2:
         per = float(np.median(np.diff(rises))) / cap.rate
         got["period_s"] = per
-        if abs(per / x["period_s"] - 1) > x["tol"]:
+        if abs(per / x["period_s"] - 1) > x["tol_period"]:
             ok = False
             why.append(f"period {per * 1e6:.2f} us vs {x['period_s'] * 1e6:.2f} us")
     return ok, got, "; ".join(why)
@@ -475,8 +486,8 @@ def check_uart(cap, x):
         ok = False
         why.append(f"idle level {got['idle']}")
     if not x.get("baud") and ok and x.get("data") is None and x.get("max_errors") is None:
-        # nothing was expected: reported as unchecked with the measurement
-        return None, got, (f"measured {got['baud']:.0f} baud, " if got["baud"] else "") + \
+        # nothing was expected: a measurement (status "measured", not a failure)
+        return MEASURED, got, (f"measured {got['baud']:.0f} baud, " if got["baud"] else "") + \
             f"{got['chars']} chars, {frame_err} framing / {par_err} parity errors"
     return ok, got, "; ".join(why)
 
@@ -495,9 +506,9 @@ def check_voltage(cap, x):
     if not got["samples"]:
         return False, got, "no samples"
     ok, why = True, []
-    if x.get("volts") is not None and abs(got["mean_v"] - x["volts"]) > x["tol"]:
+    if x.get("volts") is not None and abs(got["mean_v"] - x["volts"]) > x["tol_v"]:
         ok = False
-        why.append(f"mean {got['mean_v']:.4f} V vs {x['volts']:.4f} +- {x['tol']:g} V")
+        why.append(f"mean {got['mean_v']:.4f} V vs {x['volts']:.4f} +- {x['tol_v']:g} V")
     if x.get("min_v") is not None and got["min_v"] < x["min_v"]:
         ok = False
         why.append(f"min {got['min_v']:.4f} V < {x['min_v']:g} V")
@@ -545,6 +556,14 @@ def _pins_of(x: dict) -> set[str]:
     return out
 
 
+def _in_segment(c: dict, t: int, path: str, seg) -> bool:
+    """A capture belongs to the section it was taken in (its recorded path) and that section's ancestors;
+    one without a path (another recorder) to the section its start falls in."""
+    if "path" in c:
+        return c["path"] == path or c["path"].startswith(path + "/")
+    return seg.begin <= t < (seg.end if seg.end is not None else 1 << 62)
+
+
 def verify(run_dir: str | Path) -> dict:
     run_dir = Path(run_dir)
     doc = json.loads((run_dir / "run.json").read_text())
@@ -559,7 +578,8 @@ def verify(run_dir: str | Path) -> dict:
         if seg is None:
             results.append(Result(path, None, "segment", False, reason="no segment with this path in the log"))
             continue
-        inside = [c for c, t in caps if seg.begin <= t < (seg.end if seg.end is not None else 1 << 62)]
+        # a capture belongs to the section it was taken in (recorded path), or else to the one its start falls in
+        inside = [c for c, t in caps if _in_segment(c, t, path, seg)]
         if not inside:
             results.append(Result(path, None, "capture", False, reason="no capture inside the segment"))
             continue
@@ -598,10 +618,9 @@ def verify(run_dir: str | Path) -> dict:
     for issue in tree.issues:
         results.append(Result("", None, "markers", False, reason=json.dumps(issue)))
     ev = [{"t": e["t"], "src": e["src"], "text": e["text"]} for e in doc["log"]]
-    n_ok = sum(r.ok is True for r in results)
-    n_ng = sum(r.ok is False for r in results)
+    count = {k: sum(r.status == k for r in results) for k in STATUSES}
     return {"run": str(run_dir), "meta": doc.get("meta", {}), "results": [r.__dict__ for r in results],
-            "summary": {"ok": n_ok, "ng": n_ng, "unchecked": sum(r.ok is None for r in results),
+            "summary": {**count,
                         "segments": len(segs), "captures": len(caps)},
             "tree_issues": tree.issues, "log": ev}
 
@@ -612,36 +631,51 @@ def dumps(report: dict) -> str:
     return _dumps(report)
 
 
+def failed(report: dict, allow_unchecked: bool = False) -> bool:
+    """Whether the run fails: an NG, or (unless allowed) a check that could not be made."""
+    s = report["summary"]
+    return bool(s["ng"] or (s["unchecked"] and not allow_unchecked))
+
+
+MARKS = {"ok": "OK", "ng": "NG", "unchecked": "--", "measured": "ME"}
+
+
 def lines(report: dict, ok: bool = False) -> list[str]:
-    """One line per result, as `wireskein verify` prints them ("OK"/"NG"/"--",
-    path, check, capture, reason); only NG and unchecked unless ok=True."""
+    """One line per result, as `wireskein verify` prints them, for people (the form is not promised:
+    programs read the JSON report); only the ones that are not "ok" unless ok=True."""
     out = []
     for r in report["results"]:
-        if r["ok"] is True and not ok:
+        if r["status"] == "ok" and not ok:
             continue
-        mark = {True: "OK", False: "NG", None: "--"}[r["ok"]]
-        out.append(f"{mark}  {r['path']}  {r['check']}  {r['capture'] or ''}  {r['reason']}".rstrip())
+        out.append(f"{MARKS[r['status']]}  {r['path']}  {r['check']}  {r['capture'] or ''}  {r['reason']}".rstrip())
     return out
 
 
 def summary_line(report: dict) -> str:
     s = report["summary"]
-    return (f"{s['ok']} ok, {s['ng']} ng, {s['unchecked']} unchecked "
+    return (f"{s['ok']} ok, {s['ng']} ng, {s['unchecked']} unchecked, {s['measured']} measured "
             f"({s['segments']} segments, {s['captures']} captures)")
 
 
-def junit(report: dict) -> str:
+def junit(report: dict, allow_unchecked: bool = False) -> str:
+    """JUnit XML: ng -> failure; unchecked -> failure (skipped when allowed); measured -> passed, with the values."""
     from xml.sax.saxutils import escape, quoteattr
     rs = report["results"]
+    fail = [r for r in rs if r["status"] == "ng" or (r["status"] == "unchecked" and not allow_unchecked)]
+    skip = [r for r in rs if r["status"] == "unchecked" and allow_unchecked]
     out = [f'<testsuite name={quoteattr("wireskein verify " + report["run"])} tests="{len(rs)}" '
-           f'failures="{sum(r["ok"] is False for r in rs)}" skipped="{sum(r["ok"] is None for r in rs)}">']
+           f'failures="{len(fail)}" skipped="{len(skip)}">']
     for r in rs:
         name = f'{r["check"]} [{r["capture"] or "-"}]'
         out.append(f'  <testcase classname={quoteattr(r["path"])} name={quoteattr(name)}>')
-        if r["ok"] is False:
-            out.append(f'    <failure message={quoteattr(r["reason"])}>{escape(json.dumps(r["measured"], default=str))}</failure>')
-        elif r["ok"] is None:
+        values = escape(json.dumps(r["measured"], default=str))
+        if r in fail:
+            why = r["reason"] if r["status"] == "ng" else f"unchecked: {r['reason']}"
+            out.append(f'    <failure message={quoteattr(why)}>{values}</failure>')
+        elif r in skip:
             out.append(f'    <skipped message={quoteattr(r["reason"])}/>')
+        elif r["status"] == "measured":
+            out.append(f'    <system-out>{values}</system-out>')
         out.append("  </testcase>")
     out.append("</testsuite>")
     return "\n".join(out)

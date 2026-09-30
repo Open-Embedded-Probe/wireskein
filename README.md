@@ -85,14 +85,14 @@ wireskein verify out/run1 --junit out/run1/report.xml --json out/run1/report.jso
 OK  test_pwm/duty=64  square  c0001.wireskein
 NG  test_pwm/duty=128  square  c0002.wireskein  duty 0.6999 vs 0.5020
 OK  test_pwm/duty=0  level  c0003.wireskein
-2 ok, 1 ng, 0 unchecked (4 segments, 3 captures)
+2 ok, 1 ng, 0 unchecked, 0 measured (4 segments, 3 captures)
 ```
 
-The captures are stored as `.wireskein` files (below). The exit code is 1 when a check fails. A check whose pins are not in the capture is **unchecked** (`--`). Unchecked results do not fail the run.
+The captures are stored as `.wireskein` files (below). The exit code is 1 when a check fails. A check that could not be made (its pins are not in the capture, ...) is **unchecked** (`--`) and **fails the run by default**, since it is usually a mistake in the test or the wiring (`--allow-unchecked` lets it pass). A check asked only to measure (`uart(baud=None)`, ...) is **measured** (`ME`) and does not fail. The run format and the result statuses: [docs/run-format.ja.md](docs/run-format.ja.md).
 
 ### Headings and segments
 
-Headings split the run into a tree of segments. `#` is a test, `##` is a step, and a heading without a name (`##`) closes that level. `Recorder.section()` opens a heading and closes it when the `with` block ends. A capture belongs to the segment in which it was armed. Expectations are stored under the segment path, for example `test_pwm/duty=64`. When a name repeats under the same parent, each repetition gets an index (`duty=64[0]`, `duty=64[1]`) and keeps its own expectations. A broken structure, such as a skipped level, is always reported as NG.
+Headings split the run into a tree of segments. `#` is a test, `##` is a step, and a heading without a name (`##`) closes that level. `Recorder.section()` opens a heading and closes it when the `with` block ends. A capture belongs to the segment that was open when it was recorded (its path is stored with it). Expectations are stored under the segment path, for example `test_pwm/duty=64`. When a name repeats under the same parent, the first keeps its name and the repeats get an index (`duty=64`, `duty=64[1]`, `duty=64[2]`), each with its own expectations; adding a repeat later does not rename the earlier ones. A broken structure, such as a skipped level, is always reported as NG.
 
 ### Checks
 
@@ -102,11 +102,11 @@ Headings split the run into a tree of segments. `#` is a test, `##` is a step, a
 | `level(pin, value)` | The pin does not move |
 | `starts({pin: v})` / `ends({pin: v})` | The level at the first / last sample |
 | `only_moving([pins])` | No other captured pin moves |
-| `pulses(pin, count, period_s, tol)` | Number of rising edges and their period |
+| `pulses(pin, count, period_s, tol_period)` | Number of rising edges and their period (`tol_period` relative) |
 | `i2c(scl, sda, transactions, hz, tol_hz, released)` | Transactions (address, direction, bytes, ACK, `complete`), SCL rate, and a released bus at the end |
 | `spi(clk, mosi, miso, cs, mode, mosi_bytes, miso_bytes, hz)` | Mode, bytes on both lines, SCK rate, and CS high at the end |
 | `uart(pin, baud, data, tol_baud, idle, bits, parity, stop, max_errors)` | Bit rate measured from the edges, data, idle level, and framing / parity errors. `baud=None` only measures |
-| `voltage(pin, volts, tol, min_v, max_v, ripple)` | An analog channel: mean within `volts` ± `tol` (V), every sample within `min_v`..`max_v`, peak-to-peak at most `ripple`. Only what is given is checked |
+| `voltage(pin, volts, tol_v, min_v, max_v, ripple)` | An analog channel: mean within `volts` ± `tol_v` (V), every sample within `min_v`..`max_v`, peak-to-peak at most `ripple`. Only what is given is checked |
 
 The logic checks (`square`, `level`, `starts` / `ends`, `pulses`, `i2c`, `spi`, `uart`) also run on analog channels when given `threshold=`: one voltage, or `(low, high)` for hysteresis (a noisy slow edge then makes one edge). Edges are placed where the line between two samples crosses the threshold; the resolution is one ADC sample, added to the tolerances. Without `threshold=`, an analog channel in a logic check is unchecked, and the reason says so.
 

@@ -44,5 +44,5 @@ def test_repeated_headings_keep_their_own_expectations(tmp_path):
         with rec.section(2, "hold", expect=[level("P", 1)]):
             pass
     doc = json.loads(rec.close().read_text())
-    assert list(doc["expect"]) == ["t[0]/hold[0]", "t[0]/hold[1]", "t[0]/hold[2]", "t[0]/once", "t[1]/hold"]
+    assert list(doc["expect"]) == ["t/hold", "t/hold[1]", "t/hold[2]", "t/once", "t[1]/hold"]   # repeats: [1], [2], ...
     assert [spec["checks"][0]["value"] for spec in doc["expect"].values()] == [0, 1, 0, 1, 1]

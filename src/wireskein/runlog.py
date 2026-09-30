@@ -44,7 +44,7 @@ from pathlib import Path
 
 from . import fileformat
 
-FORMAT = "wireskein-run/2"          # 2: captures are .wireskein files
+FORMAT = "wireskein-run/3"          # docs/run-format.ja.md
 
 
 class Recorder:
@@ -80,15 +80,16 @@ class Recorder:
             self._occ.append((name, self._seen[k] - 1))
 
     @contextmanager
-    def section(self, level: int, name: str, expect: list | None = None, **rules):
+    def section(self, level: int, name: str, expect: list | None = None):
         """A heading closed explicitly, so its quiet tail belongs to it.
-        expect / rules are stored for this occurrence of the section. The key in
-        run.json is the segment path as markers.py writes it: a name repeated
-        under the same parent gets its index ("duty=64[0]", "duty=64[1]"), so
-        each repetition keeps its own expectations."""
+        expect is stored for this occurrence of the section. The key in run.json
+        is the segment path as markers.py writes it: the first occurrence of a
+        name under a parent keeps it, repeats get [1], [2], ... ("duty=64",
+        "duty=64[1]"), so each repetition keeps its own expectations and adding
+        one later does not rename the earlier ones (docs/run-format.ja.md)."""
         self.heading(level, name)
-        if expect is not None or rules:
-            self._expect.setdefault(tuple(self._occ), {"checks": [], **rules})["checks"] += list(expect or [])
+        if expect is not None:
+            self._expect.setdefault(tuple(self._occ), {"checks": []})["checks"] += list(expect)
         try:
             yield self
         finally:
@@ -126,14 +127,22 @@ class Recorder:
             channels = fileformat.from_interleaved(interleaved, names, width, positions, n)
         name = f"c{len(self.doc['captures']) + 1:04d}{fileformat.SUFFIX}"
         fileformat.write(self.dir / name, tick_hz, channels, attachments, **meta)
-        self.doc["captures"].append({"file": name, "t0": armed - self.t0, "channels": [c.name for c in channels]})
+        entry = {"file": name, "t0": armed - self.t0, "channels": [c.name for c in channels]}
+        if any(n for n, _ in self._occ):
+            entry["path"] = self._key(tuple(self._occ))       # the section open now: verify assigns it there
+        self.doc["captures"].append(entry)
         return name
 
     def _key(self, occ: tuple) -> str:
         parts = []
         for i, (name, k) in enumerate(occ):
-            parts.append(name + (f"[{k}]" if self._seen[(occ[:i], name)] > 1 else ""))
+            parts.append(name + (f"[{k}]" if k else ""))
         return "/".join(parts)
+
+    @property
+    def is_empty(self) -> bool:
+        """Nothing to check: no expectations and no captures."""
+        return not self._expect and not self.doc["captures"]
 
     def close(self) -> Path:
         self.doc["expect"] = {self._key(occ): spec for occ, spec in self._expect.items()}
@@ -212,17 +221,18 @@ def uart(pin: str, baud: float | None, data: str | None = None, tol_baud: float 
                "parity": parity, "stop": stop, "max_errors": max_errors}, threshold)
 
 
-def pulses(pin: str, count: int | None = None, period_s: float | None = None, tol: float = 0.05,
+def pulses(pin: str, count: int | None = None, period_s: float | None = None, tol_period: float = 0.05,
            threshold=None) -> dict:
-    """Rising edges counted, optional period (TOGGLE / MILLIS style tests)."""
-    return _t({"kind": "pulses", "pin": pin, "count": count, "period_s": period_s, "tol": tol}, threshold)
+    """Rising edges counted, optional period (TOGGLE / MILLIS style tests); tol_period is relative."""
+    return _t({"kind": "pulses", "pin": pin, "count": count, "period_s": period_s, "tol_period": tol_period},
+              threshold)
 
 
-def voltage(pin: str, volts: float | None = None, tol: float = 0.05, min_v: float | None = None,
+def voltage(pin: str, volts: float | None = None, tol_v: float = 0.05, min_v: float | None = None,
             max_v: float | None = None, ripple: float | None = None) -> dict:
-    """An analog channel's level: the mean within volts +- tol (absolute, V),
+    """An analog channel's level: the mean within volts +- tol_v (absolute, V),
     every sample within [min_v, max_v], peak-to-peak at most ripple (V). Only
     what is given is checked; a channel without a conversion to volts is left
     unchecked."""
-    return {"kind": "voltage", "pin": pin, "volts": volts, "tol": tol, "min_v": min_v, "max_v": max_v,
+    return {"kind": "voltage", "pin": pin, "volts": volts, "tol_v": tol_v, "min_v": min_v, "max_v": max_v,
             "ripple": ripple}

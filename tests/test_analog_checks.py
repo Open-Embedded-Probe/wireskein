@@ -31,8 +31,8 @@ def pwm_volts(n, rate, freq, duty, lo=0.0, hi=3.3, noise=0.02):
 def test_voltage_mean_range_and_ripple(tmp_path):
     v = 3.30 + RNG.normal(0, 0.01, 2000)
     chans = [fileformat.analog_volts("VBUS", v.tolist(), 100_000)]
-    got = run(tmp_path, [voltage("VBUS", 3.3, tol=0.05, min_v=3.2, max_v=3.4, ripple=0.1),
-                         voltage("VBUS", 5.0, tol=0.25), voltage("VBUS", ripple=0.01)], chans, 100_000)
+    got = run(tmp_path, [voltage("VBUS", 3.3, tol_v=0.05, min_v=3.2, max_v=3.4, ripple=0.1),
+                         voltage("VBUS", 5.0, tol_v=0.25), voltage("VBUS", ripple=0.01)], chans, 100_000)
     assert [ok for _, ok, _ in got] == [True, False, False]
     assert got[1][2].startswith("mean 3.") and "vs 5.0000" in got[1][2]
     assert "peak-to-peak" in got[2][2]
@@ -42,7 +42,7 @@ def test_voltage_from_raw_values_and_without_a_conversion(tmp_path):
     raw = [4095 * 1650 // 3300] * 100                                    # 1.65 V on a 12-bit ADC at 3.3 V
     chans = [fileformat.analog_raw("MID", raw, 100_000, value_bits=12, zero=0, scale_nv=3300e6 / 4095),
              fileformat.analog_raw("RAW", raw, 100_000)]
-    got = run(tmp_path, [voltage("MID", 1.65, tol=0.01), voltage("RAW", 1.65)], chans, 100_000)
+    got = run(tmp_path, [voltage("MID", 1.65, tol_v=0.01), voltage("RAW", 1.65)], chans, 100_000)
     assert got[0][1] is True
     assert got[1][1] is None and "no conversion to volts" in got[1][2]
 

@@ -63,7 +63,7 @@ def test_uart_error_in_a_skewed_character_points_at_the_time_base():
 
 def test_uart_measure_only_out_of_range_brr():
     (x, ok, got, why), = run_expectations("x035-uart-brr-below-16")
-    assert ok is None
+    assert ok == "measured"
     assert abs(got["baud"] / (6e6 / 16) - 1) < 0.003                 # F_CPU / 16, not the 460800 asked for
     assert got["frame_errors"] == 0
 

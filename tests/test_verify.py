@@ -18,7 +18,7 @@ def demo(tmp_path_factory):
 
 def test_demo_run_finds_the_injected_bugs(demo):
     rep = verify(demo)
-    assert rep["summary"] | {"segments": 0, "captures": 0} == {"ok": 13, "ng": 4, "unchecked": 0, "segments": 0, "captures": 0}
+    assert rep["summary"] | {"segments": 0, "captures": 0} == {"ok": 13, "ng": 4, "unchecked": 0, "measured": 0, "segments": 0, "captures": 0}
     ng = sorted((r["path"], r["check"]) for r in rep["results"] if r["ok"] is False)
     assert ng == [("test_i2c_write/case1 addr=42", "i2c"), ("test_misc/orphan-phase", "markers"),
                   ("test_pwm/duty=192", "square"), ("test_tone/440Hz", "only_moving")]
