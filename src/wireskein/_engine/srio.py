@@ -51,7 +51,8 @@ def read_sr(path: Path) -> Capture:
             avals[idx] = np.frombuffer(b"".join(z.read(n) for n in parts), "<f4")
         extra = json.loads(z.read(EXTRA)) if EXTRA in z.namelist() else {}
         rawfiles = {a["file"]: z.read(a["file"]) for a in extra.get("analog", {}).values() if a.get("file") in z.namelist()}
-        carried = {n: z.read(n) for n in z.namelist() if n.startswith(("attach/", "notes/"))}
+        listed = set(extra.get("extras", []))
+        carried = {n: z.read(n) for n in z.namelist() if n.startswith(("attach/", "notes/")) or n in listed}
     dtype = {1: np.uint8, 2: np.uint16, 4: np.uint32}[unitsize]
     data = np.frombuffer(raw, dtype=dtype)
     n_ticks = len(data) if len(data) else max((len(v) for v in avals.values()), default=0)
@@ -132,7 +133,10 @@ def write_sr(path: Path, cap: Capture, **meta) -> Path:
     extra = {"format": "wireskein-sr-extra/0", "tick_hz": [tick.numerator, tick.denominator],
              "channels": {c.name: {"step": c.step, "phase": c.phase, **({"acquisition": c.acquisition} if c.acquisition else {})}
                           for c in cap.channels if c.step != 1 or c.phase or c.acquisition},
-             "analog": {}, "meta": meta}
+             "analog": {}, "meta": meta, "extras": sorted(cap.meta.get("extras", {}))}
+    for name in extra["extras"]:
+        if name in ("version", "metadata", EXTRA) or name.startswith(("logic-1", "analog-1-", "wireskein/")):
+            raise ValueError(f"not writing {path}: the entry {name!r} would clash with the .sr's own")
     for idx, a, per, t0, _ in held:
         info = {"encoding": a.encoding, "n": len(a.values), "rate_hz": [a.rate_hz.numerator, a.rate_hz.denominator],
                 "t0_ticks": [a.t0_ticks.numerator, a.t0_ticks.denominator], "acquisition": a.acquisition}
@@ -147,7 +151,7 @@ def write_sr(path: Path, cap: Capture, **meta) -> Path:
         z.writestr("version", "2")
         z.writestr("metadata", "\n".join(lines))
         z.writestr(EXTRA, json.dumps(extra, indent=1, default=str))
-        for name, data in cap.meta.get("extras", {}).items():      # attachments and notes of a .wsc
+        for name, data in cap.meta.get("extras", {}).items():      # attachments, notes and other parts of a WireSkein file
             z.writestr(name, data)
         for idx, a, *_ in held:
             if a.encoding == "analog":

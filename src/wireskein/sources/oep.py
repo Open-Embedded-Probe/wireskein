@@ -19,7 +19,7 @@ from __future__ import annotations
 import struct
 from fractions import Fraction
 
-from .. import wsc
+from .. import fileformat
 from . import Request, Result
 
 TRIGGER = {"high": (1, 1), "low": (1, 0), "rise": (2, 0), "fall": (2, 1), "both": (2, 2)}   # (type, value), oep-if-capture
@@ -180,7 +180,7 @@ def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], aids
         if cfg.jitter_ns:
             meta["jitter_ns"] = cfg.jitter_ns
         tick = Fraction(cfg.rate)
-        chans = wsc.from_interleaved(data, names, cfg.width, cfg.positions, seg.samples)
+        chans = fileformat.from_interleaved(data, names, cfg.width, cfg.positions, seg.samples)
         for c, ch in zip(chans, ids):
             c.acquisition = {"pin": ch, **_accuracy(cfg)}
         t_ref = getattr(seg, "start_ns", None)
@@ -216,7 +216,7 @@ def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], aids
             if aseg.trigger_index is not None:
                 acq["trigger_index"] = aseg.trigger_index
             width = {8: 8, 16: 16, 32: 32}[acfg.slot]
-            chans.append(wsc.analog_raw(name, values, Fraction(acfg.rate), width=width, t0_ticks=t0,
+            chans.append(fileformat.analog_raw(name, values, Fraction(acfg.rate), width=width, t0_ticks=t0,
                                         value_bits=acfg.bits or None, zero=acfg.zero.get(k),
                                         scale_nv=acfg.scale_nv.get(k), **acq))
     if probe:

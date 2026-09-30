@@ -4,15 +4,16 @@
                               [--hint JSON|@file.json] [--alternatives] [--out FILE]
     wireskein segments CAPTURE [--results] [--markers JSON]
     wireskein verify RUN_DIR [--junit FILE] [--json FILE]
-    wireskein convert IN OUT            (.wsc / .sr / fixture directory -> .wsc / .sr)
+    wireskein convert IN OUT            (WireSkein / .sr / fixture directory -> WireSkein, or .sr by the name)
     wireskein capture --source oep:PORT|sigrok:DRIVER --channels NAME=ID,... --rate 20M --samples 1M
-                      [--trigger NAME:rise|fall|both|high|low] [--pretrigger N] [--note TEXT] -o OUT.wsc
-    wireskein info FILE.wsc             channels, rates, metadata, attachments, notes
+                      [--trigger NAME:rise|fall|both|high|low] [--pretrigger N] [--note TEXT] -o OUT.wireskein
+    wireskein info FILE.wireskein       channels, rates, metadata, attachments, notes
     wireskein gui [FILE | DIR] [--port N] [--no-browser]   the viewer in the browser (localhost only)
-    wireskein note FILE.wsc TEXT [--json] [--kind K]
-    wireskein attach FILE.wsc NAME [SRC | --text TEXT] [--replace]
+    wireskein note FILE.wireskein TEXT [--json] [--kind K]
+    wireskein attach FILE.wireskein NAME [SRC | --text TEXT] [--replace]
 
-CAPTURE is a .wsc capture, a sigrok .sr file or a fixture directory (corpus/fixtures/real/<id>).
+CAPTURE is a WireSkein file (.wireskein), a sigrok .sr file or a fixture directory (corpus/fixtures/real/<id>).
+Files are told apart by their content, not their name; an output is a .sr when its name ends in .sr.
 Paths for --select: "<protocol>.<layer>" with wildcards, e.g. i2c.transactions,
 uart.lines, spi.transfers, rvswd.dm, *.final, i2c.* .
 
@@ -30,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import zipfile
 import sys
 import time
 from pathlib import Path
@@ -44,13 +46,13 @@ def load(path: Path):
 
 
 def info(args) -> None:
-    from . import wsc
-    head, chans = wsc.read(args.file)
-    tick = wsc.tick_hz(head)
-    print(f"{args.file}: {head['format']}, tick {float(tick):g} Hz ({tick}), {head['ticks']} ticks "
+    from . import fileformat
+    head, chans = fileformat.read(args.file)
+    tick = fileformat.tick_hz(head)
+    print(f"{args.file}: {fileformat.FORMAT}, tick {float(tick):g} Hz ({tick}), {head['ticks']} ticks "
           f"({head['ticks'] / float(tick):.6g} s)")
     for c in chans:
-        if isinstance(c, wsc.AnalogChannel):
+        if isinstance(c, fileformat.AnalogChannel):
             conv = (f"raw {c.width}-bit" + (f" ({c.value_bits} valid)" if c.value_bits else "")
                     + (f", V = (raw - {c.zero:g}) x {c.scale_nv:g} nV" if c.zero is not None and c.scale_nv is not None
                        else ", no volt conversion")) if c.encoding == "analog" else f"float32 {c.unit}"
@@ -61,30 +63,30 @@ def info(args) -> None:
             print(f"  {c.name:12s} {c.n:>12d} samples  step {c.step:<4d} phase {c.phase:<4d} {rate:g} Hz")
         if c.acquisition:
             print(f"  {'':12s} acquisition: {json.dumps(c.acquisition, ensure_ascii=False)}")
-    for c in wsc.skipped(head):
+    for c in fileformat.skipped(head):
         print(f"  {c['name']:12s} encoding {c['encoding']!r}: not read by this version")
     if head.get("meta"):
         print("meta: " + json.dumps(head["meta"], ensure_ascii=False, default=str))
-    for name, data in wsc.attachments(args.file).items():
+    for name, data in fileformat.attachments(args.file).items():
         print(f"attach/{name}: {len(data)} bytes")
-    for k, n in enumerate(wsc.notes(args.file), 1):
+    for k, n in enumerate(fileformat.notes(args.file), 1):
         extra = {x: v for x, v in n.items() if x not in ("time", "content")}
         body = n["content"] if isinstance(n["content"], str) else json.dumps(n["content"], ensure_ascii=False)
         print(f"note {k} {n['time']}" + (f" {json.dumps(extra, ensure_ascii=False)}" if extra else "") + f": {body}")
 
 
 def note_cmd(args) -> None:
-    from . import wsc
+    from . import fileformat
     content = json.loads(args.text) if args.json else args.text
-    print(wsc.note(args.file, content, **({"kind": args.kind} if args.kind else {})))
+    print(fileformat.note(args.file, content, **({"kind": args.kind} if args.kind else {})))
 
 
 def attach_cmd(args) -> None:
-    from . import wsc
+    from . import fileformat
     if (args.src is None) == (args.text is None):
         sys.exit("give SRC (a file) or --text")
     data = args.src.read_bytes() if args.src else args.text
-    wsc.attach(args.file, args.name, data, replace=args.replace)
+    fileformat.attach(args.file, args.name, data, replace=args.replace)
 
 
 def _count(cap) -> str:
@@ -112,9 +114,9 @@ def capture_cmd(args) -> None:
                           sources.parse_count(args.analog_samples) if args.analog_samples else None)
     out = sources.capture(args.source, req, args.output)
     if args.note:
-        from . import wsc
-        if out.suffix == wsc.SUFFIX:
-            wsc.note(out, args.note)
+        from . import fileformat
+        if fileformat.sniff(out) == "wireskein":
+            fileformat.note(out, args.note)
     from .analyze import load
     cap = load(out)
     print(f"{out}: {_count(cap)}, {cap.n_samples} ticks at {cap.rate:g} Hz ({cap.duration:.6g} s)")
@@ -199,10 +201,10 @@ def main() -> None:
     vf.add_argument("--junit", type=Path, default=None, help="also write JUnit XML")
     vf.add_argument("--json", type=Path, default=None, help="write the full report (with measured values)")
     vf.add_argument("--log", action="store_true", help="include the host log (markers, commands, replies) in --json")
-    cv = sub.add_parser("convert", help="convert a capture between formats (by extension: .wsc, .sr; a fixture directory as input)")
+    cv = sub.add_parser("convert", help="convert a capture between formats (read by content; written as .sr when OUT ends in .sr, else WireSkein)")
     cv.add_argument("input", type=Path)
     cv.add_argument("output", type=Path)
-    cp = sub.add_parser("capture", help="capture logic channels from a device into a .wsc (sources: oep, sigrok)")
+    cp = sub.add_parser("capture", help="capture logic channels from a device into a .wireskein (sources: oep, sigrok)")
     cp.add_argument("--source", required=True, help="oep:<serial port | tcp://HOST:PORT | usb[:VID:PID]> or sigrok:<driver>")
     cp.add_argument("--channels", default=None, help='logic: "NAME=ID,..." (ID: the probe channel number / sigrok channel) or "ID,..."')
     cp.add_argument("--analog", default=None, help='analog: "NAME=ID[@FRONTEND],..." (FRONTEND: the input range number, OEP)')
@@ -214,19 +216,19 @@ def main() -> None:
     cp.add_argument("--pretrigger", default=None, help="samples kept before the trigger")
     cp.add_argument("--timeout", type=float, default=10.0, help="seconds to wait for the capture")
     cp.add_argument("--note", default=None, help="a note stored with the capture")
-    cp.add_argument("-o", "--output", type=Path, required=True, help=".wsc (or .sr)")
+    cp.add_argument("-o", "--output", type=Path, required=True, help="OUT.wireskein (or OUT.sr)")
     gp = sub.add_parser("gui", help="show captures in the browser (a local server, 127.0.0.1 only)")
-    gp.add_argument("path", type=Path, nargs="?", default=Path("."), help="a .wsc / .sr file or a directory (default: .)")
+    gp.add_argument("path", type=Path, nargs="?", default=Path("."), help="a WireSkein or .sr file, or a directory (default: .)")
     gp.add_argument("--port", type=int, default=0, help="default: any free port")
     gp.add_argument("--no-browser", action="store_true", help="only print the URL")
-    inf = sub.add_parser("info", help="what a .wsc holds: channels, rates, metadata, attachments, notes")
+    inf = sub.add_parser("info", help="what a WireSkein file holds: channels, rates, metadata, attachments, notes")
     inf.add_argument("file", type=Path)
-    nt = sub.add_parser("note", help="append a note to a .wsc (its log is append-only)")
+    nt = sub.add_parser("note", help="append a note to a WireSkein file (its log is append-only)")
     nt.add_argument("file", type=Path)
     nt.add_argument("text")
     nt.add_argument("--json", action="store_true", help="TEXT is JSON, stored as such")
     nt.add_argument("--kind", default=None, help="a label stored with the note (e.g. analysis, setup)")
-    at = sub.add_parser("attach", help="store a free-form file in a .wsc as attach/NAME")
+    at = sub.add_parser("attach", help="store a free-form file in a WireSkein file as attach/NAME")
     at.add_argument("file", type=Path)
     at.add_argument("name")
     at.add_argument("src", type=Path, nargs="?", default=None)
@@ -238,7 +240,8 @@ def main() -> None:
     if args.cmd in files:
         try:
             return files[args.cmd](args)
-        except (ValueError, FileExistsError, FileNotFoundError, KeyError, RuntimeError, TimeoutError) as e:
+        except (ValueError, FileExistsError, FileNotFoundError, KeyError, RuntimeError, TimeoutError,
+                zipfile.BadZipFile) as e:
             sys.exit(f"wireskein {args.cmd}: {e}")
     if args.cmd == "segments":
         return segments(args)

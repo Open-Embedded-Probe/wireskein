@@ -26,7 +26,7 @@ def capture(target: str, req: Request) -> Result:
         raise RuntimeError("the sigrok source needs sigrok-cli on PATH")
     if not target:
         raise ValueError("sigrok:<driver>, e.g. sigrok:fx2lafw")
-    from .._engine import wscio
+    from .._engine import fileio
     from .._engine.srio import read_sr
     if req.analog:                  # sigrok has one rate per device: analog ids ride with the logic ones
         if req.analog_rate not in (None, req.rate):
@@ -53,7 +53,7 @@ def capture(target: str, req: Request) -> Result:
         raise RuntimeError(f"sigrok did not return channels {missing} (got {sorted([*by_id, *an_id])})")
     chans = []
     for name, cid in req.channels:
-        c = wscio.to_channel(by_id[cid], cap.n_samples) if cid in by_id else wscio.to_analog(an_id[cid])
+        c = fileio.to_channel(by_id[cid], cap.n_samples) if cid in by_id else fileio.to_analog(an_id[cid])
         c.name = name
         chans.append(c)
     meta = {"driver": target, "device_channels": ids}

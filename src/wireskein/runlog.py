@@ -2,8 +2,8 @@
 
 A run is a directory:
 
-    run.json      log, captures and expectations
-    c0001.wsc     one capture (wireskein.wsc: each channel at its own rate)
+    run.json          log, captures and expectations
+    c0001.wireskein   one capture (wireskein.fileformat: each channel at its own rate)
 
 The log is on the host clock (seconds from the recorder's start). It holds heading
 markers ("# test", "## step", "##" closes; docs/workbench-model.ja.md), the
@@ -24,7 +24,7 @@ expectations recorded for its path.
 
 A capture comes either as the probe's sample stream (`interleaved`, with
 `width` bits per sample and channel k at bit `positions[k]`, oep-if-capture
-§1.1) or as channels already split (`channels`, wireskein.wsc.Channel, each
+§1.1) or as channels already split (`channels`, wireskein.fileformat.Channel, each
 with its own step). Test scripts import this module directly, so these calls
 and the helpers below keep their names, arguments and meaning; anything added
 gets a default that keeps the old meaning. An incompatible change raises
@@ -41,9 +41,9 @@ from contextlib import contextmanager
 from fractions import Fraction
 from pathlib import Path
 
-from . import wsc
+from . import fileformat
 
-FORMAT = "wireskein-run/1"
+FORMAT = "wireskein-run/2"          # 2: captures are .wireskein files
 
 
 class Recorder:
@@ -110,21 +110,21 @@ class Recorder:
 
     def capture(self, armed: float, tick_hz: int | float | Fraction, *, interleaved: bytes | None = None,
                 names: list[str] | None = None, width: int = 8, positions: list[int] | None = None,
-                n: int | None = None, channels: list[wsc.Channel] | None = None,
+                n: int | None = None, channels: list[fileformat.Channel] | None = None,
                 attachments: dict | None = None, **meta) -> str:
-        """Store one capture as cNNNN.wsc. armed: time.monotonic() when it was
+        """Store one capture as cNNNN.wireskein. armed: time.monotonic() when it was
         armed (Recorder.armed(), or the capture client's own stamp). Give either
         interleaved + names (+ width / positions / n for other sample layouts)
         or channels. meta goes into the capture file (start_us, time_base_slipped, ...);
-        attachments are free-form files stored with it (see wireskein.wsc.attach)."""
+        attachments are free-form files stored with it (see wireskein.fileformat.attach)."""
         if (interleaved is None) == (channels is None):
             raise ValueError("give either interleaved (with names) or channels")
         if channels is None:
             if not names:
                 raise ValueError("interleaved needs names")
-            channels = wsc.from_interleaved(interleaved, names, width, positions, n)
-        name = f"c{len(self.doc['captures']) + 1:04d}{wsc.SUFFIX}"
-        wsc.write(self.dir / name, tick_hz, channels, attachments, **meta)
+            channels = fileformat.from_interleaved(interleaved, names, width, positions, n)
+        name = f"c{len(self.doc['captures']) + 1:04d}{fileformat.SUFFIX}"
+        fileformat.write(self.dir / name, tick_hz, channels, attachments, **meta)
         self.doc["captures"].append({"file": name, "t0": armed - self.t0, "channels": [c.name for c in channels]})
         return name
 

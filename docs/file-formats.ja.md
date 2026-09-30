@@ -1,6 +1,6 @@
 # ファイル形式の検討
 
-作成 2026-09-30。`.wsc` の仕様は [キャプチャのファイル形式 .wsc](wsc-format.ja.md) にあります。**§5.1〜5.3 は実装済み**（`wireskein.wsc`、`Channel.step`、`wireskein convert`、記録の形式 `wireskein-run/1`）。VCD と §5.5 は後回し。次の 3 つの問いについて、調べたことと実験の結果をもとに案を出します。
+作成 2026-09-30。**拡張子は、その後 `.wsc` から `.wireskein` に変えました**（`.wsc` は Windows Script Component と重なるため。2026-09-30 の決定）。今の仕様は [WireSkein のファイル形式](wireskein-format.ja.md) にあります。この文書の `.wsc` や `wireskein.wsc` は、当時の名前のまま残します。**§5.1〜5.3 は実装済み**（今の `wireskein.fileformat`、`Channel.step`、`wireskein convert`、記録の形式 `wireskein-run/1`）。VCD と §5.5 は後回し。次の 3 つの問いについて、調べたことと実験の結果をもとに案を出します。
 
 1. `.sr` 以外の形式を読み書きするか。
 2. 独自の形式を持つか。

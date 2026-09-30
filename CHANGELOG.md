@@ -1,6 +1,18 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) **Breaking: the file format is now `.wireskein` (`wireskein/0`)**, replacing `.wsc` (`wireskein-capture/0`; the extension is Windows Script Component's, which mail filters and virus scanners block). Files written by earlier versions are not read. The zip starts with `wireskein.json` (`{"format": "wireskein/0"}`, the first entry, stored); `capture.json` no longer carries `format`. The file is a container: a capture, attachments and notes now; `markers/`, `decode/`, `verify/` and `view/` are reserved. Spec: docs/wireskein-format.ja.md (was wsc-format.ja.md).
+- (JA) **互換のない変更: ファイルの形式を `.wireskein`（`wireskein/0`）にした。** 今までの `.wsc`（`wireskein-capture/0`）は置き換える（`.wsc` は Windows Script Component の拡張子で、メールのフィルタやウイルス対策に止められる）。前の版で書いたファイルは読まない。zip の最初の項目は `wireskein.json`（`{"format": "wireskein/0"}`、無圧縮）で、`capture.json` は `format` を持たない。ファイルは入れ物で、今はキャプチャ、添付、メモを入れる。`markers/`、`decode/`、`verify/`、`view/` は予約。仕様: docs/wireskein-format.ja.md（旧 wsc-format.ja.md）。
+- (EN) **Breaking: the module `wireskein.wsc` is now `wireskein.fileformat`** (same functions; `import wireskein.fileformat as wf`). Also `sniff(path)` ("wireskein", "sr" or None).
+- (JA) **互換のない変更: モジュール `wireskein.wsc` を `wireskein.fileformat` にした**（関数は同じ。`import wireskein.fileformat as wf`）。`sniff(path)`（"wireskein"、"sr"、None）を足した。
+- (EN) Files are told apart by their content, not their name: `analyze`, `info`, `convert`, `verify` and `gui` read a WireSkein file or a sigrok .sr under any name, and refuse other files with a clear message. Output is a .sr when its name ends in .sr, else a WireSkein file.
+- (JA) ファイルは名前ではなく中身で見分ける: `analyze`、`info`、`convert`、`verify`、`gui` は、どんな名前の WireSkein のファイルや sigrok の .sr も読み、ほかのファイルは分かるメッセージで断る。書き出しは、名前が .sr で終われば .sr、そのほかは WireSkein のファイル。
+- (EN) Entries this version does not know are carried over when a file is rewritten (replacing an attachment, `convert`, also through a .sr and back).
+- (JA) この版が知らない項目は、ファイルを書き直すとき（添付の置き換え、`convert`、.sr を経由した往復も）に持ち越す。
+- (EN) **Breaking: runs are `wireskein-run/2`**: captures are `cNNNN.wireskein`. `verify` refuses `wireskein-run/1` runs.
+- (JA) **互換のない変更: 記録は `wireskein-run/2`**。キャプチャは `cNNNN.wireskein`。`verify` は `wireskein-run/1` の記録を断る。
+- (EN) `wireskein gui` needs wireskein-web 0.0.2 or later (it reads the new format).
+- (JA) `wireskein gui` は wireskein-web 0.0.2 以降が要る（新しい形式を読む）。
 - (EN) `capture` with analog channels only needs no logic `--rate` / `--samples`: `--analog-rate` and `--analog-samples` are enough (found on the V003 jig).
 - (JA) アナログだけの `capture` は、ロジックの `--rate` / `--samples` なしで、`--analog-rate` と `--analog-samples` だけで取れる（V003 の治具で見つかった）。
 

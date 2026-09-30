@@ -45,7 +45,7 @@ rec.close()
 wireskein verify out/run1 --junit out/run1/report.xml --json out/run1/report.json
 ```
 
-キャプチャは `.wsc`（後述）で保存されます。NG があれば、終了コードは 1 です。検査に使うピンがキャプチャにないときは、未検査（`--`）になります。未検査は、実行を失敗にしません。
+キャプチャは `.wireskein`（後述）で保存されます。NG があれば、終了コードは 1 です。検査に使うピンがキャプチャにないときは、未検査（`--`）になります。未検査は、実行を失敗にしません。
 
 - 見出し（`#` がテスト、`##` がステップ、名前のない `##` で閉じる）で、区間の木を作ります。
 - キャプチャは、開始した時刻を含む区間に割り当てます。
@@ -57,13 +57,13 @@ pytest からは、[pytest-embedded-wireskein](https://github.com/Open-Embedded-
 
 ## キャプチャを取る
 
-`wireskein capture` で、機器からロジックのチャンネルを取り、`.wsc` に保存します。
+`wireskein capture` で、機器からロジックのチャンネルを取り、`.wireskein` に保存します。
 
 ```sh
 pip install "wireskein[oep]"      # OEP のプローブを使うとき（oep-client-python）。sigrok は sigrok-cli が PATH に要る
-wireskein capture --source oep:/dev/ttyACM0 --channels SDA=47,SCL=48 --rate 20M --samples 200k -o i2c.wsc
+wireskein capture --source oep:/dev/ttyACM0 --channels SDA=47,SCL=48 --rate 20M --samples 200k -o i2c.wireskein
 wireskein capture --source sigrok:fx2lafw --channels SDA=D0,SCL=D1 --rate 12M --samples 1M \
-                  --trigger SCL:fall --pretrigger 1k --note "リフローの後" -o i2c.wsc
+                  --trigger SCL:fall --pretrigger 1k --note "リフローの後" -o i2c.wireskein
 ```
 
 | 取得元 | 機器 | チャンネルの番号 |
@@ -83,8 +83,8 @@ wireskein capture --source sigrok:fx2lafw --channels SDA=D0,SCL=D1 --rate 12M --
 ## ブラウザでキャプチャを見る
 
 ```sh
-wireskein gui capture.wsc          # そのキャプチャをブラウザで開く（.sr はその場で変換）
-wireskein gui runs/                # runs/ の下の .wsc、.sr、記録の一覧のページ
+wireskein gui capture.wireskein          # そのキャプチャをブラウザで開く（.sr はその場で変換）
+wireskein gui runs/                # runs/ の下の .wireskein、.sr、記録の一覧のページ
 ```
 
 ビューアは [wireskein-web](https://github.com/Open-Embedded-Probe/wireskein-web) で、wheel に同梱しています。次のものを表示します。
@@ -99,18 +99,18 @@ wireskein gui runs/                # runs/ の下の .wsc、.sr、記録の一�
 - ベンチのマシンで動かすときは、ポートを転送し（`ssh -L ポート:127.0.0.1:ポート ベンチ`）、表示された URL を開きます。
 - 返すのは、ビューアと、指定したディレクトリの下のキャプチャのファイルだけです。
 
-## キャプチャのファイル（.wsc）と変換
+## WireSkein のファイル（.wireskein）と変換
 
-`.wsc` は、各チャンネルを自分のサンプルレートのまま持ちます。帯域に収めるために一部のチャンネルを間引くプローブ（例: 32 サンプルに 1 つ）は、取ったサンプルだけを `step=32` で保存します。間を埋める水増しはしないので、ビューアは実際にあるサンプルだけを見せられます。読み書きは、標準ライブラリだけで動く `wireskein.wsc` で行います。
+WireSkein のファイル（`.wireskein`、中身は zip）は、キャプチャと、それに付くもの（今は添付とメモ、将来はマーカーや復号・照合の結果）を 1 つに持ちます。道具は、名前ではなく中身で見分けます。キャプチャは、各チャンネルを自分のサンプルレートのまま持ちます。帯域に収めるために一部のチャンネルを間引くプローブ（例: 32 サンプルに 1 つ）は、取ったサンプルだけを `step=32` で保存します。間を埋める水増しはしないので、ビューアは実際にあるサンプルだけを見せられます。読み書きは、標準ライブラリだけで動く `wireskein.fileformat` で行います。
 
 ```python
-from wireskein import wsc
+from wireskein import fileformat as wf
 
-wsc.write("c.wsc", 100_000_000, [
-    wsc.Channel("PA5", wsc.pack(pa5_samples), n),                 # samples: 1 サンプル 1 バイト（0 か 1）
-    wsc.Channel("PB0", wsc.pack(pb0_samples), n // 32, step=32),  # 1/32 のレートで取ったチャンネル
+wf.write("c.wireskein", 100_000_000, [
+    wf.Channel("PA5", wf.pack(pa5_samples), n),                 # samples: 1 サンプル 1 バイト（0 か 1）
+    wf.Channel("PB0", wf.pack(pb0_samples), n // 32, step=32),  # 1/32 のレートで取ったチャンネル
 ], start_us=segment_start_us)
-channels = wsc.from_interleaved(data, ["PA5", "PA7"], width=8)    # プローブの並び: 1 サンプル width ビット、ビット k がチャンネル k
+channels = wf.from_interleaved(data, ["PA5", "PA7"], width=8)    # プローブの並び: 1 サンプル width ビット、ビット k がチャンネル k
 ```
 
 アナログのチャンネルも、同じファイルに入れられます。
@@ -120,19 +120,19 @@ channels = wsc.from_interleaved(data, ["PA5", "PA7"], width=8)    # プローブ
 - 取ったときの情報（ピン、減衰、基準電圧、プローブの出荷時の補正値）も、分析で使うかにかかわらず保存します。
 
 ```python
-wsc.write("m.wsc", 20_000_000, [
-    wsc.Channel("CLK", wsc.pack(clk_samples), n),
-    wsc.analog_raw("VBUS", raw_values, Fraction(80_000_000, 1667), width=16, value_bits=12, zero=0, scale_nv=805_860,
+wf.write("m.wireskein", 20_000_000, [
+    wf.Channel("CLK", wf.pack(clk_samples), n),
+    wf.analog_raw("VBUS", raw_values, Fraction(80_000_000, 1667), width=16, value_bits=12, zero=0, scale_nv=805_860,
                    pin=22, attenuation_db=12, reference={"source": "vdd", "mv": 3300}),
-    wsc.analog_volts("SINE", volts, 1_000_000),                     # 電圧（sigrok や Saleae から）
+    wf.analog_volts("SINE", volts, 1_000_000),                     # 電圧（sigrok や Saleae から）
 ], probe={"chip": "ESP32-P4", "calibration": {"scheme": "curve-fitting-v1", "raw": "..."}})
 ```
 
-`wireskein capture --source sigrok:<ドライバ>` で、アナログのチャンネルも取れます（`--channels CLK=D0,VBUS=A0`）。解析は、今までどおりロジックのチャンネルを読みます。アナログの検査は、これから作ります。形式の仕様は `docs/wsc-format.ja.md` にあります。
+`wireskein capture --source sigrok:<ドライバ>` で、アナログのチャンネルも取れます（`--channels CLK=D0,VBUS=A0`）。解析は、今までどおりロジックのチャンネルを読みます。アナログの検査は、これから作ります。形式の仕様は `docs/wireskein-format.ja.md` にあります。
 
 テストの記録では、同じものを `rec.capture(t, tick_hz, channels=[...])` に渡します。
 
-`.wsc` には、キャプチャについてのほかの情報も入れられます（取得の設定、配線のメモ、分析の結果など）。
+WireSkein のファイルには、キャプチャについてのほかの情報も入れられます（取得の設定、配線のメモ、分析の結果など）。
 
 - **添付**: 名前付きのファイルです（テキスト、JSON、bytes）。後から差し替えられます。
 - **メモ**: 追記専用の記録です。1 回の呼び出しで 1 件、時刻付きで足します。
@@ -140,17 +140,17 @@ wsc.write("m.wsc", 20_000_000, [
 どちらも、既存のファイルに、チャンネルのデータを書き直さずに足せます。
 
 ```python
-wsc.attach("c.wsc", "probe.json", {"fw": "1.2", "plan": plan})   # dict / list は JSON、str はテキスト、bytes はそのまま
-wsc.note("c.wsc", "PA5 がうるさい。次は線を短く")
-wsc.note("c.wsc", {"i2c": transactions}, kind="analysis")
-wsc.attachments("c.wsc"), wsc.notes("c.wsc")
+wf.attach("c.wireskein", "probe.json", {"fw": "1.2", "plan": plan})   # dict / list は JSON、str はテキスト、bytes はそのまま
+wf.note("c.wireskein", "PA5 がうるさい。次は線を短く")
+wf.note("c.wireskein", {"i2c": transactions}, kind="analysis")
+wf.attachments("c.wireskein"), wf.notes("c.wireskein")
 ```
 
 ```sh
-wireskein info c.wsc                                  # チャンネルとレート、メタ情報、添付、メモ
-wireskein note c.wsc "リフローの後に取り直し"
-wireskein attach c.wsc setup.txt --text "SDA/SCL に 10k のプルアップ"
-wireskein attach c.wsc scope.png scope.png            # どんなファイルでも
+wireskein info c.wireskein                                  # チャンネルとレート、メタ情報、添付、メモ
+wireskein note c.wireskein "リフローの後に取り直し"
+wireskein attach c.wireskein setup.txt --text "SDA/SCL に 10k のプルアップ"
+wireskein attach c.wireskein scope.png scope.png            # どんなファイルでも
 ```
 
 テストの記録では、`rec.capture(..., attachments={...})` でキャプチャと一緒に添付を保存します。添付とメモは、`.sr` への変換と、`.sr` からの戻しでも持ち運ばれます。
@@ -158,8 +158,8 @@ wireskein attach c.wsc scope.png scope.png            # どんなファイルで
 形式の変換は、コマンドで行います（形式は拡張子で決まります）。
 
 ```sh
-wireskein convert c0001.wsc c0001.sr     # PulseView 用: 1 つのレート、遅いチャンネルは水増し
-wireskein convert c0001.sr c0001.wsc     # 戻す: チャンネルは本当のレートに戻る
+wireskein convert c0001.wireskein c0001.sr     # PulseView 用: 1 つのレート、遅いチャンネルは水増し
+wireskein convert c0001.sr c0001.wireskein     # 戻す: チャンネルは本当のレートに戻る
 wireskein convert corpus/fixtures/real/<id> capture.sr
 ```
 
@@ -168,7 +168,7 @@ wireskein convert corpus/fixtures/real/<id> capture.sr
 ## キャプチャを復号する
 
 ```sh
-wireskein analyze capture.wsc                             # .wsc、sigrok の .sr、または fixture のディレクトリ
+wireskein analyze capture.wireskein                             # .wireskein、sigrok の .sr、または fixture のディレクトリ
 wireskein analyze capture.sr --hint '{"protocols": ["i2c"]}'
 wireskein segments capture.sr --results                   # UART にマーカーの行を流したキャプチャ
 ```
@@ -176,7 +176,7 @@ wireskein segments capture.sr --results                   # UART にマーカー
 ```python
 from wireskein.analyze import load, save, analyze, export
 
-cap = load("capture.wsc")                                     # .sr や fixture のディレクトリも
+cap = load("capture.wireskein")                                     # .sr や fixture のディレクトリも
 doc = export(analyze(cap, {"protocols": ["spi"]}), cap)
 ```
 
@@ -185,7 +185,7 @@ doc = export(analyze(cap, {"protocols": ["spi"]}), cap)
 | 部分 | β の間の約束 |
 | --- | --- |
 | `wireskein.runlog`（`Recorder` と検査の helper の名前、引数、意味） | 変えない。足す引数は、既定値で今の意味を保つ |
-| 記録の形式（`run.json` と `.wsc` のキャプチャ、`FORMAT = "wireskein-run/1"`）とキャプチャの形式（`.wsc`、`wireskein-capture/0`） | 変えない。互換のない変更をするときは `FORMAT` を上げ、`verify` は古い形式をはっきりしたエラーで断る |
+| 記録の形式（`run.json` と `.wireskein` のキャプチャ、`FORMAT = "wireskein-run/2"`）とキャプチャの形式（`.wireskein`、`wireskein/0`） | 変えない。互換のない変更をするときは `FORMAT` を上げ、`verify` は古い形式をはっきりしたエラーで断る |
 | `wireskein.verify.verify` / `junit`、`wireskein verify` | 変えない。報告の項目は増えることがある |
 | `wireskein.analyze`、`wireskein analyze` / `segments` の出力 | 変わることがある |
 | `wireskein._engine` | 内部 |

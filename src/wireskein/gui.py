@@ -1,12 +1,13 @@
 """`wireskein gui`: the viewer (wireskein-web) on a local web server.
 
-    wireskein gui capture.wsc          # opens the browser on that capture (.sr is converted on the fly)
+    wireskein gui capture.wireskein    # opens the browser on that capture (a .sr is converted on the fly)
     wireskein gui runs/                # a page listing the captures and runs below that directory
 
 The server listens on 127.0.0.1 only (a remote bench: `ssh -L PORT:127.0.0.1:PORT bench` and open the printed
 URL). Every start makes a token; the URL printed carries it once, the browser keeps it as a cookie, and requests
 without it, or with a Host other than the local one, are refused - another web page cannot read local files
-through it. It serves only the viewer and the .wsc / .sr files below the directory given.
+through it. It serves only the viewer and the WireSkein and .sr files below the directory given (told apart
+by their content, not their names).
 
 The viewer comes with the wheel (src/wireskein/web, the pinned wireskein-web release, tools/fetch_web.py);
 WIRESKEIN_WEB_DIR points it at another build (development of wireskein-web).
@@ -27,11 +28,10 @@ from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import __version__
+from . import __version__, fileformat
 
 API = 1
 COOKIE = "wireskein_token"
-CAPTURES = (".wsc", ".sr")
 LOCAL = {"127.0.0.1", "localhost", "::1"}
 
 
@@ -177,17 +177,18 @@ class _Handler(BaseHTTPRequestHandler):
 
     def _capture(self, rel: str) -> None:
         p = self._inside(self.server_gui.root, rel)
-        if p.suffix not in CAPTURES or not p.is_file():
+        kind = fileformat.sniff(p) if p.is_file() else None
+        if kind is None:
             raise FileNotFoundError(rel)
-        if p.suffix == ".wsc":
+        if kind == "wireskein":
             return self._send(200, p.read_bytes(), "application/octet-stream")
-        # a .sr is shown as the .wsc it converts to (slow channels get their real rate back when it came from one)
+        # a .sr is shown as the WireSkein file it converts to (slow channels get their real rate back when it came from one)
         from .analyze import load, save
         cap = load(p)
         meta = {k: v for k, v in cap.meta.items()
                 if k not in ("file", "sr_file", "tick_hz", "unitsize", "fixture", "extras", "skipped_channels")}
         with tempfile.TemporaryDirectory() as d:
-            out = save(Path(d) / (p.stem + ".wsc"), cap, **meta)
+            out = save(Path(d) / (p.stem + fileformat.SUFFIX), cap, **meta)
             self._send(200, out.read_bytes(), "application/octet-stream")
 
     def _browse(self, rel: str) -> None:
@@ -200,7 +201,7 @@ class _Handler(BaseHTTPRequestHandler):
             if len(p.relative_to(base).parts) > 4:
                 continue
             r = p.relative_to(root).as_posix()
-            if p.is_file() and p.suffix in CAPTURES:
+            if p.is_file() and p.name != "run.json" and fileformat.sniff(p):
                 link = "/?file=/files/" + urllib.parse.quote(r)
                 rows.append(f'<li><a href="{html.escape(link)}">{html.escape(r)}</a> '
                             f'<small>{p.stat().st_size:,} bytes</small></li>')
@@ -210,7 +211,7 @@ class _Handler(BaseHTTPRequestHandler):
         title = html.escape(str(base))
         body = (f"<!doctype html><meta charset=utf-8><title>wireskein gui</title>"
                 f"<style>body{{font:14px system-ui;margin:20px}}small{{color:#777}}</style>"
-                f"<h1>{title}</h1><ul>{''.join(rows) or '<li>no .wsc or .sr files here</li>'}</ul>"
+                f"<h1>{title}</h1><ul>{''.join(rows) or '<li>no WireSkein or .sr files here</li>'}</ul>"
                 f"<p><small>wireskein {__version__} · wireskein-web {web_version(self.server_gui.web) or '(dev)'}"
                 f"</small></p>")
         self._send(200, body.encode(), "text/html; charset=utf-8")

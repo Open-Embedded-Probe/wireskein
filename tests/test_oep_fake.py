@@ -9,7 +9,7 @@ import sys
 import numpy as np
 import pytest
 
-from wireskein import sources, wsc
+from wireskein import sources, fileformat
 
 oep_client = pytest.importorskip("oep_client")
 try:
@@ -38,13 +38,13 @@ def probe():
 
 
 def levels(path):
-    return [np.frombuffer(wsc.unpack(c), np.uint8) for c in wsc.read(path)[1]]
+    return [np.frombuffer(fileformat.unpack(c), np.uint8) for c in fileformat.read(path)[1]]
 
 
 def test_three_channels_of_a_four_bit_stream(probe, tmp_path):
     src = probe()
-    out = sources.capture(src, sources.Request([("A", "10"), ("B", "11"), ("C", "12")], 20_000_000, 1000), tmp_path / "a.wsc")
-    head, chans = wsc.read(out)
+    out = sources.capture(src, sources.Request([("A", "10"), ("B", "11"), ("C", "12")], 20_000_000, 1000), tmp_path / "a.wireskein")
+    head, chans = fileformat.read(out)
     assert head["tick_hz"] == [20_000_000, 1] and [c.n for c in chans] == [1000] * 3
     i = np.arange(1000)
     for k, lv in enumerate(levels(out)):                        # the fake's waveform: sample i is the counter i
@@ -56,8 +56,8 @@ def test_three_channels_of_a_four_bit_stream(probe, tmp_path):
 def test_trigger_and_slip(probe, tmp_path):
     src = probe("--capture-slipped")
     req = sources.Request([("A", "10"), ("B", "11")], 20_000_000, 400, trigger=("B", "rise"), pretrigger=50)
-    out = sources.capture(src, req, tmp_path / "t.wsc")
-    meta = wsc.read(out)[0]["meta"]
+    out = sources.capture(src, req, tmp_path / "t.wireskein")
+    meta = fileformat.read(out)[0]["meta"]
     assert meta["time_base_slipped"] is True
     b = levels(out)[1]
     t = meta["trigger_index"]
@@ -65,20 +65,20 @@ def test_trigger_and_slip(probe, tmp_path):
 
 
 def test_rate_is_the_probes_answer(probe, tmp_path):
-    out = sources.capture(probe(), sources.Request([("A", "10")], 3_000_000, 100), tmp_path / "r.wsc")
-    tick = wsc.tick_hz(wsc.read(out)[0])
+    out = sources.capture(probe(), sources.Request([("A", "10")], 3_000_000, 100), tmp_path / "r.wireskein")
+    tick = fileformat.tick_hz(fileformat.read(out)[0])
     assert tick <= 3_000_000 and 20_000_000 % tick == 0           # source / integer, at most what was asked
 
 
 def test_a_pin_another_interface_listens_to_can_be_captured(probe, tmp_path):
     src = probe("--uart-plan")        # the fixture UART's saved plan holds channels 0 (RX) and 1 (TX); capture only listens
-    out = sources.capture(src, sources.Request([("RX", "0"), ("TX", "1")], 1_000_000, 64), tmp_path / "s.wsc")
-    assert [c.n for c in wsc.read(out)[1]] == [64, 64]
+    out = sources.capture(src, sources.Request([("RX", "0"), ("TX", "1")], 1_000_000, 64), tmp_path / "s.wireskein")
+    assert [c.n for c in fileformat.read(out)[1]] == [64, 64]
 
 
 def test_esp32_sampler_profile(probe, tmp_path):
     out = sources.capture(probe(profile="esp32-v003"), sources.Request([("A", "4"), ("B", "5")], 1_000_000, 200),
-                          tmp_path / "v.wsc")
+                          tmp_path / "v.wireskein")
     i = np.arange(200)
     assert [np.array_equal(lv, (i >> k) & 1) for k, lv in enumerate(levels(out))] == [True, True]
 
@@ -91,10 +91,10 @@ analog_only = pytest.mark.skipif(not HAS_ANALOG, reason="oep-client has no analo
 @analog_only
 def test_analog_alone_keeps_raw_values_and_what_the_probe_knows(probe, tmp_path):
     req = sources.Request([], 20_000_000, 512, analog=[("SQ", "16", None), ("SINE", "17", 3)], analog_rate=48_000)
-    out = sources.capture(probe(), req, tmp_path / "a.wsc")
-    head, chans = wsc.read(out)
+    out = sources.capture(probe(), req, tmp_path / "a.wireskein")
+    head, chans = fileformat.read(out)
     sq, sine = chans
-    assert isinstance(sq, wsc.AnalogChannel) and sq.encoding == "analog" and sq.n == 512
+    assert isinstance(sq, fileformat.AnalogChannel) and sq.encoding == "analog" and sq.n == 512
     assert sq.value_bits == 12 and sq.zero is not None and sq.scale_nv
     v = sq.values()
     assert len(set(v)) == 2                                        # the fake's square wave on even channels
@@ -108,10 +108,10 @@ def test_analog_alone_keeps_raw_values_and_what_the_probe_knows(probe, tmp_path)
 def test_logic_and_analog_together_in_a_group(probe, tmp_path):
     req = sources.Request([("A", "10"), ("B", "11")], 20_000_000, 2000, analog=[("SQ", "16", None)],
                           analog_rate=48_000)
-    out = sources.capture(probe(), req, tmp_path / "g.wsc")
-    head, chans = wsc.read(out)
+    out = sources.capture(probe(), req, tmp_path / "g.wireskein")
+    head, chans = fileformat.read(out)
     a, b, sq = chans
-    assert isinstance(a, wsc.Channel) and isinstance(sq, wsc.AnalogChannel)
+    assert isinstance(a, fileformat.Channel) and isinstance(sq, fileformat.AnalogChannel)
     assert head["tick_hz"] == [20_000_000, 1]
     # the fake starts the analog track 5 us (+-2 us) after the group, logic at once: 100 ticks of 20 MHz
     assert abs(float(sq.t0_ticks) - 100) <= 40 + 1
@@ -123,8 +123,8 @@ def test_logic_and_analog_together_in_a_group(probe, tmp_path):
 def test_group_trigger_marks_both_tracks(probe, tmp_path):
     req = sources.Request([("A", "10"), ("B", "11")], 20_000_000, 2000, trigger=("B", "rise"), pretrigger=100,
                           analog=[("SQ", "16", None)], analog_rate=48_000, analog_samples=64)
-    out = sources.capture(probe(), req, tmp_path / "t.wsc")
-    head, chans = wsc.read(out)
+    out = sources.capture(probe(), req, tmp_path / "t.wireskein")
+    head, chans = fileformat.read(out)
     assert "trigger_index" in head["meta"] and "trigger_index" in chans[2].acquisition
     assert "trigger_ns" in head["meta"]["probe"]
 
@@ -132,11 +132,11 @@ def test_group_trigger_marks_both_tracks(probe, tmp_path):
 @analog_only
 def test_cli_analog_only_needs_no_logic_rate(probe, tmp_path):
     src = probe()
-    out = tmp_path / "a.wsc"
+    out = tmp_path / "a.wireskein"
     r = subprocess.run([sys.executable, "-m", "wireskein", "capture", "--source", src, "--analog", "SQ=16",
                         "--analog-rate", "20k", "--analog-samples", "200", "-o", str(out)], capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
-    (sq,) = wsc.read(out)[1]
+    (sq,) = fileformat.read(out)[1]
     assert sq.n == 200
     r = subprocess.run([sys.executable, "-m", "wireskein", "capture", "--source", src, "--channels", "A=10",
                         "--analog-rate", "20k", "-o", str(out)], capture_output=True, text=True)
