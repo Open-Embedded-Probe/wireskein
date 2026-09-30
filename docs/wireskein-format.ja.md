@@ -349,13 +349,13 @@ UTF-8 の JSON のオブジェクトです。
 - 読み手が今の規則のまま読めて、意味を取り違えない追加（新しい `meta` のキー、新しい `encoding` の値、新しい部分、新しい任意の項目）では、`format` を変えません。
 - それ以外の変更（既存のキーの意味や必須の項目を変える）では、`format` の番号を上げます（`wireskein/2`）。読み手は、知らない番号のファイルを読みません（§2.1）。
 - 版の中の小さい番号（minor）は作りません。足す変更は、読み手が知らないものを無視する規則（§2.2、§3.2）で受けます。
-- **`wireskein/1` は、互換を守る最初の版です（2026-09-30 に凍結）。** β の間の `wireskein/0` のファイルは読みません。
+- **`wireskein/1` は、凍結の候補です。** 凍結の前に決めること（[freeze-review](freeze-review.ja.md)）を入れた版で、凍結したら互換を守る最初の版にします。**まだ凍結していないので、それまでは互換のない変更がありえます。** β の間の `wireskein/0` のファイルは読みません。
 
 ## 8. 実装の状況
 
 | 項目 | 状態 |
 | --- | --- |
-| `wireskein/1`（`id`、`trigger_index`、`analog` の `unit`、`capture_id`、`wireskein/sr-extra.json`） | wireskein 0.1.0 から。`wireskein/0` は読みません |
+| `wireskein/1`（`id`、`trigger_index`、`analog` の `unit`、`capture_id`、`wireskein/sr-extra.json`） | wireskein 0.0.13 から（凍結の候補）。`wireskein/0` は読みません |
 | マーカー（§5.2）、復号の注釈（§5.3） | wireskein 0.0.12 から |
 | `.wireskein`（`wireskein/0`）、中身での見分け（§2.3）、知らない項目の持ち越し（§2.2） | wireskein 0.0.8〜0.0.12（β）。それより前の `.wsc`（`wireskein-capture/0`）は読みません（`wireskein.json` がないので、§2.3 の 3 として断ります） |
 | `bits`、アナログ（`analog`、`analog-f32`）、`acquisition`、`meta.probe`、添付、メモ、`.sr` との変換、知らない `encoding` の読み飛ばし（§3.2） | 0.0.8 から、この形式で（`.wsc` の時代に 0.0.2〜0.0.5 で入れたもの） |

@@ -1,6 +1,6 @@
 # 記録の形式 `wireskein-run/3` と照合の結果
 
-作成 2026-09-30（凍結の前の決定: [凍結の前に決めること](freeze-review.ja.md) 5、6）。`wireskein.runlog` が書き、`wireskein verify` が読む、試験の記録の仕様です。キャプチャのファイルそのものは、[WireSkein のファイル形式](wireskein-format.ja.md) にあります。
+作成 2026-09-30（凍結に向けて決めたこと: [凍結の前に決めること](freeze-review.ja.md) 5、6。まだ凍結していないので、互換のない変更がありえます）。`wireskein.runlog` が書き、`wireskein verify` が読む、試験の記録の仕様です。キャプチャのファイルそのものは、[WireSkein のファイル形式](wireskein-format.ja.md) にあります。
 
 ## 1. 記録
 
