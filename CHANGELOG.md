@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) VCD: `convert X.wireskein X.vcd` writes only the changes (each channel at its own rate; analog as `real`), with the exact tick clock, steps, metadata and analog rates in a `$comment` that a read restores. VCDs from elsewhere are read by content: the tick is the common divisor of the change times, vectors become one channel per bit, x/z read as 0 (counted), and `real` variables become analog only when evenly spaced (others are named, not read). Attachments and notes have no place in a VCD; `convert` says so.
+- (JA) VCD: `convert X.wireskein X.vcd` は変化点だけを書く（各チャンネルは自分のレートのまま、アナログは `real`）。正確な刻み、`step`、メタ情報、アナログのレートは `$comment` に入れ、読むときに戻す。ほかの道具の VCD は中身で見分けて読む: 刻みは変化の時刻の最大公約数、ベクタはビットごとのチャンネル、x/z は 0（数を残す）、`real` は間隔が一定のときだけアナログとして読む（ほかは名前を示して読まない）。添付とメモは VCD に入れられないので、`convert` がそう知らせる。
 
 ## 0.0.11
 - (EN) `align` reports the matched edges out of those that overlap the reference (a logic channel may cover only part of the analog track), notes when the overlap is short, and gives the scale's uncertainty from the fit (`overlap_edges`, `overlap_s`, `scale_ppm_uncertainty`). Found on the V003 jig: 65/671 read as a poor match, but the logic had 32.5 ms of edges and all 65 there matched.

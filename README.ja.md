@@ -169,6 +169,8 @@ wireskein attach c.wireskein scope.png scope.png            # どんなファイ
 ```sh
 wireskein convert c0001.wireskein c0001.sr     # PulseView 用: 1 つのレート、遅いチャンネルは水増し
 wireskein convert c0001.sr c0001.wireskein     # 戻す: チャンネルは本当のレートに戻る
+wireskein convert c0001.wireskein c0001.vcd    # GTKWave など: 変化点だけ。各チャンネルは自分のレートのまま
+wireskein convert saleae.vcd s.wireskein       # ほかの道具の VCD: 刻みは変化の時刻の最大公約数
 wireskein convert corpus/fixtures/real/<id> capture.sr
 ```
 

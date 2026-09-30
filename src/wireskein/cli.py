@@ -171,11 +171,16 @@ def convert(args) -> None:
     from .analyze import save
     cap = load(args.input)
     meta = {k: v for k, v in cap.meta.items()
-            if k not in ("file", "sr_file", "tick_hz", "unitsize", "fixture", "extras", "skipped_channels")}
+            if k not in ("file", "sr_file", "vcd_file", "tick_hz", "unitsize", "fixture", "extras", "skipped_channels",
+                         "vcd_not_read")}
     out = save(args.output, cap, **meta)
     slow = [f"{c.name}/{c.step}" for c in cap.channels if c.step != 1]
     print(f"{args.input} -> {out}: {_count(cap)}, {cap.n_samples} ticks at {cap.rate:g} Hz"
           + (f", decimated: {', '.join(slow)}" if slow else ""))
+    for c in cap.meta.get("vcd_not_read", []):
+        print(f"note: {c['name']} not read ({c['encoding']})")
+    if Path(out).suffix == ".vcd" and cap.meta.get("extras"):
+        print(f"note: a VCD has no place for attachments and notes: {len(cap.meta['extras'])} entries not carried")
 
 
 def segments(args) -> None:

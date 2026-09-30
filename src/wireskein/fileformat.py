@@ -341,12 +341,15 @@ def _rewrite(path: str | Path, drop: str) -> None:
 
 def sniff(path: str | Path) -> str | None:
     """What a file is, by its content (wireskein-format §2.3): "wireskein",
-    "sr" (a sigrok session), or None. A WireSkein file of a version this one
+    "sr" (a sigrok session), "vcd" (a Value Change Dump), or None. A WireSkein file of a version this one
     does not know is "wireskein" too; read_header() says why it cannot read it."""
     try:
         with open(path, "rb") as f:
-            if f.read(4) != b"PK\x03\x04":             # not a zip: no need to look further
-                return None
+            head = f.read(4096)
+        if head[:4] != b"PK\x03\x04":                 # not a zip: a VCD (text) or nothing we read
+            text = head.decode("utf-8", "replace").lstrip()
+            import re
+            return "vcd" if re.match(r"\$(date|version|timescale|comment|scope|var)\b", text) else None
         with zipfile.ZipFile(path) as z:
             names = set(z.namelist())
             if IDENT in names:          # (a .sr written by wireskein has one too, "wireskein-sr-extra/0")

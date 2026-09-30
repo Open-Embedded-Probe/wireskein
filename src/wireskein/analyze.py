@@ -29,17 +29,24 @@ def load(path: str | Path) -> Capture:
         return fileio.load(path)
     if kind == "sr":
         return read_sr(path)
-    raise ValueError(f"{path}: neither a WireSkein file nor a sigrok session (.sr)")
+    if kind == "vcd":
+        from ._engine.vcdio import read_vcd
+        return read_vcd(path)
+    raise ValueError(f"{path}: not a WireSkein file, a sigrok session (.sr) or a VCD")
 
 
 def save(path: str | Path, cap: Capture, **meta) -> Path:
     """By the name: .sr (one rate: slow channels are repeated, their real rate
-    kept in wireskein.json inside the zip), anything else a WireSkein file
+    kept in wireskein.json inside the zip), .vcd (the changes; wireskein's own
+    data in a $comment), anything else a WireSkein file
     (each channel at its own rate; .wireskein is the usual name)."""
     path = Path(path)
     fileio.refuse_if_skipped(cap, path)
     if path.suffix == ".sr":
         return write_sr(path, cap, **meta)
+    if path.suffix == ".vcd":
+        from ._engine.vcdio import write_vcd
+        return write_vcd(path, cap, **meta)
     return fileio.save(path, cap, **meta)
 
 
