@@ -56,6 +56,7 @@ class Gui:
         self.root = root.resolve()
         self.web = (web or web_dir()).resolve()
         self.token = secrets.token_urlsafe(24)
+        self.cache: dict = {}                    # (file, mtime) -> annotations computed on request
         gui = self
 
         class Handler(_Handler):
@@ -126,6 +127,57 @@ class _Handler(BaseHTTPRequestHandler):
     def do_HEAD(self):
         self.do_GET()
 
+    def _origin_ok(self) -> bool:
+        """A write must come from this server's own page (a browser sends Origin on POST / PUT)."""
+        origin = self.headers.get("Origin")
+        if origin is None:
+            return False
+        o = urllib.parse.urlsplit(origin)
+        return o.scheme == "http" and o.hostname in LOCAL and o.port == self.server_gui.port
+
+    def _write(self, method: str):
+        url = urllib.parse.urlsplit(self.path)
+        query = urllib.parse.parse_qs(url.query)
+        if not self._host_ok() or not self._token_ok({}) or not self._origin_ok():
+            return self._send(403, b"writes need this server's page (token cookie, localhost, same origin)\n")
+        if (self.headers.get("Content-Type") or "").split(";")[0].strip() != "application/json":
+            return self._send(415, b"send application/json\n")
+        n = int(self.headers.get("Content-Length") or 0)
+        if n > 4 << 20:
+            return self._send(413, b"too large\n")
+        try:
+            body = json.loads(self.rfile.read(n) or b"{}")
+            p = self._capture_path(query.get("file", [""])[0])
+            if fileformat.sniff(p) != "wireskein":
+                raise PermissionError("only WireSkein files can be written to (convert a .sr / .vcd first)")
+            path = urllib.parse.unquote(url.path)
+            if method == "POST" and path == "/api/note":
+                if not isinstance(body.get("text"), str) or not body["text"].strip():
+                    raise ValueError("give text")
+                return self._json({"note": fileformat.note(p, body["text"], by="viewer")})
+            if method == "PUT" and path == "/api/markers":
+                fileformat.set_markers(p, body.get("markers", []))
+                return self._json({"markers": len(body.get("markers", []))})
+            if method == "POST" and path == "/api/annotations":
+                from . import annotate
+                from .analyze import load
+                doc = annotate.build(load(p))
+                annotate.save(p, doc)
+                return self._json(doc)
+            return self._send(404, b"no such API\n")
+        except FileNotFoundError as e:
+            return self._send(404, f"{e}\n".encode())
+        except PermissionError as e:
+            return self._send(403, f"{e}\n".encode())
+        except ValueError as e:
+            return self._send(422, f"{e}\n".encode())
+
+    def do_POST(self):
+        self._write("POST")
+
+    def do_PUT(self):
+        self._write("PUT")
+
     def do_GET(self):
         url = urllib.parse.urlsplit(self.path)
         query = urllib.parse.parse_qs(url.query)
@@ -146,6 +198,10 @@ class _Handler(BaseHTTPRequestHandler):
                 return self._capture(path[len("/files/"):])
             if path == "/browse":
                 return self._browse(query.get("dir", [""])[0])
+            if path == "/api/annotations":
+                return self._annotations(query.get("file", [""])[0])
+            if path == "/api/checks":
+                return self._checks(query.get("file", [""])[0])
             return self._static(path)
         except FileNotFoundError as e:
             return self._send(404, f"{e}\n".encode())
@@ -155,7 +211,8 @@ class _Handler(BaseHTTPRequestHandler):
             return self._send(422, f"{e}\n".encode())
 
     def _json(self, obj) -> None:
-        self._send(200, json.dumps(obj).encode(), "application/json")
+        from ._engine.export import dumps
+        self._send(200, dumps(obj).encode(), "application/json")
 
     def _inside(self, base: Path, rel: str) -> Path:
         p = (base / rel.lstrip("/")).resolve()
@@ -174,6 +231,39 @@ class _Handler(BaseHTTPRequestHandler):
         if p.suffix == ".js":
             ctype = "text/javascript"
         self._send(200, p.read_bytes(), ctype + ("; charset=utf-8" if ctype.startswith("text/") else ""))
+
+    def _capture_path(self, rel: str) -> Path:
+        p = self._inside(self.server_gui.root, rel)
+        if not p.is_file() or fileformat.sniff(p) is None:
+            raise FileNotFoundError(rel)
+        return p
+
+    def _annotations(self, rel: str) -> None:
+        """The file's decode/annotations.json, or the analysis run now (not stored)."""
+        from . import annotate
+        from .analyze import load
+        p = self._capture_path(rel)
+        stored = annotate.load(p) if fileformat.sniff(p) == "wireskein" else None
+        if stored is not None:
+            return self._json({**stored, "stored": True})
+        key = (str(p), p.stat().st_mtime_ns)
+        cache = self.server_gui.cache
+        if key not in cache:
+            cache[key] = annotate.build(load(p))
+        return self._json({**cache[key], "stored": False})
+
+    def _checks(self, rel: str) -> None:
+        """The run's check results for this capture (when it belongs to a recorded run)."""
+        from . import verify
+        p = self._capture_path(rel)
+        run = p.parent / "run.json"
+        if not run.is_file():
+            return self._json({"run": None, "results": []})
+        rep = verify.verify(p.parent)
+        mine = [r for r in rep["results"] if r.get("capture") == p.name]
+        keep = ("path", "check", "ok", "reason", "expected", "measured")
+        return self._json({"run": p.parent.name, "summary": rep["summary"],
+                           "results": json.loads(verify.dumps([{k: r.get(k) for k in keep} for r in mine]))})
 
     def _capture(self, rel: str) -> None:
         p = self._inside(self.server_gui.root, rel)

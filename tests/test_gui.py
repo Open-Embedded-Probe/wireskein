@@ -120,3 +120,48 @@ def test_captures_are_found_by_content(served):
     assert "renamed.dat" in text and "other.wireskein" not in text
     assert get(gui, "/files/renamed.dat", cookie=cookie(gui))[0] == 200
     assert get(gui, "/files/other.wireskein", cookie=cookie(gui))[0] == 404
+
+
+def call(gui, method, path, body, origin=None, ctype="application/json"):
+    c = http.client.HTTPConnection("127.0.0.1", gui.port, timeout=30)
+    headers = {"Host": f"127.0.0.1:{gui.port}", "Cookie": cookie(gui), "Content-Type": ctype,
+               "Origin": origin or f"http://127.0.0.1:{gui.port}"}
+    c.request(method, path, body=json.dumps(body), headers=headers)
+    r = c.getresponse()
+    return r.status, r.read()
+
+
+def test_notes_and_markers_from_the_viewer(served):
+    gui, data = served
+    assert call(gui, "POST", "/api/note?file=a.wireskein", {"text": "seen in the viewer"})[0] == 200
+    assert fileformat.notes(data / "a.wireskein")[-1]["content"] == "seen in the viewer"
+    assert fileformat.notes(data / "a.wireskein")[-1]["by"] == "viewer"
+    marks = [{"t": 3, "label": "start"}, {"t": 5, "end": 9, "label": "burst", "by": "viewer"}]
+    assert call(gui, "PUT", "/api/markers?file=a.wireskein", {"markers": marks})[0] == 200
+    assert fileformat.markers(data / "a.wireskein") == marks
+    assert call(gui, "PUT", "/api/markers?file=a.wireskein", {"markers": [{"t": "x"}]})[0] == 422
+
+
+def test_writes_need_the_page_itself(served):
+    gui, data = served
+    body = {"text": "x"}
+    assert call(gui, "POST", "/api/note?file=a.wireskein", body, origin="http://evil.example")[0] == 403
+    assert call(gui, "POST", "/api/note?file=a.wireskein", body, ctype="text/plain")[0] == 415
+    assert call(gui, "POST", "/api/note?file=../secret.wireskein", body)[0] in (403, 404)
+    assert fileformat.notes(data / "a.wireskein") == []
+
+
+def test_annotations_and_checks(served, tmp_path):
+    gui, data = served
+    from wireskein.runlog import Recorder, level
+    rec = Recorder(data / "run2")
+    with rec.section(1, "t", expect=[level("P0", 0), level("P0", 1)]):
+        rec.capture(rec.armed(), 1000, channels=[fileformat.Channel("P0", fileformat.pack(bytes(8)), 8)])
+    rec.close()
+    doc = json.loads(get(gui, "/api/checks?file=run2/c0001.wireskein", cookie=cookie(gui))[2])
+    assert [(r["check"], r["ok"]) for r in doc["results"]] == [("level", True), ("level", False)]
+    assert json.loads(get(gui, "/api/checks?file=a.wireskein", cookie=cookie(gui))[2]) == {"run": None, "results": []}
+    ann = json.loads(get(gui, "/api/annotations?file=a.wireskein", cookie=cookie(gui))[2])
+    assert ann["format"] == "wireskein-annotations/0" and ann["stored"] is False
+    assert call(gui, "POST", "/api/annotations?file=a.wireskein", {})[0] == 200
+    assert json.loads(get(gui, "/api/annotations?file=a.wireskein", cookie=cookie(gui))[2])["stored"] is True

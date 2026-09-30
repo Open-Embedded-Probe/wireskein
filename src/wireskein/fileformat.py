@@ -310,6 +310,56 @@ def note(path: str | Path, content: str | dict | list, **fields) -> int:
     return n
 
 
+def put(path: str | Path, entry: str, data: str | bytes | dict | list) -> None:
+    """Store one entry (a defined part such as decode/annotations.json), replacing
+    an older one. The capture itself (wireskein.json, capture.json, the channel
+    data) cannot be written this way."""
+    if not entry or entry.startswith("/") or ".." in entry.split("/") or entry.endswith("/"):
+        raise ValueError(f"bad entry name {entry!r}")
+    with zipfile.ZipFile(path) as z:
+        _check(z, path)
+        head = json.loads(z.read(CAPTURE)) if CAPTURE in z.namelist() else {}
+        if entry in {IDENT, CAPTURE} | {c.get("file") for c in head.get("channels", [])}:
+            raise ValueError(f"{entry} is part of the capture itself")
+        exists = entry in z.namelist()
+    if exists:
+        _rewrite(path, drop=entry)
+    with zipfile.ZipFile(path, "a", zipfile.ZIP_DEFLATED) as z:
+        z.writestr(entry, _encode(data))
+
+
+def get(path: str | Path, entry: str) -> bytes | None:
+    """One entry's bytes, or None."""
+    with zipfile.ZipFile(path) as z:
+        return z.read(entry) if entry in z.namelist() else None
+
+
+MARKERS, MARKERS_FORMAT = "markers/markers.json", "wireskein-markers/0"
+
+
+def markers(path: str | Path) -> list[dict]:
+    """The markers (wireskein-format §5.2): [{"t", "end"?, "label", "note"?, ...}]."""
+    data = get(path, MARKERS)
+    if data is None:
+        return []
+    doc = json.loads(data)
+    if doc.get("format") != MARKERS_FORMAT:
+        raise ValueError(f"{path}: markers format {doc.get('format')!r}, this version reads {MARKERS_FORMAT!r}")
+    return doc.get("markers", [])
+
+
+def set_markers(path: str | Path, items: list[dict]) -> None:
+    """Replace the markers. Each needs "t" (ticks) and "label"; "end" makes it a span."""
+    clean = []
+    for m in items:
+        if not isinstance(m.get("t"), (int, float)) or not isinstance(m.get("label"), str):
+            raise ValueError(f"a marker needs a number t and a text label: {m!r}")
+        if m.get("end") is not None and not isinstance(m["end"], (int, float)):
+            raise ValueError(f"marker end must be a number: {m!r}")
+        clean.append({k: v for k, v in m.items() if v is not None})
+    put(path, MARKERS, json.dumps({"format": MARKERS_FORMAT, "markers": clean}, ensure_ascii=False, indent=1))
+
+
 def attachments(path: str | Path) -> dict[str, bytes]:
     with zipfile.ZipFile(path) as z:
         return {x[len(ATTACH):]: z.read(x) for x in z.namelist() if x.startswith(ATTACH)}
