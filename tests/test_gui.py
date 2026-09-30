@@ -165,3 +165,15 @@ def test_annotations_and_checks(served, tmp_path):
     assert ann["format"] == "wireskein-annotations/0" and ann["stored"] is False
     assert call(gui, "POST", "/api/annotations?file=a.wireskein", {})[0] == 200
     assert json.loads(get(gui, "/api/annotations?file=a.wireskein", cookie=cookie(gui))[2])["stored"] is True
+
+
+def test_vcd_is_served_as_wireskein(served, tmp_path):
+    gui, data = served
+    from wireskein.analyze import load, save
+    save(data / "v.vcd", load(data / "a.wireskein"))
+    assert "v.vcd" in get(gui, "/browse", cookie=cookie(gui))[2].decode()
+    status, _, body = get(gui, "/files/v.vcd", cookie=cookie(gui))
+    assert status == 200
+    (tmp_path / "back.wireskein").write_bytes(body)
+    _, chans = fileformat.read(tmp_path / "back.wireskein")
+    assert fileformat.unpack(chans[0]) == bytes([0, 1] * 8)

@@ -150,13 +150,22 @@ wireskein capture --source sigrok:fx2lafw --channels SDA=D0,SCL=D1 --rate 12M --
 ## Viewing captures in the browser
 
 ```sh
-wireskein gui capture.wireskein          # opens the browser on that capture (a .sr is converted on the fly)
-wireskein gui runs/                # a page listing the .wireskein / .sr files and recorded runs below runs/
+wireskein gui capture.wireskein    # opens the browser on that capture (a .sr or .vcd is converted on the fly)
+wireskein gui runs/                # a page listing the captures and recorded runs below runs/
 ```
 
-The viewer is [wireskein-web](https://github.com/Open-Embedded-Probe/wireskein-web), shipped in the wheel. It shows
-logic and analog lanes, dots on the samples the probe really took (a decimated channel shows only its own samples), and
-the metadata, acquisition settings, attachments and notes.
+The viewer is [wireskein-web](https://github.com/Open-Embedded-Probe/wireskein-web), shipped in the wheel (also on
+[GitHub Pages](https://open-embedded-probe.github.io/wireskein-web/) for files opened in the browser). It shows:
+
+- logic and analog lanes on a time axis; hover to measure pulse widths, period, frequency and duty (analog: the value);
+  Shift + wheel scrolls in time;
+- the samples the probe really took (a decimated channel shows only its own), the trigger, and analog on the aligned
+  time when the file has an alignment;
+- decoding annotations (I2C transactions, UART characters, ...) under their data line: from the file
+  (`wireskein annotate --save`), or decoded on request with a button to store them;
+- markers: M puts one at the mouse, and they are saved into the file;
+- for a capture of a recorded run, the run's check results (OK / NG and why);
+- the metadata, acquisition settings, attachments and notes, with a form that appends a note.
 
 The server listens on 127.0.0.1 only and prints a URL with a one-time token; requests without it, or for another host
 name, are refused. For a bench machine, forward the port (`ssh -L PORT:127.0.0.1:PORT bench`) and open the printed URL.

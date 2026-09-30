@@ -119,15 +119,18 @@ wireskein capture --source sigrok:fx2lafw --channels SDA=D0,SCL=D1 --rate 12M --
 ## ブラウザでキャプチャを見る
 
 ```sh
-wireskein gui capture.wireskein          # そのキャプチャをブラウザで開く（.sr はその場で変換）
-wireskein gui runs/                # runs/ の下の .wireskein、.sr、記録の一覧のページ
+wireskein gui capture.wireskein    # そのキャプチャをブラウザで開く（.sr と .vcd はその場で変換）
+wireskein gui runs/                # runs/ の下のキャプチャと記録の一覧のページ
 ```
 
-ビューアは [wireskein-web](https://github.com/Open-Embedded-Probe/wireskein-web) で、wheel に同梱しています。次のものを表示します。
+ビューアは [wireskein-web](https://github.com/Open-Embedded-Probe/wireskein-web) で、wheel に同梱しています（ブラウザでファイルを開くだけなら [GitHub Pages](https://open-embedded-probe.github.io/wireskein-web/) でも使えます）。次のものを表示します。
 
-- ロジックとアナログの行
-- プローブが実際に取ったサンプルの点（間引いたチャンネルは、自分のサンプルだけ）
-- メタ情報、取得の設定、添付、メモ
+- 時間軸つきのロジックとアナログの行。マウスを重ねると、パルスの幅、周期、周波数、デューティを示します（アナログは値）。Shift + ホイールで時間方向に移動します。
+- プローブが実際に取ったサンプル（間引いたチャンネルは自分のサンプルだけ）、トリガの位置。時刻の合わせ込みがファイルにあれば、アナログを合わせた時刻で描きます。
+- 復号の注釈（I2C の取引、UART の文字など）を、データの線の下に示します。ファイルに入っていればそれを（`wireskein annotate --save`）、なければその場で復号し、ファイルに入れるボタンも出します。
+- マーカー: M でマウスの位置に付け、ファイルに保存できます。
+- 記録した run の中のキャプチャなら、その照合の結果（OK / NG と理由）。
+- メタ情報、取得の設定、添付、メモ。メモを追記する欄もあります。
 
 サーバーは 127.0.0.1 にだけ開き、起動ごとのトークン付きの URL を表示します。
 
