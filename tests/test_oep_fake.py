@@ -49,7 +49,8 @@ def test_three_channels_of_a_four_bit_stream(probe, tmp_path):
     i = np.arange(1000)
     for k, lv in enumerate(levels(out)):                        # the fake's waveform: sample i is the counter i
         assert np.array_equal(lv, (i >> k) & 1), k
-    assert head["meta"]["probe_channels"] == {"A": 10, "B": 11, "C": 12} and "start_us" in head["meta"]
+    assert head["meta"]["probe_channels"] == {"A": 10, "B": 11, "C": 12} and "start_ns" in head["meta"]
+    assert "start_uncertainty_ns" in head["meta"]
 
 
 def test_trigger_and_slip(probe, tmp_path):
@@ -80,3 +81,49 @@ def test_esp32_sampler_profile(probe, tmp_path):
                           tmp_path / "v.wsc")
     i = np.arange(200)
     assert [np.array_equal(lv, (i >> k) & 1) for k, lv in enumerate(levels(out))] == [True, True]
+
+
+HAS_ANALOG = hasattr(oep_client.capture if hasattr(oep_client, "capture") else __import__("oep_client.capture").capture,
+                     "CaptureGroup")
+analog_only = pytest.mark.skipif(not HAS_ANALOG, reason="oep-client has no analog / group (before 0.0.10)")
+
+
+@analog_only
+def test_analog_alone_keeps_raw_values_and_what_the_probe_knows(probe, tmp_path):
+    req = sources.Request([], 20_000_000, 512, analog=[("SQ", "16", None), ("SINE", "17", 3)], analog_rate=48_000)
+    out = sources.capture(probe(), req, tmp_path / "a.wsc")
+    head, chans = wsc.read(out)
+    sq, sine = chans
+    assert isinstance(sq, wsc.AnalogChannel) and sq.encoding == "analog" and sq.n == 512
+    assert sq.value_bits == 12 and sq.zero is not None and sq.scale_nv
+    v = sq.values()
+    assert len(set(v)) == 2                                        # the fake's square wave on even channels
+    assert sine.acquisition["frontend"]["frontend"] == 3 and sine.acquisition["attenuation_db"] == 12
+    assert sq.acquisition["pin"] == 16 and "reference" in sq.acquisition and sq.acquisition["vrefint_raw"] == 1365
+    p = head["meta"]["probe"]
+    assert p["calibration"] and "boot_id" in p and "start_ns" in head["meta"]
+
+
+@analog_only
+def test_logic_and_analog_together_in_a_group(probe, tmp_path):
+    req = sources.Request([("A", "10"), ("B", "11")], 20_000_000, 2000, analog=[("SQ", "16", None)],
+                          analog_rate=48_000)
+    out = sources.capture(probe(), req, tmp_path / "g.wsc")
+    head, chans = wsc.read(out)
+    a, b, sq = chans
+    assert isinstance(a, wsc.Channel) and isinstance(sq, wsc.AnalogChannel)
+    assert head["tick_hz"] == [20_000_000, 1]
+    # the fake starts the analog track 5 us (+-2 us) after the group, logic at once: 100 ticks of 20 MHz
+    assert abs(float(sq.t0_ticks) - 100) <= 40 + 1
+    assert sq.acquisition["start_uncertainty_ns"] == 2000 and "group_start_ns" in head["meta"]["probe"]
+    assert sq.n == round(2000 * 48_000 / 20_000_000) or sq.n >= 1
+
+
+@analog_only
+def test_group_trigger_marks_both_tracks(probe, tmp_path):
+    req = sources.Request([("A", "10"), ("B", "11")], 20_000_000, 2000, trigger=("B", "rise"), pretrigger=100,
+                          analog=[("SQ", "16", None)], analog_rate=48_000, analog_samples=64)
+    out = sources.capture(probe(), req, tmp_path / "t.wsc")
+    head, chans = wsc.read(out)
+    assert "trigger_index" in head["meta"] and "trigger_index" in chans[2].acquisition
+    assert "trigger_ns" in head["meta"]["probe"]

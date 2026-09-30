@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) `capture --analog NAME=ID[@FRONTEND] --analog-rate --analog-samples`: analog channels. On OEP (oep-client-python 0.0.10+), logic and analog start together through oep.fixture.capture-group; each analog channel gets t0_ticks from the segments' start_ns and its skew, raw values with the probe's linear conversion, and acquisition (pin, input range and attenuation, reference, Vrefint, start uncertainty, trigger index, rate accuracy); meta.probe holds chip, firmware, model, boot_id, group start / trigger times and the factory calibration (raw). Analog samples default to the logic capture's duration at the rate the probe really uses (asked first).
+- (JA) `capture --analog 名前=番号[@入力範囲] --analog-rate --analog-samples`: アナログのチャンネル。OEP（oep-client-python 0.0.10 以降）では、ロジックとアナログを oep.fixture.capture-group で一緒に始める。アナログの各チャンネルは、区画の start_ns とずれから t0_ticks、生の値とプローブの 1 次式、acquisition（ピン、入力範囲と減衰、基準電圧、Vrefint、開始の不確かさ、トリガーの位置、レートの確かさ）を持つ。meta.probe には、チップ、ファームウェア、型番、boot_id、組の開始とトリガーの時刻、出荷時の較正（生の値）を入れる。アナログのサンプル数の既定は、プローブが実際に使うレート（先に問い合わせる）で、ロジックと同じ時間。
 
 ## 0.0.5
 - (EN) Analog channels in `.wsc` (wsc-format §4.2, §4.3): `analog` (raw unsigned values with `zero` / `scale_nv`) and `analog-f32` (volts), each with its own rate (`rate_hz`, a fraction) and first-sample time (`t0_ticks`). `wsc.analog_raw()` / `wsc.analog_volts()`; channels carry `acquisition` (pin, attenuation, reference voltage, Vrefint reading) and `meta.probe` holds the probe / MCU and raw factory calibration values. The analysis keeps them in `Capture.analog`; `info` lists them; `.sr` conversion writes them as volts when their samples land on ticks and restores the raw values when read back. `capture --source sigrok:...` takes analog channels (A0, ...).

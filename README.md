@@ -104,7 +104,9 @@ wireskein capture --source sigrok:fx2lafw --channels SDA=D0,SCL=D1 --rate 12M --
 | `oep:<target>` | An OEP probe through oep-client-python. `<target>` is a serial port, `tcp://HOST:PORT` (a broker) or `usb[:VID:PID[:SERIAL]]` | The probe's channel numbers |
 | `sigrok:<driver>` | Any device sigrok supports, through `sigrok-cli` (`fx2lafw`, `dreamsourcelab-dslogic`, `demo`, ...) | sigrok's channel names (`D0`, ...) |
 
-`--channels` names each channel (`NAME=ID`). The file keeps the rate the device actually used, plus what the source knows: the probe's `start_us`, a `time_base_slipped` mark, the trigger position. From Python: `wireskein.sources.capture(source, Request(...), out)`. Other packages can add sources through the `wireskein.sources` entry point group.
+`--channels` names each logic channel (`NAME=ID`). `--analog NAME=ID[@FRONTEND],...` adds analog channels (`--analog-rate`, `--analog-samples`; by default as long as the logic capture). On an OEP probe, logic and analog are started together (capture-group); each analog channel keeps its own rate and start (the probe's estimate, with its uncertainty), raw values, input range, reference and the probe's factory calibration. With sigrok, analog ids ride at the device's one rate.
+
+ The file keeps the rate the device actually used, plus what the source knows: the probe's `start_us`, a `time_base_slipped` mark, the trigger position. From Python: `wireskein.sources.capture(source, Request(...), out)`. Other packages can add sources through the `wireskein.sources` entry point group.
 
 ## Capture files (.wsc) and conversion
 

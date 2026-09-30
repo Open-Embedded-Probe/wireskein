@@ -28,6 +28,11 @@ def capture(target: str, req: Request) -> Result:
         raise ValueError("sigrok:<driver>, e.g. sigrok:fx2lafw")
     from .._engine import wscio
     from .._engine.srio import read_sr
+    if req.analog:                  # sigrok has one rate per device: analog ids ride with the logic ones
+        if req.analog_rate not in (None, req.rate):
+            raise ValueError("sigrok gives one rate per device: --analog-rate must be left out or equal --rate")
+        req = type(req)(req.channels + [(n, c) for n, c, _ in req.analog], req.rate, req.samples, req.trigger,
+                        req.pretrigger, req.timeout)
     ids = {name: cid for name, cid in req.channels}
     with tempfile.TemporaryDirectory() as d:
         out = Path(d) / "c.sr"

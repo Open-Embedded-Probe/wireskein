@@ -34,20 +34,23 @@ TRIGGERS = ("rise", "fall", "both", "high", "low")
 
 @dataclass
 class Request:
-    channels: list[tuple[str, str]]          # (name to record, the device's channel id), in this order
-    rate: int                                # samples per second asked for (the device may answer another)
+    channels: list[tuple[str, str]]          # logic: (name to record, the device's channel id), in this order
+    rate: int                                # logic samples per second asked for (the device may answer another)
     samples: int
-    trigger: tuple[str, str] | None = None   # (channel name, one of TRIGGERS); None: start at once
+    trigger: tuple[str, str] | None = None   # (logic channel name, one of TRIGGERS); None: start at once
     pretrigger: int | None = None            # samples kept before the trigger
     timeout: float = 10.0                    # seconds to wait for the capture to finish
+    analog: list[tuple[str, str, int | None]] = field(default_factory=list)   # (name, channel id, input range / frontend)
+    analog_rate: int | None = None           # analog samples per second (default: the source's choice or `rate`)
+    analog_samples: int | None = None        # default: as long as the logic capture
 
     def __post_init__(self):
-        names = [n for n, _ in self.channels]
+        names = [n for n, _ in self.channels] + [n for n, *_ in self.analog]
         if not names or len(set(names)) != len(names):
             raise ValueError(f"channel names must be given and differ: {names}")
         if self.trigger is not None:
             name, kind = self.trigger
-            if name not in names or kind not in TRIGGERS:
+            if name not in [n for n, _ in self.channels] or kind not in TRIGGERS:
                 raise ValueError(f"trigger {name}:{kind}: the channel must be one captured, the kind one of {', '.join(TRIGGERS)}")
 
 
@@ -110,6 +113,15 @@ def parse_channels(text: str) -> list[tuple[str, str]]:
     for part in filter(None, (p.strip() for p in text.split(","))):
         name, _, cid = part.partition("=")
         out.append((name.strip(), (cid or name).strip()))
+    return out
+
+
+def parse_analog(text: str) -> list[tuple[str, str, int | None]]:
+    """"VBUS=16,SINE=17@3" -> [("VBUS", "16", None), ("SINE", "17", 3)] (@N: the input range / frontend)."""
+    out = []
+    for name, cid in parse_channels(text):
+        cid, _, fe = cid.partition("@")
+        out.append((name, cid, int(fe) if fe else None))
     return out
 
 
