@@ -294,7 +294,8 @@ class _Handler(BaseHTTPRequestHandler):
             r = p.relative_to(root).as_posix()
             if p.is_file() and p.name != "run.json" and fileformat.sniff(p):
                 link = "/?file=/files/" + urllib.parse.quote(r)
-                rows.append(f'<li><a href="{html.escape(link)}">{html.escape(r)}</a> '
+                rows.append(f'<li><input type="checkbox" value="/files/{html.escape(urllib.parse.quote(r))}"> '
+                            f'<a href="{html.escape(link)}">{html.escape(r)}</a> '
                             f'<small>{p.stat().st_size:,} bytes</small></li>')
             elif p.is_file() and p.name == "run.json":
                 rows.append(f"<li><b>{html.escape(p.parent.relative_to(root).as_posix() or '.')}</b> "
@@ -303,6 +304,16 @@ class _Handler(BaseHTTPRequestHandler):
         body = (f"<!doctype html><meta charset=utf-8><title>wireskein gui</title>"
                 f"<style>body{{font:14px system-ui;margin:20px}}small{{color:#777}}</style>"
                 f"<h1>{title}</h1><ul>{''.join(rows) or '<li>no WireSkein or .sr files here</li>'}</ul>"
+                f"<p><button id=together disabled>Open the checked ones together</button> "
+                f"<small>the first checked is the time reference; the others are drawn on its time "
+                f"(aligned with <code>wireskein align --to</code>)</small></p>"
+                f"<script>const boxes=[...document.querySelectorAll('input[type=checkbox]')];"
+                f"const b=document.getElementById('together');"
+                f"const picked=()=>boxes.filter(x=>x.checked).map(x=>x.value);"
+                f"boxes.forEach(x=>x.addEventListener('change',()=>{{b.disabled=picked().length<2;}}));"
+                f"b.addEventListener('click',()=>{{const [first,...rest]=picked();"
+                f"location.href='/?file='+encodeURIComponent(first)+rest.map(r=>'&with='+encodeURIComponent(r)).join('');}});"
+                f"</script>"
                 f"<p><small>wireskein {__version__} · wireskein-web {web_version(self.server_gui.web) or '(dev)'}"
                 f"</small></p>")
         self._send(200, body.encode(), "text/html; charset=utf-8")

@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) `wireskein gui`'s list page: check captures and "Open the checked ones together" (the first is the time reference; the others are drawn on its time, aligned by `wireskein align --to`).
+- (JA) `wireskein gui` の一覧のページ: キャプチャにチェックを付けて「一緒に開く」（最初のものが時間の基準。ほかはその時間に、`wireskein align --to` の合わせ込みで描く）。
 - (EN) `analyze`, `segments` and `annotate` take `--threshold NAME=V|NAME=LOW,HIGH` (repeatable): the analog channel is also read as logic, so a UART or I2C line captured by an ADC is found and decoded. `analyze.as_logic(cap, {name: threshold})` in Python. `analyze` and `segments` report a bad file or channel as one line instead of a traceback.
 - (JA) `analyze`、`segments`、`annotate` に `--threshold 名前=V|名前=LOW,HIGH`（繰り返し可）: アナログのチャンネルをロジックとしても読み、ADC で取った UART や I2C の線を見つけて復号する。Python からは `analyze.as_logic(cap, {名前: しきい値})`。`analyze` と `segments` は、ファイルやチャンネルの誤りを、トレースバックではなく 1 行で知らせる。
 - (EN) `wireskein align B --to A --reference A_LOGIC --via B_CHANNEL [--save]` and `align.between()`: a capture from another probe onto A's ticks (spec §5.1.1), from a signal both saw. Stored in B's alignment.json under `files`, with A's capture.json SHA-256; neither file's samples change. A coarse offset from the first edges, then a line fit over more and more of them; an ambiguous result (a periodic signal) is refused. Saving an in-file alignment keeps the ones to other files.
