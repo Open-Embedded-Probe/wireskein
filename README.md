@@ -88,6 +88,24 @@ print(summary_line(report), *lines(report), sep="\n")   # NG and unchecked lines
 
 For pytest, [pytest-embedded-wireskein](https://github.com/Open-Embedded-Probe/pytest-embedded-wireskein) gives each test a `ws_run` recorder and runs `verify` after the test.
 
+## Capturing
+
+`wireskein capture` takes logic channels from a device and saves a `.wsc`:
+
+```sh
+pip install "wireskein[oep]"      # for OEP probes (oep-client-python); sigrok needs sigrok-cli on PATH
+wireskein capture --source oep:/dev/ttyACM0 --channels SDA=47,SCL=48 --rate 20M --samples 200k -o i2c.wsc
+wireskein capture --source sigrok:fx2lafw --channels SDA=D0,SCL=D1 --rate 12M --samples 1M \
+                  --trigger SCL:fall --pretrigger 1k --note "after reflow" -o i2c.wsc
+```
+
+| Source | Device | Channel ids |
+| --- | --- | --- |
+| `oep:<target>` | An OEP probe through oep-client-python. `<target>` is a serial port, `tcp://HOST:PORT` (a broker) or `usb[:VID:PID[:SERIAL]]` | The probe's channel numbers |
+| `sigrok:<driver>` | Any device sigrok supports, through `sigrok-cli` (`fx2lafw`, `dreamsourcelab-dslogic`, `demo`, ...) | sigrok's channel names (`D0`, ...) |
+
+`--channels` names each channel (`NAME=ID`). The file keeps the rate the device actually used, plus what the source knows: the probe's `start_us`, a `time_base_slipped` mark, the trigger position. From Python: `wireskein.sources.capture(source, Request(...), out)`. Other packages can add sources through the `wireskein.sources` entry point group.
+
 ## Capture files (.wsc) and conversion
 
 A `.wsc` keeps each channel at its own sample rate. A probe that decimates some channels to fit its link (every 32nd sample, say) stores only the samples it took, with `step=32`. Nothing is repeated to fill the gaps, so a viewer can show exactly the samples that exist. The module `wireskein.wsc` reads and writes it with the standard library only:
