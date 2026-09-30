@@ -1,5 +1,7 @@
 # WireSkein
 
+![WireSkein: オープンソースのロジックアナライザのライブラリ](https://raw.githubusercontent.com/Open-Embedded-Probe/wireskein/main/docs/images/wireskein-top.jpg)
+
 [English README](https://github.com/Open-Embedded-Probe/wireskein/blob/main/README.md)
 
 WireSkein は、ロジックアナライザのキャプチャを読むツールです。用途は 2 つあります。
