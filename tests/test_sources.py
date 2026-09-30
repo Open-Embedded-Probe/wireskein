@@ -75,7 +75,7 @@ class StandIn:
             def configure(self, **kw):
                 me.calls.append(("configure", kw))
                 if me.refuse & set(kw.get("critical", ())):
-                    raise Unsupported(min(me.refuse & set(kw["critical"])))
+                    raise Unsupported(min(me.refuse & set(kw["critical"])) | 0x80)   # as sent: bit 7 = critical
                 return types.SimpleNamespace(rate=Fraction(160_000_000, 8), width=4, positions=[0, 1, 2], jitter_ns=0,
                                              ignored=sorted(me.ignore))
 

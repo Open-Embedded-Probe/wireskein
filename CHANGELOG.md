@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) `capture --source oep:...`: a refused trigger / pretrigger is named as such; the probe reports the tag with its critical bit, which was shown as "configure item 197".
+- (JA) `capture --source oep:...`: 断られたトリガーとプリトリガーを、その名前で示す。プローブは critical のビット付きの番号を返すので、「configure item 197」と出ていた。
 
 ## 0.0.4
 - (EN) UART check: a back-to-back stream with little idle at the start is read. When no idle gap of a whole character comes later, the receiver gets in step at the start edge from which 16 characters in a row keep valid stop / parity bits (an idle gap is still preferred, because regular data can keep valid stop bits for a while from a wrong edge). The idle level is judged by reading (the level that reads clearly more good characters), not by the longest run, which a burst of zeros can outlast (733 baud 8N1 at 1 MHz with 2 idle bits misjudged idle as 0).
