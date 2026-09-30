@@ -49,6 +49,8 @@ def info(args) -> None:
     for c in chans:
         rate = float(tick) / c.step
         print(f"  {c.name:12s} {c.n:>12d} samples  step {c.step:<4d} phase {c.phase:<4d} {rate:g} Hz")
+    for c in wsc.skipped(head):
+        print(f"  {c['name']:12s} encoding {c['encoding']!r}: not read by this version")
     if head.get("meta"):
         print("meta: " + json.dumps(head["meta"], ensure_ascii=False, default=str))
     for name, data in wsc.attachments(args.file).items():
@@ -76,7 +78,8 @@ def attach_cmd(args) -> None:
 def convert(args) -> None:
     from .analyze import save
     cap = load(args.input)
-    meta = {k: v for k, v in cap.meta.items() if k not in ("file", "source", "tick_hz", "unitsize", "fixture", "extras")}
+    meta = {k: v for k, v in cap.meta.items()
+            if k not in ("file", "source", "tick_hz", "unitsize", "fixture", "extras", "skipped_channels")}
     out = save(args.output, cap, **meta)
     slow = [f"{c.name}/{c.step}" for c in cap.channels if c.step != 1]
     print(f"{args.input} -> {out}: {len(cap.channels)} channels, {cap.n_samples} ticks at {cap.rate:g} Hz"

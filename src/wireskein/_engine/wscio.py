@@ -19,7 +19,8 @@ def load(path: str | Path) -> Capture:
         out.append(Channel(c.name, init, edges, c.step, c.phase))
     tick = wsc.tick_hz(head)
     return Capture(float(tick), int(head["ticks"]), out,
-                   meta={**head.get("meta", {}), "file": str(path), "tick_hz": tick, "extras": wsc.extras(path)})
+                   meta={**head.get("meta", {}), "file": str(path), "tick_hz": tick, "extras": wsc.extras(path),
+                         "skipped_channels": wsc.skipped(head)})
 
 
 def to_channel(ch: Channel, n_ticks: int) -> wsc.Channel:
@@ -30,10 +31,19 @@ def to_channel(ch: Channel, n_ticks: int) -> wsc.Channel:
     return wsc.Channel(ch.name, np.packbits(levels, bitorder="little").tobytes(), n, ch.step, ch.phase)
 
 
+def refuse_if_skipped(cap: Capture, dest) -> None:
+    """Writing a capture read with skipped channels would drop them (wsc-format §3.2)."""
+    sk = cap.meta.get("skipped_channels")
+    if sk:
+        names = ", ".join(f"{c['name']} ({c['encoding']!r})" for c in sk)
+        raise ValueError(f"not writing {dest}: it would drop the channels this version does not read: {names}")
+
+
 def save(path: str | Path, cap: Capture, **meta) -> Path:
     """meta: the capture file's metadata; attachments and notes carried in
     cap.meta["extras"] (as read from a .wsc or .sr) are copied as they are."""
     import zipfile
+    refuse_if_skipped(cap, path)
     tick = cap.meta.get("tick_hz", cap.rate)
     path = wsc.write(path, tick, [to_channel(c, cap.n_samples) for c in cap.channels], **meta)
     if cap.meta.get("extras"):

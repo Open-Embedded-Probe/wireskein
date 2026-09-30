@@ -31,6 +31,7 @@ def save(path: str | Path, cap: Capture, **meta) -> Path:
     """.wsc (each channel at its own rate) or .sr (one rate: slow channels are
     repeated, their real rate kept in wireskein.json inside the zip)."""
     path = Path(path)
+    wscio.refuse_if_skipped(cap, path)
     if path.suffix == ".wsc":
         return wscio.save(path, cap, **meta)
     if path.suffix == ".sr":
