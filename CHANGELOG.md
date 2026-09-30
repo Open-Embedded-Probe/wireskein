@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 0.0.4
 - (EN) UART check: a back-to-back stream with little idle at the start is read. When no idle gap of a whole character comes later, the receiver gets in step at the start edge from which 16 characters in a row keep valid stop / parity bits (an idle gap is still preferred, because regular data can keep valid stop bits for a while from a wrong edge). The idle level is judged by reading (the level that reads clearly more good characters), not by the longest run, which a burst of zeros can outlast (733 baud 8N1 at 1 MHz with 2 idle bits misjudged idle as 0).
 - (JA) UART の検査: 先頭の idle が短く、隙間なく続く流れも読む。この先に 1 文字分の idle がないときは、ストップビットとパリティが 16 文字続けて正しい開始位置で同期する（idle があればそちらを優先する。規則的なデータでは、ずれた位置からでもしばらく正しいストップビットが続くため）。idle のレベルは、一番長い run ではなく、読んでみて明らかに多く読めるほうで決める（733 baud 8N1 を 1 MHz、先頭の idle 2 ビットで取ると、0 の続くデータに負けて idle を 0 と取り違えていた）。
 - (EN) `capture --source oep:...` with `--trigger` / `--pretrigger`: the probe must honour them or refuse (they are sent as critical), and a probe that ignores them is an error, instead of an immediate capture without a trigger (a P4 on oep-probe-arduino 0.0.8 has no trigger).
