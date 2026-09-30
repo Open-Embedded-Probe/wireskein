@@ -39,9 +39,10 @@ def _uncertainty_ticks(cap: Capture, trace: AnalogTrace, tick: float) -> float |
 
 
 def _match(ref: np.ndarray, pol_ref: np.ndarray, t: np.ndarray, pol: np.ndarray, off: float, scale: float,
-           tol: float) -> tuple[np.ndarray, np.ndarray]:
+           tol) -> tuple[np.ndarray, np.ndarray]:
     """Pairs (index in t, index in ref): each edge of t, moved by the model, to the
-    nearest reference edge of the same direction within tol."""
+    nearest reference edge of the same direction within tol (a number, or one per edge of t)."""
+    tol = np.broadcast_to(np.asarray(tol, dtype=float), t.shape)
     out_t, out_r = [], []
     for p in (0, 1):
         r = ref[pol_ref == p]
@@ -53,7 +54,7 @@ def _match(ref: np.ndarray, pol_ref: np.ndarray, t: np.ndarray, pol: np.ndarray,
         right = np.clip(np.searchsorted(r, x), 0, len(r) - 1)
         left = np.clip(right - 1, 0, len(r) - 1)
         j = np.where(np.abs(r[left] - x) <= np.abs(r[right] - x), left, right)
-        ok = np.abs(r[j] - x) <= tol
+        ok = np.abs(r[j] - x) <= tol[ti]
         out_t.append(ti[ok])
         out_r.append(ri[j[ok]])
     if not out_t:
@@ -168,6 +169,119 @@ def find(cap: Capture, reference: str, via: str, threshold, window_ticks: float 
     return {"format": FORMAT, "channels": {n: dict(entry) for n in names}}
 
 
+def _edges(cap: Capture, name: str, threshold) -> tuple[np.ndarray, np.ndarray, float]:
+    """(times in the capture's ticks, level after each, resolution in ticks) of a channel's edges: a logic
+    channel's (the middle of the step each happened in), or an analog one read at `threshold`."""
+    try:
+        ch = cap.channel(name)
+    except KeyError:
+        ch = None
+    if ch is not None:
+        pol = (ch.initial ^ ((np.arange(len(ch.edges)) + 1) & 1)).astype(np.uint8)
+        return ch.edges.astype(float) - ch.step / 2, pol, float(ch.step)
+    trace = next((a for a in cap.analog if a.name == name), None)
+    if trace is None:
+        raise ValueError(f"{name}: no such channel")
+    if threshold is None:
+        raise ValueError(f"{name} is analog: give a threshold")
+    tick_hz = cap.meta.get("tick_hz", cap.rate)
+    _, t, pol = analog.crossings(trace, tick_hz, threshold)
+    return t, pol.astype(np.uint8), float(Fraction(tick_hz) / trace.rate_hz)
+
+
+def between(ref_cap: Capture, reference: str, cap: Capture, via: str, threshold=None,
+            window_ticks: float | None = None, max_ppm: float = 200) -> dict:
+    """How this capture's ticks map onto another capture's (wireskein-format §5.1.1): the
+    same signal on `reference` (a logic channel of ref_cap) and `via` (a channel of cap;
+    analog needs a threshold). Returns the entry for alignment.json["files"] (without
+    capture_sha256). The start may be off by anything within window_ticks (reference
+    ticks; default: the reference capture's length); the two clocks by max_ppm.
+    Raises ValueError when the edges do not tell one answer."""
+    r_t, r_pol, r_w = _edges(ref_cap, reference, None)
+    t, pol, w = _edges(cap, via, threshold)
+    if len(r_t) < 2 or len(t) < 2:
+        raise ValueError(f"too few edges: {reference} has {len(r_t)}, {via} has {len(t)}")
+    tick_ref, tick = float(ref_cap.meta.get("tick_hz", ref_cap.rate)), float(cap.meta.get("tick_hz", cap.rate))
+    s0 = tick_ref / tick                                       # reference ticks per tick here
+    fine = max(r_w, w * s0)
+    if window_ticks is None:
+        window_ticks = float(ref_cap.n_samples)
+    # 1. a coarse offset from the first edges: the most common difference to a reference edge of the same
+    #    direction, in bins wide enough that the clocks cannot drift out of one over these edges
+    k = max(8, min(64, int(20_000_000 // max(1, len(r_t)))))
+    head, hpol = t[:k], pol[:k]
+    span = float(head[-1] - head[0]) * s0
+    width = max(fine, 4 * max_ppm * 1e-6 * span)
+    diffs = []
+    for x, p in zip(head, hpol):
+        r = r_t[r_pol == p]
+        d = r - s0 * x
+        diffs.append(d[np.abs(d) <= window_ticks])
+    d = np.concatenate(diffs)
+    if not len(d):
+        raise ValueError(f"no edges of {reference} within the window")
+    bins = np.round(d / width).astype(np.int64)
+    values, counts = np.unique(bins, return_counts=True)
+    order = np.argsort(counts)[::-1]
+    best = values[order[0]]
+    rival = next((values[i] for i in order[1:] if abs(values[i] - best) > 2), None)
+    if counts[order[0]] < 2 or (rival is not None and counts[values == rival][0] >= 0.8 * counts[order[0]]):
+        raise ValueError(f"ambiguous: the first {len(head)} edges of {via} fit several offsets (a periodic signal: "
+                         f"give a smaller window, or align on an irregular marker pulse)")
+    off, scale = float(np.median(d[np.abs(bins - best) <= 1])), s0
+    # 2. refine over more and more of the edges; the tolerance grows with how uncertain the extrapolation is
+    order_t = np.argsort(t)
+    t, pol = t[order_t], pol[order_t]
+    se, rms, center = max_ppm * 1e-6 * s0, width / 4, float(t[0])
+    for frac in (0.02, 0.1, 0.3, 1.0):
+        n = max(16, int(len(t) * frac))
+        tt, pp = t[:n], pol[:n]
+        tol = np.maximum(1.5 * fine, 4 * rms) + 3 * se * np.abs(tt - center)
+        ti, ri = _match(r_t, r_pol, tt, pp, off, scale, tol)
+        if len(ti) < 3:
+            continue
+        x, y = tt[ti], r_t[ri]
+        if float(x.max() - x.min()) * s0 > 10 * fine:
+            scale, off = (float(v) for v in np.polyfit(x, y, 1))
+            resid = y - (off + scale * x)
+            rms = float(np.sqrt(np.mean(resid ** 2)))
+            spread = float(np.sum((x - x.mean()) ** 2))
+            se = float(np.sqrt(np.sum(resid ** 2) / max(1, len(x) - 2) / spread)) if spread > 0 else se
+            center = float(x.mean())
+        else:
+            off = float(np.median(y - scale * x))
+    tol = np.maximum(1.5 * fine, 4 * rms) + 3 * se * np.abs(t - center)
+    ti, ri = _match(r_t, r_pol, t, pol, off, scale, tol)
+    if len(ti) < 3:
+        raise ValueError(f"only {len(ti)} edges of {via} match {reference}")
+    resid = r_t[ri] - (off + scale * t[ti])
+    moved = off + scale * t
+    overlap = int(np.count_nonzero((moved >= r_t[0] - fine) & (moved <= r_t[-1] + fine)))
+    return {"offset_ticks": off, "scale": scale, "reference": reference, "via": via, "method": "edges",
+            "matched": int(len(ti)), "edges": int(len(t)), "overlap_edges": overlap,
+            "residual_ticks": float(np.sqrt(np.mean(resid ** 2))),
+            "scale_ppm": (scale / s0 - 1) * 1e6, "scale_ppm_uncertainty": se / s0 * 1e6,
+            "offset_us": off / tick_ref * 1e6, **({"threshold_v": list(analog.thresholds(threshold))} if threshold else {})}
+
+
+def capture_sha256(path: str | Path) -> str:
+    """The identity of a WireSkein file for alignment.json["files"]: SHA-256 of its capture.json."""
+    import hashlib
+    from . import fileformat
+    data = fileformat.get(path, "capture.json")
+    if data is None:
+        raise ValueError(f"{path}: holds no capture")
+    return hashlib.sha256(data).hexdigest()
+
+
+def save_between(path: str | Path, reference_path: str | Path, entry: dict) -> dict:
+    """Add (or replace) the alignment of `path` to `reference_path` in path's alignment.json."""
+    doc = load(path) or {"format": FORMAT, "channels": {}}
+    doc.setdefault("files", {})[Path(reference_path).name] = {"capture_sha256": capture_sha256(reference_path), **entry}
+    save(path, doc)
+    return doc
+
+
 def apply(cap: Capture, alignment: dict) -> Capture:
     """The capture with its analog channels on the aligned time (a new Capture;
     the logic channels and `cap` are not changed)."""
@@ -187,8 +301,12 @@ def apply(cap: Capture, alignment: dict) -> Capture:
 
 
 def save(path: str | Path, alignment: dict) -> None:
-    """Store it in a WireSkein file as attach/alignment.json (replacing an older one)."""
+    """Store it in a WireSkein file as attach/alignment.json (replacing an older one; the alignments to
+    other files it held are kept unless `alignment` has its own "files")."""
     from . import fileformat
+    old = load(path) if Path(path).exists() else None
+    if old and old.get("files") and "files" not in alignment:
+        alignment = {**alignment, "files": old["files"]}
     fileformat.attach(path, NAME, json.dumps(alignment, indent=1), replace=True)
 
 

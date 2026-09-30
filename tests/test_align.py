@@ -93,3 +93,60 @@ def test_cli(tmp_path):
     assert r.returncode == 0, r.stderr
     assert "SYNC_A" in r.stdout and "start +" in r.stdout
     assert align.load(p)["channels"]["VBUS"]["via"] == "SYNC_A"
+
+
+# ---- another file (spec §5.1.1) ----
+
+def two_probes(tmp_path, start_us=3700.0, ppm=80.0, periodic=False):
+    """A at 20 MHz and B at 10 MHz, both seeing the same pulses; B started start_us later and its clock runs ppm fast."""
+    rng = np.random.default_rng(11)
+    dur = 0.3                                                        # seconds of the signal
+    t, pulses = 0.001, []
+    while t < dur - 0.002:
+        width = 0.0005 if periodic else float(rng.uniform(0.0002, 0.0009))
+        pulses.append((t, t + width))
+        t += width + (0.0005 if periodic else float(rng.uniform(0.0005, 0.003)))
+
+    def logic(tick, t0, fast_ppm):
+        n = int((dur - t0) * tick)
+        own = np.arange(n) / tick                                    # this probe's idea of time since its start
+        real = t0 + own / (1 + fast_ppm * 1e-6)                      # a fast clock counts more ticks per real second
+        lv = np.zeros(n, np.uint8)
+        for a, b in pulses:
+            lv[(real >= a) & (real < b)] = 1
+        return fileformat.Channel("SYNC", fileformat.pack(lv.tobytes()), n)
+
+    a = tmp_path / "A.wireskein"
+    b = tmp_path / "B.wireskein"
+    fileformat.write(a, 20_000_000, [logic(20_000_000, 0.0, 0.0)])
+    fileformat.write(b, 10_000_000, [logic(10_000_000, start_us * 1e-6, ppm),
+                                     fileformat.Channel("OTHER", fileformat.pack(bytes(100)), 100)])
+    return a, b
+
+
+def test_another_file(tmp_path):
+    a, b = two_probes(tmp_path)
+    e = align.between(fileio.load(a), "SYNC", fileio.load(b), "SYNC")
+    assert e["offset_us"] == pytest.approx(3700, abs=0.2)             # B's tick 0 is 3.7 ms into A
+    assert e["scale_ppm"] == pytest.approx(-80, abs=2)                 # B's fast clock: fewer A ticks per B tick
+    assert e["matched"] >= 0.95 * e["overlap_edges"]
+    assert e["residual_ticks"] < 3                                     # A ticks: 50 ns each
+    doc = align.save_between(b, a, e)
+    assert doc["files"]["A.wireskein"]["capture_sha256"] == align.capture_sha256(a)
+    align.save(b, {"format": align.FORMAT, "channels": {}})           # an in-file alignment saved later
+    assert "A.wireskein" in align.load(b)["files"]                    # keeps the one to A
+
+
+def test_another_file_cli(tmp_path):
+    a, b = two_probes(tmp_path, start_us=-1200.0, ppm=-40.0)          # B started first
+    r = subprocess.run([sys.executable, "-m", "wireskein", "align", str(b), "--to", str(a), "--reference", "SYNC",
+                        "--via", "SYNC", "--save"], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert "A.wireskein" in r.stdout and "-1200" in r.stdout
+    assert align.load(b)["files"]["A.wireskein"]["via"] == "SYNC"
+
+
+def test_another_file_periodic_is_ambiguous(tmp_path):
+    a, b = two_probes(tmp_path, periodic=True)
+    with pytest.raises(ValueError, match="ambiguous"):
+        align.between(fileio.load(a), "SYNC", fileio.load(b), "SYNC")
