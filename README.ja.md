@@ -71,7 +71,11 @@ wireskein capture --source sigrok:fx2lafw --channels SDA=D0,SCL=D1 --rate 12M --
 | `oep:<接続先>` | oep-client-python を使う OEP のプローブ。接続先は、シリアルポート、`tcp://HOST:PORT`（ブローカー）、`usb[:VID:PID[:SERIAL]]` | プローブのチャンネル番号 |
 | `sigrok:<ドライバ>` | sigrok が対応する機器（`fx2lafw`、`dreamsourcelab-dslogic`、`demo` など）。`sigrok-cli` を使う | sigrok のチャンネル名（`D0` など） |
 
-- `--channels` は、各チャンネルに名前を付けます（`名前=番号`）。
+- `--channels` は、ロジックの各チャンネルに名前を付けます（`名前=番号`）。
+- `--analog 名前=番号[@入力範囲],...` で、アナログのチャンネルを足します（`--analog-rate`、`--analog-samples`。サンプル数の既定は、ロジックと同じ時間）。
+  - OEP のプローブでは、ロジックとアナログを組（capture-group）で一緒に始めます。
+  - アナログの各チャンネルは、自分のレートと開始時刻（プローブの推定値と不確かさ）、生の値、入力範囲、基準電圧、プローブの出荷時の較正を持ちます。
+  - sigrok では、アナログはデバイスの 1 つのレートで取ります。
 - ファイルには、機器が実際に使ったレートを入れます。取得元が知っている情報（プローブの `start_us`、`time_base_slipped` の印、トリガーの位置）も入れます。
 - Python からは `wireskein.sources.capture(取得元, Request(...), 出力先)` です。
 - 別の package から、entry point の `wireskein.sources` で取得元を足せます。

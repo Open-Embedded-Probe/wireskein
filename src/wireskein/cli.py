@@ -92,10 +92,13 @@ def _count(cap) -> str:
 
 def capture_cmd(args) -> None:
     from . import sources
-    req = sources.Request(sources.parse_channels(args.channels), sources.parse_count(args.rate),
+    req = sources.Request(sources.parse_channels(args.channels or ""), sources.parse_count(args.rate),
                           sources.parse_count(args.samples),
                           sources.parse_trigger(args.trigger) if args.trigger else None,
-                          sources.parse_count(args.pretrigger) if args.pretrigger else None, args.timeout)
+                          sources.parse_count(args.pretrigger) if args.pretrigger else None, args.timeout,
+                          sources.parse_analog(args.analog) if args.analog else [],
+                          sources.parse_count(args.analog_rate) if args.analog_rate else None,
+                          sources.parse_count(args.analog_samples) if args.analog_samples else None)
     out = sources.capture(args.source, req, args.output)
     if args.note:
         from . import wsc
@@ -190,8 +193,11 @@ def main() -> None:
     cv.add_argument("output", type=Path)
     cp = sub.add_parser("capture", help="capture logic channels from a device into a .wsc (sources: oep, sigrok)")
     cp.add_argument("--source", required=True, help="oep:<serial port | tcp://HOST:PORT | usb[:VID:PID]> or sigrok:<driver>")
-    cp.add_argument("--channels", required=True, help='"NAME=ID,..." (ID: the probe channel number / sigrok channel) or "ID,..."')
-    cp.add_argument("--rate", required=True, help="samples per second, e.g. 20M, 500k")
+    cp.add_argument("--channels", default=None, help='logic: "NAME=ID,..." (ID: the probe channel number / sigrok channel) or "ID,..."')
+    cp.add_argument("--analog", default=None, help='analog: "NAME=ID[@FRONTEND],..." (FRONTEND: the input range number, OEP)')
+    cp.add_argument("--analog-rate", default=None, help="analog samples per second (default: --rate)")
+    cp.add_argument("--analog-samples", default=None, help="default: as long as the logic capture")
+    cp.add_argument("--rate", required=True, help="samples per second, e.g. 20M, 500k (logic; analog too unless --analog-rate)")
     cp.add_argument("--samples", required=True, help="e.g. 1M, 200000")
     cp.add_argument("--trigger", default=None, help="NAME:rise|fall|both|high|low (default: start at once)")
     cp.add_argument("--pretrigger", default=None, help="samples kept before the trigger")
