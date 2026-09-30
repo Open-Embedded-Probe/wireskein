@@ -128,7 +128,16 @@ wf.write("m.wireskein", 20_000_000, [
 ], probe={"chip": "ESP32-P4", "calibration": {"scheme": "curve-fitting-v1", "raw": "..."}})
 ```
 
-`wireskein capture --source sigrok:<ドライバ>` で、アナログのチャンネルも取れます（`--channels CLK=D0,VBUS=A0`）。解析は、今までどおりロジックのチャンネルを読みます。アナログの検査は、これから作ります。形式の仕様は `docs/wireskein-format.ja.md` にあります。
+`wireskein capture --source sigrok:<ドライバ>` で、アナログのチャンネルも取れます（`--channels CLK=D0,VBUS=A0`）。解析は、ロジックのチャンネルを読みます。照合は、アナログのチャンネルも読みます（`voltage()` と、ロジックの検査の `threshold=`）。形式の仕様は `docs/wireskein-format.ja.md` にあります。
+
+プローブが返すアナログの開始時刻は、推定値です（ADC は数百 µs ずれて始まったり、少し速く・遅く動いたりします）。同じ信号をロジックとアナログの両方で取っておけば（同じネットを両方につなぐ、または目印のパルス）、`wireskein align` がそのエッジからオフセットと時間の倍率を求め、`attach/alignment.json` に入れます。サンプルと記録した時刻は変えません。
+
+```sh
+wireskein align m.wireskein --reference SYNC --via SYNC_A --threshold 1.0,2.3 --save
+# SYNC_A against SYNC: start +197.890 us, scale +1490.7 ppm, 166/166 edges matched, residual 5.665 us
+```
+
+Python からは `wireskein.align.find()` / `apply()` / `save()` / `load()` です。周期的な信号は、開始のずれがその周期より大きくなりうると、答えが 1 つに決まりません。`--window` を与えるか、不規則な目印のパルスで合わせます。
 
 テストの記録では、同じものを `rec.capture(t, tick_hz, channels=[...])` に渡します。
 

@@ -151,7 +151,16 @@ wf.write("m.wireskein", 20_000_000, [
 ], probe={"chip": "ESP32-P4", "calibration": {"scheme": "curve-fitting-v1", "raw": "..."}})
 ```
 
-`wireskein capture --source sigrok:<driver>` takes analog channels too (`--channels CLK=D0,VBUS=A0`). The analysis reads the logic channels as before; checks on analog channels come later. The format is specified in `docs/wireskein-format.ja.md`.
+`wireskein capture --source sigrok:<driver>` takes analog channels too (`--channels CLK=D0,VBUS=A0`). The analysis reads the logic channels; the checks read analog channels too (`voltage()`, and `threshold=` on the logic checks). The format is specified in `docs/wireskein-format.ja.md`.
+
+A probe's analog start time is an estimate (an ADC may start some hundred microseconds off and run a little fast or slow). When the same signal is on a logic channel and an analog channel (the same net wired to both, or a marker pulse), `wireskein align` finds the offset and the time scale from its edges and stores them as `attach/alignment.json`; the samples and stored times are not changed:
+
+```sh
+wireskein align m.wireskein --reference SYNC --via SYNC_A --threshold 1.0,2.3 --save
+# SYNC_A against SYNC: start +197.890 us, scale +1490.7 ppm, 166/166 edges matched, residual 5.665 us
+```
+
+In Python, `wireskein.align.find()` / `apply()` / `save()` / `load()`. A periodic signal is ambiguous when the start may be off by more than its period: give `--window`, or align on an irregular marker pulse.
 
 In a recorded run, pass the same thing to `rec.capture(t, tick_hz, channels=[...])`.
 

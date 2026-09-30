@@ -51,26 +51,36 @@ def schmitt(v: np.ndarray, low: float, high: float) -> np.ndarray:
     return out.astype(np.uint8)
 
 
-def to_logic(a: AnalogTrace, tick_hz, threshold) -> Channel:
-    """The analog trace as a logic channel (see the module docstring). Needs volts."""
+def crossings(a: AnalogTrace, tick_hz, threshold) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """(levels per sample, crossing times in ticks as floats, new level at each):
+    where the line between the two samples around each change crosses the
+    threshold (hysteresis: `high` going up, `low` going down). Needs volts."""
     v = a.volts()
     if v is None:
         raise ValueError(f"{a.name}: no conversion to volts, so no threshold in volts applies")
     low, high = thresholds(threshold)
     lv = schmitt(v, low, high)
     per = float(Fraction(tick_hz) / a.rate_hz)
-    t0 = float(a.t0_ticks)
     k = np.flatnonzero(lv[1:] != lv[:-1]) + 1          # first sample of each new level
     th = np.where(lv[k] == 1, high, low)
     before, after = v[k - 1], v[k]
     with np.errstate(invalid="ignore", divide="ignore"):
         frac = np.clip((th - before) / (after - before), 0.0, 1.0)
     frac = np.where(np.isfinite(frac), frac, 1.0)
-    edges = np.ceil(t0 + (k - 1 + frac) * per - 1e-9).astype(np.int64)
+    return lv, float(a.t0_ticks) + (k - 1 + frac) * per, lv[k]
+
+
+def to_logic(a: AnalogTrace, tick_hz, threshold) -> Channel:
+    """The analog trace as a logic channel (see the module docstring). Needs volts."""
+    lv, times, new = crossings(a, tick_hz, threshold)
+    low, high = thresholds(threshold)
+    per = float(Fraction(tick_hz) / a.rate_hz)
+    t0 = float(a.t0_ticks)
+    edges = np.ceil(times - 1e-9).astype(np.int64)
     if len(edges) > 1:                                  # an ADC faster than the ticks: the last level at each tick
         keep = np.concatenate([np.diff(edges) > 0, [True]])
         if not keep.all():
-            edges, lv_k = edges[keep], lv[k][keep]
+            edges, lv_k = edges[keep], new[keep]
             flip = np.concatenate([[lv_k[0] != lv[0]], lv_k[1:] != lv_k[:-1]])
             edges = edges[flip]
     return Channel(a.name, int(lv[0]) if len(lv) else 0, edges, max(1, round(per)), max(0, math.floor(t0)),
