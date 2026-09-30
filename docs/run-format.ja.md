@@ -1,0 +1,82 @@
+# 記録の形式 `wireskein-run/3` と照合の結果
+
+作成 2026-09-30（凍結の前の決定: [凍結の前に決めること](freeze-review.ja.md) 5、6）。`wireskein.runlog` が書き、`wireskein verify` が読む、試験の記録の仕様です。キャプチャのファイルそのものは、[WireSkein のファイル形式](wireskein-format.ja.md) にあります。
+
+## 1. 記録
+
+記録はディレクトリです。
+
+| 項目 | 中身 |
+| --- | --- |
+| `run.json` | ログ、キャプチャの一覧、期待（§2） |
+| `cNNNN.wireskein` | 1 回ごとのキャプチャ（`c0001` から） |
+
+記録をディレクトリにし、キャプチャを 1 回ごとに別のファイルにするのは、試験の途中で落ちても、それまでのキャプチャが残るようにするためです。
+
+## 2. `run.json`
+
+| キー | 型 | 意味 |
+| --- | --- | --- |
+| `format` | 文字列 | `"wireskein-run/3"`。`verify` は、ほかの値の記録を断ります |
+| `meta` | オブジェクト | 記録についての情報（`Recorder(out, **meta)` に渡したもの） |
+| `log` | 配列 | ログ: `{"t": 秒, "src": "marker" / "host" / "dut" / "note", "text": 文字列}`。`t` は記録器の開始からの秒（ホストの時計） |
+| `captures` | 配列 | キャプチャ: `{"file": 名前, "t0": 秒, "channels": [名前...], "path": 区間のパス}` |
+| `expect` | オブジェクト | 区間のパスから `{"checks": [検査...]}` へ |
+
+### 2.1 区間とパス
+
+- 見出し（`#` がテスト、`##` がステップ。名前のない見出しで閉じる）を `log` に `src: "marker"` で書き、区間の木を作ります。
+- 区間のパスは、見出しの名前を `/` でつないだものです（例 `test_pwm/duty=64`）。
+- **同じ親の下で同じ名前が繰り返されたとき、最初のものは名前のまま、2 回目から `[1]`、`[2]`、... を付けます**（例 `duty=64`、`duty=64[1]`）。あとから同じ名前を足しても、前の区間のパスは変わりません。
+- `wireskein analyze --segment` などのマーカーの区間のパスも、同じ規則です。
+
+### 2.2 キャプチャの割り当て
+
+- `captures[].path` は、キャプチャを取ったときに開いていた、いちばん深い区間のパスです。区間の外で取ったときは、キー自体を入れません。
+- `verify` は、`path` のあるキャプチャを、その区間（とその祖先）のものとして扱います。
+- `path` のないキャプチャ（ほかの道具が書いた記録）は、`t0` を含む区間に割り当てます。
+
+### 2.3 検査
+
+`checks` の各要素は `{"kind": ..., ...}` のオブジェクトです。`wireskein.runlog` の関数（`square`、`level`、`starts`、`ends`、`only_moving`、`pulses`、`i2c`、`spi`、`uart`、`voltage`）が作ります。意味は `wireskein.verify` が決めます。一覧と使い方は [キャプチャで試験する](capture-test-guide.ja.md) にあります。
+
+許容誤差の名前:
+
+| 名前 | 相対 / 絶対 | 使う検査 |
+| --- | --- | --- |
+| `tol_freq` | 相対（周波数の比のずれ） | `square` |
+| `tol_duty` | 絶対（デューティの差。0〜1 の値どうし） | `square` |
+| `tol_baud` | 相対 | `uart` |
+| `tol_hz` | 相対 | `i2c`、`spi` |
+| `tol_period` | 相対 | `pulses` |
+| `tol_v` | 絶対（V） | `voltage` |
+
+- `threshold`（V、または `(low, high)`）を与えると、ロジックの検査（`square`、`level`、`starts`、`ends`、`pulses`、`i2c`、`spi`、`uart`）が、アナログのチャンネルをロジックとして読みます。
+- `only_moving` は、ロジックのチャンネルだけを見ます。
+
+## 3. 照合の結果
+
+`wireskein verify` は、検査ごとに 1 つの結果を返します。
+
+| キー | 意味 |
+| --- | --- |
+| `path` | 区間のパス |
+| `capture` | キャプチャのファイルの名前（キャプチャに当たらなかったものは null） |
+| `check` | 検査の種類（`kind`） |
+| `status` | 下の 4 つのどれか |
+| `ok` | `status` が `ok` なら true、`ng` なら false、それ以外は null（`status` を読むほうが確かです） |
+| `expected`、`measured`、`reason` | 期待、測った値、理由 |
+
+状態:
+
+| `status` | 意味 | 既定で失敗か |
+| --- | --- | --- |
+| `ok` | 期待どおり | いいえ |
+| `ng` | 期待と違う | はい |
+| `unchecked` | 検査できなかった（ピンがキャプチャにない、電圧への換算がない、区間やキャプチャがない、など） | **はい**（`--allow-unchecked` で、いいえ） |
+| `measured` | 測るだけと頼まれた（`uart(baud=None)` など）。測った値を返す | いいえ |
+
+- `unchecked` を既定で失敗にするのは、多くが試験の書き間違いか、配線やキャプチャの抜けだからです。
+- 要約（`summary`）は、`ok`、`ng`、`unchecked`、`measured` の数と、区間の数、キャプチャの数です。
+- 報告の JSON（`--json`）と JUnit XML（`--junit`）の形は、この表のとおりです。JUnit では、`ng` は failure、`unchecked` は既定で failure（許すときは skipped）、`measured` は passed（system-out に測った値）です。
+- テキストの行（`lines()`）は人が読むためのもので、形を約束しません。プログラムは JSON を読みます。
