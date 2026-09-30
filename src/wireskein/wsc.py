@@ -40,7 +40,7 @@ from pathlib import Path
 
 FORMAT = "wireskein-capture/0"
 SUFFIX = ".wsc"
-ENCODINGS = {"bits"}     # what this version reads; others (analog, ...) are refused, see docs/wsc-format.ja.md
+ENCODINGS = {"bits"}     # what this version reads; channels of others (analog, ...) are skipped, see docs/wsc-format.ja.md §3.2
 
 
 @dataclass
@@ -224,19 +224,23 @@ def read_header(path: str | Path) -> dict:
         head = json.loads(z.read("capture.json"))
     if head.get("format") != FORMAT:
         raise ValueError(f"{path}: format {head.get('format')!r}, expected {FORMAT!r}")
-    unknown = [f"{c.get('name')} ({c.get('encoding')!r})" for c in head.get("channels", [])
-               if c.get("encoding") not in ENCODINGS]
-    if unknown:
-        raise ValueError(f"{path}: channel encodings this wireskein does not read: {', '.join(unknown)} "
-                         f"(it reads {', '.join(sorted(ENCODINGS))}; a newer wireskein may)")
     return head
 
 
+def skipped(head: dict) -> list[dict]:
+    """Channels whose encoding this version does not read: [{"name", "encoding"}]."""
+    return [{"name": c.get("name"), "encoding": c.get("encoding")} for c in head.get("channels", [])
+            if c.get("encoding") not in ENCODINGS]
+
+
 def read(path: str | Path) -> tuple[dict, list[Channel]]:
-    """(header, channels). header["tick_hz"] is [numerator, denominator]."""
+    """(header, channels). header["tick_hz"] is [numerator, denominator].
+    Channels of an encoding this version does not read are left out (never
+    read as something else); skipped(header) names them."""
     head = read_header(path)
     with zipfile.ZipFile(path) as z:
-        chans = [Channel(c["name"], z.read(c["file"]), c["n"], c["step"], c["phase"]) for c in head["channels"]]
+        chans = [Channel(c["name"], z.read(c["file"]), c["n"], c["step"], c["phase"]) for c in head["channels"]
+                 if c.get("encoding") in ENCODINGS]
     return head, chans
 
 

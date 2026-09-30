@@ -467,7 +467,12 @@ def verify(run_dir: str | Path) -> dict:
             hit = [(c, cap) for c, cap in loaded if pins <= set(cap_ch.name for cap_ch in cap.channels)] or \
                   ([(c, cap) for c, cap in loaded] if x["kind"] == "only_moving" else [])
             if not hit:
-                results.append(Result(path, None, x["kind"], None, x, reason="pins not in any capture: " + ", ".join(sorted(pins))))
+                skipped = {c["name"]: c["encoding"] for _, cap in loaded for c in cap.meta.get("skipped_channels", [])}
+                why = "pins not in any capture: " + ", ".join(sorted(pins))
+                if pins & set(skipped):
+                    why += " (" + ", ".join(f"{p} has encoding {skipped[p]!r}, not read by this version"
+                                            for p in sorted(pins & set(skipped))) + ")"
+                results.append(Result(path, None, x["kind"], None, x, reason=why))
                 continue
             for c, cap in hit:
                 ok, got, why = CHECKS[x["kind"]](cap, x)
