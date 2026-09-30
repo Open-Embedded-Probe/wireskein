@@ -11,6 +11,8 @@
     wireskein gui [FILE | DIR] [--port N] [--no-browser]   the viewer in the browser (localhost only)
     wireskein note FILE.wireskein TEXT [--json] [--kind K]
     wireskein attach FILE.wireskein NAME [SRC | --text TEXT] [--replace]
+    wireskein align FILE.wireskein --reference LOGIC --via ANALOG --threshold V|LOW,HIGH
+                    [--window 300us] [--apply-to A,B] [--save]   analog tracks onto the logic ticks
 
 CAPTURE is a WireSkein file (.wireskein), a sigrok .sr file or a fixture directory (corpus/fixtures/real/<id>).
 Files are told apart by their content, not their name; an output is a .sr when its name ends in .sr.
@@ -87,6 +89,32 @@ def attach_cmd(args) -> None:
         sys.exit("give SRC (a file) or --text")
     data = args.src.read_bytes() if args.src else args.text
     fileformat.attach(args.file, args.name, data, replace=args.replace)
+
+
+def _seconds(text: str) -> float:
+    """"300us", "1.5ms", "2s", "0.001" -> seconds."""
+    import re
+    m = re.fullmatch(r"\s*([\d.]+)\s*(ns|us|µs|ms|s)?\s*", text)
+    if not m:
+        raise ValueError(f"not a time: {text!r}")
+    return float(m.group(1)) * {"ns": 1e-9, "us": 1e-6, "µs": 1e-6, "ms": 1e-3, "s": 1.0, None: 1.0}[m.group(2)]
+
+
+def align_cmd(args) -> None:
+    from . import align
+    from .analyze import load
+    cap = load(args.file)
+    th = [float(v) for v in args.threshold.split(",")]
+    window = _seconds(args.window) * cap.rate if args.window else None
+    apply_to = args.apply_to.split(",") if args.apply_to else None
+    a = align.find(cap, args.reference, args.via, th if len(th) > 1 else th[0], window, apply_to)
+    c = a["channels"][args.via]
+    print(f"{args.via} against {args.reference}: start {c['start_shift_us']:+.3f} us, scale {c['scale_ppm']:+.1f} ppm, "
+          f"{c['matched']}/{c['edges']} edges matched, residual {c['residual_ticks'] / cap.rate * 1e6:.3f} us")
+    print(f"applies to: {', '.join(a['channels'])}")
+    if args.save:
+        align.save(args.file, a)
+        print(f"saved as attach/{align.NAME}")
 
 
 def _count(cap) -> str:
@@ -234,9 +262,17 @@ def main() -> None:
     at.add_argument("src", type=Path, nargs="?", default=None)
     at.add_argument("--text", default=None)
     at.add_argument("--replace", action="store_true")
+    al = sub.add_parser("align", help="align analog tracks to the logic ticks by a signal on both (attach/alignment.json)")
+    al.add_argument("file", type=Path)
+    al.add_argument("--reference", required=True, help="the logic channel")
+    al.add_argument("--via", required=True, help="the analog channel with the same signal")
+    al.add_argument("--threshold", required=True, help="volts: V, or LOW,HIGH for hysteresis")
+    al.add_argument("--window", default=None, help="how far off the start may be (e.g. 300us; default from the probe)")
+    al.add_argument("--apply-to", default=None, help="analog channels that get the result (default: all)")
+    al.add_argument("--save", action="store_true", help="store it in the file as attach/alignment.json")
     args = ap.parse_args()
     files = {"info": info, "note": note_cmd, "attach": attach_cmd, "convert": convert, "capture": capture_cmd,
-             "gui": gui_cmd}
+             "gui": gui_cmd, "align": align_cmd}
     if args.cmd in files:
         try:
             return files[args.cmd](args)
