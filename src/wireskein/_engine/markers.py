@@ -55,7 +55,8 @@ class Segment:
         parts, s = [], self
         while s is not None and s.kind != "root":
             sib = [x for x in s.parent.children if x.name == s.name] if s.parent else [s]
-            parts.append(s.name + (f"[{sib.index(s)}]" if len(sib) > 1 else ""))
+            k = sib.index(s)                               # the first keeps its name; repeats get [1], [2], ...
+            parts.append(s.name + (f"[{k}]" if k else ""))
             s = s.parent
         return "/".join(reversed(parts))
 

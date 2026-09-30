@@ -118,5 +118,5 @@ def test_rate_far_off_is_still_measured():
 
 def test_measure_only():
     ok, got, why = check_uart(line(20e6, 921600 * 0.965), uart("TX", None))
-    assert ok is None and abs(got["baud"] / (921600 * 0.965) - 1) < 1e-4 and got["baud_error"] is None
+    assert ok == "measured" and abs(got["baud"] / (921600 * 0.965) - 1) < 1e-4 and got["baud_error"] is None
     assert why.startswith("measured ")
