@@ -16,6 +16,11 @@ from wireskein import sources, fileformat
 def test_parsers():
     assert sources.parse_count("20M") == 20_000_000 and sources.parse_count("250k") == 250_000
     assert sources.parse_count("1.5M") == 1_500_000 and sources.parse_count("1000") == 1000
+    for bad in ("20m", "2x", "M"):
+        with pytest.raises(ValueError, match="not a count"):
+            sources.parse_count(bad)
+    with pytest.raises(ValueError, match="M for mega"):
+        sources.parse_count("20m")
     assert sources.parse_channels("SDA=47, SCL=48") == [("SDA", "47"), ("SCL", "48")]
     assert sources.parse_channels("D0,D1") == [("D0", "D0"), ("D1", "D1")]
     assert sources.parse_trigger("SDA:fall") == ("SDA", "fall")

@@ -96,15 +96,16 @@ def capture(source: str, request: Request, out: str | Path, attachments: dict | 
 
 # ---------------- command-line helpers ----------------
 
-_SUFFIX = {"": 1, "k": 10**3, "m": 10**6, "g": 10**9}
+_SUFFIX = {"": 1, "k": 10**3, "K": 10**3, "M": 10**6, "G": 10**9}
 
 
 def parse_count(text: str) -> int:
-    """"20M", "250k", "1000" -> int."""
-    m = re.fullmatch(r"\s*(\d+(?:\.\d+)?)\s*([kKmMgG]?)\s*", text)
-    if not m:
-        raise ValueError(f"not a number: {text!r}")
-    return round(float(m.group(1)) * _SUFFIX[m.group(2).lower()])
+    """"20M", "250k", "1000" -> int. Only k / K, M and G: a lowercase m would read as milli."""
+    m = re.fullmatch(r"\s*(\d+(?:\.\d+)?)\s*([a-zA-Z]?)\s*", text)
+    if not m or m.group(2) not in _SUFFIX:
+        hint = " (M for mega)" if m and m.group(2) == "m" else ""
+        raise ValueError(f"not a count: {text!r}{hint}; use a number with k, M or G")
+    return round(float(m.group(1)) * _SUFFIX[m.group(2)])
 
 
 def parse_channels(text: str) -> list[tuple[str, str]]:

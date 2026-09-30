@@ -176,7 +176,7 @@ wireskein align m.wireskein --reference SYNC --via SYNC_A --threshold 1.0,2.3 --
 # SYNC_A against SYNC: start +197.890 us, scale +1490.7 ppm, 166/166 edges matched, residual 5.665 us
 ```
 
-Python からは `wireskein.align.find()` / `apply()` / `save()` / `load()` です。周期的な信号は、開始のずれがその周期より大きくなりうると、答えが 1 つに決まりません。`--window` を与えるか、不規則な目印のパルスで合わせます。
+Python からは `wireskein.align.find()` / `apply()` / `save()` / `load()` です。周期的な信号は、開始のずれがその周期より大きくなりうると、答えが 1 つに決まりません。`--max-offset` を与えるか、不規則な目印のパルスで合わせます。
 
 2 つのプローブで同時に取ったキャプチャも、同じ方法で合わせられます。両方が見た信号（それぞれのピンにつなぐ）を使います。
 

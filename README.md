@@ -205,7 +205,7 @@ wireskein align m.wireskein --reference SYNC --via SYNC_A --threshold 1.0,2.3 --
 # SYNC_A against SYNC: start +197.890 us, scale +1490.7 ppm, 166/166 edges matched, residual 5.665 us
 ```
 
-In Python, `wireskein.align.find()` / `apply()` / `save()` / `load()`. A periodic signal is ambiguous when the start may be off by more than its period: give `--window`, or align on an irregular marker pulse.
+In Python, `wireskein.align.find()` / `apply()` / `save()` / `load()`. A periodic signal is ambiguous when the start may be off by more than its period: give `--max-offset`, or align on an irregular marker pulse.
 
 Captures from two probes taken at the same time line up the same way, from a signal both saw (wired to a pin of each):
 

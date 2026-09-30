@@ -88,12 +88,24 @@ class PackSet:
         return len(self.paths)
 
 
+def _glob(pattern: str) -> re.Pattern:
+    """A path pattern as a regex: "**" is any number of folders, "*" and "?" stay inside one name
+    (PurePath.full_match, which needs Python 3.13)."""
+    out = []
+    for i, part in enumerate(pattern.split("/")):
+        last = i == len(pattern.split("/")) - 1
+        if part == "**":
+            out.append("(?:[^/]+/)*" if not last else "(?:[^/]+/)*[^/]*")
+            continue
+        out.append(re.escape(part).replace(r"\*", "[^/]*").replace(r"\?", "[^/]") + ("" if last else "/"))
+    return re.compile("".join(out) + r"\Z")
+
+
 def _match(rel: Path, pattern: str) -> bool:
-    from pathlib import PurePosixPath
-    pr = PurePosixPath(rel.as_posix())
+    path = rel.as_posix()
     if pattern.endswith("/**"):          # "i2c/**": everything below that folder
-        return pr.as_posix().startswith(pattern[:-2]) or pr.full_match(pattern + "/*")
-    return pr.full_match(pattern)
+        return path.startswith(pattern[:-2]) or bool(_glob(pattern + "/*").match(path))
+    return bool(_glob(pattern).match(path))
 
 
 CACHE = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "wireskein" / "device-headers.json"
