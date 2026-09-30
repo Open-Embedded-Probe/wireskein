@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 0.0.7
 - (EN) `wireskein gui [FILE | DIR] [--port N] [--no-browser]`: the viewer (wireskein-web, shipped in the wheel; the version is pinned in `tools/web.json` and fetched with its npm integrity by `tools/fetch_web.py`) on a local server: a capture opens in the browser (`.sr` converted on the fly), a directory gets a list of its captures and runs. 127.0.0.1 only, a per-start token kept as an HttpOnly SameSite cookie, Host checked, nothing served outside the viewer and the captures below the directory. `WIRESKEIN_WEB_DIR` points at another viewer build.
 - (JA) `wireskein gui [ファイル | ディレクトリ] [--port N] [--no-browser]`: ビューア（wireskein-web。wheel に同梱。版は `tools/web.json` で固定し、`tools/fetch_web.py` が npm の integrity を確かめて取る）を、ローカルのサーバーで出す。キャプチャはブラウザで開き（`.sr` はその場で変換）、ディレクトリは中のキャプチャと記録の一覧を出す。127.0.0.1 だけ、起動ごとのトークンを HttpOnly / SameSite のクッキーで持ち、Host を確かめ、ビューアとディレクトリの下のキャプチャ以外は返さない。`WIRESKEIN_WEB_DIR` で別のビューアのビルドを使える。
 
