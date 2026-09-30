@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) `wireskein gui [FILE | DIR] [--port N] [--no-browser]`: the viewer (wireskein-web, shipped in the wheel; the version is pinned in `tools/web.json` and fetched with its npm integrity by `tools/fetch_web.py`) on a local server: a capture opens in the browser (`.sr` converted on the fly), a directory gets a list of its captures and runs. 127.0.0.1 only, a per-start token kept as an HttpOnly SameSite cookie, Host checked, nothing served outside the viewer and the captures below the directory. `WIRESKEIN_WEB_DIR` points at another viewer build.
+- (JA) `wireskein gui [ファイル | ディレクトリ] [--port N] [--no-browser]`: ビューア（wireskein-web。wheel に同梱。版は `tools/web.json` で固定し、`tools/fetch_web.py` が npm の integrity を確かめて取る）を、ローカルのサーバーで出す。キャプチャはブラウザで開き（`.sr` はその場で変換）、ディレクトリは中のキャプチャと記録の一覧を出す。127.0.0.1 だけ、起動ごとのトークンを HttpOnly / SameSite のクッキーで持ち、Host を確かめ、ビューアとディレクトリの下のキャプチャ以外は返さない。`WIRESKEIN_WEB_DIR` で別のビューアのビルドを使える。
 
 ## 0.0.6
 - (EN) `capture --analog NAME=ID[@FRONTEND] --analog-rate --analog-samples`: analog channels. On OEP (oep-client-python 0.0.10+), logic and analog start together through oep.fixture.capture-group; each analog channel gets t0_ticks from the segments' start_ns and its skew, raw values with the probe's linear conversion, and acquisition (pin, input range and attenuation, reference, Vrefint, start uncertainty, trigger index, rate accuracy); meta.probe holds chip, firmware, model, boot_id, group start / trigger times and the factory calibration (raw). Analog samples default to the logic capture's duration at the rate the probe really uses (asked first).

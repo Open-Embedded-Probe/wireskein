@@ -8,6 +8,7 @@
     wireskein capture --source oep:PORT|sigrok:DRIVER --channels NAME=ID,... --rate 20M --samples 1M
                       [--trigger NAME:rise|fall|both|high|low] [--pretrigger N] [--note TEXT] -o OUT.wsc
     wireskein info FILE.wsc             channels, rates, metadata, attachments, notes
+    wireskein gui [FILE | DIR] [--port N] [--no-browser]   the viewer in the browser (localhost only)
     wireskein note FILE.wsc TEXT [--json] [--kind K]
     wireskein attach FILE.wsc NAME [SRC | --text TEXT] [--replace]
 
@@ -88,6 +89,11 @@ def attach_cmd(args) -> None:
 
 def _count(cap) -> str:
     return f"{len(cap.channels)} logic" + (f" + {len(cap.analog)} analog" if cap.analog else "") + " channels"
+
+
+def gui_cmd(args) -> None:
+    from . import gui
+    gui.main(args.path, args.port, not args.no_browser)
 
 
 def capture_cmd(args) -> None:
@@ -204,6 +210,10 @@ def main() -> None:
     cp.add_argument("--timeout", type=float, default=10.0, help="seconds to wait for the capture")
     cp.add_argument("--note", default=None, help="a note stored with the capture")
     cp.add_argument("-o", "--output", type=Path, required=True, help=".wsc (or .sr)")
+    gp = sub.add_parser("gui", help="show captures in the browser (a local server, 127.0.0.1 only)")
+    gp.add_argument("path", type=Path, nargs="?", default=Path("."), help="a .wsc / .sr file or a directory (default: .)")
+    gp.add_argument("--port", type=int, default=0, help="default: any free port")
+    gp.add_argument("--no-browser", action="store_true", help="only print the URL")
     inf = sub.add_parser("info", help="what a .wsc holds: channels, rates, metadata, attachments, notes")
     inf.add_argument("file", type=Path)
     nt = sub.add_parser("note", help="append a note to a .wsc (its log is append-only)")
@@ -218,7 +228,8 @@ def main() -> None:
     at.add_argument("--text", default=None)
     at.add_argument("--replace", action="store_true")
     args = ap.parse_args()
-    files = {"info": info, "note": note_cmd, "attach": attach_cmd, "convert": convert, "capture": capture_cmd}
+    files = {"info": info, "note": note_cmd, "attach": attach_cmd, "convert": convert, "capture": capture_cmd,
+             "gui": gui_cmd}
     if args.cmd in files:
         try:
             return files[args.cmd](args)

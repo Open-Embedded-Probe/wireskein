@@ -108,6 +108,21 @@ wireskein capture --source sigrok:fx2lafw --channels SDA=D0,SCL=D1 --rate 12M --
 
  The file keeps the rate the device actually used, plus what the source knows: the probe's `start_us`, a `time_base_slipped` mark, the trigger position. From Python: `wireskein.sources.capture(source, Request(...), out)`. Other packages can add sources through the `wireskein.sources` entry point group.
 
+## Viewing captures in the browser
+
+```sh
+wireskein gui capture.wsc          # opens the browser on that capture (a .sr is converted on the fly)
+wireskein gui runs/                # a page listing the .wsc / .sr files and recorded runs below runs/
+```
+
+The viewer is [wireskein-web](https://github.com/Open-Embedded-Probe/wireskein-web), shipped in the wheel. It shows
+logic and analog lanes, dots on the samples the probe really took (a decimated channel shows only its own samples), and
+the metadata, acquisition settings, attachments and notes.
+
+The server listens on 127.0.0.1 only and prints a URL with a one-time token; requests without it, or for another host
+name, are refused. For a bench machine, forward the port (`ssh -L PORT:127.0.0.1:PORT bench`) and open the printed URL.
+It serves nothing but the viewer and the capture files below the directory given.
+
 ## Capture files (.wsc) and conversion
 
 A `.wsc` keeps each channel at its own sample rate. A probe that decimates some channels to fit its link (every 32nd sample, say) stores only the samples it took, with `step=32`. Nothing is repeated to fill the gaps, so a viewer can show exactly the samples that exist. The module `wireskein.wsc` reads and writes it with the standard library only:

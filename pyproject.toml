@@ -39,9 +39,11 @@ research = ["mini-racer>=0.14.1"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/wireskein"]
+artifacts = ["src/wireskein/web/**"]      # the viewer: not in git, fetched by tools/fetch_web.py
 
 [tool.hatch.build.targets.sdist]
 only-include = ["src/wireskein", "tests", "README.md", "README.ja.md", "CHANGELOG.md", "LICENSE", "pyproject.toml"]
+artifacts = ["src/wireskein/web/**"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

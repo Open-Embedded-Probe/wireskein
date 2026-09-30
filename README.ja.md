@@ -80,6 +80,25 @@ wireskein capture --source sigrok:fx2lafw --channels SDA=D0,SCL=D1 --rate 12M --
 - Python からは `wireskein.sources.capture(取得元, Request(...), 出力先)` です。
 - 別の package から、entry point の `wireskein.sources` で取得元を足せます。
 
+## ブラウザでキャプチャを見る
+
+```sh
+wireskein gui capture.wsc          # そのキャプチャをブラウザで開く（.sr はその場で変換）
+wireskein gui runs/                # runs/ の下の .wsc、.sr、記録の一覧のページ
+```
+
+ビューアは [wireskein-web](https://github.com/Open-Embedded-Probe/wireskein-web) で、wheel に同梱しています。次のものを表示します。
+
+- ロジックとアナログの行
+- プローブが実際に取ったサンプルの点（間引いたチャンネルは、自分のサンプルだけ）
+- メタ情報、取得の設定、添付、メモ
+
+サーバーは 127.0.0.1 にだけ開き、起動ごとのトークン付きの URL を表示します。
+
+- トークンのない要求や、別のホスト名への要求は断ります。
+- ベンチのマシンで動かすときは、ポートを転送し（`ssh -L ポート:127.0.0.1:ポート ベンチ`）、表示された URL を開きます。
+- 返すのは、ビューアと、指定したディレクトリの下のキャプチャのファイルだけです。
+
 ## キャプチャのファイル（.wsc）と変換
 
 `.wsc` は、各チャンネルを自分のサンプルレートのまま持ちます。帯域に収めるために一部のチャンネルを間引くプローブ（例: 32 サンプルに 1 つ）は、取ったサンプルだけを `step=32` で保存します。間を埋める水増しはしないので、ビューアは実際にあるサンプルだけを見せられます。読み書きは、標準ライブラリだけで動く `wireskein.wsc` で行います。
