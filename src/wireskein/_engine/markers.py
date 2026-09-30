@@ -237,7 +237,7 @@ def activity(cap, seg: Segment, exclude: set[str]) -> dict:
             moved[ch.name] = int(i1 - i0)
             first = ed[i0] if first is None else min(first, ed[i0])
             last = ed[i1 - 1] if last is None else max(last, ed[i1 - 1])
-            p = _periodic(ed[i0:i1], ch.initial ^ (i0 & 1), cap.rate)
+            p = _periodic(ed[i0:i1], ch.initial ^ (i0 & 1), cap.rate, ch.step)
             if p:
                 periodic[ch.name] = p
     return {"begin": int(b), "end": int(e), "moved": moved, "levels": levels,
@@ -246,7 +246,7 @@ def activity(cap, seg: Segment, exclude: set[str]) -> dict:
             "changed": sorted(k for k, (x, y) in levels.items() if x != y), "periodic": periodic}
 
 
-def _periodic(ed: np.ndarray, level_before: int, rate: float) -> dict | None:
+def _periodic(ed: np.ndarray, level_before: int, rate: float, step: int = 1) -> dict | None:
     """Frequency / duty of a pin that toggles regularly inside the segment
     (PWM, tone, clock outputs): rising-to-rising periods, high time per period.
     None when there are too few periods or they do not agree (not a steady signal)."""
@@ -264,7 +264,7 @@ def _periodic(ed: np.ndarray, level_before: int, rate: float) -> dict | None:
     high = high[high < per[ok]]
     return {"freq_hz": rate * (len(per)) / float(rises[-1] - rises[0]), "duty": float(np.median(high / med)) if len(high) else None,
             "periods": int(len(per)), "period_spread": float(np.std(per) / med),
-            "resolution": 1.0 / med}
+            "resolution": step / med}      # one sample of the channel, as a share of the period
 
 
 def select(tree: Segment, pattern: str) -> list[Segment]:

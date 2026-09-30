@@ -20,7 +20,7 @@ from pathlib import Path
 import numpy as np
 
 from ._engine import markers
-from ._engine.model import Capture, Channel, edges_from_dense
+from ._engine.model import Capture, Channel
 from .runlog import FORMAT
 
 
@@ -36,12 +36,10 @@ class Result:
 
 
 def load_capture(run_dir: Path, c: dict) -> Capture:
-    raw = np.frombuffer((run_dir / c["file"]).read_bytes(), dtype=np.uint8)
-    chans = []
-    for k, name in enumerate(c["bits"]):
-        init, edges = edges_from_dense((raw >> k) & 1)
-        chans.append(Channel(name, init, edges))
-    return Capture(float(c["rate"]), len(raw), chans, meta={"file": c["file"], "t0": c["t0"]})
+    from ._engine import wscio
+    cap = wscio.load(run_dir / c["file"])
+    cap.meta.update(file=c["file"], t0=c["t0"])
+    return cap
 
 
 def segment_tree(doc: dict):
@@ -67,7 +65,7 @@ def check_square(cap, x):
     ch = _ch(cap, x["pin"])
     if ch is None:
         return None, {}, "pin not captured"
-    p = markers._periodic(ch.edges, ch.initial, cap.rate)
+    p = markers._periodic(ch.edges, ch.initial, cap.rate, ch.step)
     if p is None:
         return False, {"edges": int(len(ch.edges))}, "no steady square wave"
     ferr = p["freq_hz"] / x["freq_hz"] - 1
@@ -380,7 +378,7 @@ def check_uart(cap, x):
     rx = _uart_rx(ch, cap.n_samples, u0, idle, bits, parity, stop)
     frames = rx["frames"]
     if not frames:
-        got = {"idle": rest, "lead_in": rx["lead_in"], "cut_at_end": rx["cut_at_end"], "samples_per_bit": u0}
+        got = {"idle": rest, "lead_in": rx["lead_in"], "cut_at_end": rx["cut_at_end"], "samples_per_bit": u0 / ch.step}
         if not len(ch.edges):
             return False, got, f"no activity (constant {ch.initial})"
         if rest != idle:
@@ -392,7 +390,7 @@ def check_uart(cap, x):
     data = bytes(f[1] & 0xFF for f in frames if f[2] and f[3]).hex() if bits <= 8 else None
     ref = cap.rate / x["baud"] if x.get("baud") else None
     got = {"baud": cap.rate / u if u else None, "baud_error": (ref / u - 1) if u and ref else None,
-           "samples_per_bit": u if u else u0,
+           "samples_per_bit": (u if u else u0) / ch.step,       # samples of this channel
            "chars": len(frames), "frame_errors": frame_err, "parity_errors": par_err,
            "lead_in": rx["lead_in"], "resync_skipped": rx["resync_skipped"], "cut_at_end": rx["cut_at_end"], "data": data}
     got["idle"] = rest
@@ -473,7 +471,7 @@ def verify(run_dir: str | Path) -> dict:
                 continue
             for c, cap in hit:
                 ok, got, why = CHECKS[x["kind"]](cap, x)
-                if c.get("time_base_slipped"):
+                if cap.meta.get("time_base_slipped"):
                     # the probe says some samples were taken late: the verdict
                     # stands (it may still read fine), a failure names it
                     got = {**got, "time_base_slipped": True}

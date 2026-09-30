@@ -154,7 +154,7 @@ def pair_relation(cap: Capture, clk: ClockInfo, other: str) -> PairRelation:
     pr = K.relative_phase_concentration(di, rise) if len(di) >= 2 and len(rise) > 2 else 0.0
     pf = K.relative_phase_concentration(di, fall) if len(di) >= 2 and len(fall) > 2 else 0.0
     dist, _ = K.nearest_distance(de, c.edges)
-    coincide = float(np.mean(dist <= 1))
+    coincide = float(np.mean(dist <= max(c.step, d.step)))   # within one sample of the coarser line
     # CS-like: every burst lies between two edges of `other`, with none inside it,
     # and at the same (active) level. Several bursts may share one window (bytes
     # with gaps under one CS), so a single CS frame counts. A lone rising edge is

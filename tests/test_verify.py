@@ -42,7 +42,7 @@ def test_cli_exit_code(demo, tmp_path):
 def test_missing_pin_is_unchecked(tmp_path):
     rec = Recorder(tmp_path)
     with rec.section(1, "t", expect=[square("NOPE", 1000), level("P0", 0)]):
-        rec.capture(bytes(1000), 1e6, ["P0"], rec.armed())
+        rec.capture(rec.armed(), 1e6, interleaved=bytes(1000), names=["P0"])
     rec.close()
     rep = verify(tmp_path)
     assert [(r["check"], r["ok"]) for r in rep["results"]] == [("square", None), ("level", True)]
@@ -51,7 +51,7 @@ def test_missing_pin_is_unchecked(tmp_path):
 def test_time_base_slip_is_named_on_failure_only(tmp_path):
     rec = Recorder(tmp_path)
     with rec.section(1, "t", expect=[level("P0", 0), level("P0", 1)]):
-        rec.capture(bytes(1000), 1e6, ["P0"], rec.armed(), time_base_slipped=True)
+        rec.capture(rec.armed(), 1e6, interleaved=bytes(1000), names=["P0"], time_base_slipped=True)
     rec.close()
     ok, ng = verify(tmp_path)["results"]
     assert ok["ok"] is True and ok["measured"]["time_base_slipped"] and ok["reason"] == ""

@@ -2,6 +2,7 @@ import json
 import subprocess
 import sys
 
+from wireskein import wsc
 from wireskein.runlog import FORMAT, Recorder, level
 
 
@@ -18,14 +19,16 @@ def test_run_json_layout(tmp_path):
         rec.reply("PONG")
         rec.note("hello")
         t = rec.armed()
-        rec.capture(bytes(100), 1e6, ["P0"], t, start_us=12, time_base_slipped=True)
+        rec.capture(t, 1e6, interleaved=bytes(100), names=["P0"], start_us=12, time_base_slipped=True)
     doc = json.loads(rec.close().read_text())
     assert doc["format"] == FORMAT
     assert doc["meta"] == {"target": "demo"}
     assert [e["src"] for e in doc["log"]] == ["marker", "host", "dut", "note", "marker"]
-    assert doc["captures"][0] | {"t0": 0} == {"file": "c0001.bin", "t0": 0, "rate": 1e6, "bits": ["P0"], "samples": 100,
-                                              "start_us": 12, "time_base_slipped": True}
-    assert (tmp_path / "c0001.bin").read_bytes() == bytes(100)
+    c = doc["captures"][0]
+    assert c["file"] == "c0001.wsc" and c["channels"] == ["P0"] and 0 <= c["t0"] < 5
+    head, (ch,) = wsc.read(tmp_path / "c0001.wsc")
+    assert head["meta"] == {"start_us": 12, "time_base_slipped": True}
+    assert (ch.name, ch.n, ch.step, wsc.unpack(ch)) == ("P0", 100, 1, bytes(100))
     assert list(doc["expect"]) == ["t"]
 
 

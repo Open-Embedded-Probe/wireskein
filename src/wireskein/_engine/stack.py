@@ -100,7 +100,7 @@ def slice_capture(cap: Capture, s0: int, s1: int) -> Capture:
     for ch in cap.channels:
         lo, hi = np.searchsorted(ch.edges, [s0, s1], side="right")
         init = int(ch.initial ^ (lo & 1))
-        chans.append(Channel(ch.name, init, ch.edges[lo:hi] - s0))
+        chans.append(Channel(ch.name, init, ch.edges[lo:hi] - s0, ch.step, (ch.phase - s0) % ch.step))
     return Capture(cap.rate, int(s1 - s0), chans, meta={"slice": (int(s0), int(s1))})
 
 

@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import math
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import lru_cache
 
 import numpy as np
@@ -345,17 +345,18 @@ def glitch_views(cap, sv, g):
     med = float(np.median(inner))
     # Short pulses relative to the clock's own runs (reflections last a few ns,
     # i.e. more samples at higher rates; single-sample spikes at any rate).
-    short = inner <= max(1.0, 0.25 * med)
+    step = max(x.step for x in cap.channels if x.name in {g.clock, *g.data, *([g.select] if g.select else [])})
+    short = inner <= max(float(step), 0.25 * med)
     if med >= 3 and 0 < short.mean() < 0.2:
         # the filter width is undecidable here: fixed small widths and one from
         # the observed short pulses are siblings; plugins' checks pick. A width
         # never exceeds half the clock's typical run.
-        k_rel = int(max(2, min(0.3 * med, np.quantile(inner[short], 0.95) + 1)))
+        k_rel = int(max(2 * step, min(0.3 * med, np.quantile(inner[short], 0.95) + step)))
         pins = {g.clock, *g.data, *([g.select] if g.select else [])}
-        for k in sorted({2, 3, 5, k_rel}):
+        for k in sorted({2 * step, 3 * step, 5 * step, k_rel}):
             if k > 0.5 * med:
                 continue
-            chans = [Channel(x.name, x.initial, K.deglitch(x.edges, k)) if x.name in pins else x for x in cap.channels]
+            chans = [replace(x, edges=K.deglitch(x.edges, k)) if x.name in pins else x for x in cap.channels]
             yield Capture(cap.rate, cap.n_samples, chans), k
 
 
@@ -370,12 +371,12 @@ def single_views(cap, sv, pin):
     ch = cap.channel(pin)
     _, length, _ = ch.runs(cap.n_samples)
     inner = length[1:-1]
-    if len(inner) < 16 or unit < 4:
+    if len(inner) < 16 or unit < 4 * ch.step:
         return
-    spikes = inner <= 1
+    spikes = inner <= ch.step
     if 0 < spikes.mean() < 0.1:
-        k = int(max(2, min(0.3 * unit, 3)))
-        chans = [type(x)(x.name, x.initial, K.deglitch(x.edges, k)) if x.name == pin else x for x in cap.channels]
+        k = int(max(2 * ch.step, min(0.3 * unit, 3 * ch.step)))
+        chans = [replace(x, edges=K.deglitch(x.edges, k)) if x.name == pin else x for x in cap.channels]
         yield Capture(cap.rate, cap.n_samples, chans), k
 
 

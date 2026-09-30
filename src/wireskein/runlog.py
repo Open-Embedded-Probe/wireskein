@@ -1,34 +1,36 @@
-"""Recording side of `ws verify`: what a test run writes (standard library only,
-so the ArduinoCore-CH32 test scripts can import or copy this file).
+"""Recording a test run for `wireskein verify` (standard library only).
 
 A run is a directory:
 
     run.json      log, captures and expectations
-    c0001.bin     one capture: one byte per sample, bit k = bits[k] (as trace_kit reads it)
+    c0001.wsc     one capture (wireskein.wsc: each channel at its own rate)
 
 The log is on the host clock (seconds from the recorder's start). It holds heading
 markers ("# test", "## step", "##" closes; docs/workbench-model.ja.md), the
-commands sent and the replies received. Commands go over the OEP console, not a
-captured line, so the markers live here, not in the waveform; each capture is
+commands sent and the replies received. Commands go over the probe's console, not
+a captured line, so the markers live here, not in the waveform; each capture is
 placed on the same clock by the time it was armed. The analysis builds the
 segment tree from the headings and checks each segment's captures against the
 expectations recorded for its path.
 
-    rec = Recorder("out/run1", target="x035", pins={"PA1": 47})
+    rec = Recorder("out/run1", target="x035")
     with rec.section(1, "test_pwm"):
         with rec.section(2, "duty=64", expect=[square("PA1", 1000, 64 / 255)]):
             rec.command("PWM 64"); rec.reply("PWM duty=64")
-            t = rec.armed()
+            armed = rec.armed()                       # time.monotonic() right after arming
             data = capture.read_all(n)
-            rec.capture(data, 2_000_000, ["PA1"], t, start_us=seg.start_us)
+            rec.capture(armed, 2_000_000, interleaved=data, names=["PA1", "PA0"], start_us=seg.start_us)
     rec.close()
 
-Test scripts import this module directly, so the calls above and the helpers
-below keep their names, arguments and meaning; anything added gets a default
-that keeps the old meaning. An incompatible change raises FORMAT. Capture meta
-"start_us" is the probe clock (us, integer) of the first sample;
-"time_base_slipped": True means the probe knows some samples were taken late
-(OEP segment flags bit 2; absent when not).
+A capture comes either as the probe's sample stream (`interleaved`, with
+`width` bits per sample and channel k at bit `positions[k]`, oep-if-capture
+§1.1) or as channels already split (`channels`, wireskein.wsc.Channel, each
+with its own step). Test scripts import this module directly, so these calls
+and the helpers below keep their names, arguments and meaning; anything added
+gets a default that keeps the old meaning. An incompatible change raises
+FORMAT. Capture meta "start_us" is the probe clock (us, integer) of the first
+sample; "time_base_slipped": True means the probe knows some samples were taken
+late (OEP segment flags bit 2; absent when not).
 """
 
 from __future__ import annotations
@@ -36,9 +38,12 @@ from __future__ import annotations
 import json
 import time
 from contextlib import contextmanager
+from fractions import Fraction
 from pathlib import Path
 
-FORMAT = "wireskein-run/0"
+from . import wsc
+
+FORMAT = "wireskein-run/1"
 
 
 class Recorder:
@@ -100,14 +105,25 @@ class Recorder:
 
     # captures
     def armed(self) -> float:
-        """Call right after the capture was armed; pass the value to capture()."""
-        return self.now()
+        """time.monotonic() right after the capture was armed; pass it to capture()."""
+        return time.monotonic()
 
-    def capture(self, data: bytes, rate: float, bits: list[str], armed_at: float, **meta) -> str:
-        name = f"c{len(self.doc['captures']) + 1:04d}.bin"
-        (self.dir / name).write_bytes(bytes(data))
-        self.doc["captures"].append({"file": name, "t0": armed_at, "rate": float(rate), "bits": list(bits),
-                                     "samples": len(data), **meta})
+    def capture(self, armed: float, tick_hz: int | float | Fraction, *, interleaved: bytes | None = None,
+                names: list[str] | None = None, width: int = 8, positions: list[int] | None = None,
+                n: int | None = None, channels: list[wsc.Channel] | None = None, **meta) -> str:
+        """Store one capture as cNNNN.wsc. armed: time.monotonic() when it was
+        armed (Recorder.armed(), or the capture client's own stamp). Give either
+        interleaved + names (+ width / positions / n for other sample layouts)
+        or channels. meta goes into the capture file (start_us, time_base_slipped, ...)."""
+        if (interleaved is None) == (channels is None):
+            raise ValueError("give either interleaved (with names) or channels")
+        if channels is None:
+            if not names:
+                raise ValueError("interleaved needs names")
+            channels = wsc.from_interleaved(interleaved, names, width, positions, n)
+        name = f"c{len(self.doc['captures']) + 1:04d}{wsc.SUFFIX}"
+        wsc.write(self.dir / name, tick_hz, channels, **meta)
+        self.doc["captures"].append({"file": name, "t0": armed - self.t0, "channels": [c.name for c in channels]})
         return name
 
     def _key(self, occ: tuple) -> str:
