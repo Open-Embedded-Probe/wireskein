@@ -1,5 +1,7 @@
 # WireSkein
 
+![WireSkein: open-source logic analyzer library](https://raw.githubusercontent.com/Open-Embedded-Probe/wireskein/main/docs/images/wireskein-top.jpg)
+
 [日本語 README](https://github.com/Open-Embedded-Probe/wireskein/blob/main/README.ja.md)
 
 WireSkein reads logic-analyzer captures. It has two uses:
