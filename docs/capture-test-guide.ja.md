@@ -46,7 +46,7 @@ WireSkein は本来、未知の信号から方式を推定する道具です。�
 | 見出しのマーカー | `# test_pwm`、`## duty=64`、`##` | `heading(level, name)`、`section(level, name, expect=...)` |
 | 送ったコマンド | `PWM 64` | `command(text)` |
 | 受けた応答 | `PWM duty=64`、`PONG 1234` | `reply(text)` |
-| キャプチャ | `c0001.bin`、開始した時刻、レート、ビットとピンの対応 | `armed()` の後に `capture(data, rate, bits, t)` |
+| キャプチャ | `c0001.wsc`（チャンネルごとに自分のレート）、開始した時刻 | `t = armed()` の後に `capture(t, rate, interleaved=data, names=[...])`、または `capture(t, tick_hz, channels=[...])` |
 
 - 時刻はすべて PC の時計です。キャプチャは、開始（`arm`）した時刻で、どの区間に入るかが決まります。
 - **CH32 のファームウェアは変えなくてよい。** マーカーは CH32 に送らないので、`#` の行の扱いは関係ありません。
@@ -146,17 +146,17 @@ uart("PB0", None)                        # 測るだけ（8N1 として読む）
 
 ### 2.4.1 `runlog` の呼び方は固定する
 
-テスト側は `wireskein.runlog` を直接 import します。このため、次の呼び方と意味は変えません。互換のない変更をするときは `FORMAT`（今は `wireskein-run/0`）を上げ、`wireskein verify` は古い形式をはっきりしたエラーで断ります。
+テスト側は `wireskein.runlog` を直接 import します。このため、次の呼び方と意味は変えません。互換のない変更をするときは `FORMAT`（今は `wireskein-run/1`）を上げ、`wireskein verify` は古い形式をはっきりしたエラーで断ります。
 
 - 標準ライブラリだけで動くこと
-- `Recorder(out, **meta)`、`heading`、`section(level, name, expect=None, **rules)`、`command`、`reply`、`note`、`armed`、`capture(data, rate, bits, armed_at, **meta)`、`close`
+- `Recorder(out, **meta)`、`heading`、`section(level, name, expect=None, **rules)`、`command`、`reply`、`note`、`armed`、`capture(armed, tick_hz, *, interleaved, names, width, positions, n, channels, **meta)`、`close`
 - 検査の helper（`square`、`level`、`starts`、`ends`、`only_moving`、`pulses`、`i2c`、`spi`、`uart`）の引数。引数やトランザクションのキーの追加は、既定値で今の意味を保つ形でだけ行う
 
 ### 2.5 時刻の精度
 
 PC の時計と、キャプチャの開始時刻の対応は ms の精度です（`arm` の要求が P4 に届くまでの遅れがある）。区間の割り当てには十分ですが、コマンドとキャプチャの中の変化点のずれを µs で測る用途には使えません。精度が要る場合は、次のどちらかにします。
 
-- **P4 のキャプチャの印を使う。** OEP には、UART や console のストリームに付ける `mark` がありますが、キャプチャの時間軸に付ける印は今の `oep.if.capture` にありません。付けるなら OEP の仕様への追加提案になります。クライアントの `Segment` が持つ `start_us` を記録に残すことが、その第一歩です。キャプチャの追加情報の名前は `start_us`（プローブの時計で最初のサンプルの時刻、µs、整数）に決めます: `rec.capture(data, rate, bits, t, start_us=seg.start_us)`。時刻合わせを実装するときも、この名前を読みます。
+- **P4 のキャプチャの印を使う。** OEP には、UART や console のストリームに付ける `mark` がありますが、キャプチャの時間軸に付ける印は今の `oep.if.capture` にありません。付けるなら OEP の仕様への追加提案になります。クライアントの `Segment` が持つ `start_us` を記録に残すことが、その第一歩です。キャプチャの追加情報の名前は `start_us`（プローブの時計で最初のサンプルの時刻、µs、整数）に決めます: `rec.capture(t, rate, interleaved=data, names=[...], start_us=seg.start_us)`。時刻合わせを実装するときも、この名前を読みます。
 - **CH32 か P4 が、目印のピンを動かす。** 今の `reset_trace` の GPIO マーカーと同じやり方です。
 
 ## 3. テストの組み方
@@ -169,7 +169,7 @@ PWM で周波数とデューティー比を複数試すときは、組み合わ�
 
 ### 3.2 ピンの対応表は1か所に置く
 
-CH32 のピン名、P4 のキャプチャのチャンネル、P4 の役割（スタブの SPI など）の対応は、今の `tests/manual/oep_smoke/targets.py` の `TARGETS` にあります。テストと期待値は、CH32 のピン名（`PA1`）で書き、`capture(data, rate, bits=[...])` の `bits` にも CH32 のピン名を並べます。スクリプトの先頭に x035 の定数を直に書いている箇所（`periph_trace`、`i2c_trace`、`uart_trace`、`reset_trace`）は、`TARGETS` から取るようにそろえます。
+CH32 のピン名、P4 のキャプチャのチャンネル、P4 の役割（スタブの SPI など）の対応は、今の `tests/manual/oep_smoke/targets.py` の `TARGETS` にあります。テストと期待値は、CH32 のピン名（`PA1`）で書き、`capture(..., names=[...])` の `names` にも CH32 のピン名を並べます。スクリプトの先頭に x035 の定数を直に書いている箇所（`periph_trace`、`i2c_trace`、`uart_trace`、`reset_trace`）は、`TARGETS` から取るようにそろえます。
 
 ### 3.3 最初にキャプチャ系の自己テストを入れる
 
@@ -204,10 +204,10 @@ WS2812 と tone() は受け手がいないので、キャプチャでの解析�
   ├─ Recorder を開く（出力のディレクトリ）
   ├─ ステップごとに: section("## 条件", expect=[...]) の中で
   │     コマンドを送る → 応答を待つ → キャプチャを arm → armed() → wait → read_all → capture(...)
-  ├─ close() → run.json と c0001.bin …
+  ├─ close() → run.json と c0001.wsc …
   └─ wireskein verify <出力> [--junit report.xml] [--json report.json]
         区間の木 → 区間ごとのキャプチャ → 検査 → 項目ごとの OK/NG と測定値。NG が 1 つでもあれば終了コード 1
-NG のキャプチャは .bin のまま残る（PulseView で見るなら oep_client の to_sr で .sr にする）
+NG のキャプチャは .wsc のまま残る（PulseView で見るなら wireskein convert c0001.wsc c0001.sr）
 ```
 
 今の `oep_periph_trace.py` の `run()` に当てはめると、次のようになります。
@@ -228,7 +228,7 @@ def run(cap_lines, rate, samples, command, reply, settle=0.05):
     t = rec.armed()
     st = capture.wait(3.0)
     data = capture.read_all(st.samples) if st.flags & FixtureCapture.COMPLETE else b""
-    rec.capture(data, rate, [pin_name(ch) for ch in cap_lines], t)   # pin_name: P4 の GPIO → CH32 のピン名（TARGETS の逆引き、要追加）
+    rec.capture(t, rate, interleaved=data, names=[pin_name(ch) for ch in cap_lines])   # pin_name: P4 の GPIO → CH32 のピン名（TARGETS の逆引き）
     return data, line.strip(), got
 
 with rec.section(1, "test_pwm"):

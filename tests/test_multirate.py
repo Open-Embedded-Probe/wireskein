@@ -88,3 +88,22 @@ def test_run_with_split_channels(tmp_path):
     rec.close()
     rep = verify(tmp_path)
     assert [r["ok"] for r in rep["results"]] == [True, True]
+
+
+def test_convert_wsc_sr_wsc_keeps_the_real_rate(tmp_path):
+    import subprocess
+    import sys
+    import zipfile
+    fast, pwm = signals()
+    a = write(tmp_path / "a.wsc", fast, pwm)
+    for src, dst in (("a.wsc", "b.sr"), ("b.sr", "c.wsc")):
+        r = subprocess.run([sys.executable, "-m", "wireskein", "convert", str(tmp_path / src), str(tmp_path / dst)],
+                           capture_output=True, text=True, check=True)
+        assert "decimated: SLOW/32" in r.stdout
+    with zipfile.ZipFile(tmp_path / "b.sr") as z:                   # a plain one-rate .sr for PulseView
+        assert "samplerate=100000000 Hz" in z.read("metadata").decode()
+        assert len(b"".join(z.read(n) for n in z.namelist() if n.startswith("logic-1-"))) == N
+    c = wscio.load(tmp_path / "c.wsc")
+    assert [(ch.name, ch.step) for ch in c.channels] == [("FAST", 1), ("SLOW", STEP)]
+    assert all(np.array_equal(x.edges, y.edges) and x.initial == y.initial for x, y in zip(a.channels, c.channels))
+    assert wsc.read(tmp_path / "c.wsc")[1][1].n == N // STEP        # only the samples that were taken

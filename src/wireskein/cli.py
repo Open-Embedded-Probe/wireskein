@@ -4,8 +4,9 @@
                               [--hint JSON|@file.json] [--alternatives] [--out FILE]
     wireskein segments CAPTURE [--results] [--markers JSON]
     wireskein verify RUN_DIR [--junit FILE] [--json FILE]
+    wireskein convert IN OUT            (.wsc / .sr / fixture directory -> .wsc / .sr)
 
-CAPTURE is a fixture directory (corpus/fixtures/real/<id>) or a sigrok .sr file.
+CAPTURE is a .wsc capture, a sigrok .sr file or a fixture directory (corpus/fixtures/real/<id>).
 Paths for --select: "<protocol>.<layer>" with wildcards, e.g. i2c.transactions,
 uart.lines, spi.transfers, rvswd.dm, *.final, i2c.* .
 
@@ -28,14 +29,22 @@ import time
 from pathlib import Path
 
 from . import __version__
-from ._engine import export, fixture, markers, staged
-from ._engine.srio import read_sr
+from ._engine import export, markers, staged
 
 
 def load(path: Path):
-    if path.is_dir():
-        return fixture.load_capture(path)
-    return read_sr(path)
+    from .analyze import load as _load
+    return _load(path)
+
+
+def convert(args) -> None:
+    from .analyze import save
+    cap = load(args.input)
+    meta = {k: v for k, v in cap.meta.items() if k not in ("file", "source", "tick_hz", "unitsize", "fixture")}
+    out = save(args.output, cap, **meta)
+    slow = [f"{c.name}/{c.step}" for c in cap.channels if c.step != 1]
+    print(f"{args.input} -> {out}: {len(cap.channels)} channels, {cap.n_samples} ticks at {cap.rate:g} Hz"
+          + (f", decimated: {', '.join(slow)}" if slow else ""))
 
 
 def segments(args) -> None:
@@ -106,7 +115,12 @@ def main() -> None:
     vf.add_argument("--junit", type=Path, default=None, help="also write JUnit XML")
     vf.add_argument("--json", type=Path, default=None, help="write the full report (with measured values)")
     vf.add_argument("--log", action="store_true", help="include the host log (markers, commands, replies) in --json")
+    cv = sub.add_parser("convert", help="convert a capture between formats (by extension: .wsc, .sr; a fixture directory as input)")
+    cv.add_argument("input", type=Path)
+    cv.add_argument("output", type=Path)
     args = ap.parse_args()
+    if args.cmd == "convert":
+        return convert(args)
     if args.cmd == "segments":
         return segments(args)
     if args.cmd == "verify":
