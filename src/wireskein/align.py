@@ -145,9 +145,19 @@ def find(cap: Capture, reference: str, via: str, threshold, window_ticks: float 
     if len(ti) < 2:
         raise ValueError(f"only {len(ti)} edges of {via} match {reference}")
     resid = r_t[ri] - (off + scale * a_t[ti])
+    # the edges that could match: those that land where the reference has edges (a logic channel may
+    # cover only part of the analog track, when the probe gave it fewer samples)
+    moved = off + scale * a_t
+    overlap = int(np.count_nonzero((moved >= r_t[0] - tol) & (moved <= r_t[-1] + tol)))
+    x = a_t[ti]
+    spread = float(np.sum((x - x.mean()) ** 2))
+    dof = max(1, len(ti) - 2)
+    scale_err = float(np.sqrt(np.sum(resid ** 2) / dof / spread)) if spread > 0 else float("inf")
     low, high = analog.thresholds(threshold)
     entry = {"offset_ticks": off, "scale": scale, "reference": reference, "via": via, "method": "edges",
-             "matched": int(len(ti)), "edges": int(len(a_t)), "residual_ticks": float(np.sqrt(np.mean(resid ** 2))),
+             "matched": int(len(ti)), "edges": int(len(a_t)), "overlap_edges": overlap,
+             "overlap_s": float(r_t[-1] - r_t[0]) / tick, "residual_ticks": float(np.sqrt(np.mean(resid ** 2))),
+             "scale_ppm_uncertainty": scale_err * 1e6,
              "threshold_v": [low, high], "window_ticks": float(window_ticks),
              "offset_us": off / tick * 1e6, "scale_ppm": (scale - 1) * 1e6,
              "start_shift_us": (off + (scale - 1) * float(trace.t0_ticks)) / tick * 1e6}   # how far its start moved

@@ -145,3 +145,12 @@ def test_oep_trigger_the_probe_cannot_do_is_an_error(probe, monkeypatch):
     fake.calls.clear()
     sources.run("oep:/dev/x", sources.Request([("A", "1"), ("B", "2"), ("C", "3")], 1000, 10))   # no trigger: nothing critical
     assert next(kw for c, *kw in fake.calls if c == "configure")[0]["critical"] == set()
+
+
+def test_fewer_samples_than_asked_are_named(tmp_path, capsys):
+    from wireskein.cli import _fewer
+    out = tmp_path / "c.wireskein"
+    fileformat.write(out, 1000, [fileformat.Channel("A", fileformat.pack(bytes(64)), 64),
+                                 fileformat.analog_volts("V", [1.0] * 10, 100)])
+    _fewer(out, sources.Request([("A", "0")], 1000, 400, analog_samples=10))
+    assert capsys.readouterr().out == "note: A: 64 samples of the 400 asked (the probe's limit)\n"
