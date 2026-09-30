@@ -120,8 +120,15 @@ with rec.section(2, f"duty={duty}", expect=[square("PA1", 1003.5, duty / 255, to
 | `i2c(scl, sda, transactions, hz, tol_hz, released)` | トランザクションの列（アドレス、読み書き、バイト、ACK）、SCL の周波数、終了時に両方 High。STOP のないまま窓が終わった最後のトランザクションは `"complete": False` で、最後の完全なバイトの後に打たれたビットを `pending_bits` に持つ。期待に `complete` を書かなければ `True`（完了）として比べ、`pending_bits` は書いたときだけ比べる。アドレスの途中で止まったものは `addr` が `None` |
 | `spi(clk, mosi, miso, cs, mode, mosi_bytes, miso_bytes, hz)` | モード、両方向のバイト、SCK の周波数、終了時に CS が High |
 | `uart(pin, baud, data, tol_baud, idle, bits, parity, stop, max_errors)` | ボーレート（エッジから測ったビットの幅と `baud` の相対の差が `tol_baud` 以内）、バイト列、アイドルレベル、フレームとパリティのエラー。`baud` には呼び値ではなく、送信側が実際に出すはずの値（CH32 なら F_CPU / BRR）を渡す。フォーマットは `bits`（データのビット数）、`parity`（`"none"` / `"even"` / `"odd"`）、`stop`（1、1.5、2）。窓が文字の途中で始まる・終わるのはエラーにしない（1 文字分以上の idle の後から読み、それより前は `lead_in`、最後に切れた文字は `cut_at_end` として数える）。`max_errors` を与えると、フレームとパリティのエラーの合計がそれを超えたら NG（既定は数えて出すだけ）。測定値は `baud`、`baud_error`、`samples_per_bit`、`chars`、`frame_errors`、`parity_errors`、`data`、`edge_offset_max` / `edge_offset_p99`（文字の中のエッジと、ビットの格子のずれ。ビット単位）、`errors_at`。エラーの文字がどれも、ほかの文字よりはっきりエッジがずれていれば（0.2 ビット以上、かつ p99 の 2 倍以上）、理由に「キャプチャの時間軸を疑う」と出る（ソフトで歩調を取るサンプラーが止まった場合など）。フレームエラーの後は次の 1 文字分の idle まで読み直しを待つので、1 つの乱れは 1 件と数える（その間に飛ばした文字は `resync_skipped`）。ボーレートの測定は期待から独立で、エッジの間隔から候補を求め、期待の値は最も近い候補を選ぶのにだけ使う |
+| `voltage(pin, volts, tol, min_v, max_v, ripple)` | アナログのチャンネルの電圧。平均が `volts` ± `tol`（V、絶対）、全サンプルが `min_v`〜`max_v`、ピークからピークが `ripple` 以下。与えたものだけを見る。電圧への換算がファイルにないチャンネルは未検査。測定値は `mean_v`、`min_v`、`max_v`、`p2p_v`、`std_v` |
 
 検査に使うピンがキャプチャにないときは、どの検査も NG ではなく未検査（`--`、JUnit では skipped）になります。
+
+**アナログの線にロジックの検査をかける（`threshold=`）**: `square`、`level`、`starts` / `ends`、`pulses`、`i2c`、`spi`、`uart` は、`threshold=` を与えると、アナログのチャンネルをその電圧でロジックとして読んで検査します。
+
+- 1 つの値（例 `threshold=1.65`）か、ヒステリシスの組（例 `threshold=(1.0, 2.3)`: 2.3 V に達したら high、1.0 V まで下がったら low、その間は前のまま）。ノイズの乗った遅いエッジは、組にすると 1 本のエッジになります。
+- エッジは、前後の 2 サンプルを結んだ線がしきい値を横切る位置に置きます。分解能は ADC の 1 サンプルとして扱います（デューティーなどの許容誤差に自動で足します）。
+- `threshold=` のないロジックの検査にアナログのチャンネルを渡すと、未検査になり、理由に「threshold= が要る」と出ます。電圧への換算がファイルにないチャンネルも、未検査です。
 
 例: 途中で止まった読み出し（0x42 から 1 バイト読み、ACK の後に target が SDA を握ったまま）
 
