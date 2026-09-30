@@ -75,7 +75,13 @@ def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], name
             core.plan_release(hst, [cap.fn])
     finally:
         hst.end()
-    meta = {"start_us": seg.start_us, "probe_channels": dict(zip(names, ids))}
+    meta = {"probe_channels": dict(zip(names, ids))}
+    if getattr(seg, "start_ns", None) is not None:      # oep-if-capture with ns times (oep-spec ddf28dc)
+        meta["start_ns"] = seg.start_ns
+        if getattr(seg, "start_uncertainty_ns", None) is not None:
+            meta["start_uncertainty_ns"] = seg.start_uncertainty_ns
+    else:
+        meta["start_us"] = seg.start_us
     if seg.slipped:
         meta["time_base_slipped"] = True
     if seg.trigger_index is not None:
