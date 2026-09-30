@@ -10,7 +10,7 @@ from fractions import Fraction
 import numpy as np
 import pytest
 
-from wireskein import sources, wsc
+from wireskein import sources, fileformat
 
 
 def test_parsers():
@@ -27,23 +27,23 @@ def test_parsers():
 
 @pytest.mark.skipif(shutil.which("sigrok-cli") is None, reason="sigrok-cli not installed")
 def test_sigrok_demo_through_the_cli(tmp_path):
-    out = tmp_path / "d.wsc"
+    out = tmp_path / "d.wireskein"
     r = subprocess.run([sys.executable, "-m", "wireskein", "capture", "--source", "sigrok:demo", "--channels", "A=D0,B=D1",
                         "--rate", "1M", "--samples", "20k", "--note", "demo", "-o", str(out)], capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
-    head, chans = wsc.read(out)
+    head, chans = fileformat.read(out)
     assert [c.name for c in chans] == ["A", "B"] and all(c.n == 20_000 for c in chans)
     assert head["tick_hz"] == [1_000_000, 1] and head["meta"]["driver"] == "demo"
     assert head["meta"]["device_channels"] == {"A": "D0", "B": "D1"}
-    assert wsc.notes(out)[0]["content"] == "demo"
-    assert any(wsc.unpack(c).count(1) not in (0, c.n) for c in chans)          # the demo pattern moves
+    assert fileformat.notes(out)[0]["content"] == "demo"
+    assert any(fileformat.unpack(c).count(1) not in (0, c.n) for c in chans)          # the demo pattern moves
 
 
 @pytest.mark.skipif(shutil.which("sigrok-cli") is None, reason="sigrok-cli not installed")
 def test_sigrok_to_sr(tmp_path):
     out = sources.capture("sigrok:demo", sources.Request([("D0", "D0")], 100_000, 1000), tmp_path / "d.sr")
     from wireskein.analyze import load
-    assert out.suffix == ".sr" and load(out).channel("D0") and not list(tmp_path.glob("*.wsc"))
+    assert out.suffix == ".sr" and load(out).channel("D0") and not list(tmp_path.glob("*.wireskein"))
 
 
 class StandIn:
@@ -107,15 +107,15 @@ def test_oep_source_against_a_stand_in(tmp_path, monkeypatch):
         monkeypatch.setitem(sys.modules, name, mod)
     req = sources.Request([("SDA", "47"), ("SCL", "48"), ("INT", "5")], 20_000_000, 11, trigger=("SCL", "fall"),
                           pretrigger=3)
-    out = sources.capture("oep:/dev/ttyACM9", req, tmp_path / "o.wsc")
+    out = sources.capture("oep:/dev/ttyACM9", req, tmp_path / "o.wireskein")
     assert ("plan", [(7, 0, 47), (7, 1, 48), (7, 2, 5)]) in fake.calls
     conf = next(kw for c, *kw in fake.calls if c == "configure")[0]
     assert conf["trigger"] == (2, 1, 1) and conf["pretrigger"] == 3 and conf["samples"] == 11 and conf["rate"] == 20_000_000
     assert conf["critical"] == {0x45, 0x46}                                     # honour the trigger or refuse
     assert [c[0] for c in fake.calls][-2:] == ["release", "end"]                 # plan released, session ended
-    head, chans = wsc.read(out)
+    head, chans = fileformat.read(out)
     assert head["tick_hz"] == [20_000_000, 1]
-    assert [wsc.unpack(c) for c in chans] == [row.tobytes() for row in fake.levels]
+    assert [fileformat.unpack(c) for c in chans] == [row.tobytes() for row in fake.levels]
     meta = head["meta"]
     assert meta["source"] == "oep:/dev/ttyACM9" and meta["start_us"] == 123 and meta["time_base_slipped"] is True
     assert meta["trigger_index"] == 4 and meta["probe_channels"] == {"SDA": 47, "SCL": 48, "INT": 5}

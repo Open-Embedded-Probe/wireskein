@@ -1,14 +1,19 @@
-"""WireSkein capture files (.wsc): each channel at its own sample rate.
+"""WireSkein files (.wireskein, docs/wireskein-format.ja.md): a capture with
+each channel at its own sample rate, and what goes with it.
 
 Standard library only, like wireskein.runlog, so anything holding samples can
-save them without numpy. A .wsc is a zip:
+save them without numpy. A .wireskein is a zip:
 
-    capture.json    format, tick clock, channels, capture metadata
+    wireskein.json  {"format": "wireskein/0"}: what the file is (first entry, stored)
+    capture.json    tick clock, channels, capture metadata
     ch/0.bits       channel 0: one bit per sample, least significant bit first
     ch/1.bits       ...
     attach/<name>   free-form files: acquisition settings, analysis results,
                     anything (text, JSON, bytes); attach() adds or replaces one
     notes/<n>.json  an append-only log: note() adds one entry, with its time
+
+Readers go by the content, not the name (sniff()). Entries this version does
+not know are left alone, and carried over when the file is rewritten.
 
 Time is counted in ticks of one clock (tick_hz, a fraction). Channel k has a
 sample every `step` ticks, the first at tick `phase`: a probe that decimates
@@ -16,16 +21,16 @@ some channels (keeps every 32nd sample to fit its link) stores those with
 step=32 and only the samples it really took. Nothing is repeated to fill the
 gaps, so a viewer can show exactly the samples that exist.
 
-    from wireskein import wsc
-    wsc.write("c.wsc", 100_000_000,
-              [wsc.Channel("PA5", wsc.pack(samples_pa5), n),                   # samples: 0/1 per byte
-               wsc.Channel("PB0", wsc.pack(samples_pb0), n // 32, step=32)],
-              start_us=seg_start_us)
-    wsc.write("c.wsc", 20_000_000, wsc.from_interleaved(data, ["PA5", "PA7"]))  # 1 byte per sample, bit k = channel k
+    from wireskein import fileformat as wf
+    wf.write("c.wireskein", 100_000_000,
+             [wf.Channel("PA5", wf.pack(samples_pa5), n),                   # samples: 0/1 per byte
+              wf.Channel("PB0", wf.pack(samples_pb0), n // 32, step=32)],
+             start_us=seg_start_us)
+    wf.write("c.wireskein", 20_000_000, wf.from_interleaved(data, ["PA5", "PA7"]))  # 1 byte per sample, bit k = channel k
 
-    wsc.attach("c.wsc", "probe.json", {"fw": "1.2", "plan": {...}})   # later, to an existing file
-    wsc.note("c.wsc", "PA5 looked noisy; re-captured with a shorter wire")
-    wsc.note("c.wsc", {"kind": "analysis", "i2c": [...]})
+    wf.attach("c.wireskein", "probe.json", {"fw": "1.2", "plan": {...}})   # later, to an existing file
+    wf.note("c.wireskein", "PA5 looked noisy; re-captured with a shorter wire")
+    wf.note("c.wireskein", {"kind": "analysis", "i2c": [...]})
 """
 
 from __future__ import annotations
@@ -41,9 +46,11 @@ from dataclasses import dataclass, field
 from fractions import Fraction
 from pathlib import Path
 
-FORMAT = "wireskein-capture/0"
-SUFFIX = ".wsc"
-ENCODINGS = {"bits", "analog", "analog-f32"}    # what this version reads; others are skipped (docs/wsc-format.ja.md §3.2)
+FORMAT = "wireskein/0"
+SUFFIX = ".wireskein"
+IDENT = "wireskein.json"          # what the file is; the first entry, stored (wireskein-format §2.1)
+CAPTURE = "capture.json"
+ENCODINGS = {"bits", "analog", "analog-f32"}    # what this version reads; others are skipped (docs/wireskein-format.ja.md §3.2)
 
 
 @dataclass
@@ -53,7 +60,7 @@ class Channel:
     n: int               # number of samples
     step: int = 1        # ticks per sample
     phase: int = 0       # tick of the first sample
-    acquisition: dict = field(default_factory=dict)   # how it was taken (pin, ...), wsc-format §3.1.1
+    acquisition: dict = field(default_factory=dict)   # how it was taken (pin, ...), wireskein-format §3.1.1
 
     encoding = "bits"
 
@@ -74,7 +81,7 @@ _TYPECODE = {8: "B", 16: "H", 32: "I"}
 
 @dataclass
 class AnalogChannel:
-    """An analog channel (wsc-format §4.2, §4.3). encoding "analog": raw
+    """An analog channel (wireskein-format §4.2, §4.3). encoding "analog": raw
     unsigned values of `width` bits (little endian), volts = (raw - zero) *
     scale_nv * 1e-9 when zero / scale_nv are known; "analog-f32": float32
     volts. Sample k is at tick t0_ticks + k * tick_hz / rate_hz."""
@@ -215,7 +222,7 @@ def from_interleaved(data: bytes | bytearray | memoryview, names: list[str], wid
 
 def write(path: str | Path, tick_hz: int | float | Fraction | tuple[int, int], channels: list[Channel | AnalogChannel],
           attachments: dict[str, str | bytes | dict | list] | None = None, **meta) -> Path:
-    """Write a .wsc. tick_hz is the tick clock (a Fraction keeps an exact rate
+    """Write a .wireskein file (any name; SUFFIX is the usual one). tick_hz is the tick clock (a Fraction keeps an exact rate
     such as 160 MHz / 3). meta: small JSON-able facts about the capture, e.g.
     start_us (probe clock of tick 0), time_base_slipped, probe, trigger.
     attachments: free-form files stored as attach/<name> (see attach())."""
@@ -244,10 +251,11 @@ def write(path: str | Path, tick_hz: int | float | Fraction | tuple[int, int], c
             e["acquisition"] = c.acquisition
         entries.append(e)
     ends = [c.end(tick) if isinstance(c, AnalogChannel) else c.end for c in channels]
-    head = {"format": FORMAT, "tick_hz": [tick.numerator, tick.denominator], "ticks": max(ends, default=0),
+    head = {"tick_hz": [tick.numerator, tick.denominator], "ticks": max(ends, default=0),
             "channels": entries, "meta": meta}
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
-        z.writestr("capture.json", json.dumps(head, indent=1, default=str))
+        z.writestr(zipfile.ZipInfo(IDENT, (1980, 1, 1, 0, 0, 0)), json.dumps({"format": FORMAT}), zipfile.ZIP_STORED)
+        z.writestr(CAPTURE, json.dumps(head, indent=1, default=str))
         for name, data in files:
             z.writestr(name, data)
         for name, data in (attachments or {}).items():
@@ -275,11 +283,12 @@ def _encode(data) -> bytes:
 
 
 def attach(path: str | Path, name: str, data: str | bytes | dict | list, replace: bool = False) -> None:
-    """Store a free-form file in an existing .wsc as attach/<name>: str as
+    """Store a free-form file in an existing .wireskein as attach/<name>: str as
     UTF-8 text, dict / list as JSON, bytes as they are. The channel data is
     not rewritten unless an existing attachment is replaced (replace=True)."""
     entry = _attach_name(name)
     with zipfile.ZipFile(path) as z:
+        _check(z, path)
         exists = entry in z.namelist()
     if exists and not replace:
         raise FileExistsError(f"{path}: {entry} exists (replace=True to overwrite)")
@@ -293,6 +302,7 @@ def note(path: str | Path, content: str | dict | list, **fields) -> int:
     """Append one entry to the capture's log (never rewrites the others):
     {"time": ISO 8601, "content": ..., **fields}. Returns its number."""
     with zipfile.ZipFile(path) as z:
+        _check(z, path)
         n = sum(1 for x in z.namelist() if x.startswith(NOTES)) + 1
     entry = {"time": datetime.datetime.now().astimezone().isoformat(timespec="seconds"), "content": content, **fields}
     with zipfile.ZipFile(path, "a", zipfile.ZIP_DEFLATED) as z:
@@ -311,9 +321,12 @@ def notes(path: str | Path) -> list[dict]:
 
 
 def extras(path: str | Path) -> dict[str, bytes]:
-    """attach/ and notes/ entries as they are stored (to carry them into another file)."""
+    """Every entry but the capture itself (attach/, notes/ and parts this
+    version does not know), as stored: to carry them into another file."""
     with zipfile.ZipFile(path) as z:
-        return {x: z.read(x) for x in z.namelist() if x.startswith((ATTACH, NOTES))}
+        head = json.loads(z.read(CAPTURE)) if CAPTURE in z.namelist() else {}
+        own = {IDENT, CAPTURE} | {c.get("file") for c in head.get("channels", [])}
+        return {x: z.read(x) for x in z.namelist() if x not in own and not x.endswith("/")}
 
 
 def _rewrite(path: str | Path, drop: str) -> None:
@@ -326,12 +339,41 @@ def _rewrite(path: str | Path, drop: str) -> None:
     os.replace(tmp, path)
 
 
+def sniff(path: str | Path) -> str | None:
+    """What a file is, by its content (wireskein-format §2.3): "wireskein",
+    "sr" (a sigrok session), or None. A WireSkein file of a version this one
+    does not know is "wireskein" too; read_header() says why it cannot read it."""
+    try:
+        with open(path, "rb") as f:
+            if f.read(4) != b"PK\x03\x04":             # not a zip: no need to look further
+                return None
+        with zipfile.ZipFile(path) as z:
+            names = set(z.namelist())
+            if IDENT in names:          # (a .sr written by wireskein has one too, "wireskein-sr-extra/0")
+                fmt = json.loads(z.read(IDENT)).get("format", "")
+                if isinstance(fmt, str) and fmt.startswith("wireskein/"):
+                    return "wireskein"
+            return "sr" if {"version", "metadata"} <= names else None
+    except (OSError, zipfile.BadZipFile, ValueError, AttributeError):
+        return None
+
+
+def _check(z: zipfile.ZipFile, path) -> None:
+    """ValueError unless z is a WireSkein file of this version."""
+    if IDENT not in z.namelist():
+        raise ValueError(f"{path}: not a WireSkein file (no {IDENT})")
+    fmt = json.loads(z.read(IDENT)).get("format")
+    if fmt != FORMAT:
+        raise ValueError(f"{path}: format {fmt!r}, this version reads {FORMAT!r} (a newer wireskein may read it)")
+
+
 def read_header(path: str | Path) -> dict:
+    """capture.json of a WireSkein file (ValueError: not one, a newer version, or no capture in it)."""
     with zipfile.ZipFile(path) as z:
-        head = json.loads(z.read("capture.json"))
-    if head.get("format") != FORMAT:
-        raise ValueError(f"{path}: format {head.get('format')!r}, expected {FORMAT!r}")
-    return head
+        _check(z, path)
+        if CAPTURE not in z.namelist():
+            raise ValueError(f"{path}: holds no capture")
+        return json.loads(z.read(CAPTURE))
 
 
 def skipped(head: dict) -> list[dict]:

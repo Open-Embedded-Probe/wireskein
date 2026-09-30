@@ -2,7 +2,7 @@ import json
 import subprocess
 import sys
 
-from wireskein import wsc
+from wireskein import fileformat
 from wireskein.runlog import FORMAT, Recorder, level
 
 
@@ -25,10 +25,10 @@ def test_run_json_layout(tmp_path):
     assert doc["meta"] == {"target": "demo"}
     assert [e["src"] for e in doc["log"]] == ["marker", "host", "dut", "note", "marker"]
     c = doc["captures"][0]
-    assert c["file"] == "c0001.wsc" and c["channels"] == ["P0"] and 0 <= c["t0"] < 5
-    head, (ch,) = wsc.read(tmp_path / "c0001.wsc")
+    assert c["file"] == "c0001.wireskein" and c["channels"] == ["P0"] and 0 <= c["t0"] < 5
+    head, (ch,) = fileformat.read(tmp_path / "c0001.wireskein")
     assert head["meta"] == {"start_us": 12, "time_base_slipped": True}
-    assert (ch.name, ch.n, ch.step, wsc.unpack(ch)) == ("P0", 100, 1, bytes(100))
+    assert (ch.name, ch.n, ch.step, fileformat.unpack(ch)) == ("P0", 100, 1, bytes(100))
     assert list(doc["expect"]) == ["t"]
 
 

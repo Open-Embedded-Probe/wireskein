@@ -1,7 +1,7 @@
-"""Capturing from a device into a .wsc (logic channels).
+"""Capturing from a device into a .wireskein (logic channels).
 
 A source turns a Request (channel names and the device's channel ids, rate,
-samples, trigger) into a Result (tick clock, wsc.Channels, metadata). The
+samples, trigger) into a Result (tick clock, fileformat.Channels, metadata). The
 built-in sources:
 
     oep:<target>      an OEP probe through oep-client-python (pip install "wireskein[oep]");
@@ -14,7 +14,7 @@ Other packages add sources through the entry point group "wireskein.sources"
 
     from wireskein import sources
     req = sources.Request([("SDA", "47"), ("SCL", "48")], rate=20_000_000, samples=200_000)
-    sources.capture("oep:/dev/ttyACM0", req, "i2c.wsc")
+    sources.capture("oep:/dev/ttyACM0", req, "i2c.wireskein")
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ from fractions import Fraction
 from importlib.metadata import entry_points
 from pathlib import Path
 
-from .. import wsc
+from .. import fileformat
 
 BUILTIN = {"oep": "wireskein.sources.oep", "sigrok": "wireskein.sources.sigrok"}
 TRIGGERS = ("rise", "fall", "both", "high", "low")
@@ -57,7 +57,7 @@ class Request:
 @dataclass
 class Result:
     tick_hz: Fraction
-    channels: list[wsc.Channel]
+    channels: list[fileformat.Channel]
     meta: dict = field(default_factory=dict)
 
 
@@ -80,11 +80,11 @@ def run(source: str, request: Request) -> Result:
 
 
 def capture(source: str, request: Request, out: str | Path, attachments: dict | None = None, **meta) -> Path:
-    """Capture and save to `out` (.wsc; .sr also works, with slow channels repeated)."""
+    """Capture and save to `out`: a WireSkein file, or a .sr by that name (slow channels repeated)."""
     res = run(source, request)
     out = Path(out)
-    tmp = out if out.suffix == wsc.SUFFIX else out.with_name(out.name + wsc.SUFFIX)
-    wsc.write(tmp, res.tick_hz, res.channels, attachments, **{**res.meta, **meta})
+    tmp = out if out.suffix != ".sr" else out.with_name(out.name + fileformat.SUFFIX)
+    fileformat.write(tmp, res.tick_hz, res.channels, attachments, **{**res.meta, **meta})
     if tmp != out:
         from ..analyze import load, save
         try:

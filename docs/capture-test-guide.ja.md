@@ -46,7 +46,7 @@ WireSkein は本来、未知の信号から方式を推定する道具です。�
 | 見出しのマーカー | `# test_pwm`、`## duty=64`、`##` | `heading(level, name)`、`section(level, name, expect=...)` |
 | 送ったコマンド | `PWM 64` | `command(text)` |
 | 受けた応答 | `PWM duty=64`、`PONG 1234` | `reply(text)` |
-| キャプチャ | `c0001.wsc`（チャンネルごとに自分のレート）、開始した時刻 | `t = armed()` の後に `capture(t, rate, interleaved=data, names=[...])`、または `capture(t, tick_hz, channels=[...])` |
+| キャプチャ | `c0001.wireskein`（チャンネルごとに自分のレート）、開始した時刻 | `t = armed()` の後に `capture(t, rate, interleaved=data, names=[...])`、または `capture(t, tick_hz, channels=[...])` |
 
 - 時刻はすべて PC の時計です。キャプチャは、開始（`arm`）した時刻で、どの区間に入るかが決まります。
 - **CH32 のファームウェアは変えなくてよい。** マーカーは CH32 に送らないので、`#` の行の扱いは関係ありません。
@@ -146,7 +146,7 @@ uart("PB0", None)                        # 測るだけ（8N1 として読む）
 
 ### 2.4.1 `runlog` の呼び方は固定する
 
-テスト側は `wireskein.runlog` を直接 import します。このため、次の呼び方と意味は変えません。互換のない変更をするときは `FORMAT`（今は `wireskein-run/1`）を上げ、`wireskein verify` は古い形式をはっきりしたエラーで断ります。
+テスト側は `wireskein.runlog` を直接 import します。このため、次の呼び方と意味は変えません。互換のない変更をするときは `FORMAT`（今は `wireskein-run/2`）を上げ、`wireskein verify` は古い形式をはっきりしたエラーで断ります。
 
 - 標準ライブラリだけで動くこと
 - `Recorder(out, **meta)`、`heading`、`section(level, name, expect=None, **rules)`、`command`、`reply`、`note`、`armed`、`capture(armed, tick_hz, *, interleaved, names, width, positions, n, channels, **meta)`、`close`
@@ -204,10 +204,10 @@ WS2812 と tone() は受け手がいないので、キャプチャでの解析�
   ├─ Recorder を開く（出力のディレクトリ）
   ├─ ステップごとに: section("## 条件", expect=[...]) の中で
   │     コマンドを送る → 応答を待つ → キャプチャを arm → armed() → wait → read_all → capture(...)
-  ├─ close() → run.json と c0001.wsc …
+  ├─ close() → run.json と c0001.wireskein …
   └─ wireskein verify <出力> [--junit report.xml] [--json report.json]
         区間の木 → 区間ごとのキャプチャ → 検査 → 項目ごとの OK/NG と測定値。NG が 1 つでもあれば終了コード 1
-NG のキャプチャは .wsc のまま残る（PulseView で見るなら wireskein convert c0001.wsc c0001.sr）
+NG のキャプチャは .wireskein のまま残る（PulseView で見るなら wireskein convert c0001.wireskein c0001.sr）
 ```
 
 今の `oep_periph_trace.py` の `run()` に当てはめると、次のようになります。

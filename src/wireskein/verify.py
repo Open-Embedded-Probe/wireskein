@@ -36,8 +36,8 @@ class Result:
 
 
 def load_capture(run_dir: Path, c: dict) -> Capture:
-    from ._engine import wscio
-    cap = wscio.load(run_dir / c["file"])
+    from ._engine import fileio
+    cap = fileio.load(run_dir / c["file"])
     cap.meta.update(file=c["file"], t0=c["t0"])
     return cap
 

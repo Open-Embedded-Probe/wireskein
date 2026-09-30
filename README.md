@@ -46,13 +46,13 @@ wireskein verify out/run1 --junit out/run1/report.xml --json out/run1/report.jso
 ```
 
 ```text
-OK  test_pwm/duty=64  square  c0001.wsc
-NG  test_pwm/duty=128  square  c0002.wsc  duty 0.6999 vs 0.5020
-OK  test_pwm/duty=0  level  c0003.wsc
+OK  test_pwm/duty=64  square  c0001.wireskein
+NG  test_pwm/duty=128  square  c0002.wireskein  duty 0.6999 vs 0.5020
+OK  test_pwm/duty=0  level  c0003.wireskein
 2 ok, 1 ng, 0 unchecked (4 segments, 3 captures)
 ```
 
-The captures are stored as `.wsc` files (below). The exit code is 1 when a check fails. A check whose pins are not in the capture is **unchecked** (`--`). Unchecked results do not fail the run.
+The captures are stored as `.wireskein` files (below). The exit code is 1 when a check fails. A check whose pins are not in the capture is **unchecked** (`--`). Unchecked results do not fail the run.
 
 ### Headings and segments
 
@@ -90,13 +90,13 @@ For pytest, [pytest-embedded-wireskein](https://github.com/Open-Embedded-Probe/p
 
 ## Capturing
 
-`wireskein capture` takes logic channels from a device and saves a `.wsc`:
+`wireskein capture` takes logic channels from a device and saves a `.wireskein`:
 
 ```sh
 pip install "wireskein[oep]"      # for OEP probes (oep-client-python); sigrok needs sigrok-cli on PATH
-wireskein capture --source oep:/dev/ttyACM0 --channels SDA=47,SCL=48 --rate 20M --samples 200k -o i2c.wsc
+wireskein capture --source oep:/dev/ttyACM0 --channels SDA=47,SCL=48 --rate 20M --samples 200k -o i2c.wireskein
 wireskein capture --source sigrok:fx2lafw --channels SDA=D0,SCL=D1 --rate 12M --samples 1M \
-                  --trigger SCL:fall --pretrigger 1k --note "after reflow" -o i2c.wsc
+                  --trigger SCL:fall --pretrigger 1k --note "after reflow" -o i2c.wireskein
 ```
 
 | Source | Device | Channel ids |
@@ -111,8 +111,8 @@ wireskein capture --source sigrok:fx2lafw --channels SDA=D0,SCL=D1 --rate 12M --
 ## Viewing captures in the browser
 
 ```sh
-wireskein gui capture.wsc          # opens the browser on that capture (a .sr is converted on the fly)
-wireskein gui runs/                # a page listing the .wsc / .sr files and recorded runs below runs/
+wireskein gui capture.wireskein          # opens the browser on that capture (a .sr is converted on the fly)
+wireskein gui runs/                # a page listing the .wireskein / .sr files and recorded runs below runs/
 ```
 
 The viewer is [wireskein-web](https://github.com/Open-Embedded-Probe/wireskein-web), shipped in the wheel. It shows
@@ -123,49 +123,49 @@ The server listens on 127.0.0.1 only and prints a URL with a one-time token; req
 name, are refused. For a bench machine, forward the port (`ssh -L PORT:127.0.0.1:PORT bench`) and open the printed URL.
 It serves nothing but the viewer and the capture files below the directory given.
 
-## Capture files (.wsc) and conversion
+## WireSkein files (.wireskein) and conversion
 
-A `.wsc` keeps each channel at its own sample rate. A probe that decimates some channels to fit its link (every 32nd sample, say) stores only the samples it took, with `step=32`. Nothing is repeated to fill the gaps, so a viewer can show exactly the samples that exist. The module `wireskein.wsc` reads and writes it with the standard library only:
+A WireSkein file (`.wireskein`, a zip) holds a capture and what goes with it: attachments and notes now, markers and decoding / check results later. Tools tell it apart by its content, not its name. A capture keeps each channel at its own sample rate. A probe that decimates some channels to fit its link (every 32nd sample, say) stores only the samples it took, with `step=32`. Nothing is repeated to fill the gaps, so a viewer can show exactly the samples that exist. The module `wireskein.fileformat` reads and writes it with the standard library only:
 
 ```python
-from wireskein import wsc
+from wireskein import fileformat as wf
 
-wsc.write("c.wsc", 100_000_000, [
-    wsc.Channel("PA5", wsc.pack(pa5_samples), n),                 # samples: one byte per sample, 0 or 1
-    wsc.Channel("PB0", wsc.pack(pb0_samples), n // 32, step=32),  # a channel kept at 1/32 of the rate
+wf.write("c.wireskein", 100_000_000, [
+    wf.Channel("PA5", wf.pack(pa5_samples), n),                 # samples: one byte per sample, 0 or 1
+    wf.Channel("PB0", wf.pack(pb0_samples), n // 32, step=32),  # a channel kept at 1/32 of the rate
 ], start_us=segment_start_us)
-channels = wsc.from_interleaved(data, ["PA5", "PA7"], width=8)    # a probe's stream: width bits per sample, bit k = channel k
+channels = wf.from_interleaved(data, ["PA5", "PA7"], width=8)    # a probe's stream: width bits per sample, bit k = channel k
 ```
 
 Analog channels can sit in the same file, each with its own rate and start time (`t0_ticks`), so an ADC whose real rate is not a whole number of logic ticks keeps its true timing. ADC values are kept raw with their linear conversion (`zero`, `scale_nv`), and how they were taken (pin, attenuation, reference voltage, the probe's factory calibration values) is stored too, whether or not the analysis uses it:
 
 ```python
-wsc.write("m.wsc", 20_000_000, [
-    wsc.Channel("CLK", wsc.pack(clk_samples), n),
-    wsc.analog_raw("VBUS", raw_values, Fraction(80_000_000, 1667), width=16, value_bits=12, zero=0, scale_nv=805_860,
+wf.write("m.wireskein", 20_000_000, [
+    wf.Channel("CLK", wf.pack(clk_samples), n),
+    wf.analog_raw("VBUS", raw_values, Fraction(80_000_000, 1667), width=16, value_bits=12, zero=0, scale_nv=805_860,
                    pin=22, attenuation_db=12, reference={"source": "vdd", "mv": 3300}),
-    wsc.analog_volts("SINE", volts, 1_000_000),                     # volts, e.g. from sigrok or Saleae
+    wf.analog_volts("SINE", volts, 1_000_000),                     # volts, e.g. from sigrok or Saleae
 ], probe={"chip": "ESP32-P4", "calibration": {"scheme": "curve-fitting-v1", "raw": "..."}})
 ```
 
-`wireskein capture --source sigrok:<driver>` takes analog channels too (`--channels CLK=D0,VBUS=A0`). The analysis reads the logic channels as before; checks on analog channels come later. The format is specified in `docs/wsc-format.ja.md`.
+`wireskein capture --source sigrok:<driver>` takes analog channels too (`--channels CLK=D0,VBUS=A0`). The analysis reads the logic channels as before; checks on analog channels come later. The format is specified in `docs/wireskein-format.ja.md`.
 
 In a recorded run, pass the same thing to `rec.capture(t, tick_hz, channels=[...])`.
 
-A `.wsc` can also carry anything else about the capture: acquisition settings, a wiring note, analysis results. Attachments are named files (text, JSON or bytes) and can be replaced. Notes form an append-only log, one entry per call, with its time. Both can be added to an existing file without rewriting the channels:
+A WireSkein file can also carry anything else about the capture: acquisition settings, a wiring note, analysis results. Attachments are named files (text, JSON or bytes) and can be replaced. Notes form an append-only log, one entry per call, with its time. Both can be added to an existing file without rewriting the channels:
 
 ```python
-wsc.attach("c.wsc", "probe.json", {"fw": "1.2", "plan": plan})   # dict / list -> JSON, str -> text, bytes as is
-wsc.note("c.wsc", "PA5 looked noisy; shorter wire next time")
-wsc.note("c.wsc", {"i2c": transactions}, kind="analysis")
-wsc.attachments("c.wsc"), wsc.notes("c.wsc")
+wf.attach("c.wireskein", "probe.json", {"fw": "1.2", "plan": plan})   # dict / list -> JSON, str -> text, bytes as is
+wf.note("c.wireskein", "PA5 looked noisy; shorter wire next time")
+wf.note("c.wireskein", {"i2c": transactions}, kind="analysis")
+wf.attachments("c.wireskein"), wf.notes("c.wireskein")
 ```
 
 ```sh
-wireskein info c.wsc                                  # channels and rates, metadata, attachments, notes
-wireskein note c.wsc "re-captured after reflow"
-wireskein attach c.wsc setup.txt --text "10k pull-ups on SDA/SCL"
-wireskein attach c.wsc scope.png scope.png            # any file
+wireskein info c.wireskein                                  # channels and rates, metadata, attachments, notes
+wireskein note c.wireskein "re-captured after reflow"
+wireskein attach c.wireskein setup.txt --text "10k pull-ups on SDA/SCL"
+wireskein attach c.wireskein scope.png scope.png            # any file
 ```
 
 `rec.capture(..., attachments={...})` stores attachments with a capture of a recorded run. Attachments and notes go along when a capture is converted to `.sr` and back.
@@ -173,8 +173,8 @@ wireskein attach c.wsc scope.png scope.png            # any file
 Convert between formats on the command line (the format follows the extension):
 
 ```sh
-wireskein convert c0001.wsc c0001.sr     # for PulseView: one rate, slow channels repeated
-wireskein convert c0001.sr c0001.wsc     # back: channels get their real rate again
+wireskein convert c0001.wireskein c0001.sr     # for PulseView: one rate, slow channels repeated
+wireskein convert c0001.sr c0001.wireskein     # back: channels get their real rate again
 wireskein convert corpus/fixtures/real/<id> capture.sr
 ```
 
@@ -183,7 +183,7 @@ A `.sr` has one sample rate for all channels, so slow channels are repeated to t
 ## Decoding a capture
 
 ```sh
-wireskein analyze capture.wsc                             # .wsc, sigrok .sr, or a fixture directory
+wireskein analyze capture.wireskein                             # .wireskein, sigrok .sr, or a fixture directory
 wireskein analyze capture.sr --hint '{"protocols": ["i2c"]}'
 wireskein analyze capture.sr --mode all --out result.json
 wireskein segments capture.sr --results                   # a capture with marker lines on a UART
@@ -194,7 +194,7 @@ wireskein segments capture.sr --results                   # a capture with marke
 ```python
 from wireskein.analyze import load, save, analyze, export
 
-cap = load("capture.wsc")                                     # or .sr / a fixture directory
+cap = load("capture.wireskein")                                     # or .sr / a fixture directory
 res = analyze(cap, {"protocols": ["spi"]})
 doc = export(res, cap)
 ```
@@ -204,7 +204,7 @@ doc = export(res, cap)
 | Part | Promise during the beta |
 | --- | --- |
 | `wireskein.runlog` (names, arguments and meaning of `Recorder` and the check helpers) | Stable. New arguments get defaults that keep the old meaning |
-| Run format (`run.json` + `.wsc` captures, `FORMAT = "wireskein-run/1"`) and the capture format (`.wsc`, `wireskein-capture/0`) | Stable. An incompatible change raises `FORMAT`, and `verify` refuses older runs with a clear error |
+| Run format (`run.json` + `.wireskein` captures, `FORMAT = "wireskein-run/2"`) and the capture format (`.wireskein`, `wireskein/0`) | Stable. An incompatible change raises `FORMAT`, and `verify` refuses older runs with a clear error |
 | `wireskein.verify.verify` / `junit`, `wireskein verify` | Stable. Report fields may be added |
 | `wireskein.analyze`, `wireskein analyze` / `segments` output | May change |
 | `wireskein._engine` | Internal |
