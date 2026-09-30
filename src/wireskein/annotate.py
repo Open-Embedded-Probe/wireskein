@@ -22,6 +22,7 @@ FORMAT = "wireskein-annotations/0"
 ENTRY = "decode/annotations.json"
 MAX_ITEMS = 50_000                     # per row: beyond this the viewer would only draw noise
 DATA_ROLES = ("sda", "data", "dio", "mosi", "miso", "rx", "tx")
+CONTROL = {9: "\\t", 10: "\\n", 13: "\\r", 0: "\\0"}
 
 
 def _text(protocol: str, it: dict) -> str:
@@ -42,8 +43,13 @@ def _text(protocol: str, it: dict) -> str:
         return s
     if isinstance(it.get("value"), int):                       # a character or word
         v = it["value"]
-        if protocol == "uart" and 32 <= v < 127:
-            return chr(v)
+        if protocol == "uart":
+            if v == 32:
+                return "\u2423"                                # open box: a space would draw nothing
+            if 32 < v < 127:
+                return chr(v)
+            if v in CONTROL:
+                return CONTROL[v]
         return f"{v:#04x}" if v < 256 else f"{v:#x}"
     rest = {k: v for k, v in it.items() if k not in ("s", "e")}
     return ", ".join(f"{k}={v}" for k, v in rest.items())[:60]
