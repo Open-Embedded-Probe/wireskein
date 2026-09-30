@@ -49,8 +49,17 @@ def info(args) -> None:
     print(f"{args.file}: {head['format']}, tick {float(tick):g} Hz ({tick}), {head['ticks']} ticks "
           f"({head['ticks'] / float(tick):.6g} s)")
     for c in chans:
-        rate = float(tick) / c.step
-        print(f"  {c.name:12s} {c.n:>12d} samples  step {c.step:<4d} phase {c.phase:<4d} {rate:g} Hz")
+        if isinstance(c, wsc.AnalogChannel):
+            conv = (f"raw {c.width}-bit" + (f" ({c.value_bits} valid)" if c.value_bits else "")
+                    + (f", V = (raw - {c.zero:g}) x {c.scale_nv:g} nV" if c.zero is not None and c.scale_nv is not None
+                       else ", no volt conversion")) if c.encoding == "analog" else f"float32 {c.unit}"
+            print(f"  {c.name:12s} {c.n:>12d} samples  {c.encoding:10s} {float(c.rate_hz):g} Hz from tick "
+                  f"{float(c.t0_ticks):g}  {conv}")
+        else:
+            rate = float(tick) / c.step
+            print(f"  {c.name:12s} {c.n:>12d} samples  step {c.step:<4d} phase {c.phase:<4d} {rate:g} Hz")
+        if c.acquisition:
+            print(f"  {'':12s} acquisition: {json.dumps(c.acquisition, ensure_ascii=False)}")
     for c in wsc.skipped(head):
         print(f"  {c['name']:12s} encoding {c['encoding']!r}: not read by this version")
     if head.get("meta"):
@@ -77,6 +86,10 @@ def attach_cmd(args) -> None:
     wsc.attach(args.file, args.name, data, replace=args.replace)
 
 
+def _count(cap) -> str:
+    return f"{len(cap.channels)} logic" + (f" + {len(cap.analog)} analog" if cap.analog else "") + " channels"
+
+
 def capture_cmd(args) -> None:
     from . import sources
     req = sources.Request(sources.parse_channels(args.channels), sources.parse_count(args.rate),
@@ -90,17 +103,17 @@ def capture_cmd(args) -> None:
             wsc.note(out, args.note)
     from .analyze import load
     cap = load(out)
-    print(f"{out}: {len(cap.channels)} channels, {cap.n_samples} ticks at {cap.rate:g} Hz ({cap.duration:.6g} s)")
+    print(f"{out}: {_count(cap)}, {cap.n_samples} ticks at {cap.rate:g} Hz ({cap.duration:.6g} s)")
 
 
 def convert(args) -> None:
     from .analyze import save
     cap = load(args.input)
     meta = {k: v for k, v in cap.meta.items()
-            if k not in ("file", "source", "tick_hz", "unitsize", "fixture", "extras", "skipped_channels")}
+            if k not in ("file", "sr_file", "tick_hz", "unitsize", "fixture", "extras", "skipped_channels")}
     out = save(args.output, cap, **meta)
     slow = [f"{c.name}/{c.step}" for c in cap.channels if c.step != 1]
-    print(f"{args.input} -> {out}: {len(cap.channels)} channels, {cap.n_samples} ticks at {cap.rate:g} Hz"
+    print(f"{args.input} -> {out}: {_count(cap)}, {cap.n_samples} ticks at {cap.rate:g} Hz"
           + (f", decimated: {', '.join(slow)}" if slow else ""))
 
 

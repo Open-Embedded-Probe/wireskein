@@ -151,7 +151,7 @@ def test_unknown_encoding_is_skipped_and_rewriting_refused(tmp_path):
     with zipfile.ZipFile(tmp_path / "a.wsc") as z:
         items = {n: z.read(n) for n in z.namelist()}
     head = json.loads(items["capture.json"])
-    head["channels"].append({"name": "VBUS", "file": "ch/2.a16", "encoding": "analog", "n": 10,
+    head["channels"].append({"name": "VBUS", "file": "ch/2.a16", "encoding": "edges", "n": 10,
                              "rate_hz": [48000, 1], "t0_ticks": [0, 1]})
     items["capture.json"] = json.dumps(head).encode()
     items["ch/2.a16"] = bytes(20)
@@ -160,12 +160,12 @@ def test_unknown_encoding_is_skipped_and_rewriting_refused(tmp_path):
             z.writestr(n, d)
     h, chans = wsc.read(tmp_path / "b.wsc")                               # the logic channels still read
     assert [c.name for c in chans] == ["FAST", "SLOW"]
-    assert wsc.skipped(h) == [{"name": "VBUS", "encoding": "analog"}]
+    assert wsc.skipped(h) == [{"name": "VBUS", "encoding": "edges"}]
     cap = wscio.load(tmp_path / "b.wsc")
     assert [c.name for c in cap.channels] == ["FAST", "SLOW"] and cap.meta["skipped_channels"][0]["name"] == "VBUS"
     run = lambda *a: subprocess.run([sys.executable, "-m", "wireskein", *map(str, a)], capture_output=True, text=True)
     r = run("convert", tmp_path / "b.wsc", tmp_path / "c.sr")             # would drop VBUS
-    assert r.returncode != 0 and "VBUS ('analog')" in r.stderr and not (tmp_path / "c.sr").exists()
+    assert r.returncode != 0 and "VBUS ('edges')" in r.stderr and not (tmp_path / "c.sr").exists()
     r = run("info", tmp_path / "b.wsc")
     assert r.returncode == 0 and "VBUS" in r.stdout and "not read by this version" in r.stdout
     assert run("note", tmp_path / "b.wsc", "fine").returncode == 0      # adding to the file is fine
@@ -179,4 +179,4 @@ def test_unknown_encoding_is_skipped_and_rewriting_refused(tmp_path):
     doc["captures"] = [{"file": "c0001.wsc", "t0": doc["log"][0]["t"], "channels": ["FAST", "SLOW", "VBUS"]}]
     (tmp_path / "run" / "run.json").write_text(json.dumps(doc))
     (res,) = verify(tmp_path / "run")["results"]
-    assert res["ok"] is None and "VBUS has encoding 'analog'" in res["reason"]
+    assert res["ok"] is None and "VBUS has encoding 'edges'" in res["reason"]

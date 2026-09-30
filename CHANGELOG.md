@@ -1,6 +1,10 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Analog channels in `.wsc` (wsc-format §4.2, §4.3): `analog` (raw unsigned values with `zero` / `scale_nv`) and `analog-f32` (volts), each with its own rate (`rate_hz`, a fraction) and first-sample time (`t0_ticks`). `wsc.analog_raw()` / `wsc.analog_volts()`; channels carry `acquisition` (pin, attenuation, reference voltage, Vrefint reading) and `meta.probe` holds the probe / MCU and raw factory calibration values. The analysis keeps them in `Capture.analog`; `info` lists them; `.sr` conversion writes them as volts when their samples land on ticks and restores the raw values when read back. `capture --source sigrok:...` takes analog channels (A0, ...).
+- (JA) `.wsc` のアナログのチャンネル（wsc-format §4.2、§4.3）: `analog`（生の符号なしの値と `zero` / `scale_nv`）と `analog-f32`（電圧）。それぞれ自分のレート（`rate_hz`、分数）と最初のサンプルの時刻（`t0_ticks`）を持つ。`wsc.analog_raw()` / `wsc.analog_volts()`。チャンネルは `acquisition`（ピン、減衰、基準電圧、Vrefint の測定値）を持ち、`meta.probe` にプローブと MCU の情報、出荷時の補正値の生の値を入れる。解析は `Capture.analog` に持ち、`info` で一覧する。`.sr` への変換は、サンプルが刻みにそろうものを電圧で書き、読み戻すと生の値に戻す。`capture --source sigrok:...` でアナログ（A0 など）も取れる。
+- (EN) Reading a `.sr` keeps only the named probes when some are named (sigrok names the channels it captured).
+- (JA) `.sr` を読むとき、名前の付いたチャンネルがあれば、それだけを読む（sigrok は取ったチャンネルに名前を付ける）。
 - (EN) `capture --source oep:...`: a refused trigger / pretrigger is named as such; the probe reports the tag with its critical bit, which was shown as "configure item 197".
 - (JA) `capture --source oep:...`: 断られたトリガーとプリトリガーを、その名前で示す。プローブは critical のビット付きの番号を返すので、「configure item 197」と出ていた。
 

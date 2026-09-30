@@ -30,17 +30,20 @@ gaps, so a viewer can show exactly the samples that exist.
 
 from __future__ import annotations
 
+import array
 import datetime
 import json
+import math
 import os
+import sys
 import zipfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from fractions import Fraction
 from pathlib import Path
 
 FORMAT = "wireskein-capture/0"
 SUFFIX = ".wsc"
-ENCODINGS = {"bits"}     # what this version reads; channels of others (analog, ...) are skipped, see docs/wsc-format.ja.md §3.2
+ENCODINGS = {"bits", "analog", "analog-f32"}    # what this version reads; others are skipped (docs/wsc-format.ja.md §3.2)
 
 
 @dataclass
@@ -50,6 +53,9 @@ class Channel:
     n: int               # number of samples
     step: int = 1        # ticks per sample
     phase: int = 0       # tick of the first sample
+    acquisition: dict = field(default_factory=dict)   # how it was taken (pin, ...), wsc-format §3.1.1
+
+    encoding = "bits"
 
     def __post_init__(self):
         if self.step < 1 or not 0 <= self.phase:
@@ -61,6 +67,90 @@ class Channel:
     def end(self) -> int:
         """The tick just after the last sample's step."""
         return self.phase + self.n * self.step
+
+
+_TYPECODE = {8: "B", 16: "H", 32: "I"}
+
+
+@dataclass
+class AnalogChannel:
+    """An analog channel (wsc-format §4.2, §4.3). encoding "analog": raw
+    unsigned values of `width` bits (little endian), volts = (raw - zero) *
+    scale_nv * 1e-9 when zero / scale_nv are known; "analog-f32": float32
+    volts. Sample k is at tick t0_ticks + k * tick_hz / rate_hz."""
+    name: str
+    data: bytes
+    n: int
+    rate_hz: Fraction
+    t0_ticks: Fraction = Fraction(0)
+    encoding: str = "analog"
+    width: int = 16
+    value_bits: int | None = None
+    zero: float | None = None
+    scale_nv: float | None = None
+    unit: str = "V"
+    acquisition: dict = field(default_factory=dict)
+
+    def __post_init__(self):
+        self.rate_hz, self.t0_ticks = _fraction(self.rate_hz), _fraction(self.t0_ticks)
+        if self.encoding not in ("analog", "analog-f32"):
+            raise ValueError(f"{self.name}: encoding {self.encoding!r} is not analog")
+        if self.rate_hz <= 0:
+            raise ValueError(f"{self.name}: rate_hz must be > 0")
+        size = self.n * (4 if self.encoding == "analog-f32" else self.width // 8)
+        if self.encoding == "analog" and self.width not in _TYPECODE:
+            raise ValueError(f"{self.name}: width {self.width}: must be 8, 16 or 32")
+        if len(self.data) != size:
+            raise ValueError(f"{self.name}: {len(self.data)} bytes for {self.n} samples, want {size}")
+
+    def end(self, tick: Fraction) -> int:
+        """The tick just after the last sample (rounded up)."""
+        return math.ceil(self.t0_ticks + self.n * tick / self.rate_hz)
+
+    def values(self) -> list:
+        """Raw integers ("analog") or volts ("analog-f32")."""
+        a = array.array("f" if self.encoding == "analog-f32" else _TYPECODE[self.width])
+        a.frombytes(self.data)
+        if sys.byteorder == "big":
+            a.byteswap()
+        return a.tolist()
+
+    def volts(self) -> list[float] | None:
+        """Volts by the stored linear conversion; None when it is not known."""
+        if self.encoding == "analog-f32":
+            return self.values()
+        if self.zero is None or self.scale_nv is None:
+            return None
+        return [(v - self.zero) * self.scale_nv * 1e-9 for v in self.values()]
+
+
+def _fraction(x) -> Fraction:
+    if isinstance(x, (list, tuple)):
+        return Fraction(*x)
+    return Fraction(x).limit_denominator(10**12) if isinstance(x, float) else Fraction(x)
+
+
+def _packed(values, code: str) -> bytes:
+    a = array.array(code, values)
+    if sys.byteorder == "big":
+        a.byteswap()
+    return a.tobytes()
+
+
+def analog_raw(name: str, values, rate_hz, width: int = 16, t0_ticks=0, value_bits: int | None = None,
+               zero: float | None = None, scale_nv: float | None = None, **acquisition) -> AnalogChannel:
+    """Raw ADC values (unsigned integers) -> an "analog" channel. acquisition:
+    pin, attenuation_db, reference={"source": "vdd", "mv": 3300}, vrefint_raw, ..."""
+    data = _packed(values, _TYPECODE[width])
+    return AnalogChannel(name, data, len(data) // (width // 8), rate_hz, t0_ticks, "analog", width, value_bits,
+                         zero, scale_nv, acquisition=acquisition)
+
+
+def analog_volts(name: str, values, rate_hz, t0_ticks=0, unit: str = "V", **acquisition) -> AnalogChannel:
+    """Volts (floats) -> an "analog-f32" channel."""
+    data = _packed(values, "f")
+    return AnalogChannel(name, data, len(data) // 4, rate_hz, t0_ticks, "analog-f32", unit=unit,
+                         acquisition=acquisition)
 
 
 # ---------------- packing (C-speed paths of the standard library) ----------------
@@ -123,7 +213,7 @@ def from_interleaved(data: bytes | bytearray | memoryview, names: list[str], wid
 
 # ---------------- files ----------------
 
-def write(path: str | Path, tick_hz: int | float | Fraction | tuple[int, int], channels: list[Channel],
+def write(path: str | Path, tick_hz: int | float | Fraction | tuple[int, int], channels: list[Channel | AnalogChannel],
           attachments: dict[str, str | bytes | dict | list] | None = None, **meta) -> Path:
     """Write a .wsc. tick_hz is the tick clock (a Fraction keeps an exact rate
     such as 160 MHz / 3). meta: small JSON-able facts about the capture, e.g.
@@ -134,15 +224,32 @@ def write(path: str | Path, tick_hz: int | float | Fraction | tuple[int, int], c
     names = [c.name for c in channels]
     if len(set(names)) != len(names):
         raise ValueError(f"channel names repeat: {names}")
-    head = {"format": FORMAT, "tick_hz": [tick.numerator, tick.denominator],
-            "ticks": max((c.end for c in channels), default=0),
-            "channels": [{"name": c.name, "file": f"ch/{k}.bits", "encoding": "bits", "n": c.n, "step": c.step,
-                          "phase": c.phase} for k, c in enumerate(channels)],
-            "meta": meta}
+    entries, files = [], []
+    for k, c in enumerate(channels):
+        if isinstance(c, AnalogChannel):
+            e = {"name": c.name, "file": f"ch/{k}.{'f32' if c.encoding == 'analog-f32' else 'raw'}",
+                 "encoding": c.encoding, "n": c.n, "rate_hz": [c.rate_hz.numerator, c.rate_hz.denominator],
+                 "t0_ticks": [c.t0_ticks.numerator, c.t0_ticks.denominator]}
+            if c.encoding == "analog":
+                e["width"] = c.width
+                e.update({k2: v for k2, v in (("value_bits", c.value_bits), ("zero", c.zero), ("scale_nv", c.scale_nv))
+                          if v is not None})
+            elif c.unit != "V":
+                e["unit"] = c.unit
+            files.append((e["file"], c.data))
+        else:
+            e = {"name": c.name, "file": f"ch/{k}.bits", "encoding": "bits", "n": c.n, "step": c.step, "phase": c.phase}
+            files.append((e["file"], c.bits))
+        if c.acquisition:
+            e["acquisition"] = c.acquisition
+        entries.append(e)
+    ends = [c.end(tick) if isinstance(c, AnalogChannel) else c.end for c in channels]
+    head = {"format": FORMAT, "tick_hz": [tick.numerator, tick.denominator], "ticks": max(ends, default=0),
+            "channels": entries, "meta": meta}
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
-        z.writestr("capture.json", json.dumps(head, indent=1))
-        for k, c in enumerate(channels):
-            z.writestr(f"ch/{k}.bits", c.bits)
+        z.writestr("capture.json", json.dumps(head, indent=1, default=str))
+        for name, data in files:
+            z.writestr(name, data)
         for name, data in (attachments or {}).items():
             z.writestr(_attach_name(name), _encode(data))
     return path
@@ -233,14 +340,24 @@ def skipped(head: dict) -> list[dict]:
             if c.get("encoding") not in ENCODINGS]
 
 
-def read(path: str | Path) -> tuple[dict, list[Channel]]:
-    """(header, channels). header["tick_hz"] is [numerator, denominator].
+def read(path: str | Path, analog: bool = True) -> tuple[dict, list[Channel | AnalogChannel]]:
+    """(header, channels): Channel for logic, AnalogChannel for analog (left
+    out with analog=False). header["tick_hz"] is [numerator, denominator].
     Channels of an encoding this version does not read are left out (never
     read as something else); skipped(header) names them."""
     head = read_header(path)
+    chans = []
     with zipfile.ZipFile(path) as z:
-        chans = [Channel(c["name"], z.read(c["file"]), c["n"], c["step"], c["phase"]) for c in head["channels"]
-                 if c.get("encoding") in ENCODINGS]
+        for c in head["channels"]:
+            enc = c.get("encoding")
+            if enc == "bits":
+                chans.append(Channel(c["name"], z.read(c["file"]), c["n"], c["step"], c["phase"],
+                                     c.get("acquisition", {})))
+            elif enc in ("analog", "analog-f32") and analog:
+                chans.append(AnalogChannel(c["name"], z.read(c["file"]), c["n"], Fraction(*c["rate_hz"]),
+                                           Fraction(*c["t0_ticks"]), enc, c.get("width", 16), c.get("value_bits"),
+                                           c.get("zero"), c.get("scale_nv"), c.get("unit", "V"),
+                                           c.get("acquisition", {})))
     return head, chans
 
 

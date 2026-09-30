@@ -1,9 +1,10 @@
 """sigrok:<driver> - any device sigrok supports, through the sigrok-cli command.
 
 <driver> is what `sigrok-cli -d` takes, e.g. fx2lafw, demo,
-dreamsourcelab-dslogic:conn=1.6. The channel ids are sigrok's channel names
-(D0, D1, ...). The capture comes back as a .sr and keeps the rate sigrok
-reports.
+dreamsourcelab-dslogic:conn=1.6. The channel ids are sigrok's channel names:
+logic (D0, D1, ...) and analog (A0, ...; stored as volts, analog-f32, at the
+same rate, since sigrok gives one rate per device). The capture comes back as
+a .sr and keeps the rate sigrok reports.
 """
 
 from __future__ import annotations
@@ -41,12 +42,13 @@ def capture(target: str, req: Request) -> Result:
             raise RuntimeError(f"sigrok-cli failed ({r.returncode}): {r.stderr.strip() or r.stdout.strip()}")
         cap = read_sr(out)
     by_id = {c.name: c for c in cap.channels}
-    missing = [cid for _, cid in req.channels if cid not in by_id]
+    an_id = {a.name: a for a in cap.analog}
+    missing = [cid for _, cid in req.channels if cid not in by_id and cid not in an_id]
     if missing:
-        raise RuntimeError(f"sigrok did not return channels {missing} (got {sorted(by_id)})")
+        raise RuntimeError(f"sigrok did not return channels {missing} (got {sorted([*by_id, *an_id])})")
     chans = []
     for name, cid in req.channels:
-        c = wscio.to_channel(by_id[cid], cap.n_samples)
+        c = wscio.to_channel(by_id[cid], cap.n_samples) if cid in by_id else wscio.to_analog(an_id[cid])
         c.name = name
         chans.append(c)
     meta = {"driver": target, "device_channels": ids}
