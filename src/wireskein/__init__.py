@@ -7,4 +7,4 @@ capture). Everything under wireskein._engine may change between versions.
 
 __all__ = ["__version__"]
 
-__version__ = "0.0.2"
+__version__ = "0.0.3"
