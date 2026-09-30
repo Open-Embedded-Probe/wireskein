@@ -31,9 +31,9 @@ with rec.section(1, "test_pwm"):
         with rec.section(2, f"duty={duty}", expect=want):
             rec.command(f"PWM {duty}")          # PC が送ったもの
             rec.reply(reply_line)               # デバイスの応答
-            t = rec.armed()                     # キャプチャを開始した直後
-            data = read_capture()               # bytes。1 サンプル 1 バイト、ビット k がピン k
-            rec.capture(data, rate, ["PA1", "PA0"], t, start_us=segment_start_us)
+            t = rec.armed()                     # キャプチャを開始した直後の time.monotonic()
+            data = read_capture()               # プローブのサンプル。1 サンプル 1 バイト、ビット k がピン k
+            rec.capture(t, rate, interleaved=data, names=["PA1", "PA0"], start_us=segment_start_us)
 rec.close()
 ```
 
@@ -43,7 +43,7 @@ rec.close()
 wireskein verify out/run1 --junit out/run1/report.xml --json out/run1/report.json
 ```
 
-NG があれば、終了コードは 1 です。検査に使うピンがキャプチャにないときは、未検査（`--`）になります。未検査は、実行を失敗にしません。
+キャプチャは `.wsc`（後述）で保存されます。NG があれば、終了コードは 1 です。検査に使うピンがキャプチャにないときは、未検査（`--`）になります。未検査は、実行を失敗にしません。
 
 - 見出し（`#` がテスト、`##` がステップ、名前のない `##` で閉じる）で、区間の木を作ります。
 - キャプチャは、開始した時刻を含む区間に割り当てます。
@@ -53,18 +53,44 @@ NG があれば、終了コードは 1 です。検査に使うピンがキャ�
 
 pytest からは、[pytest-embedded-wireskein](https://github.com/Open-Embedded-Probe/pytest-embedded-wireskein) を使います。test ごとに記録器 `ws_run` を渡し、test の後に照合します。
 
+## キャプチャのファイル（.wsc）と変換
+
+`.wsc` は、各チャンネルを自分のサンプルレートのまま持ちます。帯域に収めるために一部のチャンネルを間引くプローブ（例: 32 サンプルに 1 つ）は、取ったサンプルだけを `step=32` で保存します。間を埋める水増しはしないので、ビューアは実際にあるサンプルだけを見せられます。読み書きは、標準ライブラリだけで動く `wireskein.wsc` で行います。
+
+```python
+from wireskein import wsc
+
+wsc.write("c.wsc", 100_000_000, [
+    wsc.Channel("PA5", wsc.pack(pa5_samples), n),                 # samples: 1 サンプル 1 バイト（0 か 1）
+    wsc.Channel("PB0", wsc.pack(pb0_samples), n // 32, step=32),  # 1/32 のレートで取ったチャンネル
+], start_us=segment_start_us)
+channels = wsc.from_interleaved(data, ["PA5", "PA7"], width=8)    # プローブの並び: 1 サンプル width ビット、ビット k がチャンネル k
+```
+
+テストの記録では、同じものを `rec.capture(t, tick_hz, channels=[...])` に渡します。
+
+形式の変換は、コマンドで行います（形式は拡張子で決まります）。
+
+```sh
+wireskein convert c0001.wsc c0001.sr     # PulseView 用: 1 つのレート、遅いチャンネルは水増し
+wireskein convert c0001.sr c0001.wsc     # 戻す: チャンネルは本当のレートに戻る
+wireskein convert corpus/fixtures/real/<id> capture.sr
+```
+
+`.sr` は全チャンネルで 1 つのレートなので、遅いチャンネルは最も速いレートに水増しします。各チャンネルの本当のレートは、`.sr` の中の `wireskein.json` に残します。sigrok はこのファイルを無視し、WireSkein は読み戻します。PulseView では、水増しした値も取った値と同じに見えます。
+
 ## キャプチャを復号する
 
 ```sh
-wireskein analyze capture.sr                              # sigrok の .sr、または fixture のディレクトリ
+wireskein analyze capture.wsc                             # .wsc、sigrok の .sr、または fixture のディレクトリ
 wireskein analyze capture.sr --hint '{"protocols": ["i2c"]}'
 wireskein segments capture.sr --results                   # UART にマーカーの行を流したキャプチャ
 ```
 
 ```python
-from wireskein.analyze import load, analyze, export
+from wireskein.analyze import load, save, analyze, export
 
-cap = load("capture.sr")
+cap = load("capture.wsc")                                     # .sr や fixture のディレクトリも
 doc = export(analyze(cap, {"protocols": ["spi"]}), cap)
 ```
 
@@ -73,7 +99,7 @@ doc = export(analyze(cap, {"protocols": ["spi"]}), cap)
 | 部分 | β の間の約束 |
 | --- | --- |
 | `wireskein.runlog`（`Recorder` と検査の helper の名前、引数、意味） | 変えない。足す引数は、既定値で今の意味を保つ |
-| 記録の形式（`run.json`、`FORMAT = "wireskein-run/0"`） | 変えない。互換のない変更をするときは `FORMAT` を上げ、`verify` は古い形式をはっきりしたエラーで断る |
+| 記録の形式（`run.json` と `.wsc` のキャプチャ、`FORMAT = "wireskein-run/1"`）とキャプチャの形式（`.wsc`、`wireskein-capture/0`） | 変えない。互換のない変更をするときは `FORMAT` を上げ、`verify` は古い形式をはっきりしたエラーで断る |
 | `wireskein.verify.verify` / `junit`、`wireskein verify` | 変えない。報告の項目は増えることがある |
 | `wireskein.analyze`、`wireskein analyze` / `segments` の出力 | 変わることがある |
 | `wireskein._engine` | 内部 |

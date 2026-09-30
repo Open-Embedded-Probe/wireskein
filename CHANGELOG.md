@@ -1,6 +1,12 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Capture files `.wsc` (`wireskein.wsc`, standard library only): each channel at its own sample rate (`step` ticks per sample), so a probe that decimates some channels stores only the samples it took. `wsc.from_interleaved()` splits a probe's sample stream by bits per sample and bit positions. The analysis uses each channel's own sample width wherever it assumed one tick.
+- (JA) キャプチャのファイル `.wsc`（`wireskein.wsc`、標準ライブラリだけ）: 各チャンネルを自分のサンプルレート（`step` 刻みに 1 サンプル）で持つ。一部のチャンネルを間引くプローブは、取ったサンプルだけを保存する。`wsc.from_interleaved()` はプローブのサンプルの並びを、1 サンプルのビット数とビット位置で切り分ける。解析は、1 刻みを前提にしていた所で、各チャンネルのサンプルの幅を使う。
+- (EN) `wireskein convert IN OUT` converts between `.wsc`, `.sr` and fixture directories (by extension). A `.sr` has one rate, so slow channels are repeated to it; `wireskein.json` inside the `.sr` keeps their real rate, and reading it back restores them. `wireskein.analyze.save()` does the same from Python.
+- (JA) `wireskein convert IN OUT` で、`.wsc`、`.sr`、fixture のディレクトリの間を変換する（拡張子で決まる）。`.sr` は 1 つのレートなので、遅いチャンネルは水増しする。本当のレートは `.sr` の中の `wireskein.json` に残し、読み戻すと元に戻る。Python からは `wireskein.analyze.save()`。
+- (EN) Breaking: runs store captures as `.wsc` and `run.json` is `wireskein-run/1`; runs of `wireskein-run/0` (`.bin`) are no longer read. `Recorder.capture(armed, tick_hz, *, interleaved=..., names=..., width=8, positions=None, n=None)` or `capture(armed, tick_hz, channels=[wsc.Channel(...)])`, and `Recorder.armed()` returns `time.monotonic()`, so a capture client's own stamp can be passed as is.
+- (JA) 互換のない変更: 記録はキャプチャを `.wsc` で持ち、`run.json` は `wireskein-run/1`。`wireskein-run/0`（`.bin`）の記録は読まない。`Recorder.capture(armed, tick_hz, *, interleaved=..., names=..., width=8, positions=None, n=None)` または `capture(armed, tick_hz, channels=[wsc.Channel(...)])`。`Recorder.armed()` は `time.monotonic()` を返すので、キャプチャのクライアントが付けた時刻をそのまま渡せる。
 
 ## 0.0.1
 - (EN) First beta. The prototype is now the `wireskein` package on PyPI (`pip install --pre wireskein`, Python 3.13+, numpy only). Public modules are `wireskein.runlog` (recording a test run, standard library only), `wireskein.verify` (checking a recorded run) and `wireskein.analyze` (decoding a capture, beta), with a `wireskein` command (`analyze`, `segments`, `verify`). The `wsproto` import and `prototype/ws.py` are gone; evaluation scripts moved to `research/` and are not packaged.
