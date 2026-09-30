@@ -71,6 +71,8 @@ UTF-8 の JSON のオブジェクトです。
 | --- | --- |
 | `pin` | プローブのチャンネル番号（OEP の plan のチャンネル）。ADC のユニットや番号は、`meta.probe` のチップとこの番号から引けます |
 | `attenuation_db` | ADC の減衰（ESP32 の 0 / 2.5 / 6 / 11 dB など）。これがないと、生の値の意味が決まりません |
+| `reference` | ADC の基準電圧（オブジェクト）: `source`（`"vdd"`、`"internal"`、`"external"`）と `mv`（その電圧、mV）、`measured`（`true`: 実測、`false` / なし: 公称値）。基準電圧が電源の MCU（CH32V003 や CH32X035 など、3.3 V でも 5 V でも動くもの）では、これがないと生の値の意味が決まりません |
+| `vrefint_raw` | 内部の基準電圧（Vrefint）を同時に測った生の値。基準電圧が電源のとき、実際の電源電圧を逆算するのに使えます |
 
 ### 3.2 知らない `encoding`
 
