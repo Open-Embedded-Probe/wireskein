@@ -23,6 +23,9 @@ classifiers = [
   "Topic :: Software Development :: Testing",
 ]
 
+[project.optional-dependencies]
+oep = ["oep-client-python>=0.0.4"]
+
 [project.scripts]
 wireskein = "wireskein.cli:main"
 
@@ -31,7 +34,7 @@ Homepage = "https://github.com/Open-Embedded-Probe/wireskein"
 Repository = "https://github.com/Open-Embedded-Probe/wireskein"
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "oep-client-python>=0.0.4"]
 research = ["mini-racer>=0.14.1"]
 
 [tool.hatch.build.targets.wheel]

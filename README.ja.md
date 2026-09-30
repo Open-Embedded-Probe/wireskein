@@ -55,6 +55,27 @@ wireskein verify out/run1 --junit out/run1/report.xml --json out/run1/report.jso
 
 pytest からは、[pytest-embedded-wireskein](https://github.com/Open-Embedded-Probe/pytest-embedded-wireskein) を使います。test ごとに記録器 `ws_run` を渡し、test の後に照合します。
 
+## キャプチャを取る
+
+`wireskein capture` で、機器からロジックのチャンネルを取り、`.wsc` に保存します。
+
+```sh
+pip install "wireskein[oep]"      # OEP のプローブを使うとき（oep-client-python）。sigrok は sigrok-cli が PATH に要る
+wireskein capture --source oep:/dev/ttyACM0 --channels SDA=47,SCL=48 --rate 20M --samples 200k -o i2c.wsc
+wireskein capture --source sigrok:fx2lafw --channels SDA=D0,SCL=D1 --rate 12M --samples 1M \
+                  --trigger SCL:fall --pretrigger 1k --note "リフローの後" -o i2c.wsc
+```
+
+| 取得元 | 機器 | チャンネルの番号 |
+| --- | --- | --- |
+| `oep:<接続先>` | oep-client-python を使う OEP のプローブ。接続先は、シリアルポート、`tcp://HOST:PORT`（ブローカー）、`usb[:VID:PID[:SERIAL]]` | プローブのチャンネル番号 |
+| `sigrok:<ドライバ>` | sigrok が対応する機器（`fx2lafw`、`dreamsourcelab-dslogic`、`demo` など）。`sigrok-cli` を使う | sigrok のチャンネル名（`D0` など） |
+
+- `--channels` は、各チャンネルに名前を付けます（`名前=番号`）。
+- ファイルには、機器が実際に使ったレートを入れます。取得元が知っている情報（プローブの `start_us`、`time_base_slipped` の印、トリガーの位置）も入れます。
+- Python からは `wireskein.sources.capture(取得元, Request(...), 出力先)` です。
+- 別の package から、entry point の `wireskein.sources` で取得元を足せます。
+
 ## キャプチャのファイル（.wsc）と変換
 
 `.wsc` は、各チャンネルを自分のサンプルレートのまま持ちます。帯域に収めるために一部のチャンネルを間引くプローブ（例: 32 サンプルに 1 つ）は、取ったサンプルだけを `step=32` で保存します。間を埋める水増しはしないので、ビューアは実際にあるサンプルだけを見せられます。読み書きは、標準ライブラリだけで動く `wireskein.wsc` で行います。

@@ -5,6 +5,8 @@
     wireskein segments CAPTURE [--results] [--markers JSON]
     wireskein verify RUN_DIR [--junit FILE] [--json FILE]
     wireskein convert IN OUT            (.wsc / .sr / fixture directory -> .wsc / .sr)
+    wireskein capture --source oep:PORT|sigrok:DRIVER --channels NAME=ID,... --rate 20M --samples 1M
+                      [--trigger NAME:rise|fall|both|high|low] [--pretrigger N] [--note TEXT] -o OUT.wsc
     wireskein info FILE.wsc             channels, rates, metadata, attachments, notes
     wireskein note FILE.wsc TEXT [--json] [--kind K]
     wireskein attach FILE.wsc NAME [SRC | --text TEXT] [--replace]
@@ -73,6 +75,22 @@ def attach_cmd(args) -> None:
         sys.exit("give SRC (a file) or --text")
     data = args.src.read_bytes() if args.src else args.text
     wsc.attach(args.file, args.name, data, replace=args.replace)
+
+
+def capture_cmd(args) -> None:
+    from . import sources
+    req = sources.Request(sources.parse_channels(args.channels), sources.parse_count(args.rate),
+                          sources.parse_count(args.samples),
+                          sources.parse_trigger(args.trigger) if args.trigger else None,
+                          sources.parse_count(args.pretrigger) if args.pretrigger else None, args.timeout)
+    out = sources.capture(args.source, req, args.output)
+    if args.note:
+        from . import wsc
+        if out.suffix == wsc.SUFFIX:
+            wsc.note(out, args.note)
+    from .analyze import load
+    cap = load(out)
+    print(f"{out}: {len(cap.channels)} channels, {cap.n_samples} ticks at {cap.rate:g} Hz ({cap.duration:.6g} s)")
 
 
 def convert(args) -> None:
@@ -157,6 +175,16 @@ def main() -> None:
     cv = sub.add_parser("convert", help="convert a capture between formats (by extension: .wsc, .sr; a fixture directory as input)")
     cv.add_argument("input", type=Path)
     cv.add_argument("output", type=Path)
+    cp = sub.add_parser("capture", help="capture logic channels from a device into a .wsc (sources: oep, sigrok)")
+    cp.add_argument("--source", required=True, help="oep:<serial port | tcp://HOST:PORT | usb[:VID:PID]> or sigrok:<driver>")
+    cp.add_argument("--channels", required=True, help='"NAME=ID,..." (ID: the probe channel number / sigrok channel) or "ID,..."')
+    cp.add_argument("--rate", required=True, help="samples per second, e.g. 20M, 500k")
+    cp.add_argument("--samples", required=True, help="e.g. 1M, 200000")
+    cp.add_argument("--trigger", default=None, help="NAME:rise|fall|both|high|low (default: start at once)")
+    cp.add_argument("--pretrigger", default=None, help="samples kept before the trigger")
+    cp.add_argument("--timeout", type=float, default=10.0, help="seconds to wait for the capture")
+    cp.add_argument("--note", default=None, help="a note stored with the capture")
+    cp.add_argument("-o", "--output", type=Path, required=True, help=".wsc (or .sr)")
     inf = sub.add_parser("info", help="what a .wsc holds: channels, rates, metadata, attachments, notes")
     inf.add_argument("file", type=Path)
     nt = sub.add_parser("note", help="append a note to a .wsc (its log is append-only)")
@@ -171,11 +199,11 @@ def main() -> None:
     at.add_argument("--text", default=None)
     at.add_argument("--replace", action="store_true")
     args = ap.parse_args()
-    files = {"info": info, "note": note_cmd, "attach": attach_cmd, "convert": convert}
+    files = {"info": info, "note": note_cmd, "attach": attach_cmd, "convert": convert, "capture": capture_cmd}
     if args.cmd in files:
         try:
             return files[args.cmd](args)
-        except (ValueError, FileExistsError, FileNotFoundError, KeyError) as e:     # a file this version cannot use
+        except (ValueError, FileExistsError, FileNotFoundError, KeyError, RuntimeError, TimeoutError) as e:
             sys.exit(f"wireskein {args.cmd}: {e}")
     if args.cmd == "segments":
         return segments(args)
