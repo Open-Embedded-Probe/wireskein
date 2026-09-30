@@ -34,8 +34,11 @@ def capture(target: str, req: Request) -> Result:
 
 
 def _what(tag, oc) -> str:
+    """A configure item for people. The probe names the TLV it refused with its
+    tag as sent, bit 7 (critical) included."""
+    base = tag & 0x7F if isinstance(tag, int) else tag
     return {getattr(oc, "TRIGGER", None): "a trigger", getattr(oc, "PRETRIGGER", None): "a pretrigger"}.get(
-        tag, f"configure item {tag}")
+        base, f"configure item 0x{base:02x}" if isinstance(base, int) else f"configure item {tag}")
 
 
 def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], names: list[str]) -> Result:
