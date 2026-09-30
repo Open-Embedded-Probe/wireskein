@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 0.0.3
 - (EN) `wireskein capture`: logic channels from a device into a `.wsc` (or `.sr`), with names, rate, samples, an optional trigger / pretrigger and a note. Sources: `oep:<target>` (OEP probes through oep-client-python, the extra `wireskein[oep]`) and `sigrok:<driver>` (any device sigrok supports, through `sigrok-cli`); more through the `wireskein.sources` entry point group. Python: `wireskein.sources.capture()`.
 - (JA) `wireskein capture`: 機器からロジックのチャンネルを取り、`.wsc`（または `.sr`）に保存する。名前、レート、サンプル数、任意のトリガーとプリトリガー、メモを指定できる。取得元は `oep:<接続先>`（oep-client-python を使う OEP のプローブ。任意の依存 `wireskein[oep]`）と `sigrok:<ドライバ>`（sigrok が対応する機器。`sigrok-cli` を使う）。entry point の `wireskein.sources` で足せる。Python からは `wireskein.sources.capture()`。
 - (EN) Channels of a `.wsc` whose `encoding` this version does not know (only `bits` so far) are skipped and named, never read as logic, so a file that also holds analog channels still reads its logic ones; converting or re-saving such a capture refuses because it would drop them. `docs/wsc-format.ja.md` is the format spec; new encodings (analog, reserved with its own `rate_hz` / `t0_ticks`) will not change the format version. The `info` / `note` / `attach` / `convert` commands print errors without a traceback.
