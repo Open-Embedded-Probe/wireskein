@@ -177,3 +177,9 @@ def test_vcd_is_served_as_wireskein(served, tmp_path):
     (tmp_path / "back.wireskein").write_bytes(body)
     _, chans = fileformat.read(tmp_path / "back.wireskein")
     assert fileformat.unpack(chans[0]) == bytes([0, 1] * 8)
+
+
+def test_browse_can_open_files_together(served):
+    gui, _ = served
+    text = get(gui, "/browse", cookie=cookie(gui))[2].decode()
+    assert 'type="checkbox" value="/files/a.wireskein"' in text and 'id=together' in text and "&with=" in text
