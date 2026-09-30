@@ -168,14 +168,12 @@ def main() -> None:
     at.add_argument("--text", default=None)
     at.add_argument("--replace", action="store_true")
     args = ap.parse_args()
-    if args.cmd == "info":
-        return info(args)
-    if args.cmd == "note":
-        return note_cmd(args)
-    if args.cmd == "attach":
-        return attach_cmd(args)
-    if args.cmd == "convert":
-        return convert(args)
+    files = {"info": info, "note": note_cmd, "attach": attach_cmd, "convert": convert}
+    if args.cmd in files:
+        try:
+            return files[args.cmd](args)
+        except (ValueError, FileExistsError, FileNotFoundError, KeyError) as e:     # a file this version cannot use
+            sys.exit(f"wireskein {args.cmd}: {e}")
     if args.cmd == "segments":
         return segments(args)
     if args.cmd == "verify":
