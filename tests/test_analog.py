@@ -118,3 +118,13 @@ def test_sigrok_demo_logic_and_analog_together(tmp_path):
     sq, sine = (a.volts() for a in cap.analog)
     assert set(np.round(sq, 3)) <= {-10.0, 10.0} and len(set(np.round(sq, 3))) == 2      # the demo's square wave
     assert sine.max() == pytest.approx(10, abs=0.1) and sine.min() == pytest.approx(-10, abs=0.1)
+
+
+def test_info_explains_the_meta_flags(tmp_path):
+    fileformat.write(tmp_path / "s.wireskein", 2_000_000, [logic()], time_base_slipped=True, trigger_index=2000,
+                     start_ns=5_000, start_uncertainty_ns=2_000)
+    out = subprocess.run([sys.executable, "-m", "wireskein", "info", str(tmp_path / "s.wireskein")],
+                         capture_output=True, text=True, check=True).stdout
+    assert "time_base_slipped: the probe knows some samples were taken late" in out
+    assert "trigger_index 2000: the trigger at logic sample 2000 (1000.000 us from the start)" in out
+    assert "+- 2 us" in out and ", id " in out

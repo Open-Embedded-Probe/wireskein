@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) `info` explains the meta keys with a set meaning (`time_base_slipped`, `trigger_index` as a time, the start's uncertainty), shows the capture id, and names a raw analog channel's unit in its conversion.
+- (JA) `info` は、意味の決まった meta のキー（`time_base_slipped`、時刻にした `trigger_index`、開始の不確かさ）を説明し、キャプチャの ID を示し、生の値のアナログの換算に単位を出す。
 
 ## 0.0.13
 - (EN) `wireskein gui` ships wireskein-web 0.0.6: it reads `wireskein/1` (with the capture id) and shows the four check statuses.
