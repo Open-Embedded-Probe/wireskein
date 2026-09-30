@@ -40,12 +40,13 @@ def test_saved_in_the_file_and_read_back(tmp_path):
 
 
 def test_rows_from_an_i2c_document():
-    doc = {"claims": [{"protocol": "i2c", "roles": {"scl": "D3", "sda": "D2"}, "layers": {
+    doc = {"claims": [{"protocol": "i2c", "verdict": "likely", "score": 0.7, "roles": {"scl": "D3", "sda": "D2"}, "layers": {
         "frames": [{"s": 1, "e": 2, "bits": 10}],
         "transactions": [{"s": 10, "e": 90, "addr": 0x44, "rw": "read", "addr_ack": True, "bytes": "0000", "acks": [True, False]},
                          {"s": 100, "e": 120, "addr": 0x45, "rw": "write", "addr_ack": False, "bytes": "", "acks": []}]}}]}
     (row,) = annotate.rows_of(doc)
     assert row["name"] == "i2c transactions" and row["near"] == "D2"
+    assert (row["verdict"], row["score"]) == ("likely", 0.7)
     assert [(i["text"], i["level"]) for i in row["items"]] == [("R 0x44 00 00", "ok"), ("W 0x45 NACK", "warn")]
 
 

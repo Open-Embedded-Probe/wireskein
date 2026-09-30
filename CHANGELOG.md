@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Annotation rows carry the analysis's `verdict` and `score` (spec §5.3), so a viewer can show which rows are only "likely" (random pulses may pass as a slow UART).
+- (JA) 注釈の行に、判定の `verdict` と `score` を入れる（仕様 §5.3）。ビューアは、"likely" どまりの行をそうと示せる（ランダムなパルスが遅い UART に見えることがある）。
 - (EN) `wireskein gui`'s list page: check captures and "Open the checked ones together" (the first is the time reference; the others are drawn on its time, aligned by `wireskein align --to`).
 - (JA) `wireskein gui` の一覧のページ: キャプチャにチェックを付けて「一緒に開く」（最初のものが時間の基準。ほかはその時間に、`wireskein align --to` の合わせ込みで描く）。
 - (EN) `analyze`, `segments` and `annotate` take `--threshold NAME=V|NAME=LOW,HIGH` (repeatable): the analog channel is also read as logic, so a UART or I2C line captured by an ADC is found and decoded. `analyze.as_logic(cap, {name: threshold})` in Python. `analyze` and `segments` report a bad file or channel as one line instead of a traceback.
