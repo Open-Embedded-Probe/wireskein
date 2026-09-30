@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) `wireskein gui` ships wireskein-web 0.0.6: it reads `wireskein/1` (with the capture id) and shows the four check statuses.
+- (JA) `wireskein gui` は wireskein-web 0.0.6 を同梱する: `wireskein/1`（キャプチャの ID 付き）を読み、照合の 4 つの状態を示す。
 - (EN) **Breaking CLI:** `align --window` is `--max-offset`; `analyze --window FROM TO` and `--max-offset` take units (`1ms`, `300us`; a plain number is seconds); counts take only k / K, M and G (a lowercase `m`, which would read as milli, is an error that says so).
 - (JA) **互換のない CLI の変更:** `align --window` は `--max-offset` にした。`analyze --window FROM TO` と `--max-offset` は単位付きの値を受ける（`1ms`、`300us`。単位なしは秒）。数の単位は k / K、M、G だけ（小文字の `m` は milli と紛らわしいので、そう伝えて誤りにする）。
 - (EN) Python 3.11 or newer (was 3.13); CI tests 3.11, 3.12 and 3.13. `oep-client-python>=0.0.10` for the `oep` extra (analog and capture groups need it).
