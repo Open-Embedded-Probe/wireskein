@@ -56,6 +56,27 @@ def _what(tag, oc) -> str:
         base, f"configure item 0x{base:02x}" if isinstance(base, int) else f"configure item {tag}")
 
 
+def _waiting(wait, cap, req):
+    """wait(), with a timeout that names a trigger which never came (the probe still waiting, state 2)."""
+    try:
+        return wait()
+    except TimeoutError:
+        if req.trigger and cap is not None:
+            try:
+                waiting = cap.status()[0] == oc_state("waiting")
+            except Exception:           # the timeout is the news; a failed status read must not hide it
+                waiting = False
+            if waiting:
+                raise TimeoutError(f"no trigger ({req.trigger[0]}:{req.trigger[1]}) within {req.timeout:g} s "
+                                   f"(--timeout)") from None
+        raise
+
+
+def oc_state(name: str) -> int:
+    from oep_client.capture import STATE
+    return STATE[name]
+
+
 def _configure(track, oc, oh, target: str, what: str, **kw):
     """configure with the trigger / pretrigger asked for sent critical (a probe
     without them would otherwise ignore them and start at once)."""
@@ -144,7 +165,7 @@ def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], aids
                 group.bind([cap, an], trigger=cap if req.trigger else None)
                 try:
                     _, group_start = group.start([cap, an])
-                    st = group.wait(req.timeout)
+                    st = _waiting(lambda: group.wait(req.timeout), cap, req)
                     seg = _segment(cap)
                     aseg = _segment(an)
                 finally:
@@ -155,7 +176,7 @@ def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], aids
             else:
                 track = cap or an
                 track.start()
-                segments = track.wait(req.timeout)
+                segments = _waiting(lambda: track.wait(req.timeout), cap, req)
                 if not segments:
                     raise RuntimeError("the probe finished without a segment")
                 seg = segments[0] if cap else None

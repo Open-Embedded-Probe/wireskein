@@ -141,3 +141,20 @@ def test_cli_analog_only_needs_no_logic_rate(probe, tmp_path):
     r = subprocess.run([sys.executable, "-m", "wireskein", "capture", "--source", src, "--channels", "A=10",
                         "--analog-rate", "20k", "-o", str(out)], capture_output=True, text=True)
     assert r.returncode != 0 and "give --rate and --samples" in r.stderr
+
+
+def test_a_trigger_that_never_comes_is_named():
+    from wireskein.sources.oep import _waiting, oc_state
+
+    class Waiting:
+        def status(self):
+            return (oc_state("waiting"), 0, 0, 0)
+
+    def never():
+        raise TimeoutError("capture did not finish")
+
+    req = sources.Request([("A", "10")], 1_000_000, 100, trigger=("A", "rise"), timeout=2)
+    with pytest.raises(TimeoutError, match=r"no trigger \(A:rise\) within 2 s"):
+        _waiting(never, Waiting(), req)
+    with pytest.raises(TimeoutError, match="did not finish"):          # no trigger asked: the plain timeout
+        _waiting(never, Waiting(), sources.Request([("A", "10")], 1_000_000, 100, timeout=2))
