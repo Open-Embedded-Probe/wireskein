@@ -28,12 +28,17 @@ def capture(target: str, req: Request) -> Result:
         raise ValueError(f"oep channel ids are the probe's channel numbers: {[cid for _, cid in req.channels]}") from None
     names = [n for n, _ in req.channels]
     try:
-        return _capture(link, core, oc, target, req, ids, names)
+        return _capture(link, core, oc, oh, target, req, ids, names)
     except oh.OepError as e:        # the probe refused or failed: say what, not where
         raise RuntimeError(f"probe {target}: {e}") from e
 
 
-def _capture(link, core, oc, target: str, req: Request, ids: list[int], names: list[str]) -> Result:
+def _what(tag, oc) -> str:
+    return {getattr(oc, "TRIGGER", None): "a trigger", getattr(oc, "PRETRIGGER", None): "a pretrigger"}.get(
+        tag, f"configure item {tag}")
+
+
+def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], names: list[str]) -> Result:
     hst = link.open_host(target)
     try:
         core.take(hst, 30_000, owner="wireskein capture")
@@ -44,8 +49,19 @@ def _capture(link, core, oc, target: str, req: Request, ids: list[int], names: l
             if req.trigger:
                 kind, value = TRIGGER[req.trigger[1]]
                 trigger = (kind, names.index(req.trigger[0]), value)
-            cfg = cap.configure(rate=req.rate, mode=oc.ONE_SHOT, samples=req.samples, trigger=trigger,
-                                pretrigger=req.pretrigger)
+            # a trigger asked for must be honoured or refused: a probe without one would
+            # otherwise ignore it and start at once (P4, oep-probe-arduino 0.0.8)
+            asked = {oc.TRIGGER} if trigger else set()
+            if req.pretrigger is not None:
+                asked.add(oc.PRETRIGGER)
+            try:
+                cfg = cap.configure(rate=req.rate, mode=oc.ONE_SHOT, samples=req.samples, trigger=trigger,
+                                    pretrigger=req.pretrigger, critical=asked)
+            except oh.Unsupported as e:
+                raise RuntimeError(f"probe {target} cannot capture with {_what(e.tag, oc)}") from e
+            ignored = asked & set(cfg.ignored or [])
+            if ignored:
+                raise RuntimeError(f"probe {target} ignored {', '.join(_what(t, oc) for t in sorted(ignored))}")
             cap.start()
             segments = cap.wait(req.timeout)
             if not segments:

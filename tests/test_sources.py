@@ -49,8 +49,8 @@ def test_sigrok_to_sr(tmp_path):
 class StandIn:
     """Just enough of oep-client for the source: a 3-channel probe answering w=4 (two samples per byte)."""
 
-    def __init__(self, n=10):
-        self.calls, self.n = [], n
+    def __init__(self, n=10, refuse=(), ignore=()):
+        self.calls, self.n, self.refuse, self.ignore = [], n, set(refuse), set(ignore)
         rng = np.random.default_rng(0)
         self.levels = rng.integers(0, 2, (3, n)).astype(np.uint8)
         nib = self.levels[0] | self.levels[1] << 1 | self.levels[2] << 2           # bit 3 undefined
@@ -63,13 +63,21 @@ class StandIn:
         class OepError(Exception):
             pass
 
+        class Unsupported(OepError):
+            def __init__(self, tag):
+                super().__init__(f"unsupported {tag}")
+                self.tag = tag
+
         class Cap:
             def __init__(self, hst):
                 self.fn = 7
 
             def configure(self, **kw):
                 me.calls.append(("configure", kw))
-                return types.SimpleNamespace(rate=Fraction(160_000_000, 8), width=4, positions=[0, 1, 2], jitter_ns=0)
+                if me.refuse & set(kw.get("critical", ())):
+                    raise Unsupported(min(me.refuse & set(kw["critical"])))
+                return types.SimpleNamespace(rate=Fraction(160_000_000, 8), width=4, positions=[0, 1, 2], jitter_ns=0,
+                                             ignored=sorted(me.ignore))
 
             def start(self):
                 me.calls.append(("start",))
@@ -85,9 +93,10 @@ class StandIn:
         core = types.SimpleNamespace(take=lambda h, ms, owner: me.calls.append(("take", owner)),
                                      plan_apply=lambda h, a: me.calls.append(("plan", a)),
                                      plan_release=lambda h, f: me.calls.append(("release", f)))
-        capture = types.SimpleNamespace(LogicCapture=Cap, ONE_SHOT=0)
+        capture = types.SimpleNamespace(LogicCapture=Cap, ONE_SHOT=0, TRIGGER=0x45, PRETRIGGER=0x46)
         pkg = types.ModuleType("oep_client")
-        pkg.link, pkg.core, pkg.capture, pkg.host = link, core, capture, types.SimpleNamespace(OepError=OepError)
+        pkg.link, pkg.core, pkg.capture = link, core, capture
+        pkg.host = types.SimpleNamespace(OepError=OepError, Unsupported=Unsupported)
         return {"oep_client": pkg, "oep_client.link": link, "oep_client.core": core, "oep_client.capture": capture,
                 "oep_client.host": pkg.host}
 
@@ -102,6 +111,7 @@ def test_oep_source_against_a_stand_in(tmp_path, monkeypatch):
     assert ("plan", [(7, 0, 47), (7, 1, 48), (7, 2, 5)]) in fake.calls
     conf = next(kw for c, *kw in fake.calls if c == "configure")[0]
     assert conf["trigger"] == (2, 1, 1) and conf["pretrigger"] == 3 and conf["samples"] == 11 and conf["rate"] == 20_000_000
+    assert conf["critical"] == {0x45, 0x46}                                     # honour the trigger or refuse
     assert [c[0] for c in fake.calls][-2:] == ["release", "end"]                 # plan released, session ended
     head, chans = wsc.read(out)
     assert head["tick_hz"] == [20_000_000, 1]
@@ -122,3 +132,16 @@ def test_oep_source_names_a_refusal(monkeypatch):
         monkeypatch.setitem(sys.modules, name, mod)
     with pytest.raises(RuntimeError, match="probe /dev/x: rejected: unavailable"):
         sources.run("oep:/dev/x", sources.Request([("A", "1")], 1000, 10))
+
+
+@pytest.mark.parametrize("probe", [dict(refuse={0x45}), dict(ignore={0x45})])
+def test_oep_trigger_the_probe_cannot_do_is_an_error(probe, monkeypatch):
+    fake = StandIn(**probe)
+    for name, mod in fake.modules().items():
+        monkeypatch.setitem(sys.modules, name, mod)
+    with pytest.raises(RuntimeError, match="a trigger"):
+        sources.run("oep:/dev/x", sources.Request([("A", "1")], 1000, 10, trigger=("A", "rise")))
+    assert [c[0] for c in fake.calls][-2:] == ["release", "end"]
+    fake.calls.clear()
+    sources.run("oep:/dev/x", sources.Request([("A", "1"), ("B", "2"), ("C", "3")], 1000, 10))   # no trigger: nothing critical
+    assert next(kw for c, *kw in fake.calls if c == "configure")[0]["critical"] == set()

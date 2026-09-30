@@ -1,6 +1,10 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) `capture --source oep:...` with `--trigger` / `--pretrigger`: the probe must honour them or refuse (they are sent as critical), and a probe that ignores them is an error, instead of an immediate capture without a trigger (a P4 on oep-probe-arduino 0.0.8 has no trigger).
+- (JA) `capture --source oep:...` の `--trigger` / `--pretrigger`: プローブに「守るか断るか」を求め（critical で送る）、無視したプローブはエラーにする。これまでは、トリガーなしの即時の取得を黙って返していた（oep-probe-arduino 0.0.8 の P4 はトリガーを持たない）。
+- (EN) Tests of the OEP source over a real link to oep-client's fake probe (run when its fake has capture, oep-client-python 0.0.9 and later): a 4-bit stream of three channels, the counter waveform, trigger and slip, the rate the probe answers, capturing pins another interface listens to, the ESP32 sampler profile.
+- (JA) OEP の取得を、oep-client の偽のプローブと本物の通信で試すテスト（偽のプローブがキャプチャを持つ oep-client-python 0.0.9 以降で動く）: 1 サンプル 4 ビットの 3 本、カウンターの波形、トリガーと時間軸の乱れ、プローブが答えたレート、ほかのインターフェースが聞いているピンの取得、ESP32 のサンプラーの形。
 
 ## 0.0.3
 - (EN) `wireskein capture`: logic channels from a device into a `.wsc` (or `.sr`), with names, rate, samples, an optional trigger / pretrigger and a note. Sources: `oep:<target>` (OEP probes through oep-client-python, the extra `wireskein[oep]`) and `sigrok:<driver>` (any device sigrok supports, through `sigrok-cli`); more through the `wireskein.sources` entry point group. Python: `wireskein.sources.capture()`.
