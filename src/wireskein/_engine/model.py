@@ -15,6 +15,7 @@ in the step ticks before it: one sample of that channel is `step` ticks wide.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from fractions import Fraction
 
 import numpy as np
 
@@ -26,6 +27,7 @@ class Channel:
     edges: np.ndarray  # int64, strictly increasing
     step: int = 1      # ticks per sample of this channel
     phase: int = 0     # tick of its first sample
+    acquisition: dict = field(default_factory=dict)   # how it was taken (pin, ...), kept through files
 
     def level_at(self, samples: np.ndarray) -> np.ndarray:
         from . import kernels
@@ -39,11 +41,42 @@ class Channel:
 
 
 @dataclass
+class AnalogTrace:
+    """An analog channel: values at their own rate. Sample k is at tick
+    t0_ticks + k * tick_hz / rate_hz (tick_hz: the capture's rate). values are
+    raw integers (encoding "analog") or volts ("analog-f32")."""
+    name: str
+    values: np.ndarray
+    rate_hz: Fraction
+    t0_ticks: Fraction = Fraction(0)
+    encoding: str = "analog"
+    width: int = 16
+    value_bits: int | None = None
+    zero: float | None = None
+    scale_nv: float | None = None
+    unit: str = "V"
+    acquisition: dict = field(default_factory=dict)
+
+    def ticks(self, tick_hz) -> np.ndarray:
+        """The tick of each sample (float)."""
+        per = float(Fraction(tick_hz) / self.rate_hz)
+        return float(self.t0_ticks) + np.arange(len(self.values)) * per
+
+    def volts(self) -> np.ndarray | None:
+        if self.encoding == "analog-f32":
+            return self.values.astype(np.float64)
+        if self.zero is None or self.scale_nv is None:
+            return None
+        return (self.values.astype(np.float64) - self.zero) * self.scale_nv * 1e-9
+
+
+@dataclass
 class Capture:
     rate: float
     n_samples: int
     channels: list[Channel]
     meta: dict = field(default_factory=dict)
+    analog: list[AnalogTrace] = field(default_factory=list)
 
     def channel(self, name: str) -> Channel:
         for ch in self.channels:

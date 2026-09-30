@@ -120,6 +120,19 @@ wsc.write("c.wsc", 100_000_000, [
 channels = wsc.from_interleaved(data, ["PA5", "PA7"], width=8)    # a probe's stream: width bits per sample, bit k = channel k
 ```
 
+Analog channels can sit in the same file, each with its own rate and start time (`t0_ticks`), so an ADC whose real rate is not a whole number of logic ticks keeps its true timing. ADC values are kept raw with their linear conversion (`zero`, `scale_nv`), and how they were taken (pin, attenuation, reference voltage, the probe's factory calibration values) is stored too, whether or not the analysis uses it:
+
+```python
+wsc.write("m.wsc", 20_000_000, [
+    wsc.Channel("CLK", wsc.pack(clk_samples), n),
+    wsc.analog_raw("VBUS", raw_values, Fraction(80_000_000, 1667), width=16, value_bits=12, zero=0, scale_nv=805_860,
+                   pin=22, attenuation_db=12, reference={"source": "vdd", "mv": 3300}),
+    wsc.analog_volts("SINE", volts, 1_000_000),                     # volts, e.g. from sigrok or Saleae
+], probe={"chip": "ESP32-P4", "calibration": {"scheme": "curve-fitting-v1", "raw": "..."}})
+```
+
+`wireskein capture --source sigrok:<driver>` takes analog channels too (`--channels CLK=D0,VBUS=A0`). The analysis reads the logic channels as before; checks on analog channels come later. The format is specified in `docs/wsc-format.ja.md`.
+
 In a recorded run, pass the same thing to `rec.capture(t, tick_hz, channels=[...])`.
 
 A `.wsc` can also carry anything else about the capture: acquisition settings, a wiring note, analysis results. Attachments are named files (text, JSON or bytes) and can be replaced. Notes form an append-only log, one entry per call, with its time. Both can be added to an existing file without rewriting the channels:

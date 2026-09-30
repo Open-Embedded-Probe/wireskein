@@ -90,6 +90,23 @@ wsc.write("c.wsc", 100_000_000, [
 channels = wsc.from_interleaved(data, ["PA5", "PA7"], width=8)    # プローブの並び: 1 サンプル width ビット、ビット k がチャンネル k
 ```
 
+アナログのチャンネルも、同じファイルに入れられます。
+
+- 各チャンネルが、自分のレートと最初のサンプルの時刻（`t0_ticks`）を持ちます。ADC の実際のレートがロジックの刻みの整数倍でなくても、本当の時刻のまま持てます。
+- ADC の値は、生のまま、1 次式の換算（`zero`、`scale_nv`）と一緒に保存します。
+- 取ったときの情報（ピン、減衰、基準電圧、プローブの出荷時の補正値）も、分析で使うかにかかわらず保存します。
+
+```python
+wsc.write("m.wsc", 20_000_000, [
+    wsc.Channel("CLK", wsc.pack(clk_samples), n),
+    wsc.analog_raw("VBUS", raw_values, Fraction(80_000_000, 1667), width=16, value_bits=12, zero=0, scale_nv=805_860,
+                   pin=22, attenuation_db=12, reference={"source": "vdd", "mv": 3300}),
+    wsc.analog_volts("SINE", volts, 1_000_000),                     # 電圧（sigrok や Saleae から）
+], probe={"chip": "ESP32-P4", "calibration": {"scheme": "curve-fitting-v1", "raw": "..."}})
+```
+
+`wireskein capture --source sigrok:<ドライバ>` で、アナログのチャンネルも取れます（`--channels CLK=D0,VBUS=A0`）。解析は、今までどおりロジックのチャンネルを読みます。アナログの検査は、これから作ります。形式の仕様は `docs/wsc-format.ja.md` にあります。
+
 テストの記録では、同じものを `rec.capture(t, tick_hz, channels=[...])` に渡します。
 
 `.wsc` には、キャプチャについてのほかの情報も入れられます（取得の設定、配線のメモ、分析の結果など）。
