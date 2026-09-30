@@ -263,11 +263,19 @@ def check_spi(cap, x):
 def _uart_rx(ch: Channel, n: int, u: float, idle: int, bits: int, parity: str, stop: float) -> dict:
     """A receiver at a given bit time: each character starts at the first edge
     leaving idle after the middle of the previous one's first stop bit, and its
-    bits are sampled at their middles. Characters before the first idle gap of
-    a whole character (the window may open inside one) are lead-in, a character
-    the window ends inside is cut; neither counts as an error. After a framing
-    error the receiver waits for the next idle gap again, so one disturbance
-    counts once (characters skipped meanwhile are resync_skipped)."""
+    bits are sampled at their middles.
+
+    The window may open inside a character, so reading starts only once the
+    receiver is in step: after an idle gap of a whole character; or, when no
+    such gap comes later in the window (a back-to-back stream with little idle
+    at the start), at a start edge from which the characters that follow keep
+    valid stop (and parity) bits (LOOKAHEAD of them, or all up to the end of
+    the window). A gap is preferred because regular data can keep valid stop
+    bits for a while from a wrong edge. Characters
+    before that are lead-in, a character the window ends inside is cut; neither
+    counts as an error. After a framing error the receiver gets in step again
+    the same way, so one disturbance counts once (characters skipped meanwhile
+    are resync_skipped)."""
     e = ch.edges
     after = ch.initial ^ ((np.arange(len(e)) + 1) & 1)          # level after each edge
     act = e[after != idle]
@@ -275,17 +283,8 @@ def _uart_rx(ch: Channel, n: int, u: float, idle: int, bits: int, parity: str, s
     L = 1 + bits + npar + int(np.ceil(stop))
     first_stop = 1 + bits + npar
     gap = L * u
-    out = {"frames": [], "lead_in": 0, "resync_skipped": 0, "cut_at_end": False}
-    synced, lost, i = False, False, 0
-    while i < len(act):
-        st = int(act[i])
-        if not synced:
-            j = int(np.searchsorted(e, st))
-            quiet = st - int(e[j - 1]) if j > 0 else (st if ch.initial == idle else 0)
-            synced = quiet >= gap
-        if st + L * u > n:
-            out["cut_at_end"] = True
-            break
+
+    def frame(st: int):
         b = ch.level_at((st + (np.arange(L) + 0.5) * u).astype(np.int64)).astype(np.int64)
         if idle == 0:
             b = 1 - b
@@ -295,14 +294,68 @@ def _uart_rx(ch: Channel, n: int, u: float, idle: int, bits: int, parity: str, s
         if npar:
             ones = int(b[1:1 + bits].sum()) + int(b[1 + bits])
             par_ok = (ones % 2 == 0) if parity == "even" else (ones % 2 == 1)
+        return value, stop_ok, par_ok
+
+    def next_start(i: int, st: int) -> int:
+        return int(np.searchsorted(act, st + (first_stop + 0.5) * u))
+
+    def in_step(i: int) -> bool:
+        """The characters from start edge i on keep valid stop / parity bits."""
+        good = 0
+        while i < len(act) and good < LOOKAHEAD:
+            st = int(act[i])
+            if st + L * u > n:
+                return good >= 3               # the window ends: all it held were good
+            _, stop_ok, par_ok = frame(st)
+            if not (stop_ok and par_ok):
+                return False
+            good += 1
+            i = next_start(i, st)
+        return good >= LOOKAHEAD or good >= 3
+
+    # an idle gap of a whole character before start edge k, and whether one comes at k or later
+    j = np.searchsorted(e, act)
+    prev = np.where(j > 0, e[np.maximum(j - 1, 0)], 0)
+    quiet = np.where(j > 0, act - prev, act if ch.initial == idle else 0)
+    gap_at = quiet >= gap
+    gap_later = np.flip(np.logical_or.accumulate(np.flip(gap_at))) if len(act) else gap_at
+
+    out = {"frames": [], "lead_in": 0, "resync_skipped": 0, "cut_at_end": False}
+    synced, lost, i = False, False, 0
+    while i < len(act):
+        st = int(act[i])
+        if not synced:
+            synced = bool(gap_at[i]) or (not gap_later[i] and in_step(i))
+        if st + L * u > n:
+            out["cut_at_end"] = True
+            break
+        value, stop_ok, par_ok = frame(st)
         if synced:
             out["frames"].append((st, value, stop_ok, par_ok))
             if not stop_ok:
                 synced, lost = False, True
         else:
             out["resync_skipped" if lost else "lead_in"] += 1
-        i = int(np.searchsorted(act, st + (first_stop + 0.5) * u))
+        i = next_start(i, st)
     return out
+
+
+LOOKAHEAD = 16          # characters in a row with valid stop bits that put the receiver in step
+
+
+def _uart_idle(ch: Channel, n: int, u: float, idle: int, bits: int, parity: str, stop: float, rx: dict) -> int | None:
+    """The level the line rests at, judged by reading: the idle level whose
+    reading gives clearly more good characters. The longest run decides only
+    when neither reads (a burst of zeros can outlast a short idle)."""
+    good = sum(f[2] and f[3] for f in rx["frames"])
+    other = _uart_rx(ch, n, u, 1 - idle, bits, parity, stop)
+    good_other = sum(f[2] and f[3] for f in other["frames"])
+    if good_other > 2 * good + 2:
+        return 1 - idle
+    if good:
+        return idle
+    _, length, level = ch.runs(n)
+    return int(level[np.argmax(length)]) if len(length) else None
 
 
 def _uart_bit_time(ch: Channel, frames: list, u0: float, idle: int, span_bits: int) -> float | None:
@@ -364,26 +417,25 @@ def check_uart(cap, x):
     if ch is None:
         return None, {}, "pin not captured"
     idle, bits, parity, stop = x.get("idle", 1), x.get("bits", 8), x.get("parity", "none"), x.get("stop", 1)
-    # the level the line rests at: the longest run
     start, length, level = ch.runs(cap.n_samples)
-    rest = int(level[np.argmax(length)]) if len(length) else None
     # the measured bit time does not depend on the expectation: candidates from
     # the runs (the expected rate only picks the nearest), refined by reading
     u = _uart_measure(ch, cap.n_samples, length, cap.rate / x["baud"] if x.get("baud") else None,
                       idle, bits, parity, stop)
     if not x.get("baud") and u is None:
-        return None, {"idle": rest, "edges": int(len(ch.edges))}, "measure only: too few edges to find a bit time"
+        return None, {"edges": int(len(ch.edges))}, "measure only: too few edges to find a bit time"
     # characters, errors and data: read as a receiver at the expected rate would
     u0 = cap.rate / x["baud"] if x.get("baud") else u
     rx = _uart_rx(ch, cap.n_samples, u0, idle, bits, parity, stop)
     frames = rx["frames"]
+    rest = _uart_idle(ch, cap.n_samples, u0, idle, bits, parity, stop, rx)     # the level the line rests at
     if not frames:
         got = {"idle": rest, "lead_in": rx["lead_in"], "cut_at_end": rx["cut_at_end"], "samples_per_bit": u0 / ch.step}
         if not len(ch.edges):
             return False, got, f"no activity (constant {ch.initial})"
         if rest != idle:
             return False, got, f"idle level {rest}, not {idle}"
-        why = "no UART character after an idle gap of a whole character"
+        why = "no UART character (neither an idle gap of a whole character nor a run of valid characters)"
         return (None, got, "measure only: " + why) if not x.get("baud") else (False, got, why)
     frame_err = sum(not f[2] for f in frames)
     par_err = sum(f[2] and not f[3] for f in frames)
