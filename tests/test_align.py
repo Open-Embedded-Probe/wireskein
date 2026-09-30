@@ -57,7 +57,8 @@ def test_finds_offset_and_scale(tmp_path, offset_us, ppm):
     true_start = offset_us * 1e-6 * TICK + 1000
     assert c["offset_ticks"] + c["scale"] * 1000 == pytest.approx(true_start, abs=0.3 * TICK / float(ADC))
     assert c["scale"] == pytest.approx(1 + ppm * 1e-6, abs=30e-6)
-    assert c["matched"] >= 0.9 * c["edges"]
+    assert c["matched"] >= 0.9 * c["overlap_edges"] and c["overlap_edges"] >= 0.9 * c["edges"]
+    assert abs(c["scale"] - (1 + ppm * 1e-6)) < 5 * c["scale_ppm_uncertainty"] * 1e-6 + 5e-6
     assert set(a["channels"]) == {"SYNC_A", "VBUS"}                  # the ADC's other channel gets it too
 
 

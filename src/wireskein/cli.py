@@ -109,8 +109,12 @@ def align_cmd(args) -> None:
     apply_to = args.apply_to.split(",") if args.apply_to else None
     a = align.find(cap, args.reference, args.via, th if len(th) > 1 else th[0], window, apply_to)
     c = a["channels"][args.via]
-    print(f"{args.via} against {args.reference}: start {c['start_shift_us']:+.3f} us, scale {c['scale_ppm']:+.1f} ppm, "
-          f"{c['matched']}/{c['edges']} edges matched, residual {c['residual_ticks'] / cap.rate * 1e6:.3f} us")
+    print(f"{args.via} against {args.reference}: start {c['start_shift_us']:+.3f} us, "
+          f"scale {c['scale_ppm']:+.1f} +- {c['scale_ppm_uncertainty']:.1f} ppm, "
+          f"{c['matched']}/{c['overlap_edges']} edges matched, residual {c['residual_ticks'] / cap.rate * 1e6:.3f} us")
+    if c["overlap_edges"] < 0.9 * c["edges"]:
+        print(f"note: {args.reference} has edges over {c['overlap_s'] * 1e3:.3g} ms only; {c['edges'] - c['overlap_edges']} "
+              f"of the {c['edges']} edges of {args.via} lie outside it (the scale comes from that span)")
     print(f"applies to: {', '.join(a['channels'])}")
     if args.save:
         align.save(args.file, a)
@@ -148,6 +152,19 @@ def capture_cmd(args) -> None:
     from .analyze import load
     cap = load(out)
     print(f"{out}: {_count(cap)}, {cap.n_samples} ticks at {cap.rate:g} Hz ({cap.duration:.6g} s)")
+    _fewer(out, req)
+
+
+def _fewer(out, req) -> None:
+    """Say when the probe gave fewer samples than asked (its buffer limit): easy to miss otherwise."""
+    from . import fileformat
+    if fileformat.sniff(out) != "wireskein":
+        return
+    _, chans = fileformat.read(out)
+    for c in chans:
+        want = req.analog_samples if isinstance(c, fileformat.AnalogChannel) else req.samples
+        if want and c.n < want:
+            print(f"note: {c.name}: {c.n} samples of the {want} asked (the probe's limit)")
 
 
 def convert(args) -> None:
