@@ -5,6 +5,9 @@
     wireskein segments CAPTURE [--results] [--markers JSON]
     wireskein verify RUN_DIR [--junit FILE] [--json FILE]
     wireskein convert IN OUT            (.wsc / .sr / fixture directory -> .wsc / .sr)
+    wireskein info FILE.wsc             channels, rates, metadata, attachments, notes
+    wireskein note FILE.wsc TEXT [--json] [--kind K]
+    wireskein attach FILE.wsc NAME [SRC | --text TEXT] [--replace]
 
 CAPTURE is a .wsc capture, a sigrok .sr file or a fixture directory (corpus/fixtures/real/<id>).
 Paths for --select: "<protocol>.<layer>" with wildcards, e.g. i2c.transactions,
@@ -37,10 +40,43 @@ def load(path: Path):
     return _load(path)
 
 
+def info(args) -> None:
+    from . import wsc
+    head, chans = wsc.read(args.file)
+    tick = wsc.tick_hz(head)
+    print(f"{args.file}: {head['format']}, tick {float(tick):g} Hz ({tick}), {head['ticks']} ticks "
+          f"({head['ticks'] / float(tick):.6g} s)")
+    for c in chans:
+        rate = float(tick) / c.step
+        print(f"  {c.name:12s} {c.n:>12d} samples  step {c.step:<4d} phase {c.phase:<4d} {rate:g} Hz")
+    if head.get("meta"):
+        print("meta: " + json.dumps(head["meta"], ensure_ascii=False, default=str))
+    for name, data in wsc.attachments(args.file).items():
+        print(f"attach/{name}: {len(data)} bytes")
+    for k, n in enumerate(wsc.notes(args.file), 1):
+        extra = {x: v for x, v in n.items() if x not in ("time", "content")}
+        body = n["content"] if isinstance(n["content"], str) else json.dumps(n["content"], ensure_ascii=False)
+        print(f"note {k} {n['time']}" + (f" {json.dumps(extra, ensure_ascii=False)}" if extra else "") + f": {body}")
+
+
+def note_cmd(args) -> None:
+    from . import wsc
+    content = json.loads(args.text) if args.json else args.text
+    print(wsc.note(args.file, content, **({"kind": args.kind} if args.kind else {})))
+
+
+def attach_cmd(args) -> None:
+    from . import wsc
+    if (args.src is None) == (args.text is None):
+        sys.exit("give SRC (a file) or --text")
+    data = args.src.read_bytes() if args.src else args.text
+    wsc.attach(args.file, args.name, data, replace=args.replace)
+
+
 def convert(args) -> None:
     from .analyze import save
     cap = load(args.input)
-    meta = {k: v for k, v in cap.meta.items() if k not in ("file", "source", "tick_hz", "unitsize", "fixture")}
+    meta = {k: v for k, v in cap.meta.items() if k not in ("file", "source", "tick_hz", "unitsize", "fixture", "extras")}
     out = save(args.output, cap, **meta)
     slow = [f"{c.name}/{c.step}" for c in cap.channels if c.step != 1]
     print(f"{args.input} -> {out}: {len(cap.channels)} channels, {cap.n_samples} ticks at {cap.rate:g} Hz"
@@ -118,7 +154,26 @@ def main() -> None:
     cv = sub.add_parser("convert", help="convert a capture between formats (by extension: .wsc, .sr; a fixture directory as input)")
     cv.add_argument("input", type=Path)
     cv.add_argument("output", type=Path)
+    inf = sub.add_parser("info", help="what a .wsc holds: channels, rates, metadata, attachments, notes")
+    inf.add_argument("file", type=Path)
+    nt = sub.add_parser("note", help="append a note to a .wsc (its log is append-only)")
+    nt.add_argument("file", type=Path)
+    nt.add_argument("text")
+    nt.add_argument("--json", action="store_true", help="TEXT is JSON, stored as such")
+    nt.add_argument("--kind", default=None, help="a label stored with the note (e.g. analysis, setup)")
+    at = sub.add_parser("attach", help="store a free-form file in a .wsc as attach/NAME")
+    at.add_argument("file", type=Path)
+    at.add_argument("name")
+    at.add_argument("src", type=Path, nargs="?", default=None)
+    at.add_argument("--text", default=None)
+    at.add_argument("--replace", action="store_true")
     args = ap.parse_args()
+    if args.cmd == "info":
+        return info(args)
+    if args.cmd == "note":
+        return note_cmd(args)
+    if args.cmd == "attach":
+        return attach_cmd(args)
     if args.cmd == "convert":
         return convert(args)
     if args.cmd == "segments":

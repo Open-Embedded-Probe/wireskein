@@ -102,6 +102,24 @@ channels = wsc.from_interleaved(data, ["PA5", "PA7"], width=8)    # a probe's st
 
 In a recorded run, pass the same thing to `rec.capture(t, tick_hz, channels=[...])`.
 
+A `.wsc` can also carry anything else about the capture: acquisition settings, a wiring note, analysis results. Attachments are named files (text, JSON or bytes) and can be replaced. Notes form an append-only log, one entry per call, with its time. Both can be added to an existing file without rewriting the channels:
+
+```python
+wsc.attach("c.wsc", "probe.json", {"fw": "1.2", "plan": plan})   # dict / list -> JSON, str -> text, bytes as is
+wsc.note("c.wsc", "PA5 looked noisy; shorter wire next time")
+wsc.note("c.wsc", {"i2c": transactions}, kind="analysis")
+wsc.attachments("c.wsc"), wsc.notes("c.wsc")
+```
+
+```sh
+wireskein info c.wsc                                  # channels and rates, metadata, attachments, notes
+wireskein note c.wsc "re-captured after reflow"
+wireskein attach c.wsc setup.txt --text "10k pull-ups on SDA/SCL"
+wireskein attach c.wsc scope.png scope.png            # any file
+```
+
+`rec.capture(..., attachments={...})` stores attachments with a capture of a recorded run. Attachments and notes go along when a capture is converted to `.sr` and back.
+
 Convert between formats on the command line (the format follows the extension):
 
 ```sh

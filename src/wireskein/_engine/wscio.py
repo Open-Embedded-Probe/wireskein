@@ -18,7 +18,8 @@ def load(path: str | Path) -> Capture:
         init, edges = edges_from_dense(bits, c.step, c.phase)
         out.append(Channel(c.name, init, edges, c.step, c.phase))
     tick = wsc.tick_hz(head)
-    return Capture(float(tick), int(head["ticks"]), out, meta={**head.get("meta", {}), "file": str(path), "tick_hz": tick})
+    return Capture(float(tick), int(head["ticks"]), out,
+                   meta={**head.get("meta", {}), "file": str(path), "tick_hz": tick, "extras": wsc.extras(path)})
 
 
 def to_channel(ch: Channel, n_ticks: int) -> wsc.Channel:
@@ -30,5 +31,13 @@ def to_channel(ch: Channel, n_ticks: int) -> wsc.Channel:
 
 
 def save(path: str | Path, cap: Capture, **meta) -> Path:
+    """meta: the capture file's metadata; attachments and notes carried in
+    cap.meta["extras"] (as read from a .wsc or .sr) are copied as they are."""
+    import zipfile
     tick = cap.meta.get("tick_hz", cap.rate)
-    return wsc.write(path, tick, [to_channel(c, cap.n_samples) for c in cap.channels], **meta)
+    path = wsc.write(path, tick, [to_channel(c, cap.n_samples) for c in cap.channels], **meta)
+    if cap.meta.get("extras"):
+        with zipfile.ZipFile(path, "a", zipfile.ZIP_DEFLATED) as z:
+            for name, data in cap.meta["extras"].items():
+                z.writestr(name, data)
+    return path
