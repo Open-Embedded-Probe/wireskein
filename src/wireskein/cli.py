@@ -14,6 +14,8 @@
     wireskein annotate FILE.wireskein [--save] [--hint JSON]   decoding results as rows for the viewer
     wireskein align FILE.wireskein --reference LOGIC --via ANALOG --threshold V|LOW,HIGH
                     [--window 300us] [--apply-to A,B] [--save]   analog tracks onto the logic ticks
+    wireskein align B.wireskein --to A.wireskein --reference A_LOGIC --via B_CHANNEL [--save]
+                                                               another probe's capture onto A's ticks
 
 CAPTURE is a WireSkein file (.wireskein), a sigrok .sr file or a fixture directory (corpus/fixtures/real/<id>).
 Files are told apart by their content, not their name; an output is a .sr when its name ends in .sr.
@@ -120,7 +122,21 @@ def align_cmd(args) -> None:
     from . import align
     from .analyze import load
     cap = load(args.file)
-    th = [float(v) for v in args.threshold.split(",")]
+    th = [float(v) for v in args.threshold.split(",")] if args.threshold else None
+    if args.to:                                               # onto another file's ticks (spec §5.1.1)
+        ref = load(args.to)
+        window = _seconds(args.window) * ref.rate if args.window else None
+        e = align.between(ref, args.reference, cap, args.via, (th if len(th) > 1 else th[0]) if th else None,
+                          window, args.max_ppm)
+        print(f"{args.file} onto {Path(args.to).name}: tick 0 at {e['offset_us']:+.3f} us, clock "
+              f"{e['scale_ppm']:+.2f} +- {e['scale_ppm_uncertainty']:.2f} ppm, {e['matched']}/{e['overlap_edges']} "
+              f"edges matched, residual {e['residual_ticks'] / ref.rate * 1e6:.3f} us")
+        if args.save:
+            align.save_between(args.file, args.to, e)
+            print(f"saved in attach/{align.NAME} (files: {Path(args.to).name})")
+        return
+    if th is None:
+        raise ValueError("give --threshold (the analog channel is read as logic)")
     window = _seconds(args.window) * cap.rate if args.window else None
     apply_to = args.apply_to.split(",") if args.apply_to else None
     a = align.find(cap, args.reference, args.via, th if len(th) > 1 else th[0], window, apply_to)
@@ -306,9 +322,11 @@ def main() -> None:
     an.add_argument("--hint", default=None, help="as for analyze: JSON or @file.json")
     al = sub.add_parser("align", help="align analog tracks to the logic ticks by a signal on both (attach/alignment.json)")
     al.add_argument("file", type=Path)
-    al.add_argument("--reference", required=True, help="the logic channel")
-    al.add_argument("--via", required=True, help="the analog channel with the same signal")
-    al.add_argument("--threshold", required=True, help="volts: V, or LOW,HIGH for hysteresis")
+    al.add_argument("--to", default=None, help="another WireSkein file to align this one onto (its --reference)")
+    al.add_argument("--reference", required=True, help="the logic channel (of --to, when given)")
+    al.add_argument("--via", required=True, help="this file's channel with the same signal")
+    al.add_argument("--threshold", default=None, help="volts for an analog --via: V, or LOW,HIGH for hysteresis")
+    al.add_argument("--max-ppm", type=float, default=200, help="with --to: how far the two clocks may differ")
     al.add_argument("--window", default=None, help="how far off the start may be (e.g. 300us; default from the probe)")
     al.add_argument("--apply-to", default=None, help="analog channels that get the result (default: all)")
     al.add_argument("--save", action="store_true", help="store it in the file as attach/alignment.json")
