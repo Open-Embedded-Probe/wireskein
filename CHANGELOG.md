@@ -13,8 +13,8 @@
 - (JA) この版が知らない項目は、ファイルを書き直すとき（添付の置き換え、`convert`、.sr を経由した往復も）に持ち越す。
 - (EN) **Breaking: runs are `wireskein-run/2`**: captures are `cNNNN.wireskein`. `verify` refuses `wireskein-run/1` runs.
 - (JA) **互換のない変更: 記録は `wireskein-run/2`**。キャプチャは `cNNNN.wireskein`。`verify` は `wireskein-run/1` の記録を断る。
-- (EN) `wireskein gui` needs wireskein-web 0.0.2 or later (it reads the new format).
-- (JA) `wireskein gui` は wireskein-web 0.0.2 以降が要る（新しい形式を読む）。
+- (EN) `wireskein gui` ships wireskein-web 0.0.2: it reads the new format; a time axis with grid lines and an overview strip; hover a lane to measure pulse widths, period, frequency and duty (analog: the sample's value); Shift + wheel scrolls in time.
+- (JA) `wireskein gui` は wireskein-web 0.0.2 を同梱する: 新しい形式を読む。時間軸と格子線、全体の帯。行にマウスを重ねると、パルスの幅、周期、周波数、デューティを示す（アナログはサンプルの値）。Shift + ホイールで時間方向に移動。
 - (EN) `capture` with analog channels only needs no logic `--rate` / `--samples`: `--analog-rate` and `--analog-samples` are enough (found on the V003 jig).
 - (JA) アナログだけの `capture` は、ロジックの `--rate` / `--samples` なしで、`--analog-rate` と `--analog-samples` だけで取れる（V003 の治具で見つかった）。
 
