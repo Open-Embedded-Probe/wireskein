@@ -93,6 +93,10 @@ def rows_of(doc: dict) -> list[dict]:
             a["detail"] = {k: v for k, v in it.items() if k not in ("s", "e")}
             out.append(a)
         row = {"name": f"{proto} {name}", "items": out}
+        if claim.get("verdict"):
+            row["verdict"] = claim["verdict"]                 # how sure the analysis is ("confirmed", "likely", ...)
+        if isinstance(claim.get("score"), (int, float)):
+            row["score"] = claim["score"]
         if near:
             row["near"] = near
         if len(items) > MAX_ITEMS:
