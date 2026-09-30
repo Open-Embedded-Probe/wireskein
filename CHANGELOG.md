@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) `capture --trigger` on OEP: when the probe is still waiting for the trigger at `--timeout`, the error says so ("no trigger (SCL:fall) within 10 s") instead of "capture did not finish".
+- (JA) OEP での `capture --trigger`: `--timeout` の時点でプローブがまだトリガを待っていれば、「capture did not finish」ではなく、そう伝える（「no trigger (SCL:fall) within 10 s」）。
 - (EN) **Breaking: the file format is now `.wireskein` (`wireskein/0`)**, replacing `.wsc` (`wireskein-capture/0`; the extension is Windows Script Component's, which mail filters and virus scanners block). Files written by earlier versions are not read. The zip starts with `wireskein.json` (`{"format": "wireskein/0"}`, the first entry, stored); `capture.json` no longer carries `format`. The file is a container: a capture, attachments and notes now; `markers/`, `decode/`, `verify/` and `view/` are reserved. Spec: docs/wireskein-format.ja.md (was wsc-format.ja.md).
 - (JA) **互換のない変更: ファイルの形式を `.wireskein`（`wireskein/0`）にした。** 今までの `.wsc`（`wireskein-capture/0`）は置き換える（`.wsc` は Windows Script Component の拡張子で、メールのフィルタやウイルス対策に止められる）。前の版で書いたファイルは読まない。zip の最初の項目は `wireskein.json`（`{"format": "wireskein/0"}`、無圧縮）で、`capture.json` は `format` を持たない。ファイルは入れ物で、今はキャプチャ、添付、メモを入れる。`markers/`、`decode/`、`verify/`、`view/` は予約。仕様: docs/wireskein-format.ja.md（旧 wsc-format.ja.md）。
 - (EN) **Breaking: the module `wireskein.wsc` is now `wireskein.fileformat`** (same functions; `import wireskein.fileformat as wf`). Also `sniff(path)` ("wireskein", "sr" or None).
