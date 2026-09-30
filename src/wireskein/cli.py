@@ -98,8 +98,13 @@ def gui_cmd(args) -> None:
 
 def capture_cmd(args) -> None:
     from . import sources
-    req = sources.Request(sources.parse_channels(args.channels or ""), sources.parse_count(args.rate),
-                          sources.parse_count(args.samples),
+    logic = sources.parse_channels(args.channels or "")
+    rate = args.rate or (args.analog_rate if not logic else None)        # analog only: its own rate / samples do
+    samples = args.samples or (args.analog_samples if not logic else None)
+    if not rate or not samples:
+        need = "--rate and --samples" if logic else "--analog-rate (or --rate) and --analog-samples (or --samples)"
+        raise ValueError(f"give {need}")
+    req = sources.Request(logic, sources.parse_count(rate), sources.parse_count(samples),
                           sources.parse_trigger(args.trigger) if args.trigger else None,
                           sources.parse_count(args.pretrigger) if args.pretrigger else None, args.timeout,
                           sources.parse_analog(args.analog) if args.analog else [],
@@ -203,8 +208,8 @@ def main() -> None:
     cp.add_argument("--analog", default=None, help='analog: "NAME=ID[@FRONTEND],..." (FRONTEND: the input range number, OEP)')
     cp.add_argument("--analog-rate", default=None, help="analog samples per second (default: --rate)")
     cp.add_argument("--analog-samples", default=None, help="default: as long as the logic capture")
-    cp.add_argument("--rate", required=True, help="samples per second, e.g. 20M, 500k (logic; analog too unless --analog-rate)")
-    cp.add_argument("--samples", required=True, help="e.g. 1M, 200000")
+    cp.add_argument("--rate", default=None, help="logic samples per second, e.g. 20M, 500k (analog too unless --analog-rate)")
+    cp.add_argument("--samples", default=None, help="logic samples, e.g. 1M, 200000 (analog only: --analog-samples does)")
     cp.add_argument("--trigger", default=None, help="NAME:rise|fall|both|high|low (default: start at once)")
     cp.add_argument("--pretrigger", default=None, help="samples kept before the trigger")
     cp.add_argument("--timeout", type=float, default=10.0, help="seconds to wait for the capture")
