@@ -261,7 +261,7 @@ class _Handler(BaseHTTPRequestHandler):
             return self._json({"run": None, "results": []})
         rep = verify.verify(p.parent)
         mine = [r for r in rep["results"] if r.get("capture") == p.name]
-        keep = ("path", "check", "ok", "reason", "expected", "measured")
+        keep = ("path", "check", "status", "ok", "reason", "expected", "measured")
         return self._json({"run": p.parent.name, "summary": rep["summary"],
                            "results": json.loads(verify.dumps([{k: r.get(k) for k in keep} for r in mine]))})
 
