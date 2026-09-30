@@ -127,3 +127,17 @@ def test_group_trigger_marks_both_tracks(probe, tmp_path):
     head, chans = wsc.read(out)
     assert "trigger_index" in head["meta"] and "trigger_index" in chans[2].acquisition
     assert "trigger_ns" in head["meta"]["probe"]
+
+
+@analog_only
+def test_cli_analog_only_needs_no_logic_rate(probe, tmp_path):
+    src = probe()
+    out = tmp_path / "a.wsc"
+    r = subprocess.run([sys.executable, "-m", "wireskein", "capture", "--source", src, "--analog", "SQ=16",
+                        "--analog-rate", "20k", "--analog-samples", "200", "-o", str(out)], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    (sq,) = wsc.read(out)[1]
+    assert sq.n == 200
+    r = subprocess.run([sys.executable, "-m", "wireskein", "capture", "--source", src, "--channels", "A=10",
+                        "--analog-rate", "20k", "-o", str(out)], capture_output=True, text=True)
+    assert r.returncode != 0 and "give --rate and --samples" in r.stderr

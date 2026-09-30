@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) `capture` with analog channels only needs no logic `--rate` / `--samples`: `--analog-rate` and `--analog-samples` are enough (found on the V003 jig).
+- (JA) アナログだけの `capture` は、ロジックの `--rate` / `--samples` なしで、`--analog-rate` と `--analog-samples` だけで取れる（V003 の治具で見つかった）。
 
 ## 0.0.7
 - (EN) `wireskein gui [FILE | DIR] [--port N] [--no-browser]`: the viewer (wireskein-web, shipped in the wheel; the version is pinned in `tools/web.json` and fetched with its npm integrity by `tools/fetch_web.py`) on a local server: a capture opens in the browser (`.sr` converted on the fly), a directory gets a list of its captures and runs. 127.0.0.1 only, a per-start token kept as an HttpOnly SameSite cookie, Host checked, nothing served outside the viewer and the captures below the directory. `WIRESKEIN_WEB_DIR` points at another viewer build.
