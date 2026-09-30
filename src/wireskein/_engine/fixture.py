@@ -59,6 +59,6 @@ def anonymize(cap: Capture, seed: int) -> tuple[Capture, dict[str, str]]:
     for new_idx, old_idx in enumerate(order):
         old = cap.channels[old_idx]
         name = f"D{new_idx}"
-        channels.append(Channel(name, old.initial, old.edges))
+        channels.append(Channel(name, old.initial, old.edges, old.step, old.phase))
         mapping[name] = old.name
     return Capture(cap.rate, cap.n_samples, channels), mapping

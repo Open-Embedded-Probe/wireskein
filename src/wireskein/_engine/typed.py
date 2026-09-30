@@ -323,7 +323,7 @@ def async_segments(cap, sv: Survey, pin: str, half: int = 10, change: float = 1.
     f = sv.features[pin]
     if len(inner) < 4 * half:
         return [(0, cap.n_samples, f.units[0].samples)] if f.units else []
-    x = np.where(inner > 1, inner, np.inf)  # 1-sample spikes are not bits
+    x = np.where(inner > ch.step, inner, np.inf)  # 1-sample spikes are not bits
     w = 2 * half + 1
     loc = np.min(sliding_window_view(np.pad(x, (half, half), mode="edge"), w), axis=1)
     # windows with only 1-sample spikes have no bit-time estimate: carry the neighbour
@@ -386,8 +386,8 @@ def async_segments(cap, sv: Survey, pin: str, half: int = 10, change: float = 1.
         # "fits" cannot place the boundary. What the slower side never has is a
         # run shorter than its own bit: minimise the runs that are too short for
         # the unit of the side they would fall on (1-sample spikes ignored).
-        sa = (r < 0.8 * ua) & (r > 1)
-        sb = (r < 0.8 * ub) & (r > 1)
+        sa = (r < 0.8 * ua) & (r > ch.step)
+        sb = (r < 0.8 * ub) & (r > ch.step)
         ca = np.concatenate(([0], np.cumsum(sa)))              # too short for A before j
         cb = np.concatenate((np.cumsum(sb[::-1])[::-1], [0]))  # too short for B from j on
         bad = ca[:-1] + cb[:-1]

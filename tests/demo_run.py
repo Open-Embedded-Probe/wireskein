@@ -49,7 +49,7 @@ def main(out: Path) -> Path:
                 elif duty:
                     gen.pwm(w["PA1"], 13e-6, n / rate, 1003.5, real)
                 t = rec.armed()
-                rec.capture(dense(w, ["PA1", "PA0"], rate, n), rate, ["PA1", "PA0"], t)
+                rec.capture(t, rate, interleaved=dense(w, ["PA1", "PA0"], rate, n), names=["PA1", "PA0"])
     with rec.section(1, "test_tone"):
         with rec.section(2, "440Hz", expect=[square("PA1", 440, 0.5, tol_freq=0.005, tol_duty=0.02), only_moving(["PA1"])]):
             rec.command("TONE 440")
@@ -59,7 +59,7 @@ def main(out: Path) -> Path:
             gen.pwm(w["PA1"], 7e-6, n / rate, 440.2, 0.5)
             gen.pwm(w["PA0"], 10e-3, 10.4e-3, 5000, 0.5)                 # injected: PA0 moves
             t = rec.armed()
-            rec.capture(dense(w, ["PA1", "PA0"], rate, n), rate, ["PA1", "PA0"], t)
+            rec.capture(t, rate, interleaved=dense(w, ["PA1", "PA0"], rate, n), names=["PA1", "PA0"])
     with rec.section(1, "test_i2c_write"):
         for case, (addr, stuck) in enumerate([(0x42, False), (0x42, True), (0x43, False)]):
             payload = [(0x10 * case + i) & 0xFF for i in range(4)]
@@ -77,7 +77,7 @@ def main(out: Path) -> Path:
                 t = rec.armed()
                 rec.command(f"WRITE 2 100000 {addr:02x} {bytes(payload).hex()}")
                 rec.reply(f"WRITE rc={0 if ack else 2} route=2 hz=100000 n={4 if ack else 0}")
-                rec.capture(dense(w, ["PC16", "PC17"], rate, n), rate, ["PC16", "PC17"], t)
+                rec.capture(t, rate, interleaved=dense(w, ["PC16", "PC17"], rate, n), names=["PC16", "PC17"])
     with rec.section(1, "test_spi"):
         mosi, miso = bytes.fromhex("9f000000"), bytes.fromhex("ffef4017")
         with rec.section(2, "1MHz mode0", expect=[spi("PA5", "PA7", "PA6", "PA4", mode=0, mosi_bytes=mosi.hex(),
@@ -88,7 +88,7 @@ def main(out: Path) -> Path:
             rec.command(f"SPI 1000000 0 {mosi.hex()}")
             gen.spi(w["PA5"], w["PA7"], w["PA6"], w["PA4"], 200e-6, [(mosi, miso)], 1e6, 0, "msb")
             rec.reply(f"SPI got={miso.hex()}")
-            rec.capture(dense(w, ["PA5", "PA7", "PA6", "PA4"], rate, n), rate, ["PA5", "PA7", "PA6", "PA4"], t)
+            rec.capture(t, rate, interleaved=dense(w, ["PA5", "PA7", "PA6", "PA4"], rate, n), names=["PA5", "PA7", "PA6", "PA4"])
     # a marker mistake: a phase heading without its step level
     rec.heading(1, "test_misc")
     rec.heading(3, "orphan-phase")

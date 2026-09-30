@@ -32,7 +32,7 @@ def _runs_p05(sv: Survey, cap, ch: str) -> float:
         c = cap.channel(ch)
         _, length, _ = c.runs(cap.n_samples)
         inner = length[1:-1]
-        inner = inner[inner > 1]  # 1-sample spikes are glitches, not bits
+        inner = inner[inner > c.step]  # 1-sample spikes are glitches, not bits
         cache[key] = float(np.quantile(inner, 0.05)) if len(inner) >= 20 else 0.0
     return cache[key]
 

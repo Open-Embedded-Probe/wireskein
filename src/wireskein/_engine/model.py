@@ -1,8 +1,15 @@
 """Edge-list representation of a digital capture.
 
-A channel is its level at sample 0 plus the sample indices where the level
-toggles. The level at sample s is initial ^ (number of edges <= s) & 1, so an
-edge at index e means sample e is the first sample of the new level.
+Time is counted in ticks of one clock per capture (`Capture.rate`, ticks per
+second; `n_samples` is the length in ticks). A channel is its level at tick 0
+plus the ticks where the level toggles. The level at tick s is
+initial ^ (number of edges <= s) & 1, so an edge at e means tick e is the first
+tick of the new level.
+
+A channel sampled slower than the tick clock (a probe that decimates some
+channels to fit its link) has `step` ticks per sample, its samples at ticks
+phase + k * step. Its edges fall on those ticks, and each one happened somewhere
+in the step ticks before it: one sample of that channel is `step` ticks wide.
 """
 
 from __future__ import annotations
@@ -17,6 +24,8 @@ class Channel:
     name: str
     initial: int
     edges: np.ndarray  # int64, strictly increasing
+    step: int = 1      # ticks per sample of this channel
+    phase: int = 0     # tick of its first sample
 
     def level_at(self, samples: np.ndarray) -> np.ndarray:
         from . import kernels
@@ -47,9 +56,10 @@ class Capture:
         return self.n_samples / self.rate
 
 
-def edges_from_dense(bits: np.ndarray) -> tuple[int, np.ndarray]:
-    """bits: uint8 array of 0/1 per sample."""
+def edges_from_dense(bits: np.ndarray, step: int = 1, phase: int = 0) -> tuple[int, np.ndarray]:
+    """bits: uint8 array of 0/1 per sample of a channel whose samples are at
+    ticks phase + k * step. Returns (initial level, edge ticks)."""
     if len(bits) == 0:
         return 0, np.zeros(0, dtype=np.int64)
     change = np.flatnonzero(bits[1:] != bits[:-1]) + 1
-    return int(bits[0]), change.astype(np.int64)
+    return int(bits[0]), (phase + change.astype(np.int64) * step)
