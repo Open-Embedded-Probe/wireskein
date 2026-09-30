@@ -4,12 +4,48 @@
 
 [日本語 README](https://github.com/Open-Embedded-Probe/wireskein/blob/main/README.ja.md)
 
-WireSkein reads logic-analyzer captures. It has two uses:
+WireSkein turns logic-analyzer captures into **tests and analysis** (MIT license). Instead of ending with someone looking at a waveform, it checks in code whether the wire did what it should, and hands what was on the wire to scripts and AI in a form they can read.
 
-- **Checking recorded hardware test runs.** A test records what it sent, the captures, and what each step should look like on the wire (a 1 kHz square wave, an I2C write to 0x42, a UART at F_CPU / BRR). `wireskein verify` checks every capture against these expectations and reports OK / NG with measured values, as text, JSON and JUnit XML.
+- **Checking recorded hardware test runs.** A test records what it sent, the captures, and what each step should look like on the wire (a 1 kHz square wave, an I2C write to 0x42, a UART at F_CPU / BRR, a 3.3 V ± 0.1 V supply). `wireskein verify` checks every capture against these expectations and reports OK / NG with measured values, as text, JSON and JUnit XML. From pytest, use [pytest-embedded-wireskein](https://github.com/Open-Embedded-Probe/pytest-embedded-wireskein).
 - **Decoding unknown captures.** `wireskein analyze` finds which pins carry I2C, SPI, UART, RVSWD / SWIO, SWD or CAN, and decodes them. Upper layers (NMEA, Modbus, known I2C / SPI devices) are tried on top.
+- **Capturing, storing, viewing.** `wireskein capture` takes captures from a probe, stores them as `.wireskein`, and `wireskein gui` shows them in the browser.
 
 Status: **beta**. Breaking changes may still happen; see [Stability](#stability).
+
+## Why WireSkein
+
+A logic analyzer is essential in embedded work, but the usual tools are built around a person looking at a screen. That leaves these problems:
+
+| The problem | How WireSkein solves it |
+| --- | --- |
+| **Captures are not tests.** You look at the waveform and decide it is probably right. There is no way to check a capture against expectations, get OK / NG, and run it in CI | The test states its expectations in code (`square`, `uart`, `i2c`, `voltage`, ...) and `wireskein verify` checks them with measured values. JUnit XML and a pytest plugin put it straight into CI |
+| **Tied to the hardware.** The easiest apps expect their own analyzers; cheap analyzers and home-made probes do not fit, and licenses may not allow embedding or changes | Any source: sigrok `.sr` and VCD files are read as they are; capture directly from sigrok devices or from OEP probes built on boards such as the ESP32. MIT license |
+| **Decimated or slow channels are padded with fake samples.** Existing formats have one rate for all channels, so a channel kept at a lower rate is filled with samples that were never taken | A `.wireskein` keeps each channel at its own rate and stores only the samples taken; the viewer shows the real samples and how uncertain each edge is |
+| **Logic and analog live apart.** Separate recordings, separate tools, times lined up by hand | Logic and analog in one file; `wireskein align` finds the offset and time scale from the edges of a signal seen on both; analog channels take logic checks (`threshold=`) and voltage checks |
+| **Too much data.** Having people or AI read every waveform and event is heavy, yet summarizing can drop what matters (in one RVSWD investigation, a link that sped up mid-capture was taken for noise) | Structured output of just the layers needed (a command list, spans, or full detail), without hiding undecoded spans, the evidence for each candidate, or the capture quality |
+| **Every use of the output needs glue code.** Re-parsing display strings, one conversion script per tool | Output is JSON with a stable structure; times are integer ticks that lead back to the capture |
+
+### AI-friendly
+
+- **CLI and JSON first.** Everything works without a screen: an AI agent can run a command, read the result and decide the next step.
+- **Just what is needed.** `analyze --select` (layers), `--window` (time range) and `--segment` (a marker span) pass only the part a question needs, saving tokens.
+- **The grounds for each answer.** Decoding candidates, how well they fit, where they do not, and undecoded spans come back, so an AI can tell what was read from what was not.
+- **Checks come with measurements.** An NG gives its reason and the measured values (frequency, duty, baud error, voltage, ...), which points toward the cause.
+- **Findings stay with the capture.** Notes, attachments, markers and decoding annotations go into the same file, so the next person, or the next AI, sees how it was investigated.
+
+### Test-friendly
+
+- **Expectations are code.** `wireskein.runlog` uses only the standard library, so it fits into any test script.
+- **The test's structure is recorded.** Headings (`#` a test, `##` a step) build a tree of segments, and each capture belongs to one, so an NG names the step and the expectation.
+- **Pins and roles are given.** Checks do not depend on automatic detection, so results are stable. How to choose capture windows and tolerances: [docs/capture-test-guide.ja.md](docs/capture-test-guide.ja.md).
+- **Straight into CI.** JUnit XML, and with [pytest-embedded-wireskein](https://github.com/Open-Embedded-Probe/pytest-embedded-wireskein) each pytest test is recorded and checked. The captures of an NG stay as files to open in the viewer later.
+
+### Sources: existing formats, and OEP probes
+
+- **Existing formats work as they are.** sigrok / PulseView `.sr` and VCD (GTKWave, Saleae, DSView, simulators, ...) are recognized by their content, not their names, and can also be written. sigrok devices capture directly with `wireskein capture --source sigrok:<driver>`.
+- **[Open Embedded Probe (OEP)](https://github.com/Open-Embedded-Probe/oep-spec)** is an open protocol between a small board wired to the chip you develop on (the probe) and the software on your PC. One probe is a debugger (RVSWD / SWIO for WCH's CH32, SWD for ARM), a console to the target and a test fixture (GPIO, UART, SPI / I2C devices, logic and analog capture) at once. Firmware: [oep-probe-arduino](https://github.com/Open-Embedded-Probe/oep-probe-arduino); host side: [oep-client-python](https://github.com/Open-Embedded-Probe/oep-client-python).
+  - With an **ESP32-P4** as the probe, logic capture runs **from 16 channels at 20 Msps up to 160 Msps on 2 channels** (40 Msps on 8). Each test picks the pins it captures, with no change to wiring or firmware.
+  - A classic ESP32 and other boards work too, more slowly: a probe declares what it can do, and WireSkein uses that. With ADC channels, analog is captured alongside.
 
 ## Install
 
