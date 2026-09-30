@@ -276,7 +276,8 @@ class _Handler(BaseHTTPRequestHandler):
         from .analyze import load, save
         cap = load(p)
         meta = {k: v for k, v in cap.meta.items()
-                if k not in ("file", "sr_file", "tick_hz", "unitsize", "fixture", "extras", "skipped_channels")}
+                if k not in ("file", "sr_file", "vcd_file", "vcd_not_read", "tick_hz", "unitsize", "fixture", "extras",
+                             "skipped_channels")}
         with tempfile.TemporaryDirectory() as d:
             out = save(Path(d) / (p.stem + fileformat.SUFFIX), cap, **meta)
             self._send(200, out.read_bytes(), "application/octet-stream")
