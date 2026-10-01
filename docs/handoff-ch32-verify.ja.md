@@ -2,7 +2,7 @@
 
 > **2026-09-29 追記:** この文書は、package 化より前のものです。文中の `prototype/`、`wsproto`、`ws.py`、`PYTHONPATH=.` は、今は次のとおりです。`pip install wireskein` で入れ、`from wireskein.runlog import ...` で記録し、`wireskein verify` で照合します。合成の例は `tests/demo_run.py` にあります。引き継ぎの手順は、[pytest-embedded-wireskein](https://github.com/Open-Embedded-Probe/pytest-embedded-wireskein) に置き換わります。
 
-作成 2026-09-28（wireskein のコミット `9c2a534` の時点）。実機を接続したマシンの新しいセッションで、ArduinoCore-CH32 の修正を依頼するためのメモです。読み手は、この会話の履歴を持たない作業者（Claude Code のセッションを含む）です。
+作成 2026-09-28（wireskein のコミット `9c2a534` の時点）。**ArduinoCore-CH32 は、その後 ArduinoCore-CH32RV に改名されました（https://github.com/ch32-riscv-ug/ArduinoCore-CH32RV、FQBN は `ch32-riscv-ug:ch32rv:<board>`）。** この文書の名前は、当時のまま残します。実機を接続したマシンの新しいセッションで、ArduinoCore-CH32 の修正を依頼するためのメモです。読み手は、この会話の履歴を持たない作業者（Claude Code のセッションを含む）です。
 
 ## 1. 目的
 

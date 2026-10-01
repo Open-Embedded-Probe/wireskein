@@ -1,4 +1,4 @@
-"""Captures from real ArduinoCore-CH32 runs (x035: ESP32-P4 PARLIO, v003:
+"""Captures from real ArduinoCore-CH32 (now ArduinoCore-CH32RV) runs (x035: ESP32-P4 PARLIO, v003:
 classic ESP32 GPIO sampler) that once exposed a bug in the checks."""
 
 import gzip

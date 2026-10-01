@@ -1,4 +1,4 @@
-"""A recorded run shaped like the ArduinoCore-CH32 x035 trace tests, with bugs
+"""A recorded run shaped like the ArduinoCore-CH32RV x035 trace tests, with bugs
 injected (used by tests/test_verify.py; also a script):
 
     uv run python tests/demo_run.py OUT_DIR && uv run wireskein verify OUT_DIR
