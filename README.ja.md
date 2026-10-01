@@ -113,6 +113,7 @@ wireskein capture --source sigrok:fx2lafw --channels SDA=D0,SCL=D1 --rate 12M --
   - アナログの各チャンネルは、自分のレートと開始時刻（プローブの推定値と不確かさ）、生の値、入力範囲、基準電圧、プローブの出荷時の較正を持ちます。
   - sigrok では、アナログはデバイスの 1 つのレートで取ります。
 - ファイルには、機器が実際に使ったレートを入れます。取得元が知っている情報（プローブの時計での最初のサンプルの時刻 `start_ns` とその不確かさ `start_uncertainty_ns`、`time_base_slipped` の印（プローブが、サンプルを取るのが遅れたと知っている。バッファの上限などで起きる。その辺りの時刻が伸びている可能性がある。`wireskein info` がそう説明し、NG の検査は理由にそれを添える）、トリガの位置 `trigger_index`）も入れます。
+- UART のプローブ（classic ESP32 の治具など）では、プローブとアダプタが許せば、キャプチャの読み出しのためにリンクを速い速度に上げます（oep-client-python 0.0.24 以降。1.5 Mbaud で約 9 倍）。上げられなければ、自分で起動時の速度に戻ります。`oep:/dev/ttyUSB0?fast=0` で、起動時の速度のままにできます。
 - Python からは `wireskein.sources.capture(取得元, Request(...), 出力先)` です。
 - 別の package から、entry point の `wireskein.sources` で取得元を足せます。
 

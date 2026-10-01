@@ -34,7 +34,7 @@ Homepage = "https://github.com/Open-Embedded-Probe/wireskein"
 Repository = "https://github.com/Open-Embedded-Probe/wireskein"
 
 [dependency-groups]
-dev = ["pytest>=8", "oep-client-python>=0.0.22"]
+dev = ["pytest>=8", "oep-client-python>=0.0.24"]
 research = ["mini-racer>=0.14.1"]
 
 [tool.hatch.build.targets.wheel]
