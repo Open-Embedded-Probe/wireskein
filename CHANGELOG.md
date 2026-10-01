@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 0.0.14
 - (EN) Ready for OEP v1 clients: `meta.probe.generation` (which start a capture came from) and the analog channels' `acquisition.vrefint_nominal_mv`, when the client gives them. An error from the OEP client (anything under `OepError`, such as `Expired` when the probe's lease ran out) ends `capture` in one line naming it.
 - (JA) OEP v1 のクライアントへの備え: クライアントが返せば、`meta.probe.generation`（どの開始の取得か）と、アナログのチャンネルの `acquisition.vrefint_nominal_mv` を入れる。OEP のクライアントの誤り（`OepError` の下のもの。プローブの貸し出しが切れたときの `Expired` など）は、`capture` をその名前付きの 1 行で終える。
 - (EN) Logic samples of 64 and 128 bits (`from_interleaved(width=64 / 128)`, little-endian, channel k at bit k), for OEP v1's wider captures.
