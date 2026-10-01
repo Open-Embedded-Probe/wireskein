@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Logic samples of 64 and 128 bits (`from_interleaved(width=64 / 128)`, little-endian, channel k at bit k), for OEP v1's wider captures.
+- (JA) 64 ビットと 128 ビットのロジックのサンプル（`from_interleaved(width=64 / 128)`。little endian、チャンネル k はビット k）。OEP v1 の幅の広い取得のため。
 - (EN) `info` explains the meta keys with a set meaning (`time_base_slipped`, `trigger_index` as a time, the start's uncertainty), shows the capture id, and names a raw analog channel's unit in its conversion.
 - (JA) `info` は、意味の決まった meta のキー（`time_base_slipped`、時刻にした `trigger_index`、開始の不確かさ）を説明し、キャプチャの ID を示し、生の値のアナログの換算に単位を出す。
 

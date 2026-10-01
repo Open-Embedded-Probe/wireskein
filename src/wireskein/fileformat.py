@@ -209,13 +209,13 @@ def _bit(data: bytes, b: int) -> bytes:
 def from_interleaved(data: bytes | bytearray | memoryview, names: list[str], width: int = 8,
                      positions: list[int] | None = None, n: int | None = None, step: int = 1, phase: int = 0) -> list[Channel]:
     """Channels from a probe's sample stream (oep-if-capture §1.1): each sample
-    is `width` bits (1, 2, 4, 8, 16 or 32), channel k is bit positions[k] of it
+    is `width` bits (1, 2, 4, 8, 16, 32, 64 or 128), channel k is bit positions[k] of it
     (default k), samples below 8 bits share a byte with the earliest sample in
     the low bits, wider ones are little-endian. n: number of samples (default:
     all that fit). All channels get the same step and phase."""
     data = bytes(data)
-    if width not in (1, 2, 4, 8, 16, 32):
-        raise ValueError(f"width {width}: must be 1, 2, 4, 8, 16 or 32")
+    if width not in (1, 2, 4, 8, 16, 32, 64, 128):
+        raise ValueError(f"width {width}: must be 1, 2, 4, 8, 16, 32, 64 or 128")
     positions = list(range(len(names))) if positions is None else list(positions)
     if len(positions) != len(names) or any(not 0 <= q < width for q in positions):
         raise ValueError(f"positions {positions} do not fit {len(names)} channels of a {width}-bit sample")
