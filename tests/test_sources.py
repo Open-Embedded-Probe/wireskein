@@ -196,7 +196,7 @@ def test_uart_link_speed_is_asked_for_unless_turned_off(tmp_path, monkeypatch):
         def open_host(target):
             calls.append((target, "old"))
 
-    oep._open(NewLink, "/dev/ttyUSB0", oep._rates("1"))
+    oep._open(NewLink, "/dev/ttyUSB0", oep.FAST)
     oep._open(NewLink, "/dev/ttyUSB0", oep._rates("1500000,921600"))
     oep._open(NewLink, "/dev/ttyUSB0", oep._rates("0"))
     oep._open(OldLink, "/dev/ttyUSB0", [])
@@ -225,3 +225,22 @@ def test_link_line():
                        "raised": False, "trials": [{"rate": 1_500_000, "result": "verify broke", "broken_in": 3,
                                                     "broken_out": 0}]})
     assert line == "115200 baud (the boot speed), tried 1500000 verify broke, opened in 4.30 s, read 64.0 KB in 6.10 s (10.5 KB/s)"
+
+
+def test_link_rates_are_remembered_per_port(tmp_path, monkeypatch):
+    from wireskein.sources import oep
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    now = 1_000_000.0
+    assert oep._rates("1") is None and oep._rates("921600") == [921_600]
+    assert oep._candidates("/dev/A", now) == ([1_500_000, 921_600], False)          # nothing known: the ladder, 2 of it
+    trial = lambda r, ok: {"rate": r, "result": "committed" if ok else "verify broke", "broken_in": 0, "broken_out": 0}  # noqa: E731
+    # first session on a CH340: both fail, the boot speed stays
+    oep._remember("/dev/A", {"rate": 115200, "raised": False, "trials": [trial(1_500_000, 0), trial(921_600, 0)]}, now)
+    assert oep._candidates("/dev/A", now + 60) == ([500_000], True)                  # next time: down the ladder
+    oep._remember("/dev/A", {"rate": 500_000, "raised": True, "trials": [trial(500_000, 1)]}, now + 60)
+    assert oep._candidates("/dev/A", now + 120) == ([500_000], True)                 # what held, and nothing that failed
+    assert oep._candidates("/dev/A", now + oep.FORGET_S + 61)[0] == [500_000, 1_500_000]   # failures are forgotten
+    # a raised rate that was lost in use counts as failed
+    oep._remember("/dev/B", {"rate": 921_600, "raised": True, "lost": True, "trials": [trial(921_600, 1)]}, now)
+    assert oep._candidates("/dev/B", now)[0] == [1_500_000, 500_000]
+    assert oep._candidates("/dev/A", now)[0] != oep._candidates("/dev/B", now)[0]     # per port
