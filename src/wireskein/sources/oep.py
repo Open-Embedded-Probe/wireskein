@@ -210,6 +210,10 @@ def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], aids
         chans = []
         _times(meta, aseg)
         t_ref = getattr(aseg, "start_ns", None)
+    gens = {k: getattr(t, "generation", None) for k, t in (("logic", cap), ("analog", an)) if t is not None}
+    gens = {k: g for k, g in gens.items() if g is not None}          # OEP v1 clients: which start this was
+    if gens:
+        probe["generation"] = gens
     if an:
         if calib is not None and (calib.factory or calib.vrefint):
             probe["calibration"] = [{"frontend": fe, "scheme": scheme, "raw": bytes(raw).hex()}
@@ -232,6 +236,9 @@ def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], aids
                 acq["reference"] = {"source": source, "mv": mv, "measured": bool(measured)}
             if calib is not None and calib.vrefint:
                 acq["vrefint_raw"], acq["vrefint_ns"] = calib.vrefint
+            nominal = getattr(calib, "vrefint_nominal_mv", None)     # OEP v1 clients
+            if nominal is not None:
+                acq["vrefint_nominal_mv"] = nominal
             if getattr(aseg, "start_uncertainty_ns", None) is not None:
                 acq["start_uncertainty_ns"] = aseg.start_uncertainty_ns
             if aseg.trigger_index is not None:
