@@ -25,9 +25,10 @@ from . import Request, Result
 TRIGGER = {"high": (1, 1), "low": (1, 0), "rise": (2, 0), "fall": (2, 1), "both": (2, 2)}   # (type, value), oep-if-capture
 TAG_FRONTEND = 0x46          # analog describe: frontend, range_min_mv, range_max_mv, attenuation_mdb
 TAG_CHIP, TAG_MODEL, TAG_FIRMWARE = 0x4C, 0x41, 0x40      # core describe
-# UART link rates to try for `oep:PORT?fast=1` (port_speed, oep-client 0.0.24): ones common USB-serial adapters
-# (FTDI, CP210x, CH340) take. A rate that fails costs seconds of trying, so it is opt-in, as in the client.
-FAST = [921_600, 500_000]
+# UART link rates tried by default (port_speed): fastest first. oep-client 0.0.26 refuses a rate that breaks with
+# both directions busy and drops back to the boot speed on repeated broken frames, so trying never ends slower
+# than the boot speed; `oep:PORT?fast=0` keeps the boot speed, `?fast=RATE,RATE` tries those.
+FAST = [1_500_000, 921_600, 500_000]
 
 
 def capture(target: str, req: Request) -> Result:
@@ -46,7 +47,8 @@ def capture(target: str, req: Request) -> Result:
     if unknown:
         raise ValueError(f"oep:{target}?...: unknown option {', '.join(sorted(unknown))} "
                          f"(fast=1, or fast=RATE,RATE,... raises a UART probe's link)")
-    fast = _rates(opts.get("fast", ["0"])[-1])
+    fast = _rates(opts.get("fast", ["1"])[-1])
+    asked = "fast" in opts
     try:
         ids = [int(cid) for _, cid in req.channels]
         aids = [int(cid) for _, cid, _ in req.analog]
@@ -54,7 +56,7 @@ def capture(target: str, req: Request) -> Result:
         raise ValueError("oep channel ids are the probe's channel numbers: "
                          f"{[c for _, c in req.channels] + [c for _, c, _ in req.analog]}") from None
     try:
-        return _capture(link, core, oc, oh, target, req, ids, aids, fast)
+        return _capture(link, core, oc, oh, target, req, ids, aids, fast, asked)
     except oh.OepError as e:        # the probe refused or failed: say what, not where
         raise RuntimeError(f"probe {target}: {e}") from e
 
@@ -134,7 +136,7 @@ def _frontends(core, hst, fn: int) -> dict[int, dict]:
 
 
 def _rates(text: str) -> list[int]:
-    """fast=0 / absent: [] (the boot speed); fast=1: FAST; fast=1500000,921600: those, in that order."""
+    """fast=0: [] (the boot speed); fast=1 / absent: FAST; fast=1500000,921600: those, in that order."""
     if text.lower() in ("", "0", "no", "off", "false"):
         return []
     if text.lower() in ("1", "yes", "on", "true"):
@@ -145,7 +147,7 @@ def _rates(text: str) -> list[int]:
         raise ValueError(f"fast={text}: 0, 1, or link rates (fast=1500000,921600)") from None
 
 
-def _open(link, target: str, rates: list[int]):
+def _open(link, target: str, rates: list[int], asked: bool = True):
     """The host; on a UART probe, at a faster link rate when asked and the client can ask for one (port_speed: it
     keeps the boot speed, or goes back to it, whenever the probe, the adapter or the line cannot)."""
     import inspect
@@ -154,7 +156,9 @@ def _open(link, target: str, rates: list[int]):
     except (TypeError, ValueError):
         can = False
     if rates and not can:
-        raise ValueError("fast=...: this oep-client-python cannot raise the link speed (0.0.24 or later can)")
+        if asked:
+            raise ValueError("fast=...: this oep-client-python cannot raise the link speed (0.0.24 or later can)")
+        rates = []                                     # the default, with a client that cannot: the boot speed
     return link.open_host(target, port_speed=rates) if rates else link.open_host(target)
 
 
@@ -177,12 +181,12 @@ def _link_info(hst, rates: list[int], open_s: float, read_bytes: int, read_s: fl
 
 
 def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], aids: list[int],
-             fast: list[int] | None = None) -> Result:
+             fast: list[int] | None = None, asked: bool = False) -> Result:
     import time
     names = [n for n, _ in req.channels]
     anames = [n for n, _, _ in req.analog]
     t_open = time.monotonic()
-    hst = _open(link, target, fast or [])
+    hst = _open(link, target, fast or [], asked)
     open_s = time.monotonic() - t_open
     try:
         opened = core.take(hst, 30_000, owner="wireskein capture")
