@@ -24,7 +24,7 @@ WireSkein は、ロジックアナライザなどの観測記録から必要な�
 | [対応プロトコルの優先度と積み重なりの深さ](protocol-priority.ja.md) | sigrok・Saleae・Pico の一覧から今も使われている方式と優先度、実際の積み重なりの深さ、出力の粒度の比較を確認する |
 | [プラグインの言語と記述方式](plugin-languages.ja.md) | 宣言的なフレーミング記述・汎用スクリプト・WASM の3層の案と、7 処理系（QuickJS、Lua、LuaJIT、Rhai、Starlark、CPython、WASM）の組み込みベンチマークの結果を確認する |
 | [キャプチャで確かめるテストの作り方](capture-test-guide.ja.md) | CH32 の Arduino コアのテストで、マーカー（Start・End・静かな区間）、ステップの分け方、周辺機能ごとの検査項目、許容誤差の決め方を確認する |
-| [引き継ぎ: ArduinoCore-CH32 のテストに wireskein verify を組み込む](handoff-ch32-verify.ja.md) | 実機のあるマシンの新しいセッションで、trace_kit への記録器の組み込み、期待の付け方、実機での受け入れ条件、分かっている限界を確認する |
+| [引き継ぎ: ArduinoCore-CH32（現 ArduinoCore-CH32RV）のテストに wireskein verify を組み込む](handoff-ch32-verify.ja.md) | 実機のあるマシンの新しいセッションで、trace_kit への記録器の組み込み、期待の付け方、実機での受け入れ条件、分かっている限界を確認する |
 | [ファイル形式の検討](file-formats.ja.md) | `.sr` 以外の読み書き、独自のキャプチャの形式、チャンネルごとにレートが違うキャプチャ（P4 の間引き）の保存を、実験の結果とあわせて確認する |
 | [WireSkein のファイル形式 .wireskein](wireskein-format.ja.md) | `.wireskein`（`wireskein/0`）の仕様: 入れ物と中身での見分け方、知らない部分の持ち越し、`capture.json`、チャンネルのデータの `encoding`、添付とメモ、`.sr` との関係、版の上げ方 |
 | [複数アナログとミックスドシグナルの事前調査](analog-mixed-survey.ja.md) | OEP の今の仕様、sigrok と Saleae のアナログとミックスドシグナルの持ち方、OEP の仕様への要望、`.wireskein` のアナログの案 |
