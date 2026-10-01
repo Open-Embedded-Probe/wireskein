@@ -186,26 +186,21 @@ def test_uart_link_speed_is_asked_for_unless_turned_off(tmp_path, monkeypatch):
 
     calls = []
 
-    class NewLink:                                     # oep-client 0.0.24+: open_host(..., port_speed=[...])
+    class NewLink:                                     # oep-client 0.0.24+: raise_speed(hst, rates) after opening
         @staticmethod
-        def open_host(target, *, port_speed=None):
-            calls.append((target, port_speed))
+        def raise_speed(hst, rates):
+            calls.append((hst, rates))
 
     class OldLink:
-        @staticmethod
-        def open_host(target):
-            calls.append((target, "old"))
+        pass
 
-    oep._open(NewLink, "/dev/ttyUSB0", oep.FAST)
-    oep._open(NewLink, "/dev/ttyUSB0", oep._rates("1500000,921600"))
-    oep._open(NewLink, "/dev/ttyUSB0", oep._rates("0"))
-    oep._open(OldLink, "/dev/ttyUSB0", [])
-    assert calls == [("/dev/ttyUSB0", oep.FAST), ("/dev/ttyUSB0", [1_500_000, 921_600]), ("/dev/ttyUSB0", None),
-                     ("/dev/ttyUSB0", "old")]
+    assert oep._raise(NewLink, "H", oep.FAST) == oep.FAST
+    assert oep._raise(NewLink, "H", [1_500_000, 921_600]) == [1_500_000, 921_600]
+    assert oep._raise(NewLink, "H", []) == []
+    assert calls == [("H", oep.FAST), ("H", [1_500_000, 921_600])]
     with pytest.raises(ValueError, match="cannot raise the link speed"):
-        oep._open(OldLink, "/dev/ttyUSB0", oep.FAST)                           # asked for: an error
-    oep._open(OldLink, "/dev/ttyUSB0", oep.FAST, asked=False)                  # the default: the boot speed
-    assert calls[-1] == ("/dev/ttyUSB0", "old")
+        oep._raise(OldLink, "H", oep.FAST)                                     # asked for: an error
+    assert oep._raise(OldLink, "H", oep.FAST, asked=False) == []                # the default: the boot speed
     assert oep._rates("") == [] and oep.FAST[0] == 1_500_000
     fake = StandIn(n=11)
     for name, mod in fake.modules().items():

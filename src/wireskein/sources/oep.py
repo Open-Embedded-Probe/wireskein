@@ -25,7 +25,7 @@ from . import Request, Result
 
 TRIGGER = {"high": (1, 1), "low": (1, 0), "rise": (2, 0), "fall": (2, 1), "both": (2, 2)}   # (type, value), oep-if-capture
 TAG_FRONTEND = 0x46          # analog describe: frontend, range_min_mv, range_max_mv, attenuation_mdb
-TAG_CHIP, TAG_MODEL, TAG_FIRMWARE = 0x4C, 0x41, 0x40      # core describe
+TAG_CHIP, TAG_MODEL, TAG_FIRMWARE, TAG_UNIT_ID = 0x4C, 0x41, 0x40, 0x42     # core describe
 # UART link rates tried by default (port_speed): fastest first. oep-client 0.0.26 refuses a rate that breaks with
 # both directions busy and drops back to the boot speed on repeated broken frames, so trying never ends slower
 # than the boot speed; `oep:PORT?fast=0` keeps the boot speed, `?fast=RATE,RATE` tries those.
@@ -167,7 +167,7 @@ def _describe(core, hst, fn: int) -> list[tuple[int, bytes]]:
 def _probe_info(core, hst, opened) -> dict:
     info = {}
     for tag, value in _describe(core, hst, 0):
-        key = {TAG_CHIP: "chip", TAG_MODEL: "model", TAG_FIRMWARE: "firmware"}.get(tag)
+        key = {TAG_CHIP: "chip", TAG_MODEL: "model", TAG_FIRMWARE: "firmware", TAG_UNIT_ID: "unit_id"}.get(tag)
         if key:
             info[key] = value.decode("utf-8", "replace").rstrip("\0")
     boot = getattr(opened, "boot_id", None)
@@ -199,19 +199,18 @@ def _rates(text: str) -> list[int]:
         raise ValueError(f"fast={text}: 0, 1, or link rates (fast=1500000,921600)") from None
 
 
-def _open(link, target: str, rates: list[int], asked: bool = True):
-    """The host; on a UART probe, at a faster link rate when asked and the client can ask for one (port_speed: it
-    keeps the boot speed, or goes back to it, whenever the probe, the adapter or the line cannot)."""
-    import inspect
-    try:
-        can = "port_speed" in inspect.signature(link.open_host).parameters
-    except (TypeError, ValueError):
-        can = False
-    if rates and not can:
+def _raise(link, hst, rates: list[int], asked: bool = True) -> list[int]:
+    """Raise the link of an open host to the first of `rates` that holds (port_speed: the client keeps the boot speed,
+    or goes back to it, whenever the probe, the adapter or the line cannot). -> the rates asked of the client
+    ([] when none were, or the client cannot and they were only the default)."""
+    raise_speed = getattr(link, "raise_speed", None)
+    if rates and raise_speed is None:
         if asked:
             raise ValueError("fast=...: this oep-client-python cannot raise the link speed (0.0.24 or later can)")
-        rates = []                                     # the default, with a client that cannot: the boot speed
-    return link.open_host(target, port_speed=rates) if rates else link.open_host(target)
+        return []                                      # the default, with a client that cannot: the boot speed
+    if rates:
+        raise_speed(hst, rates)
+    return rates
 
 
 def _link_info(hst, rates: list[int], open_s: float, read_bytes: int, read_s: float) -> dict:
@@ -240,13 +239,17 @@ def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], aids
     t_open = time.monotonic()
     now = time.time()
     remembered = False
-    if fast is None:                                   # the default: what this port did before decides the order
-        fast, remembered = _candidates(target, now)
-    hst = _open(link, target, fast, asked and bool(fast))
-    open_s = time.monotonic() - t_open
+    hst = link.open_host(target)
     try:
         opened = core.take(hst, 30_000, owner="wireskein capture")
         probe = _probe_info(core, hst, opened)
+        # the link's memory is per port and probe (host development guide §7.5): the adapter belongs to the port,
+        # the rest of the link to the probe, so either changing starts over
+        key = f"{target}#{probe.get('unit_id', '')}"
+        if fast is None:                               # the default: what this port and probe did before decides
+            fast, remembered = _candidates(key, now)
+        fast = _raise(link, hst, fast, asked and bool(fast))
+        open_s = time.monotonic() - t_open
         cap = oc.LogicCapture(hst) if ids else None
         an = oc.AnalogCapture(hst) if aids else None
         plan = [(cap.fn, k, ch) for k, ch in enumerate(ids)] if cap else []
@@ -306,7 +309,7 @@ def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], aids
             probe["link"] = _link_info(hst, fast, open_s, len(data or b"") + len(adata or b""), read_s)
             if remembered:
                 probe["link"]["remembered"] = True
-            _remember(target, probe["link"], now)
+            _remember(key, probe["link"], now)
             calib = an.calibration() if an else None
             frontends = _frontends(core, hst, an.fn) if an else {}
         finally:

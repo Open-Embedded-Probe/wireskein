@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) The link memory is per port and probe (`port#unit_id`, OEP host development guide §7.5): the link is opened at the boot speed, the probe's describe read (its `unit_id` now goes into `meta.probe` too), and then raised with the remembered candidates (`link.raise_speed`). A USB / TCP link says why it is not raised.
+- (JA) リンクの記録は、口とプローブごと（`口#unit_id`。OEP の host 開発ガイド §7.5）。起動時の速度で開き、プローブの describe を読んでから（その `unit_id` も `meta.probe` に入れる）、覚えた候補で上げる（`link.raise_speed`）。USB や TCP のリンクは、上げない理由を示す。
 - (EN) The UART link speed-up tries at most two rates per capture (each trial costs up to a second, core §3.5) and remembers per port what held and what failed (`~/.cache/wireskein/link-speed.json`, failures skipped for 30 days), so a port whose fast rates fail moves down the list (1.5M, 921600, 500000) over captures. An explicit `?fast=RATE,...` ignores the memory; the `link:` line says when the memory chose the rates.
 - (JA) UART のリンクの高速化は、1 回の取得で試す速度を 2 つまでにし（1 つに最大 1 秒ほどかかる。core §3.5）、口ごとに通った速度と通らなかった速度を覚える（`~/.cache/wireskein/link-speed.json`。通らなかったものは 30 日飛ばす）。速い速度が通らない口は、回を追って（1.5M、921600、500000 の順に）遅い方へ移る。`?fast=速度,...` とはっきり指定したときは、覚えたものを使わない。`link:` の行は、覚えたもので速度を選んだときにそう示す。
 - (EN) The UART link speed-up: tries 1.5 Mbaud, 921600, 500000 (fastest first) and needs oep-client-python 0.0.26, which refuses a rate that breaks with both directions busy (921600 on the V003 jig's CH340 did), drops back to the boot speed on repeated broken frames, and fixes 0.0.25's result_lost after a quiet second. `?fast=RATE,RATE` tries those only; asking for it with a client that cannot is an error. `capture` prints how the link went (rate, trials, open and read times), kept in `meta.probe.link`.

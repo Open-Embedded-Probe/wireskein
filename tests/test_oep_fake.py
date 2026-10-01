@@ -104,6 +104,7 @@ def test_analog_alone_keeps_raw_values_and_what_the_probe_knows(probe, tmp_path)
     assert sq.acquisition["pin"] == 16 and "reference" in sq.acquisition and sq.acquisition["vrefint_raw"] == 1365
     p = head["meta"]["probe"]
     assert p["calibration"] and "boot_id" in p and "start_ns" in head["meta"]
+    assert p.get("unit_id")                                        # core describe: the probe's own id
     if V1:                                                         # what an OEP v1 client also gives
         assert isinstance(sq.acquisition["vrefint_nominal_mv"], int)
         assert set(p["generation"]) == {"analog"} and isinstance(p["generation"]["analog"], int)
