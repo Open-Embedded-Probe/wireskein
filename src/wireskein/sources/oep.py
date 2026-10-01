@@ -17,6 +17,7 @@ reference, Vrefint reading and factory calibration go along, never applied.
 from __future__ import annotations
 
 import struct
+from pathlib import Path
 from fractions import Fraction
 
 from .. import fileformat
@@ -29,6 +30,56 @@ TAG_CHIP, TAG_MODEL, TAG_FIRMWARE = 0x4C, 0x41, 0x40      # core describe
 # both directions busy and drops back to the boot speed on repeated broken frames, so trying never ends slower
 # than the boot speed; `oep:PORT?fast=0` keeps the boot speed, `?fast=RATE,RATE` tries those.
 FAST = [1_500_000, 921_600, 500_000]
+PER_SESSION = 2          # candidates tried per open: each costs up to ~1 s, plus a wait when it fails (core §3.5)
+FORGET_S = 30 * 86400    # a rate that failed on a port is skipped for this long
+
+
+def _speed_cache() -> Path:
+    import os
+    return Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "wireskein" / "link-speed.json"
+
+
+def _load_speeds() -> dict:
+    import json
+    try:
+        return json.loads(_speed_cache().read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def _candidates(target: str, now: float) -> tuple[list[int], bool]:
+    """The default rates to try on this port: the one that held last time first, then the ladder (FAST) without
+    the ones that failed lately, at most PER_SESSION. (rates, whether the memory shaped them)."""
+    mem = _load_speeds().get(target, {})
+    failed = {int(r) for r, t in mem.get("failed", {}).items() if now - t < FORGET_S}
+    good = mem.get("good")
+    order = ([good] if good and good not in failed else []) + [r for r in FAST if r != good and r not in failed]
+    return order[:PER_SESSION], bool(mem)
+
+
+def _remember(target: str, link: dict, now: float) -> None:
+    """Keep what the port did (the committed rate, the failed trials, a raised rate that was lost) for next time."""
+    import json
+    if "rate" not in link:
+        return
+    data = _load_speeds()
+    mem = data.setdefault(target, {})
+    failed = mem.setdefault("failed", {})
+    for t in link.get("trials", []):
+        if t["result"] != "committed":
+            failed[str(t["rate"])] = now
+    if link.get("lost") and link.get("rate"):
+        failed[str(link["rate"])] = now
+        mem.pop("good", None)
+    elif link.get("raised"):
+        mem["good"] = link["rate"]
+        failed.pop(str(link["rate"]), None)
+    try:
+        p = _speed_cache()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(data, indent=1))
+    except OSError:
+        pass                                           # the memory is a convenience: a read-only home is fine
 
 
 def capture(target: str, req: Request) -> Result:
@@ -136,11 +187,12 @@ def _frontends(core, hst, fn: int) -> dict[int, dict]:
 
 
 def _rates(text: str) -> list[int]:
-    """fast=0: [] (the boot speed); fast=1 / absent: FAST; fast=1500000,921600: those, in that order."""
+    """fast=0: [] (the boot speed); fast=1 / absent: None (the remembered default, _candidates);
+    fast=1500000,921600: those, in that order, whatever was remembered."""
     if text.lower() in ("", "0", "no", "off", "false"):
         return []
     if text.lower() in ("1", "yes", "on", "true"):
-        return list(FAST)
+        return None
     try:
         return [int(r) for r in text.split(",")]
     except ValueError:
@@ -186,7 +238,11 @@ def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], aids
     names = [n for n, _ in req.channels]
     anames = [n for n, _, _ in req.analog]
     t_open = time.monotonic()
-    hst = _open(link, target, fast or [], asked)
+    now = time.time()
+    remembered = False
+    if fast is None:                                   # the default: what this port did before decides the order
+        fast, remembered = _candidates(target, now)
+    hst = _open(link, target, fast, asked and bool(fast))
     open_s = time.monotonic() - t_open
     try:
         opened = core.take(hst, 30_000, owner="wireskein capture")
@@ -247,7 +303,10 @@ def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], aids
             data = cap.read_segment(seg) if cap else None
             adata = an.read_segment(aseg) if an else None
             read_s = time.monotonic() - t_read
-            probe["link"] = _link_info(hst, fast or [], open_s, len(data or b"") + len(adata or b""), read_s)
+            probe["link"] = _link_info(hst, fast, open_s, len(data or b"") + len(adata or b""), read_s)
+            if remembered:
+                probe["link"]["remembered"] = True
+            _remember(target, probe["link"], now)
             calib = an.calibration() if an else None
             frontends = _frontends(core, hst, an.fn) if an else {}
         finally:
