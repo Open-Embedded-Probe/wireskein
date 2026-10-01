@@ -244,7 +244,9 @@ def capture_cmd(args) -> None:
 def _link_line(link: dict) -> str:
     """How the probe's link went: the rate in force and the trials, the open and the read (meta.probe.link)."""
     parts = []
-    if "rate" in link:
+    if "rate" in link and not link.get("rate"):        # no serial speed here (USB, TCP): say why only
+        parts.append(f"not raised ({link.get('why', 'no serial port')})")
+    elif "rate" in link:
         tried = [f"{t['rate']} {t['result']}" for t in link.get("trials", []) if t["result"] != "committed"]
         parts.append(f"{link['rate']} baud" + (" (raised)" if link.get("raised") else " (the boot speed)")
                      + (f", tried {'; '.join(tried)}" if tried else "") + (f", {link['why']}" if link.get("why") else "")
