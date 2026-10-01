@@ -236,6 +236,24 @@ def capture_cmd(args) -> None:
     cap = load(out)
     print(f"{out}: {_count(cap)}, {cap.n_samples} ticks at {cap.rate:g} Hz ({cap.duration:.6g} s)")
     _fewer(out, req)
+    link = (cap.meta.get("probe") or {}).get("link")
+    if link:
+        print("link: " + _link_line(link))
+
+
+def _link_line(link: dict) -> str:
+    """How the probe's link went: the rate in force and the trials, the open and the read (meta.probe.link)."""
+    parts = []
+    if "rate" in link:
+        tried = [f"{t['rate']} {t['result']}" for t in link.get("trials", []) if t["result"] != "committed"]
+        parts.append(f"{link['rate']} baud" + (" (raised)" if link.get("raised") else " (the boot speed)")
+                     + (f", tried {'; '.join(tried)}" if tried else "") + (f", {link['why']}" if link.get("why") else "")
+                     + (", the raised rate was lost" if link.get("lost") else ""))
+    parts.append(f"opened in {link['open_s']:.2f} s")
+    kb = link["read_bytes"] / 1000
+    rate = f" ({kb / link['read_s']:.1f} KB/s)" if link["read_s"] > 0 else ""
+    parts.append(f"read {kb:.1f} KB in {link['read_s']:.2f} s{rate}")
+    return ", ".join(parts)
 
 
 def _fewer(out, req) -> None:
@@ -344,8 +362,8 @@ def main() -> None:
     cv.add_argument("input", type=Path)
     cv.add_argument("output", type=Path)
     cp = sub.add_parser("capture", help="capture logic channels from a device into a .wireskein (sources: oep, sigrok)")
-    cp.add_argument("--source", required=True, help="oep:<serial port | tcp://HOST:PORT | usb[:VID:PID]>[?fast=0] or sigrok:<driver> "
-                         "(a UART probe's link is raised to a faster rate when it can; fast=0 keeps its boot speed)")
+    cp.add_argument("--source", required=True, help="oep:<serial port | tcp://HOST:PORT | usb[:VID:PID]>[?fast=1 | ?fast=RATE,RATE] or sigrok:<driver> "
+                         "(fast: raise a UART probe's link for reading back; it falls back by itself)")
     cp.add_argument("--channels", default=None, help='logic: "NAME=ID,..." (ID: the probe channel number / sigrok channel) or "ID,..."')
     cp.add_argument("--analog", default=None, help='analog: "NAME=ID[@FRONTEND],..." (FRONTEND: the input range number, OEP)')
     cp.add_argument("--analog-rate", default=None, help="analog samples per second (default: --rate)")

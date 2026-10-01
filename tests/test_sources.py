@@ -196,15 +196,30 @@ def test_uart_link_speed_is_asked_for_unless_turned_off(tmp_path, monkeypatch):
         def open_host(target):
             calls.append((target, "old"))
 
-    oep._open(NewLink, "/dev/ttyUSB0", True)
-    oep._open(NewLink, "/dev/ttyUSB0", False)
-    oep._open(OldLink, "/dev/ttyUSB0", True)
-    assert calls == [("/dev/ttyUSB0", oep.FAST), ("/dev/ttyUSB0", None), ("/dev/ttyUSB0", "old")]
+    oep._open(NewLink, "/dev/ttyUSB0", oep._rates("1"))
+    oep._open(NewLink, "/dev/ttyUSB0", oep._rates("1500000,921600"))
+    oep._open(NewLink, "/dev/ttyUSB0", oep._rates("0"))
+    oep._open(OldLink, "/dev/ttyUSB0", [])
+    assert calls == [("/dev/ttyUSB0", oep.FAST), ("/dev/ttyUSB0", [1_500_000, 921_600]), ("/dev/ttyUSB0", None),
+                     ("/dev/ttyUSB0", "old")]
+    with pytest.raises(ValueError, match="cannot raise the link speed"):
+        oep._open(OldLink, "/dev/ttyUSB0", oep.FAST)
+    assert oep._rates("") == [] and oep.FAST[0] == 921_600
     fake = StandIn(n=11)
     for name, mod in fake.modules().items():
         monkeypatch.setitem(sys.modules, name, mod)
     req = sources.Request([("SDA", "47"), ("SCL", "48"), ("INT", "5")], 20_000_000, 11)
-    sources.capture("oep:/dev/ttyACM9?fast=0", req, tmp_path / "o.wireskein")
+    out = sources.capture("oep:/dev/ttyACM9?fast=0", req, tmp_path / "o.wireskein")
     assert ("open", "/dev/ttyACM9") in fake.calls                              # the option is not part of the port
+    link = fileformat.read(out)[0]["meta"]["probe"]["link"]
+    assert set(link) == {"open_s", "read_bytes", "read_s"} and link["read_bytes"] == len(fake.data)
     with pytest.raises(ValueError, match="unknown option speed"):
         sources.capture("oep:/dev/ttyACM9?speed=2", req, tmp_path / "p.wireskein")
+
+
+def test_link_line():
+    from wireskein.cli import _link_line
+    line = _link_line({"open_s": 4.3, "read_bytes": 64000, "read_s": 6.1, "asked": [1_500_000], "rate": 115200,
+                       "raised": False, "trials": [{"rate": 1_500_000, "result": "verify broke", "broken_in": 3,
+                                                    "broken_out": 0}]})
+    assert line == "115200 baud (the boot speed), tried 1500000 verify broke, opened in 4.30 s, read 64.0 KB in 6.10 s (10.5 KB/s)"

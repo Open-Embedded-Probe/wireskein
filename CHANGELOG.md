@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) **Raising a UART probe's link is now opt-in** (it was on by default in 0.0.15): on the V003 jig's CH340 adapter, a failing 1.5 Mbaud trial made a 64 KB capture twice as slow. `oep:PORT?fast=1` tries 921600 then 500000; `?fast=1500000,921600` tries the rates given; asking with a client that cannot (before 0.0.24) is an error. `capture` prints how the link went (rate, trials, open and read times), kept in `meta.probe.link`.
+- (JA) **UART のプローブのリンクを上げるのは、頼んだときだけにした**（0.0.15 では既定で上げていた）。V003 の治具の CH340 で、通らない 1.5 Mbaud を試す分、64 KB のキャプチャが 2 倍遅くなったため。`oep:ポート?fast=1` で 921600、だめなら 500000。`?fast=1500000,921600` で並べた速度を試す。上げられないクライアント（0.0.24 より前）で頼むと誤り。`capture` は、リンクがどうなったか（速度、試した結果、開くのと読み出しの時間）を表示し、`meta.probe.link` に残す。
 
 ## 0.0.15
 - (EN) `capture --source oep:...` raises a UART probe's link to a faster rate for reading the capture back (port_speed, oep-client-python 0.0.24 or later: 1.5 Mbaud, 921600 or 500000, the first that works; it stays at or returns to the boot speed when the probe, the adapter or the line cannot). `oep:PORT?fast=0` keeps the boot speed. With an older client nothing changes.
