@@ -86,6 +86,8 @@ def test_esp32_sampler_profile(probe, tmp_path):
 HAS_ANALOG = hasattr(oep_client.capture if hasattr(oep_client, "capture") else __import__("oep_client.capture").capture,
                      "CaptureGroup")
 analog_only = pytest.mark.skipif(not HAS_ANALOG, reason="oep-client has no analog / group (before 0.0.10)")
+_cal = getattr(__import__("oep_client.capture").capture, "Calibration", None)
+V1 = _cal is not None and "vrefint_nominal_mv" in getattr(_cal, "__dataclass_fields__", {})     # OEP v1 clients
 
 
 @analog_only
@@ -102,6 +104,9 @@ def test_analog_alone_keeps_raw_values_and_what_the_probe_knows(probe, tmp_path)
     assert sq.acquisition["pin"] == 16 and "reference" in sq.acquisition and sq.acquisition["vrefint_raw"] == 1365
     p = head["meta"]["probe"]
     assert p["calibration"] and "boot_id" in p and "start_ns" in head["meta"]
+    if V1:                                                         # what an OEP v1 client also gives
+        assert isinstance(sq.acquisition["vrefint_nominal_mv"], int)
+        assert set(p["generation"]) == {"analog"} and isinstance(p["generation"]["analog"], int)
 
 
 @analog_only
@@ -116,6 +121,8 @@ def test_logic_and_analog_together_in_a_group(probe, tmp_path):
     # the fake starts the analog track 5 us (+-2 us) after the group, logic at once: 100 ticks of 20 MHz
     assert abs(float(sq.t0_ticks) - 100) <= 40 + 1
     assert sq.acquisition["start_uncertainty_ns"] == 2000 and "group_start_ns" in head["meta"]["probe"]
+    if V1:
+        assert set(head["meta"]["probe"]["generation"]) == {"logic", "analog"}
     assert sq.n == round(2000 * 48_000 / 20_000_000) or sq.n >= 1
 
 
