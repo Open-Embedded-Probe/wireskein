@@ -86,6 +86,7 @@ class StandIn:
 
             def start(self):
                 me.calls.append(("start",))
+                self.generation = 3                     # OEP v1 clients: the capture's generation
 
             def wait(self, timeout):
                 return [types.SimpleNamespace(samples=me.n, start_us=123, trigger_index=4, slipped=True)]
@@ -123,6 +124,7 @@ def test_oep_source_against_a_stand_in(tmp_path, monkeypatch):
     assert [fileformat.unpack(c) for c in chans] == [row.tobytes() for row in fake.levels]
     meta = head["meta"]
     assert meta["source"] == "oep:/dev/ttyACM9" and meta["start_ns"] == 123_000 and "start_us" not in meta
+    assert meta["probe"]["generation"] == {"logic": 3}
     assert meta["time_base_slipped"] is True
     assert meta["trigger_index"] == 4 and meta["probe_channels"] == {"SDA": 47, "SCL": 48, "INT": 5}
 
@@ -160,3 +162,20 @@ def test_fewer_samples_than_asked_are_named(tmp_path, capsys):
                                  fileformat.analog_volts("V", [1.0] * 10, 100)])
     _fewer(out, sources.Request([("A", "0")], 1000, 400, analog_samples=10))
     assert capsys.readouterr().out == "note: A: 64 samples of the 400 asked (the probe's limit)\n"
+
+
+def test_a_probe_error_ends_in_one_line(monkeypatch, capsys):
+    from oep_client.message import OepError
+
+    class Expired(OepError):                          # stands for oep_client.host.Expired (OEP v1)
+        pass
+
+    def fail(*a, **k):
+        raise Expired("the lease (5000 ms) ran out")
+    monkeypatch.setattr(sources, "capture", fail)
+    from wireskein import cli
+    monkeypatch.setattr(sys, "argv", ["wireskein", "capture", "--source", "oep:/dev/null", "--channels", "A=0",
+                                      "--rate", "1M", "--samples", "10", "-o", "x.wireskein"])
+    with pytest.raises(SystemExit) as e:
+        cli.main()
+    assert str(e.value) == "wireskein capture: Expired: the lease (5000 ms) ran out"

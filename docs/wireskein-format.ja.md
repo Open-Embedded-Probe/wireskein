@@ -124,6 +124,7 @@ UTF-8 の JSON のオブジェクトです。
 | `attenuation_db` | ADC の減衰（ESP32 の 0 / 2.5 / 6 / 11 dB など）。これがないと、生の値の意味が決まりません |
 | `reference` | ADC の基準電圧（オブジェクト）: `source`（`"vdd"`、`"internal"`、`"external"`）と `mv`（その電圧、mV）、`measured`（`true`: 実測、`false` / なし: 公称値）。基準電圧が電源の MCU（CH32V003 や CH32X035 など、3.3 V でも 5 V でも動くもの）では、これがないと生の値の意味が決まりません |
 | `vrefint_raw` | 内部の基準電圧（Vrefint）を同時に測った生の値。基準電圧が電源のとき、実際の電源電圧を逆算するのに使えます |
+| `vrefint_nominal_mv` | Vrefint の公称の電圧（mV。OEP v1 の校正の情報）。`vrefint_raw` と合わせて、電源電圧を逆算するのに使います |
 | `start_uncertainty_ns` | そのチャンネル（トラック）の最初のサンプルの時刻の不確かさ（±ns）。複数のトラックを一緒に取ったとき、トラックごとに違います |
 | `frontend` | 選ばれた入力の前段（OEP の `frontend_used` と describe の `frontend`: 番号、測れる範囲 `range_min_mv` / `range_max_mv`、減衰） |
 
@@ -143,7 +144,7 @@ UTF-8 の JSON のオブジェクトです。
 | `start_uncertainty_ns` | `start_ns` の不確かさ（±ns。OEP の区画の `start_uncertainty_ns`。保証ではない目安） |
 | `trigger_index` | トリガの位置: ロジックのチャンネルのサンプルの番号（OEP の区画の `trigger_index`）。トリガがないときは、キー自体を入れません。アナログのトラックのトリガの位置は、そのチャンネルの `acquisition.trigger_index`（そのチャンネルのサンプルの番号）です |
 | `time_base_slipped` | `true`: プローブが、サンプルの時刻が遅れたことを知っている（OEP の区画の flags bit 2）。遅れがないときは、キー自体を入れません |
-| `probe` | 取得した機器の情報（オブジェクト）。キーは任意です。WireSkein が意味を決めているのは次のものです。`model`、`firmware`（プローブ）、`chip`、`chip_revision`（取得した MCU）、`calibration`（出荷時の補正値。`scheme` に方式の名前、`raw` に生の値を、適用せずにそのまま入れる。例: ESP32 の eFuse の ADC の補正値） |
+| `probe` | 取得した機器の情報（オブジェクト）。キーは任意です。WireSkein が意味を決めているのは次のものです。`model`、`firmware`（プローブ）、`chip`、`chip_revision`（取得した MCU）、`generation`（OEP v1 の取得の世代: `{"logic": n, "analog": n}`。どの開始の取得かを追うため）、`calibration`（出荷時の補正値。`scheme` に方式の名前、`raw` に生の値を、適用せずにそのまま入れる。例: ESP32 の eFuse の ADC の補正値） |
 
 大きな情報や、後から足す情報は、`meta` ではなく添付かメモに入れます（§5）。
 

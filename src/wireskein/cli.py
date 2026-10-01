@@ -112,6 +112,16 @@ def attach_cmd(args) -> None:
     fileformat.attach(args.file, args.name, data, replace=args.replace)
 
 
+def _probe_errors() -> tuple:
+    """The OEP client's errors (all under OepError: Rejected, Failed, Expired when a lease ran out, ...),
+    when it is installed, so a capture that fails on the probe ends in one line."""
+    try:
+        from oep_client.message import OepError
+    except ImportError:
+        return ()
+    return (OepError,)
+
+
 def _thresholds(items: list[str] | None) -> dict:
     """["RX=1.65", "SDA=1.0,2.3"] -> {"RX": 1.65, "SDA": (1.0, 2.3)}."""
     out = {}
@@ -387,8 +397,9 @@ def main() -> None:
         try:
             return files[args.cmd](args)
         except (ValueError, FileExistsError, FileNotFoundError, KeyError, RuntimeError, TimeoutError,
-                zipfile.BadZipFile) as e:
-            sys.exit(f"wireskein {args.cmd}: {e}")
+                zipfile.BadZipFile, *_probe_errors()) as e:
+            what = "" if isinstance(e, (ValueError, FileNotFoundError, zipfile.BadZipFile)) else f"{type(e).__name__}: "
+            sys.exit(f"wireskein {args.cmd}: {what}{e}")
     if args.cmd == "segments":
         try:
             return segments(args)
