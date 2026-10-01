@@ -25,6 +25,7 @@ from . import Request, Result
 TRIGGER = {"high": (1, 1), "low": (1, 0), "rise": (2, 0), "fall": (2, 1), "both": (2, 2)}   # (type, value), oep-if-capture
 TAG_FRONTEND = 0x46          # analog describe: frontend, range_min_mv, range_max_mv, attenuation_mdb
 TAG_CHIP, TAG_MODEL, TAG_FIRMWARE = 0x4C, 0x41, 0x40      # core describe
+FAST = [1_500_000, 921_600, 500_000]    # UART link rates to try (port_speed, oep-client 0.0.24); it falls back by itself
 
 
 def capture(target: str, req: Request) -> Result:
@@ -34,8 +35,15 @@ def capture(target: str, req: Request) -> Result:
         from oep_client import host as oh
     except ImportError as e:
         raise RuntimeError('the oep source needs oep-client-python: pip install "wireskein[oep]"') from e
+    target, _, query = target.partition("?")
     if not target:
         raise ValueError("oep:<target>: a serial port, tcp://HOST:PORT or usb[:VID:PID[:SERIAL]]")
+    import urllib.parse
+    opts = urllib.parse.parse_qs(query)
+    unknown = set(opts) - {"fast"}
+    if unknown:
+        raise ValueError(f"oep:{target}?...: unknown option {', '.join(sorted(unknown))} (fast=0 keeps the link's boot speed)")
+    fast = opts.get("fast", ["1"])[-1] not in ("0", "no", "off", "false")
     try:
         ids = [int(cid) for _, cid in req.channels]
         aids = [int(cid) for _, cid, _ in req.analog]
@@ -43,7 +51,7 @@ def capture(target: str, req: Request) -> Result:
         raise ValueError("oep channel ids are the probe's channel numbers: "
                          f"{[c for _, c in req.channels] + [c for _, c, _ in req.analog]}") from None
     try:
-        return _capture(link, core, oc, oh, target, req, ids, aids)
+        return _capture(link, core, oc, oh, target, req, ids, aids, fast)
     except oh.OepError as e:        # the probe refused or failed: say what, not where
         raise RuntimeError(f"probe {target}: {e}") from e
 
@@ -122,10 +130,21 @@ def _frontends(core, hst, fn: int) -> dict[int, dict]:
     return out
 
 
-def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], aids: list[int]) -> Result:
+def _open(link, target: str, fast: bool):
+    """The host; on a UART probe, at a faster link rate when the client can ask for one (port_speed: it keeps the
+    boot speed, or goes back to it, whenever the probe, the adapter or the line cannot)."""
+    import inspect
+    try:
+        can = "port_speed" in inspect.signature(link.open_host).parameters
+    except (TypeError, ValueError):
+        can = False
+    return link.open_host(target, port_speed=FAST) if fast and can else link.open_host(target)
+
+
+def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], aids: list[int], fast: bool = True) -> Result:
     names = [n for n, _ in req.channels]
     anames = [n for n, _, _ in req.analog]
-    hst = link.open_host(target)
+    hst = _open(link, target, fast)
     try:
         opened = core.take(hst, 30_000, owner="wireskein capture")
         probe = _probe_info(core, hst, opened)

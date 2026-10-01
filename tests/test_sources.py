@@ -179,3 +179,32 @@ def test_a_probe_error_ends_in_one_line(monkeypatch, capsys):
     with pytest.raises(SystemExit) as e:
         cli.main()
     assert str(e.value) == "wireskein capture: Expired: the lease (5000 ms) ran out"
+
+
+def test_uart_link_speed_is_asked_for_unless_turned_off(tmp_path, monkeypatch):
+    from wireskein.sources import oep
+
+    calls = []
+
+    class NewLink:                                     # oep-client 0.0.24+: open_host(..., port_speed=[...])
+        @staticmethod
+        def open_host(target, *, port_speed=None):
+            calls.append((target, port_speed))
+
+    class OldLink:
+        @staticmethod
+        def open_host(target):
+            calls.append((target, "old"))
+
+    oep._open(NewLink, "/dev/ttyUSB0", True)
+    oep._open(NewLink, "/dev/ttyUSB0", False)
+    oep._open(OldLink, "/dev/ttyUSB0", True)
+    assert calls == [("/dev/ttyUSB0", oep.FAST), ("/dev/ttyUSB0", None), ("/dev/ttyUSB0", "old")]
+    fake = StandIn(n=11)
+    for name, mod in fake.modules().items():
+        monkeypatch.setitem(sys.modules, name, mod)
+    req = sources.Request([("SDA", "47"), ("SCL", "48"), ("INT", "5")], 20_000_000, 11)
+    sources.capture("oep:/dev/ttyACM9?fast=0", req, tmp_path / "o.wireskein")
+    assert ("open", "/dev/ttyACM9") in fake.calls                              # the option is not part of the port
+    with pytest.raises(ValueError, match="unknown option speed"):
+        sources.capture("oep:/dev/ttyACM9?speed=2", req, tmp_path / "p.wireskein")
