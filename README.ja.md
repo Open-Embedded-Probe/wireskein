@@ -116,6 +116,7 @@ wireskein capture --source sigrok:fx2lafw --channels SDA=D0,SCL=D1 --rate 12M --
 - UART のプローブ（classic ESP32 の治具など）では、キャプチャの読み出しのためにリンクを速い速度に上げます。1.5 Mbaud、921600、500000 の順に試し、両方向を同時に流しても壊れない最初のものを使います（oep-client-python 0.0.26 以降）。
   - 壊れる速度はクライアントが断り、使っている間にフレームが続けて壊れたら起動時の速度に戻るので、起動時の速度より遅くはなりません。
   - `?fast=0` で起動時の速度のまま、`?fast=921600`（並べることもできる）でその速度だけを試します。
+- USB のあるプローブ（ESP32-P4 など）は、`oep:usb:VID:PID[:SERIAL]` で開くのがよいです。vendor bulk のインターフェースで、毎秒数 MB を落とさずに読み出せます。USB シリアル（CDC）の口は遅く、負荷が高いと応答を落とすことがあります。
   - `capture` は、リンクがどうなったか（速度、試した結果、読み出しの時間）を表示し、`meta.probe.link` に残します。
 - Python からは `wireskein.sources.capture(取得元, Request(...), 出力先)` です。
 - 別の package から、entry point の `wireskein.sources` で取得元を足せます。
