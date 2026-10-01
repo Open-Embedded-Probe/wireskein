@@ -250,3 +250,17 @@ def test_unknown_parts_are_carried_over(tmp_path):
     run("convert", tmp_path / "b.sr", tmp_path / "c.wireskein")
     run("convert", tmp_path / "c.wireskein", tmp_path / "d.wireskein")
     assert fileformat.extras(tmp_path / "d.wireskein") == {"attach/r.txt": b"two", "markers/0001.json": b'{"t": 5}'}
+
+
+@pytest.mark.parametrize("width", [64, 128])
+def test_wide_samples(width):
+    """64 / 128 logic channels per sample (OEP v1's widths): little-endian, channel k at bit k."""
+    rng = np.random.default_rng(width)
+    n, size = 200, width // 8
+    data = rng.integers(0, 256, n * size, dtype=np.uint8).tobytes()
+    names = [f"D{k}" for k in range(width)]
+    chans = fileformat.from_interleaved(data, names, width=width)
+    raw = np.frombuffer(data, np.uint8).reshape(n, size)
+    for k in (0, 7, 8, 63, width - 1):
+        want = ((raw[:, k // 8] >> (k % 8)) & 1).tobytes()
+        assert fileformat.unpack(chans[k]) == want
