@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 0.0.15
 - (EN) `capture --source oep:...` raises a UART probe's link to a faster rate for reading the capture back (port_speed, oep-client-python 0.0.24 or later: 1.5 Mbaud, 921600 or 500000, the first that works; it stays at or returns to the boot speed when the probe, the adapter or the line cannot). `oep:PORT?fast=0` keeps the boot speed. With an older client nothing changes.
 - (JA) `capture --source oep:...` は、UART のプローブのリンクを、キャプチャの読み出しのために速い速度に上げる（port_speed、oep-client-python 0.0.24 以降。1.5 Mbaud、921600、500000 の順で、通った最初のもの。プローブ、アダプタ、線が許さなければ、起動時の速度のまま、または戻る）。`oep:ポート?fast=0` で起動時の速度のまま。古いクライアントでは何も変わらない。
 
