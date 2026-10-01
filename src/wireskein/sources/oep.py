@@ -25,7 +25,9 @@ from . import Request, Result
 TRIGGER = {"high": (1, 1), "low": (1, 0), "rise": (2, 0), "fall": (2, 1), "both": (2, 2)}   # (type, value), oep-if-capture
 TAG_FRONTEND = 0x46          # analog describe: frontend, range_min_mv, range_max_mv, attenuation_mdb
 TAG_CHIP, TAG_MODEL, TAG_FIRMWARE = 0x4C, 0x41, 0x40      # core describe
-FAST = [1_500_000, 921_600, 500_000]    # UART link rates to try (port_speed, oep-client 0.0.24); it falls back by itself
+# UART link rates to try for `oep:PORT?fast=1` (port_speed, oep-client 0.0.24): ones common USB-serial adapters
+# (FTDI, CP210x, CH340) take. A rate that fails costs seconds of trying, so it is opt-in, as in the client.
+FAST = [921_600, 500_000]
 
 
 def capture(target: str, req: Request) -> Result:
@@ -42,8 +44,9 @@ def capture(target: str, req: Request) -> Result:
     opts = urllib.parse.parse_qs(query)
     unknown = set(opts) - {"fast"}
     if unknown:
-        raise ValueError(f"oep:{target}?...: unknown option {', '.join(sorted(unknown))} (fast=0 keeps the link's boot speed)")
-    fast = opts.get("fast", ["1"])[-1] not in ("0", "no", "off", "false")
+        raise ValueError(f"oep:{target}?...: unknown option {', '.join(sorted(unknown))} "
+                         f"(fast=1, or fast=RATE,RATE,... raises a UART probe's link)")
+    fast = _rates(opts.get("fast", ["0"])[-1])
     try:
         ids = [int(cid) for _, cid in req.channels]
         aids = [int(cid) for _, cid, _ in req.analog]
@@ -130,21 +133,57 @@ def _frontends(core, hst, fn: int) -> dict[int, dict]:
     return out
 
 
-def _open(link, target: str, fast: bool):
-    """The host; on a UART probe, at a faster link rate when the client can ask for one (port_speed: it keeps the
-    boot speed, or goes back to it, whenever the probe, the adapter or the line cannot)."""
+def _rates(text: str) -> list[int]:
+    """fast=0 / absent: [] (the boot speed); fast=1: FAST; fast=1500000,921600: those, in that order."""
+    if text.lower() in ("", "0", "no", "off", "false"):
+        return []
+    if text.lower() in ("1", "yes", "on", "true"):
+        return list(FAST)
+    try:
+        return [int(r) for r in text.split(",")]
+    except ValueError:
+        raise ValueError(f"fast={text}: 0, 1, or link rates (fast=1500000,921600)") from None
+
+
+def _open(link, target: str, rates: list[int]):
+    """The host; on a UART probe, at a faster link rate when asked and the client can ask for one (port_speed: it
+    keeps the boot speed, or goes back to it, whenever the probe, the adapter or the line cannot)."""
     import inspect
     try:
         can = "port_speed" in inspect.signature(link.open_host).parameters
     except (TypeError, ValueError):
         can = False
-    return link.open_host(target, port_speed=FAST) if fast and can else link.open_host(target)
+    if rates and not can:
+        raise ValueError("fast=...: this oep-client-python cannot raise the link speed (0.0.24 or later can)")
+    return link.open_host(target, port_speed=rates) if rates else link.open_host(target)
 
 
-def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], aids: list[int], fast: bool = True) -> Result:
+def _link_info(hst, rates: list[int], open_s: float, read_bytes: int, read_s: float) -> dict:
+    """How the link went, for meta.probe.link: what was asked, the rate in force, each trial, and the read."""
+    out = {"open_s": round(open_s, 3), "read_bytes": read_bytes, "read_s": round(read_s, 3)}
+    rep = getattr(getattr(hst, "link", None), "speed", None)
+    if rates:
+        out["asked"] = rates
+    if rep is not None:
+        out["rate"] = rep.rate
+        out["raised"] = bool(rep.chosen)
+        if not rep.supported:
+            out["why"] = rep.why
+        out["trials"] = [{"rate": t.rate, "result": "committed" if t.committed else t.why,
+                          "broken_in": t.broken_in, "broken_out": t.broken_out} for t in rep.trials]
+        if rep.lost or getattr(hst.link, "speed_lost", 0):
+            out["lost"] = True                      # the raised rate was found gone: reads went at the boot speed
+    return out
+
+
+def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], aids: list[int],
+             fast: list[int] | None = None) -> Result:
+    import time
     names = [n for n, _ in req.channels]
     anames = [n for n, _, _ in req.analog]
-    hst = _open(link, target, fast)
+    t_open = time.monotonic()
+    hst = _open(link, target, fast or [])
+    open_s = time.monotonic() - t_open
     try:
         opened = core.take(hst, 30_000, owner="wireskein capture")
         probe = _probe_info(core, hst, opened)
@@ -200,8 +239,11 @@ def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], aids
                     raise RuntimeError("the probe finished without a segment")
                 seg = segments[0] if cap else None
                 aseg = segments[0] if an else None
+            t_read = time.monotonic()
             data = cap.read_segment(seg) if cap else None
             adata = an.read_segment(aseg) if an else None
+            read_s = time.monotonic() - t_read
+            probe["link"] = _link_info(hst, fast or [], open_s, len(data or b"") + len(adata or b""), read_s)
             calib = an.calibration() if an else None
             frontends = _frontends(core, hst, an.fn) if an else {}
         finally:
