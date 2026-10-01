@@ -203,8 +203,10 @@ def test_uart_link_speed_is_asked_for_unless_turned_off(tmp_path, monkeypatch):
     assert calls == [("/dev/ttyUSB0", oep.FAST), ("/dev/ttyUSB0", [1_500_000, 921_600]), ("/dev/ttyUSB0", None),
                      ("/dev/ttyUSB0", "old")]
     with pytest.raises(ValueError, match="cannot raise the link speed"):
-        oep._open(OldLink, "/dev/ttyUSB0", oep.FAST)
-    assert oep._rates("") == [] and oep.FAST[0] == 921_600
+        oep._open(OldLink, "/dev/ttyUSB0", oep.FAST)                           # asked for: an error
+    oep._open(OldLink, "/dev/ttyUSB0", oep.FAST, asked=False)                  # the default: the boot speed
+    assert calls[-1] == ("/dev/ttyUSB0", "old")
+    assert oep._rates("") == [] and oep.FAST[0] == 1_500_000
     fake = StandIn(n=11)
     for name, mod in fake.modules().items():
         monkeypatch.setitem(sys.modules, name, mod)

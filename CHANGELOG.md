@@ -1,10 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
-- (EN) **Raising a UART probe's link is now opt-in** (it was on by default in 0.0.15): on the V003 jig's CH340 adapter, a failing 1.5 Mbaud trial made a 64 KB capture twice as slow. `oep:PORT?fast=1` tries 921600 then 500000; `?fast=1500000,921600` tries the rates given; asking with a client that cannot (before 0.0.24) is an error. `capture` prints how the link went (rate, trials, open and read times), kept in `meta.probe.link`.
-- (JA) **UART のプローブのリンクを上げるのは、頼んだときだけにした**（0.0.15 では既定で上げていた）。V003 の治具の CH340 で、通らない 1.5 Mbaud を試す分、64 KB のキャプチャが 2 倍遅くなったため。`oep:ポート?fast=1` で 921600、だめなら 500000。`?fast=1500000,921600` で並べた速度を試す。上げられないクライアント（0.0.24 より前）で頼むと誤り。`capture` は、リンクがどうなったか（速度、試した結果、開くのと読み出しの時間）を表示し、`meta.probe.link` に残す。
-
-## 0.0.15
+- (EN) The UART link speed-up: tries 1.5 Mbaud, 921600, 500000 (fastest first) and needs oep-client-python 0.0.26, which refuses a rate that breaks with both directions busy (921600 on the V003 jig's CH340 did), drops back to the boot speed on repeated broken frames, and fixes 0.0.25's result_lost after a quiet second. `?fast=RATE,RATE` tries those only; asking for it with a client that cannot is an error. `capture` prints how the link went (rate, trials, open and read times), kept in `meta.probe.link`.
+- (JA) UART のリンクの高速化: 1.5 Mbaud、921600、500000 の順（速い方から）に試し、oep-client-python 0.0.26 が要る（両方向を同時に流して壊れる速度は断る。V003 の治具の CH340 の 921600 がそうだった。フレームが続けて壊れたら起動時の速度に戻る。0.0.25 の、1 秒黙った後の result_lost も直っている）。`?fast=RATE,RATE` でその速度だけを試す。上げられないクライアントで頼むと誤り。`capture` は、リンクがどうなったか（速度、試した結果、開くのと読み出しの時間）を表示し、`meta.probe.link` に残す。
 - (EN) `capture --source oep:...` raises a UART probe's link to a faster rate for reading the capture back (port_speed, oep-client-python 0.0.24 or later: 1.5 Mbaud, 921600 or 500000, the first that works; it stays at or returns to the boot speed when the probe, the adapter or the line cannot). `oep:PORT?fast=0` keeps the boot speed. With an older client nothing changes.
 - (JA) `capture --source oep:...` は、UART のプローブのリンクを、キャプチャの読み出しのために速い速度に上げる（port_speed、oep-client-python 0.0.24 以降。1.5 Mbaud、921600、500000 の順で、通った最初のもの。プローブ、アダプタ、線が許さなければ、起動時の速度のまま、または戻る）。`oep:ポート?fast=0` で起動時の速度のまま。古いクライアントでは何も変わらない。
 
