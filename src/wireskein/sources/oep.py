@@ -34,16 +34,21 @@ PER_SESSION = 2          # candidates tried per open: each costs up to ~1 s, plu
 FLOWS = [("in", 0)]      # a capture reads back: verify probe -> host only, at the link's largest in-flight n
 
 
-def _candidates(port: str, unit_id: str, record=None) -> tuple[list[int], bool]:
+def _candidates(port: str, unit_id: str, record=None) -> tuple[list[int], bool, list[int]]:
     """The default rates to try on this port and probe: what passed there first, then the list (FAST) without what
     failed lately, at most PER_SESSION. The record is oep-client's (speed_record: per port path and unit_id,
-    30 days), which raise_speed(record=True) writes back. -> (rates, whether the record shaped them)."""
+    30 days), which raise_speed(record=True) writes back. When the record has every rate failed, the slowest is
+    tried again anyway (one short trial): a rate can fail right after a faster one broke down and hold on its own
+    (V003 jig's CH340: 500000 marked failed that way, 43 KB/s when tried alone), and giving up would keep the port
+    at the boot speed for 30 days. -> (rates, whether the record shaped them, the rates it left out)."""
     if record is None:
         from oep_client.speed_record import SpeedRecord
         record = SpeedRecord()
     passed, failed = record.lookup(port, unit_id)
     order = [r for r in passed if r not in failed] + [r for r in FAST if r not in passed and r not in failed]
-    return order[:PER_SESSION], bool(passed or failed)
+    if not order:
+        order = [FAST[-1]]
+    return order[:PER_SESSION], bool(passed or failed), [r for r in FAST if r in failed and r not in order]
 
 
 def capture(target: str, req: Request) -> Result:
@@ -209,6 +214,7 @@ def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], aids
     anames = [n for n, _, _ in req.analog]
     t_open = time.monotonic()
     remembered = False
+    left_out: list[int] = []
     hst = link.open_host(target)
     try:
         opened = core.take(hst, 30_000, owner="wireskein capture")
@@ -218,7 +224,7 @@ def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], aids
         record = fast is None                          # the default: the client's record of this port and probe
         if fast is None:
             port = getattr(getattr(hst, "link", None), "port_path", None)
-            fast, remembered = _candidates(port, probe.get("unit_id", "?")) if port else ([], False)
+            fast, remembered, left_out = _candidates(port, probe.get("unit_id", "?")) if port else ([], False, [])
         fast = _raise(link, hst, fast, asked and bool(fast), record)
         open_s = time.monotonic() - t_open
         cap = oc.LogicCapture(hst) if ids else None
@@ -280,6 +286,10 @@ def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], aids
             probe["link"] = _link_info(hst, fast, open_s, len(data or b"") + len(adata or b""), read_s)
             if remembered:
                 probe["link"]["remembered"] = True
+                if left_out and not probe["link"].get("skipped"):
+                    probe["link"]["skipped"] = left_out      # left out before asking the client: say so all the same
+            if "rate" not in probe["link"] and getattr(getattr(hst, "link", None), "base_baud", None):
+                probe["link"].update(rate=hst.link.base_baud, raised=False)   # nothing tried: the boot speed
             if "rate" not in probe["link"] and record and not getattr(getattr(hst, "link", None), "port_path", None):
                 probe["link"].update(rate=0, why="the link is not a serial port this host opened")
             calib = an.calibration() if an else None

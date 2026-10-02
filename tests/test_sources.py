@@ -231,12 +231,16 @@ def test_link_rates_come_from_the_clients_record(tmp_path):
     from oep_client.speed_record import SpeedRecord
     from wireskein.sources import oep
     rec = SpeedRecord(tmp_path / "link-speed.json")
-    assert oep._candidates("/dev/A", "u1", rec) == ([1_500_000, 921_600], False)    # nothing known: the list, 2 of it
+    assert oep._candidates("/dev/A", "u1", rec) == ([1_500_000, 921_600], False, [])   # nothing known: the list, 2 of it
     rec.note("/dev/A", "u1", 1_500_000, passed=False)
     rec.note("/dev/A", "u1", 921_600, passed=False)
-    assert oep._candidates("/dev/A", "u1", rec) == ([500_000], True)                # next time: down the list
+    assert oep._candidates("/dev/A", "u1", rec) == ([500_000], True, [1_500_000, 921_600])   # next time: down the list
     rec.note("/dev/A", "u1", 500_000, passed=True)
-    assert oep._candidates("/dev/A", "u1", rec) == ([500_000], True)
+    assert oep._candidates("/dev/A", "u1", rec) == ([500_000], True, [1_500_000, 921_600])
+    rec.note("/dev/C", "u1", 1_500_000, passed=False)
+    rec.note("/dev/C", "u1", 921_600, passed=False)
+    rec.note("/dev/C", "u1", 500_000, passed=False)
+    assert oep._candidates("/dev/C", "u1", rec) == ([500_000], True, [1_500_000, 921_600])   # all failed: the slowest again
     assert oep._candidates("/dev/A", "u2", rec)[0] == [1_500_000, 921_600]          # another probe on the port
     rec.note("/dev/B", "u1", 921_600, passed=True)
     assert oep._candidates("/dev/B", "u1", rec)[0] == [921_600, 1_500_000]          # what passed first
