@@ -31,55 +31,19 @@ TAG_CHIP, TAG_MODEL, TAG_FIRMWARE, TAG_UNIT_ID = 0x4C, 0x41, 0x40, 0x42     # co
 # than the boot speed; `oep:PORT?fast=0` keeps the boot speed, `?fast=RATE,RATE` tries those.
 FAST = [1_500_000, 921_600, 500_000]
 PER_SESSION = 2          # candidates tried per open: each costs up to ~1 s, plus a wait when it fails (core §3.5)
-FORGET_S = 30 * 86400    # a rate that failed on a port is skipped for this long
+FLOWS = [("in", 0)]      # a capture reads back: verify probe -> host only, at the link's largest in-flight n
 
 
-def _speed_cache() -> Path:
-    import os
-    return Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "wireskein" / "link-speed.json"
-
-
-def _load_speeds() -> dict:
-    import json
-    try:
-        return json.loads(_speed_cache().read_text())
-    except (OSError, ValueError):
-        return {}
-
-
-def _candidates(target: str, now: float) -> tuple[list[int], bool]:
-    """The default rates to try on this port: the one that held last time first, then the ladder (FAST) without
-    the ones that failed lately, at most PER_SESSION. (rates, whether the memory shaped them)."""
-    mem = _load_speeds().get(target, {})
-    failed = {int(r) for r, t in mem.get("failed", {}).items() if now - t < FORGET_S}
-    good = mem.get("good")
-    order = ([good] if good and good not in failed else []) + [r for r in FAST if r != good and r not in failed]
-    return order[:PER_SESSION], bool(mem)
-
-
-def _remember(target: str, link: dict, now: float) -> None:
-    """Keep what the port did (the committed rate, the failed trials, a raised rate that was lost) for next time."""
-    import json
-    if "rate" not in link:
-        return
-    data = _load_speeds()
-    mem = data.setdefault(target, {})
-    failed = mem.setdefault("failed", {})
-    for t in link.get("trials", []):
-        if t["result"] != "committed":
-            failed[str(t["rate"])] = now
-    if link.get("lost") and link.get("rate"):
-        failed[str(link["rate"])] = now
-        mem.pop("good", None)
-    elif link.get("raised"):
-        mem["good"] = link["rate"]
-        failed.pop(str(link["rate"]), None)
-    try:
-        p = _speed_cache()
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(json.dumps(data, indent=1))
-    except OSError:
-        pass                                           # the memory is a convenience: a read-only home is fine
+def _candidates(port: str, unit_id: str, record=None) -> tuple[list[int], bool]:
+    """The default rates to try on this port and probe: what passed there first, then the list (FAST) without what
+    failed lately, at most PER_SESSION. The record is oep-client's (speed_record: per port path and unit_id,
+    30 days), which raise_speed(record=True) writes back. -> (rates, whether the record shaped them)."""
+    if record is None:
+        from oep_client.speed_record import SpeedRecord
+        record = SpeedRecord()
+    passed, failed = record.lookup(port, unit_id)
+    order = [r for r in passed if r not in failed] + [r for r in FAST if r not in passed and r not in failed]
+    return order[:PER_SESSION], bool(passed or failed)
 
 
 def capture(target: str, req: Request) -> Result:
@@ -199,24 +163,27 @@ def _rates(text: str) -> list[int]:
         raise ValueError(f"fast={text}: 0, 1, or link rates (fast=1500000,921600)") from None
 
 
-def _raise(link, hst, rates: list[int], asked: bool = True) -> list[int]:
-    """Raise the link of an open host to the first of `rates` that holds (port_speed: the client keeps the boot speed,
-    or goes back to it, whenever the probe, the adapter or the line cannot). -> the rates asked of the client
+def _raise(link, hst, rates: list[int], asked: bool = True, record: bool = True) -> list[int]:
+    """Raise the link of an open host to the first of `rates` that holds, verifying the read-back direction (FLOWS);
+    the client keeps the boot speed, or goes back to it, whenever the probe, the adapter or the line cannot.
+    record: let the client's record skip what failed and keep what happened. -> the rates asked of the client
     ([] when none were, or the client cannot and they were only the default)."""
     raise_speed = getattr(link, "raise_speed", None)
     if rates and raise_speed is None:
         if asked:
-            raise ValueError("fast=...: this oep-client-python cannot raise the link speed (0.0.24 or later can)")
+            raise ValueError("fast=...: this oep-client-python cannot raise the link speed (0.0.27 or later can)")
         return []                                      # the default, with a client that cannot: the boot speed
     if rates:
-        raise_speed(hst, rates)
+        raise_speed(hst, rates, flows=FLOWS, record=record)
     return rates
 
 
 def _link_info(hst, rates: list[int], open_s: float, read_bytes: int, read_s: float) -> dict:
-    """How the link went, for meta.probe.link: what was asked, the rate in force, each trial, and the read."""
+    """How the link went, for meta.probe.link: what was asked, the rate in force, each trial with its flows, what
+    the record skipped, steps down while in use, and the read."""
     out = {"open_s": round(open_s, 3), "read_bytes": read_bytes, "read_s": round(read_s, 3)}
-    rep = getattr(getattr(hst, "link", None), "speed", None)
+    lk = getattr(hst, "link", None)
+    rep = getattr(lk, "speed", None)
     if rates:
         out["asked"] = rates
     if rep is not None:
@@ -225,9 +192,13 @@ def _link_info(hst, rates: list[int], open_s: float, read_bytes: int, read_s: fl
         if not rep.supported:
             out["why"] = rep.why
         out["trials"] = [{"rate": t.rate, "result": "committed" if t.committed else t.why,
-                          "broken_in": t.broken_in, "broken_out": t.broken_out} for t in rep.trials]
-        if rep.lost or getattr(hst.link, "speed_lost", 0):
-            out["lost"] = True                      # the raised rate was found gone: reads went at the boot speed
+                          "flows": [{"flow": f.flow, "n": f.n, "frames": f.frames, "broken": f.broken, "lost": f.lost,
+                                     "kb_s": round(f.kb_s, 1), "passed": f.passed} for f in getattr(t, "flows", [])]}
+                         for t in rep.trials]
+        if getattr(rep, "skipped", None):
+            out["skipped"] = list(rep.skipped)            # the record says these failed on this port and probe
+        if getattr(rep, "stepped_down", False) or rep.lost:
+            out["stepped_down"] = getattr(rep, "down_why", "") or "lost"   # back to the boot speed while in use
     return out
 
 
@@ -237,7 +208,6 @@ def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], aids
     names = [n for n, _ in req.channels]
     anames = [n for n, _, _ in req.analog]
     t_open = time.monotonic()
-    now = time.time()
     remembered = False
     hst = link.open_host(target)
     try:
@@ -245,10 +215,11 @@ def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], aids
         probe = _probe_info(core, hst, opened)
         # the link's memory is per port and probe (host development guide §7.5): the adapter belongs to the port,
         # the rest of the link to the probe, so either changing starts over
-        key = f"{target}#{probe.get('unit_id', '')}"
-        if fast is None:                               # the default: what this port and probe did before decides
-            fast, remembered = _candidates(key, now)
-        fast = _raise(link, hst, fast, asked and bool(fast))
+        record = fast is None                          # the default: the client's record of this port and probe
+        if fast is None:
+            port = getattr(getattr(hst, "link", None), "port_path", None)
+            fast, remembered = _candidates(port, probe.get("unit_id", "?")) if port else ([], False)
+        fast = _raise(link, hst, fast, asked and bool(fast), record)
         open_s = time.monotonic() - t_open
         cap = oc.LogicCapture(hst) if ids else None
         an = oc.AnalogCapture(hst) if aids else None
@@ -309,7 +280,8 @@ def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], aids
             probe["link"] = _link_info(hst, fast, open_s, len(data or b"") + len(adata or b""), read_s)
             if remembered:
                 probe["link"]["remembered"] = True
-            _remember(key, probe["link"], now)
+            if "rate" not in probe["link"] and record and not getattr(getattr(hst, "link", None), "port_path", None):
+                probe["link"].update(rate=0, why="the link is not a serial port this host opened")
             calib = an.calibration() if an else None
             frontends = _frontends(core, hst, an.fn) if an else {}
         finally:
