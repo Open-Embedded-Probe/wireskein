@@ -250,8 +250,9 @@ def _link_line(link: dict) -> str:
         tried = [f"{t['rate']} {t['result']}" for t in link.get("trials", []) if t["result"] != "committed"]
         parts.append(f"{link['rate']} baud" + (" (raised)" if link.get("raised") else " (the boot speed)")
                      + (f", tried {'; '.join(tried)}" if tried else "") + (f", {link['why']}" if link.get("why") else "")
-                     + (", the raised rate was lost" if link.get("lost") else "")
-                     + (", rates from what this port did before" if link.get("remembered") else ""))
+                     + (f", skipped {', '.join(map(str, link['skipped']))} (failed before)" if link.get("skipped") else "")
+                     + (f", stepped down while in use ({link['stepped_down']})" if link.get("stepped_down") else "")
+                     + (", rates from what this port and probe did before" if link.get("remembered") else ""))
     parts.append(f"opened in {link['open_s']:.2f} s")
     kb = link["read_bytes"] / 1000
     rate = f" ({kb / link['read_s']:.1f} KB/s)" if link["read_s"] > 0 else ""

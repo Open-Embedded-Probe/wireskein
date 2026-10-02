@@ -188,8 +188,9 @@ def test_uart_link_speed_is_asked_for_unless_turned_off(tmp_path, monkeypatch):
 
     class NewLink:                                     # oep-client 0.0.24+: raise_speed(hst, rates) after opening
         @staticmethod
-        def raise_speed(hst, rates):
+        def raise_speed(hst, rates, *, flows=None, record=False):
             calls.append((hst, rates))
+            assert flows == oep.FLOWS                                     # a capture verifies the read-back way
 
     class OldLink:
         pass
@@ -220,22 +221,22 @@ def test_link_line():
                        "raised": False, "trials": [{"rate": 1_500_000, "result": "verify broke", "broken_in": 3,
                                                     "broken_out": 0}]})
     assert line == "115200 baud (the boot speed), tried 1500000 verify broke, opened in 4.30 s, read 64.0 KB in 6.10 s (10.5 KB/s)"
+    line = _link_line({"open_s": 0.5, "read_bytes": 64000, "read_s": 0.8, "rate": 500_000, "raised": True,
+                       "trials": [{"rate": 500_000, "result": "committed"}], "skipped": [1_500_000, 921_600],
+                       "remembered": True})
+    assert "skipped 1500000, 921600 (failed before)" in line and "what this port and probe did before" in line
 
 
-def test_link_rates_are_remembered_per_port(tmp_path, monkeypatch):
+def test_link_rates_come_from_the_clients_record(tmp_path):
+    from oep_client.speed_record import SpeedRecord
     from wireskein.sources import oep
-    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
-    now = 1_000_000.0
-    assert oep._rates("1") is None and oep._rates("921600") == [921_600]
-    assert oep._candidates("/dev/A", now) == ([1_500_000, 921_600], False)          # nothing known: the ladder, 2 of it
-    trial = lambda r, ok: {"rate": r, "result": "committed" if ok else "verify broke", "broken_in": 0, "broken_out": 0}  # noqa: E731
-    # first session on a CH340: both fail, the boot speed stays
-    oep._remember("/dev/A", {"rate": 115200, "raised": False, "trials": [trial(1_500_000, 0), trial(921_600, 0)]}, now)
-    assert oep._candidates("/dev/A", now + 60) == ([500_000], True)                  # next time: down the ladder
-    oep._remember("/dev/A", {"rate": 500_000, "raised": True, "trials": [trial(500_000, 1)]}, now + 60)
-    assert oep._candidates("/dev/A", now + 120) == ([500_000], True)                 # what held, and nothing that failed
-    assert oep._candidates("/dev/A", now + oep.FORGET_S + 61)[0] == [500_000, 1_500_000]   # failures are forgotten
-    # a raised rate that was lost in use counts as failed
-    oep._remember("/dev/B", {"rate": 921_600, "raised": True, "lost": True, "trials": [trial(921_600, 1)]}, now)
-    assert oep._candidates("/dev/B", now)[0] == [1_500_000, 500_000]
-    assert oep._candidates("/dev/A", now)[0] != oep._candidates("/dev/B", now)[0]     # per port
+    rec = SpeedRecord(tmp_path / "link-speed.json")
+    assert oep._candidates("/dev/A", "u1", rec) == ([1_500_000, 921_600], False)    # nothing known: the list, 2 of it
+    rec.note("/dev/A", "u1", 1_500_000, passed=False)
+    rec.note("/dev/A", "u1", 921_600, passed=False)
+    assert oep._candidates("/dev/A", "u1", rec) == ([500_000], True)                # next time: down the list
+    rec.note("/dev/A", "u1", 500_000, passed=True)
+    assert oep._candidates("/dev/A", "u1", rec) == ([500_000], True)
+    assert oep._candidates("/dev/A", "u2", rec)[0] == [1_500_000, 921_600]          # another probe on the port
+    rec.note("/dev/B", "u1", 921_600, passed=True)
+    assert oep._candidates("/dev/B", "u1", rec)[0] == [921_600, 1_500_000]          # what passed first
