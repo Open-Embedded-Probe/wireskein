@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) OEP capture sends the mode critical too (as OEP v1's rule-change proposal ○8 recommends): a probe that cannot capture one-shot refuses instead of quietly running another mode.
+- (JA) OEP の取得で、mode も critical で送る（OEP v1 の規則変更案 ○8 の勧め）。one-shot で取れない probe は、黙って別の mode で動かず、断る。
 - (EN) `capture --source oep:...` closes the link after the session ends, so the next open of the serial port (opened exclusively) succeeds even where the exclusive mark outlives the process (a pty).
 - (JA) `capture --source oep:...` は、セッションを終えた後にリンクを閉じる。シリアルの口は排他で開くので、排他の印がプロセスより長く残る所（pty）でも、次に開くのが通る。
 - (EN) With an oep-client-python whose `raise_speed` takes `max_tries`, the speed-up is left to the client: `raise_speed(hst, [1500000, 921600, 500000], record=True, flows=[("in", 0)], max_tries=2)` (its record orders and skips, it retries the slowest when all failed, and steps down to a slower candidate in use); older clients keep wireskein's own selection. `link:` and `meta.probe.link` show step-downs (from, to, in probation or in use), a retried rate and the capped ones. A busy serial port (or any OS error) ends `capture` in one line.
