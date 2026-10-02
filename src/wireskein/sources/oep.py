@@ -51,6 +51,15 @@ def _candidates(port: str, unit_id: str, record=None) -> tuple[list[int], bool, 
     return order[:PER_SESSION], bool(passed or failed), [r for r in FAST if r in failed and r not in order]
 
 
+def _takes(link, name: str) -> bool:
+    """Whether the client's raise_speed takes this argument."""
+    import inspect
+    try:
+        return name in inspect.signature(link.raise_speed).parameters
+    except (AttributeError, TypeError, ValueError):
+        return False
+
+
 def _raise_default(link, hst, port: str | None, unit_id: str, record=None) -> tuple[list[int], bool, list[int]]:
     """The default raise: candidates from the client's record (_candidates), then raise_speed(record=True). When the
     record has every rate failed, the slowest is retried without the record (with it the client would skip it as
@@ -58,6 +67,12 @@ def _raise_default(link, hst, port: str | None, unit_id: str, record=None) -> tu
     -> (rates asked, whether the record shaped them, the rates it left out)."""
     if not port:
         return [], False, []
+    if _takes(link, "max_tries"):
+        # a client that does it all (oep-client-python with max_tries): it orders and skips by its record, tries at
+        # most PER_SESSION, retries the slowest when all failed, and steps down to a slower candidate in use
+        link.raise_speed(hst, list(FAST), record=True, flows=FLOWS, max_tries=PER_SESSION)
+        rep = getattr(getattr(hst, "link", None), "speed", None)
+        return list(FAST), bool(rep is not None and (rep.skipped or getattr(rep, "retried", False))), []
     if record is None:
         from oep_client.speed_record import SpeedRecord
         record = SpeedRecord()
@@ -221,8 +236,16 @@ def _link_info(hst, rates: list[int], open_s: float, read_bytes: int, read_s: fl
                          for t in rep.trials]
         if getattr(rep, "skipped", None):
             out["skipped"] = list(rep.skipped)            # the record says these failed on this port and probe
+        if getattr(rep, "retried", None):
+            out["retried"] = rep.retried                  # every rate recorded failed: the slowest tried once anyway
+        if getattr(rep, "capped", None):
+            out["capped"] = list(rep.capped)              # left out by the limit of tries per capture
+        downs = getattr(rep, "step_downs", None) or []
+        if downs:                                         # in use (or in probation): from a rate to a slower one
+            out["step_downs"] = [{"from": d.rate, "to": getattr(d, "to", None), "why": d.why,
+                                  "probation": bool(getattr(d, "probation", False))} for d in downs]
         if getattr(rep, "stepped_down", False) or rep.lost:
-            out["stepped_down"] = getattr(rep, "down_why", "") or "lost"   # back to the boot speed while in use
+            out["stepped_down"] = getattr(rep, "down_why", "") or "lost"   # went down while in use
     return out
 
 
