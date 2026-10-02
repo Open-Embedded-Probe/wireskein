@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 0.0.16
 - (EN) The link speed-up uses oep-client-python 0.0.27's record (`~/.cache/oep-client/link-speed.json`, per port path and unit_id) instead of wireskein's own: at most two rates per capture, picked from it, then `raise_speed(record=True)` writes back. Only the read-back direction is verified (`flows=[("in", 0)]`). `meta.probe.link` keeps each trial's flows (frames, broken, lost, KB/s), what the record skipped, and a step down while in use. Needs oep-client-python 0.0.27.
 - (JA) リンクの高速化は、wireskein の自前の記録をやめ、oep-client-python 0.0.27 の記録（`~/.cache/oep-client/link-speed.json`、口のパスと unit_id ごと）を使う: 1 回の取得で 2 つまでの速度をそこから選び、`raise_speed(record=True)` が書き戻す。確かめるのは読み出しの向きだけ（`flows=[("in", 0)]`）。`meta.probe.link` に、試行ごとの流し方の結果（フレーム、壊れ、失われ、KB/s）、記録で飛ばした速度、使用中に戻したことを残す。oep-client-python 0.0.27 が要る。
 - (EN) The link memory is per port and probe (`port#unit_id`, OEP host development guide §7.5): the link is opened at the boot speed, the probe's describe read (its `unit_id` now goes into `meta.probe` too), and then raised with the remembered candidates (`link.raise_speed`). A USB / TCP link says why it is not raised.
