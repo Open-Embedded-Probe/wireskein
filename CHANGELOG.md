@@ -1,8 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
-- (EN) When the speed record has every rate failed for a port and probe, the slowest is tried again (one short trial) instead of giving up for 30 days: on the V003 jig's CH340, 500000 was marked failed right after 921600 broke down, yet held at 43 KB/s on its own. When the record leaves rates out before asking the client, `link:` and `meta.probe.link` still say the rate in force (the boot speed) and what was skipped (found on the V003 jig: the line showed only the read).
-- (JA) 速度の記録で、口とプローブのすべての速度が「通らなかった」になっていても、30 日あきらめずに、いちばん遅い速度をもう一度試す（短い確かめ 1 回）。V003 の治具の CH340 では、921600 が崩れた直後に試した 500000 が通らなかったと記録されたが、単独では 43 KB/s で安定していた。記録でクライアントに頼む前に速度を外したときも、`link:` の行と `meta.probe.link` に、使っている速度（起動時の速度）と飛ばした速度を出す（V003 の治具で、読み出しの時間しか出なかった）。
+- (EN) When the speed record has every rate failed for a port and probe, the slowest is tried again (one short trial, without the record, which would skip it; a pass is written back) instead of giving up for 30 days: on the V003 jig's CH340, 500000 was marked failed right after 921600 broke down, yet held at 43 KB/s on its own. When the record leaves rates out before asking the client, `link:` and `meta.probe.link` still say the rate in force (the boot speed) and what was skipped (found on the V003 jig: the line showed only the read).
+- (JA) 速度の記録で、口とプローブのすべての速度が「通らなかった」になっていても、30 日あきらめずに、いちばん遅い速度をもう一度試す（短い確かめ 1 回。記録を使うとクライアントが飛ばすので、記録なしで試し、通れば記録に書き戻す）。V003 の治具の CH340 では、921600 が崩れた直後に試した 500000 が通らなかったと記録されたが、単独では 43 KB/s で安定していた。記録でクライアントに頼む前に速度を外したときも、`link:` の行と `meta.probe.link` に、使っている速度（起動時の速度）と飛ばした速度を出す（V003 の治具で、読み出しの時間しか出なかった）。
 
 ## 0.0.16
 - (EN) The link speed-up uses oep-client-python 0.0.27's record (`~/.cache/oep-client/link-speed.json`, per port path and unit_id) instead of wireskein's own: at most two rates per capture, picked from it, then `raise_speed(record=True)` writes back. Only the read-back direction is verified (`flows=[("in", 0)]`). `meta.probe.link` keeps each trial's flows (frames, broken, lost, KB/s), what the record skipped, and a step down while in use. Needs oep-client-python 0.0.27.

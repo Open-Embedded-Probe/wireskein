@@ -244,3 +244,28 @@ def test_link_rates_come_from_the_clients_record(tmp_path):
     assert oep._candidates("/dev/A", "u2", rec)[0] == [1_500_000, 921_600]          # another probe on the port
     rec.note("/dev/B", "u1", 921_600, passed=True)
     assert oep._candidates("/dev/B", "u1", rec)[0] == [921_600, 1_500_000]          # what passed first
+
+
+def test_an_all_failed_record_retries_the_slowest_and_learns(tmp_path):
+    """With record=True the client skips recorded failures, so the retry goes without it, and a pass is written back."""
+    import types
+    from oep_client.speed_record import SpeedRecord
+    from wireskein.sources import oep
+    rec = SpeedRecord(tmp_path / "link-speed.json")
+    for r in oep.FAST:
+        rec.note("/dev/X", "u", r, passed=False)
+    calls = []
+
+    class Link:
+        @staticmethod
+        def raise_speed(hst, rates, *, flows=None, record=False):
+            calls.append((rates, record))
+            hst.link.speed = types.SimpleNamespace(chosen=rates[0], rate=rates[0])     # it holds on its own
+
+    hst = types.SimpleNamespace(link=types.SimpleNamespace(speed=None))
+    rates, remembered, left_out = oep._raise_default(Link, hst, "/dev/X", "u", rec)
+    assert calls == [([500_000], False)] and remembered and left_out == [1_500_000, 921_600]
+    assert 500_000 in rec.lookup("/dev/X", "u")[0]                           # learnt: passed now
+    calls.clear()
+    oep._raise_default(Link, hst, "/dev/X", "u", rec)
+    assert calls == [([500_000], True)]                                      # next time from the record, as usual
