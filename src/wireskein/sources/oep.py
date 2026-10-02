@@ -47,8 +47,27 @@ def _candidates(port: str, unit_id: str, record=None) -> tuple[list[int], bool, 
     passed, failed = record.lookup(port, unit_id)
     order = [r for r in passed if r not in failed] + [r for r in FAST if r not in passed and r not in failed]
     if not order:
-        order = [FAST[-1]]
+        order = [FAST[-1]]                             # every rate failed: the slowest once more (see _capture)
     return order[:PER_SESSION], bool(passed or failed), [r for r in FAST if r in failed and r not in order]
+
+
+def _raise_default(link, hst, port: str | None, unit_id: str, record=None) -> tuple[list[int], bool, list[int]]:
+    """The default raise: candidates from the client's record (_candidates), then raise_speed(record=True). When the
+    record has every rate failed, the slowest is retried without the record (with it the client would skip it as
+    recorded failed) and a pass is written back, so the next capture starts from it.
+    -> (rates asked, whether the record shaped them, the rates it left out)."""
+    if not port:
+        return [], False, []
+    if record is None:
+        from oep_client.speed_record import SpeedRecord
+        record = SpeedRecord()
+    rates, remembered, left_out = _candidates(port, unit_id, record)
+    retry = bool(rates) and rates[0] in record.lookup(port, unit_id)[1]
+    rates = _raise(link, hst, rates, False, record=not retry)
+    rep = getattr(getattr(hst, "link", None), "speed", None)
+    if retry and rep is not None and rep.chosen:
+        record.note(port, unit_id, rep.chosen, passed=True)
+    return rates, remembered, left_out
 
 
 def capture(target: str, req: Request) -> Result:
@@ -224,8 +243,9 @@ def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], aids
         record = fast is None                          # the default: the client's record of this port and probe
         if fast is None:
             port = getattr(getattr(hst, "link", None), "port_path", None)
-            fast, remembered, left_out = _candidates(port, probe.get("unit_id", "?")) if port else ([], False, [])
-        fast = _raise(link, hst, fast, asked and bool(fast), record)
+            fast, remembered, left_out = _raise_default(link, hst, port, probe.get("unit_id", "?"))
+        else:
+            fast = _raise(link, hst, fast, asked and bool(fast), False)
         open_s = time.monotonic() - t_open
         cap = oc.LogicCapture(hst) if ids else None
         an = oc.AnalogCapture(hst) if aids else None
