@@ -251,7 +251,12 @@ def _link_line(link: dict) -> str:
         parts.append(f"{link['rate']} baud" + (" (raised)" if link.get("raised") else " (the boot speed)")
                      + (f", tried {'; '.join(tried)}" if tried else "") + (f", {link['why']}" if link.get("why") else "")
                      + (f", skipped {', '.join(map(str, link['skipped']))} (failed before)" if link.get("skipped") else "")
-                     + (f", stepped down while in use ({link['stepped_down']})" if link.get("stepped_down") else "")
+                     + "".join(f", {d['from']} -> {d['to'] or 'the boot speed'}"
+                               f" {'in its probation' if d['probation'] else 'in use'} ({d['why']})"
+                               for d in link.get("step_downs", []))
+                     + (f", stepped down while in use ({link['stepped_down']})"
+                        if link.get("stepped_down") and not link.get("step_downs") else "")
+                     + (f", retried {link['retried']} (all failed before)" if link.get("retried") else "")
                      + (", rates from what this port and probe did before" if link.get("remembered") else ""))
     parts.append(f"opened in {link['open_s']:.2f} s")
     kb = link["read_bytes"] / 1000
@@ -420,9 +425,10 @@ def main() -> None:
     if args.cmd in files:
         try:
             return files[args.cmd](args)
-        except (ValueError, FileExistsError, FileNotFoundError, KeyError, RuntimeError, TimeoutError,
+        except (ValueError, OSError, KeyError, RuntimeError, TimeoutError,
                 zipfile.BadZipFile, *_probe_errors()) as e:
-            what = "" if isinstance(e, (ValueError, FileNotFoundError, zipfile.BadZipFile)) else f"{type(e).__name__}: "
+            what = "" if type(e) in (ValueError, FileNotFoundError, zipfile.BadZipFile) or isinstance(e, zipfile.BadZipFile) \
+                else f"{type(e).__name__}: "
             sys.exit(f"wireskein {args.cmd}: {what}{e}")
     if args.cmd == "segments":
         try:

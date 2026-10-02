@@ -269,3 +269,18 @@ def test_an_all_failed_record_retries_the_slowest_and_learns(tmp_path):
     calls.clear()
     oep._raise_default(Link, hst, "/dev/X", "u", rec)
     assert calls == [([500_000], True)]                                      # next time from the record, as usual
+
+
+def test_a_busy_port_ends_in_one_line(monkeypatch):
+    class PortBusy(OSError):                          # stands for oep_client.link.PortBusy
+        pass
+
+    def fail(*a, **k):
+        raise PortBusy("/dev/ttyUSB0 is open in another program")
+    monkeypatch.setattr(sources, "capture", fail)
+    from wireskein import cli
+    monkeypatch.setattr(sys, "argv", ["wireskein", "capture", "--source", "oep:/dev/ttyUSB0", "--channels", "A=0",
+                                      "--rate", "1M", "--samples", "10", "-o", "x.wireskein"])
+    with pytest.raises(SystemExit) as e:
+        cli.main()
+    assert str(e.value) == "wireskein capture: PortBusy: /dev/ttyUSB0 is open in another program"
