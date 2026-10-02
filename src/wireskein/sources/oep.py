@@ -145,14 +145,17 @@ def oc_state(name: str) -> int:
 
 
 def _configure(track, oc, oh, target: str, what: str, **kw):
-    """configure with the mode, and the trigger / pretrigger asked for, sent critical (a probe
-    without them would otherwise ignore them: another mode, or a start at once)."""
+    """configure with the mode, the rate, and the trigger / pretrigger / frontend asked for, sent critical (a probe
+    without them would otherwise ignore them: another mode or rate, or a start at once)."""
     asked = {oc.TRIGGER} if kw.get("trigger") else set()
     if kw.get("pretrigger") is not None:
         asked.add(oc.PRETRIGGER)
-    mode = getattr(oc, "MODE", None)
-    if mode is not None:
-        asked.add(mode)          # one-shot: a probe that cannot must refuse, not quietly run another mode
+    # OEP v1 (core §2.3, capture §3.3): mode, rate and frontend are sent critical too - a probe that cannot honour
+    # one must refuse, not quietly run another mode or rate
+    for name, given in (("MODE", True), ("RATE", "rate" in kw), ("FRONTEND", bool(kw.get("frontends")))):
+        tag = getattr(oc, name, None)
+        if tag is not None and given:
+            asked.add(tag)
     try:
         cfg = track.configure(mode=oc.ONE_SHOT, critical=asked, **kw)
     except oh.Unsupported as e:
