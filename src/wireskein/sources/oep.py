@@ -340,7 +340,12 @@ def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], aids
         finally:
             core.plan_release(hst, fns)
     finally:
-        hst.end()
+        try:
+            hst.end()
+        finally:
+            close = getattr(getattr(hst, "link", None), "close", None)
+            if close is not None:
+                close()          # let the port go (a serial port is opened exclusively: the next open must succeed)
 
     meta = {}
     if cap:
