@@ -371,7 +371,7 @@ def main() -> None:
     cv.add_argument("input", type=Path)
     cv.add_argument("output", type=Path)
     cp = sub.add_parser("capture", help="capture logic channels from a device into a .wireskein (sources: oep, sigrok)")
-    cp.add_argument("--source", required=True, help="oep:<serial port | tcp://HOST:PORT | usb[:VID:PID]>[?fast=0 | ?fast=RATE,RATE] or sigrok:<driver> "
+    cp.add_argument("--source", required=True, help="oep:<serial port | tcp://HOST:PORT | usb | usb:UNIT_ID | usb:VID:PID>[?fast=0 | ?fast=RATE,RATE] or sigrok:<driver> "
                          "(a UART probe's link is raised for reading back, 1.5M / 921600 / 500000 first that "
                          "works; fast=0 keeps the boot speed)")
     cp.add_argument("--channels", default=None, help='logic: "NAME=ID,..." (ID: the probe channel number / sigrok channel) or "ID,..."')

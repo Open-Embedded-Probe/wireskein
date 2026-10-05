@@ -104,7 +104,7 @@ wireskein capture --source sigrok:fx2lafw --channels SDA=D0,SCL=D1 --rate 12M --
 
 | 取得元 | 機器 | チャンネルの番号 |
 | --- | --- | --- |
-| `oep:<接続先>` | oep-client-python を使う OEP のプローブ。接続先は、シリアルポート、`tcp://HOST:PORT`（ブローカー）、`usb[:VID:PID[:SERIAL]]` | プローブのチャンネル番号 |
+| `oep:<接続先>` | oep-client-python を使う OEP のプローブ。接続先は、シリアルポート、`tcp://HOST:PORT`（ブローカー）、`usb`（プロジェクトの USB ID 1209:4F45 で見つける OEP のプローブ）、`usb:<unit_id>`（その個体）、`usb:VID:PID[:SERIAL]` | プローブのチャンネル番号 |
 | `sigrok:<ドライバ>` | sigrok が対応する機器（`fx2lafw`、`dreamsourcelab-dslogic`、`demo` など）。`sigrok-cli` を使う | sigrok のチャンネル名（`D0` など） |
 
 - `--channels` は、ロジックの各チャンネルに名前を付けます（`名前=番号`）。
@@ -117,7 +117,7 @@ wireskein capture --source sigrok:fx2lafw --channels SDA=D0,SCL=D1 --rate 12M --
   - 壊れる速度はクライアントが断り、使っている間にフレームが続けて壊れたら起動時の速度に戻るので、起動時の速度より遅くはなりません。
   - 試すのは 1 回の取得で 2 つまでです（1 つに最大 1 秒ほどかかるため）。確かめるのは読み出しの向き（プローブ → ホスト）だけです。口とプローブ（`unit_id`）ごとに通った速度と通らなかった速度を、oep-client-python の記録（`~/.cache/oep-client/link-speed.json`。通らなかったものは 30 日飛ばす）で使います。速い速度が通らない口は、毎回試す代わりに、回を追って遅い方へ移ります。`?fast=921600` のようにはっきり指定したときは、覚えたものに関わらず試します。
   - `?fast=0` で起動時の速度のまま、`?fast=921600`（並べることもできる）でその速度だけを試します。
-- USB のあるプローブ（ESP32-P4 など）は、`oep:usb:VID:PID[:SERIAL]` で開くのがよいです。vendor bulk のインターフェースで、毎秒数 MB を落とさずに読み出せます。USB シリアル（CDC）の口は遅く、負荷が高いと応答を落とすことがあります。
+- USB のあるプローブ（ESP32-P4 など）は、`oep:usb:<unit_id>`（1 台だけなら `oep:usb`）で開くのがよいです。vendor bulk のインターフェースで、毎秒数 MB を落とさずに読み出せます。USB シリアル（CDC）の口は遅く、負荷が高いと応答を落とすことがあります。
   - `capture` は、リンクがどうなったか（速度、試した結果、読み出しの時間）を表示し、`meta.probe.link` に残します。
 - Python からは `wireskein.sources.capture(取得元, Request(...), 出力先)` です。
 - 別の package から、entry point の `wireskein.sources` で取得元を足せます。
