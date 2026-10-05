@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) An OEP probe without the optional capture query (OEP v1: absent = unknown_operation) still takes logic + analog captures: the analog sample count then follows the asked rate instead of the probe's answer.
+- (JA) キャプチャの問い合わせ（query）を持たない OEP の probe（OEP v1 では任意の op。無ければ unknown_operation）でも、ロジック + アナログを取れる。そのときのアナログのサンプル数は、probe の答えではなく頼んだレートから決める。
 - (EN) OEP capture sends the mode, the rate and the frontend critical too, as OEP v1 requires (core §2.3, capture §3.3): a probe that cannot honour one refuses instead of quietly running another mode or rate.
 - (JA) OEP の取得で、mode、rate、frontend も critical で送る（OEP v1 の決まり、core §2.3、capture §3.3）。守れない probe は、黙って別の mode や rate で動かず、断る。
 - (EN) `capture --source oep:...` closes the link after the session ends, so the next open of the serial port (opened exclusively) succeeds even where the exclusive mark outlives the process (a pty).

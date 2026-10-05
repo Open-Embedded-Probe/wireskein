@@ -166,6 +166,15 @@ def _configure(track, oc, oh, target: str, what: str, **kw):
     return cfg
 
 
+def _unknown_op() -> int | None:
+    """The reject detail of an op the probe does not offer (an optional op such as query)."""
+    try:
+        from oep_client import message
+        return message.UNKNOWN_OPERATION
+    except (ImportError, AttributeError):
+        return None
+
+
 def _describe(core, hst, fn: int) -> list[tuple[int, bytes]]:
     try:
         return core.describe(hst, fn)
@@ -298,9 +307,14 @@ def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], aids
                 if asamples is None and cap:
                     # as long as the logic capture, at the rate the probe will really use
                     # (channels share the ADC, so it may answer less than asked)
-                    q = an.configure(mode=oc.ONE_SHOT, rate=arate, samples=1, query=True,
-                                     **({"frontends": fes} if fes else {}))
-                    real = Fraction(q.rate) if q.rate else Fraction(arate)
+                    real = Fraction(arate)
+                    try:
+                        q = an.configure(mode=oc.ONE_SHOT, rate=arate, samples=1, query=True,
+                                         **({"frontends": fes} if fes else {}))
+                        real = Fraction(q.rate) if q.rate else real
+                    except oh.Rejected as e:       # query is optional (OEP v1): absent = unknown_operation
+                        if getattr(getattr(e, "result", None), "detail", None) != _unknown_op():
+                            raise
                     asamples = max(1, round(Fraction(req.samples) / Fraction(cfg.rate) * real))
                 elif asamples is None:
                     asamples = req.samples
