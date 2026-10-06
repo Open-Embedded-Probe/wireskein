@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) With an OEP client that has the clock op (core §7.7), `capture` reads the probe's clock against this host's before and after the capture (the shortest of 4 round trips each) into `meta.probe.clock`: host time (the midpoint), the probe's uptime_ns, boot_id and the uncertainty (half the round trip), and the probe clock's rate against the host's in ppm when both are of one boot. With an older client or probe nothing changes.
+- (JA) clock の op（core §7.7）を持つ OEP のクライアントでは、`capture` は取得の前後に probe の時計と host の時計の対応を読み（それぞれ 4 回の往復の最短）、`meta.probe.clock` に残す: host の時刻（中点）、probe の uptime_ns、boot_id、不確かさ（往復の半分）、両方が同じ起動なら probe の時計の速さの host に対するずれ（ppm）。古いクライアントや probe では何も変わらない。
 - (EN) Raw analog values at the converter's end codes (0 and 2^value_bits − 1) are read as clipped, not as voltages (OEP capture §1.2; spec §4.2): `voltage()` decides a range check by them only when the end settles it (a 3V3 rail clipped at 2.45 V fails `max_v=2.0` but leaves `min_v=3.0` unchecked), leaves mean and ripple unchecked when any sample is clipped, and reports the counts; a threshold outside the frontend's range is an error; `info` shows the range and the clipped counts. The file keeps raw values.
 - (JA) 生の値のアナログで、変換器の端の値（0 と 2^value_bits − 1）は電圧ではなく「切れた」と読む（OEP capture §1.2、仕様 §4.2）: `voltage()` は、端で決まる範囲の照合だけそれで判定し（2.45 V で切れた 3V3 は `max_v=2.0` で NG、`min_v=3.0` は未検査）、切れたサンプルがあれば平均と ripple は未検査にし、数を報告する。frontend の範囲の外のしきい値は誤り。`info` は範囲と切れた数を出す。ファイルは生の値のまま。
 - (EN) An OEP probe without the optional capture query (OEP v1: absent = unknown_operation) still takes logic + analog captures: the analog sample count then follows the asked rate instead of the probe's answer.

@@ -166,6 +166,34 @@ def _configure(track, oc, oh, target: str, what: str, **kw):
     return cfg
 
 
+def _clock(hst):
+    """The probe's clock against this host's (core §7.7): the reading with the shortest round trip of a few, or None
+    when the client or the probe has no clock op."""
+    best = getattr(hst, "clock_best", None)
+    if best is None:
+        return None
+    try:
+        return best(4)
+    except Exception:                  # an older probe (unknown_operation) or a link hiccup: the capture goes on
+        return None
+
+
+def _clock_info(before, after) -> dict:
+    """meta.probe.clock: each reading as (host monotonic ns at the midpoint, the probe's uptime_ns, +- ns), and the
+    probe clock's rate against the host's when both readings are of one boot (ppm: positive = the probe runs fast)."""
+    out = {}
+    for name, r in (("before", before), ("after", after)):
+        if r is not None:
+            out[name] = {"host_ns": int(r.host_ns), "uptime_ns": int(r.uptime_ns), "boot_id": int(r.boot_id),
+                         "uncertainty_ns": int(r.uncertainty_ns)}
+    if before is not None and after is not None and before.boot_id == after.boot_id:
+        host_d, probe_d = after.host_ns - before.host_ns, after.uptime_ns - before.uptime_ns
+        if host_d > 0:
+            out["rate_ppm"] = (probe_d / host_d - 1) * 1e6
+            out["rate_ppm_uncertainty"] = (before.uncertainty_ns + after.uncertainty_ns) / host_d * 1e6
+    return out
+
+
 def _unknown_op() -> int | None:
     """The reject detail of an op the probe does not offer (an optional op such as query)."""
     try:
@@ -285,6 +313,7 @@ def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], aids
         else:
             fast = _raise(link, hst, fast, asked and bool(fast), False)
         open_s = time.monotonic() - t_open
+        clock_before = _clock(hst)
         cap = oc.LogicCapture(hst) if ids else None
         an = oc.AnalogCapture(hst) if aids else None
         plan = [(cap.fn, k, ch) for k, ch in enumerate(ids)] if cap else []
@@ -356,6 +385,10 @@ def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], aids
             if "rate" not in probe["link"] and record and not getattr(getattr(hst, "link", None), "port_path", None):
                 probe["link"].update(rate=0, why="the link is not a serial port this host opened")
             calib = an.calibration() if an else None
+            clock_after = _clock(hst)
+            clock = _clock_info(clock_before, clock_after)
+            if clock:
+                probe["clock"] = clock
             frontends = _frontends(core, hst, an.fn) if an else {}
         finally:
             core.plan_release(hst, fns)

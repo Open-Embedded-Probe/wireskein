@@ -144,7 +144,7 @@ UTF-8 の JSON のオブジェクトです。
 | `start_uncertainty_ns` | `start_ns` の不確かさ（±ns。OEP の区画の `start_uncertainty_ns`。保証ではない目安） |
 | `trigger_index` | トリガの位置: ロジックのチャンネルのサンプルの番号（OEP の区画の `trigger_index`）。トリガがないときは、キー自体を入れません。アナログのトラックのトリガの位置は、そのチャンネルの `acquisition.trigger_index`（そのチャンネルのサンプルの番号）です |
 | `time_base_slipped` | `true`: プローブが、サンプルの時刻が遅れたことを知っている（OEP の区画の flags bit 2）。遅れがないときは、キー自体を入れません |
-| `probe` | 取得した機器の情報（オブジェクト）。キーは任意です。WireSkein が意味を決めているのは次のものです。`model`、`firmware`（プローブ）、`chip`、`chip_revision`（取得した MCU）、`generation`（OEP v1 の取得の世代: `{"logic": n, "analog": n}`。どの開始の取得かを追うため）、`calibration`（出荷時の補正値。`scheme` に方式の名前、`raw` に生の値を、適用せずにそのまま入れる。例: ESP32 の eFuse の ADC の補正値） |
+| `probe` | 取得した機器の情報（オブジェクト）。キーは任意です。WireSkein が意味を決めているのは次のものです。`model`、`firmware`（プローブ）、`chip`、`chip_revision`（取得した MCU）、`clock`（取得の前後に読んだ probe の時計と host の時計の対応、OEP core §7.7: `before` / `after` に `host_ns`（host の単調時計、往復の中点）、`uptime_ns`、`boot_id`、`uncertainty_ns`（往復の半分）。同じ boot_id なら `rate_ppm`（probe の時計の速さの host に対するずれ）と `rate_ppm_uncertainty`）、`generation`（OEP v1 の取得の世代: `{"logic": n, "analog": n}`。どの開始の取得かを追うため）、`calibration`（出荷時の補正値。`scheme` に方式の名前、`raw` に生の値を、適用せずにそのまま入れる。例: ESP32 の eFuse の ADC の補正値） |
 
 大きな情報や、後から足す情報は、`meta` ではなく添付かメモに入れます（§5）。
 

@@ -284,3 +284,15 @@ def test_a_busy_port_ends_in_one_line(monkeypatch):
     with pytest.raises(SystemExit) as e:
         cli.main()
     assert str(e.value) == "wireskein capture: PortBusy: /dev/ttyUSB0 is open in another program"
+
+
+def test_probe_clock_against_the_host():
+    import types
+    from wireskein.sources import oep
+    r = lambda host, up, unc, boot=7: types.SimpleNamespace(host_ns=host, uptime_ns=up, boot_id=boot, uncertainty_ns=unc)  # noqa: E731
+    info = oep._clock_info(r(1_000_000_000, 5_000_000_000, 50_000), r(2_000_000_000, 6_000_100_000, 50_000))
+    assert info["before"]["uptime_ns"] == 5_000_000_000 and info["after"]["host_ns"] == 2_000_000_000
+    assert abs(info["rate_ppm"] - 100) < 1e-6 and abs(info["rate_ppm_uncertainty"] - 100) < 1e-6
+    assert "rate_ppm" not in oep._clock_info(r(1, 5, 1), r(2, 6, 1, boot=8))        # restarted between: no rate
+    assert oep._clock_info(None, None) == {}
+    assert oep._clock(types.SimpleNamespace()) is None                              # an older client: no clock
