@@ -68,6 +68,8 @@ def info(args) -> None:
                 vals = c.values()
                 lo, hi = sum(v <= 0 for v in vals), sum(v >= top for v in vals)
                 lo_v, hi_v = -c.zero * c.scale_nv * 1e-9, (top - c.zero) * c.scale_nv * 1e-9
+                if c.scale_nv < 0:                    # an inverting frontend: code 0 is the high end
+                    lo, hi, lo_v, hi_v = hi, lo, hi_v, lo_v
                 print(f"  {'':12s} range {lo_v:.3f}..{hi_v:.3f} {c.unit}" + (
                     f": {lo} samples clipped at <= {lo_v:.3f}, {hi} at >= {hi_v:.3f} (not voltages)" if lo or hi else ""))
         else:

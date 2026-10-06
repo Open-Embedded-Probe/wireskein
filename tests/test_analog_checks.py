@@ -164,3 +164,9 @@ def test_a_threshold_outside_the_range_is_refused():
     assert len(to_logic(a, 1000, 1.65).edges) == 3                       # inside 0.15..2.45 V: clipped ends are sure
     with pytest.raises(ValueError, match="not inside the frontend's range"):
         to_logic(a, 1000, 3.0)
+
+
+def test_an_inverting_frontend_clips_code_0_at_the_high_end(tmp_path):
+    inv = fileformat.analog_raw("INV", [0] * 20, 100_000, value_bits=12, zero=4095, scale_nv=-600_000)   # 0 -> +2.457 V
+    got = run(tmp_path, [voltage("INV", max_v=2.0), voltage("INV", min_v=0.1)], [inv], 100_000)
+    assert [ok for _, ok, _ in got] == [False, True], got                   # >= the high end: above 2.0 for sure

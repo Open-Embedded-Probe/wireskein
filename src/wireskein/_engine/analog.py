@@ -101,6 +101,8 @@ def clipped(a: AnalogTrace):
     top = (1 << a.value_bits) - 1
     raw = np.asarray(a.values)
     to_v = lambda code: (code - a.zero) * a.scale_nv * 1e-9    # noqa: E731
+    if a.scale_nv < 0:                    # an inverting frontend: code 0 is the high end
+        return raw >= top, raw <= 0, float(to_v(top)), float(to_v(0))
     return raw <= 0, raw >= top, float(to_v(0)), float(to_v(top))
 
 
