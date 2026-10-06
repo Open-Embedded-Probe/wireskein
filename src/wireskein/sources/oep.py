@@ -408,7 +408,7 @@ def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], aids
             meta["time_base_slipped"] = True
         if seg.trigger_index is not None:
             meta["trigger_index"] = seg.trigger_index
-        if cfg.jitter_ns:
+        if getattr(cfg, "jitter_ns", 0):              # gone from OEP v1's configure answer: recorded while given
             meta["jitter_ns"] = cfg.jitter_ns
         tick = Fraction(cfg.rate)
         chans = fileformat.from_interleaved(data, names, cfg.width, cfg.positions, seg.samples)
