@@ -497,28 +497,59 @@ def _analog(cap: Capture, pin: str) -> AnalogTrace | None:
 
 
 def check_voltage(cap, x):
+    """Mean, range and ripple in volts. Samples clipped at an end of the converter (OEP capture §1.2) are not
+    voltages: they say only "at or below the low end" / "at or above the high end". A range check they decide
+    either way still counts (below a low end that is already under min_v is NG); what they leave open is
+    unchecked, with the reason."""
     a = _analog(cap, x["pin"])
     if a is None:
         return None, {}, "not an analog channel in this capture" if _ch(cap, x["pin"]) else "pin not captured"
     got = analog.levels(a)
     if got is None:
         return None, {"samples": int(len(a.values))}, "no conversion to volts in the file"
-    if not got["samples"]:
+    c_lo, c_hi = got.get("clipped_low", 0), got.get("clipped_high", 0)
+    lo_v, hi_v = got.get("range_v", [None, None])
+    if not got["samples"] and not (c_lo or c_hi):
         return False, got, "no samples"
-    ok, why = True, []
-    if x.get("volts") is not None and abs(got["mean_v"] - x["volts"]) > x["tol_v"]:
-        ok = False
-        why.append(f"mean {got['mean_v']:.4f} V vs {x['volts']:.4f} +- {x['tol_v']:g} V")
-    if x.get("min_v") is not None and got["min_v"] < x["min_v"]:
-        ok = False
-        why.append(f"min {got['min_v']:.4f} V < {x['min_v']:g} V")
-    if x.get("max_v") is not None and got["max_v"] > x["max_v"]:
-        ok = False
-        why.append(f"max {got['max_v']:.4f} V > {x['max_v']:g} V")
-    if x.get("ripple") is not None and got["p2p_v"] > x["ripple"]:
-        ok = False
-        why.append(f"peak-to-peak {got['p2p_v']:.4f} V > {x['ripple']:g} V")
-    return ok, got, "; ".join(why)
+    ok, why, open_ = True, [], []
+    if x.get("min_v") is not None:
+        if c_lo and lo_v < x["min_v"]:
+            ok = False
+            why.append(f"{c_lo} samples clipped at the low end (<= {lo_v:.3f} V) < {x['min_v']:g} V")
+        elif c_lo:
+            open_.append(f"{c_lo} samples clipped at <= {lo_v:.3f} V: min_v {x['min_v']:g} V cannot be told")
+        elif got["samples"] and got["min_v"] < x["min_v"]:
+            ok = False
+            why.append(f"min {got['min_v']:.4f} V < {x['min_v']:g} V")
+        if c_hi and hi_v < x["min_v"]:                  # >= the high end, but the high end is under min_v
+            open_.append(f"{c_hi} samples clipped at >= {hi_v:.3f} V: min_v {x['min_v']:g} V cannot be told")
+    if x.get("max_v") is not None:
+        if c_hi and hi_v > x["max_v"]:
+            ok = False
+            why.append(f"{c_hi} samples clipped at the high end (>= {hi_v:.3f} V) > {x['max_v']:g} V")
+        elif c_hi:
+            open_.append(f"{c_hi} samples clipped at >= {hi_v:.3f} V: max_v {x['max_v']:g} V cannot be told")
+        elif got["samples"] and got["max_v"] > x["max_v"]:
+            ok = False
+            why.append(f"max {got['max_v']:.4f} V > {x['max_v']:g} V")
+        if c_lo and lo_v > x["max_v"]:                  # <= the low end, but the low end is over max_v
+            open_.append(f"{c_lo} samples clipped at <= {lo_v:.3f} V: max_v {x['max_v']:g} V cannot be told")
+    if x.get("volts") is not None or x.get("ripple") is not None:
+        if c_lo or c_hi:
+            open_.append(f"{c_lo + c_hi} samples clipped at an end of {lo_v:.3f}..{hi_v:.3f} V: "
+                         "mean and ripple cannot be told")
+        else:
+            if x.get("volts") is not None and abs(got["mean_v"] - x["volts"]) > x["tol_v"]:
+                ok = False
+                why.append(f"mean {got['mean_v']:.4f} V vs {x['volts']:.4f} +- {x['tol_v']:g} V")
+            if x.get("ripple") is not None and got["p2p_v"] > x["ripple"]:
+                ok = False
+                why.append(f"peak-to-peak {got['p2p_v']:.4f} V > {x['ripple']:g} V")
+    if not ok:
+        return False, got, "; ".join(why + open_)
+    if open_:
+        return None, got, "; ".join(open_)
+    return True, got, ""
 
 
 LOGIC = {"square", "level", "ends", "starts", "pulses", "i2c", "spi", "uart"}   # checks that read logic levels

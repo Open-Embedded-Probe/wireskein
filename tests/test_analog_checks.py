@@ -134,3 +134,33 @@ def test_analyze_decodes_an_adc_line(tmp_path):
     r = subprocess.run([sys.executable, "-m", "wireskein", "analyze", str(p), "--threshold", "NOPE=1"],
                        capture_output=True, text=True)
     assert r.returncode != 0 and r.stderr.startswith("wireskein analyze: NOPE: not an analog channel")
+
+
+def esp32_12db(name, raw):
+    """A classic ESP32 frontend at 12 dB, as the fixed probe declares it: 150..2450 mV over codes 0..4095."""
+    return fileformat.analog_raw(name, raw, 100_000, value_bits=12, zero=-267, scale_nv=561_661)
+
+
+def test_clipped_codes_are_not_voltages(tmp_path):
+    rail = [4095] * 50                                                    # a 3V3 rail: beyond the 2.45 V end
+    gnd = [0] * 50                                                        # GND: below the 150 mV end
+    mid = [2048] * 50                                                     # 1.30 V
+    chans = [esp32_12db("RAIL", rail), esp32_12db("GND", gnd), esp32_12db("MID", mid)]
+    got = run(tmp_path, [
+        voltage("RAIL", min_v=3.0),                  # >= 2.45 V cannot tell whether it reaches 3.0 V
+        voltage("RAIL", max_v=2.0),                  # >= 2.45 V is above 2.0 V for sure
+        voltage("GND", max_v=0.5),                   # <= 0.15 V is below 0.5 V for sure: fine
+        voltage("GND", min_v=0.2),                   # <= 0.15 V is below 0.2 V for sure
+        voltage("RAIL", 3.3, tol_v=0.1),             # a mean of clipped samples is no voltage
+        voltage("MID", 1.30, tol_v=0.01),
+    ], chans, 100_000)
+    assert [ok for _, ok, _ in got] == [None, False, True, False, None, True], got
+    assert "cannot be told" in got[0][2] and "clipped at the high end" in got[1][2]
+
+
+def test_a_threshold_outside_the_range_is_refused():
+    from wireskein._engine.model import AnalogTrace
+    a = AnalogTrace("X", np.array([0, 4095, 0, 4095]), Fraction(1000), Fraction(0), "analog", 16, 12, -267, 561_661)
+    assert len(to_logic(a, 1000, 1.65).edges) == 3                       # inside 0.15..2.45 V: clipped ends are sure
+    with pytest.raises(ValueError, match="not inside the frontend's range"):
+        to_logic(a, 1000, 3.0)

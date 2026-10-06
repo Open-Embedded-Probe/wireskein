@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Raw analog values at the converter's end codes (0 and 2^value_bits − 1) are read as clipped, not as voltages (OEP capture §1.2; spec §4.2): `voltage()` decides a range check by them only when the end settles it (a 3V3 rail clipped at 2.45 V fails `max_v=2.0` but leaves `min_v=3.0` unchecked), leaves mean and ripple unchecked when any sample is clipped, and reports the counts; a threshold outside the frontend's range is an error; `info` shows the range and the clipped counts. The file keeps raw values.
+- (JA) 生の値のアナログで、変換器の端の値（0 と 2^value_bits − 1）は電圧ではなく「切れた」と読む（OEP capture §1.2、仕様 §4.2）: `voltage()` は、端で決まる範囲の照合だけそれで判定し（2.45 V で切れた 3V3 は `max_v=2.0` で NG、`min_v=3.0` は未検査）、切れたサンプルがあれば平均と ripple は未検査にし、数を報告する。frontend の範囲の外のしきい値は誤り。`info` は範囲と切れた数を出す。ファイルは生の値のまま。
 - (EN) An OEP probe without the optional capture query (OEP v1: absent = unknown_operation) still takes logic + analog captures: the analog sample count then follows the asked rate instead of the probe's answer.
 - (JA) キャプチャの問い合わせ（query）を持たない OEP の probe（OEP v1 では任意の op。無ければ unknown_operation）でも、ロジック + アナログを取れる。そのときのアナログのサンプル数は、probe の答えではなく頼んだレートから決める。
 - (EN) OEP capture sends the mode, the rate and the frontend critical too, as OEP v1 requires (core §2.3, capture §3.3): a probe that cannot honour one refuses instead of quietly running another mode or rate.

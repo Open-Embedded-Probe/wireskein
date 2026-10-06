@@ -59,6 +59,10 @@ def crossings(a: AnalogTrace, tick_hz, threshold) -> tuple[np.ndarray, np.ndarra
     if v is None:
         raise ValueError(f"{a.name}: no conversion to volts, so no threshold in volts applies")
     low, high = thresholds(threshold)
+    clip = clipped(a)
+    if clip is not None and not clip[2] < low <= high < clip[3]:
+        raise ValueError(f"{a.name}: threshold {low:g}..{high:g} V is not inside the frontend's range "
+                         f"{clip[2]:.3f}..{clip[3]:.3f} V (the ends clip, so they say only 'at or beyond')")
     lv = schmitt(v, low, high)
     per = float(Fraction(tick_hz) / a.rate_hz)
     k = np.flatnonzero(lv[1:] != lv[:-1]) + 1          # first sample of each new level
@@ -87,13 +91,35 @@ def to_logic(a: AnalogTrace, tick_hz, threshold) -> Channel:
                    {**a.acquisition, "threshold_v": [low, high]})
 
 
+def clipped(a: AnalogTrace):
+    """Where a raw channel sat at an end of its converter (OEP capture §1.2): the code 0 means the input was at or
+    below the frontend's low end, the top code (2^value_bits - 1) at or above its high end, so neither is a
+    voltage. -> (low mask, high mask, low end V, high end V), or None when the file cannot tell (volts only,
+    no value_bits, or no conversion to volts)."""
+    if a.encoding != "analog" or not a.value_bits or a.zero is None or a.scale_nv is None:
+        return None
+    top = (1 << a.value_bits) - 1
+    raw = np.asarray(a.values)
+    to_v = lambda code: (code - a.zero) * a.scale_nv * 1e-9    # noqa: E731
+    return raw <= 0, raw >= top, float(to_v(0)), float(to_v(top))
+
+
 def levels(a: AnalogTrace) -> dict | None:
-    """Mean, min, max and peak-to-peak in volts (None: no conversion to volts)."""
+    """Mean, min, max and peak-to-peak in volts over the samples inside the converter's range (None: no conversion
+    to volts); with the counts of samples clipped at either end and that range, when the file can tell."""
     v = a.volts()
     if v is None:
         return None
-    v = v[np.isfinite(v)]
+    ok = np.isfinite(v)
+    out = {}
+    clip = clipped(a)
+    if clip is not None:
+        low, high, lo_v, hi_v = clip
+        out.update(clipped_low=int(np.count_nonzero(low & ok)), clipped_high=int(np.count_nonzero(high & ok)),
+                   range_v=[lo_v, hi_v])
+        ok &= ~low & ~high
+    v = v[ok]
     if not len(v):
-        return {"samples": 0}
+        return {"samples": 0, **out}
     return {"samples": int(len(v)), "mean_v": float(v.mean()), "min_v": float(v.min()), "max_v": float(v.max()),
-            "p2p_v": float(v.max() - v.min()), "std_v": float(v.std())}
+            "p2p_v": float(v.max() - v.min()), "std_v": float(v.std()), **out}

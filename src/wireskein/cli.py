@@ -63,6 +63,13 @@ def info(args) -> None:
                        else ", no volt conversion")) if c.encoding == "analog" else f"float32 {c.unit}"
             print(f"  {c.name:12s} {c.n:>12d} samples  {c.encoding:10s} {float(c.rate_hz):g} Hz from tick "
                   f"{float(c.t0_ticks):g}  {conv}")
+            if c.encoding == "analog" and c.value_bits and c.zero is not None and c.scale_nv is not None:
+                top = (1 << c.value_bits) - 1
+                vals = c.values()
+                lo, hi = sum(v <= 0 for v in vals), sum(v >= top for v in vals)
+                lo_v, hi_v = -c.zero * c.scale_nv * 1e-9, (top - c.zero) * c.scale_nv * 1e-9
+                print(f"  {'':12s} range {lo_v:.3f}..{hi_v:.3f} {c.unit}" + (
+                    f": {lo} samples clipped at <= {lo_v:.3f}, {hi} at >= {hi_v:.3f} (not voltages)" if lo or hi else ""))
         else:
             rate = float(tick) / c.step
             print(f"  {c.name:12s} {c.n:>12d} samples  step {c.step:<4d} phase {c.phase:<4d} {rate:g} Hz")
