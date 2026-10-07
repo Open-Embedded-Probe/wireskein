@@ -120,7 +120,7 @@ def capture(target: str, req: Request) -> Result:
 
 def _what(tag, oc) -> str:
     """A configure item for people. The probe names the TLV it refused with its
-    tag as sent, bit 7 (critical) included."""
+    tag as sent (bit 7, critical, for multirate)."""
     base = tag & 0x7F if isinstance(tag, int) else tag
     mr_tag = getattr(getattr(oc, "mr", None), "TAG", None)
     return {getattr(oc, "TRIGGER", None): "a trigger", getattr(oc, "PRETRIGGER", None): "a pretrigger",
@@ -151,29 +151,16 @@ def oc_state(name: str) -> int:
 
 
 def _configure(track, oc, oh, target: str, what: str, **kw):
-    """configure with the mode, the rate, and the trigger / pretrigger / frontend asked for, sent critical (a probe
-    without them would otherwise ignore them: another mode or rate, or a start at once)."""
-    asked = {oc.TRIGGER} if kw.get("trigger") else set()
-    if kw.get("pretrigger") is not None:
-        asked.add(oc.PRETRIGGER)
-    # OEP v1 (core §2.3, capture §3.3): mode, rate and frontend are sent critical too - a probe that cannot honour
-    # one must refuse, not quietly run another mode or rate
-    for name, given in (("MODE", True), ("RATE", "rate" in kw), ("FRONTEND", bool(kw.get("frontends")))):
-        tag = getattr(oc, name, None)
-        if tag is not None and given:
-            asked.add(tag)
+    """configure; a refusal (unsupported, naming the TLV) in one line. Every probe knows the configure TLVs of OEP
+    v1 (capture §3.3), so one it cannot honour is refused, not ignored; oep-client sends multirate critical itself."""
     try:
-        cfg = track.configure(mode=oc.ONE_SHOT, critical=asked, **kw)
+        return track.configure(mode=oc.ONE_SHOT, **kw)
     except oh.Unsupported as e:
         raise RuntimeError(f"probe {target} cannot capture {what} with {_what(e.tag, oc)}") from e
     except ValueError as e:              # oep-client checks multirate against the probe's describe before sending
         if "multirate" not in str(e):
             raise
         raise RuntimeError(f"probe {target}: {e}") from e
-    ignored = asked & set(getattr(cfg, "ignored", None) or [])     # before OEP v1's rule review: no ignored TLV
-    if ignored:
-        raise RuntimeError(f"probe {target} ignored {', '.join(_what(t, oc) for t in sorted(ignored))}")
-    return cfg
 
 
 def _clock(hst):

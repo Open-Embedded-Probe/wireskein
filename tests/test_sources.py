@@ -54,8 +54,8 @@ def test_sigrok_to_sr(tmp_path):
 class StandIn:
     """Just enough of oep-client for the source: a 3-channel probe answering w=4 (two samples per byte)."""
 
-    def __init__(self, n=10, refuse=(), ignore=()):
-        self.calls, self.n, self.refuse, self.ignore = [], n, set(refuse), set(ignore)
+    def __init__(self, n=10, refuse=()):
+        self.calls, self.n, self.refuse = [], n, set(refuse)
         rng = np.random.default_rng(0)
         self.levels = rng.integers(0, 2, (3, n)).astype(np.uint8)
         nib = self.levels[0] | self.levels[1] << 1 | self.levels[2] << 2           # bit 3 undefined
@@ -79,10 +79,9 @@ class StandIn:
 
             def configure(self, **kw):
                 me.calls.append(("configure", kw))
-                if me.refuse & set(kw.get("critical", ())):
-                    raise Unsupported(min(me.refuse & set(kw["critical"])) | 0x80)   # as sent: bit 7 = critical
-                return types.SimpleNamespace(rate=Fraction(160_000_000, 8), width=4, positions=[0, 1, 2], jitter_ns=0,
-                                             ignored=sorted(me.ignore))
+                if kw.get("trigger") and 0x45 in me.refuse:
+                    raise Unsupported(0x45)                      # the tag as sent
+                return types.SimpleNamespace(rate=Fraction(160_000_000, 8), width=4, positions=[0, 1, 2])
 
             def start(self):
                 me.calls.append(("start",))
@@ -117,7 +116,7 @@ def test_oep_source_against_a_stand_in(tmp_path, monkeypatch):
     assert ("plan", [(7, 0, 47), (7, 1, 48), (7, 2, 5)]) in fake.calls
     conf = next(kw for c, *kw in fake.calls if c == "configure")[0]
     assert conf["trigger"] == (2, 1, 1) and conf["pretrigger"] == 3 and conf["samples"] == 11 and conf["rate"] == 20_000_000
-    assert conf["critical"] == {0x45, 0x46}                                     # honour the trigger or refuse
+    assert "critical" not in conf                                               # OEP v1: refused, never ignored
     assert [c[0] for c in fake.calls][-2:] == ["release", "end"]                 # plan released, session ended
     head, chans = fileformat.read(out)
     assert head["tick_hz"] == [20_000_000, 1]
@@ -142,17 +141,13 @@ def test_oep_source_names_a_refusal(monkeypatch):
         sources.run("oep:/dev/x", sources.Request([("A", "1")], 1000, 10))
 
 
-@pytest.mark.parametrize("probe", [dict(refuse={0x45}), dict(ignore={0x45})])
-def test_oep_trigger_the_probe_cannot_do_is_an_error(probe, monkeypatch):
-    fake = StandIn(**probe)
+def test_oep_trigger_the_probe_cannot_do_is_an_error(monkeypatch):
+    fake = StandIn(refuse={0x45})
     for name, mod in fake.modules().items():
         monkeypatch.setitem(sys.modules, name, mod)
     with pytest.raises(RuntimeError, match="a trigger"):
         sources.run("oep:/dev/x", sources.Request([("A", "1")], 1000, 10, trigger=("A", "rise")))
     assert [c[0] for c in fake.calls][-2:] == ["release", "end"]
-    fake.calls.clear()
-    sources.run("oep:/dev/x", sources.Request([("A", "1"), ("B", "2"), ("C", "3")], 1000, 10))   # no trigger: nothing critical
-    assert next(kw for c, *kw in fake.calls if c == "configure")[0]["critical"] == set()
 
 
 def test_fewer_samples_than_asked_are_named(tmp_path, capsys):
