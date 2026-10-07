@@ -1,5 +1,5 @@
-"""The OEP source over a real link to oep-client's fake probe (fake_serve on
-TCP). Skipped when oep-client is missing or its fake probe has no capture
+"""The OEP source over a real link to oep-client's virtual bench (virtual_bench_serve, fake_serve before
+oep-client-python 0.0.29, on TCP). Skipped when oep-client is missing or its fake probe has no capture
 (before oep-client-python 0.0.9)."""
 
 import re
@@ -17,6 +17,9 @@ try:
     HAS_CAPTURE = "capture_slipped" in open(endpoint.__file__).read()
 except ImportError:
     HAS_CAPTURE = False
+import importlib.util
+SERVE = next(m for m in ("oep_client.virtual_bench_serve", "oep_client.fake_serve")
+             if m == "oep_client.fake_serve" or importlib.util.find_spec(m))
 pytestmark = pytest.mark.skipif(not HAS_CAPTURE, reason="oep-client's fake probe has no capture")
 
 
@@ -25,7 +28,7 @@ def probe():
     procs = []
 
     def start(*extra, profile="p4-x035"):
-        p = subprocess.Popen([sys.executable, "-m", "oep_client.fake_serve", "--tcp", "0", "--framing", "length",
+        p = subprocess.Popen([sys.executable, "-m", SERVE, "--tcp", "0", "--framing", "length",
                               "--profile", profile, *extra], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                              stderr=subprocess.PIPE, text=True)
         procs.append(p)

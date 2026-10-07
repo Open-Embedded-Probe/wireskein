@@ -160,7 +160,7 @@ def _configure(track, oc, oh, target: str, what: str, **kw):
         cfg = track.configure(mode=oc.ONE_SHOT, critical=asked, **kw)
     except oh.Unsupported as e:
         raise RuntimeError(f"probe {target} cannot capture {what} with {_what(e.tag, oc)}") from e
-    ignored = asked & set(cfg.ignored or [])
+    ignored = asked & set(getattr(cfg, "ignored", None) or [])     # before OEP v1's rule review: no ignored TLV
     if ignored:
         raise RuntimeError(f"probe {target} ignored {', '.join(_what(t, oc) for t in sorted(ignored))}")
     return cfg
