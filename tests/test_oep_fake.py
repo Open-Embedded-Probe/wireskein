@@ -63,7 +63,7 @@ def test_trigger_and_slip(probe, tmp_path):
     meta = fileformat.read(out)[0]["meta"]
     assert meta["time_base_slipped"] is True
     b = levels(out)[1]
-    t = meta["trigger_index"]
+    t = meta["trigger_tick"]
     assert t >= 50 and b[t] == 1 and b[t - 1] == 0                # a rising edge of B at the trigger index
 
 
@@ -136,7 +136,7 @@ def test_group_trigger_marks_both_tracks(probe, tmp_path):
                           analog=[("SQ", "16", None)], analog_rate=48_000, analog_samples=64)
     out = sources.capture(probe(), req, tmp_path / "t.wireskein")
     head, chans = fileformat.read(out)
-    assert "trigger_index" in head["meta"] and "trigger_index" in chans[2].acquisition
+    assert "trigger_tick" in head["meta"] and "trigger_index" in chans[2].acquisition
     assert "trigger_ns" in head["meta"]["probe"]
 
 
@@ -169,3 +169,33 @@ def test_a_trigger_that_never_comes_is_named():
         _waiting(never, Waiting(), req)
     with pytest.raises(TimeoutError, match="did not finish"):          # no trigger asked: the plain timeout
         _waiting(never, Waiting(), sources.Request([("A", "10")], 1_000_000, 100, timeout=2))
+
+
+HAS_MULTIRATE = __import__("importlib").util.find_spec("oep_client.multirate") is not None
+
+
+@pytest.mark.skipif(not HAS_MULTIRATE, reason="oep-client has no multirate (before 0.0.29)")
+def test_multirate_keeps_each_channel_as_asked(probe, tmp_path):
+    """OEP multirate: a raw channel, a sample every 4 from 1, any-low per 32, latch-high per 8 - each read back as the
+    probe's counter waveform (role k is bit k of the base sample number) summarized the same way."""
+    src = probe()
+    text = "A=10,B=11/4+1,C=12:any-low/32,D=13:latch-high/8"
+    req = sources.Request(sources.parse_channels(text), 20_000_000, 1000, reduce=sources.parse_reduce(text),
+                          trigger=("C", "fall"), pretrigger=40)
+    out = sources.capture(src, req, tmp_path / "m.wireskein")
+    head, chans = fileformat.read(out)
+    assert [c["encoding"] for c in head["channels"]] == ["bits", "bits", "interval-any", "interval-latch"]
+    a, b, c, d = chans
+    n = a.n                                                       # base samples (the probe rounds up to its block)
+    assert n >= 1000 and (b.step, b.phase, c.step, d.step) == (4, 1, 32, 8)
+    t = head["meta"]["trigger_tick"]
+    lvl = lambda k: [(i >> k) & 1 for i in range(n)]              # noqa: E731  (the virtual bench's counter)
+    assert np.frombuffer(fileformat.unpack(a), np.uint8).tolist() == lvl(0)
+    assert np.frombuffer(fileformat.unpack(b), np.uint8).tolist() == lvl(1)[1::4]
+    any_low = [0 if 0 in lvl(2)[j:j + 32] else 1 for j in range(0, n - n % 32, 32)]
+    assert c.values() == any_low and c.active == 0
+    x = lvl(3)
+    latch = [x[j + 7] | (any(n_ >= 1 and x[n_ - 1] == 0 and x[n_] == 1 for n_ in range(j, j + 8)) << 1)
+             for j in range(0, n - n % 8, 8)]
+    assert d.values() == latch and d.active == 1
+    assert lvl(2)[t] == 0 and lvl(2)[t - 1] == 1                  # the trigger: C fell at that base sample

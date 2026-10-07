@@ -117,7 +117,7 @@ class Recorder:
         """Store one capture as cNNNN.wireskein. armed: time.monotonic() when it was
         armed (Recorder.armed(), or the capture client's own stamp). Give either
         interleaved + names (+ width / positions / n for other sample layouts)
-        or channels. meta goes into the capture file (start_ns, start_uncertainty_ns, trigger_index, time_base_slipped, ...);
+        or channels. meta goes into the capture file (start_ns, start_uncertainty_ns, trigger_tick, time_base_slipped, ...);
         attachments are free-form files stored with it (see wireskein.fileformat.attach)."""
         if (interleaved is None) == (channels is None):
             raise ValueError("give either interleaved (with names) or channels")

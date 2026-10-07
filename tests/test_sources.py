@@ -126,7 +126,7 @@ def test_oep_source_against_a_stand_in(tmp_path, monkeypatch):
     assert meta["source"] == "oep:/dev/ttyACM9" and meta["start_ns"] == 123_000 and "start_us" not in meta
     assert meta["probe"]["generation"] == {"logic": 3}
     assert meta["time_base_slipped"] is True
-    assert meta["trigger_index"] == 4 and meta["probe_channels"] == {"SDA": 47, "SCL": 48, "INT": 5}
+    assert meta["trigger_tick"] == 4 and meta["probe_channels"] == {"SDA": 47, "SCL": 48, "INT": 5}
 
 
 def test_oep_source_names_a_refusal(monkeypatch):

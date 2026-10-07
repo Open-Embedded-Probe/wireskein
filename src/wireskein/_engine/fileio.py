@@ -7,13 +7,17 @@ from pathlib import Path
 import numpy as np
 
 from .. import fileformat
-from .model import AnalogTrace, Capture, Channel, edges_from_dense
+from .model import AnalogTrace, Capture, Channel, IntervalTrace, edges_from_dense
 
 
 def load(path: str | Path) -> Capture:
     head, chans = fileformat.read(path)
-    out, analog = [], []
+    out, analog, intervals = [], [], []
     for c in chans:
+        if isinstance(c, fileformat.IntervalChannel):
+            intervals.append(IntervalTrace(c.name, np.array(c.values(), np.uint8), c.step, c.phase,
+                                           c.encoding.split("-")[1], c.active, dict(c.acquisition)))
+            continue
         if isinstance(c, fileformat.AnalogChannel):
             dtype = np.float32 if c.encoding == "analog-f32" else {8: np.uint8, 16: "<u2", 32: "<u4"}[c.width]
             analog.append(AnalogTrace(c.name, np.frombuffer(c.data, dtype), c.rate_hz, c.t0_ticks, c.encoding, c.width,
@@ -26,7 +30,7 @@ def load(path: str | Path) -> Capture:
     return Capture(float(tick), int(head["ticks"]), out,
                    meta={**head.get("meta", {}), "file": str(path), "tick_hz": tick, "extras": fileformat.extras(path),
                          "capture_id": head.get("id"),
-                         "skipped_channels": fileformat.skipped(head)}, analog=analog)
+                         "skipped_channels": fileformat.skipped(head)}, analog=analog, intervals=intervals)
 
 
 def to_channel(ch: Channel, n_ticks: int) -> fileformat.Channel:
@@ -47,6 +51,18 @@ def to_analog(a: AnalogTrace) -> fileformat.AnalogChannel:
                              a.zero, a.scale_nv, a.unit, dict(a.acquisition))
 
 
+def to_interval(t: IntervalTrace) -> fileformat.IntervalChannel:
+    return fileformat.interval(t.name, t.values.tolist(), t.step, t.phase, t.encoding, t.active, **t.acquisition)
+
+
+def refuse_if_no_intervals(cap: Capture, dest) -> None:
+    """A .sr or VCD has no form for a channel kept by interval (wireskein-format §4.4)."""
+    if cap.intervals:
+        names = ", ".join(f"{t.name} ({t.encoding})" for t in cap.intervals)
+        raise ValueError(f"not writing {dest}: it has no form for the channels kept by interval: {names} "
+                         f"(keep it as a WireSkein file)")
+
+
 def refuse_if_skipped(cap: Capture, dest) -> None:
     """Writing a capture read with skipped channels would drop them (wireskein-format §3.2)."""
     sk = cap.meta.get("skipped_channels")
@@ -62,7 +78,8 @@ def save(path: str | Path, cap: Capture, **meta) -> Path:
     refuse_if_skipped(cap, path)
     tick = cap.meta.get("tick_hz", cap.rate)
     meta.pop("capture_id", None)
-    path = fileformat.write(path, tick, [to_channel(c, cap.n_samples) for c in cap.channels] + [to_analog(a) for a in cap.analog],
+    path = fileformat.write(path, tick, [to_channel(c, cap.n_samples) for c in cap.channels] + [to_analog(a) for a in cap.analog]
+                     + [to_interval(t) for t in cap.intervals],
                      capture_id=cap.meta.get("capture_id"),
                      **meta)
     if cap.meta.get("extras"):

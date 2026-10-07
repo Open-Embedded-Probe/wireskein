@@ -42,6 +42,8 @@ def save(path: str | Path, cap: Capture, **meta) -> Path:
     (each channel at its own rate; .wireskein is the usual name)."""
     path = Path(path)
     fileio.refuse_if_skipped(cap, path)
+    if path.suffix in (".sr", ".vcd"):
+        fileio.refuse_if_no_intervals(cap, path)
     if path.suffix == ".sr":
         return write_sr(path, cap, **meta)
     if path.suffix == ".vcd":
@@ -64,7 +66,7 @@ def as_logic(cap: Capture, thresholds: dict) -> Capture:
         if name in names:
             raise ValueError(f"{name}: already a logic channel")
         extra.append(analog.to_logic(trace, cap.meta.get("tick_hz", cap.rate), th))
-    return Capture(cap.rate, cap.n_samples, cap.channels + extra, cap.meta, cap.analog)
+    return Capture(cap.rate, cap.n_samples, cap.channels + extra, cap.meta, cap.analog, cap.intervals)
 
 
 def analyze(cap: Capture, hints: dict | None = None, declarative: bool = False):

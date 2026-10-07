@@ -71,12 +71,37 @@ class AnalogTrace:
 
 
 @dataclass
+class IntervalTrace:
+    """A logic line kept as one value per interval of `step` ticks (interval k: ticks [phase + k * step,
+    phase + (k + 1) * step)); see fileformat.IntervalChannel. kind "any": values 0/1, `active` if the line was
+    active at any tick of the interval. kind "latch": values 0-3, bit 0 the level at the interval's last tick, bit 1
+    a change to `active` inside it (the first tick of the channel compared with nothing). Where in the interval,
+    and how many times, is not kept."""
+    name: str
+    values: np.ndarray       # uint8
+    step: int
+    phase: int = 0
+    kind: str = "any"        # "any" | "latch"
+    active: int = 1
+    acquisition: dict = field(default_factory=dict)
+
+    @property
+    def encoding(self) -> str:
+        return f"interval-{self.kind}"
+
+    @property
+    def end(self) -> int:
+        return self.phase + len(self.values) * self.step
+
+
+@dataclass
 class Capture:
     rate: float
     n_samples: int
     channels: list[Channel]
     meta: dict = field(default_factory=dict)
     analog: list[AnalogTrace] = field(default_factory=list)
+    intervals: list[IntervalTrace] = field(default_factory=list)
 
     def channel(self, name: str) -> Channel:
         for ch in self.channels:

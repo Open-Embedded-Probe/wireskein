@@ -30,6 +30,7 @@ from .. import fileformat
 
 BUILTIN = {"oep": "wireskein.sources.oep", "sigrok": "wireskein.sources.sigrok"}
 TRIGGERS = ("rise", "fall", "both", "high", "low")
+POLICIES = ("sample", "any", "latch")     # how a reduced logic channel keeps the line (OEP multirate)
 
 
 @dataclass
@@ -43,6 +44,11 @@ class Request:
     analog: list[tuple[str, str, int | None]] = field(default_factory=list)   # (name, channel id, input range / frontend)
     analog_rate: int | None = None           # analog samples per second (default: the source's choice or `rate`)
     analog_samples: int | None = None        # default: as long as the logic capture
+    # logic channels kept at fewer values than the rate (a probe's multirate): name -> (policy, d, param).
+    # "sample": the level every d samples, from sample param (the phase); "any": per d samples, whether the line was at
+    # level param (the active level) at any of them; "latch": per d samples, the level at the last one and whether it
+    # went to level param inside. rate, samples, pretrigger stay in samples of the rate (base samples).
+    reduce: dict[str, tuple[str, int, int]] = field(default_factory=dict)
 
     def __post_init__(self):
         names = [n for n, _ in self.channels] + [n for n, *_ in self.analog]
@@ -52,6 +58,14 @@ class Request:
             name, kind = self.trigger
             if name not in [n for n, _ in self.channels] or kind not in TRIGGERS:
                 raise ValueError(f"trigger {name}:{kind}: the channel must be one captured, the kind one of {', '.join(TRIGGERS)}")
+        logic = [n for n, _ in self.channels]
+        for name, (policy, d, param) in self.reduce.items():
+            if name not in logic or policy not in POLICIES or d < 1:
+                raise ValueError(f"{name}: reduce {policy}/{d}: a logic channel captured, one of {', '.join(POLICIES)}, "
+                                 f"d >= 1")
+            if policy == "sample" and not 0 <= param < d or policy != "sample" and (d < 2 or param not in (0, 1)):
+                raise ValueError(f"{name}: reduce {policy}/{d} with {param}: sample takes a phase below d; "
+                                 f"any and latch take d >= 2 and the active level 0 or 1")
 
 
 @dataclass
@@ -108,12 +122,39 @@ def parse_count(text: str) -> int:
     return round(float(m.group(1)) * _SUFFIX[m.group(2)])
 
 
+_REDUCE = re.compile(r"(?:(?:sample)?/(\d+)(?:\+(\d+))?|(any|latch)-(low|high)/(\d+))")
+
+
+def _split(part: str) -> tuple[str, str, str]:
+    name, _, cid = part.partition("=")
+    cid = (cid or name).strip()
+    k = min([i for i in (cid.find("/"), cid.find(":")) if i >= 0], default=len(cid))
+    return name.strip(), cid[:k], cid[k:].lstrip(":")
+
+
 def parse_channels(text: str) -> list[tuple[str, str]]:
-    """"SDA=47,SCL=48" (name=id) or "D0,D1" (the id is also the name)."""
-    out = []
+    """"SDA=47,SCL=48" (name=id) or "D0,D1" (the id is also the name). A reduction after the id (parse_reduce) is
+    left out here."""
+    return [_split(p)[:2] for p in filter(None, (p.strip() for p in text.split(",")))]
+
+
+def parse_reduce(text: str) -> dict[str, tuple[str, int, int]]:
+    """The logic channels to reduce (Request.reduce), written after the id:
+    "CLK=3/4" (the level every 4 samples), "CLK=3/4+1" (from sample 1), "CS=5:any-low/32" (per 32 samples, whether it
+    was low at any), "IRQ=7:latch-high/8" (per 8 samples, the last level and whether it went high)."""
+    out = {}
     for part in filter(None, (p.strip() for p in text.split(","))):
-        name, _, cid = part.partition("=")
-        out.append((name.strip(), (cid or name).strip()))
+        name, _, spec = _split(part)
+        if not spec:
+            continue
+        m = _REDUCE.fullmatch(spec)
+        if not m:
+            raise ValueError(f"{part}: not a reduction (ID/D, ID/D+PHASE, ID:any-low/D, ID:any-high/D, "
+                             f"ID:latch-low/D or ID:latch-high/D)")
+        if m.group(1):
+            out[name] = ("sample", int(m.group(1)), int(m.group(2) or 0))
+        else:
+            out[name] = (m.group(3), int(m.group(5)), int(m.group(4) == "high"))
     return out
 
 

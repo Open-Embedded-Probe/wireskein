@@ -296,7 +296,7 @@ def apply(cap: Capture, alignment: dict) -> Capture:
         t0 = Fraction(c["offset_ticks"]).limit_denominator(10**6) + scale * a.t0_ticks
         out.append(AnalogTrace(a.name, a.values, a.rate_hz / scale, t0, a.encoding, a.width, a.value_bits, a.zero,
                                a.scale_nv, a.unit, {**a.acquisition, "aligned": True}))
-    return Capture(cap.rate, cap.n_samples, cap.channels, cap.meta, out)
+    return Capture(cap.rate, cap.n_samples, cap.channels, cap.meta, out, cap.intervals)
 
 
 def save(path: str | Path, alignment: dict) -> None:

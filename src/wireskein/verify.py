@@ -19,8 +19,8 @@ from pathlib import Path
 
 import numpy as np
 
-from ._engine import analog, markers
-from ._engine.model import AnalogTrace, Capture, Channel
+from ._engine import analog, intervals, markers
+from ._engine.model import AnalogTrace, Capture, Channel, IntervalTrace
 from .runlog import FORMAT
 
 
@@ -68,6 +68,10 @@ def _ch(cap: Capture, pin: str) -> Channel | None:
         return None
 
 
+def _iv(cap: Capture, pin: str) -> IntervalTrace | None:
+    return next((t for t in cap.intervals if t.name == pin), None)
+
+
 def _level_at(ch: Channel, s: int) -> int:
     return int(ch.initial ^ (np.searchsorted(ch.edges, s, side="right") & 1))
 
@@ -94,6 +98,12 @@ def check_square(cap, x):
 
 def check_level(cap, x):
     ch = _ch(cap, x["pin"])
+    t = _iv(cap, x["pin"]) if ch is None else None
+    if t is not None:
+        ok = intervals.constant(t, x["value"])
+        return ok, {"values": int(len(t.values)), "step": t.step}, (
+            "" if ok else f"not constant {x['value']}" if ok is False else
+            f"{intervals.describe(t)}: the summaries do not tell whether it stayed {x['value']}")
     if ch is None:
         return None, {}, "pin not captured"
     got = {"initial": ch.initial, "edges": int(len(ch.edges)),
@@ -103,18 +113,29 @@ def check_level(cap, x):
 
 
 def _levels(cap, want: dict, at_end: bool):
-    got, bad, missing = {}, [], []
+    got, bad, missing, unknown = {}, [], [], []
     for pin, v in want.items():
         ch = _ch(cap, pin)
-        if ch is None:
+        t = _iv(cap, pin) if ch is None else None
+        if t is not None:
+            got[pin] = (intervals.end_level if at_end else intervals.start_level)(t)
+            if got[pin] is None:
+                unknown.append(intervals.describe(t))
+                continue
+        elif ch is None:
             missing.append(pin)
             continue
-        got[pin] = _level_at(ch, cap.n_samples - 1) if at_end else ch.initial
+        else:
+            got[pin] = _level_at(ch, cap.n_samples - 1) if at_end else ch.initial
         if got[pin] != v:
             bad.append(f"{pin}={got[pin]} (want {v})")
     if missing and not got:
         return None, got, "pins not captured: " + ", ".join(missing)
-    return not bad, got, "; ".join(bad)
+    if bad:
+        return False, got, "; ".join(bad)
+    if unknown:
+        return None, got, "; ".join(unknown) + f": the summaries do not tell its level at the {'end' if at_end else 'start'}"
+    return True, got, ""
 
 
 def check_ends(cap, x):
@@ -127,11 +148,32 @@ def check_starts(cap, x):
 
 def check_only_moving(cap, x):
     moved = {c.name: int(len(c.edges)) for c in cap.channels if len(c.edges) and c.name not in x["pins"]}
-    return not moved, {"unexpected": moved}, "" if not moved else "other pins moved: " + ", ".join(moved)
+    unsure = []
+    for t in cap.intervals:
+        if t.name not in x["pins"]:
+            m = intervals.moved(t)
+            if m:
+                moved[t.name] = intervals.rises_at_least(t)
+            elif m is None:
+                unsure.append(t.name)
+    if moved:
+        return False, {"unexpected": moved}, "other pins moved: " + ", ".join(moved)
+    if unsure:
+        return None, {"unexpected": moved, "cannot_tell": unsure}, (
+            ", ".join(unsure) + " kept by interval: the summaries do not tell whether it moved")
+    return True, {"unexpected": moved}, ""
 
 
 def check_pulses(cap, x):
     ch = _ch(cap, x["pin"])
+    t = _iv(cap, x["pin"]) if ch is None else None
+    if t is not None:                    # a lower bound only: one interval may hide several pulses
+        least = intervals.rises_at_least(t)
+        got = {"rises_at_least": least}
+        if x.get("count") is not None and least > x["count"]:
+            return False, got, f"at least {least} rising edges, want {x['count']}"
+        return None, got, (f"{intervals.describe(t)}: at least {least} rising edges; "
+                           "the count and the period need every edge")
     if ch is None:
         return None, {}, "pin not captured"
     lv = ch.initial
@@ -570,9 +612,10 @@ def _as_logic(cap: Capture, x: dict) -> tuple[Capture | None, str]:
         extra = [analog.to_logic(a, cap.meta.get("tick_hz", cap.rate), x["threshold"]) for a in wanted]
     except ValueError as e:
         return None, str(e)
-    return Capture(cap.rate, cap.n_samples, cap.channels + extra, cap.meta, cap.analog), ""
+    return Capture(cap.rate, cap.n_samples, cap.channels + extra, cap.meta, cap.analog, cap.intervals), ""
 
 
+INTERVAL_CHECKS = {"level", "ends", "starts", "pulses", "only_moving"}   # what a channel kept by interval can answer
 CHECKS = {"square": check_square, "level": check_level, "ends": check_ends, "starts": check_starts,
           "only_moving": check_only_moving, "pulses": check_pulses, "i2c": check_i2c, "spi": check_spi,
           "uart": check_uart, "voltage": check_voltage}
@@ -618,7 +661,8 @@ def verify(run_dir: str | Path) -> dict:
         for x in spec["checks"]:
             pins = _pins_of(x)
             hit = [(c, cap) for c, cap in loaded
-                   if pins <= {ch.name for ch in cap.channels} | {a.name for a in cap.analog}] or \
+                   if pins <= {ch.name for ch in cap.channels} | {a.name for a in cap.analog}
+                   | {t.name for t in cap.intervals}] or \
                   ([(c, cap) for c, cap in loaded] if x["kind"] == "only_moving" else [])
             if not hit:
                 skipped = {c["name"]: c["encoding"] for _, cap in loaded for c in cap.meta.get("skipped_channels", [])}
@@ -632,6 +676,11 @@ def verify(run_dir: str | Path) -> dict:
                 cap, why = _as_logic(cap, x)
                 if cap is None:
                     results.append(Result(path, c["file"], x["kind"], None, x, reason=why))
+                    continue
+                kept = [t for t in cap.intervals if t.name in pins]
+                if kept and x["kind"] not in INTERVAL_CHECKS:
+                    results.append(Result(path, c["file"], x["kind"], None, x, reason="; ".join(
+                        intervals.describe(t) for t in kept) + f": {x['kind']} needs every edge"))
                     continue
                 ok, got, why = CHECKS[x["kind"]](cap, x)
                 if cap.meta.get("time_base_slipped"):

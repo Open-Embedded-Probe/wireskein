@@ -97,8 +97,8 @@ UTF-8 の JSON のオブジェクトです。
 | `file` | 文字列 | データの項目の名前（例 `ch/0.bits`） |
 | `encoding` | 文字列 | データの持ち方（§4）。知らない値の扱いは §3.2 |
 | `n` | 整数 | サンプルの数 |
-| `step` | 整数（1 以上） | 刻みいくつごとに 1 サンプルか（`bits` では必須） |
-| `phase` | 整数（0 以上） | 最初のサンプルの刻み。サンプル k は刻み `phase + k × step` にあります（`bits` では必須） |
+| `step` | 整数（1 以上） | 刻みいくつごとに 1 サンプルか（`bits` と `interval-*` では必須。`interval-*` では 1 つの値の区間の刻みの数） |
+| `phase` | 整数（0 以上） | 最初のサンプルの刻み。サンプル k は刻み `phase + k × step` にあります（`bits` と `interval-*` では必須。`interval-*` では最初の区間の始まり） |
 
 ### 3.1 `bits` 以外のチャンネルの時刻
 
@@ -142,7 +142,7 @@ UTF-8 の JSON のオブジェクトです。
 | --- | --- |
 | `start_ns` | 刻み 0 の時刻を、プローブの時計（起動からの ns、整数）で表したもの（OEP の区画の `start_ns`。推定値） |
 | `start_uncertainty_ns` | `start_ns` の不確かさ（±ns。OEP の区画の `start_uncertainty_ns`。保証ではない目安） |
-| `trigger_index` | トリガの位置: ロジックのチャンネルのサンプルの番号（OEP の区画の `trigger_index`）。トリガがないときは、キー自体を入れません。アナログのトラックのトリガの位置は、そのチャンネルの `acquisition.trigger_index`（そのチャンネルのサンプルの番号）です |
+| `trigger_tick` | トリガの位置を、刻みで表したもの（整数）。OEP では、ロジックの区画の `trigger_index`（multirate では base sample の番号。刻み 0 が区画の base sample 0 なので、そのまま刻み）。トリガがないときは、キー自体を入れません。アナログのトラックのトリガの位置は、そのチャンネルの `acquisition.trigger_index`（そのチャンネルのサンプルの番号）です |
 | `time_base_slipped` | `true`: プローブが、サンプルの時刻が遅れたことを知っている（OEP の区画の flags bit 2）。遅れがないときは、キー自体を入れません |
 | `probe` | 取得した機器の情報（オブジェクト）。キーは任意です。WireSkein が意味を決めているのは次のものです。`model`、`firmware`（プローブ）、`chip`、`chip_revision`（取得した MCU）、`clock`（取得の前後に読んだ probe の時計と host の時計の対応、OEP core §7.7: `before` / `after` に `host_ns`（host の単調時計、往復の中点）、`uptime_ns`、`boot_id`、`uncertainty_ns`（往復の半分）。同じ boot_id なら `rate_ppm`（probe の時計の速さの host に対するずれ）と `rate_ppm_uncertainty`）、`generation`（OEP v1 の取得の世代: `{"logic": n, "analog": n}`。どの開始の取得かを追うため）、`calibration`（出荷時の補正値。`scheme` に方式の名前、`raw` に生の値を、適用せずにそのまま入れる。例: ESP32 の eFuse の ADC の補正値） |
 
@@ -186,7 +186,24 @@ ADC の生の値を、損失なく持つ形です。OEP の `oep.fixture.analog`
 
 - データの長さは `n × 4` バイトです。NaN は「値がない」を表します。
 
-### 4.4 予約（まだ定義しない）
+### 4.4 `interval-any`、`interval-latch`（区間ごとの要約のロジック）
+
+ロジックの線を、サンプルごとではなく、`step` 刻みの区間ごとに 1 つの値で持つ形です。OEP の multirate（capture §5）の any_active と edge_latch は、この形で保存します（sample の方針は `bits` の `step` と `phase` で持てます）。区間 k は、刻み `[phase + k × step, phase + (k + 1) × step)` です。
+
+| キー | 型 | 意味 |
+| --- | --- | --- |
+| `step`、`phase` | §3 | 必須。区間の長さと、最初の区間の始まり |
+| `active` | 0 か 1 | 見張るレベル（active-low なら 0）。必須 |
+
+- **`interval-any`**: 1 値 1 ビットで、並べ方は `bits`（§4.1）と同じです。区間のどこかの刻みで線が `active` だったら値は `active`、1 度もなければその反対です。
+- **`interval-latch`**: 1 値 2 ビットで、値 k はビット `2k` と `2k + 1` にあります（ビットの数え方は §4.1 と同じ。ビット 0 が下）。長さは `ceil(2n / 8)` バイトです。
+  - ビット 0: 区間の最後の刻みのレベル。
+  - ビット 1: 区間の中で、線が `active` に変わった（前の刻みは `active` でなかった）か。区間の最初の刻みは、前の区間の最後の刻みと比べます。チャンネルの最初の刻み（`phase`）は、何とも比べません。
+- 値は区間の要約です。変化の位置と回数は持ちません（時間の不確かさは `step` 刻み）。
+- 照合と分析は、要約から確かに言えることだけを答えます。例えば、`interval-any` で `active` の値は「どこかで active だった」だけを表し、ずっと active だったとは言えません。パルスの数は下限しか分かりません。言えない照合は未検査です。
+- `.sr` と VCD には、この形を表す方法がありません。この形のチャンネルがあるキャプチャは、それらの形式へ書き出せません（断ります）。
+
+### 4.5 予約（まだ定義しない）
 
 次のものは、必要になったときに `encoding` の新しい値として定義します。**`format` は変えません**（読み手は知らない `encoding` を読み飛ばすか断るので、古い読み手が新しいファイルを誤って読むことはありません。§3.2）。
 
@@ -357,8 +374,9 @@ UTF-8 の JSON のオブジェクトです。
 
 | 項目 | 状態 |
 | --- | --- |
-| `wireskein/1`（`id`、`trigger_index`、`analog` の `unit`、`capture_id`、`wireskein/sr-extra.json`） | wireskein 0.0.13 から（凍結の候補）。`wireskein/0` は読みません |
+| `wireskein/1`（`id`、`analog` の `unit`、`capture_id`、`wireskein/sr-extra.json`） | wireskein 0.0.13 から（凍結の候補）。`wireskein/0` は読みません |
+| `interval-any`、`interval-latch`（§4.4）、`meta.trigger_tick`（それまでの `trigger_index` に代わる） | wireskein 0.0.17 から |
 | マーカー（§5.2）、復号の注釈（§5.3） | wireskein 0.0.12 から |
 | `.wireskein`（`wireskein/0`）、中身での見分け（§2.3）、知らない項目の持ち越し（§2.2） | wireskein 0.0.8〜0.0.12（β）。それより前の `.wsc`（`wireskein-capture/0`）は読みません（`wireskein.json` がないので、§2.3 の 3 として断ります） |
 | `bits`、アナログ（`analog`、`analog-f32`）、`acquisition`、`meta.probe`、添付、メモ、`.sr` との変換、知らない `encoding` の読み飛ばし（§3.2） | 0.0.8 から、この形式で（`.wsc` の時代に 0.0.2〜0.0.5 で入れたもの） |
-| 予約した部分（`verify/`、`view/`、§2.4）、エッジの列（§4.4） | 未定義。足す変更として後から入れられます |
+| 予約した部分（`verify/`、`view/`、§2.4）、エッジの列（§4.5） | 未定義。足す変更として後から入れられます |

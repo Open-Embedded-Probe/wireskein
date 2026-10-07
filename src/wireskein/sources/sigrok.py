@@ -28,6 +28,9 @@ def capture(target: str, req: Request) -> Result:
         raise ValueError("sigrok:<driver>, e.g. sigrok:fx2lafw")
     from .._engine import fileio
     from .._engine.srio import read_sr
+    if req.reduce:
+        raise ValueError("sigrok keeps every channel at the rate: reducing a channel (/D, :any-..., :latch-...) "
+                         "needs a probe with multirate (OEP)")
     if req.analog:                  # sigrok has one rate per device: analog ids ride with the logic ones
         if req.analog_rate not in (None, req.rate):
             raise ValueError("sigrok gives one rate per device: --analog-rate must be left out or equal --rate")
