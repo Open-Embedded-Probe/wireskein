@@ -209,13 +209,13 @@ def _bit(data: bytes, b: int) -> bytes:
 def from_interleaved(data: bytes | bytearray | memoryview, names: list[str], width: int = 8,
                      positions: list[int] | None = None, n: int | None = None, step: int = 1, phase: int = 0) -> list[Channel]:
     """Channels from a probe's sample stream (oep-if-capture §1.1): each sample
-    is `width` bits (1, 2, 4, 8, 16, 32, 64 or 128), channel k is bit positions[k] of it
-    (default k), samples below 8 bits share a byte with the earliest sample in
-    the low bits, wider ones are little-endian. n: number of samples (default:
-    all that fit). All channels get the same step and phase."""
+    is `width` bits (1-128, any integer), sample i starts at stream bit i*width,
+    channel k is bit positions[k] of it (default k); stream bit j is bit j % 8
+    of byte j // 8. n: number of samples (default: all that fit). All channels
+    get the same step and phase."""
     data = bytes(data)
-    if width not in (1, 2, 4, 8, 16, 32, 64, 128):
-        raise ValueError(f"width {width}: must be 1, 2, 4, 8, 16, 32, 64 or 128")
+    if not 1 <= width <= 128:
+        raise ValueError(f"width {width}: must be 1-128")
     positions = list(range(len(names))) if positions is None else list(positions)
     if len(positions) != len(names) or any(not 0 <= q < width for q in positions):
         raise ValueError(f"positions {positions} do not fit {len(names)} channels of a {width}-bit sample")
@@ -225,16 +225,12 @@ def from_interleaved(data: bytes | bytearray | memoryview, names: list[str], wid
         raise ValueError(f"{n} samples of {width} bits need {(n * width + 7) // 8} bytes, got {len(data)}")
     out = []
     for name, q in zip(names, positions):
-        if width >= 8:
-            size = width // 8
-            col = _bit(data[q // 8::size], q % 8)
-        else:
-            per = 8 // width
-            buf = bytearray(len(data) * per)
-            for j in range(per):
-                buf[j::per] = _bit(data, j * width + q)
-            col = bytes(buf)
-        out.append(Channel(name, pack(col[:n]), n, step, phase))
+        # 8 samples take `width` bytes: sample 8m + j's bit is bit (j*width + q) % 8 of byte m*width + (j*width + q) // 8
+        col = bytearray(n)
+        for j in range(min(8, n)):
+            b = j * width + q
+            col[j::8] = _bit(data[b // 8::width], b % 8)[:(n - j + 7) // 8]
+        out.append(Channel(name, pack(col), n, step, phase))
     return out
 
 

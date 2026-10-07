@@ -264,3 +264,19 @@ def test_wide_samples(width):
     for k in (0, 7, 8, 63, width - 1):
         want = ((raw[:, k // 8] >> (k % 8)) & 1).tobytes()
         assert fileformat.unpack(chans[k]) == want
+
+
+def test_any_width():
+    """OEP capture §1.1 with w any of 1-128: sample i at stream bit i*w, so 3 raw channels pack in w = 3."""
+    chans = fileformat.from_interleaved(bytes.fromhex("598480"), ["A", "B", "C"], width=3, n=8)   # the spec's vector
+    assert [list(fileformat.unpack(c)) for c in chans] == [[1, 1, 1, 0, 0, 1, 0, 0], [0, 1, 0, 1, 0, 0, 0, 0],
+                                                          [0, 0, 0, 0, 0, 0, 0, 1]]
+    rng = np.random.default_rng(3)
+    for width in (1, 3, 5, 7, 12, 24, 100):
+        n = int(rng.integers(1, 300))
+        pos = sorted({0, width // 2, width - 1})
+        bits = rng.integers(0, 2, (len(pos), n))
+        v = sum(int(bits[k, i]) << (i * width + q) for k, q in enumerate(pos) for i in range(n))
+        data = v.to_bytes((n * width + 7) // 8, "little")
+        got = fileformat.from_interleaved(data, [f"D{q}" for q in pos], width, pos, n)
+        assert [list(fileformat.unpack(c)) for c in got] == bits.tolist(), width
