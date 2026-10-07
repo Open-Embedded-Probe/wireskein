@@ -217,7 +217,8 @@ def align_cmd(args) -> None:
 
 
 def _count(cap) -> str:
-    return f"{len(cap.channels)} logic" + (f" + {len(cap.analog)} analog" if cap.analog else "") + " channels"
+    return (f"{len(cap.channels)} logic" + (f" + {len(cap.intervals)} interval" if cap.intervals else "")
+            + (f" + {len(cap.analog)} analog" if cap.analog else "") + " channels")
 
 
 def gui_cmd(args) -> None:
