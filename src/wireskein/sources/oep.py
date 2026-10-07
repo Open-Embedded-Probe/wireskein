@@ -112,7 +112,10 @@ def capture(target: str, req: Request) -> Result:
     try:
         return _capture(link, core, oc, oh, target, req, ids, aids, fast, asked)
     except oh.OepError as e:        # the probe refused or failed: say what, not where
-        raise RuntimeError(f"probe {target}: {e}") from e
+        hint = ""
+        if "(storage)" in str(e):     # capture §2.2: data lost inside a segment stops the track with error 2
+            hint = " - the probe lost data inside a segment: try a lower --rate or fewer channels"
+        raise RuntimeError(f"probe {target}: {e}{hint}") from e
 
 
 def _what(tag, oc) -> str:
