@@ -1,6 +1,6 @@
 """oep:<target> - an OEP probe through oep-client-python (one shot).
 
-Logic channels go to oep.fixture.logic (oep.fixture.capture before OEP v1), analog ones to oep.fixture.analog;
+Logic channels go to oep.fixture.logic, analog ones to oep.fixture.analog;
 with both, oep.fixture.capture-group starts them together (the trigger, if
 any, on a logic channel). Channel ids are the probe's channel numbers; a
 track's channels are its plan roles 0..C-1 in the order given. The lock is
@@ -26,63 +26,23 @@ from . import Request, Result
 TRIGGER = {"high": (1, 1), "low": (1, 0), "rise": (2, 0), "fall": (2, 1), "both": (2, 2)}   # (type, value), oep-if-capture
 TAG_FRONTEND = 0x46          # analog describe: frontend, range_min_mv, range_max_mv, attenuation_mdb
 TAG_CHIP, TAG_MODEL, TAG_FIRMWARE, TAG_UNIT_ID = 0x4C, 0x41, 0x40, 0x42     # core describe
-# UART link rates tried by default (port_speed): fastest first. oep-client 0.0.26 refuses a rate that breaks with
-# both directions busy and drops back to the boot speed on repeated broken frames, so trying never ends slower
-# than the boot speed; `oep:PORT?fast=0` keeps the boot speed, `?fast=RATE,RATE` tries those.
+# UART link rates tried by default (port_speed): fastest first. oep-client refuses a rate that breaks and drops back
+# to the boot speed on repeated broken frames, so trying never ends slower than the boot speed; `oep:PORT?fast=0`
+# keeps the boot speed, `?fast=RATE,RATE` tries those.
 FAST = [1_500_000, 921_600, 500_000]
 PER_SESSION = 2          # candidates tried per open: each costs up to ~1 s, plus a wait when it fails (core §3.5)
 FLOWS = [("in", 0)]      # a capture reads back: verify probe -> host only, at the link's largest in-flight n
 
 
-def _candidates(port: str, unit_id: str, record=None) -> tuple[list[int], bool, list[int]]:
-    """The default rates to try on this port and probe: what passed there first, then the list (FAST) without what
-    failed lately, at most PER_SESSION. The record is oep-client's (speed_record: per port path and unit_id,
-    30 days), which raise_speed(record=True) writes back. When the record has every rate failed, the slowest is
-    tried again anyway (one short trial): a rate can fail right after a faster one broke down and hold on its own
-    (V003 jig's CH340: 500000 marked failed that way, 43 KB/s when tried alone), and giving up would keep the port
-    at the boot speed for 30 days. -> (rates, whether the record shaped them, the rates it left out)."""
-    if record is None:
-        from oep_client.speed_record import SpeedRecord
-        record = SpeedRecord()
-    passed, failed = record.lookup(port, unit_id)
-    order = [r for r in passed if r not in failed] + [r for r in FAST if r not in passed and r not in failed]
-    if not order:
-        order = [FAST[-1]]                             # every rate failed: the slowest once more (see _capture)
-    return order[:PER_SESSION], bool(passed or failed), [r for r in FAST if r in failed and r not in order]
-
-
-def _takes(link, name: str) -> bool:
-    """Whether the client's raise_speed takes this argument."""
-    import inspect
-    try:
-        return name in inspect.signature(link.raise_speed).parameters
-    except (AttributeError, TypeError, ValueError):
-        return False
-
-
-def _raise_default(link, hst, port: str | None, unit_id: str, record=None) -> tuple[list[int], bool, list[int]]:
-    """The default raise: candidates from the client's record (_candidates), then raise_speed(record=True). When the
-    record has every rate failed, the slowest is retried without the record (with it the client would skip it as
-    recorded failed) and a pass is written back, so the next capture starts from it.
-    -> (rates asked, whether the record shaped them, the rates it left out)."""
+def _raise_default(link, hst, port: str | None) -> tuple[list[int], bool]:
+    """The default raise, left to the client: it orders and skips the candidates by its record of this port and
+    probe, tries at most PER_SESSION, retries the slowest when all failed, and steps down to a slower one in use.
+    -> (rates asked, whether the record shaped them)."""
     if not port:
-        return [], False, []
-    if _takes(link, "max_tries"):
-        # a client that does it all (oep-client-python with max_tries): it orders and skips by its record, tries at
-        # most PER_SESSION, retries the slowest when all failed, and steps down to a slower candidate in use
-        link.raise_speed(hst, list(FAST), record=True, flows=FLOWS, max_tries=PER_SESSION)
-        rep = getattr(getattr(hst, "link", None), "speed", None)
-        return list(FAST), bool(rep is not None and (rep.skipped or getattr(rep, "retried", False))), []
-    if record is None:
-        from oep_client.speed_record import SpeedRecord
-        record = SpeedRecord()
-    rates, remembered, left_out = _candidates(port, unit_id, record)
-    retry = bool(rates) and rates[0] in record.lookup(port, unit_id)[1]
-    rates = _raise(link, hst, rates, False, record=not retry)
-    rep = getattr(getattr(hst, "link", None), "speed", None)
-    if retry and rep is not None and rep.chosen:
-        record.note(port, unit_id, rep.chosen, passed=True)
-    return rates, remembered, left_out
+        return [], False
+    link.raise_speed(hst, list(FAST), record=True, flows=FLOWS, max_tries=PER_SESSION)
+    rep = hst.link.speed
+    return list(FAST), bool(rep is not None and (rep.skipped or rep.retried))
 
 
 def capture(target: str, req: Request) -> Result:
@@ -90,6 +50,7 @@ def capture(target: str, req: Request) -> Result:
         from oep_client import capture as oc
         from oep_client import core, link
         from oep_client import host as oh
+        from oep_client import message
     except ImportError as e:
         raise RuntimeError('the oep source needs oep-client-python: pip install "wireskein[oep]"') from e
     target, _, query = target.partition("?")
@@ -102,7 +63,6 @@ def capture(target: str, req: Request) -> Result:
         raise ValueError(f"oep:{target}?...: unknown option {', '.join(sorted(unknown))} "
                          f"(fast=1, or fast=RATE,RATE,... raises a UART probe's link)")
     fast = _rates(opts.get("fast", ["1"])[-1])
-    asked = "fast" in opts
     try:
         ids = [int(cid) for _, cid in req.channels]
         aids = [int(cid) for _, cid, _ in req.analog]
@@ -110,7 +70,7 @@ def capture(target: str, req: Request) -> Result:
         raise ValueError("oep channel ids are the probe's channel numbers: "
                          f"{[c for _, c in req.channels] + [c for _, c, _ in req.analog]}") from None
     try:
-        return _capture(link, core, oc, oh, target, req, ids, aids, fast, asked)
+        return _capture(link, core, oc, oh, message, target, req, ids, aids, fast)
     except oh.OepError as e:        # the probe refused or failed: say what, not where
         hint = ""
         if "(storage)" in str(e):     # capture §2.2: data lost inside a segment stops the track with error 2
@@ -122,9 +82,8 @@ def _what(tag, oc) -> str:
     """A configure item for people. The probe names the TLV it refused with its
     tag as sent (bit 7, critical, for multirate)."""
     base = tag & 0x7F if isinstance(tag, int) else tag
-    mr_tag = getattr(getattr(oc, "mr", None), "TAG", None)
-    return {getattr(oc, "TRIGGER", None): "a trigger", getattr(oc, "PRETRIGGER", None): "a pretrigger",
-            mr_tag: "these channel reductions (/D, any, latch: none offered, or this combination not kept even at "
+    return {oc.TRIGGER: "a trigger", oc.PRETRIGGER: "a pretrigger",
+            oc.mr.TAG: "these channel reductions (/D, any, latch: none offered, or this combination not kept even at "
                     "its lowest rate)"}.get(
         base, f"configure item 0x{base:02x}" if isinstance(base, int) else f"configure item {tag}")
 
@@ -165,13 +124,10 @@ def _configure(track, oc, oh, target: str, what: str, **kw):
 
 def _clock(hst):
     """The probe's clock against this host's (core §7.7): the reading with the shortest round trip of a few, or None
-    when the client or the probe has no clock op."""
-    best = getattr(hst, "clock_best", None)
-    if best is None:
-        return None
+    when it could not be read (the capture goes on without it)."""
     try:
-        return best(4)
-    except Exception:                  # an older probe (unknown_operation) or a link hiccup: the capture goes on
+        return hst.clock_best(4)
+    except Exception:                  # noqa: BLE001 - the clock is a bonus to the capture
         return None
 
 
@@ -191,15 +147,6 @@ def _clock_info(before, after) -> dict:
     return out
 
 
-def _unknown_op() -> int | None:
-    """The reject detail of an op the probe does not offer (an optional op such as query)."""
-    try:
-        from oep_client import message
-        return message.UNKNOWN_OPERATION
-    except (ImportError, AttributeError):
-        return None
-
-
 def _describe(core, hst, fn: int) -> list[tuple[int, bytes]]:
     try:
         return core.describe(hst, fn)
@@ -213,9 +160,7 @@ def _probe_info(core, hst, opened) -> dict:
         key = {TAG_CHIP: "chip", TAG_MODEL: "model", TAG_FIRMWARE: "firmware", TAG_UNIT_ID: "unit_id"}.get(tag)
         if key:
             info[key] = value.decode("utf-8", "replace").rstrip("\0")
-    boot = getattr(opened, "boot_id", None)
-    if boot is not None:
-        info["boot_id"] = boot          # start_ns of captures with the same boot_id share one clock
+    info["boot_id"] = opened.boot_id    # start_ns of captures with the same boot_id share one clock
     return info
 
 
@@ -230,7 +175,7 @@ def _frontends(core, hst, fn: int) -> dict[int, dict]:
 
 
 def _rates(text: str) -> list[int]:
-    """fast=0: [] (the boot speed); fast=1 / absent: None (the remembered default, _candidates);
+    """fast=0: [] (the boot speed); fast=1 / absent: None (the default, _raise_default);
     fast=1500000,921600: those, in that order, whatever was remembered."""
     if text.lower() in ("", "0", "no", "off", "false"):
         return []
@@ -242,18 +187,12 @@ def _rates(text: str) -> list[int]:
         raise ValueError(f"fast={text}: 0, 1, or link rates (fast=1500000,921600)") from None
 
 
-def _raise(link, hst, rates: list[int], asked: bool = True, record: bool = True) -> list[int]:
+def _raise(link, hst, rates: list[int]) -> list[int]:
     """Raise the link of an open host to the first of `rates` that holds, verifying the read-back direction (FLOWS);
     the client keeps the boot speed, or goes back to it, whenever the probe, the adapter or the line cannot.
-    record: let the client's record skip what failed and keep what happened. -> the rates asked of the client
-    ([] when none were, or the client cannot and they were only the default)."""
-    raise_speed = getattr(link, "raise_speed", None)
-    if rates and raise_speed is None:
-        if asked:
-            raise ValueError("fast=...: this oep-client-python cannot raise the link speed (0.0.27 or later can)")
-        return []                                      # the default, with a client that cannot: the boot speed
+    -> the rates asked of the client."""
     if rates:
-        raise_speed(hst, rates, flows=FLOWS, record=record)
+        link.raise_speed(hst, rates, flows=FLOWS)
     return rates
 
 
@@ -272,31 +211,29 @@ def _link_info(hst, rates: list[int], open_s: float, read_bytes: int, read_s: fl
             out["why"] = rep.why
         out["trials"] = [{"rate": t.rate, "result": "committed" if t.committed else t.why,
                           "flows": [{"flow": f.flow, "n": f.n, "frames": f.frames, "broken": f.broken, "lost": f.lost,
-                                     "kb_s": round(f.kb_s, 1), "passed": f.passed} for f in getattr(t, "flows", [])]}
+                                     "kb_s": round(f.kb_s, 1), "passed": f.passed} for f in t.flows]}
                          for t in rep.trials]
-        if getattr(rep, "skipped", None):
+        if rep.skipped:
             out["skipped"] = list(rep.skipped)            # the record says these failed on this port and probe
-        if getattr(rep, "retried", None):
+        if rep.retried:
             out["retried"] = rep.retried                  # every rate recorded failed: the slowest tried once anyway
-        if getattr(rep, "capped", None):
+        if rep.capped:
             out["capped"] = list(rep.capped)              # left out by the limit of tries per capture
-        downs = getattr(rep, "step_downs", None) or []
-        if downs:                                         # in use (or in probation): from a rate to a slower one
-            out["step_downs"] = [{"from": d.rate, "to": getattr(d, "to", None), "why": d.why,
-                                  "probation": bool(getattr(d, "probation", False))} for d in downs]
-        if getattr(rep, "stepped_down", False) or rep.lost:
-            out["stepped_down"] = getattr(rep, "down_why", "") or "lost"   # went down while in use
+        if rep.step_downs:                                # in use (or in probation): from a rate to a slower one
+            out["step_downs"] = [{"from": d.rate, "to": d.to, "why": d.why, "probation": d.probation}
+                                 for d in rep.step_downs]
+        if rep.stepped_down or rep.lost:
+            out["stepped_down"] = rep.down_why or "lost"  # went down while in use
     return out
 
 
-def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], aids: list[int],
-             fast: list[int] | None = None, asked: bool = False) -> Result:
+def _capture(link, core, oc, oh, message, target: str, req: Request, ids: list[int], aids: list[int],
+             fast: list[int] | None = None) -> Result:
     import time
     names = [n for n, _ in req.channels]
     anames = [n for n, _, _ in req.analog]
     t_open = time.monotonic()
     remembered = False
-    left_out: list[int] = []
     hst = link.open_host(target)
     try:
         opened = core.take(hst, 30_000, owner="wireskein capture")
@@ -306,9 +243,9 @@ def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], aids
         record = fast is None                          # the default: the client's record of this port and probe
         if fast is None:
             port = getattr(getattr(hst, "link", None), "port_path", None)
-            fast, remembered, left_out = _raise_default(link, hst, port, probe.get("unit_id", "?"))
+            fast, remembered = _raise_default(link, hst, port)
         else:
-            fast = _raise(link, hst, fast, asked and bool(fast), False)
+            fast = _raise(link, hst, fast)
         open_s = time.monotonic() - t_open
         clock_before = _clock(hst)
         cap = oc.LogicCapture(hst) if ids else None
@@ -340,7 +277,7 @@ def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], aids
                                          **({"frontends": fes} if fes else {}))
                         real = Fraction(q.rate) if q.rate else real
                     except oh.Rejected as e:       # query is optional (OEP v1): absent = unknown_operation
-                        if getattr(getattr(e, "result", None), "detail", None) != _unknown_op():
+                        if e.result.detail != message.UNKNOWN_OPERATION:
                             raise
                     asamples = max(1, round(Fraction(req.samples) / Fraction(cfg.rate) * real))
                 elif asamples is None:
@@ -376,8 +313,6 @@ def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], aids
             probe["link"] = _link_info(hst, fast, open_s, len(data or b"") + len(adata or b""), read_s)
             if remembered:
                 probe["link"]["remembered"] = True
-                if left_out and not probe["link"].get("skipped"):
-                    probe["link"]["skipped"] = left_out      # left out before asking the client: say so all the same
             if "rate" not in probe["link"] and getattr(getattr(hst, "link", None), "base_baud", None):
                 probe["link"].update(rate=hst.link.base_baud, raised=False)   # nothing tried: the boot speed
             if "rate" not in probe["link"] and record and not getattr(getattr(hst, "link", None), "port_path", None):
@@ -406,37 +341,34 @@ def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], aids
             meta["time_base_slipped"] = True
         if seg.trigger_index is not None:              # tick 0 is the segment's (base) sample 0
             meta["trigger_tick"] = seg.trigger_index
-        if getattr(cfg, "jitter_ns", 0):              # gone from OEP v1's configure answer: recorded while given
-            meta["jitter_ns"] = cfg.jitter_ns
         tick = Fraction(cfg.rate)
-        if getattr(cfg, "block", None) is not None:
+        if cfg.block is not None:
             chans = _reduced(cap.decode_multirate(data, seg.samples), req, names)
         else:
             chans = fileformat.from_interleaved(data, names, cfg.width, cfg.positions, seg.samples)
         for c, ch in zip(chans, ids):
-            c.acquisition = {"pin": ch, **_accuracy(cfg)}
-        t_ref = getattr(seg, "start_ns", None)
+            c.acquisition = {"pin": ch}
+        t_ref = seg.start_ns
     else:
         tick = Fraction(acfg.rate)
         chans = []
         _times(meta, aseg)
-        t_ref = getattr(aseg, "start_ns", None)
-    gens = {k: getattr(t, "generation", None) for k, t in (("logic", cap), ("analog", an)) if t is not None}
-    gens = {k: g for k, g in gens.items() if g is not None}          # OEP v1 clients: which start this was
+        t_ref = aseg.start_ns
+    gens = {k: t.generation for k, t in (("logic", cap), ("analog", an)) if t is not None and t.generation is not None}
     if gens:
         probe["generation"] = gens
     if an:
         if calib is not None and (calib.factory or calib.vrefint):
             probe["calibration"] = [{"frontend": fe, "scheme": scheme, "raw": bytes(raw).hex()}
                                     for fe, scheme, raw in calib.factory]
-        a_ns = getattr(aseg, "start_ns", None)
+        a_ns = aseg.start_ns
         for k, ((name, _, _), ch) in enumerate(zip(req.analog, aids)):
             values = an.values(adata, k, aseg.samples)
             t0 = Fraction(0)
-            if a_ns is not None and t_ref is not None:
+            if t_ref is not None:
                 t0 = Fraction(a_ns - t_ref) * tick / 10**9
             t0 += Fraction(acfg.skew_ns.get(k, 0)) * tick / 10**9
-            acq = {"pin": ch, **_accuracy(acfg)}
+            acq = {"pin": ch}
             fe = acfg.frontend.get(k)
             if fe is not None:
                 acq["frontend"] = frontends.get(fe, {"frontend": fe})
@@ -447,11 +379,9 @@ def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], aids
                 acq["reference"] = {"source": source, "mv": mv, "measured": bool(measured)}
             if calib is not None and calib.vrefint:
                 acq["vrefint_raw"], acq["vrefint_ns"] = calib.vrefint
-            nominal = getattr(calib, "vrefint_nominal_mv", None)     # OEP v1 clients
-            if nominal is not None:
-                acq["vrefint_nominal_mv"] = nominal
-            if getattr(aseg, "start_uncertainty_ns", None) is not None:
-                acq["start_uncertainty_ns"] = aseg.start_uncertainty_ns
+            if calib is not None and calib.vrefint_nominal_mv is not None:
+                acq["vrefint_nominal_mv"] = calib.vrefint_nominal_mv
+            acq["start_uncertainty_ns"] = aseg.start_uncertainty_ns
             if aseg.trigger_index is not None:
                 acq["trigger_index"] = aseg.trigger_index
             width = {8: 8, 16: 16, 32: 32}[acfg.slot]
@@ -465,10 +395,7 @@ def _capture(link, core, oc, oh, target: str, req: Request, ids: list[int], aids
 
 def _multirate(req: Request, names: list[str]) -> list:
     """Request.reduce as oep-client's Multirate list (oep-if-capture §5.2): the role is the channel's place."""
-    try:
-        from oep_client import multirate as mr
-    except ImportError:
-        raise RuntimeError("reducing a channel needs an oep-client with multirate (oep-client-python 0.0.29)") from None
+    from oep_client import multirate as mr
     policy = {"sample": mr.SAMPLE, "any": mr.ANY_ACTIVE, "latch": mr.EDGE_LATCH}
     return [mr.Multirate(names.index(n), policy[p], d, param) for n, (p, d, param) in req.reduce.items()]
 
@@ -500,18 +427,5 @@ def _segment(track):
 
 
 def _times(meta: dict, seg) -> None:
-    if getattr(seg, "start_ns", None) is not None:      # oep-if-capture with ns times (oep-client 0.0.10)
-        meta["start_ns"] = seg.start_ns
-        if getattr(seg, "start_uncertainty_ns", None) is not None:
-            meta["start_uncertainty_ns"] = seg.start_uncertainty_ns
-    elif getattr(seg, "start_us", None) is not None:  # an older probe's us time: the file keeps ns (spec §3.3)
-        meta["start_ns"] = seg.start_us * 1000
-
-
-def _accuracy(cfg) -> dict:
-    out = {}
-    if getattr(cfg, "rate_measured", False):
-        out["rate_measured"] = True
-    if getattr(cfg, "rate_ppm", 0):
-        out["rate_ppm"] = cfg.rate_ppm
-    return out
+    meta["start_ns"] = seg.start_ns
+    meta["start_uncertainty_ns"] = seg.start_uncertainty_ns

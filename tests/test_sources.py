@@ -76,34 +76,39 @@ class StandIn:
         class Cap:
             def __init__(self, hst):
                 self.fn = 7
+                self.generation = None
 
             def configure(self, **kw):
                 me.calls.append(("configure", kw))
                 if kw.get("trigger") and 0x45 in me.refuse:
                     raise Unsupported(0x45)                      # the tag as sent
-                return types.SimpleNamespace(rate=Fraction(160_000_000, 8), width=4, positions=[0, 1, 2])
+                return types.SimpleNamespace(rate=Fraction(160_000_000, 8), width=4, positions=[0, 1, 2], block=None)
 
             def start(self):
                 me.calls.append(("start",))
-                self.generation = 3                     # OEP v1 clients: the capture's generation
+                self.generation = 3                     # the capture's generation
 
             def wait(self, timeout):
-                return [types.SimpleNamespace(samples=me.n, start_us=123, trigger_index=4, slipped=True)]
+                return [types.SimpleNamespace(samples=me.n, start_ns=123_000, start_uncertainty_ns=500, trigger_index=4,
+                                              slipped=True)]
 
             def read_segment(self, seg):
                 return me.data
 
         host = types.SimpleNamespace(end=lambda: me.calls.append(("end",)))
         link = types.SimpleNamespace(open_host=lambda t: me.calls.append(("open", t)) or host)
-        core = types.SimpleNamespace(take=lambda h, ms, owner: me.calls.append(("take", owner)),
+        core = types.SimpleNamespace(take=lambda h, ms, owner: me.calls.append(("take", owner)) or
+                                     types.SimpleNamespace(boot_id=9),
                                      plan_apply=lambda h, a: me.calls.append(("plan", a)),
                                      plan_release=lambda h, f: me.calls.append(("release", f)))
-        capture = types.SimpleNamespace(LogicCapture=Cap, ONE_SHOT=0, TRIGGER=0x45, PRETRIGGER=0x46)
+        capture = types.SimpleNamespace(LogicCapture=Cap, ONE_SHOT=0, TRIGGER=0x45, PRETRIGGER=0x46,
+                                        mr=types.SimpleNamespace(TAG=0x60))
+        message = types.SimpleNamespace(UNKNOWN_OPERATION=2)
         pkg = types.ModuleType("oep_client")
-        pkg.link, pkg.core, pkg.capture = link, core, capture
+        pkg.link, pkg.core, pkg.capture, pkg.message = link, core, capture, message
         pkg.host = types.SimpleNamespace(OepError=OepError, Unsupported=Unsupported)
         return {"oep_client": pkg, "oep_client.link": link, "oep_client.core": core, "oep_client.capture": capture,
-                "oep_client.host": pkg.host}
+                "oep_client.host": pkg.host, "oep_client.message": message}
 
 
 def test_oep_source_against_a_stand_in(tmp_path, monkeypatch):
@@ -122,7 +127,8 @@ def test_oep_source_against_a_stand_in(tmp_path, monkeypatch):
     assert head["tick_hz"] == [20_000_000, 1]
     assert [fileformat.unpack(c) for c in chans] == [row.tobytes() for row in fake.levels]
     meta = head["meta"]
-    assert meta["source"] == "oep:/dev/ttyACM9" and meta["start_ns"] == 123_000 and "start_us" not in meta
+    assert meta["source"] == "oep:/dev/ttyACM9" and meta["start_ns"] == 123_000
+    assert meta["start_uncertainty_ns"] == 500 and meta["probe"]["boot_id"] == 9
     assert meta["probe"]["generation"] == {"logic": 3}
     assert meta["time_base_slipped"] is True
     assert meta["trigger_tick"] == 4 and meta["probe_channels"] == {"SDA": 47, "SCL": 48, "INT": 5}
@@ -177,26 +183,25 @@ def test_a_probe_error_ends_in_one_line(monkeypatch, capsys):
 
 
 def test_uart_link_speed_is_asked_for_unless_turned_off(tmp_path, monkeypatch):
+    import types
     from wireskein.sources import oep
 
     calls = []
 
-    class NewLink:                                     # oep-client 0.0.24+: raise_speed(hst, rates) after opening
+    class Link:
         @staticmethod
-        def raise_speed(hst, rates, *, flows=None, record=False):
-            calls.append((hst, rates))
+        def raise_speed(hst, rates, *, flows=None, record=False, max_tries=None):
+            calls.append((rates, record, max_tries))
             assert flows == oep.FLOWS                                     # a capture verifies the read-back way
 
-    class OldLink:
-        pass
-
-    assert oep._raise(NewLink, "H", oep.FAST) == oep.FAST
-    assert oep._raise(NewLink, "H", [1_500_000, 921_600]) == [1_500_000, 921_600]
-    assert oep._raise(NewLink, "H", []) == []
-    assert calls == [("H", oep.FAST), ("H", [1_500_000, 921_600])]
-    with pytest.raises(ValueError, match="cannot raise the link speed"):
-        oep._raise(OldLink, "H", oep.FAST)                                     # asked for: an error
-    assert oep._raise(OldLink, "H", oep.FAST, asked=False) == []                # the default: the boot speed
+    assert oep._raise(Link, "H", [1_500_000, 921_600]) == [1_500_000, 921_600]
+    assert oep._raise(Link, "H", []) == []
+    assert calls == [([1_500_000, 921_600], False, None)]                  # asked rates: tried as given
+    calls.clear()
+    hst = types.SimpleNamespace(link=types.SimpleNamespace(speed=types.SimpleNamespace(skipped=[1_500_000], retried=None)))
+    assert oep._raise_default(Link, hst, "/dev/X") == (oep.FAST, True)     # the record shaped them
+    assert calls == [(oep.FAST, True, oep.PER_SESSION)]                    # the default: the client's record decides
+    assert oep._raise_default(Link, hst, None) == ([], False)              # not a serial port this host opened
     assert oep._rates("") == [] and oep.FAST[0] == 1_500_000
     fake = StandIn(n=11)
     for name, mod in fake.modules().items():
@@ -220,50 +225,6 @@ def test_link_line():
                        "trials": [{"rate": 500_000, "result": "committed"}], "skipped": [1_500_000, 921_600],
                        "remembered": True})
     assert "skipped 1500000, 921600 (failed before)" in line and "what this port and probe did before" in line
-
-
-def test_link_rates_come_from_the_clients_record(tmp_path):
-    from oep_client.speed_record import SpeedRecord
-    from wireskein.sources import oep
-    rec = SpeedRecord(tmp_path / "link-speed.json")
-    assert oep._candidates("/dev/A", "u1", rec) == ([1_500_000, 921_600], False, [])   # nothing known: the list, 2 of it
-    rec.note("/dev/A", "u1", 1_500_000, passed=False)
-    rec.note("/dev/A", "u1", 921_600, passed=False)
-    assert oep._candidates("/dev/A", "u1", rec) == ([500_000], True, [1_500_000, 921_600])   # next time: down the list
-    rec.note("/dev/A", "u1", 500_000, passed=True)
-    assert oep._candidates("/dev/A", "u1", rec) == ([500_000], True, [1_500_000, 921_600])
-    rec.note("/dev/C", "u1", 1_500_000, passed=False)
-    rec.note("/dev/C", "u1", 921_600, passed=False)
-    rec.note("/dev/C", "u1", 500_000, passed=False)
-    assert oep._candidates("/dev/C", "u1", rec) == ([500_000], True, [1_500_000, 921_600])   # all failed: the slowest again
-    assert oep._candidates("/dev/A", "u2", rec)[0] == [1_500_000, 921_600]          # another probe on the port
-    rec.note("/dev/B", "u1", 921_600, passed=True)
-    assert oep._candidates("/dev/B", "u1", rec)[0] == [921_600, 1_500_000]          # what passed first
-
-
-def test_an_all_failed_record_retries_the_slowest_and_learns(tmp_path):
-    """With record=True the client skips recorded failures, so the retry goes without it, and a pass is written back."""
-    import types
-    from oep_client.speed_record import SpeedRecord
-    from wireskein.sources import oep
-    rec = SpeedRecord(tmp_path / "link-speed.json")
-    for r in oep.FAST:
-        rec.note("/dev/X", "u", r, passed=False)
-    calls = []
-
-    class Link:
-        @staticmethod
-        def raise_speed(hst, rates, *, flows=None, record=False):
-            calls.append((rates, record))
-            hst.link.speed = types.SimpleNamespace(chosen=rates[0], rate=rates[0])     # it holds on its own
-
-    hst = types.SimpleNamespace(link=types.SimpleNamespace(speed=None))
-    rates, remembered, left_out = oep._raise_default(Link, hst, "/dev/X", "u", rec)
-    assert calls == [([500_000], False)] and remembered and left_out == [1_500_000, 921_600]
-    assert 500_000 in rec.lookup("/dev/X", "u")[0]                           # learnt: passed now
-    calls.clear()
-    oep._raise_default(Link, hst, "/dev/X", "u", rec)
-    assert calls == [([500_000], True)]                                      # next time from the record, as usual
 
 
 def test_a_busy_port_ends_in_one_line(monkeypatch):
@@ -290,4 +251,4 @@ def test_probe_clock_against_the_host():
     assert abs(info["rate_ppm"] - 100) < 1e-6 and abs(info["rate_ppm_uncertainty"] - 100) < 1e-6
     assert "rate_ppm" not in oep._clock_info(r(1, 5, 1), r(2, 6, 1, boot=8))        # restarted between: no rate
     assert oep._clock_info(None, None) == {}
-    assert oep._clock(types.SimpleNamespace()) is None                              # an older client: no clock
+    assert oep._clock(types.SimpleNamespace()) is None                              # no reading: the capture goes on
