@@ -215,17 +215,17 @@ def test_identified_by_content_not_name(tmp_path):
 
 
 def test_other_files_are_refused(tmp_path):
-    old = tmp_path / "old.wsc"                                             # the format before wireskein/0
+    old = tmp_path / "old.wsc"                                             # no wireskein.json
     with zipfile.ZipFile(old, "w") as z:
         z.writestr("capture.json", json.dumps({"format": "wireskein-capture/0", "tick_hz": [1, 1], "ticks": 0,
                                                "channels": [], "meta": {}}))
     (tmp_path / "text.wireskein").write_text("hello")
-    beta = tmp_path / "beta.wireskein"                                     # wireskein 0.0.8-0.0.12
-    with zipfile.ZipFile(beta, "w") as z:
+    other = tmp_path / "other.wireskein"                                   # another version: refused, not guessed
+    with zipfile.ZipFile(other, "w") as z:
         z.writestr("wireskein.json", '{"format": "wireskein/0"}')
         z.writestr("capture.json", '{"tick_hz": [1, 1], "ticks": 0, "channels": [], "meta": {}}')
-    with pytest.raises(ValueError, match="a beta WireSkein file"):
-        load(beta)
+    with pytest.raises(ValueError, match="'wireskein/0'; this version of wireskein reads 'wireskein/1' only"):
+        load(other)
     newer = tmp_path / "new.wireskein"
     with zipfile.ZipFile(newer, "w") as z:
         z.writestr("wireskein.json", '{"format": "wireskein/9"}')

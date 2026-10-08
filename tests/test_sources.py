@@ -112,20 +112,20 @@ class StandIn:
 
 
 def test_oep_source_against_a_stand_in(tmp_path, monkeypatch):
-    fake = StandIn(n=11)
-    for name, mod in fake.modules().items():
+    stand_in = StandIn(n=11)
+    for name, mod in stand_in.modules().items():
         monkeypatch.setitem(sys.modules, name, mod)
     req = sources.Request([("SDA", "47"), ("SCL", "48"), ("INT", "5")], 20_000_000, 11, trigger=("SCL", "fall"),
                           pretrigger=3)
     out = sources.capture("oep:/dev/ttyACM9", req, tmp_path / "o.wireskein")
-    assert ("plan", [(7, 0, 47), (7, 1, 48), (7, 2, 5)]) in fake.calls
-    conf = next(kw for c, *kw in fake.calls if c == "configure")[0]
+    assert ("plan", [(7, 0, 47), (7, 1, 48), (7, 2, 5)]) in stand_in.calls
+    conf = next(kw for c, *kw in stand_in.calls if c == "configure")[0]
     assert conf["trigger"] == (2, 1, 1) and conf["pretrigger"] == 3 and conf["samples"] == 11 and conf["rate"] == 20_000_000
     assert "critical" not in conf                                               # OEP v1: refused, never ignored
-    assert [c[0] for c in fake.calls][-2:] == ["release", "end"]                 # plan released, session ended
+    assert [c[0] for c in stand_in.calls][-2:] == ["release", "end"]                 # plan released, session ended
     head, chans = fileformat.read(out)
     assert head["tick_hz"] == [20_000_000, 1]
-    assert [fileformat.unpack(c) for c in chans] == [row.tobytes() for row in fake.levels]
+    assert [fileformat.unpack(c) for c in chans] == [row.tobytes() for row in stand_in.levels]
     meta = head["meta"]
     assert meta["source"] == "oep:/dev/ttyACM9" and meta["start_ns"] == 123_000
     assert meta["start_uncertainty_ns"] == 500 and meta["probe"]["boot_id"] == 9
@@ -135,8 +135,8 @@ def test_oep_source_against_a_stand_in(tmp_path, monkeypatch):
 
 
 def test_oep_source_names_a_refusal(monkeypatch):
-    fake = StandIn()
-    mods = fake.modules()
+    stand_in = StandIn()
+    mods = stand_in.modules()
 
     def refuse(h, a):
         raise mods["oep_client.host"].OepError("rejected: unavailable")
@@ -148,12 +148,12 @@ def test_oep_source_names_a_refusal(monkeypatch):
 
 
 def test_oep_trigger_the_probe_cannot_do_is_an_error(monkeypatch):
-    fake = StandIn(refuse={0x45})
-    for name, mod in fake.modules().items():
+    stand_in = StandIn(refuse={0x45})
+    for name, mod in stand_in.modules().items():
         monkeypatch.setitem(sys.modules, name, mod)
     with pytest.raises(RuntimeError, match="a trigger"):
         sources.run("oep:/dev/x", sources.Request([("A", "1")], 1000, 10, trigger=("A", "rise")))
-    assert [c[0] for c in fake.calls][-2:] == ["release", "end"]
+    assert [c[0] for c in stand_in.calls][-2:] == ["release", "end"]
 
 
 def test_fewer_samples_than_asked_are_named(tmp_path, capsys):
@@ -203,14 +203,14 @@ def test_uart_link_speed_is_asked_for_unless_turned_off(tmp_path, monkeypatch):
     assert calls == [(oep.FAST, True, oep.PER_SESSION)]                    # the default: the client's record decides
     assert oep._raise_default(Link, hst, None) == ([], False)              # not a serial port this host opened
     assert oep._rates("") == [] and oep.FAST[0] == 1_500_000
-    fake = StandIn(n=11)
-    for name, mod in fake.modules().items():
+    stand_in = StandIn(n=11)
+    for name, mod in stand_in.modules().items():
         monkeypatch.setitem(sys.modules, name, mod)
     req = sources.Request([("SDA", "47"), ("SCL", "48"), ("INT", "5")], 20_000_000, 11)
     out = sources.capture("oep:/dev/ttyACM9?fast=0", req, tmp_path / "o.wireskein")
-    assert ("open", "/dev/ttyACM9") in fake.calls                              # the option is not part of the port
+    assert ("open", "/dev/ttyACM9") in stand_in.calls                              # the option is not part of the port
     link = fileformat.read(out)[0]["meta"]["probe"]["link"]
-    assert set(link) == {"open_s", "read_bytes", "read_s"} and link["read_bytes"] == len(fake.data)
+    assert set(link) == {"open_s", "read_bytes", "read_s"} and link["read_bytes"] == len(stand_in.data)
     with pytest.raises(ValueError, match="unknown option speed"):
         sources.capture("oep:/dev/ttyACM9?speed=2", req, tmp_path / "p.wireskein")
 

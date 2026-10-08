@@ -1,6 +1,5 @@
-"""The OEP source over a real link to oep-client's virtual bench (virtual_bench_serve, fake_serve before
-oep-client-python 0.0.29, on TCP). Skipped when oep-client is missing or its fake probe has no capture
-(before oep-client-python 0.0.9)."""
+"""The OEP source over a real link to oep-client's virtual bench (virtual_bench_serve, on TCP). Skipped when
+oep-client is missing."""
 
 import re
 import subprocess
@@ -11,16 +10,8 @@ import pytest
 
 from wireskein import sources, fileformat
 
-oep_client = pytest.importorskip("oep_client")
-try:
-    from oep_client import endpoint
-    HAS_CAPTURE = "capture_slipped" in open(endpoint.__file__).read()
-except ImportError:
-    HAS_CAPTURE = False
-import importlib.util
-SERVE = next(m for m in ("oep_client.virtual_bench_serve", "oep_client.fake_serve")
-             if m == "oep_client.fake_serve" or importlib.util.find_spec(m))
-pytestmark = pytest.mark.skipif(not HAS_CAPTURE, reason="oep-client's fake probe has no capture")
+pytest.importorskip("oep_client")
+SERVE = "oep_client.virtual_bench_serve"
 
 
 @pytest.fixture
@@ -50,7 +41,7 @@ def test_three_channels_of_a_four_bit_stream(probe, tmp_path):
     head, chans = fileformat.read(out)
     assert head["tick_hz"] == [20_000_000, 1] and [c.n for c in chans] == [1000] * 3
     i = np.arange(1000)
-    for k, lv in enumerate(levels(out)):                        # the fake's waveform: sample i is the counter i
+    for k, lv in enumerate(levels(out)):                        # the virtual bench's waveform: sample i is the counter i
         assert np.array_equal(lv, (i >> k) & 1), k
     assert head["meta"]["probe_channels"] == {"A": 10, "B": 11, "C": 12} and "start_ns" in head["meta"]
     assert "start_uncertainty_ns" in head["meta"]
@@ -86,14 +77,6 @@ def test_esp32_sampler_profile(probe, tmp_path):
     assert [np.array_equal(lv, (i >> k) & 1) for k, lv in enumerate(levels(out))] == [True, True]
 
 
-HAS_ANALOG = hasattr(oep_client.capture if hasattr(oep_client, "capture") else __import__("oep_client.capture").capture,
-                     "CaptureGroup")
-analog_only = pytest.mark.skipif(not HAS_ANALOG, reason="oep-client has no analog / group (before 0.0.10)")
-_cal = getattr(__import__("oep_client.capture").capture, "Calibration", None)
-V1 = _cal is not None and "vrefint_nominal_mv" in getattr(_cal, "__dataclass_fields__", {})     # OEP v1 clients
-
-
-@analog_only
 def test_analog_alone_keeps_raw_values_and_what_the_probe_knows(probe, tmp_path):
     req = sources.Request([], 20_000_000, 512, analog=[("SQ", "16", None), ("SINE", "17", 3)], analog_rate=48_000)
     out = sources.capture(probe(), req, tmp_path / "a.wireskein")
@@ -102,18 +85,16 @@ def test_analog_alone_keeps_raw_values_and_what_the_probe_knows(probe, tmp_path)
     assert isinstance(sq, fileformat.AnalogChannel) and sq.encoding == "analog" and sq.n == 512
     assert sq.value_bits == 12 and sq.zero is not None and sq.scale_nv
     v = sq.values()
-    assert len(set(v)) == 2                                        # the fake's square wave on even channels
+    assert len(set(v)) == 2                                        # the virtual bench's square wave on even channels
     assert sine.acquisition["frontend"]["frontend"] == 3 and sine.acquisition["attenuation_db"] == 12
     assert sq.acquisition["pin"] == 16 and "reference" in sq.acquisition and sq.acquisition["vrefint_raw"] == 1365
     p = head["meta"]["probe"]
     assert p["calibration"] and "boot_id" in p and "start_ns" in head["meta"]
     assert p.get("unit_id")                                        # core describe: the probe's own id
-    if V1:                                                         # what an OEP v1 client also gives
-        assert isinstance(sq.acquisition["vrefint_nominal_mv"], int)
-        assert set(p["generation"]) == {"analog"} and isinstance(p["generation"]["analog"], int)
+    assert isinstance(sq.acquisition["vrefint_nominal_mv"], int)
+    assert set(p["generation"]) == {"analog"} and isinstance(p["generation"]["analog"], int)
 
 
-@analog_only
 def test_logic_and_analog_together_in_a_group(probe, tmp_path):
     req = sources.Request([("A", "10"), ("B", "11")], 20_000_000, 2000, analog=[("SQ", "16", None)],
                           analog_rate=48_000)
@@ -122,15 +103,13 @@ def test_logic_and_analog_together_in_a_group(probe, tmp_path):
     a, b, sq = chans
     assert isinstance(a, fileformat.Channel) and isinstance(sq, fileformat.AnalogChannel)
     assert head["tick_hz"] == [20_000_000, 1]
-    # the fake starts the analog track 5 us (+-2 us) after the group, logic at once: 100 ticks of 20 MHz
+    # the virtual bench starts the analog track 5 us (+-2 us) after the group, logic at once: 100 ticks of 20 MHz
     assert abs(float(sq.t0_ticks) - 100) <= 40 + 1
     assert sq.acquisition["start_uncertainty_ns"] == 2000 and "group_start_ns" in head["meta"]["probe"]
-    if V1:
-        assert set(head["meta"]["probe"]["generation"]) == {"logic", "analog"}
+    assert set(head["meta"]["probe"]["generation"]) == {"logic", "analog"}
     assert sq.n == round(2000 * 48_000 / 20_000_000) or sq.n >= 1
 
 
-@analog_only
 def test_group_trigger_marks_both_tracks(probe, tmp_path):
     req = sources.Request([("A", "10"), ("B", "11")], 20_000_000, 2000, trigger=("B", "rise"), pretrigger=100,
                           analog=[("SQ", "16", None)], analog_rate=48_000, analog_samples=64)
@@ -140,7 +119,6 @@ def test_group_trigger_marks_both_tracks(probe, tmp_path):
     assert "trigger_ns" in head["meta"]["probe"]
 
 
-@analog_only
 def test_cli_analog_only_needs_no_logic_rate(probe, tmp_path):
     src = probe()
     out = tmp_path / "a.wireskein"
@@ -171,10 +149,6 @@ def test_a_trigger_that_never_comes_is_named():
         _waiting(never, Waiting(), sources.Request([("A", "10")], 1_000_000, 100, timeout=2))
 
 
-HAS_MULTIRATE = __import__("importlib").util.find_spec("oep_client.multirate") is not None
-
-
-@pytest.mark.skipif(not HAS_MULTIRATE, reason="oep-client has no multirate (before 0.0.29)")
 def test_multirate_keeps_each_channel_as_asked(probe, tmp_path):
     """OEP multirate: a raw channel, a sample every 4 from 1, any-low per 32, latch-high per 8 - each read back as the
     probe's counter waveform (role k is bit k of the base sample number) summarized the same way."""

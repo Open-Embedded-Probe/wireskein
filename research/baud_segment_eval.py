@@ -1,6 +1,6 @@
 """UART with mid-stream baud changes: segment the line, then decode per segment.
 
-    PYTHONPATH=. uv run python baud_segment_eval.py [n] [--stress baudhop|none]
+    uv run python baud_segment_eval.py [n] [--stress baudhop|none]
 """
 import sys
 from difflib import SequenceMatcher

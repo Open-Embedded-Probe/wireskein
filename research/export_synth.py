@@ -3,7 +3,7 @@
 The generator stays the source (seeded), but the frozen fixtures are what a
 reimplementation (any language) runs its regression tests on.
 
-    PYTHONPATH=. uv run python export_synth.py
+    uv run python export_synth.py
 """
 import json
 

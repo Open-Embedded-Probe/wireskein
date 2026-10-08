@@ -491,11 +491,8 @@ def _check(z: zipfile.ZipFile, path) -> None:
     if IDENT not in z.namelist():
         raise ValueError(f"{path}: not a WireSkein file (no {IDENT})")
     fmt = json.loads(z.read(IDENT)).get("format")
-    if fmt == "wireskein/0":
-        raise ValueError(f"{path}: a beta WireSkein file (wireskein/0, from wireskein 0.0.8-0.0.12); "
-                         f"this version reads {FORMAT!r} only")
     if fmt != FORMAT:
-        raise ValueError(f"{path}: format {fmt!r}, this version reads {FORMAT!r} (a newer wireskein may read it)")
+        raise ValueError(f"{path}: format {fmt!r}; this version of wireskein reads {FORMAT!r} only")
 
 
 def read_header(path: str | Path) -> dict:

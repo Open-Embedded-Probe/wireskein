@@ -2,7 +2,7 @@
 shrink the information handled, is the typed result still correct, and how
 long does each stage take?
 
-    PYTHONPATH=. uv run python stage_eval.py [n_synth]
+    uv run python stage_eval.py [n_synth]
 """
 
 import sys
@@ -54,7 +54,6 @@ def main():
             pin_ok += w in tx.pins[ch].candidates
             sc = tx.pins[ch].scores
             pin_top += max(sc, key=sc.get) == w
-        raw = sum(len(c.edges) for c in cap.channels) * 8
         for b in truth["buses"]:
             proto, r = b["protocol"], b["roles"]
             chans = set(r.values())

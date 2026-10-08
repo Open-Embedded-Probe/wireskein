@@ -1,6 +1,6 @@
 """TX/RX pairing and SCPI on top of two single-line UART results.
 
-    PYTHONPATH=. uv run python scpi_eval.py [n]
+    uv run python scpi_eval.py [n]
 """
 import sys
 from collections import Counter

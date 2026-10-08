@@ -17,7 +17,6 @@ reference, Vrefint reading and factory calibration go along, never applied.
 from __future__ import annotations
 
 import struct
-from pathlib import Path
 from fractions import Fraction
 
 from .. import fileformat
@@ -231,7 +230,6 @@ def _capture(link, core, oc, oh, message, target: str, req: Request, ids: list[i
              fast: list[int] | None = None) -> Result:
     import time
     names = [n for n, _ in req.channels]
-    anames = [n for n, _, _ in req.analog]
     t_open = time.monotonic()
     remembered = False
     hst = link.open_host(target)

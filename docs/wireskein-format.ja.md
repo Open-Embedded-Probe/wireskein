@@ -59,7 +59,7 @@ UTF-8 の JSON のオブジェクトです。
 
 読み手は、拡張子ではなく中身で形式を判断します。
 
-1. zip で、`wireskein.json` を持ち、その `format` が `"wireskein/"` で始まる: WireSkein のファイルです。`format` を知らなければ、「新しい版のファイル」と伝えて断ります。
+1. zip で、`wireskein.json` を持ち、その `format` が `"wireskein/"` で始まる: WireSkein のファイルです。`format` が読み手の対応する版でなければ、その版を示して断ります。
 2. zip で、`version` と `metadata` を持つ: sigrok の `.sr` です（§6）。
 3. どちらでもない: 読めないファイルとして断ります。
 

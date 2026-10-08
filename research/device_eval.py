@@ -1,11 +1,10 @@
 """Device level: identification where evidence exists, and no overreach where it does not.
 
-    PYTHONPATH=. uv run python device_eval.py [n]
+    uv run python device_eval.py [n]
 """
 import sys
 from collections import Counter
 
-import numpy as np
 
 import corpus
 from wireskein._engine import devices, fixture, staged, synth

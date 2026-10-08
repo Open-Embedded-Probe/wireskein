@@ -168,7 +168,6 @@ def _seconds(text: str) -> float:
 
 def annotate_cmd(args) -> None:
     from . import annotate
-    from .analyze import load
     hints = json.loads(Path(args.hint[1:]).read_text() if args.hint.startswith("@") else args.hint) if args.hint else None
     doc = annotate.build(_load_for_decoding(args.file, args), hints)
     for r in doc["rows"]:

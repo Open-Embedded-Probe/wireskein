@@ -1,6 +1,6 @@
-"""Evaluate the pipeline against ground truth (real fixtures + synthetic seeds).
+"""Evaluate the staged engine against ground truth (real fixtures + synthetic seeds).
 
-    PYTHONPATH=. uv run python evaluate.py --synth 200 --tag baseline
+    uv run python evaluate.py --set heldout --tag NAME
 
 Writes corpus/work/eval-<tag>.json with one record per case and prints a summary.
 Also records, for every true bus, where its true hypothesis ranked at each layer,
@@ -16,19 +16,14 @@ import multiprocessing as mp
 import time
 from collections import Counter
 from difflib import SequenceMatcher
-from pathlib import Path
 
 import numpy as np
 
 import corpus
-from wireskein._engine import pipeline, synth
-from wireskein._engine.stack import ProbeConfig
-from wireskein._engine.scoring import DefaultScorer, LayerOnlyScorer
+from wireskein._engine import staged, synth
 
-SCORERS = {"default": DefaultScorer, "layer-only": LayerOnlyScorer}
 IN_SCOPE = {"uart", "i2c", "spi", "lin", "dmx512", "rvswd", "swio", "swd", "can"}
 WORK = corpus.ROOT / "corpus/work"
-MAX_EDGES = 400_000  # exhaustive expansion on multi-million-edge clocks takes hours; reported as skipped
 
 
 def _ratio(a, b) -> float:
@@ -133,28 +128,17 @@ def bus_channels(bus):
 
 
 def evaluate_case(args):
-    kind, ref, scorer_name, use_probe, use_excl, engine = args
+    kind, ref, engine = args
     if kind in ("real", "fixture"):
         from wireskein._engine import fixture
         cap, truth = fixture.load_capture(ref), fixture.load_truth(ref)
     else:
         cap, truth = synth.scenario(*ref)
-    n_edges = sum(len(c.edges) for c in cap.channels)
-    if kind == "synth" and n_edges > MAX_EDGES and not use_probe and engine != "staged":
-        return {"id": truth["id"], "skipped": f"{n_edges} edges > {MAX_EDGES}", "seconds": 0.0, "runs": 0,
-                "n_active": 0, "buses": [], "claims": []}
-    if engine in ("staged", "declarative"):
-        from wireskein._engine import staged
-        staged.use_declarative(engine == "declarative")
-        res = staged.analyze(cap)
-        res.seconds = sum(res.seconds.values())
-        res.probe_runs = res.abandoned = res.excluded = 0
-    else:
-        res = pipeline.analyze(cap, scorer=SCORERS[scorer_name](), probe=ProbeConfig() if use_probe else None,
-                               exclude=use_excl)
-    rec = {"id": truth["id"], "rate": cap.rate, "seconds": res.seconds, "runs": res.runs,
-           "n_active": sum(1 for f in res.features.values() if not f.static), "buses": [], "claims": [],
-           "probe_runs": res.probe_runs, "abandoned": res.abandoned, "excluded": res.excluded}
+    staged.use_declarative(engine == "declarative")
+    res = staged.analyze(cap)
+    seconds = sum(res.seconds.values())
+    rec = {"id": truth["id"], "rate": cap.rate, "seconds": seconds, "runs": res.runs,
+           "n_active": sum(1 for f in res.features.values() if not f.static), "buses": [], "claims": []}
     claimed_correct = set()
     for bi, bus in enumerate(truth["buses"]):
         chans = bus_channels(bus)
@@ -257,11 +241,9 @@ def main() -> None:
     ap.add_argument("--stress", default=None)
     ap.add_argument("--no-real", action="store_true")
     ap.add_argument("--large", action="store_true", help="include large real captures")
-    ap.add_argument("--scorer", default="default", choices=sorted(SCORERS))
     ap.add_argument("--tag", default="run")
-    ap.add_argument("--probe", action="store_true", help="early abandonment on probe windows")
-    ap.add_argument("--exclude", action="store_true", help="safe (definitional) exclusion rules before decoding")
-    ap.add_argument("--engine", default="flat", choices=["flat", "staged", "declarative"])
+    ap.add_argument("--engine", default="staged", choices=["staged", "declarative"],
+                    help="declarative: I2C, SPI and RVSWD from their TOML definitions")
     ap.add_argument("--set", default=None, help="frozen fixture set under corpus/fixtures/synth (replaces --synth)")
     ap.add_argument("-j", type=int, default=max(1, mp.cpu_count() - 2))
     args = ap.parse_args()
@@ -269,12 +251,12 @@ def main() -> None:
     if not args.no_real:
         for d in sorted(corpus.REAL.iterdir()):
             if args.large or "flash" not in d.name or d.name.startswith("i2cdb"):
-                jobs.append(("real", d, args.scorer, args.probe, args.exclude, args.engine))
+                jobs.append(("real", d, args.engine))
     if args.set:
         base = corpus.ROOT / "corpus/fixtures/synth" / args.set
-        jobs += [("fixture", d, args.scorer, args.probe, args.exclude, args.engine) for d in sorted(base.iterdir())]
+        jobs += [("fixture", d, args.engine) for d in sorted(base.iterdir())]
     else:
-        jobs += [("synth", (s, args.profile, args.stress), args.scorer, args.probe, args.exclude, args.engine)
+        jobs += [("synth", (s, args.profile, args.stress), args.engine)
                  for s in range(args.start, args.start + args.synth)]
     t0 = time.time()
     records = []

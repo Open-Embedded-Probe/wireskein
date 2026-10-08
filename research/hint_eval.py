@@ -1,6 +1,6 @@
 """Effect of hints given before analysis: none, protocol list only, per-pin protocol/role/baud.
 
-    PYTHONPATH=. uv run python hint_eval.py [n]
+    uv run python hint_eval.py [n]
 """
 import sys
 import time

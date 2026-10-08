@@ -11,7 +11,7 @@ import re
 
 import numpy as np
 
-from ..stack import Context, Stream
+from ..stack import Stream
 
 PRINTABLE = set(range(0x20, 0x7F)) | {0x09, 0x0A, 0x0D}
 

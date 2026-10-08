@@ -1,6 +1,6 @@
 """Reuse of the RateBlocks -> Chars stages by UART-like plugins (UART, LIN, DMX512).
 
-    PYTHONPATH=. uv run python plugin_reuse_eval.py [n]
+    uv run python plugin_reuse_eval.py [n]
 """
 import inspect
 import sys

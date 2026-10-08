@@ -46,12 +46,6 @@ def _bursts(ch: Channel, gap: float) -> list[tuple[int, int]]:
     return list(zip(starts.tolist(), ends.tolist()))
 
 
-def _circ_fit(runs: np.ndarray, u: float) -> float:
-    """Mean resultant length of run/u phases: 1 when every run is an integer multiple of u."""
-    ph = 2 * np.pi * runs / u
-    return float(np.hypot(np.cos(ph).mean(), np.sin(ph).mean()))
-
-
 def estimate_units(runs: np.ndarray, max_mult: int = 12, top: int = 6) -> list[UnitCandidate]:
     """Candidate base units from interior run lengths (excluding the first/last partial runs).
 

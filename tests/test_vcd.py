@@ -10,7 +10,7 @@ import pytest
 
 from wireskein import fileformat
 from wireskein._engine import fileio
-from wireskein.analyze import load, save
+from wireskein.analyze import load
 
 
 def cli(*args):

@@ -70,9 +70,6 @@ class Survey:
     asyncs: dict[str, AsyncInfo]
     pairs: dict[tuple[str, str], PairRelation] = field(default_factory=dict)
 
-    def clock_ranked(self) -> list[ClockInfo]:
-        return sorted(self.clocks.values(), key=lambda c: -c.clock_score)
-
     def partners(self, clock: str) -> list[PairRelation]:
         return sorted((r for (c, _), r in self.pairs.items() if c == clock), key=lambda r: -r.data_score)
 

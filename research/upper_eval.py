@@ -1,6 +1,6 @@
 """Effect of upper-layer support on UART verdicts (NMEA, Modbus RTU, text, binary payloads).
 
-    PYTHONPATH=. uv run python upper_eval.py [n]
+    uv run python upper_eval.py [n]
 """
 import sys
 from collections import defaultdict

@@ -1,7 +1,6 @@
 """Channels kept by interval (interval-any / interval-latch, OEP multirate's any_active / edge_latch): the file form,
 and the checks, which say only what the summaries fix."""
 
-import numpy as np
 import pytest
 
 from wireskein import fileformat

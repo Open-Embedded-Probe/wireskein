@@ -29,12 +29,52 @@ from . import plugins_uartlike as UL
 from . import typed
 from .analyzers.upper import Lines, MarkerGrammar, ModbusRtu, Nmea
 from .model import Capture
-from .pipeline import CLAIM_COST, Claim, changed_channels, verdict
 from .scoring import DefaultScorer
 from .stack import Node, Stream, explanations
 from .taxonomy import classify
 from .rvswd import RvswdPlugin, SwioPlugin, dm_node
-from .model import Channel
+
+
+CLAIM_COST = 0.3  # a hypothesis must beat this per channel to be worth claiming
+
+
+@dataclass
+class Claim:
+    protocol: str
+    roles: dict
+    params: dict
+    total: float
+    margin: float
+    verdict: str            # confirmed / likely / ambiguous
+    node: Node
+    runner_up: Node | None
+
+
+def channel_labels(nodes: list[Node]) -> dict[str, tuple]:
+    """channel -> (analyzer, role, key params) under an explanation."""
+    out = {}
+    for n in nodes:
+        key = ()
+        if n.analyzer == "uart":
+            key = (round(n.params["baud"] / 1000, 0), n.params["idle"])
+        elif n.analyzer == "spi":
+            key = (n.params["sample_edge"],)
+        for role, ch in n.roles.items():
+            out[ch] = (n.analyzer, role, key)
+    return out
+
+
+def changed_channels(a: list[Node], b: list[Node]) -> int:
+    la, lb = channel_labels(a), channel_labels(b)
+    return sum(1 for ch in set(la) | set(lb) if la.get(ch) != lb.get(ch))
+
+
+def verdict(total: float, margin: float) -> str:
+    if total >= 0.85 and margin >= 0.15:
+        return "confirmed"
+    if total >= 0.6 and margin >= 0.05:
+        return "likely"
+    return "ambiguous"
 
 
 def q(n: float, scale: float = 8.0) -> float:
@@ -277,17 +317,6 @@ class DmxPlugin:
         return out[:1]
 
 
-# Optional recorder for the plugin-boundary experiment (jsplugin_bench.py):
-# a list that receives (plugin, stream fields, python result, seconds).
-RECORDER = None
-
-
-def _record(name, fields, nodes, dt):
-    if RECORDER is None:
-        return
-    RECORDER.append((name, fields, [(n.layer_score, n.output.items if n.output else None) for n in nodes], dt))
-
-
 PLUGINS = [I2cPlugin(), SpiPlugin(), SyncUnknownPlugin(), RvswdPlugin(), UartPlugin(), LinPlugin(), DmxPlugin(),
            SwioPlugin()]
 _BASE_PLUGINS = list(PLUGINS)
@@ -295,17 +324,9 @@ UPPER = [Lines(), Nmea(), ModbusRtu(), MarkerGrammar()]
 
 
 def _upper(node: Node, scorer: DefaultScorer) -> None:
-    """Upper layers on byte streams (reused from the flat engine)."""
+    """Upper layers on byte streams."""
     if node.output is None or node.output.kind != "bytes":
         return
-    if RECORDER is not None and node.analyzer == "uart":
-        nm = Nmea()
-        t_p = time.perf_counter()
-        roles, out, m = nm.run(None, node, {})
-        dt = time.perf_counter() - t_p
-        tmp = Node("nmea", {}, roles, out, m)
-        tmp.layer_score = scorer._checked(m)
-        _record("nmea", {"values": np.asarray(node.output.items["value"]) & 0xFF, "roles": dict(node.roles)}, [tmp], dt)
 
     def expand(parent: Node):
         for a in UPPER:
@@ -547,15 +568,7 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
                 for kind, fr in streams:
                     for p in by_type.get(kind, []):
                         runs += 1
-                        t_p = time.perf_counter()
                         got = p.run(c, fr if getattr(p, "open_tail", False) else fr.closed(), g)
-                        if RECORDER is not None and p.name == "i2c" and kind == "frames.startstop":
-                            _record("i2c", {"bits": sb.bits[0] if len(sb.data) == 1 else sb.bits, "t": sb.t,
-                                            "bounds": fr.bounds.ravel(), "sample_edge": sb.sample_edge,
-                                            "n_data": len(sb.data), "clock": sb.clock, "data": list(sb.data),
-                                            "clk_score": c.sv.clocks[sb.clock].clock_score,
-                                            "pair_score": c.sv.pairs[(sb.clock, sb.data[0])].data_score},
-                                    got, time.perf_counter() - t_p)
                         for n in got:
                             # the engine keeps the typed inputs (references) for
                             # consumers that want intermediate layers (GUI)
@@ -603,15 +616,7 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
             blocks = typed.block_chars(view_cap, c.sv, rb)
             for p in by_type.get("chars", []):
                 runs += 1
-                t_p = time.perf_counter()
                 got = p.run(Ctx(view_cap, c.tx, c.sv), rb, blocks)
-                if RECORDER is not None and p.name in ("lin", "dmx512"):
-                    for (s0, s1, u), cands, ch in blocks:
-                        if ch is not None:
-                            _record(p.name, {"values": ch.values, "ok": ch.ok.astype(np.uint8), "start": ch.start,
-                                             "breaks": ch.breaks, "pin": rb.pin, "baud": cap.rate / u, "idle": rb.idle},
-                                    got, (time.perf_counter() - t_p) / max(1, len(blocks)))
-                            break
                 for n in got:
                     n.params["deglitch"] = k
                     n.layers = {"blocks": rb, "chars": blocks}

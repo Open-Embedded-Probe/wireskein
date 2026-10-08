@@ -7,15 +7,15 @@
 ```sh
 cd research
 uv sync
-uv run python evaluate.py --set heldout --engine staged --tag NAME   # 固定したセットで評価 → ../corpus/work/eval-NAME.json
-uv run python evaluate.py --synth 200 --engine staged --tag NAME     # 実記録＋生成 200 件
+uv run python evaluate.py --set heldout --tag NAME                 # 固定したセットで評価 → ../corpus/work/eval-NAME.json
+uv run python evaluate.py --synth 200 --tag NAME                   # 実記録＋生成 200 件
 ```
 
 `evaluate.py` の主な引数:
 
 | 引数 | 意味 |
 | --- | --- |
-| `--engine staged` | 段構成のエンジン（`wireskein analyze` が使うもの）。`declarative` は I²C・SPI・RVSWD を TOML の定義で読む。`flat` は比較用の総当たりのエンジン |
+| `--engine declarative` | I²C・SPI・RVSWD を TOML の定義で読む（既定の `staged` は `wireskein analyze` と同じ） |
 | `--set NAME` | `corpus/fixtures/synth/NAME` の固定したセットを使う |
 | `--synth N`、`--start S`、`--profile P`、`--stress S` | シード S から N 件を生成して使う |
 | `--no-real`、`--large` | 実記録を使わない / 100 万エッジ級の実記録も入れる |
@@ -36,7 +36,6 @@ uv run python evaluate.py --synth 200 --engine staged --tag NAME     # 実記録
 | スクリプト | 確かめること |
 | --- | --- |
 | `stage_eval.py [n]` | 段ごとに情報量が減っているか、型付きの結果が正しいか、段ごとの時間 |
-| `exclusion_audit.py [n] [--stress S]` | 確実な除外の規則が正解の仮説を落とさないか、どれだけ減らすか |
 | `device_eval.py [n]` | 証拠のあるデバイスを識別し、証拠のないものを主張しないか |
 | `hint_eval.py [n]` | ヒント（方式の一覧、ピンごとの方式・役割・ボーレート）の効果 |
 | `upper_eval.py [n]` | 上位（NMEA、Modbus RTU、テキスト）の支持が UART の判定に効くか |
