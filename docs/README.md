@@ -1,12 +1,14 @@
-# WireSkein の文書
+# WireSkein documents
 
-使い方の概要はリポジトリの [README](../README.ja.md) にあります。ここには、仕様と設計の決定を置きます。
+[日本語](README.ja.md)
 
-| 文書 | 内容 |
+The repository's [README](../README.md) gives an overview of using WireSkein. This folder holds the specifications and the design decisions. Each document has a Japanese version (`*.ja.md`) with the same content.
+
+| Document | Contents |
 | --- | --- |
-| [目的と範囲](concept.ja.md) | 解決したい課題、大切にする性質、範囲に入れないもの |
-| [設計の決定と理由](design.ja.md) | 版と互換性、実装の言語、復号の段の構成と判定、照合の方針、評価 |
-| [WireSkein のファイル形式](wireskein-format.ja.md) | `.wireskein` の仕様: 入れ物、`capture.json`、チャンネルの `encoding`、添付・メモ・マーカー・注釈、`.sr` と VCD との関係 |
-| [記録の形式](run-format.ja.md) | 試験の記録（`run.json`）と照合の結果の仕様 |
-| [マーカー](markers.ja.md) | 見出し型のマーカーと区間の規則 |
-| [キャプチャで試験する](capture-test-guide.ja.md) | 試験の記録の作り方、キャプチャの窓、検査の一覧、許容誤差の決め方 |
+| [Purpose and scope](concept.md) | The problems to solve, the properties that matter, what is out of scope |
+| [Design decisions and reasons](design.md) | Versions and compatibility, implementation language, the decoding stages and verdicts, how checks work, evaluation |
+| [The WireSkein file format](wireskein-format.md) | The `.wireskein` specification: container, `capture.json`, channel `encoding`s, attachments, notes, markers, annotations, relation to `.sr` and VCD |
+| [The run format](run-format.md) | Recorded test runs (`run.json`) and check results |
+| [Markers](markers.md) | Heading markers and the segment rules |
+| [Checking captures in tests](capture-test-guide.md) | How to record a test run, capture windows, the list of checks, how to choose tolerances |

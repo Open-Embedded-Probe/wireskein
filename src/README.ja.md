@@ -1,5 +1,7 @@
 # src
 
+[English](README.md)
+
 Python の package `wireskein` です（`pip install wireskein` で入るもの）。
 
 | 場所 | 内容 |

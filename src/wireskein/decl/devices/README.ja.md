@@ -1,5 +1,7 @@
 # デバイスの定義
 
+[English](README.md)
+
 置き場所は `<方式>/<メーカーまたは分類>/<機種>.toml` です（例: `i2c/sensirion/sht30.toml`、`spi/flash/spi_nor.toml`）。
 
 - 最上位のフォルダ名は方式で、ファイル内の `device.bus` と同じにします。違っていると読み込み時にエラーになります。

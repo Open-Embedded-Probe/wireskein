@@ -1,5 +1,7 @@
 # tools
 
+[English](README.md)
+
 開発とリリースに使うスクリプトです。package には入りません。
 
 | ファイル | 内容 |

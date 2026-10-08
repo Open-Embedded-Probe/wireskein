@@ -37,7 +37,7 @@ A logic analyzer is essential in embedded work, but the usual tools are built ar
 
 - **Expectations are code.** `wireskein.runlog` uses only the standard library, so it fits into any test script.
 - **The test's structure is recorded.** Headings (`#` a test, `##` a step) build a tree of segments, and each capture belongs to one, so an NG names the step and the expectation.
-- **Pins and roles are given.** Checks do not depend on automatic detection, so results are stable. How to choose capture windows and tolerances: [docs/capture-test-guide.ja.md](docs/capture-test-guide.ja.md).
+- **Pins and roles are given.** Checks do not depend on automatic detection, so results are stable. How to choose capture windows and tolerances: [docs/capture-test-guide.md](docs/capture-test-guide.md).
 - **Straight into CI.** JUnit XML, and with [pytest-embedded-wireskein](https://github.com/Open-Embedded-Probe/pytest-embedded-wireskein) each pytest test is recorded and checked. The captures of an NG stay as files to open in the viewer later.
 
 ### Sources: existing formats, and OEP probes
@@ -88,7 +88,7 @@ OK  test_pwm/duty=0  level  c0003.wireskein
 2 ok, 1 ng, 0 unchecked, 0 measured (4 segments, 3 captures)
 ```
 
-The captures are stored as `.wireskein` files (below). The exit code is 1 when a check fails. A check that could not be made (its pins are not in the capture, ...) is **unchecked** (`--`) and **fails the run by default**, since it is usually a mistake in the test or the wiring (`--allow-unchecked` lets it pass). A check asked only to measure (`uart(baud=None)`, ...) is **measured** (`ME`) and does not fail. The run format and the result statuses: [docs/run-format.ja.md](docs/run-format.ja.md).
+The captures are stored as `.wireskein` files (below). The exit code is 1 when a check fails. A check that could not be made (its pins are not in the capture, ...) is **unchecked** (`--`) and **fails the run by default**, since it is usually a mistake in the test or the wiring (`--allow-unchecked` lets it pass). A check asked only to measure (`uart(baud=None)`, ...) is **measured** (`ME`) and does not fail. The run format and the result statuses: [docs/run-format.md](docs/run-format.md).
 
 ### Headings and segments
 
@@ -110,7 +110,7 @@ Headings split the run into a tree of segments. `#` is a test, `##` is a step, a
 
 The logic checks (`square`, `level`, `starts` / `ends`, `pulses`, `i2c`, `spi`, `uart`) also run on analog channels when given `threshold=`: one voltage, or `(low, high)` for hysteresis (a noisy slow edge then makes one edge). Edges are placed where the line between two samples crosses the threshold; the resolution is one ADC sample, added to the tolerances. Without `threshold=`, an analog channel in a logic check is unchecked, and the reason says so.
 
-Pins and roles are given, so these checks are verification, not discovery. `docs/capture-test-guide.ja.md` explains how to choose capture windows and tolerances, with examples from real runs.
+Pins and roles are given, so these checks are verification, not discovery. `docs/capture-test-guide.md` explains how to choose capture windows and tolerances, with examples from real runs.
 
 If a capture has the meta `time_base_slipped: true` (the probe knows some samples were taken late), the verdict does not change, but a failure's reason says so.
 
@@ -196,7 +196,7 @@ wf.write("m.wireskein", 20_000_000, [
 ], probe={"chip": "ESP32-P4", "calibration": {"scheme": "curve-fitting-v1", "raw": "..."}})
 ```
 
-`wireskein capture --source sigrok:<driver>` takes analog channels too (`--channels CLK=D0,VBUS=A0`). The analysis reads the logic channels; the checks read analog channels too (`voltage()`, and `threshold=` on the logic checks). The format is specified in `docs/wireskein-format.ja.md`.
+`wireskein capture --source sigrok:<driver>` takes analog channels too (`--channels CLK=D0,VBUS=A0`). The analysis reads the logic channels; the checks read analog channels too (`voltage()`, and `threshold=` on the logic checks). The format is specified in `docs/wireskein-format.md`.
 
 A probe's analog start time is an estimate (an ADC may start some hundred microseconds off and run a little fast or slow). When the same signal is on a logic channel and an analog channel (the same net wired to both, or a marker pulse), `wireskein align` finds the offset and the time scale from its edges and stores them as `attach/alignment.json`; the samples and stored times are not changed:
 
@@ -283,11 +283,11 @@ src/wireskein/          the package (runlog, verify, analyze, cli, _engine, decl
 tests/                  pytest
 research/               evaluation scripts for the protocol inference (not packaged)
 corpus/                 real and synthetic fixtures for research/
-docs/                   specifications and design decisions (Japanese)
+docs/                   specifications and design decisions (English and Japanese)
 tools/                  fetching the viewer, release scripts
 ```
 
-To run the research scripts: `uv sync`, then `cd research && uv run python evaluate.py --set heldout`. See `research/README.ja.md`.
+To run the research scripts: `uv sync`, then `cd research && uv run python evaluate.py --set heldout`. See `research/README.md`.
 
 ## Development
 

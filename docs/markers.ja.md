@@ -1,5 +1,7 @@
 # マーカー
 
+[English](markers.md)
+
 長い記録や試験の記録を、実験の文脈（どのテストの、どのステップか）で区間に分けるための目印です。区間に分ける処理は `src/wireskein/_engine/markers.py`、書式（方言）の定義は `src/wireskein/decl/markers/*.toml` にあります。
 
 ## 1. 見出し型（既定の方言 `heading`）

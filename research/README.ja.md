@@ -1,5 +1,7 @@
 # 推定の評価
 
+[English](README.md)
+
 `wireskein analyze` の推定（方式・線の役割・パラメータ）を、正解付きのコーパス（[corpus](../corpus/README.ja.md)）で測るスクリプトです。package には入りません。評価の考え方は [設計の決定](../docs/design.ja.md) §6 にあります。
 
 ## 実行

@@ -1,5 +1,7 @@
 # 記録の形式 `wireskein-run/3` と照合の結果
 
+[English](run-format.md)
+
 試験の記録と、その照合の結果の仕様です。この仕様に従えば、どの言語で書き読みしてもかまいません（Python では `wireskein.runlog` が書き、`wireskein verify` が読みます）。キャプチャのファイルそのものは [WireSkein のファイル形式](wireskein-format.ja.md)、区間の規則は [マーカー](markers.ja.md) にあります。互換のない変更では `format` を上げ、読み手は知らない値の記録を断ります（[設計の決定](design.ja.md) §1）。
 
 ## 1. 記録

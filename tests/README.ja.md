@@ -1,5 +1,7 @@
 # tests
 
+[English](README.md)
+
 pytest の試験です。`uv run pytest` で実行します。
 
 | ファイル | 内容 |

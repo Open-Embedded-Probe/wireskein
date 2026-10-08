@@ -1,5 +1,7 @@
 # WireSkein のファイル形式 `.wireskein`（`wireskein/1`）
 
+[English](wireskein-format.md)
+
 WireSkein のファイルの仕様です。この仕様に従えば、どの言語で読み書きしてもかまいません。
 
 この文書で「しなければならない」と書いたものは、読み手と書き手の両方が守る規則です。

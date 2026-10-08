@@ -1,5 +1,7 @@
 # 評価コーパス
 
+[English](README.md)
+
 推定の評価と回帰試験に使う、正解付きの記録です。評価のスクリプトは [research/](../research/README.ja.md) にあります。
 
 | 場所 | Git | 内容 |

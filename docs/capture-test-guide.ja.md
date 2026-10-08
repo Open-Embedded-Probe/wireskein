@@ -1,5 +1,7 @@
 # キャプチャで試験する
 
+[English](capture-test-guide.md)
+
 実機の試験に、ロジックアナライザのキャプチャでの照合を加えるためのガイドです。例は、CH32 向けの Arduino コア（[ArduinoCore-CH32RV](https://github.com/ch32-riscv-ug/ArduinoCore-CH32RV)）を、ESP32-P4 などの OEP のプローブで試す場合です。pytest からは [pytest-embedded-wireskein](https://github.com/Open-Embedded-Probe/pytest-embedded-wireskein) を使います。
 
 この用途は、未知の信号から方式を推定することではなく、**意図した信号どおりに出ているかを確かめる**ことです。そのため、次の 2 点を前提にします。
