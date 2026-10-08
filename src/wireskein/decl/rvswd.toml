@@ -12,8 +12,9 @@ data = "dio"
 [frame]
 reframe = "rvswd_stop"
 
+# 52: the same frame with its stop bit cut by the re-framing
 [[layout]]
-bits = 53
+bits = [52, 53]
 fields = [
   { name = "addr", at = 0, width = 7, role = "address" },
   { name = "op",   at = 7, width = 1, enum = { "0" = "R", "1" = "W" } },
@@ -34,11 +35,15 @@ fields = [
 ]
 checks = [ { kind = "parity", bit = 47, over = [15, 46] } ]
 
+# Burst: 14 header bits, then words of 38 bits (32 data + 6), one stop bit; at least 2 words.
+[[layout]]
+bits = "38n+15"
+min_bits = 91
+const = { op = "BURST" }
+fields = []
+repeat = { name = "data", at = 14, every = 38, width = 32, tail = 1 }
+
 # Long (attach) form: structure only, not decoded here (fields unknown in detail).
 [[layout]]
-bits = 84
-fields = []
-
-[[layout]]
-bits = 85
+bits = [84, 85, 86]
 fields = []

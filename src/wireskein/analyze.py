@@ -69,8 +69,7 @@ def as_logic(cap: Capture, thresholds: dict) -> Capture:
     return Capture(cap.rate, cap.n_samples, cap.channels + extra, cap.meta, cap.analog, cap.intervals)
 
 
-def analyze(cap: Capture, hints: dict | None = None, declarative: bool = False):
+def analyze(cap: Capture, hints: dict | None = None):
     """hints (all optional): {"protocols": [...], "pins": {pin: {"protocol", "role", "baud"}},
     "exclude_pins": [...], "devices": ["i2c/**", ...]} restrict what is tried."""
-    staged.use_declarative(declarative)
     return staged.analyze(cap, hints)

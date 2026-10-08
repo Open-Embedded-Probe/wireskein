@@ -48,6 +48,8 @@ def chain(starts: np.ndarray, busy_until: np.ndarray) -> np.ndarray:
 def in_windows(win: np.ndarray, x: np.ndarray):
     """For each x: inside some [start, end) window, and the window index."""
     k = np.searchsorted(win[:, 0], x, side="right") - 1
+    if len(win) == 0:                      # no window (a select line that never went active): nothing is inside
+        return np.zeros(len(x), dtype=bool), k
     return (k >= 0) & (x < win[np.maximum(k, 0), 1]), k
 
 

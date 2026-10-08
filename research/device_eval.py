@@ -9,7 +9,6 @@ from collections import Counter
 import corpus
 from wireskein._engine import devices, fixture, staged, synth
 
-staged.use_declarative(True)
 
 n = int(sys.argv[1]) if len(sys.argv) > 1 else 60
 packs, adb = devices.load_packs(), devices.address_table()

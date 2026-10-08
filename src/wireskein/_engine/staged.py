@@ -32,7 +32,8 @@ from .model import Capture
 from .scoring import DefaultScorer
 from .stack import Node, Stream, explanations
 from .taxonomy import classify
-from .rvswd import RvswdPlugin, SwioPlugin, dm_node
+from .declarative import load_all
+from .rvswd import SwioPlugin, dm_node
 
 
 CLAIM_COST = 0.3  # a hypothesis must beat this per channel to be worth claiming
@@ -96,93 +97,6 @@ class Ctx:
 
 
 # ---------------- sync plugins ----------------
-
-class I2cPlugin:
-    name = "i2c"
-    consumes = ("frames.startstop",)
-    open_tail = True    # takes the frame a capture ended inside (others get Frames.closed())
-
-    def run(self, c: Ctx, fr: typed.Frames, g):
-        sb = fr.source
-        # I2C samples SDA on the SCL rising edge by definition
-        if len(sb.data) != 1 or len(fr.bounds) == 0 or sb.sample_edge != "rise":
-            return []
-        # a frame the capture ended inside (no STOP) is reported but is no
-        # evidence for I2C: it scores 0 alone and does not count with others
-        closed = len(fr.bounds) - int(fr.open_tail)
-        lens = np.diff(fr.bounds[:closed], axis=1).ravel()
-        lens = lens[lens > 0]
-        w = typed.words(fr, 9)
-        txs = typed.i2c_from_words(fr, w)
-        if len(lens) == 0 and not txs:
-            return []
-        mod9 = float(np.mean(np.isin(lens % 9, (0, 1)))) if len(lens) else 0.0
-        acks = (w.values[w.frame_of < closed] & 1) == 0
-        whole = [t for t in txs if t.get("complete", True)]
-        addr_ack = float(np.mean([t["addr_ack"] for t in whole])) if whole else 0.0
-        clk = c.sv.clocks[sb.clock].clock_score
-        pair = c.sv.pairs[(sb.clock, sb.data[0])].data_score
-        nbytes = sum(1 + len(t["bytes"]) for t in whole)
-        m = {"mod9": mod9, "ack_rate": float(acks.mean()) if len(acks) else 0.0, "addr_ack": addr_ack,
-             "transactions": len(whole), "bytes": nbytes, "clk": clk, "pair": pair, "edge": sb.sample_edge}
-        # NACKs are valid I2C (polling a busy device), so the ACK rate only
-        # weighs lightly; it matters for choosing between sibling sampling edges
-        score = mod9 * (0.8 + 0.2 * m["ack_rate"]) * q(nbytes) * (0.5 + 0.5 * clk) * (0.5 + 0.5 * pair)
-        return [Node("i2c", {"sample_edge": sb.sample_edge}, {"scl": sb.clock, "sda": sb.data[0]},
-                     Stream("i2c.transactions", txs), m, layer_score=score, total=score)]
-
-
-class SpiPlugin:
-    name = "spi"
-    consumes = ("frames.select", "frames.gap")
-
-    def run(self, c: Ctx, fr: typed.Frames, g):
-        sb = fr.source
-        if len(fr.bounds) == 0:
-            return []
-        lens = np.diff(fr.bounds, axis=1).ravel()
-        lens = lens[lens > 0]
-        if len(lens) == 0:
-            return []
-        mod8 = float(np.mean(lens % 8 == 0))
-        k = int(np.sum(lens % 8 == 0))
-        lines, line_scores, allv = {}, [], []
-        for row, d in enumerate(sb.data):
-            w = typed.words(fr, 8, row)
-            per = [w.values[w.frame_of == i] for i in range(len(fr.bounds))]
-            lines[d] = per
-            allv.append(w.values)
-            line_scores.append(c.sv.pairs[(sb.clock, d)].data_score * degenerate(w.values))
-        nbytes = int(sum(len(v) for v in allv))
-        clk = c.sv.clocks[sb.clock].clock_score
-        cs = 1.0
-        if sb.select:
-            # measure the select evidence on the view this stream came from (a
-            # glitch-filtered sibling), not on the raw capture the survey saw
-            from .survey import clock_info, pair_relation
-            view = getattr(sb, "view", c.cap)
-            if view is c.cap:
-                cs = c.sv.pairs[(sb.clock, sb.select)].boundary
-            else:
-                ci = clock_info(view, c.sv.features[sb.clock])  # bursts of the filtered clock
-                cs = pair_relation(view, ci, sb.select).boundary if ci else 0.0
-        clk_lv = c.sv.features[sb.clock].idle_level or 0
-        want = 1 if sb.sample_edge == "rise" else 0
-        mode = clk_lv * 2 + (0 if (want == 1) != bool(clk_lv) else 1)
-        m = {"mod8": mod8, "frames": len(lens), "bytes": nbytes, "clk": clk, "cs": cs,
-             "line_score": float(np.mean(line_scores)), "mode": mode, "delimiter": fr.delimiter}
-        score = mod8 * (1 - 0.125 ** k) * q(nbytes) * (0.5 + 0.5 * clk) * m["line_score"] * cs
-        if fr.delimiter == "gap" and len(lens) <= 1:
-            score *= 0.5
-        roles = {"clk": sb.clock, **({"cs": sb.select} if sb.select else {})}
-        for i, d in enumerate(sb.data):
-            roles[f"data{i}"] = d
-        first = allv[0] if allv else np.zeros(0, np.int64)
-        items = {"lines": lines, "value": first, "start": np.zeros(len(first), np.int64)}
-        params = {"sample_edge": sb.sample_edge, "bit_order": "msb", "cs_active": None, "delimiter": fr.delimiter}
-        return [Node("spi", params, roles, Stream("bytes", items, meta={"framed": True}), m,
-                     layer_score=score, total=score)]
-
 
 class SyncUnknownPlugin:
     """Clock + data with a consistent frame length that no known plugin claims.
@@ -317,9 +231,10 @@ class DmxPlugin:
         return out[:1]
 
 
-PLUGINS = [I2cPlugin(), SpiPlugin(), SyncUnknownPlugin(), RvswdPlugin(), UartPlugin(), LinPlugin(), DmxPlugin(),
-           SwioPlugin()]
-_BASE_PLUGINS = list(PLUGINS)
+# the plugins written in Python (state across frames, search, upper layers), then the frame-local protocols
+# declared in decl/*.toml (docs/design.ja.md §3.2)
+PLUGINS = ([SyncUnknownPlugin(), UartPlugin(), LinPlugin(), DmxPlugin(), SwioPlugin()]
+           + load_all(["i2c", "spi", "rvswd"]) + load_all(["swd", "can"]))
 UPPER = [Lines(), Nmea(), ModbusRtu(), MarkerGrammar()]
 
 
@@ -490,17 +405,6 @@ def _device_packs(select: tuple[str, ...]):
     """hints["devices"]: pack path patterns under decl/devices ("i2c/**", "!i2c/qst/**")."""
     from . import devices as dev
     return dev.load_packs(list(select)), dev.address_table()
-
-
-def use_declarative(on: bool = True) -> None:
-    """Swap the hand-written I2C / SPI / RVSWD plugins for the declarative ones (decl/*.toml)."""
-    global PLUGINS
-    from .declarative import load_all
-    base = [p for p in _BASE_PLUGINS if not (on and p.name in ("i2c", "spi", "rvswd"))]
-    PLUGINS = base + (load_all(["i2c", "spi", "rvswd"]) if on else []) + load_all(DECLARED_ONLY)
-
-
-DECLARED_ONLY = ["swd", "can"]   # no hand-written counterpart; always loaded from decl/
 
 
 def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
@@ -677,5 +581,3 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
     res = StagedResult(roots, exps, claims, t, tx.survey.features, tx, runs)
     res.relations = rels
     return res
-
-use_declarative(False)   # installs the declared-only plugins (swd, can) by default

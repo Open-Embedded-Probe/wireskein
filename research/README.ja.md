@@ -15,7 +15,6 @@ uv run python evaluate.py --synth 200 --tag NAME                   # 実記録�
 
 | 引数 | 意味 |
 | --- | --- |
-| `--engine declarative` | I²C・SPI・RVSWD を TOML の定義で読む（既定の `staged` は `wireskein analyze` と同じ） |
 | `--set NAME` | `corpus/fixtures/synth/NAME` の固定したセットを使う |
 | `--synth N`、`--start S`、`--profile P`、`--stress S` | シード S から N 件を生成して使う |
 | `--no-real`、`--large` | 実記録を使わない / 100 万エッジ級の実記録も入れる |

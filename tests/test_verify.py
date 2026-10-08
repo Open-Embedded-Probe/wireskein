@@ -62,3 +62,11 @@ def test_other_format_is_refused(tmp_path):
     (tmp_path / "run.json").write_text('{"format": "wireskein-run/999"}')
     with pytest.raises(ValueError, match="format"):
         verify(tmp_path)
+
+
+def test_no_select_window_is_nothing_inside():
+    """A select line with no active window leaves every sample outside (it used to index an empty array)."""
+    import numpy as np
+    from wireskein._engine import kernels
+    inside, k = kernels.in_windows(np.zeros((0, 2), np.int64), np.array([1, 5, 9]))
+    assert not inside.any() and list(k) == [-1, -1, -1]

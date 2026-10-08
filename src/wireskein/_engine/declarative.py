@@ -63,7 +63,7 @@ def _length_ok(rule: str, n: int) -> bool:
         m = re.fullmatch(r"(\d+)n(?:\+(\d+))?", part)
         if m:
             k, r = int(m.group(1)), int(m.group(2) or 0)
-            if n > r and (n - r) % k == 0:
+            if n > 0 and n >= r and (n - r) % k == 0:
                 return True
         elif part.isdigit() and n == int(part):
             return True
@@ -82,6 +82,14 @@ def _chance(rule: str) -> float:
 
 def _parity(bits: np.ndarray) -> int:
     return int(bits.sum()) & 1
+
+
+def _int_bits(bits) -> int:
+    """Bits MSB first -> int."""
+    v = 0
+    for x in bits:
+        v = (v << 1) | int(x)
+    return v
 
 
 REFRAMERS = {}
@@ -280,10 +288,14 @@ class DeclarativePlugin:
         self.consumes = tuple(p["input"]) if isinstance(p["input"], list) else (p["input"],)
         self.edge = p.get("sample_edge")
         self.data_pins = p.get("data_pins")
+        # open_tail: also take the frame a capture ended inside (no STOP); it is reported, never counted as evidence
+        self.open_tail = bool(p.get("open_tail", False))
 
     @classmethod
     def load(cls, path: Path) -> "DeclarativePlugin":
-        return cls(tomllib.loads(path.read_text()), str(path))
+        # the definition's name under decl/ (provenance in the output; never a local absolute path)
+        name = path.relative_to(HERE).as_posix() if path.is_relative_to(HERE) else path.name
+        return cls(tomllib.loads(path.read_text()), name)
 
     # ---------------- word-based ----------------
     def _words(self, fr, row):
@@ -294,13 +306,20 @@ class DeclarativePlugin:
     def _run_words(self, c, fr, g):
         sb = fr.source
         sp = self.spec
+        tail = bool(getattr(fr, "open_tail", False))
+        fr = fr.closed()                     # the evidence: closed frames only (the adapter sees the open one)
         lens = np.diff(fr.bounds, axis=1).ravel()
         keep = lens > 0
-        if not keep.any():
+        if not keep.any() and not tail:
             return []
         rule = sp["frame"]["length"]
-        fit = float(np.mean([_length_ok(rule, int(n)) for n in lens[keep]]))
-        fit_excess = max(0.0, (fit - _chance(rule)) / (1 - _chance(rule))) if _chance(rule) < 1 else fit
+        fits = np.array([_length_ok(rule, int(n)) for n in lens[keep]], dtype=bool)
+        fit = float(fits.mean()) if len(fits) else 0.0
+        fit_evidence = fit
+        if sp.get("score", {}).get("count_frames"):
+            # each fitting frame is evidence of its own: one frame fits a length rule by chance (1/8 for "8n"), k frames
+            # all by chance only (1/8)^k - so one CS window holding a whole other bus does not tie with the real framing
+            fit_evidence *= 1 - _chance(rule) ** int(fits.sum())
         checks = [f for f in sp["word"].get("fields", []) if "expect" in f]
         rows = range(len(sb.data)) if sp["frame"].get("per_data_pin") else [0]
         records, n_words, check_hits, check_total = [], 0, 0, 0
@@ -346,7 +365,7 @@ class DeclarativePlugin:
         clk = c.sv.clocks[sb.clock].clock_score
         # a bus claim is only as strong as its weakest assigned data pin
         pair = float(np.min([c.sv.pairs[(sb.clock, d)].data_score for d in sb.data]))
-        score = fit_excess * (1 - cw + cw * check_rate) * q(n_words, sc.get("evidence_scale", 8)) \
+        score = fit_evidence * (1 - cw + cw * check_rate) * q(n_words, sc.get("evidence_scale", 8)) \
             * (0.5 + 0.5 * clk) * (0.5 + 0.5 * pair)
         # evidence terms the core provides by name (not protocol code)
         terms = sc.get("terms", [])
@@ -380,32 +399,54 @@ class DeclarativePlugin:
                      Stream("records", records), m, layer_score=score, total=score)]
 
     # ---------------- layout-based ----------------
+    def _layouts(self):
+        """Exact lengths (bits = 53 or [52, 53]) and length rules (bits = "38n+15", with min_bits)."""
+        exact, rules = {}, []
+        for L in self.spec["layout"]:
+            b = L["bits"]
+            if isinstance(b, str):
+                rules.append(L)
+            else:
+                for n in (b if isinstance(b, list) else [b]):
+                    exact[int(n)] = L
+        return exact, rules
+
     def _run_layout(self, c, fr, g):
         sb = fr.source
         sp = self.spec
-        layouts = {int(L["bits"]): L for L in sp["layout"]}
+        exact, rules = self._layouts()
+
+        def layout(n):
+            return exact.get(n) or next((L for L in rules if n >= int(L.get("min_bits", 0)) and _length_ok(L["bits"], n)),
+                                        None)
+
         reframe = sp.get("frame", {}).get("reframe")
         views = REFRAMERS[reframe](fr) if reframe else [fr.bounds.tolist()]
         best = None
         bits = sb.bits[0]
         for frames in views:
-            recs, checked, passed, matched = [], 0, 0, 0
+            recs, checked, passed, matched, checked_frames, explained = [], 0, 0, 0, 0, 0
             for a, b in frames:
-                L = layouts.get(b - a)
+                L = layout(b - a)
                 if L is None:
                     continue
                 matched += 1
+                explained += b - a
                 f = bits[a:b].astype(np.int64)
-                rec = {"start": int(sb.t[a])}
+                rec = {"start": int(sb.t[a]), **L.get("const", {})}
                 for fld in L["fields"]:
-                    lo, hi = fld["at"], fld["at"] + fld["width"]
-                    v = 0
-                    for x in f[lo:hi]:
-                        v = (v << 1) | int(x)
+                    v = _int_bits(f[fld["at"]:fld["at"] + fld["width"]])
                     if "enum" in fld:
                         v = fld["enum"].get(str(v), v)
                     rec[fld["name"]] = v
+                if "repeat" in L:            # words of one width at a fixed pitch (a burst)
+                    r = L["repeat"]
+                    k = (b - a - int(r["at"]) - int(r.get("tail", 0))) // int(r["every"])
+                    rec[r["name"]] = [_int_bits(f[r["at"] + r["every"] * i:r["at"] + r["every"] * i + r["width"]])
+                                      for i in range(k)]
                 ok = True
+                if L.get("checks"):
+                    checked_frames += 1
                 for chk in L.get("checks", []):
                     if chk["kind"] == "parity":
                         lo, hi = chk["over"]
@@ -417,16 +458,18 @@ class DeclarativePlugin:
                 recs.append(rec)
             key = passed
             if best is None or key > best[0]:
-                best = (key, recs, checked, passed, matched, len(frames))
-        _, recs, checked, passed, matched, total = best
+                best = (key, recs, checked, passed, matched, len(frames), checked_frames, explained)
+        _, recs, checked, passed, matched, total, checked_frames, explained = best
         if matched < 2:
             return []
         parity = passed / checked if checked else 0.0
         total_bits = int(np.diff(fr.bounds, axis=1).sum()) or 1
-        cover = min(1.0, matched * min(layouts) / total_bits)
-        score = parity ** 2 * (0.5 + 0.5 * cover) * (1 - 0.5 ** (matched / 2))
+        cover = min(1.0, explained / total_bits)
+        # the checked frames are the evidence; frames of a known structure only add coverage
+        score = parity ** 2 * (0.5 + 0.5 * cover) * (1 - 0.5 ** (checked_frames / 2))
         roles = {sp["roles"]["clock"]: sb.clock, sp["roles"]["data"]: sb.data[0]}
-        m = {"frames": total, "matched": matched, "parity_ok": parity, "bit_coverage": cover}
+        m = {"frames": total, "matched": matched, "checked_frames": checked_frames, "parity_ok": parity,
+             "bit_coverage": cover}
         return [Node(self.name, {"sample_edge": sb.sample_edge, "declared": self.path}, roles,
                      Stream("records", recs), m, layer_score=score, total=score)]
 
@@ -545,10 +588,8 @@ def load_all(names: list[str] | None = None) -> list[DeclarativePlugin]:
 # ---- output adapters: shape the generic records like the hand-written plugins' outputs ----
 
 def _adapt_i2c(c, fr, n):
-    for r in n.output.items:
-        ack = r.pop("ack", [])
-        r["addr_ack"], r["acks"] = (bool(ack[0]) if ack else False), [bool(x) for x in ack[1:]]
-    n.output = Stream("i2c.transactions", n.output.items)
+    # the transactions as the checks read them, from all frames (an open last one: complete=False, pending_bits)
+    n.output = Stream("i2c.transactions", typed.i2c_from_words(fr, typed.words(fr, 9)))
     return n
 
 
@@ -572,8 +613,8 @@ def _adapt_spi(c, fr, n):
 
 
 def _adapt_rvswd(c, fr, n):
-    tx = [{"t": r["start"], "op": r.get("op", "R"), "addr": r["addr"], "data": r["data"], "status": r.get("status", 0),
-           "ok": r["ok"]} for r in n.output.items if "addr" in r]  # structure-only layouts carry no fields
+    tx = [{"t": r["start"], "op": r.get("op", "R"), "addr": r.get("addr"), "data": r["data"], "status": r.get("status", 0),
+           "ok": r["ok"]} for r in n.output.items if "data" in r]  # structure-only layouts carry no fields
     n.output = Stream("dmi", tx)
     return n
 

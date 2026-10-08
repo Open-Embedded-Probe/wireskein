@@ -5,6 +5,7 @@ name = "i2c"
 input = "frames.startstop"
 sample_edge = "rise"
 data_pins = 1
+open_tail = true      # a capture ending before STOP still reports where the transfer stopped
 
 [roles]
 clock = "scl"

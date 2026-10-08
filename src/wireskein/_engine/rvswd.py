@@ -1,4 +1,8 @@
-"""WCH RVSWD on clocked frames, and the RISC-V Debug Module on DMI transactions.
+"""WCH RVSWD and SWIO, and the RISC-V Debug Module on their DMI transactions.
+
+RVSWD frames are declared in decl/rvswd.toml; this module gives the re-framing
+at stop intervals the declaration names (frame.reframe = "rvswd_stop"), the
+SWIO plugin (one wire, pulse widths) and the Debug Module above both.
 
 Frame layout (53 clocks, from wch-protocols tools/dmi_decode.py): addr7, R/W
 (1 = write), header parity, park, ctl4, data32, data parity, park, status2,
@@ -64,84 +68,6 @@ def reframe(fr) -> list[tuple[int, int]]:
             if y > x:
                 out.append((x, y))
     return out
-
-
-def dmi_from_frames(fr) -> tuple[list[dict], dict]:
-    """Both framings are tried (siblings inside the plugin); the one with more
-    parity-checked short frames wins."""
-    best = None
-    for frames in (reframe(fr), reframe_rolling(fr)):
-        got = _dmi(fr, frames)
-        key = got[1]["short"] * got[1]["parity_ok"]
-        if best is None or key > best[0]:
-            best = (key, got)
-    return best[1]
-
-
-def _dmi(fr, frames) -> tuple[list[dict], dict]:
-    bits = fr.source.bits[0]
-    t = fr.source.t
-    out, lens = [], []
-    ok_h = ok_d = n53 = n54 = bursts = n_long = 0
-    for a, b in frames:
-        n = b - a
-        lens.append(n)
-        if n in (84, 85, 86):   # long (attach) form: structure known, not decoded here
-            n_long += 1
-        f = bits[a:b]
-        if n > 15 and (n - 15) % 38 == 0 and n >= 53 + 38:
-            # burst: 14 header bits, then words of 38 bits (32 data + 6)
-            bursts += 1
-            k = (n - 15) // 38
-            words = [_int(f[14 + 38 * i:14 + 38 * i + 32]) for i in range(k)]
-            out.append({"t": int(t[a]), "op": "BURST", "addr": None, "data": words, "status": 0, "ok": True})
-            continue
-        if n in (52, 53):
-            n53 += 1
-            addr, rw, data = _int(f[:7]), int(f[7]), _int(f[14:46])
-            ph = f[8] == (int(f[:8].sum()) & 1)
-            pd = f[46] == (int(f[14:46].sum()) & 1)
-            ok_h += ph
-            ok_d += pd
-            out.append({"t": int(t[a]), "op": "W" if rw else "R", "addr": addr, "data": data,
-                        "status": _int(f[48:50]), "ok": bool(ph and pd)})
-        elif n == 54:
-            n54 += 1
-            addr, data = _int(f[1:8]), _int(f[15:47])
-            pd = f[47] == (int(f[15:47].sum()) & 1)
-            ok_d += pd
-            ok_h += 1
-            out.append({"t": int(t[a]), "op": "R", "addr": addr, "data": data, "status": _int(f[49:51]), "ok": bool(pd)})
-    lens = np.asarray(lens)
-    known = int(np.isin(lens, (52, 53, 54, 585, 85, 86)).sum()) if len(lens) else 0
-    m = {"frames": int(len(lens)), "known_len": known / max(1, len(lens)), "short": n53 + n54,
-         "parity_ok": (ok_h + ok_d) / max(1, 2 * (n53 + n54)), "bursts": bursts, "long": n_long}
-    return out, m
-
-
-class RvswdPlugin:
-    name = "rvswd"
-    consumes = ("frames.gap",)
-
-    def run(self, c, fr, g):
-        sb = fr.source
-        if len(sb.data) != 1 or len(fr.bounds) < 4:
-            return []
-        tx, m = dmi_from_frames(fr)
-        if m["short"] < 2:
-            return []
-        known_addr = float(np.mean([x["addr"] in DM_NAMES for x in tx if x["op"] != "BURST"] or [0]))
-        m["dm_addr"] = known_addr
-        m["glitch_filter"] = fr.source.__dict__.get("deglitched", 0)
-        # Parity on both halves of every short frame is strong evidence; count
-        # it by the bits it explains, so fragments elsewhere (glitchy segments)
-        # do not dilute it.
-        total_bits = int(np.diff(fr.bounds, axis=1).sum()) if len(fr.bounds) else 1
-        explained = 53 * m["short"] + 585 * m["bursts"] + 85 * m["long"]
-        m["bit_coverage"] = min(1.0, explained / max(1, total_bits))
-        score = m["parity_ok"] ** 2 * (0.5 + 0.5 * m["bit_coverage"]) * (1 - 0.5 ** (m["short"] / 2))
-        return [Node("rvswd", {"sample_edge": sb.sample_edge, "deglitch": m["glitch_filter"]},
-                     {"clk": sb.clock, "dio": sb.data[0]}, Stream("dmi", tx), m, layer_score=score, total=score)]
 
 
 def memory_log(tx: list[dict]) -> list[list]:

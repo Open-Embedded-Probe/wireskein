@@ -315,7 +315,6 @@ def convert(args) -> None:
 def segments(args) -> None:
     hints = json.loads(Path(args.hint[1:]).read_text() if args.hint and args.hint.startswith("@") else args.hint) if args.hint else None
     cap = _load_for_decoding(args.capture, args)
-    staged.use_declarative(args.declarative)
     res = staged.analyze(cap, hints)
     found = markers.find(res, cap, hint=json.loads(args.markers) if args.markers else None)
     if found is None:
@@ -355,7 +354,6 @@ def main() -> None:
     a.add_argument("--alternatives", action="store_true")
     a.add_argument("--depth", choices=["transport", "frames", "protocol", "device"], default="protocol",
                    help="how far up the interpretation goes in final mode")
-    a.add_argument("--declarative", action="store_true", help="use the TOML-declared I2C/SPI/RVSWD plugins")
     a.add_argument("--devices", nargs="*", default=None, metavar="PATTERN",
                    help='device packs to use, paths under decl/devices: "i2c/**" "i2c/sensirion/*" "!spi/**"')
     a.add_argument("--out", type=Path, default=None)
@@ -377,7 +375,6 @@ def main() -> None:
     sg.add_argument("--markers", default=None, metavar="JSON")
     sg.add_argument("--results", action="store_true", help="include the decoded items of each segment")
     sg.add_argument("--events", action="store_true", help="include text lines (commands, responses, child markers) as events")
-    sg.add_argument("--declarative", action="store_true")
     sg.add_argument("--out", type=Path, default=None)
     vf = sub.add_parser("verify", help="check a recorded run (wireskein.runlog) against its expectations")
     vf.add_argument("run", type=Path, help="run directory with run.json")
@@ -470,7 +467,6 @@ def main() -> None:
     except (ValueError, FileNotFoundError, zipfile.BadZipFile) as e:
         sys.exit(f"wireskein analyze: {e}")
     t0 = time.perf_counter()
-    staged.use_declarative(args.declarative)
     res = staged.analyze(cap, hints)
     mode = "select" if args.select else args.mode
     window = (int(args.window[0] * cap.rate), int(args.window[1] * cap.rate)) if args.window else None

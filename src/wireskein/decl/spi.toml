@@ -21,4 +21,7 @@ rest = { name = "bytes", from = "byte", role = "data" }
 [score]
 check_weight = 0.0
 evidence_scale = 8
+# a frame fits "8n" by chance 1 in 8: count fitting frames as evidence, so a CS window that holds a whole other bus
+# (one frame) does not tie with the real framing. I2C does not need it: START/STOP delimit its frames.
+count_frames = true
 terms = ["select_boundary", "degenerate", "single_frame_penalty"]   # provided by the core

@@ -128,13 +128,12 @@ def bus_channels(bus):
 
 
 def evaluate_case(args):
-    kind, ref, engine = args
+    kind, ref = args
     if kind in ("real", "fixture"):
         from wireskein._engine import fixture
         cap, truth = fixture.load_capture(ref), fixture.load_truth(ref)
     else:
         cap, truth = synth.scenario(*ref)
-    staged.use_declarative(engine == "declarative")
     res = staged.analyze(cap)
     seconds = sum(res.seconds.values())
     rec = {"id": truth["id"], "rate": cap.rate, "seconds": seconds, "runs": res.runs,
@@ -242,8 +241,6 @@ def main() -> None:
     ap.add_argument("--no-real", action="store_true")
     ap.add_argument("--large", action="store_true", help="include large real captures")
     ap.add_argument("--tag", default="run")
-    ap.add_argument("--engine", default="staged", choices=["staged", "declarative"],
-                    help="declarative: I2C, SPI and RVSWD from their TOML definitions")
     ap.add_argument("--set", default=None, help="frozen fixture set under corpus/fixtures/synth (replaces --synth)")
     ap.add_argument("-j", type=int, default=max(1, mp.cpu_count() - 2))
     args = ap.parse_args()
@@ -251,12 +248,12 @@ def main() -> None:
     if not args.no_real:
         for d in sorted(corpus.REAL.iterdir()):
             if args.large or "flash" not in d.name or d.name.startswith("i2cdb"):
-                jobs.append(("real", d, args.engine))
+                jobs.append(("real", d))
     if args.set:
         base = corpus.ROOT / "corpus/fixtures/synth" / args.set
-        jobs += [("fixture", d, args.engine) for d in sorted(base.iterdir())]
+        jobs += [("fixture", d) for d in sorted(base.iterdir())]
     else:
-        jobs += [("synth", (s, args.profile, args.stress), args.engine)
+        jobs += [("synth", (s, args.profile, args.stress))
                  for s in range(args.start, args.start + args.synth)]
     t0 = time.time()
     records = []
