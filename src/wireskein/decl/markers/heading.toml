@@ -1,4 +1,4 @@
-# Heading markers (docs/workbench-model.ja.md): the number of leading '#' is the
+# Heading markers (docs/markers.ja.md): the number of leading '#' is the
 # level. A heading closes open sections of its level or deeper; a heading with no
 # name ("##") only closes, without opening a new section. The target firmware
 # treats lines starting with '#' as comments, so markers can share the command

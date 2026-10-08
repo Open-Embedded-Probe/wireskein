@@ -1,0 +1,637 @@
+[
+  {
+    "source": "/home/mt/dev/I2CDeviceDB/captures/raw/qmp6988__qmp6988__characterize__100k__nominal__0283eb57c7a7c010.sr",
+    "sample_rate_hz": 8000000,
+    "active_channels": 3,
+    "static_channels": 5,
+    "highest_edge_channel": "UART_TX",
+    "channels": [
+      {
+        "bit": 0,
+        "label": "UART_TX",
+        "edges": 3854,
+        "high_fraction": 0.976721,
+        "activity_span_ms": 207.897,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": [
+          139.0,
+          208.0,
+          347.0
+        ]
+      },
+      {
+        "bit": 1,
+        "label": "SCL",
+        "edges": 3660,
+        "high_fraction": 0.992253,
+        "activity_span_ms": 198.556,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": [
+          80.0,
+          80.0,
+          80.0
+        ]
+      },
+      {
+        "bit": 2,
+        "label": "SDA",
+        "edges": 1000,
+        "high_fraction": 0.991074,
+        "activity_span_ms": 198.568,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": [
+          151.0,
+          240.0,
+          587.0000000000009
+        ]
+      },
+      {
+        "bit": 3,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 1.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      },
+      {
+        "bit": 4,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 1.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      },
+      {
+        "bit": 5,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 1.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      },
+      {
+        "bit": 6,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 1.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      },
+      {
+        "bit": 7,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 1.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      }
+    ]
+  },
+  {
+    "source": "/home/mt/dev/I2CDeviceDB/captures/raw/qmp6988__qmp6988__characterize__100k__nominal__a6ec5b99888f5897.sr",
+    "sample_rate_hz": 8000000,
+    "active_channels": 3,
+    "static_channels": 5,
+    "highest_edge_channel": "UART_TX",
+    "channels": [
+      {
+        "bit": 0,
+        "label": "UART_TX",
+        "edges": 3854,
+        "high_fraction": 0.977103,
+        "activity_span_ms": 207.961,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": [
+          139.0,
+          208.0,
+          347.0
+        ]
+      },
+      {
+        "bit": 1,
+        "label": "SCL",
+        "edges": 3660,
+        "high_fraction": 0.992369,
+        "activity_span_ms": 198.62,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": [
+          80.0,
+          80.0,
+          80.0
+        ]
+      },
+      {
+        "bit": 2,
+        "label": "SDA",
+        "edges": 988,
+        "high_fraction": 0.99105,
+        "activity_span_ms": 198.633,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": [
+          149.0,
+          240.0,
+          631.0
+        ]
+      },
+      {
+        "bit": 3,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 1.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      },
+      {
+        "bit": 4,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 1.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      },
+      {
+        "bit": 5,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 1.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      },
+      {
+        "bit": 6,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 1.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      },
+      {
+        "bit": 7,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 1.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      }
+    ]
+  },
+  {
+    "source": "/home/mt/dev/I2CDeviceDB/captures/raw/sht30__sht30__characterize__100k__nominal__1b9dbfe9f8c22329.sr",
+    "sample_rate_hz": 8000000,
+    "active_channels": 3,
+    "static_channels": 5,
+    "highest_edge_channel": "UART_TX",
+    "channels": [
+      {
+        "bit": 0,
+        "label": "UART_TX",
+        "edges": 7396,
+        "high_fraction": 0.957598,
+        "activity_span_ms": 250.315,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": [
+          139.0,
+          208.0,
+          347.0
+        ]
+      },
+      {
+        "bit": 1,
+        "label": "SCL",
+        "edges": 2108,
+        "high_fraction": 0.982996,
+        "activity_span_ms": 219.739,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": [
+          80.0,
+          80.0,
+          80.0
+        ]
+      },
+      {
+        "bit": 2,
+        "label": "SDA",
+        "edges": 744,
+        "high_fraction": 0.983988,
+        "activity_span_ms": 219.751,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": [
+          160.0,
+          249.0,
+          391.0
+        ]
+      },
+      {
+        "bit": 3,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 1.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      },
+      {
+        "bit": 4,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 1.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      },
+      {
+        "bit": 5,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 1.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      },
+      {
+        "bit": 6,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 1.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      },
+      {
+        "bit": 7,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 1.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      }
+    ]
+  },
+  {
+    "source": "/home/mt/dev/I2CDeviceDB/captures/raw/sht30__sht30__characterize__100k__nominal__29d9633ff0bd82a0.sr",
+    "sample_rate_hz": 8000000,
+    "active_channels": 3,
+    "static_channels": 5,
+    "highest_edge_channel": "UART_TX",
+    "channels": [
+      {
+        "bit": 0,
+        "label": "UART_TX",
+        "edges": 7396,
+        "high_fraction": 0.956899,
+        "activity_span_ms": 250.69,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": [
+          139.0,
+          208.0,
+          347.0
+        ]
+      },
+      {
+        "bit": 1,
+        "label": "SCL",
+        "edges": 2168,
+        "high_fraction": 0.983235,
+        "activity_span_ms": 220.113,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": [
+          80.0,
+          80.0,
+          80.0
+        ]
+      },
+      {
+        "bit": 2,
+        "label": "SDA",
+        "edges": 780,
+        "high_fraction": 0.98351,
+        "activity_span_ms": 220.125,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": [
+          160.0,
+          248.0,
+          338.0
+        ]
+      },
+      {
+        "bit": 3,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 1.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      },
+      {
+        "bit": 4,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 1.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      },
+      {
+        "bit": 5,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 1.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      },
+      {
+        "bit": 6,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 1.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      },
+      {
+        "bit": 7,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 1.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      }
+    ]
+  },
+  {
+    "source": "/home/mt/dev_wch/wch-protocols/captures/fixtures/wire-linke-p4-2026-09-25/l103/target_info.sr",
+    "sample_rate_hz": 50000000,
+    "active_channels": 2,
+    "static_channels": 6,
+    "highest_edge_channel": "SWCLK",
+    "channels": [
+      {
+        "bit": 0,
+        "label": "SWCLK",
+        "edges": 49252,
+        "high_fraction": 0.137536,
+        "activity_span_ms": 69.132,
+        "runs_up_to_3_samples": 403,
+        "local_rising_gap_samples_p10_p50_p90": [
+          105.0,
+          106.0,
+          156.0
+        ]
+      },
+      {
+        "bit": 1,
+        "label": "SWDIO",
+        "edges": 9146,
+        "high_fraction": 0.811535,
+        "activity_span_ms": 64.724,
+        "runs_up_to_3_samples": 4227,
+        "local_rising_gap_samples_p10_p50_p90": [
+          3.0,
+          39.0,
+          939.0
+        ]
+      },
+      {
+        "bit": 2,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 0.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      },
+      {
+        "bit": 3,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 0.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      },
+      {
+        "bit": 4,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 0.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      },
+      {
+        "bit": 5,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 0.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      },
+      {
+        "bit": 6,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 0.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      },
+      {
+        "bit": 7,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 0.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      }
+    ]
+  },
+  {
+    "source": "/home/mt/dev_wch/wch-protocols/captures/fixtures/wire-linke-p4-2026-09-25/v203-100mhz/target_info.sr",
+    "sample_rate_hz": 100000000,
+    "active_channels": 2,
+    "static_channels": 6,
+    "highest_edge_channel": "SWCLK",
+    "channels": [
+      {
+        "bit": 0,
+        "label": "SWCLK",
+        "edges": 58020,
+        "high_fraction": 0.133797,
+        "activity_span_ms": 194.231,
+        "runs_up_to_3_samples": 5771,
+        "local_rising_gap_samples_p10_p50_p90": [
+          16.0,
+          212.0,
+          314.0
+        ]
+      },
+      {
+        "bit": 1,
+        "label": "SWDIO",
+        "edges": 6274,
+        "high_fraction": 0.818535,
+        "activity_span_ms": 67.665,
+        "runs_up_to_3_samples": 842,
+        "local_rising_gap_samples_p10_p50_p90": [
+          7.0,
+          720.0,
+          2745.0
+        ]
+      },
+      {
+        "bit": 2,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 0.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      },
+      {
+        "bit": 3,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 0.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      },
+      {
+        "bit": 4,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 0.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      },
+      {
+        "bit": 5,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 0.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      },
+      {
+        "bit": 6,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 0.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      },
+      {
+        "bit": 7,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 0.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      }
+    ]
+  },
+  {
+    "source": "/home/mt/dev_wch/wch-protocols/captures/fixtures/wire-linke-p4-2026-09-25/v003/target_info.sr",
+    "sample_rate_hz": 50000000,
+    "active_channels": 1,
+    "static_channels": 7,
+    "highest_edge_channel": "SWIO",
+    "channels": [
+      {
+        "bit": 0,
+        "label": "SWIO",
+        "edges": 6618,
+        "high_fraction": 0.85293,
+        "activity_span_ms": 97.441,
+        "runs_up_to_3_samples": 415,
+        "local_rising_gap_samples_p10_p50_p90": [
+          31.0,
+          62.0,
+          739.0
+        ]
+      },
+      {
+        "bit": 1,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 0.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      },
+      {
+        "bit": 2,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 0.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      },
+      {
+        "bit": 3,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 0.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      },
+      {
+        "bit": 4,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 0.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      },
+      {
+        "bit": 5,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 0.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      },
+      {
+        "bit": 6,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 0.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      },
+      {
+        "bit": 7,
+        "label": null,
+        "edges": 0,
+        "high_fraction": 0.0,
+        "activity_span_ms": 0,
+        "runs_up_to_3_samples": 0,
+        "local_rising_gap_samples_p10_p50_p90": null
+      }
+    ]
+  }
+]

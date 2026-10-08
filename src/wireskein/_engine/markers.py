@@ -1,7 +1,7 @@
 """Marker lines -> a tree of time segments.
 
 A dialect (decl/markers/<name>.toml) gives the line patterns and their action.
-The default is the heading dialect of docs/workbench-model.ja.md:
+The default is the heading dialect of docs/markers.ja.md:
 
   heading "#", "##", ... : the count of '#' is the level; closes open sections of
           that level or deeper and opens a new one; with no name it only closes

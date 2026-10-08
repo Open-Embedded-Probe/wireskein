@@ -10,7 +10,7 @@ WireSkein turns logic-analyzer captures into **tests and analysis** (MIT license
 - **Decoding unknown captures.** `wireskein analyze` finds which pins carry I2C, SPI, UART, RVSWD / SWIO, SWD or CAN, and decodes them. Upper layers (NMEA, Modbus, known I2C / SPI devices) are tried on top.
 - **Capturing, storing, viewing.** `wireskein capture` takes captures from a probe, stores them as `.wireskein`, and `wireskein gui` shows them in the browser.
 
-Status: **beta**. Breaking changes may still happen; see [Stability](#stability).
+Status: **beta**. Until version 1, breaking changes happen; see [Stability](#stability).
 
 ## Why WireSkein
 
@@ -53,7 +53,7 @@ A logic analyzer is essential in embedded work, but the usual tools are built ar
 pip install wireskein              # or: uv add wireskein
 ```
 
-Python 3.13 or newer. The only dependency is numpy.
+Python 3.11 or newer. The only dependency is numpy.
 
 ## Checking a test run
 
@@ -145,7 +145,7 @@ wireskein capture --source sigrok:fx2lafw --channels SDA=D0,SCL=D1 --rate 12M --
 
 `--channels` names each logic channel (`NAME=ID`). On an OEP probe with multirate (an ESP32-P4), a channel can be kept at fewer values, giving the link's bandwidth to the fast lines: `CLK=3/4` keeps every 4th sample (`/4+1` from sample 1; `bits` with step 4 in the file), `CS=5:any-low/32` keeps, per 32 samples, whether the line was low at any (`interval-any`), `IRQ=7:latch-high/8` keeps, per 8, the last level and whether it went high (`interval-latch`). `--rate`, `--samples` and `--pretrigger` count samples of the full (base) rate, and the trigger sees every sample. The checks answer only what the summaries fix (`level()` and `ends()` when they settle it, `pulses()` a lower bound on the count, else unchecked); such a capture cannot be written as .sr or VCD. `--analog NAME=ID[@FRONTEND],...` adds analog channels (`--analog-rate`, `--analog-samples`; by default as long as the logic capture). On an OEP probe, logic and analog are started together (capture-group); each analog channel keeps its own rate and start (the probe's estimate, with its uncertainty), raw values, input range, reference and the probe's factory calibration. With sigrok, analog ids ride at the device's one rate.
 
- The file keeps the rate the device actually used, plus what the source knows: the probe's `start_ns` and `start_uncertainty_ns` (the probe clock of the first sample), a `time_base_slipped` mark (the probe knows some samples were taken late, e.g. at its buffer limit, so times may be stretched there; `wireskein info` says so, and a failed check names it), the trigger position in ticks (`trigger_tick`). On a UART probe (a classic ESP32 jig, say), the link is raised to a faster rate for reading the capture back: 1.5 Mbaud, 921600, 500000, the first that holds with both directions busy (oep-client-python 0.0.27 or later). The client refuses a rate that breaks and drops back to the boot speed on repeated broken frames, so it does not end slower than the boot speed. Each trial costs up to a second, so wireskein tries at most two per capture, verifying only the read-back direction, and uses oep-client-python's record of what held and what failed per port and probe (`~/.cache/oep-client/link-speed.json`; a failure is skipped for 30 days): a port whose fast rates fail moves down the list instead of paying for them every time. An explicit `?fast=RATE` ignores the record, for measuring limits. `?fast=0` keeps the boot speed, `?fast=921600` (or a list) tries only those. A probe with USB (an ESP32-P4) is best opened as `oep:usb:<unit_id>` (or `oep:usb` when only one is plugged in): the vendor bulk interface reads back at megabytes per second without loss, where its USB serial port (CDC) is slower and can drop answers under load. `capture` prints how the link went (the rate, the trials, the read time), also kept in `meta.probe.link`. From Python: `wireskein.sources.capture(source, Request(...), out)`. Other packages can add sources through the `wireskein.sources` entry point group.
+ The file keeps the rate the device actually used, plus what the source knows: the probe's `start_ns` and `start_uncertainty_ns` (the probe clock of the first sample), a `time_base_slipped` mark (the probe knows some samples were taken late, e.g. at its buffer limit, so times may be stretched there; `wireskein info` says so, and a failed check names it), the trigger position in ticks (`trigger_tick`). On a UART probe (a classic ESP32 jig, say), the link is raised to a faster rate for reading the capture back: rates that hold are tried and chosen, and remembered per port and probe (an oep-client-python feature). `?fast=0` keeps the boot speed, `?fast=921600` (or a list) tries only those. A probe with USB (an ESP32-P4) is best opened as `oep:usb:<unit_id>` (or `oep:usb` when only one is plugged in): the vendor bulk interface reads back at megabytes per second without loss, where its USB serial port (CDC) is slower and can drop answers under load. `capture` prints how the link went (the rate, the trials, the read time), also kept in `meta.probe.link`. From Python: `wireskein.sources.capture(source, Request(...), out)`. Other packages can add sources through the `wireskein.sources` entry point group.
 
 ## Viewing captures in the browser
 
@@ -173,7 +173,7 @@ It serves nothing but the viewer and the capture files below the directory given
 
 ## WireSkein files (.wireskein) and conversion
 
-A WireSkein file (`.wireskein`, a zip) holds a capture and what goes with it: attachments and notes now, markers and decoding / check results later. Tools tell it apart by its content, not its name. A capture keeps each channel at its own sample rate. A probe that decimates some channels to fit its link (every 32nd sample, say) stores only the samples it took, with `step=32`. Nothing is repeated to fill the gaps, so a viewer can show exactly the samples that exist. The module `wireskein.fileformat` reads and writes it with the standard library only:
+A WireSkein file (`.wireskein`, a zip) holds a capture and what goes with it: attachments, notes, markers and decode annotations. Tools tell it apart by its content, not its name. A capture keeps each channel at its own sample rate. A probe that decimates some channels to fit its link (every 32nd sample, say) stores only the samples it took, with `step=32`. Nothing is repeated to fill the gaps, so a viewer can show exactly the samples that exist. The module `wireskein.fileformat` reads and writes it with the standard library only:
 
 ```python
 from wireskein import fileformat as wf
@@ -270,25 +270,23 @@ doc = export(res, cap)
 
 ## Stability
 
-| Part | Promise during the beta |
-| --- | --- |
-| `wireskein.runlog` (names, arguments and meaning of `Recorder` and the check helpers) | Stable. New arguments get defaults that keep the old meaning |
-| Run format (`run.json` + `.wireskein` captures, `FORMAT = "wireskein-run/2"`) and the capture format (`.wireskein`, `wireskein/0`) | Stable. An incompatible change raises `FORMAT`, and `verify` refuses older runs with a clear error |
-| `wireskein.verify.verify` / `junit`, `wireskein verify` | Stable. Report fields may be added |
-| `wireskein.analyze`, `wireskein analyze` / `segments` output | May change |
-| `wireskein._engine` | Internal |
+Until version 1, breaking changes are allowed and backward compatibility is not kept.
+
+- The run format (`wireskein-run/N`) and the file format (`wireskein/N`) get a new number on every incompatible change. An unknown number is refused with a clear error; older numbers are not read.
+- Additions (new keys, new arguments) keep the current meaning by default.
+- `wireskein._engine` is internal.
 
 ## Repository layout
 
 ```text
 src/wireskein/          the package (runlog, verify, analyze, cli, _engine, decl/ data)
 tests/                  pytest
-research/               evaluation scripts, benchmarks and findings (not packaged)
+research/               evaluation scripts for the protocol inference (not packaged)
 corpus/                 real and synthetic fixtures for research/
-docs/                   design notes (Japanese)
+docs/                   specifications and design decisions (Japanese)
 ```
 
-To run the research scripts: `uv sync --group research`, then `uv run python research/evaluate.py --synth 200 --engine staged`. See `research/README.ja.md`.
+To run the research scripts: `uv sync --group research`, then `cd research && uv run python evaluate.py --set heldout --engine staged`. See `research/README.ja.md`.
 
 ## Development
 

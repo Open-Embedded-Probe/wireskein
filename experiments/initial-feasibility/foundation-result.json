@@ -1,0 +1,871 @@
+{
+  "i2c": [
+    {
+      "source": "/home/mt/dev/I2CDeviceDB/captures/raw/qmp6988__qmp6988__characterize__100k__nominal__0283eb57c7a7c010.sr",
+      "known_signal_roles": [
+        "UART_TX",
+        "SCL",
+        "SDA"
+      ],
+      "channels": {
+        "UART_TX": {
+          "edges": 3854,
+          "idle_level": 1,
+          "high_fraction": 0.976721,
+          "modal_short_run_samples": 69,
+          "runs_1_to_3_samples": 0
+        },
+        "SCL": {
+          "edges": 3660,
+          "idle_level": 1,
+          "high_fraction": 0.992253,
+          "modal_short_run_samples": 41,
+          "runs_1_to_3_samples": 0
+        },
+        "SDA": {
+          "edges": 1000,
+          "idle_level": 1,
+          "high_fraction": 0.991074,
+          "modal_short_run_samples": 80,
+          "runs_1_to_3_samples": 0
+        }
+      },
+      "scl_rising_gaps": {
+        "rising_edges": 1830,
+        "local_gaps": 1807,
+        "top_local_gap_samples": [
+          [
+            80,
+            1756
+          ],
+          [
+            139,
+            22
+          ],
+          [
+            81,
+            15
+          ],
+          [
+            140,
+            5
+          ],
+          [
+            666,
+            2
+          ],
+          [
+            79,
+            1
+          ]
+        ],
+        "steady_window_samples": [
+          75,
+          85
+        ],
+        "steady_gaps": 1772,
+        "steady_median_samples": 80.0,
+        "steady_p05_p95_samples": [
+          80.0,
+          80.0
+        ],
+        "steady_mad_samples": 0.0,
+        "steady_frequency_hz": 100000.0
+      },
+      "scl_level_widths_38_to_42": {
+        "low": {
+          "runs": 1830,
+          "mean_samples": 40.8361,
+          "p05_p95_samples": [
+            40.0,
+            41.0
+          ],
+          "inverse_mean_width_hz": 195905.3
+        },
+        "high": {
+          "runs": 1772,
+          "mean_samples": 39.1693,
+          "p05_p95_samples": [
+            39.0,
+            40.0
+          ],
+          "inverse_mean_width_hz": 204241.6
+        }
+      },
+      "uart_tx_short_runs_68_to_71": {
+        "low": {
+          "runs": 1179,
+          "mean_samples": 69.4818,
+          "p05_p95_samples": [
+            69.0,
+            70.0
+          ],
+          "inverse_mean_width_hz": 115138.1
+        },
+        "high": {
+          "runs": 1395,
+          "mean_samples": 69.4136,
+          "p05_p95_samples": [
+            69.0,
+            70.0
+          ],
+          "inverse_mean_width_hz": 115251.2
+        }
+      },
+      "sda_edges_vs_scl": {
+        "data_edges": 1000,
+        "while_clock_high": 90,
+        "fraction": 0.09
+      },
+      "uart_tx_8n1_weak_trial": {
+        "candidate_starts": 1926,
+        "start_stop_shape": 1387,
+        "start_stop_fraction": 0.7201,
+        "distinct_octets": 129,
+        "top_octets": [
+          [
+            "95",
+            52
+          ],
+          [
+            "65",
+            52
+          ],
+          [
+            "15",
+            36
+          ]
+        ]
+      },
+      "scl_8n1_false_trial": {
+        "candidate_starts": 1829,
+        "start_stop_shape": 1721,
+        "start_stop_fraction": 0.941,
+        "distinct_octets": 5,
+        "top_octets": [
+          [
+            "55",
+            1597
+          ],
+          [
+            "d5",
+            31
+          ],
+          [
+            "f5",
+            31
+          ]
+        ]
+      },
+      "marker_kinds": {
+        "CASE_BEGIN": 5,
+        "CASE_END": 5,
+        "INPUT": 3,
+        "RESULT": 4,
+        "PHASE": 3
+      },
+      "structured_marker_payloads_json_valid": true,
+      "marker_examples": {
+        "CASE_BEGIN": "Device Detection",
+        "CASE_END": "Device Detection",
+        "INPUT": "{\"register\":\"0xE0\",\"value\":\"0xE6\"}",
+        "RESULT": "{\"identity\":\"captured\"}",
+        "PHASE": "calibration"
+      },
+      "decoded_i2c_transactions": 58
+    },
+    {
+      "source": "/home/mt/dev/I2CDeviceDB/captures/raw/qmp6988__qmp6988__characterize__100k__nominal__a6ec5b99888f5897.sr",
+      "known_signal_roles": [
+        "UART_TX",
+        "SCL",
+        "SDA"
+      ],
+      "channels": {
+        "UART_TX": {
+          "edges": 3854,
+          "idle_level": 1,
+          "high_fraction": 0.977103,
+          "modal_short_run_samples": 69,
+          "runs_1_to_3_samples": 0
+        },
+        "SCL": {
+          "edges": 3660,
+          "idle_level": 1,
+          "high_fraction": 0.992369,
+          "modal_short_run_samples": 41,
+          "runs_1_to_3_samples": 0
+        },
+        "SDA": {
+          "edges": 988,
+          "idle_level": 1,
+          "high_fraction": 0.99105,
+          "modal_short_run_samples": 81,
+          "runs_1_to_3_samples": 0
+        }
+      },
+      "scl_rising_gaps": {
+        "rising_edges": 1830,
+        "local_gaps": 1807,
+        "top_local_gap_samples": [
+          [
+            80,
+            1761
+          ],
+          [
+            139,
+            25
+          ],
+          [
+            81,
+            11
+          ],
+          [
+            666,
+            3
+          ],
+          [
+            140,
+            2
+          ],
+          [
+            692,
+            1
+          ]
+        ],
+        "steady_window_samples": [
+          75,
+          85
+        ],
+        "steady_gaps": 1772,
+        "steady_median_samples": 80.0,
+        "steady_p05_p95_samples": [
+          80.0,
+          80.0
+        ],
+        "steady_mad_samples": 0.0,
+        "steady_frequency_hz": 100000.0
+      },
+      "scl_level_widths_38_to_42": {
+        "low": {
+          "runs": 1830,
+          "mean_samples": 40.8956,
+          "p05_p95_samples": [
+            40.0,
+            41.0
+          ],
+          "inverse_mean_width_hz": 195619.9
+        },
+        "high": {
+          "runs": 1772,
+          "mean_samples": 39.1095,
+          "p05_p95_samples": [
+            39.0,
+            40.0
+          ],
+          "inverse_mean_width_hz": 204554.0
+        }
+      },
+      "uart_tx_short_runs_68_to_71": {
+        "low": {
+          "runs": 1179,
+          "mean_samples": 69.486,
+          "p05_p95_samples": [
+            69.0,
+            70.0
+          ],
+          "inverse_mean_width_hz": 115131.1
+        },
+        "high": {
+          "runs": 1395,
+          "mean_samples": 69.41,
+          "p05_p95_samples": [
+            69.0,
+            70.0
+          ],
+          "inverse_mean_width_hz": 115257.1
+        }
+      },
+      "sda_edges_vs_scl": {
+        "data_edges": 988,
+        "while_clock_high": 90,
+        "fraction": 0.0911
+      },
+      "uart_tx_8n1_weak_trial": {
+        "candidate_starts": 1926,
+        "start_stop_shape": 1387,
+        "start_stop_fraction": 0.7201,
+        "distinct_octets": 129,
+        "top_octets": [
+          [
+            "95",
+            52
+          ],
+          [
+            "65",
+            52
+          ],
+          [
+            "15",
+            36
+          ]
+        ]
+      },
+      "scl_8n1_false_trial": {
+        "candidate_starts": 1829,
+        "start_stop_shape": 1721,
+        "start_stop_fraction": 0.941,
+        "distinct_octets": 5,
+        "top_octets": [
+          [
+            "55",
+            1597
+          ],
+          [
+            "d5",
+            31
+          ],
+          [
+            "f5",
+            31
+          ]
+        ]
+      },
+      "marker_kinds": {
+        "CASE_BEGIN": 5,
+        "CASE_END": 5,
+        "INPUT": 3,
+        "RESULT": 4,
+        "PHASE": 3
+      },
+      "structured_marker_payloads_json_valid": true,
+      "marker_examples": {
+        "CASE_BEGIN": "Device Detection",
+        "CASE_END": "Device Detection",
+        "INPUT": "{\"register\":\"0xE0\",\"value\":\"0xE6\"}",
+        "RESULT": "{\"identity\":\"captured\"}",
+        "PHASE": "calibration"
+      },
+      "decoded_i2c_transactions": 58
+    },
+    {
+      "source": "/home/mt/dev/I2CDeviceDB/captures/raw/sht30__sht30__characterize__100k__nominal__1b9dbfe9f8c22329.sr",
+      "known_signal_roles": [
+        "UART_TX",
+        "SCL",
+        "SDA"
+      ],
+      "channels": {
+        "UART_TX": {
+          "edges": 7396,
+          "idle_level": 1,
+          "high_fraction": 0.957598,
+          "modal_short_run_samples": 69,
+          "runs_1_to_3_samples": 0
+        },
+        "SCL": {
+          "edges": 2108,
+          "idle_level": 1,
+          "high_fraction": 0.982996,
+          "modal_short_run_samples": 41,
+          "runs_1_to_3_samples": 0
+        },
+        "SDA": {
+          "edges": 744,
+          "idle_level": 1,
+          "high_fraction": 0.983988,
+          "modal_short_run_samples": 79,
+          "runs_1_to_3_samples": 0
+        }
+      },
+      "scl_rising_gaps": {
+        "rising_edges": 1054,
+        "local_gaps": 997,
+        "top_local_gap_samples": [
+          [
+            80,
+            979
+          ],
+          [
+            81,
+            13
+          ],
+          [
+            63,
+            2
+          ],
+          [
+            79,
+            2
+          ],
+          [
+            458,
+            1
+          ]
+        ],
+        "steady_window_samples": [
+          75,
+          85
+        ],
+        "steady_gaps": 994,
+        "steady_median_samples": 80.0,
+        "steady_p05_p95_samples": [
+          80.0,
+          80.0
+        ],
+        "steady_mad_samples": 0.0,
+        "steady_frequency_hz": 100000.0
+      },
+      "scl_level_widths_38_to_42": {
+        "low": {
+          "runs": 1050,
+          "mean_samples": 40.7933,
+          "p05_p95_samples": [
+            40.0,
+            41.0
+          ],
+          "inverse_mean_width_hz": 196110.5
+        },
+        "high": {
+          "runs": 997,
+          "mean_samples": 39.2146,
+          "p05_p95_samples": [
+            39.0,
+            40.0
+          ],
+          "inverse_mean_width_hz": 204005.4
+        }
+      },
+      "uart_tx_short_runs_68_to_71": {
+        "low": {
+          "runs": 2307,
+          "mean_samples": 69.4603,
+          "p05_p95_samples": [
+            69.0,
+            70.0
+          ],
+          "inverse_mean_width_hz": 115173.6
+        },
+        "high": {
+          "runs": 2604,
+          "mean_samples": 69.4343,
+          "p05_p95_samples": [
+            69.0,
+            70.0
+          ],
+          "inverse_mean_width_hz": 115216.8
+        }
+      },
+      "sda_edges_vs_scl": {
+        "data_edges": 744,
+        "while_clock_high": 107,
+        "fraction": 0.1438
+      },
+      "uart_tx_8n1_weak_trial": {
+        "candidate_starts": 3697,
+        "start_stop_shape": 2659,
+        "start_stop_fraction": 0.7192,
+        "distinct_octets": 127,
+        "top_octets": [
+          [
+            "95",
+            102
+          ],
+          [
+            "65",
+            102
+          ],
+          [
+            "22",
+            68
+          ]
+        ]
+      },
+      "scl_8n1_false_trial": {
+        "candidate_starts": 1051,
+        "start_stop_shape": 1035,
+        "start_stop_fraction": 0.9848,
+        "distinct_octets": 5,
+        "top_octets": [
+          [
+            "55",
+            823
+          ],
+          [
+            "d5",
+            53
+          ],
+          [
+            "f5",
+            53
+          ]
+        ]
+      },
+      "marker_kinds": {
+        "CASE_BEGIN": 8,
+        "CASE_END": 8,
+        "INPUT": 7,
+        "RESULT": 7,
+        "PHASE": 6
+      },
+      "structured_marker_payloads_json_valid": true,
+      "marker_examples": {
+        "CASE_BEGIN": "Device Detection",
+        "CASE_END": "Device Detection",
+        "INPUT": "{\"command\":\"0x30A2\"}",
+        "RESULT": "{\"status\":\"captured\"}",
+        "PHASE": "polling-high"
+      },
+      "decoded_i2c_transactions": 54
+    },
+    {
+      "source": "/home/mt/dev/I2CDeviceDB/captures/raw/sht30__sht30__characterize__100k__nominal__29d9633ff0bd82a0.sr",
+      "known_signal_roles": [
+        "UART_TX",
+        "SCL",
+        "SDA"
+      ],
+      "channels": {
+        "UART_TX": {
+          "edges": 7396,
+          "idle_level": 1,
+          "high_fraction": 0.956899,
+          "modal_short_run_samples": 69,
+          "runs_1_to_3_samples": 0
+        },
+        "SCL": {
+          "edges": 2168,
+          "idle_level": 1,
+          "high_fraction": 0.983235,
+          "modal_short_run_samples": 41,
+          "runs_1_to_3_samples": 0
+        },
+        "SDA": {
+          "edges": 780,
+          "idle_level": 1,
+          "high_fraction": 0.98351,
+          "modal_short_run_samples": 79,
+          "runs_1_to_3_samples": 0
+        }
+      },
+      "scl_rising_gaps": {
+        "rising_edges": 1084,
+        "local_gaps": 1024,
+        "top_local_gap_samples": [
+          [
+            80,
+            1012
+          ],
+          [
+            81,
+            8
+          ],
+          [
+            63,
+            1
+          ],
+          [
+            64,
+            1
+          ],
+          [
+            79,
+            1
+          ],
+          [
+            458,
+            1
+          ]
+        ],
+        "steady_window_samples": [
+          75,
+          85
+        ],
+        "steady_gaps": 1021,
+        "steady_median_samples": 80.0,
+        "steady_p05_p95_samples": [
+          80.0,
+          80.0
+        ],
+        "steady_mad_samples": 0.0,
+        "steady_frequency_hz": 100000.0
+      },
+      "scl_level_widths_38_to_42": {
+        "low": {
+          "runs": 1080,
+          "mean_samples": 40.8463,
+          "p05_p95_samples": [
+            40.0,
+            41.0
+          ],
+          "inverse_mean_width_hz": 195856.2
+        },
+        "high": {
+          "runs": 1024,
+          "mean_samples": 39.1602,
+          "p05_p95_samples": [
+            39.0,
+            40.0
+          ],
+          "inverse_mean_width_hz": 204289.3
+        }
+      },
+      "uart_tx_short_runs_68_to_71": {
+        "low": {
+          "runs": 2307,
+          "mean_samples": 69.4699,
+          "p05_p95_samples": [
+            69.0,
+            70.0
+          ],
+          "inverse_mean_width_hz": 115157.8
+        },
+        "high": {
+          "runs": 2604,
+          "mean_samples": 69.4194,
+          "p05_p95_samples": [
+            69.0,
+            70.0
+          ],
+          "inverse_mean_width_hz": 115241.6
+        }
+      },
+      "sda_edges_vs_scl": {
+        "data_edges": 780,
+        "while_clock_high": 113,
+        "fraction": 0.1449
+      },
+      "uart_tx_8n1_weak_trial": {
+        "candidate_starts": 3697,
+        "start_stop_shape": 2659,
+        "start_stop_fraction": 0.7192,
+        "distinct_octets": 127,
+        "top_octets": [
+          [
+            "95",
+            102
+          ],
+          [
+            "65",
+            102
+          ],
+          [
+            "22",
+            68
+          ]
+        ]
+      },
+      "scl_8n1_false_trial": {
+        "candidate_starts": 1081,
+        "start_stop_shape": 1065,
+        "start_stop_fraction": 0.9852,
+        "distinct_octets": 5,
+        "top_octets": [
+          [
+            "55",
+            841
+          ],
+          [
+            "d5",
+            56
+          ],
+          [
+            "f5",
+            56
+          ]
+        ]
+      },
+      "marker_kinds": {
+        "CASE_BEGIN": 8,
+        "CASE_END": 8,
+        "INPUT": 7,
+        "RESULT": 7,
+        "PHASE": 6
+      },
+      "structured_marker_payloads_json_valid": true,
+      "marker_examples": {
+        "CASE_BEGIN": "Device Detection",
+        "CASE_END": "Device Detection",
+        "INPUT": "{\"command\":\"0x30A2\"}",
+        "RESULT": "{\"status\":\"captured\"}",
+        "PHASE": "polling-high"
+      },
+      "decoded_i2c_transactions": 57
+    }
+  ],
+  "rvswd": {
+    "source": "/home/mt/dev_wch/wch-protocols/captures/fixtures/wire-linke-p4-2026-09-25/v203-100mhz/target_info.sr",
+    "known_signal_roles": [
+      "SWCLK",
+      "SWDIO"
+    ],
+    "channels": {
+      "SWCLK": {
+        "edges": 58020,
+        "idle_level": 0,
+        "high_fraction": 0.133797,
+        "modal_short_run_samples": 100,
+        "runs_1_to_3_samples": 5771
+      },
+      "SWDIO": {
+        "edges": 6274,
+        "idle_level": 1,
+        "high_fraction": 0.818535,
+        "modal_short_run_samples": 5,
+        "runs_1_to_3_samples": 842
+      }
+    },
+    "clock_rising_gaps": {
+      "rising_edges": 29010,
+      "local_gaps": 28747,
+      "top_local_gap_samples": [
+        [
+          211,
+          5658
+        ],
+        [
+          311,
+          4159
+        ],
+        [
+          210,
+          2448
+        ],
+        [
+          212,
+          2287
+        ],
+        [
+          312,
+          1232
+        ],
+        [
+          7,
+          1183
+        ]
+      ]
+    },
+    "data_edges_vs_clock": {
+      "data_edges": 6274,
+      "while_clock_high": 2018,
+      "fraction": 0.3216
+    },
+    "rvswd_frame_shapes": {
+      "known_length": 328
+    }
+  },
+  "swio": {
+    "source": "/home/mt/dev_wch/wch-protocols/captures/fixtures/wire-linke-p4-2026-09-25/v003/target_info.sr",
+    "known_signal_roles": [
+      "SWIO"
+    ],
+    "channels": {
+      "SWIO": {
+        "edges": 6618,
+        "idle_level": 1,
+        "high_fraction": 0.85293,
+        "modal_short_run_samples": 19,
+        "runs_1_to_3_samples": 415
+      }
+    },
+    "pulse_rising_gaps": {
+      "rising_edges": 3309,
+      "local_gaps": 3059,
+      "top_local_gap_samples": [
+        [
+          62,
+          724
+        ],
+        [
+          31,
+          367
+        ],
+        [
+          568,
+          162
+        ],
+        [
+          620,
+          154
+        ],
+        [
+          4945,
+          95
+        ],
+        [
+          210,
+          78
+        ]
+      ]
+    },
+    "swio_frame_shapes": {
+      "known_length": 40,
+      "unknown_length": 1463
+    }
+  },
+  "spi_generated": {
+    "origin": "generated; 20 MHz sampling, 1 MHz clock, SPI mode 0, two transfers",
+    "channels": {
+      "CLK": {
+        "edges": 32,
+        "idle_level": 0,
+        "high_fraction": 0.333333,
+        "modal_short_run_samples": 10,
+        "runs_1_to_3_samples": 0
+      },
+      "MOSI": {
+        "edges": 14,
+        "idle_level": 0,
+        "high_fraction": 0.333333,
+        "modal_short_run_samples": 20,
+        "runs_1_to_3_samples": 0
+      },
+      "MISO": {
+        "edges": 6,
+        "idle_level": 0,
+        "high_fraction": 0.333333,
+        "modal_short_run_samples": 40,
+        "runs_1_to_3_samples": 0
+      },
+      "CS": {
+        "edges": 4,
+        "idle_level": 1,
+        "high_fraction": 0.333333,
+        "modal_short_run_samples": 40,
+        "runs_1_to_3_samples": 0
+      }
+    },
+    "clock_rising_gaps": {
+      "rising_edges": 16,
+      "local_gaps": 15,
+      "top_local_gap_samples": [
+        [
+          20,
+          14
+        ],
+        [
+          100,
+          1
+        ]
+      ],
+      "steady_window_samples": [
+        20,
+        20
+      ],
+      "steady_gaps": 14,
+      "steady_median_samples": 20.0,
+      "steady_p05_p95_samples": [
+        20.0,
+        20.0
+      ],
+      "steady_mad_samples": 0.0,
+      "steady_frequency_hz": 1000000.0
+    },
+    "mosi_edges_while_clock_high": {
+      "data_edges": 14,
+      "while_clock_high": 0,
+      "fraction": 0.0
+    },
+    "clock_rises_while_cs_low": 16
+  }
+}

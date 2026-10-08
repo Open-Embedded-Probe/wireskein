@@ -6,7 +6,7 @@ A run is a directory:
     c0001.wireskein   one capture (wireskein.fileformat: each channel at its own rate)
 
 The log is on the host clock (seconds from the recorder's start). It holds heading
-markers ("# test", "## step", "##" closes; docs/workbench-model.ja.md), the
+markers ("# test", "## step", "##" closes; docs/markers.ja.md), the
 commands sent and the replies received. Commands go over the probe's console, not
 a captured line, so the markers live here, not in the waveform; each capture is
 placed on the same clock by the time it was armed. The analysis builds the
@@ -216,7 +216,7 @@ def uart(pin: str, baud: float | None, data: str | None = None, tol_baud: float 
     error). parity: "none" / "even" / "odd"; stop: 1, 1.5 or 2. max_errors:
     framing + parity errors allowed (None: not checked, only reported).
     baud=None measures only: the bit time is found from the edges and the result
-    is "unchecked" with the measured values, unless data / max_errors / idle fail."""
+    is "measured" (not a failure) with the measured values, unless data / max_errors / idle fail."""
     return _t({"kind": "uart", "pin": pin, "baud": baud, "data": data, "tol_baud": tol_baud, "idle": idle, "bits": bits,
                "parity": parity, "stop": stop, "max_errors": max_errors}, threshold)
 

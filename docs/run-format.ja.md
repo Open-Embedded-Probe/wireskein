@@ -1,6 +1,6 @@
 # 記録の形式 `wireskein-run/3` と照合の結果
 
-作成 2026-09-30（凍結に向けて決めたこと: [凍結の前に決めること](freeze-review.ja.md) 5、6。まだ凍結していないので、互換のない変更がありえます）。`wireskein.runlog` が書き、`wireskein verify` が読む、試験の記録の仕様です。キャプチャのファイルそのものは、[WireSkein のファイル形式](wireskein-format.ja.md) にあります。
+試験の記録と、その照合の結果の仕様です。この仕様に従えば、どの言語で書き読みしてもかまいません（Python では `wireskein.runlog` が書き、`wireskein verify` が読みます）。キャプチャのファイルそのものは [WireSkein のファイル形式](wireskein-format.ja.md)、区間の規則は [マーカー](markers.ja.md) にあります。互換のない変更では `format` を上げ、読み手は知らない値の記録を断ります（[設計の決定](design.ja.md) §1）。
 
 ## 1. 記録
 
@@ -17,7 +17,7 @@
 
 | キー | 型 | 意味 |
 | --- | --- | --- |
-| `format` | 文字列 | `"wireskein-run/3"`。`verify` は、ほかの値の記録を断ります |
+| `format` | 文字列 | `"wireskein-run/3"`。読み手は、ほかの値の記録を断ります |
 | `meta` | オブジェクト | 記録についての情報（`Recorder(out, **meta)` に渡したもの） |
 | `log` | 配列 | ログ: `{"t": 秒, "src": "marker" / "host" / "dut" / "note", "text": 文字列}`。`t` は記録器の開始からの秒（ホストの時計） |
 | `captures` | 配列 | キャプチャ: `{"file": 名前, "t0": 秒, "channels": [名前...], "path": 区間のパス}` |
@@ -28,17 +28,18 @@
 - 見出し（`#` がテスト、`##` がステップ。名前のない見出しで閉じる）を `log` に `src: "marker"` で書き、区間の木を作ります。
 - 区間のパスは、見出しの名前を `/` でつないだものです（例 `test_pwm/duty=64`）。
 - **同じ親の下で同じ名前が繰り返されたとき、最初のものは名前のまま、2 回目から `[1]`、`[2]`、... を付けます**（例 `duty=64`、`duty=64[1]`）。あとから同じ名前を足しても、前の区間のパスは変わりません。
+- 番号を 2 回目から付けるのは、あとから同じ名前を足しても、前の区間のパスと、それに付けた期待のキーが変わらないようにするためです。
 - `wireskein analyze --segment` などのマーカーの区間のパスも、同じ規則です。
 
 ### 2.2 キャプチャの割り当て
 
 - `captures[].path` は、キャプチャを取ったときに開いていた、いちばん深い区間のパスです。区間の外で取ったときは、キー自体を入れません。
-- `verify` は、`path` のあるキャプチャを、その区間（とその祖先）のものとして扱います。
+- 照合は、`path` のあるキャプチャを、その区間（とその祖先）のものとして扱います。
 - `path` のないキャプチャ（ほかの道具が書いた記録）は、`t0` を含む区間に割り当てます。
 
 ### 2.3 検査
 
-`checks` の各要素は `{"kind": ..., ...}` のオブジェクトです。`wireskein.runlog` の関数（`square`、`level`、`starts`、`ends`、`only_moving`、`pulses`、`i2c`、`spi`、`uart`、`voltage`）が作ります。意味は `wireskein.verify` が決めます。一覧と使い方は [キャプチャで試験する](capture-test-guide.ja.md) にあります。
+`checks` の各要素は `{"kind": ..., ...}` のオブジェクトです。`kind` は `square`、`level`、`starts`、`ends`、`only_moving`、`pulses`、`i2c`、`spi`、`uart`、`voltage` です。各検査のキーと意味は [キャプチャで試験する](capture-test-guide.ja.md) §4 にあります（Python の `wireskein.runlog` の同名の関数が、このオブジェクトを作ります）。
 
 許容誤差の名前:
 
@@ -56,7 +57,7 @@
 
 ## 3. 照合の結果
 
-`wireskein verify` は、検査ごとに 1 つの結果を返します。
+照合は、検査ごとに 1 つの結果を返します（`wireskein verify` の報告）。
 
 | キー | 意味 |
 | --- | --- |

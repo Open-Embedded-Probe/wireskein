@@ -1,0 +1,11 @@
+{
+  "input": "/home/mt/dev/I2CDeviceDB/captures/raw/sht30__sht30__characterize__100k__nominal__1b9dbfe9f8c22329.sr",
+  "source_bytes": 30780,
+  "result_bytes": 13621,
+  "manifest_bytes": 442,
+  "zip_bytes": 12087,
+  "sqlite_bytes": 53248,
+  "zip_reopen_sha_and_redecode_match": true,
+  "sqlite_reopen_sha_and_redecode_match": true,
+  "decoder_embedded": false
+}

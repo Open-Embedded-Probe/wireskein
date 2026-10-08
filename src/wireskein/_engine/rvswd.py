@@ -1,9 +1,9 @@
 """WCH RVSWD on clocked frames, and the RISC-V Debug Module on DMI transactions.
 
-Frame layout (53 clocks, from wch-protocols tools/dmi_decode.py and
-docs/protocol-layers.ja.md): addr7, R/W (1 = write), header parity, park,
-ctl4, data32, data parity, park, status2, pad2, stop. A 54-clock frame is a
-read with one extra turnaround clock (data at bits 15..46).
+Frame layout (53 clocks, from wch-protocols tools/dmi_decode.py): addr7, R/W
+(1 = write), header parity, park, ctl4, data32, data parity, park, status2,
+pad2, stop. A 54-clock frame is a read with one extra turnaround clock (data
+at bits 15..46).
 """
 
 from __future__ import annotations

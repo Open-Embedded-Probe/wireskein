@@ -1,4 +1,4 @@
-"""Declarative framing plugins (layer 1 of docs/plugin-languages.ja.md).
+"""Declarative framing plugins (docs/design.ja.md §3.2).
 
 A TOML file describes how the bits of a frame become fields, which frame
 lengths are valid and which fields are checked; the interpreter turns that into
