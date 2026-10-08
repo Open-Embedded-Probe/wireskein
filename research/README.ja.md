@@ -6,7 +6,7 @@
 
 ```sh
 cd research
-uv sync --group research
+uv sync
 uv run python evaluate.py --set heldout --engine staged --tag NAME   # 固定したセットで評価 → ../corpus/work/eval-NAME.json
 uv run python evaluate.py --synth 200 --engine staged --tag NAME     # 実記録＋生成 200 件
 ```

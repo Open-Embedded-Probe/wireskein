@@ -1,8 +1,0 @@
-[package]
-name = "eng-luajit"
-version = "0.0.1"
-edition = "2021"
-
-[dependencies]
-common = { path = "../common" }
-mlua = { version = "0.10", features = ["luajit", "vendored"] }

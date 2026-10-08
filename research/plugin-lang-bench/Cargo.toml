@@ -1,7 +1,0 @@
-[workspace]
-members = ["common", "eng-quickjs", "eng-lua54", "eng-luajit", "eng-rhai", "eng-starlark", "eng-python", "eng-wasm", "eng-native"]
-resolver = "2"
-
-[profile.release]
-opt-level = 3
-strip = true

@@ -3,13 +3,6 @@ corpus/work/
 __pycache__/
 *.py[cod]
 .venv/
-research/boundary-bench/target/
-research/plugin-lang-bench/target*/
-research/plugin-lang-bench/wasm-plugin/target/
-research/plugin-lang-bench/build-*.log
-research/plugin-lang-bench/stderr-*.log
-research/plugin-lang-bench/results.jsonl
-research/zerocopy-bench/target/
 .cache/
 
 # packaging

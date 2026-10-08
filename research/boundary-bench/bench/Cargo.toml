@@ -1,9 +1,0 @@
-[package]
-name = "bench"
-version = "0.0.1"
-edition = "2021"
-
-[dependencies]
-wsk = { path = "../wsk" }
-libloading = "0.8"
-wasmtime = { version = "*", default-features = false, features = ["cranelift", "runtime", "std"] }
