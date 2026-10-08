@@ -266,6 +266,7 @@ tests/                  pytest
 research/               推定の評価のスクリプト（package に入れない）
 corpus/                 research/ が使う実記録と合成の fixture
 docs/                   仕様と設計の決定
+tools/                  ビューアの取得とリリースのスクリプト
 ```
 
 ## 開発

@@ -284,6 +284,7 @@ tests/                  pytest
 research/               evaluation scripts for the protocol inference (not packaged)
 corpus/                 real and synthetic fixtures for research/
 docs/                   specifications and design decisions (Japanese)
+tools/                  fetching the viewer, release scripts
 ```
 
 To run the research scripts: `uv sync`, then `cd research && uv run python evaluate.py --set heldout`. See `research/README.ja.md`.
