@@ -18,7 +18,7 @@ def load(path: str | Path) -> Capture:
             ks, levels, counts = c.decode()
             ks = np.array(ks, np.int64)
             if c.step == 1:                      # lossless: each event is one change, at its tick
-                out.append(Channel(c.name, c.start_level, c.phase + ks, 1, c.phase, dict(c.acquisition), "events"))
+                out.append(Channel(c.name, c.start_level, c.phase + ks, 1, c.phase, dict(c.acquisition)))
                 continue
             t = EventTrace(c.name, c.step, c.phase, c.n, c.start_level, ks, np.array(levels, np.uint8),
                            np.array(counts, np.uint8), dict(c.acquisition))
@@ -66,12 +66,13 @@ def to_events(t: EventTrace) -> fileformat.EventsChannel:
 
 
 def to_logic(ch: Channel, n_ticks: int) -> fileformat.Channel | fileformat.EventsChannel:
-    """A Channel for the file, in the form it was read in: a step-1 line read as changes stays changes (lossless
-    either way), anything else is written as its samples. (Choosing the smaller form waits for wireskein-web to read
-    "events": until then a viewer would skip such a line.)"""
-    if ch.step == 1 and ch.kept_as == "events":
+    """A Channel for the file: a step-1 line as its changes when that is smaller than its bits (lossless either
+    way); a slower one as its samples."""
+    if ch.step == 1:
         n = max(0, n_ticks - ch.phase)
         ks = ch.edges[(ch.edges > ch.phase) & (ch.edges < ch.phase + n)] - ch.phase
+        if len(ks) * 3 >= n // 8:              # an event is 2-3 bytes, a sample 1 bit: bits are not larger
+            return to_channel(ch, n_ticks)
         start = int(ch.level_at(np.array([ch.phase]))[0]) if n else ch.initial
         lv = start ^ (np.arange(1, len(ks) + 1) & 1)
         return fileformat.events(ch.name, ks.tolist(), lv.tolist(), [1] * len(ks), n, 1, ch.phase, start,

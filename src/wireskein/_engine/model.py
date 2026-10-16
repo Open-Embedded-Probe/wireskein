@@ -28,7 +28,6 @@ class Channel:
     step: int = 1      # ticks per sample of this channel
     phase: int = 0     # tick of its first sample
     acquisition: dict = field(default_factory=dict)   # how it was taken (pin, ...), kept through files
-    kept_as: str = "bits"   # how the file held it ("bits" or "events"): a rewrite keeps the form
 
     def level_at(self, samples: np.ndarray) -> np.ndarray:
         from . import kernels

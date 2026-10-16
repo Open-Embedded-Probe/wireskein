@@ -54,15 +54,17 @@ def test_the_file_keeps_them(tmp_path):
         save(tmp_path / "c.sr", cap)
 
 
-def test_a_rewrite_keeps_the_form_each_line_was_read_in(tmp_path):
+def test_a_rewrite_keeps_each_step_1_line_in_the_smaller_form(tmp_path):
     n = 100_000
-    line = [0] * 40_000 + [1] * 60_000
+    quiet = [0] * 40_000 + [1] * 60_000                      # one change in 100k samples: smaller as events
+    busy = [(t // 2) & 1 for t in range(n)]                  # a change every 2 samples: smaller as bits
     p = fileformat.write(tmp_path / "q.wireskein", 1_000_000,
-                         [fileformat.Channel("BITS", fileformat.pack(bytes(line)), n), ev("EV", line, 1)])
+                         [fileformat.Channel("QUIET", fileformat.pack(bytes(quiet)), n), ev("BUSY", busy, 1)])
     save(tmp_path / "r.wireskein", load(p))
-    head, (b, e) = fileformat.read(tmp_path / "r.wireskein")
-    assert [c["encoding"] for c in head["channels"]] == ["bits", "events"]   # not converted behind the viewer's back
-    assert e.decode() == ([40_000], [1], [1]) and e.n == n
+    head, (q, b) = fileformat.read(tmp_path / "r.wireskein")
+    assert [c["encoding"] for c in head["channels"]] == ["events", "bits"]
+    assert q.decode() == ([40_000], [1], [1]) and q.n == n
+    assert load(tmp_path / "r.wireskein").channel("BUSY").edges.tolist() == list(range(2, n, 2))
 
 
 def test_events_refuse_what_cannot_be():
