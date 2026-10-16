@@ -53,7 +53,7 @@ FORMAT = "wireskein/1"
 SUFFIX = ".wireskein"
 IDENT = "wireskein.json"          # what the file is; the first entry, stored (wireskein-format §2.1)
 CAPTURE = "capture.json"
-ENCODINGS = {"bits", "analog", "analog-f32", "interval-any", "interval-latch"}    # what this version reads; others are skipped (docs/wireskein-format.ja.md §3.2)
+ENCODINGS = {"bits", "events", "analog", "analog-f32"}    # what this version reads; others are skipped (docs/wireskein-format.ja.md §3.2)
 
 
 @dataclass
@@ -80,53 +80,76 @@ class Channel:
 
 
 @dataclass
-class IntervalChannel:
-    """A channel kept as one value per interval of `step` ticks (wireskein-format §4.4; OEP's multirate any_active /
-    edge_latch): interval k is ticks [phase + k * step, phase + (k + 1) * step).
-    - "interval-any": 1 bit a value, `active` if the line was at `active` at any tick of the interval, else the other
-      level.
-    - "interval-latch": 2 bits a value (bit 2k: bit 0 of value k, LSB first): bit 0 the level at the interval's last
-      tick, bit 1 set if the line went to `active` at some tick of it (from the tick before; the capture's first tick
-      is compared with nothing)."""
+class EventsChannel:
+    """A logic channel kept as its changes (wireskein-format §4.4), at a resolution of `step` ticks: quantum k is ticks
+    [phase + k * step, phase + (k + 1) * step), n quanta. The line is at start_level at tick `phase`; an event says
+    that in quantum k the line changed `count` times (1-127, 127: at least 127) and was at `level` at its last tick.
+    A quantum without a change has no event. step 1 is lossless (each event is one change, count 1)."""
     name: str
-    data: bytes
-    n: int
-    step: int
+    data: bytes          # per event: a varint (k minus the previous event's k plus one; the first counts from 0), then
+    n: int               # one byte, bit 7 the level after, bits 0-6 the count
+    step: int = 1
     phase: int = 0
-    encoding: str = "interval-any"
-    active: int = 1
+    start_level: int = 0
+    count: int = 0       # number of events
     acquisition: dict = field(default_factory=dict)
 
-    def __post_init__(self):
-        if self.encoding not in ("interval-any", "interval-latch"):
-            raise ValueError(f"{self.name}: encoding {self.encoding!r} is not an interval one")
-        if self.step < 1 or not 0 <= self.phase or self.active not in (0, 1):
-            raise ValueError(f"{self.name}: step must be >= 1, phase >= 0 and active 0 or 1")
-        if len(self.data) != (self.n * self.bits + 7) // 8:
-            raise ValueError(f"{self.name}: {len(self.data)} bytes for {self.n} values, want {(self.n * self.bits + 7) // 8}")
+    encoding = "events"
 
-    @property
-    def bits(self) -> int:
-        return 2 if self.encoding == "interval-latch" else 1
+    def __post_init__(self):
+        if self.step < 1 or not 0 <= self.phase or self.start_level not in (0, 1) or self.n < 0:
+            raise ValueError(f"{self.name}: step must be >= 1, phase >= 0, start_level 0 or 1")
 
     @property
     def end(self) -> int:
         return self.phase + self.n * self.step
 
-    def values(self) -> list[int]:
-        v = int.from_bytes(self.data, "little")
-        mask = (1 << self.bits) - 1
-        return [(v >> (k * self.bits)) & mask for k in range(self.n)]
+    def decode(self) -> tuple[list[int], list[int], list[int]]:
+        """-> (quanta, levels after, counts), each one entry per event."""
+        ks, levels, counts = [], [], []
+        k, i, d = -1, 0, self.data
+        while i < len(d):
+            gap, shift = 0, 0
+            while True:
+                b = d[i]
+                i += 1
+                gap |= (b & 0x7F) << shift
+                shift += 7
+                if b < 0x80:
+                    break
+            k += gap + 1
+            ks.append(k)
+            levels.append(d[i] >> 7)
+            counts.append(d[i] & 0x7F)
+            i += 1
+        if len(ks) != self.count:
+            raise ValueError(f"{self.name}: {len(ks)} events in the data, {self.count} in the header")
+        return ks, levels, counts
 
 
-def interval(name: str, values, step: int, phase: int = 0, encoding: str = "interval-any", active: int = 1,
-             **acquisition) -> IntervalChannel:
-    """Values (0/1, or 0-3 for interval-latch: bit 0 the end level, bit 1 the edge) -> an IntervalChannel."""
-    values = list(values)
-    bits = 2 if encoding == "interval-latch" else 1
-    v = sum((int(x) & ((1 << bits) - 1)) << (k * bits) for k, x in enumerate(values))
-    data = v.to_bytes((len(values) * bits + 7) // 8, "little")
-    return IntervalChannel(name, data, len(values), step, phase, encoding, active, acquisition)
+def events(name: str, quanta, levels, counts, n: int, step: int = 1, phase: int = 0, start_level: int = 0,
+           **acquisition) -> EventsChannel:
+    """(quantum, level after, changes in it) per event, quanta increasing and below n -> an EventsChannel. A count of
+    127 or more is kept as 127 (at least 127); otherwise the level must follow from the one before and the count's
+    parity, and at step 1 each event is one change."""
+    out = bytearray()
+    prev, level = -1, start_level
+    quanta, levels, counts = list(quanta), list(levels), list(counts)
+    for k, lv, c in zip(quanta, levels, counts):
+        if not prev < k < n or lv not in (0, 1) or c < 1 or (step == 1 and (c != 1 or k == 0)):
+            raise ValueError(f"{name}: event (quantum {k}, level {lv}, count {c}) out of order or impossible")
+        c = min(c, 127)
+        if c < 127 and lv != level ^ (c & 1):
+            raise ValueError(f"{name}: quantum {k} ends at {lv} after {c} changes from {level}")
+        gap = k - prev - 1
+        while True:
+            out.append((gap & 0x7F) | (0x80 if gap > 0x7F else 0))
+            gap >>= 7
+            if not gap:
+                break
+        out.append((lv << 7) | c)
+        prev, level = k, lv
+    return EventsChannel(name, bytes(out), n, step, phase, start_level, len(quanta), acquisition)
 
 
 _TYPECODE = {8: "B", 16: "H", 32: "I"}
@@ -287,7 +310,7 @@ def from_interleaved(data: bytes | bytearray | memoryview, names: list[str], wid
 # ---------------- files ----------------
 
 def write(path: str | Path, tick_hz: int | float | Fraction | tuple[int, int],
-          channels: list[Channel | AnalogChannel | IntervalChannel],
+          channels: list[Channel | EventsChannel | AnalogChannel],
           attachments: dict[str, str | bytes | dict | list] | None = None, *, capture_id: str | None = None,
           **meta) -> Path:
     """Write a .wireskein file (any name; SUFFIX is the usual one). tick_hz is the tick clock (a Fraction keeps an exact rate
@@ -315,9 +338,9 @@ def write(path: str | Path, tick_hz: int | float | Fraction | tuple[int, int],
             if c.unit != "V":
                 e["unit"] = c.unit
             files.append((e["file"], c.data))
-        elif isinstance(c, IntervalChannel):
-            e = {"name": c.name, "file": f"ch/{k}.{c.encoding.split('-')[1]}", "encoding": c.encoding, "n": c.n,
-                 "step": c.step, "phase": c.phase, "active": c.active}
+        elif isinstance(c, EventsChannel):
+            e = {"name": c.name, "file": f"ch/{k}.events", "encoding": "events", "n": c.n, "step": c.step,
+                 "phase": c.phase, "start_level": c.start_level, "events": c.count}
             files.append((e["file"], c.data))
         else:
             e = {"name": c.name, "file": f"ch/{k}.bits", "encoding": "bits", "n": c.n, "step": c.step, "phase": c.phase}
@@ -510,9 +533,9 @@ def skipped(head: dict) -> list[dict]:
             if c.get("encoding") not in ENCODINGS]
 
 
-def read(path: str | Path, analog: bool = True) -> tuple[dict, list[Channel | AnalogChannel | IntervalChannel]]:
+def read(path: str | Path, analog: bool = True) -> tuple[dict, list[Channel | EventsChannel | AnalogChannel]]:
     """(header, channels): Channel for logic, AnalogChannel for analog (left
-    out with analog=False), IntervalChannel for a logic line kept by interval. header["tick_hz"] is [numerator, denominator].
+    out with analog=False), EventsChannel for a logic line kept as its changes. header["tick_hz"] is [numerator, denominator].
     Channels of an encoding this version does not read are left out (never
     read as something else); skipped(header) names them."""
     head = read_header(path)
@@ -523,9 +546,9 @@ def read(path: str | Path, analog: bool = True) -> tuple[dict, list[Channel | An
             if enc == "bits":
                 chans.append(Channel(c["name"], z.read(c["file"]), c["n"], c["step"], c["phase"],
                                      c.get("acquisition", {})))
-            elif enc in ("interval-any", "interval-latch"):
-                chans.append(IntervalChannel(c["name"], z.read(c["file"]), c["n"], c["step"], c["phase"], enc,
-                                             c["active"], c.get("acquisition", {})))
+            elif enc == "events":
+                chans.append(EventsChannel(c["name"], z.read(c["file"]), c["n"], c["step"], c["phase"],
+                                           c["start_level"], c["events"], c.get("acquisition", {})))
             elif enc in ("analog", "analog-f32") and analog:
                 chans.append(AnalogChannel(c["name"], z.read(c["file"]), c["n"], Fraction(*c["rate_hz"]),
                                            Fraction(*c["t0_ticks"]), enc, c.get("width", 16), c.get("value_bits"),

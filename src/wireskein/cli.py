@@ -72,10 +72,12 @@ def info(args) -> None:
                     lo, hi, lo_v, hi_v = hi, lo, hi_v, lo_v
                 print(f"  {'':12s} range {lo_v:.3f}..{hi_v:.3f} {c.unit}" + (
                     f": {lo} samples clipped at <= {lo_v:.3f}, {hi} at >= {hi_v:.3f} (not voltages)" if lo or hi else ""))
-        elif isinstance(c, fileformat.IntervalChannel):
-            what = "any tick at" if c.encoding == "interval-any" else "end level, and a change to"
-            print(f"  {c.name:12s} {c.n:>12d} values   {c.encoding:14s} {c.step} ticks a value from tick {c.phase} "
-                  f"({what} {'active-high' if c.active else 'active-low'})")
+        elif isinstance(c, fileformat.EventsChannel):
+            counts = c.decode()[2]
+            hidden = sum(1 for k in counts if k > 1)
+            print(f"  {c.name:12s} {c.n:>12d} quanta   events {c.count} at {c.step} ticks a quantum from tick {c.phase}"
+                  + (f" ({hidden} quanta hold more than one change)" if hidden else "")
+                  + ("" if c.step > 1 else " (lossless)"))
         else:
             rate = float(tick) / c.step
             print(f"  {c.name:12s} {c.n:>12d} samples  step {c.step:<4d} phase {c.phase:<4d} {rate:g} Hz")
@@ -216,7 +218,9 @@ def align_cmd(args) -> None:
 
 
 def _count(cap) -> str:
-    return (f"{len(cap.channels)} logic" + (f" + {len(cap.intervals)} interval" if cap.intervals else "")
+    kept = {t.name for t in cap.events}
+    return (f"{len([c for c in cap.channels if c.name not in kept]) + len(cap.events)} logic"
+            + (f" ({len(cap.events)} as changes at a coarser step)" if cap.events else "")
             + (f" + {len(cap.analog)} analog" if cap.analog else "") + " channels")
 
 
@@ -239,8 +243,7 @@ def capture_cmd(args) -> None:
         pretrigger=sources.parse_count(args.pretrigger) if args.pretrigger else None, timeout=args.timeout,
         analog=sources.parse_analog(args.analog) if args.analog else [],
         analog_rate=sources.parse_count(args.analog_rate) if args.analog_rate else None,
-        analog_samples=sources.parse_count(args.analog_samples) if args.analog_samples else None,
-        reduce=sources.parse_reduce(args.channels or ""))
+        analog_samples=sources.parse_count(args.analog_samples) if args.analog_samples else None)
     out = sources.capture(args.source, req, args.output)
     if args.note:
         from . import fileformat
@@ -289,11 +292,11 @@ def _fewer(out, req) -> None:
         if isinstance(c, fileformat.AnalogChannel):
             if req.analog_samples and c.n < req.analog_samples:
                 print(f"note: {c.name}: {c.n} samples of the {req.analog_samples} asked (the probe's limit)")
-        elif c.step == 1 and isinstance(c, fileformat.Channel):
+        elif isinstance(c, fileformat.Channel) and c.step == 1:
             if req.samples and c.n < req.samples:
                 print(f"note: {c.name}: {c.n} samples of the {req.samples} asked (the probe's limit)")
-        elif req.samples and c.end + c.step <= req.samples:          # a reduced channel: its values cover fewer samples
-            print(f"note: {c.name}: {c.n} values cover {c.end} of the {req.samples} samples asked (the probe's limit)")
+        elif req.samples and c.end < req.samples:            # kept at a coarser step: it covers fewer ticks
+            print(f"note: {c.name}: covers {c.end} of the {req.samples} samples asked (the probe's limit)")
 
 
 def convert(args) -> None:
@@ -390,10 +393,7 @@ def main() -> None:
     cp.add_argument("--source", required=True, help="oep:<serial port | tcp://HOST:PORT | usb | usb:UNIT_ID | usb:VID:PID>[?fast=0 | ?fast=RATE,RATE] or sigrok:<driver> "
                          "(a UART probe's link is raised for reading back, 1.5M / 921600 / 500000 first that "
                          "works; fast=0 keeps the boot speed)")
-    cp.add_argument("--channels", default=None, help='logic: "NAME=ID,..." (ID: the probe channel number / sigrok channel) or "ID,..."; '
-                         'a probe with multirate (OEP) can keep a channel at fewer values: NAME=ID/4 (every 4th '
-                         'sample), NAME=ID/4+1 (from sample 1), NAME=ID:any-low/32 (per 32 samples, low at any?), '
-                         'NAME=ID:latch-high/8 (per 8: the last level, and whether it went high)')
+    cp.add_argument("--channels", default=None, help='logic: "NAME=ID,..." (ID: the probe channel number / sigrok channel) or "ID,..."')
     cp.add_argument("--analog", default=None, help='analog: "NAME=ID[@FRONTEND],..." (FRONTEND: the input range number, OEP)')
     cp.add_argument("--analog-rate", default=None, help="analog samples per second (default: --rate)")
     cp.add_argument("--analog-samples", default=None, help="default: as long as the logic capture")

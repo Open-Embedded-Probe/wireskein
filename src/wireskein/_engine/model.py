@@ -28,6 +28,7 @@ class Channel:
     step: int = 1      # ticks per sample of this channel
     phase: int = 0     # tick of its first sample
     acquisition: dict = field(default_factory=dict)   # how it was taken (pin, ...), kept through files
+    kept_as: str = "bits"   # how the file held it ("bits" or "events"): a rewrite keeps the form
 
     def level_at(self, samples: np.ndarray) -> np.ndarray:
         from . import kernels
@@ -71,27 +72,41 @@ class AnalogTrace:
 
 
 @dataclass
-class IntervalTrace:
-    """A logic line kept as one value per interval of `step` ticks (interval k: ticks [phase + k * step,
-    phase + (k + 1) * step)); see fileformat.IntervalChannel. kind "any": values 0/1, `active` if the line was
-    active at any tick of the interval. kind "latch": values 0-3, bit 0 the level at the interval's last tick, bit 1
-    a change to `active` inside it (the first tick of the channel compared with nothing). Where in the interval,
-    and how many times, is not kept."""
+class EventTrace:
+    """A logic line kept as its changes at a resolution of `step` ticks (fileformat.EventsChannel, step > 1): quantum
+    k is ticks [phase + k * step, phase + (k + 1) * step); the line is at start_level at tick `phase`, and in each
+    quantum listed it changed counts[i] times (127: at least) and ended at levels[i]. Where in the quantum is not kept.
+    When no quantum holds more than one change, the line is also a Channel of that step (as_channel), so the
+    decoders read it at that resolution."""
     name: str
-    values: np.ndarray       # uint8
     step: int
-    phase: int = 0
-    kind: str = "any"        # "any" | "latch"
-    active: int = 1
+    phase: int
+    n: int                   # quanta covered
+    start_level: int
+    quanta: np.ndarray       # int64, increasing
+    levels: np.ndarray       # uint8, the level at each listed quantum's last tick
+    counts: np.ndarray       # uint8, 1-127
     acquisition: dict = field(default_factory=dict)
 
-    @property
-    def encoding(self) -> str:
-        return f"interval-{self.kind}"
+    encoding = "events"
 
     @property
     def end(self) -> int:
-        return self.phase + len(self.values) * self.step
+        return self.phase + self.n * self.step
+
+    @property
+    def hidden(self) -> int:
+        """Quanta holding more than one change (where those changes fall is not kept)."""
+        return int(np.count_nonzero(self.counts > 1))
+
+    def as_channel(self) -> Channel | None:
+        """The line as a Channel of this step, when every quantum holds at most one change: the edge of quantum k at
+        its last tick, so it happened somewhere in the step ticks before (the Channel convention). None otherwise."""
+        if self.hidden:
+            return None
+        edges = self.phase + self.quanta.astype(np.int64) * self.step + (self.step - 1)
+        return Channel(self.name, int(self.start_level), edges, self.step, self.phase + self.step - 1,
+                       dict(self.acquisition))
 
 
 @dataclass
@@ -101,7 +116,7 @@ class Capture:
     channels: list[Channel]
     meta: dict = field(default_factory=dict)
     analog: list[AnalogTrace] = field(default_factory=list)
-    intervals: list[IntervalTrace] = field(default_factory=list)
+    events: list[EventTrace] = field(default_factory=list)   # lines kept as changes at step > 1
 
     def channel(self, name: str) -> Channel:
         for ch in self.channels:

@@ -89,12 +89,9 @@ def _group_trigger(oc) -> bool:
 
 def _what(tag, oc) -> str:
     """A configure item for people. The probe names the TLV it refused with its
-    tag as sent (bit 7, critical, for multirate)."""
+    tag as sent (bit 7 is the critical mark)."""
     base = tag & 0x7F if isinstance(tag, int) else tag
-    mr = getattr(oc, "mr", None)
-    return {oc.TRIGGER: "a trigger", oc.PRETRIGGER: "a pretrigger",
-            getattr(mr, "TAG", None): "these channel reductions (/D, any, latch: none offered, or this combination not kept even at "
-                    "its lowest rate)"}.get(
+    return {oc.TRIGGER: "a trigger", oc.PRETRIGGER: "a pretrigger"}.get(
         base, f"configure item 0x{base:02x}" if isinstance(base, int) else f"configure item {tag}")
 
 
@@ -121,15 +118,11 @@ def oc_state(name: str) -> int:
 
 def _configure(track, oc, oh, target: str, what: str, **kw):
     """configure; a refusal (unsupported, naming the TLV) in one line. Every probe knows the configure TLVs of OEP
-    v1 (capture §3.3), so one it cannot honour is refused, not ignored; oep-client sends multirate critical itself."""
+    v1 (capture §3.3), so one it cannot honour is refused, not ignored."""
     try:
         return track.configure(mode=oc.ONE_SHOT, **kw)
     except oh.Unsupported as e:
         raise RuntimeError(f"probe {target} cannot capture {what} with {_what(e.tag, oc)}") from e
-    except ValueError as e:              # oep-client checks multirate against the probe's describe before sending
-        if "multirate" not in str(e):
-            raise
-        raise RuntimeError(f"probe {target}: {e}") from e
 
 
 def _clock(hst):
@@ -277,8 +270,7 @@ def _capture(link, core, oc, oh, message, target: str, req: Request, ids: list[i
                     kind, value = TRIGGER[req.trigger[1]]
                     trigger = (kind, names.index(req.trigger[0]), value)
                 cfg = _configure(cap, oc, oh, target, "logic", rate=req.rate, samples=req.samples, trigger=trigger,
-                                 pretrigger=req.pretrigger,
-                                 **({"multirate": _multirate(req, names)} if req.reduce else {}))
+                                 pretrigger=req.pretrigger)
             if an:
                 arate = req.analog_rate or req.rate
                 asamples = req.analog_samples
@@ -361,10 +353,7 @@ def _capture(link, core, oc, oh, message, target: str, req: Request, ids: list[i
         if seg.trigger_index is not None:              # tick 0 is the segment's (base) sample 0
             meta["trigger_tick"] = seg.trigger_index
         tick = Fraction(cfg.rate)
-        if getattr(cfg, "block", None) is not None:
-            chans = _reduced(cap.decode_multirate(data, seg.samples), req, names)
-        else:
-            chans = fileformat.from_interleaved(data, names, cfg.width, cfg.positions, seg.samples)
+        chans = fileformat.from_interleaved(data, names, cfg.width, cfg.positions, seg.samples)
         for c, ch in zip(chans, ids):
             c.acquisition = {"pin": ch}
         t_ref = seg.start_ns
@@ -410,36 +399,6 @@ def _capture(link, core, oc, oh, message, target: str, req: Request, ids: list[i
     if probe:
         meta["probe"] = probe
     return Result(tick, chans, meta)
-
-
-def _multirate(req: Request, names: list[str]) -> list:
-    """Request.reduce as oep-client's Multirate list (oep-if-capture §5.2): the role is the channel's place."""
-    try:
-        from oep_client import multirate as mr
-    except ImportError:
-        raise ValueError("this oep-client-python has no multirate (OEP v1 left it out for now): "
-                         "drop the reductions (/D, :any-..., :latch-...) from --channels") from None
-    policy = {"sample": mr.SAMPLE, "any": mr.ANY_ACTIVE, "latch": mr.EDGE_LATCH}
-    return [mr.Multirate(names.index(n), policy[p], d, param) for n, (p, d, param) in req.reduce.items()]
-
-
-def _reduced(dec, req: Request, names: list[str]) -> list:
-    """A multirate segment decoded by oep-client -> the file's channels, in the order asked: the D = 1 channels as
-    bits, "sample" as bits every d ticks from its phase, "any" / "latch" as interval channels (the tick is the base
-    sample)."""
-    d1 = iter(dec.d1)
-    out = []
-    for role, name in enumerate(names):
-        policy, d, param = req.reduce.get(name, ("sample", 1, 0))
-        if policy == "sample" and d == 1:
-            lv = next(d1)
-            out.append(fileformat.Channel(name, fileformat.pack(bytes(lv)), len(lv), 1, 0))
-        elif policy == "sample":
-            v = dec.reduced[role]
-            out.append(fileformat.Channel(name, fileformat.pack(bytes(v)), len(v), d, param))
-        else:
-            out.append(fileformat.interval(name, dec.reduced[role], d, 0, f"interval-{policy}", param))
-    return out
 
 
 def _segment(track):

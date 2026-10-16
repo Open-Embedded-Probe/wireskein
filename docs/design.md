@@ -83,7 +83,7 @@ Decisions and reasons:
 - **UART baud rate is measured independently of the expectation.** The bit width is found by least squares from the intervals between same-direction edges within one character; the expected value is used only to choose among candidates. Measuring in a window cut by the expectation would shift the measured value whenever the expectation is off.
 - **Disturbances in the capture's time base are not hidden.** When the probe reports a delay (`time_base_slipped`), or when edges are off the grid only in the error characters, the judgment is not changed, but this is attached to the NG reason. This distinguishes receiver errors from stalls of a software-paced sampler.
 - **One disturbance counts as one item.** In UART, after a framing error, re-reading waits for one character's worth of idle.
-- **For summary channels (`interval-any`, `interval-latch`), answer only what the summary can definitely say.** Anything that cannot be decided is unchecked.
+- **For lines kept as changes (`events` with `step` 2 or more), answer only what the quanta settle.** Levels, whether the line moved and how many times are answered exactly; what needs the position inside a quantum is unchecked where that quantum holds two or more changes.
 
 ## 5. Files and time
 

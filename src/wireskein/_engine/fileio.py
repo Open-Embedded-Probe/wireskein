@@ -7,16 +7,25 @@ from pathlib import Path
 import numpy as np
 
 from .. import fileformat
-from .model import AnalogTrace, Capture, Channel, IntervalTrace, edges_from_dense
+from .model import AnalogTrace, Capture, Channel, EventTrace, edges_from_dense
 
 
 def load(path: str | Path) -> Capture:
     head, chans = fileformat.read(path)
-    out, analog, intervals = [], [], []
+    out, analog, events = [], [], []
     for c in chans:
-        if isinstance(c, fileformat.IntervalChannel):
-            intervals.append(IntervalTrace(c.name, np.array(c.values(), np.uint8), c.step, c.phase,
-                                           c.encoding.split("-")[1], c.active, dict(c.acquisition)))
+        if isinstance(c, fileformat.EventsChannel):
+            ks, levels, counts = c.decode()
+            ks = np.array(ks, np.int64)
+            if c.step == 1:                      # lossless: each event is one change, at its tick
+                out.append(Channel(c.name, c.start_level, c.phase + ks, 1, c.phase, dict(c.acquisition), "events"))
+                continue
+            t = EventTrace(c.name, c.step, c.phase, c.n, c.start_level, ks, np.array(levels, np.uint8),
+                           np.array(counts, np.uint8), dict(c.acquisition))
+            events.append(t)
+            ch = t.as_channel()                  # at most one change a quantum: the decoders read it at that step
+            if ch is not None:
+                out.append(ch)
             continue
         if isinstance(c, fileformat.AnalogChannel):
             dtype = np.float32 if c.encoding == "analog-f32" else {8: np.uint8, 16: "<u2", 32: "<u4"}[c.width]
@@ -30,7 +39,7 @@ def load(path: str | Path) -> Capture:
     return Capture(float(tick), int(head["ticks"]), out,
                    meta={**head.get("meta", {}), "file": str(path), "tick_hz": tick, "extras": fileformat.extras(path),
                          "capture_id": head.get("id"),
-                         "skipped_channels": fileformat.skipped(head)}, analog=analog, intervals=intervals)
+                         "skipped_channels": fileformat.skipped(head)}, analog=analog, events=events)
 
 
 def to_channel(ch: Channel, n_ticks: int) -> fileformat.Channel:
@@ -51,16 +60,33 @@ def to_analog(a: AnalogTrace) -> fileformat.AnalogChannel:
                              a.zero, a.scale_nv, a.unit, dict(a.acquisition))
 
 
-def to_interval(t: IntervalTrace) -> fileformat.IntervalChannel:
-    return fileformat.interval(t.name, t.values.tolist(), t.step, t.phase, t.encoding, t.active, **t.acquisition)
+def to_events(t: EventTrace) -> fileformat.EventsChannel:
+    return fileformat.events(t.name, t.quanta.tolist(), t.levels.tolist(), t.counts.tolist(), t.n, t.step, t.phase,
+                             t.start_level, **t.acquisition)
 
 
-def refuse_if_no_intervals(cap: Capture, dest) -> None:
-    """A .sr or VCD has no form for a channel kept by interval (wireskein-format §4.4)."""
-    if cap.intervals:
-        names = ", ".join(f"{t.name} ({t.encoding})" for t in cap.intervals)
-        raise ValueError(f"not writing {dest}: it has no form for the channels kept by interval: {names} "
-                         f"(keep it as a WireSkein file)")
+def to_logic(ch: Channel, n_ticks: int) -> fileformat.Channel | fileformat.EventsChannel:
+    """A Channel for the file, in the form it was read in: a step-1 line read as changes stays changes (lossless
+    either way), anything else is written as its samples. (Choosing the smaller form waits for wireskein-web to read
+    "events": until then a viewer would skip such a line.)"""
+    if ch.step == 1 and ch.kept_as == "events":
+        n = max(0, n_ticks - ch.phase)
+        ks = ch.edges[(ch.edges > ch.phase) & (ch.edges < ch.phase + n)] - ch.phase
+        start = int(ch.level_at(np.array([ch.phase]))[0]) if n else ch.initial
+        lv = start ^ (np.arange(1, len(ks) + 1) & 1)
+        return fileformat.events(ch.name, ks.tolist(), lv.tolist(), [1] * len(ks), n, 1, ch.phase, start,
+                                 **ch.acquisition)
+    return to_channel(ch, n_ticks)
+
+
+def refuse_if_hidden(cap: Capture, dest) -> None:
+    """A .sr or VCD has no form for a line whose quanta hide changes (wireskein-format §4.4); one with at most a
+    change a quantum is written as samples at its step."""
+    hid = [t for t in cap.events if t.hidden]
+    if hid:
+        names = ", ".join(f"{t.name} ({t.hidden} quanta of {t.step} ticks hold more than one change)" for t in hid)
+        raise ValueError(f"not writing {dest}: it has no form for lines kept as changes whose quanta hide changes: "
+                         f"{names} (keep it as a WireSkein file)")
 
 
 def refuse_if_skipped(cap: Capture, dest) -> None:
@@ -78,8 +104,9 @@ def save(path: str | Path, cap: Capture, **meta) -> Path:
     refuse_if_skipped(cap, path)
     tick = cap.meta.get("tick_hz", cap.rate)
     meta.pop("capture_id", None)
-    path = fileformat.write(path, tick, [to_channel(c, cap.n_samples) for c in cap.channels] + [to_analog(a) for a in cap.analog]
-                     + [to_interval(t) for t in cap.intervals],
+    kept = {t.name for t in cap.events}          # their Channel view is not written; the events are
+    path = fileformat.write(path, tick, [to_logic(c, cap.n_samples) for c in cap.channels if c.name not in kept]
+                     + [to_events(t) for t in cap.events] + [to_analog(a) for a in cap.analog],
                      capture_id=cap.meta.get("capture_id"),
                      **meta)
     if cap.meta.get("extras"):

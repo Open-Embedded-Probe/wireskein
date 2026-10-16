@@ -104,8 +104,8 @@ Each element of `channels`:
 | `file` | string | Name of the data entry (e.g. `ch/0.bits`) |
 | `encoding` | string | How the data is stored (§4). Handling of unknown values: §3.2 |
 | `n` | integer | Number of samples |
-| `step` | integer (1 or more) | How many ticks per sample (required for `bits` and `interval-*`; for `interval-*`, the number of ticks in the interval of one value) |
-| `phase` | integer (0 or more) | Tick of the first sample. Sample k is at tick `phase + k × step` (required for `bits` and `interval-*`; for `interval-*`, the start of the first interval) |
+| `step` | integer (1 or more) | How many ticks per sample (required for `bits` and `events`; for `events`, the ticks of one quantum) |
+| `phase` | integer (0 or more) | Tick of the first sample. Sample k is at tick `phase + k × step` (required for `bits` and `events`; for `events`, the start of the first quantum) |
 
 ### 3.1 Time of channels other than `bits`
 
@@ -149,7 +149,7 @@ Any keys may be included. The keys whose meaning WireSkein defines are:
 | --- | --- |
 | `start_ns` | Time of tick 0 on the probe's clock (ns since boot, integer) (OEP section's `start_ns`; an estimate) |
 | `start_uncertainty_ns` | Uncertainty of `start_ns` (±ns; OEP section's `start_uncertainty_ns`; a guide, not a guarantee) |
-| `trigger_tick` | Trigger position, in ticks (integer). In OEP, the logic section's `trigger_index` (in multirate, the base sample number; tick 0 is the section's base sample 0, so it is the tick as is). When there is no trigger, the key itself is omitted. The trigger position of an analog track is that channel's `acquisition.trigger_index` (a sample number of that channel) |
+| `trigger_tick` | Trigger position, in ticks (integer). In OEP, the logic section's `trigger_index` (tick 0 is the section's sample 0, so it is the tick as is). When there is no trigger, the key itself is omitted. The trigger position of an analog track is that channel's `acquisition.trigger_index` (a sample number of that channel) |
 | `time_base_slipped` | `true`: the probe knows that sample times were delayed (OEP section flags bit 2). When there is no delay, the key itself is omitted |
 | `probe` | Information about the acquiring device (an object). Keys are optional. The ones whose meaning WireSkein defines are: `model`, `firmware` (the probe), `chip`, `chip_revision` (the MCU acquired from), `clock` (correspondence between the probe clock and the host clock read before and after acquisition, OEP core §7.7: `before` / `after` with `host_ns` (host monotonic clock, midpoint of the round trip), `uptime_ns`, `boot_id`, `uncertainty_ns` (half the round trip); for the same boot_id, `rate_ppm` (deviation of the probe clock speed relative to the host) and `rate_ppm_uncertainty`), `generation` (OEP v1 acquisition generation: `{"logic": n, "analog": n}`, to track which start an acquisition came from), `calibration` (factory calibration values; `scheme` holds the scheme name and `raw` the raw values, stored as is without applying them. Example: ESP32 eFuse ADC calibration values) |
 
@@ -193,28 +193,31 @@ float32 voltages (little endian). A form for importing data where only voltages 
 
 - The data length is `n × 4` bytes. NaN means "no value".
 
-### 4.4 `interval-any`, `interval-latch` (logic summarized per interval)
+### 4.4 `events` (logic kept as its changes)
 
-A form that holds a logic line not per sample but as one value per interval of `step` ticks. OEP multirate (capture §5) any_active and edge_latch are stored in this form (the sample policy can be held with `bits` `step` and `phase`). Interval k is ticks `[phase + k × step, phase + (k + 1) × step)`.
+A form that holds a logic line not as a run of samples but as its **changes**, so a line that changes little is kept small. OEP's format 1 events (capture §1.3) are stored in this form.
+The time resolution is `step` ticks: **quantum** k is ticks `[phase + k × step, phase + (k + 1) × step)`.
 
 | Key | Type | Meaning |
 | --- | --- | --- |
-| `step`, `phase` | §3 | Required. Interval length and start of the first interval |
-| `active` | 0 or 1 | The level being watched (0 for active-low). Required |
+| `n` | integer | Number of quanta (the channel runs to tick `phase + n × step`) |
+| `step`, `phase` | §3 | Required. Quantum length and start of the first quantum |
+| `start_level` | 0 or 1 | The line's level at tick `phase`. Required |
+| `events` | integer | Number of events. Required |
 
-- **`interval-any`**: 1 bit per value, laid out the same as `bits` (§4.1). If the line was `active` at any tick in the interval, the value is `active`; if never, the opposite.
-- **`interval-latch`**: 2 bits per value; value k is in bits `2k` and `2k + 1` (bit numbering as in §4.1; bit 0 is the low bit). The length is `ceil(2n / 8)` bytes.
-  - Bit 0: the level at the last tick of the interval.
-  - Bit 1: whether the line changed to `active` within the interval (the previous tick was not `active`). The first tick of an interval is compared with the last tick of the previous interval. The first tick of the channel (`phase`) is compared with nothing.
-- Values are summaries of intervals. They do not hold the position or number of changes (time uncertainty is `step` ticks).
-- Checks and analysis answer only what can be stated with certainty from the summary. For example, an `active` value in `interval-any` means only "was active at some point"; it cannot be said that it was active the whole time. Only a lower bound on the number of pulses is known. Checks that cannot be decided are unchecked.
-- `.sr` and VCD have no way to represent this form. A capture with channels in this form cannot be exported to those formats (refused).
+- **Events**: one per quantum in which the line changed at least once, in quantum order. A quantum without a change has no event.
+- The data is, per event:
+  1. The quantum number's gap: unsigned LEB128 (7 bits at a time, low first, bit 7 set when more follow). The value is "this event's quantum − the previous event's quantum − 1"; for the first event, the quantum number itself.
+  2. One byte: bit 7 the level at the quantum's last tick, bits 0-6 the number of changes in it (1-127; 127 means at least 127).
+- Changes are counted against the tick before (the channel's first tick is compared with `start_level`, so there is no change at tick `phase` itself). When the count is not 127, the level after a quantum follows from the level before and the count's parity (a file where it does not is wrong).
+- **`step` 1**: every event is one change, at that tick. Lossless; it says the same as `bits` (§4.1), and a writer may choose the smaller.
+- **`step` 2 or more**: what is sure is the level at each quantum boundary, whether the line changed, and how many times (a lower bound at 127). Where in the quantum it changed, and the levels in between (count 2 or more), are not known.
+  - Checks follow this: `level()`, `starts()`, `ends()`, `only_moving()` and the count of `pulses()` are answered exactly (rising edges from the level b before and count c: ceil(c/2) when b is 0, floor(c/2) when 1).
+  - When no quantum holds more than one change, the line is known at a resolution of `step` ticks, so the other checks and the decoders read it at that resolution (each change happened somewhere in its quantum).
+  - On a channel with a quantum of two or more changes, checks that need the time of every change (`square()`, periods, decoding) are unchecked.
+- `.sr` and VCD: a channel with at most one change a quantum is written as samples at `step` ticks; one with a quantum of two or more changes has no form there, and is refused.
 
 ### 4.5 Reserved (not yet defined)
-
-The following will be defined as new `encoding` values when needed. **`format` does not change** (readers skip or refuse unknown `encoding`s, so old readers never misread new files; §3.2).
-
-- **Edge lists** (a compact form for logic with few changes).
 
 An ADC with parallel output whose pins are captured as logic and turned back into values is planned to be held as `analog` (§4.2), without creating a new `encoding` ([design decisions](design.md) §5.1).
 
