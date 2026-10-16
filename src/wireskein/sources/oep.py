@@ -2,7 +2,8 @@
 
 Logic channels go to oep.fixture.logic, analog ones to oep.fixture.analog;
 with both, oep.fixture.capture-group starts them together (the trigger, if
-any, on a logic channel). Channel ids are the probe's channel numbers; a
+any, on a logic channel - only with a client whose group takes one: the
+current OEP v1 draft has the immediate group only, capture §4). Channel ids are the probe's channel numbers; a
 track's channels are its plan roles 0..C-1 in the order given. The lock is
 taken for the capture and the plans are released afterwards.
 
@@ -23,7 +24,6 @@ from .. import fileformat
 from . import Request, Result
 
 TRIGGER = {"high": (1, 1), "low": (1, 0), "rise": (2, 0), "fall": (2, 1), "both": (2, 2)}   # (type, value), oep-if-capture
-TAG_FRONTEND = 0x46          # analog describe: frontend, range_min_mv, range_max_mv, attenuation_mdb
 TAG_CHIP, TAG_MODEL, TAG_FIRMWARE, TAG_UNIT_ID = 0x4C, 0x41, 0x40, 0x42     # core describe
 # UART link rates tried by default (port_speed): fastest first. oep-client refuses a rate that breaks and drops back
 # to the boot speed on repeated broken frames, so trying never ends slower than the boot speed; `oep:PORT?fast=0`
@@ -68,6 +68,10 @@ def capture(target: str, req: Request) -> Result:
     except ValueError:
         raise ValueError("oep channel ids are the probe's channel numbers: "
                          f"{[c for _, c in req.channels] + [c for _, c, _ in req.analog]}") from None
+    if req.trigger and aids and ids and not _group_trigger(oc):
+        raise ValueError("this oep-client-python starts logic and analog together only at once (capture-group, "
+                         "capture §4: the linked trigger is out of the current OEP v1 draft): leave out --trigger, or "
+                         "capture the logic alone")
     try:
         return _capture(link, core, oc, oh, message, target, req, ids, aids, fast)
     except oh.OepError as e:        # the probe refused or failed: say what, not where
@@ -77,12 +81,19 @@ def capture(target: str, req: Request) -> Result:
         raise RuntimeError(f"probe {target}: {e}{hint}") from e
 
 
+def _group_trigger(oc) -> bool:
+    """Whether this client's capture-group takes a trigger track (bind(..., trigger=))."""
+    import inspect
+    return "trigger" in inspect.signature(oc.CaptureGroup.bind).parameters
+
+
 def _what(tag, oc) -> str:
     """A configure item for people. The probe names the TLV it refused with its
     tag as sent (bit 7, critical, for multirate)."""
     base = tag & 0x7F if isinstance(tag, int) else tag
+    mr = getattr(oc, "mr", None)
     return {oc.TRIGGER: "a trigger", oc.PRETRIGGER: "a pretrigger",
-            oc.mr.TAG: "these channel reductions (/D, any, latch: none offered, or this combination not kept even at "
+            getattr(mr, "TAG", None): "these channel reductions (/D, any, latch: none offered, or this combination not kept even at "
                     "its lowest rate)"}.get(
         base, f"configure item 0x{base:02x}" if isinstance(base, int) else f"configure item {tag}")
 
@@ -164,12 +175,18 @@ def _probe_info(core, hst, opened) -> dict:
 
 
 def _frontends(core, hst, fn: int) -> dict[int, dict]:
+    """The analog describe's frontends (capture §3.5): number -> its measurable range."""
+    from oep_client import registry
+    want = registry.FIXTURE_ANALOG.tlv["describe"]["frontend"]
     out = {}
     for tag, v in _describe(core, hst, fn):
-        if tag == TAG_FRONTEND and len(v) >= 13:
-            fe, lo, hi, att = struct.unpack_from("<BiiI", v)
-            out[fe] = {"frontend": fe, "range_min_mv": lo, "range_max_mv": hi,
-                       **({"attenuation_db": att / 1000} if att != 0xFFFFFFFF else {})}
+        if tag == want and len(v) >= 9:
+            fe, lo, hi = struct.unpack_from("<Bii", v)
+            out[fe] = {"frontend": fe, "range_min_mv": lo, "range_max_mv": hi}
+            if len(v) >= 13:            # the attenuation (milli dB), when the probe gives it (asked back of oep-spec)
+                (att,) = struct.unpack_from("<I", v, 9)
+                if att != 0xFFFFFFFF:
+                    out[fe]["attenuation_db"] = att / 1000
     return out
 
 
@@ -285,16 +302,20 @@ def _capture(link, core, oc, oh, message, target: str, req: Request, ids: list[i
             group = None
             if cap and an:
                 group = oc.CaptureGroup(hst)
-                group.bind([cap, an], trigger=cap if req.trigger else None)
+                if req.trigger:
+                    group.bind([cap, an], trigger=cap)
+                else:
+                    group.bind([cap, an])
                 try:
-                    _, group_start = group.start([cap, an])
+                    started = group.start([cap, an])
+                    group_start = started[1] if isinstance(started, tuple) else started
                     st = _waiting(lambda: group.wait(req.timeout), cap, req)
                     seg = _segment(cap)
                     aseg = _segment(an)
                 finally:
                     group.bind([])
                 probe["group_start_ns"] = group_start
-                if st.trigger_ns is not None:
+                if getattr(st, "trigger_ns", None) is not None:
                     probe["trigger_ns"] = st.trigger_ns
             else:
                 track = cap or an
@@ -340,7 +361,7 @@ def _capture(link, core, oc, oh, message, target: str, req: Request, ids: list[i
         if seg.trigger_index is not None:              # tick 0 is the segment's (base) sample 0
             meta["trigger_tick"] = seg.trigger_index
         tick = Fraction(cfg.rate)
-        if cfg.block is not None:
+        if getattr(cfg, "block", None) is not None:
             chans = _reduced(cap.decode_multirate(data, seg.samples), req, names)
         else:
             chans = fileformat.from_interleaved(data, names, cfg.width, cfg.positions, seg.samples)
@@ -393,7 +414,11 @@ def _capture(link, core, oc, oh, message, target: str, req: Request, ids: list[i
 
 def _multirate(req: Request, names: list[str]) -> list:
     """Request.reduce as oep-client's Multirate list (oep-if-capture §5.2): the role is the channel's place."""
-    from oep_client import multirate as mr
+    try:
+        from oep_client import multirate as mr
+    except ImportError:
+        raise ValueError("this oep-client-python has no multirate (OEP v1 left it out for now): "
+                         "drop the reductions (/D, :any-..., :latch-...) from --channels") from None
     policy = {"sample": mr.SAMPLE, "any": mr.ANY_ACTIVE, "latch": mr.EDGE_LATCH}
     return [mr.Multirate(names.index(n), policy[p], d, param) for n, (p, d, param) in req.reduce.items()]
 

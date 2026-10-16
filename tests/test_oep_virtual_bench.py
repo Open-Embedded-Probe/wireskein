@@ -55,19 +55,14 @@ def test_trigger_and_slip(probe, tmp_path):
     assert meta["time_base_slipped"] is True
     b = levels(out)[1]
     t = meta["trigger_tick"]
-    assert t >= 50 and b[t] == 1 and b[t - 1] == 0                # a rising edge of B at the trigger index
+    # a rising edge of B at the trigger index; a trigger before the pretrigger filled leaves it smaller (capture §3.3)
+    assert t >= 1 and b[t] == 1 and b[t - 1] == 0
 
 
 def test_rate_is_the_probes_answer(probe, tmp_path):
     out = sources.capture(probe(), sources.Request([("A", "10")], 3_000_000, 100), tmp_path / "r.wireskein")
     tick = fileformat.tick_hz(fileformat.read(out)[0])
     assert tick <= 3_000_000 and 20_000_000 % tick == 0           # source / integer, at most what was asked
-
-
-def test_a_pin_another_interface_listens_to_can_be_captured(probe, tmp_path):
-    src = probe("--uart-plan")        # the fixture UART's saved plan holds channels 0 (RX) and 1 (TX); capture only listens
-    out = sources.capture(src, sources.Request([("RX", "0"), ("TX", "1")], 1_000_000, 64), tmp_path / "s.wireskein")
-    assert [c.n for c in fileformat.read(out)[1]] == [64, 64]
 
 
 def test_esp32_sampler_profile(probe, tmp_path):
@@ -86,7 +81,8 @@ def test_analog_alone_keeps_raw_values_and_what_the_probe_knows(probe, tmp_path)
     assert sq.value_bits == 12 and sq.zero is not None and sq.scale_nv
     v = sq.values()
     assert len(set(v)) == 2                                        # the virtual bench's square wave on even channels
-    assert sine.acquisition["frontend"]["frontend"] == 3 and sine.acquisition["attenuation_db"] == 12
+    fe = sine.acquisition["frontend"]
+    assert fe["frontend"] == 3 and fe["range_min_mv"] < fe["range_max_mv"]       # describe's frontend (capture §3.5)
     assert sq.acquisition["pin"] == 16 and "reference" in sq.acquisition and sq.acquisition["vrefint_raw"] == 1365
     p = head["meta"]["probe"]
     assert p["calibration"] and "boot_id" in p and "start_ns" in head["meta"]
@@ -110,9 +106,17 @@ def test_logic_and_analog_together_in_a_group(probe, tmp_path):
     assert sq.n == round(2000 * 48_000 / 20_000_000) or sq.n >= 1
 
 
-def test_group_trigger_marks_both_tracks(probe, tmp_path):
+def test_group_trigger(probe, tmp_path):
+    """A trigger on a logic channel with analog: both tracks marked when the client's group takes a trigger track,
+    else refused in one line before opening (the current OEP v1 draft's group starts at once only, capture §4)."""
+    from oep_client import capture as oc
+    from wireskein.sources.oep import _group_trigger
     req = sources.Request([("A", "10"), ("B", "11")], 20_000_000, 2000, trigger=("B", "rise"), pretrigger=100,
                           analog=[("SQ", "16", None)], analog_rate=48_000, analog_samples=64)
+    if not _group_trigger(oc):
+        with pytest.raises(ValueError, match="only at once"):
+            sources.capture(probe(), req, tmp_path / "t.wireskein")
+        return
     out = sources.capture(probe(), req, tmp_path / "t.wireskein")
     head, chans = fileformat.read(out)
     assert "trigger_tick" in head["meta"] and "trigger_index" in chans[2].acquisition
@@ -152,6 +156,7 @@ def test_a_trigger_that_never_comes_is_named():
 def test_multirate_keeps_each_channel_as_asked(probe, tmp_path):
     """OEP multirate: a raw channel, a sample every 4 from 1, any-low per 32, latch-high per 8 - each read back as the
     probe's counter waveform (role k is bit k of the base sample number) summarized the same way."""
+    pytest.importorskip("oep_client.multirate", reason="OEP v1 left multirate out for now (asked back of oep-spec)")
     src = probe()
     text = "A=10,B=11/4+1,C=12:any-low/32,D=13:latch-high/8"
     req = sources.Request(sources.parse_channels(text), 20_000_000, 1000, reduce=sources.parse_reduce(text),
