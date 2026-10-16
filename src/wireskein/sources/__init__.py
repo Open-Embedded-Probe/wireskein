@@ -39,6 +39,9 @@ class Request:
     samples: int
     trigger: tuple[str, str] | None = None   # (logic channel name, one of TRIGGERS); None: start at once
     pretrigger: int | None = None            # samples kept before the trigger
+    arm: str = "pretrigger"                  # when the trigger is looked for: "pretrigger" (once it is there: the
+                                             # samples before the trigger are always that many) or "now" (at once:
+                                             # an early trigger leaves fewer)
     timeout: float = 10.0                    # seconds to wait for the capture to finish
     analog: list[tuple[str, str, int | None]] = field(default_factory=list)   # (name, channel id, input range / frontend)
     analog_rate: int | None = None           # analog samples per second (default: the source's choice or `rate`)
@@ -55,6 +58,8 @@ class Request:
             name, kind = self.trigger
             if name not in [n for n, _ in self.channels] or kind not in TRIGGERS:
                 raise ValueError(f"trigger {name}:{kind}: the channel must be one captured, the kind one of {', '.join(TRIGGERS)}")
+        if self.arm not in ("pretrigger", "now"):
+            raise ValueError(f"arm {self.arm!r}: pretrigger or now")
         logic = {n for n, _ in self.channels}
         for name, d in self.resolution.items():
             if name not in logic or d < 1:

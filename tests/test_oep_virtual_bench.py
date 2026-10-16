@@ -55,8 +55,9 @@ def test_trigger_and_slip(probe, tmp_path):
     assert meta["time_base_slipped"] is True
     b = levels(out)[1]
     t = meta["trigger_tick"]
-    # a rising edge of B at the trigger index; a trigger before the pretrigger filled leaves it smaller (capture §3.3)
-    assert t >= 1 and b[t] == 1 and b[t - 1] == 0
+    # armed once the pretrigger is there (the default, capture §3.3): the trigger index is the pretrigger, at a
+    # rising edge of B
+    assert t == 50 and b[t] == 1 and b[t - 1] == 0
 
 
 def test_rate_is_the_probes_answer(probe, tmp_path):
@@ -183,3 +184,14 @@ def test_format_1_keeps_each_line_at_its_resolution(probe, tmp_path):
 def test_a_resolution_on_sigrok_is_refused():
     with pytest.raises(ValueError, match="needs an OEP probe with capture format 1"):
         sources.run("sigrok:demo", sources.Request([("A", "D0")], 1_000_000, 100, resolution={"A": 4}))
+
+
+def test_arm_now_may_leave_a_shorter_pretrigger(probe, tmp_path):
+    """--arm now (trigger_opts arm 0): looked for at once, so B's first rise (sample 2 of the counter) triggers before
+    the 50 samples of pretrigger are there."""
+    req = sources.Request([("A", "10"), ("B", "11")], 20_000_000, 400, trigger=("B", "rise"), pretrigger=50, arm="now")
+    out = sources.capture(probe(), req, tmp_path / "n.wireskein")
+    meta = fileformat.read(out)[0]["meta"]
+    b = levels(out)[1]
+    t = meta["trigger_tick"]
+    assert 1 <= t < 50 and b[t] == 1 and b[t - 1] == 0

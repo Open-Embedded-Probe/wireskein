@@ -241,6 +241,7 @@ def capture_cmd(args) -> None:
         channels=logic, rate=sources.parse_count(rate), samples=sources.parse_count(samples),
         trigger=sources.parse_trigger(args.trigger) if args.trigger else None,
         pretrigger=sources.parse_count(args.pretrigger) if args.pretrigger else None, timeout=args.timeout,
+        arm=args.arm,
         analog=sources.parse_analog(args.analog) if args.analog else [],
         analog_rate=sources.parse_count(args.analog_rate) if args.analog_rate else None,
         analog_samples=sources.parse_count(args.analog_samples) if args.analog_samples else None,
@@ -408,6 +409,9 @@ def main() -> None:
     cp.add_argument("--samples", default=None, help="logic samples, e.g. 1M, 200000 (analog only: --analog-samples does)")
     cp.add_argument("--trigger", default=None, help="NAME:rise|fall|both|high|low (default: start at once)")
     cp.add_argument("--pretrigger", default=None, help="samples kept before the trigger")
+    cp.add_argument("--arm", choices=("pretrigger", "now"), default="pretrigger",
+                    help="look for the trigger once the pretrigger is there (default: always that many samples before "
+                         "it) or at once (an early trigger leaves fewer; OEP trigger_opts arm 0)")
     cp.add_argument("--timeout", type=float, default=10.0, help="seconds to wait for the capture")
     cp.add_argument("--note", default=None, help="a note stored with the capture")
     cp.add_argument("-o", "--output", type=Path, required=True, help="OUT.wireskein (or OUT.sr)")

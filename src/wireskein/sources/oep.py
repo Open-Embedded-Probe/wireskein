@@ -93,7 +93,8 @@ def _what(tag, oc) -> str:
     """A configure item for people. The probe names the TLV it refused with its
     tag as sent (bit 7 is the critical mark)."""
     base = tag & 0x7F if isinstance(tag, int) else tag
-    return {oc.TRIGGER: "a trigger", oc.PRETRIGGER: "a pretrigger"}.get(
+    return {oc.TRIGGER: "a trigger", oc.PRETRIGGER: "a pretrigger",
+            getattr(oc, "TRIGGER_OPTS", None): "these trigger options (--arm now)"}.get(
         base, f"configure item 0x{base:02x}" if isinstance(base, int) else f"configure item {tag}")
 
 
@@ -275,6 +276,10 @@ def _capture(link, core, oc, oh, message, target: str, req: Request, ids: list[i
                 if req.resolution:          # format 1: these lines as their changes, the others raw (§1.3)
                     blocks = dict(data_format=oc.DATA_FORMAT["logic_blocks"], roles=list(range(len(ids))),
                                   events={names.index(n): d for n, d in req.resolution.items()})
+                if req.arm == "now" and trigger:     # arm 0 (§3.3): optional, so it goes critical; arm 1 is the default
+                    if not hasattr(oc, "TriggerOpts"):
+                        raise ValueError("--arm now needs an oep-client-python with trigger_opts")
+                    blocks["trigger_opts"] = oc.TriggerOpts(arm=0)
                 cfg = _configure(cap, oc, oh, target, "logic", rate=req.rate, samples=req.samples, trigger=trigger,
                                  pretrigger=req.pretrigger, **blocks)
             if an:
