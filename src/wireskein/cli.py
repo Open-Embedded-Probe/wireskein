@@ -243,7 +243,8 @@ def capture_cmd(args) -> None:
         pretrigger=sources.parse_count(args.pretrigger) if args.pretrigger else None, timeout=args.timeout,
         analog=sources.parse_analog(args.analog) if args.analog else [],
         analog_rate=sources.parse_count(args.analog_rate) if args.analog_rate else None,
-        analog_samples=sources.parse_count(args.analog_samples) if args.analog_samples else None)
+        analog_samples=sources.parse_count(args.analog_samples) if args.analog_samples else None,
+        resolution=sources.parse_resolution(args.channels or ""))
     out = sources.capture(args.source, req, args.output)
     if args.note:
         from . import fileformat
@@ -256,6 +257,10 @@ def capture_cmd(args) -> None:
     link = (cap.meta.get("probe") or {}).get("link")
     if link:
         print("link: " + _link_line(link))
+    data = (cap.meta.get("probe") or {}).get("data")
+    if data:                # format 1: what the probe sent against what the format allows at worst, and format 0
+        print(f"data: format {data['format']}, {data['bytes'] / 1000:.1f} KB (worst {data['worst_bytes'] / 1000:.1f} KB, "
+              f"format 0 {data['format0_bytes'] / 1000:.1f} KB), blocks of {data['block']} samples")
 
 
 def _link_line(link: dict) -> str:
@@ -393,7 +398,9 @@ def main() -> None:
     cp.add_argument("--source", required=True, help="oep:<serial port | tcp://HOST:PORT | usb | usb:UNIT_ID | usb:VID:PID>[?fast=0 | ?fast=RATE,RATE] or sigrok:<driver> "
                          "(a UART probe's link is raised for reading back, 1.5M / 921600 / 500000 first that "
                          "works; fast=0 keeps the boot speed)")
-    cp.add_argument("--channels", default=None, help='logic: "NAME=ID,..." (ID: the probe channel number / sigrok channel) or "ID,..."')
+    cp.add_argument("--channels", default=None, help='logic: "NAME=ID,..." (ID: the probe channel number / sigrok channel) or "ID,..."; '
+                         'NAME=ID/D keeps a line as its changes, per D samples how many and the level after (OEP '
+                         'format 1; /1 is every change exact)')
     cp.add_argument("--analog", default=None, help='analog: "NAME=ID[@FRONTEND],..." (FRONTEND: the input range number, OEP)')
     cp.add_argument("--analog-rate", default=None, help="analog samples per second (default: --rate)")
     cp.add_argument("--analog-samples", default=None, help="default: as long as the logic capture")

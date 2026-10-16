@@ -68,6 +68,8 @@ def capture(target: str, req: Request) -> Result:
     except ValueError:
         raise ValueError("oep channel ids are the probe's channel numbers: "
                          f"{[c for _, c in req.channels] + [c for _, c, _ in req.analog]}") from None
+    if req.resolution and not hasattr(oc, "DATA_FORMAT"):
+        raise ValueError("a resolution (NAME=ID/D) needs an oep-client-python with capture format 1")
     if req.trigger and aids and ids and not _group_trigger(oc):
         raise ValueError("this oep-client-python starts logic and analog together only at once (capture-group, "
                          "capture §4: the linked trigger is out of the current OEP v1 draft): leave out --trigger, or "
@@ -269,8 +271,12 @@ def _capture(link, core, oc, oh, message, target: str, req: Request, ids: list[i
                 if req.trigger:
                     kind, value = TRIGGER[req.trigger[1]]
                     trigger = (kind, names.index(req.trigger[0]), value)
+                blocks = {}
+                if req.resolution:          # format 1: these lines as their changes, the others raw (§1.3)
+                    blocks = dict(data_format=oc.DATA_FORMAT["logic_blocks"], roles=list(range(len(ids))),
+                                  events={names.index(n): d for n, d in req.resolution.items()})
                 cfg = _configure(cap, oc, oh, target, "logic", rate=req.rate, samples=req.samples, trigger=trigger,
-                                 pretrigger=req.pretrigger)
+                                 pretrigger=req.pretrigger, **blocks)
             if an:
                 arate = req.analog_rate or req.rate
                 asamples = req.analog_samples
@@ -353,7 +359,11 @@ def _capture(link, core, oc, oh, message, target: str, req: Request, ids: list[i
         if seg.trigger_index is not None:              # tick 0 is the segment's (base) sample 0
             meta["trigger_tick"] = seg.trigger_index
         tick = Fraction(cfg.rate)
-        chans = fileformat.from_interleaved(data, names, cfg.width, cfg.positions, seg.samples)
+        if getattr(cfg, "event_d", None):
+            chans = _from_blocks(cap.blocks(data, seg.samples), names, seg.samples, cfg)
+            probe["data"] = _budget(oc, cfg, len(data), seg.samples, len(names))
+        else:
+            chans = fileformat.from_interleaved(data, names, cfg.width, cfg.positions, seg.samples)
         for c, ch in zip(chans, ids):
             c.acquisition = {"pin": ch}
         t_ref = seg.start_ns
@@ -399,6 +409,59 @@ def _capture(link, core, oc, oh, message, target: str, req: Request, ids: list[i
     if probe:
         meta["probe"] = probe
     return Result(tick, chans, meta)
+
+
+def _from_blocks(blocks, names: list[str], samples: int, cfg) -> list:
+    """A format 1 segment's blocks (oep-client's capture_blocks) -> the file's channels, in the order asked: a raw
+    channel as bits (L is a multiple of 8, so the blocks' bytes join as they are), an events channel as `events` at
+    its D (each block's ticks as quanta of the segment: L is a multiple of D). A block the probe carried raw
+    (fallback) is counted here from its samples, the same way the probe counts (§1.3)."""
+    import numpy as np
+    out = []
+    for role, name in enumerate(names):
+        d = cfg.event_d.get(role)
+        if d is None:
+            bits = b"".join(b.raw[role] for b in blocks)
+            out.append(fileformat.Channel(name, fileformat.pack(np.unpackbits(np.frombuffer(bits, np.uint8),
+                                                                              bitorder="little")[:samples].tobytes()),
+                                          samples))
+            continue
+        quanta, levels, counts, start, level = [], [], [], None, None
+        for b in blocks:
+            q0 = b.first // d
+            if role in b.fallback:
+                lv = np.unpackbits(np.frombuffer(b.raw[role], np.uint8), bitorder="little")[:b.samples].astype(np.int8)
+                if start is None:
+                    start = level = int(lv[0])
+                prev = np.concatenate(([level], lv[:-1]))
+                change = (lv != prev).astype(np.int64)
+                per = np.add.reduceat(change, np.arange(0, b.samples, d))
+                for t in np.flatnonzero(per):
+                    quanta.append(q0 + int(t))
+                    levels.append(int(lv[min((t + 1) * d, b.samples) - 1]))
+                    counts.append(int(per[t]))
+                level = int(lv[-1])
+            else:
+                e = b.events[role]
+                if start is None:
+                    start = level = int(e.start_level)
+                quanta += [q0 + int(t) for t in e.ticks]
+                levels += [int(x) for x in e.levels]
+                counts += [int(x) for x in e.counts]
+                if len(e.levels):
+                    level = int(e.levels[-1])
+        out.append(fileformat.events(name, quanta, levels, counts, -(-samples // d), d, 0, start or 0))
+    return out
+
+
+def _budget(oc, cfg, got: int, samples: int, channels: int) -> dict:
+    """meta.probe.data: the bytes the probe sent for the segment, the most §1.3's formula allows for it, and what
+    format 0 would have taken (1 bit a channel a sample, at least)."""
+    from oep_client import capture_blocks
+    L = cfg.block
+    worst_block = capture_blocks.worst_bytes(len(cfg.raw_roles), list(cfg.event_d.values()), L)
+    return {"format": int(cfg.format), "block": L, "bytes": got, "worst_bytes": -(-samples // L) * worst_block,
+            "format0_bytes": -(-samples * channels // 8)}
 
 
 def _segment(track):

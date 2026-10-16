@@ -152,3 +152,34 @@ def test_a_trigger_that_never_comes_is_named():
     with pytest.raises(TimeoutError, match="did not finish"):          # no trigger asked: the plain timeout
         _waiting(never, Waiting(), sources.Request([("A", "10")], 1_000_000, 100, timeout=2))
 
+
+
+def test_format_1_keeps_each_line_at_its_resolution(probe, tmp_path):
+    """OEP capture format 1 (§1.3) on the bench's counter (channel k is bit k of the sample number): A every change
+    (/1; it changes every sample, so the probe carries it raw), B raw, C per 4 (one change a quantum: also a Channel
+    of step 4), D per 64 (8 changes a quantum: the count exact, where in the quantum hidden)."""
+    from wireskein.analyze import load
+    text = "A=10/1,B=11,C=12/4,D=13/64"
+    req = sources.Request(sources.parse_channels(text), 20_000_000, 4096, resolution=sources.parse_resolution(text))
+    out = sources.capture(probe(), req, tmp_path / "f1.wireskein")
+    head, chans = fileformat.read(out)
+    assert [c["encoding"] for c in head["channels"]] == ["events", "bits", "events", "events"]
+    assert [c.get("step") for c in head["channels"]] == [1, 1, 4, 64]
+    i = np.arange(4096)
+    cap = load(out)
+    for name, k in (("A", 0), ("B", 1)):                     # exact lines: every edge where the counter says
+        assert np.array_equal(cap.channel(name).level_at(i), (i >> k) & 1), name
+    c = cap.channel("C")                                     # per 4: right at each quantum's last tick, edges within it
+    ends_ = np.arange(3, 4096, 4)
+    assert c.step == 4 and np.array_equal(c.level_at(ends_), (ends_ >> 2) & 1)
+    traces = {t.name: t for t in cap.events}                 # C (with its Channel view) and D (hidden changes)
+    assert set(traces) == {"C", "D"} and traces["C"].hidden == 0
+    dtrace = traces["D"]
+    assert dtrace.step == 64 and dtrace.counts[0] == 7 and set(dtrace.counts[1:].tolist()) == {8} and dtrace.hidden == 64   # sample 0 is the start level: no change there
+    data = head["meta"]["probe"]["data"]
+    assert data["format"] == 1 and data["bytes"] <= data["worst_bytes"]
+
+
+def test_a_resolution_on_sigrok_is_refused():
+    with pytest.raises(ValueError, match="needs an OEP probe with capture format 1"):
+        sources.run("sigrok:demo", sources.Request([("A", "D0")], 1_000_000, 100, resolution={"A": 4}))

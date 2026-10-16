@@ -43,6 +43,9 @@ class Request:
     analog: list[tuple[str, str, int | None]] = field(default_factory=list)   # (name, channel id, input range / frontend)
     analog_rate: int | None = None           # analog samples per second (default: the source's choice or `rate`)
     analog_samples: int | None = None        # default: as long as the logic capture
+    # logic channels kept as their changes (OEP capture's format 1 events): name -> D, the resolution in samples
+    # (1: every change exact; D > 1: per D samples, how many times it changed and the level after)
+    resolution: dict[str, int] = field(default_factory=dict)
 
     def __post_init__(self):
         names = [n for n, _ in self.channels] + [n for n, *_ in self.analog]
@@ -52,6 +55,10 @@ class Request:
             name, kind = self.trigger
             if name not in [n for n, _ in self.channels] or kind not in TRIGGERS:
                 raise ValueError(f"trigger {name}:{kind}: the channel must be one captured, the kind one of {', '.join(TRIGGERS)}")
+        logic = {n for n, _ in self.channels}
+        for name, d in self.resolution.items():
+            if name not in logic or d < 1:
+                raise ValueError(f"{name}/{d}: a resolution is for a logic channel captured, 1 or more samples")
 
 
 @dataclass
@@ -108,12 +115,29 @@ def parse_count(text: str) -> int:
     return round(float(m.group(1)) * _SUFFIX[m.group(2)])
 
 
-def parse_channels(text: str) -> list[tuple[str, str]]:
-    """"SDA=47,SCL=48" (name=id) or "D0,D1" (the id is also the name)."""
-    out = []
+def _parts(text: str):
     for part in filter(None, (p.strip() for p in text.split(","))):
         name, _, cid = part.partition("=")
-        out.append((name.strip(), (cid or name).strip()))
+        cid, _, d = (cid or name).strip().partition("/")
+        yield name.strip(), cid.strip(), d.strip()
+
+
+def parse_channels(text: str) -> list[tuple[str, str]]:
+    """"SDA=47,SCL=48" (name=id) or "D0,D1" (the id is also the name). A resolution after the id (parse_resolution)
+    is left out here."""
+    return [(name, cid) for name, cid, _ in _parts(text)]
+
+
+def parse_resolution(text: str) -> dict[str, int]:
+    """The logic channels kept as their changes (Request.resolution), written after the id: "CS=5/64" (per 64
+    samples, how many times it changed and the level after), "EN=7/1" (every change, exact)."""
+    out = {}
+    for name, _, d in _parts(text):
+        if d:
+            try:
+                out[name] = parse_count(d)
+            except ValueError:
+                raise ValueError(f"{name}=.../{d}: the resolution is a number of samples (CS=5/64)") from None
     return out
 
 
