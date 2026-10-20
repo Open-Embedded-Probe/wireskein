@@ -521,9 +521,8 @@ class _Streamed:
                          "stopped": True})
         elif st.dropped and not lost:
             lost.append({"after_part": len(parts) - 1, "reason": "the probe dropped data (status flags bit 0)"})
-        if why:                                  # where the probe says the data went (its own diagnostics)
-            for x in lost:
-                x["reason"] += f" - the probe's counts: {why}"
+        if why and lost:                         # where the probe says the data went (its own diagnostics; the
+            lost[-1]["reason"] += f" - the probe's counts since start: {why}"    # counters are totals: said once)
         return Result(Fraction(self.cfg.rate), parts[0].channels, self.meta, parts, lost, "timeline")
 
 

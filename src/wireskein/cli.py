@@ -62,9 +62,8 @@ def info(args) -> None:
           f"({total / float(tick):.6g} s), id {raw.get('id', '-')}"
           + (f", {len(parts)} parts ({raw.get('layout')})" if many else ""))
     if not raw.get("complete", True):     # a loss makes the capture a failure (wireskein-format §3.4): say it first
-        for x in raw.get("lost", []):
-            print(f"INCOMPLETE: data lost after part {x['after_part']}: {x['reason']}"
-                  + (f" ({x['ticks']} ticks)" if x.get("ticks") else "") + (", the capture stopped there" if x.get("stopped") else ""))
+        for line in _loss_lines(raw):
+            print(line)
     if raw.get("meta"):
         print("meta: " + json.dumps(raw["meta"], ensure_ascii=False, default=str))
     for head, chans in parts:
@@ -305,12 +304,32 @@ def capture_cmd(args) -> None:
         print(f"stream: {kb:.1f} KB in {st['frames']} frames over {st['read_s']:.2f} s"
               + (f" ({kb / st['read_s']:.1f} KB/s)" if st["read_s"] > 0 else ""))
     if raw and not raw.get("complete", True):    # a loss is a failure (wireskein-format §3.4): kept, but said and exit 1
-        for x in raw["lost"]:
-            print(f"INCOMPLETE: data lost after part {x['after_part']}: {x['reason']}"
-                  + (f" ({x['ticks']} ticks)" if x.get("ticks") else "") + (", stopped there" if x.get("stopped") else ""),
-                  file=sys.stderr)
+        for line in _loss_lines(raw):
+            print(line, file=sys.stderr)
         print(f"{out}: kept what was taken; the capture failed", file=sys.stderr)
         raise SystemExit(1)
+
+
+LOSS_LINES = 3      # the first losses shown in full; the rest summed
+
+
+def _loss_lines(raw: dict) -> list[str]:
+    """INCOMPLETE lines for a capture's losses: how many and how long in all, the first few, and the last one's
+    reason when it differs (it carries the probe's counters)."""
+    lost = raw.get("lost", [])
+    ticks = sum(x.get("ticks", 0) for x in lost)
+    taken = sum(p["ticks"] for p in raw.get("parts", []))
+    head = f"INCOMPLETE: {len(lost)} loss{'es' if len(lost) != 1 else ''}"
+    if ticks:
+        head += f", {ticks} ticks lost against {taken} taken ({ticks / (ticks + taken) * 100:.2g} %)"
+    out = [head]
+    shown = lost[:LOSS_LINES] + ([lost[-1]] if len(lost) > LOSS_LINES else [])
+    for x in shown:
+        out.append(f"  after part {x['after_part']}: {x['reason']}" + (f" ({x['ticks']} ticks)" if x.get("ticks") else "")
+                   + (", stopped there" if x.get("stopped") else ""))
+    if len(lost) > LOSS_LINES + 1:
+        out.insert(1 + LOSS_LINES, f"  ... {len(lost) - LOSS_LINES - 1} more")
+    return out
 
 
 def _link_line(link: dict) -> str:

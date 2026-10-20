@@ -51,7 +51,8 @@ def test_a_loss_is_shown_first_and_fails_the_capture(tmp_path):
     assert raw["complete"] is False and raw["lost"][0]["stopped"] is False
     out = subprocess.run([sys.executable, "-m", "wireskein", "info", str(p)], capture_output=True, text=True,
                          check=True).stdout.splitlines()
-    assert out[1].startswith("INCOMPLETE: data lost after part 0: probe dropped a segment (no room) (80 ticks)")
+    assert out[1] == "INCOMPLETE: 1 loss, 80 ticks lost against 40 taken (67 %)"
+    assert out[2] == "  after part 0: probe dropped a segment (no room) (80 ticks)"
     assert "2 parts (timeline)" in out[0] and any(x.startswith("part 1: 20 ticks from tick 100") for x in out)
 
     rec = Recorder(tmp_path / "run")
