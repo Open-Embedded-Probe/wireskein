@@ -36,6 +36,12 @@ Repository = "https://github.com/Open-Embedded-Probe/wireskein"
 [dependency-groups]
 dev = ["pytest>=8", "oep-client-python[usb-async]>=0.0.34"]
 
+[tool.uv.sources]
+# Until oep-client-python's next release: wireskein uses its unreleased capture (format 1 and LogicCapture.columns,
+# the capture group's trigger source and trigger_caps, judge_latency_ns, the usb-async stream). Before a push, release
+# it, raise the >= above to that version and drop this (CI has no ../oep-client-python).
+oep-client-python = { path = "../oep-client-python", editable = true }
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/wireskein"]
 artifacts = ["src/wireskein/web/**"]      # the viewer: not in git, fetched by tools/fetch_web.py
