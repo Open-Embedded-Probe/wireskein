@@ -109,3 +109,25 @@ def test_markers_name_their_part(tmp_path):
     fileformat.write(one, 1000, chans)
     fileformat.set_markers(one, [{"t": 3, "label": "a"}])
     assert "part" not in fileformat.markers(one)[0]                 # one part: nothing to name
+
+
+def test_convert_writes_one_part_when_asked(tmp_path):
+    chans = [fileformat.Channel("A", fileformat.pack(bytes([0, 1] * 4)), 8)]
+    src = tmp_path / "p.wireskein"
+    fileformat.write(src, 1000, parts=[fileformat.Part(chans, {"start_ns": 5}, 0), fileformat.Part(chans, {}, 20)],
+                     lost=[{"after_part": 0, "reason": "probe dropped a segment", "stopped": False, "ticks": 12}])
+    run = lambda *a: subprocess.run([sys.executable, "-m", "wireskein", "convert", *map(str, a)],   # noqa: E731
+                                    capture_output=True, text=True)
+    r = run(src, tmp_path / "x.sr")
+    assert r.returncode != 0 and "--part K" in r.stderr
+    r = run(src, tmp_path / "one.wireskein", "--part", "0")
+    assert r.returncode == 0 and "lost data" in r.stderr
+    head = fileformat.read_header(tmp_path / "one.wireskein")
+    assert len(head["parts"]) == 1 and head["meta"]["from_part"] == {"part": 0, "of": 2, "layout": "timeline",
+                                                                     "complete": False}
+    assert head["parts"][0]["meta"]["start_ns"] == 5
+    assert head["complete"] is False and "part 0 of a capture that lost data" in head["lost"][0]["reason"]
+    assert run(src, tmp_path / "one.sr", "--part", "1").returncode == 0
+    from wireskein.analyze import load
+    sr = load(tmp_path / "one.sr")
+    assert sr.meta["complete"] is False and sr.meta["from_part"]["part"] == 1   # still a failed capture's

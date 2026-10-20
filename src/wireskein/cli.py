@@ -402,11 +402,33 @@ def _fewer(raw: dict, req) -> None:
 
 
 def convert(args) -> None:
-    from .analyze import save
-    cap = load(args.input)
+    from .analyze import load as load_file, save
+    part = getattr(args, "part", None)
+    from . import fileformat
+    if part is None and fileformat.sniff(args.input) == "wireskein":
+        head = fileformat.read_header(args.input)
+        if len(head["parts"]) > 1:
+            raise ValueError(f"{args.input} has {len(head['parts'])} parts ({head['layout']}): --part K writes one of "
+                             f"them (from 0); a .sr or a VCD holds one gapless run")
+    cap = load_file(args.input, part) if part is not None else load(args.input)
     meta = {k: v for k, v in cap.meta.items()
             if k not in ("file", "sr_file", "vcd_file", "tick_hz", "unitsize", "fixture", "extras", "skipped_channels",
                          "vcd_not_read")}
+    if part is not None and cap.meta.get("n_parts", 1) > 1:   # one part, asked for: the others are left on purpose
+        n = cap.meta["n_parts"]
+        meta["from_part"] = {"part": part, "of": n, "layout": cap.meta.get("layout"),
+                             "complete": cap.meta.get("complete", True)}   # the whole capture's: a failed one stays so
+        lost = []
+        if not cap.meta.get("complete", True):           # still a failed capture's (wireskein-format §3.4)
+            lost = [{"after_part": -1, "stopped": False,
+                     "reason": f"part {part} of a capture that lost data ({len(cap.meta.get('lost', []))} losses in "
+                               f"all; meta.from_part)"}]
+            print(f"note: {args.input} lost data (a failed capture); part {part} is written on its own and stays "
+                  f"incomplete", file=sys.stderr)
+        cap.meta.update(n_parts=1, part=0, lost=lost, complete=not lost)
+        for k in ("n_parts", "part", "layout"):
+            meta.pop(k, None)
+        meta.update(lost=lost, complete=not lost)          # a .sr / VCD keeps them in wireskein's own data
     out = save(args.output, cap, **meta)
     slow = [f"{c.name}/{c.step}" for c in cap.channels if c.step != 1]
     print(f"{args.input} -> {out}: {_count(cap)}, {cap.n_samples} ticks at {cap.rate:g} Hz"
@@ -491,6 +513,9 @@ def main() -> None:
     cv = sub.add_parser("convert", help="convert a capture between formats (read by content; written as .sr when OUT ends in .sr, else WireSkein)")
     cv.add_argument("input", type=Path)
     cv.add_argument("output", type=Path)
+    cv.add_argument("--part", type=int, default=None,
+                    help="of a capture in parts (wireskein-format §3.4): write this one (from 0) on its own; .sr and "
+                         "VCD hold one gapless run")
     cp = sub.add_parser("capture", help="capture logic channels from a device into a .wireskein (sources: oep, sigrok)")
     cp.add_argument("--source", required=True, help="oep:<serial port | tcp://HOST:PORT | usb | usb:UNIT_ID | usb:VID:PID>[?fast=0 | ?fast=RATE,RATE] or sigrok:<driver> "
                          "(a UART probe's link is raised for reading back, 1.5M / 921600 / 500000 first that "
