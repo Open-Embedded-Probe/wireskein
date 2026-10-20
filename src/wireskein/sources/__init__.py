@@ -55,6 +55,8 @@ class Request:
     duration: float | None = None            # seconds, sent as it is taken: longer than the probe's memory)
     on_loss: str = "stop"                    # stream: "stop" at the first loss (the default), or "continue" to the end;
                                              # either way a loss makes the capture a failure (wireskein-format §3.4)
+    spool_dir: str | None = None             # stream: where its channels are put together on disk while it runs
+                                             # (capture() puts them by the output; not /tmp, which may be memory)
 
     def __post_init__(self):
         names = [n for n, _ in self.channels] + [n for n, *_ in self.analog]
@@ -89,6 +91,7 @@ class Result:
     parts: list[fileformat.Part] | None = None   # instead of channels: a capture in parts (wireskein-format §3.4)
     lost: list[dict] = field(default_factory=list)   # what was lost while capturing (a failure)
     layout: str = "timeline"
+    temp_dir: str | None = None                  # files the channels are read from, removed once written
 
     @property
     def complete(self) -> bool:
@@ -115,8 +118,20 @@ def run(source: str, request: Request) -> Result:
 
 def capture(source: str, request: Request, out: str | Path, attachments: dict | None = None, **meta) -> Path:
     """Capture and save to `out`: a WireSkein file, or a .sr by that name (slow channels repeated)."""
-    res = run(source, request)
+    import dataclasses
+    import shutil
     out = Path(out)
+    if request.mode == "stream" and request.spool_dir is None:
+        request = dataclasses.replace(request, spool_dir=str(out.resolve().parent))
+    res = run(source, request)
+    try:
+        return _save(res, out, attachments, meta)
+    finally:
+        if res.temp_dir:
+            shutil.rmtree(res.temp_dir, ignore_errors=True)
+
+
+def _save(res: "Result", out: Path, attachments, meta) -> Path:
     tmp = out if out.suffix != ".sr" else out.with_name(out.name + fileformat.SUFFIX)
     if res.parts is not None:
         fileformat.write(tmp, res.tick_hz, None, attachments, parts=res.parts, layout=res.layout, lost=res.lost or None,

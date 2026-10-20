@@ -255,6 +255,33 @@ def analog_volts(name: str, values, rate_hz, t0_ticks=0, unit: str = "V", **acqu
                          acquisition=acquisition)
 
 
+class OnDisk:
+    """A channel's data kept in a file instead of memory (a long stream's bits): `Channel(name, OnDisk(path), n)`.
+    write() copies it into the capture a chunk at a time, so a capture longer than memory can be written. len() is
+    its size; slicing reads that range."""
+
+    CHUNK = 1 << 22
+
+    def __init__(self, path: str | Path):
+        self.path = Path(path)
+
+    def __len__(self) -> int:
+        return self.path.stat().st_size
+
+    def __getitem__(self, key):
+        if not isinstance(key, slice) or key.step not in (None, 1):
+            raise TypeError("OnDisk takes a plain slice")
+        start, stop, _ = key.indices(len(self))
+        with open(self.path, "rb") as f:
+            f.seek(start)
+            return f.read(max(0, stop - start))
+
+    def copy_to(self, out) -> None:
+        with open(self.path, "rb") as f:
+            while chunk := f.read(self.CHUNK):
+                out.write(chunk)
+
+
 # ---------------- packing (C-speed paths of the standard library) ----------------
 
 _TO_ASCII01 = bytes(0x31 if b & 1 else 0x30 for b in range(256))
@@ -403,7 +430,13 @@ def write(path: str | Path, tick_hz: int | float | Fraction | tuple[int, int],
         z.writestr(zipfile.ZipInfo(IDENT, (1980, 1, 1, 0, 0, 0)), json.dumps({"format": FORMAT}), zipfile.ZIP_STORED)
         z.writestr(CAPTURE, json.dumps(head, indent=1, default=str))
         for name, data in files:
-            z.writestr(name, data, _compression(data))
+            if isinstance(data, OnDisk):          # a chunk at a time, zip64 when it is large
+                info = zipfile.ZipInfo(name, (1980, 1, 1, 0, 0, 0))
+                info.compress_type = _compression(data)
+                with z.open(info, "w", force_zip64=len(data) >= 1 << 31) as out:
+                    data.copy_to(out)
+            else:
+                z.writestr(name, data, _compression(data))
         for name, data in (attachments or {}).items():
             z.writestr(_attach_name(name), _encode(data))
     return path

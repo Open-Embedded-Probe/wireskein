@@ -304,3 +304,40 @@ def test_a_format_1_stream_reads_the_same_line_as_format_0(probe, tmp_path):
         n = min(got["f0"][0].n_samples, got["f1"][0].n_samples)
         i = np.arange(n)
         assert np.array_equal(a.level_at(i), b.level_at(i)), line
+
+
+def _polls(segments, gaps, polls):
+    """Received states as the client fills them over `polls` calls: the same bytes and gaps as fake_stream, cut."""
+    full = fake_stream(segments, gaps)
+    cuts = sorted({0, len(full.data)} | {len(full.data) * k // polls for k in range(1, polls)})
+    return full, cuts
+
+
+def test_a_spooled_stream_is_the_same_as_one_put_together_at_the_end(tmp_path):
+    """_Spool, fed poll by poll (the bytes taken out of the client's Received each time), gives the parts and losses
+    that _stream_parts gives from everything at once - and keeps the bits on disk."""
+    from types import SimpleNamespace
+    from oep_client import capture as oc
+    from wireskein.sources.oep import _Spool, _stream_parts
+    cfg = SimpleNamespace(rate=1_000_000, width=8, positions=[0], event_d={})
+    segs = [(0, 100, 0), (100, 100, 100_000), (300, 100, 300_000), (400, 60, 400_000)]
+    req = sources.Request([("A", "1")], 1_000_000, 0, mode="stream", duration=1, on_loss="continue",
+                          spool_dir=str(tmp_path))
+    once = fake_stream(segs, [(200, 100)])
+    want_parts, want_lost = _stream_parts(FakeCap(), cfg, once, ["A"], [1], req)
+    full = fake_stream(segs, [(200, 100)])
+    spool = _Spool(FakeCap(), cfg, ["A"], [1], req)
+    got = oc.Received()
+    for lo, hi in ((0, 37), (37, 150), (150, 260), (260, 360)):   # the client's bytes, a poll at a time
+        if got.start is None:
+            got.start = 0
+        got.data += full.data[lo:hi]
+        got.gaps += [(i - lo + len(got.data) - (hi - lo), n) for i, n in full.gaps if lo <= i < hi]
+        got.segments.update({p: s for p, s in full.segments.items() if True})
+        spool.take(got)
+        assert len(got.data) == 0                                  # taken out: memory holds a poll's worth
+    spool.take(got, final=True)
+    assert [(p.tick0, p.channels[0].n) for p in spool.parts] == [(p.tick0, p.channels[0].n) for p in want_parts]
+    assert spool.done_lost == want_lost
+    for a, b in zip(spool.parts, want_parts):
+        assert a.channels[0].bits[:] == b.channels[0].bits        # the same bits, read back from disk

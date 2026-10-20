@@ -515,26 +515,34 @@ def _stream_result(cap, hst, cfg, req: Request, names, ids, probe, fast, open_s,
             worst = capture_blocks.worst_bytes(len(cfg.raw_roles), list(cfg.event_d.values()), cfg.block) \
                 * float(cfg.rate) / cfg.block
         probe["stream_buffer"] = {"bytes": cfg.stream_buffer, "tolerable_delay_s": cfg.tolerable_delay_s(worst)}
+    spool = _Spool(cap, cfg, names, ids, req) if _spools(cfg) else None
     cap.subscribe()
     cap.start()
     t_read = time.monotonic()
-    deadline, got = t_read + req.duration, None
+    deadline, got = t_read + req.duration, oc.Received()
     while True:                                  # stream() renews the lease across calls on the same Received
         now = time.monotonic()
         if now >= deadline:
             break
         got = cap.stream(link, seconds=min(STREAM_POLL_S, deadline - now), into=got)
-        if req.on_loss == "stop" and (got.gaps or (got.start or 0) > 0):
+        if spool is not None:                    # put together as it comes: memory holds a poll's worth, not the stream
+            spool.take(got)
+            if req.on_loss == "stop" and spool.lost:
+                break
+        elif req.on_loss == "stop" and (got.gaps or (got.start or 0) > 0):
             break
     cap.stop()
-    got = cap.finish(link, got or oc.Received())
+    got = cap.finish(link, got)
     read_s = time.monotonic() - t_read
     st = cap.status()
+    if spool is not None:
+        spool.take(got, final=True, write_pos=st.write_pos if st.state == oc.STATE["error"] else None)
     drops = oc.CaptureDrops.of(st) if hasattr(oc, "CaptureDrops") else None   # the reference firmware's own
     if drops is not None:
         import dataclasses
         probe["drops"] = dataclasses.asdict(drops)
-    probe["link"] = _link_info(hst, fast, open_s, len(got.data), read_s)
+    received = spool.bytes if spool is not None else len(got.data)
+    probe["link"] = _link_info(hst, fast, open_s, received, read_s)
     clock = _clock_info(clock_before, _clock(hst))
     if clock:
         probe["clock"] = clock
@@ -542,19 +550,25 @@ def _stream_result(cap, hst, cfg, req: Request, names, ids, probe, fast, open_s,
         probe["generation"] = {"logic": cap.generation}
     meta = {"probe_channels": dict(zip(names, ids)), "probe": probe,
             "stream": {"duration_s": req.duration, "on_loss": req.on_loss, "frames": got.frames,
-                       "bytes": len(got.data), "read_s": round(read_s, 3)}}
-    return _Streamed(cap, cfg, got, st, names, ids, req, meta, oc)
+                       "bytes": received, "read_s": round(read_s, 3)}}
+    return _Streamed(cap, cfg, got, st, names, ids, req, meta, oc, spool)
 
 
 class _Streamed:
     """A stream collected, to be put together once the session is closed (decoding takes time; the lease does not
     wait for it). cap.blocks only reads the configure answer kept in the client."""
-    def __init__(self, cap, cfg, got, st, names, ids, req, meta, oc):
+    def __init__(self, cap, cfg, got, st, names, ids, req, meta, oc, spool=None):
         self.cap, self.cfg, self.got, self.st, self.names, self.ids, self.req, self.meta, self.oc = (
             cap, cfg, got, st, names, ids, req, meta, oc)
+        self.spool = spool
 
     def result(self) -> Result:
-        parts, lost = _stream_parts(self.cap, self.cfg, self.got, self.names, self.ids, self.req)
+        if self.spool is not None:
+            parts, lost = self.spool.parts, self.spool.done_lost
+            if not parts:
+                raise RuntimeError("the stream brought no data" + (" (the probe dropped it all)" if lost else ""))
+        else:
+            parts, lost = _stream_parts(self.cap, self.cfg, self.got, self.names, self.ids, self.req)
         st = self.st
         why = _drops_line(self.meta["probe"].get("drops"))
         if st.state == self.oc.STATE["error"]:
@@ -564,7 +578,215 @@ class _Streamed:
             lost.append({"after_part": len(parts) - 1, "reason": "the probe dropped data (status flags bit 0)"})
         if why and lost:                         # where the probe says the data went (its own diagnostics; the
             lost[-1]["reason"] += f" - the probe's counts since start: {why}"    # counters are totals: said once)
-        return Result(Fraction(self.cfg.rate), parts[0].channels, self.meta, parts, lost, "timeline")
+        return Result(Fraction(self.cfg.rate), parts[0].channels, self.meta, parts, lost, "timeline",
+                      self.spool.dir if self.spool is not None else None)
+
+
+def _spools(cfg) -> bool:
+    """Whether a stream is put together on disk as it comes (_Spool): format 0 with whole bytes a sample, and format
+    1 (segment by segment). Format 0 with a sample across bytes is put together at the end, in memory."""
+    return bool(getattr(cfg, "event_d", None)) or cfg.width % 8 == 0
+
+
+class _Spool:
+    """A stream put together while it comes (wireskein-format §3.4 parts on a timeline): after each poll the bytes
+    that arrived are taken out of the client's Received (its start moved on, so it goes on counting positions), the
+    channels' bits appended to files by the output and the events kept; a skipped position ends the part (a loss)
+    and the next part starts where the bytes do again. Memory holds about a poll's worth, whatever the length."""
+
+    def __init__(self, cap, cfg, names, ids, req: Request):
+        import tempfile
+        self.cap, self.cfg, self.names, self.ids, self.req = cap, cfg, names, ids, req
+        self.dir = tempfile.mkdtemp(prefix=".wireskein-stream-", dir=req.spool_dir)
+        self.blocks = bool(getattr(cfg, "event_d", None))
+        self.ds = list(getattr(cfg, "event_d", {}).values())
+        self.rate = Fraction(cfg.rate)
+        self.parts, self.lost = [], []
+        self.pending = bytearray()      # bytes from position `at` not put together yet (a gapless stretch)
+        self.at = None                  # stream position of pending[0]
+        self.bytes = 0
+        self.segs = {}                  # segment position -> SegmentInfo (the latest)
+        self.first_ns = None
+        self.cur = None                 # the part being put together: dict (tick0, meta, samples, files, events, ...)
+        self.stopped = False
+        import queue
+        import threading
+        self._queue, self._error = queue.Queue(), None
+        self._worker = threading.Thread(target=self._drain, name="wireskein-spool", daemon=True)
+        self._worker.start()
+
+    # -- taking what arrived (the caller's thread: O(1), so its polls keep coming) --
+    def take(self, got, final: bool = False, write_pos: int | None = None) -> None:
+        """Hand what arrived to the worker: the client's buffers are swapped for empty ones (no copy) and its start
+        moved on, so it goes on counting positions. final: wait for the worker to finish (its error raised here)."""
+        segs, got.segments = got.segments, {}
+        data, gaps, start = got.data, sorted(got.gaps), got.start
+        if start is not None:
+            got.data, got.gaps = bytearray(), []
+            got.start = start + len(data) + sum(n for _, n in gaps)
+        self._queue.put((segs, start, data, gaps))
+        if final:
+            self._queue.put(("final", write_pos))
+            self._worker.join()
+            if self._error is not None:
+                raise self._error
+
+    def _drain(self) -> None:
+        try:
+            while True:
+                item = self._queue.get()
+                if item[0] == "final":
+                    self._work(True, item[1])
+                    self._close()
+                    return
+                segs, start, data, gaps = item
+                self.segs.update(segs)
+                if start is not None and data:
+                    pos, i = start, 0
+                    for index, skipped in gaps + [(len(data), 0)]:
+                        self._run(pos, memoryview(data)[i:index])
+                        pos += index - i + skipped
+                        i = index
+                self._work(False, None)
+        except BaseException as e:               # noqa: BLE001 - raised in the caller's thread at the end
+            self._error = e
+
+    def _run(self, p0: int, data: bytes) -> None:
+        if self.stopped or not data:
+            return
+        self.bytes += len(data)
+        if self.at is None and not self.parts and self.cur is None:
+            if p0 != 0:                          # positions count from the generation's start: the first is gone
+                if self.req.on_loss == "stop":
+                    raise RuntimeError(f"the probe dropped the stream's first {p0} bytes before any arrived: nothing "
+                                       f"to keep (a lower --rate or fewer channels, or --on-loss continue)")
+                self.lost.append({"after_part": -1, "reason": f"the probe dropped the first {p0} bytes (no room to send)"})
+            self.at = p0
+        elif p0 != self.at + len(self.pending):  # a skipped position: the probe dropped a segment
+            self._work(True, None)
+            self._close()
+            stop = self.req.on_loss == "stop"
+            self.lost.append({"after_part": len(self.parts) - 1,
+                              "reason": "the probe dropped a segment (no room to send)", "_next": p0,
+                              **({"stopped": True} if stop else {})})
+            if stop:
+                self.stopped = True
+                return
+            self.at, self.pending = p0, bytearray()
+        self.pending += data
+
+    # -- putting together --
+    def _work(self, final: bool, write_pos: int | None) -> None:
+        if self.at is None or not self.pending:
+            return
+        if self.blocks:
+            self._segments(final, write_pos)
+        else:
+            self._samples(final, write_pos)
+
+    def _samples(self, final: bool, write_pos: int | None) -> None:
+        b = self.cfg.width // 8
+        n = len(self.pending) // b
+        if write_pos is not None:                # an error stop: nothing at or past write_pos is data (§2.2)
+            n = min(n, max(0, (write_pos - self.at) // b))
+        if not final:
+            n = n // 8 * 8                       # whole bytes of bits; the rest waits for the next poll
+        if not n:
+            return
+        self._open(self.at)
+        chans = _samples_at_once(memoryview(self.pending), self.names, self.ids, self.cfg, n)
+        for c, f in zip(chans, self.cur["files"]):
+            f.write(c.bits)
+        self.cur["samples"] += n
+        del self.pending[:n * b]
+        self.at += n * b
+        for q in [q for q in self.segs if q < self.at and q != self.cur.get("first", self.at)]:
+            del self.segs[q]                     # put together: only a part's start needs its record
+        if final:
+            self.pending = bytearray()
+
+    def _segments(self, final: bool, write_pos: int | None) -> None:
+        end = self.at + len(self.pending)
+        starts = sorted(p for p in self.segs if self.at <= p < end)
+        for k, p in enumerate(starts):
+            nxt = starts[k + 1] if k + 1 < len(starts) else (end if final else None)
+            if nxt is None or (write_pos is not None and p >= write_pos):
+                break
+            data = bytes(self.pending[p - self.at:nxt - self.at])
+            x = self.segs.pop(p)
+            if self.cur is not None and (self.cur["samples"] % 8 or any(self.cur["samples"] % d for d in self.ds)):
+                self._close(follows=True)      # a grid restart (format 1) is not a loss: the next part follows on
+            self._open(p, x)
+            chans = _from_blocks(self.cap.blocks(data, x.samples), self.names, x.samples, self.cfg)
+            for c, f, ev in zip(chans, self.cur["files"], self.cur["events"]):
+                if isinstance(c, fileformat.EventsChannel):
+                    ks, lv, ct = c.decode()
+                    q = self.cur["samples"] // c.step
+                    ev[0].extend(q + k_ for k_ in ks)
+                    ev[1].extend(lv)
+                    ev[2].extend(ct)
+                    if ev[3] is None:
+                        ev[3] = c.start_level
+                else:
+                    f.write(c.bits)
+            self.cur["samples"] += x.samples
+            del self.pending[:nxt - self.at]
+            self.at = nxt
+        if final:
+            self.pending = bytearray()
+
+    def _open(self, position: int, seg=None) -> None:
+        if self.cur is not None:
+            return
+        import os
+        seg = seg or self.segs.get(position)
+        if self.first_ns is None and seg is not None:
+            self.first_ns = seg.start_ns
+        if self.parts and self.parts[-1] is not None and getattr(self, "_follows", False):
+            tick0 = self.parts[-1].tick0 + self._last_samples
+        elif seg is not None and self.first_ns is not None:
+            tick0 = round(Fraction(seg.start_ns - self.first_ns, 10**9) * self.rate)
+        else:                                    # format 0 without the segment's record: from the bytes
+            tick0 = (self.parts[-1].tick0 + self._last_samples if self.parts else 0) + \
+                (position - (self._last_end or 0)) * 8 // self.cfg.width
+        k = len(self.parts)
+        files = [open(os.path.join(self.dir, f"p{k}-{j}.bits"), "wb") for j in range(len(self.names))]
+        self.cur = {"tick0": tick0, "meta": _seg_meta(seg) if seg is not None else {}, "samples": 0, "files": files,
+                    "events": [[[], [], [], None] for _ in self.names]}
+        self._follows = False
+
+    _last_samples, _last_end, _follows = 0, None, False
+
+    def _close(self, follows: bool = False) -> None:
+        if self.cur is None:
+            return
+        import os
+        cur, n = self.cur, self.cur["samples"]
+        chans = []
+        for role, (name, ch, f, ev) in enumerate(zip(self.names, self.ids, cur["files"], cur["events"])):
+            f.close()
+            d = self.cfg.event_d.get(role) if self.blocks else None
+            if d is not None:
+                os.unlink(f.name)
+                chans.append(fileformat.events(name, ev[0], ev[1], ev[2], -(-n // d), d, 0, ev[3] or 0, pin=ch))
+            else:
+                os.truncate(f.name, (n + 7) // 8)
+                chans.append(fileformat.Channel(name, fileformat.OnDisk(f.name), n, 1, 0, {"pin": ch}))
+        if n:
+            self.parts.append(fileformat.Part(chans, dict(cur["meta"]), int(cur["tick0"])))
+        self._last_samples, self._last_end = n, self.at
+        self.cur = None
+        self._follows = follows
+        for x in self.lost:                      # how long the loss before this part was, when the times say
+            if x.get("_next") is not None and x["after_part"] == len(self.parts) - 2 and len(self.parts) >= 2:
+                gap = self.parts[-1].tick0 - self.parts[-2].tick0 - self.parts[-2].channels[0].end
+                if gap > 0:
+                    x["ticks"] = int(gap)
+                x.pop("_next")
+
+    @property
+    def done_lost(self):
+        return [{k: v for k, v in x.items() if k != "_next"} for x in self.lost]
 
 
 DROP_COUNTS = ("no_stage_bytes", "unqueued_bytes", "dma_overruns", "queue_overflows")
