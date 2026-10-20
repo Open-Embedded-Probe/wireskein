@@ -560,7 +560,12 @@ def _stream_result(cap, hst, cfg, req: Request, names, ids, probe, fast, open_s,
     if drops is not None:
         import dataclasses
         probe["drops"] = dataclasses.asdict(drops)
-    received = spool.bytes if spool is not None else len(got.data)
+    received = spool.received if spool is not None else len(got.data)
+    tail = None
+    if st.state != oc.STATE["error"]:            # stopped: every byte up to write_pos should have come (§2.1 rule 2)
+        end = spool.end if spool is not None else (got.start or 0) + len(got.data) + sum(n for _, n in got.gaps)
+        if st.write_pos > end:
+            tail = st.write_pos - end
     probe["link"] = _link_info(hst, fast, open_s, received, read_s)
     clock = _clock_info(clock_before, _clock(hst))
     if clock:
@@ -570,16 +575,16 @@ def _stream_result(cap, hst, cfg, req: Request, names, ids, probe, fast, open_s,
     meta = {"probe_channels": dict(zip(names, ids)), "probe": probe,
             "stream": {"duration_s": req.duration, "on_loss": req.on_loss, "frames": got.frames,
                        "bytes": received, "read_s": round(read_s, 3)}}
-    return _Streamed(cap, cfg, got, st, names, ids, req, meta, oc, spool)
+    return _Streamed(cap, cfg, got, st, names, ids, req, meta, oc, spool, tail)
 
 
 class _Streamed:
     """A stream collected, to be put together once the session is closed (decoding takes time; the lease does not
     wait for it). cap.blocks only reads the configure answer kept in the client."""
-    def __init__(self, cap, cfg, got, st, names, ids, req, meta, oc, spool=None):
+    def __init__(self, cap, cfg, got, st, names, ids, req, meta, oc, spool=None, tail=None):
         self.cap, self.cfg, self.got, self.st, self.names, self.ids, self.req, self.meta, self.oc = (
             cap, cfg, got, st, names, ids, req, meta, oc)
-        self.spool = spool
+        self.spool, self.tail = spool, tail
 
     def result(self) -> Result:
         if self.spool is not None:
@@ -596,6 +601,9 @@ class _Streamed:
                          "stopped": True})
         elif st.dropped and not lost:
             lost.append({"after_part": len(parts) - 1, "reason": "the probe dropped data (status flags bit 0)"})
+        if self.tail:                            # the end did not come before finish() gave up: a loss too
+            lost.append({"after_part": len(parts) - 1, "stopped": True,
+                         "reason": f"the stream's last {self.tail} bytes did not arrive after the stop"})
         if why and lost:                         # where the probe says the data went (its own diagnostics; the
             lost[-1]["reason"] += f" - the probe's counts since start: {why}"    # counters are totals: said once)
         return Result(Fraction(self.cfg.rate), parts[0].channels, self.meta, parts, lost, "timeline",
@@ -625,6 +633,8 @@ class _Spool:
         self.pending = bytearray()      # bytes from position `at` not put together yet (a gapless stretch)
         self.at = None                  # stream position of pending[0]
         self.bytes = 0
+        self.received = 0               # bytes handed over (the caller's count; `bytes` is the worker's)
+        self.end = 0                    # the stream position just past what arrived
         self.segs = {}                  # segment position -> SegmentInfo (the latest)
         self.first_ns = None
         self.cur = None                 # the part being put together: dict (tick0, meta, samples, files, events, ...)
@@ -658,6 +668,8 @@ class _Spool:
         if start is not None:
             got.data, got.gaps = bytearray(), []
             got.start = start + len(data) + sum(n for _, n in gaps)
+            self.received += len(data)
+            self.end = got.start                 # the position just past what arrived
         self._queue.put((segs, start, data, gaps))
         if final:
             self._queue.put(("final", write_pos))

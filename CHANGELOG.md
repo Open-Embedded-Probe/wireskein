@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) A stream whose end did not arrive before the client gave up after the stop (the received end short of status's write_pos) records it as a loss (`the stream's last N bytes did not arrive after the stop`) - it was kept as complete. The bytes received are counted as handed over, not as the worker has put them together (a format 1 stream behind its worker said 96 MB of 200).
+- (JA) stop の後、クライアントがあきらめるまでに終わりが届かなかったストリーム（受けた終わりが status の write_pos に足りない）を、欠損として記録する（`the stream's last N bytes did not arrive after the stop`）。今までは完全として残していた。受けたバイト数は、組み立てた量ではなく、渡した量で数える（組み立てが遅れていた形式 1 のストリームで、200 MB のうち 96 MB と出ていた）。
 - (EN) A trigger through the group keeps the judging track's `judge_latency_ns` (OEP capture §3.3, oep-client-python 708a5e5) in `meta.probe`; when the probe refuses the group, the message says that the judging track takes that long to know the event and the others must hold that long besides their pretrigger.
 - (JA) 組を通したトリガでは、判定するトラックの `judge_latency_ns`（OEP capture §3.3、oep-client-python 708a5e5）を `meta.probe` に残す。プローブが組を断ったときは、判定するトラックが出来事を知るのにその時間がかかり、ほかのトラックはプリトリガとは別にその間を溜める必要がある、と示す。
 - (EN) A stream subscribes batched (core §10.3: at least 16 KiB a frame or after 20 ms): a capture wants bandwidth, not a frame per block - with (0, 0) the P4X sent each format 1 block of quiet lines (tens of bytes) as a USB transfer of its own, about 2000 a second, and dropped 35 % it had no stage for.
