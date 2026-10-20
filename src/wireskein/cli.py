@@ -198,10 +198,13 @@ def _seconds(text: str) -> float:
 def annotate_cmd(args) -> None:
     from . import annotate
     hints = json.loads(Path(args.hint[1:]).read_text() if args.hint.startswith("@") else args.hint) if args.hint else None
-    doc = annotate.build(_load_for_decoding(args.file, args), hints)
+    th = _thresholds(getattr(args, "threshold", None))
+    from .analyze import as_logic
+    doc = annotate.build_file(args.file, hints, (lambda cap: as_logic(cap, th)) if th else None)
     for r in doc["rows"]:
         bad = sum(i["level"] != "ok" for i in r["items"])
-        print(f"{r['name']:24s} under {r.get('near', '-'):8s} {len(r['items']):6d} items" + (f", {bad} not ok" if bad else ""))
+        part = f"part {r['part'] + 1}: " if "part" in r else ""
+        print(f"{part}{r['name']:24s} under {r.get('near', '-'):8s} {len(r['items']):6d} items" + (f", {bad} not ok" if bad else ""))
     if not doc["rows"]:
         print("nothing decoded")
     if args.save:

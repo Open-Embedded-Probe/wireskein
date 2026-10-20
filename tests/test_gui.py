@@ -167,6 +167,25 @@ def test_annotations_and_checks(served, tmp_path):
     assert json.loads(get(gui, "/api/annotations?file=a.wireskein", cookie=cookie(gui))[2])["stored"] is True
 
 
+def test_annotations_of_a_capture_in_parts(served):
+    """Each part decoded on its own (analysis never crosses parts): ?part=K decodes that one, its rows naming it;
+    storing decodes every part."""
+    gui, data = served
+    bits = [1] * 160
+    for byte in b"0123456789abcdef" * 4:                                       # 8N1, 8 ticks a bit
+        bits += [b for v in [0, *((byte >> i) & 1 for i in range(8)), 1] for b in [v] * 8] + [1] * 40
+    parts = [fileformat.Part([fileformat.Channel("TX", fileformat.pack(bytes(bits)), len(bits))], {}, k * 2 * len(bits))
+             for k in range(2)]
+    fileformat.write(data / "p.wireskein", 1_000_000, parts=parts, layout="timeline")
+    doc = json.loads(get(gui, "/api/annotations?file=p.wireskein&part=1", cookie=cookie(gui))[2])
+    assert doc["stored"] is False and doc["rows"] and {r["part"] for r in doc["rows"]} == {1}
+    assert get(gui, "/api/annotations?file=p.wireskein&part=x", cookie=cookie(gui))[0] == 422
+    assert get(gui, "/api/annotations?file=p.wireskein&part=5", cookie=cookie(gui))[0] == 422
+    assert call(gui, "POST", "/api/annotations?file=p.wireskein", {})[0] == 200
+    stored = json.loads(get(gui, "/api/annotations?file=p.wireskein", cookie=cookie(gui))[2])
+    assert stored["stored"] is True and {r["part"] for r in stored["rows"]} == {0, 1}
+
+
 def test_vcd_is_served_as_wireskein(served, tmp_path):
     gui, data = served
     from wireskein.analyze import load, save

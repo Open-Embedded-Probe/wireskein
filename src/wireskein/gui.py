@@ -49,6 +49,16 @@ def web_version(d: Path) -> str | None:
     return v.read_text().strip() if v.exists() else None
 
 
+def _part(query: dict) -> int | None:
+    """?part=K (a part of a file of several, from 0), or None."""
+    v = query.get("part", [None])[0]
+    if v is None:
+        return None
+    if not v.isdigit():
+        raise ValueError(f"part {v!r}: a number from 0")
+    return int(v)
+
+
 class Gui:
     """The server. root: the directory whose captures it may serve."""
 
@@ -158,10 +168,9 @@ class _Handler(BaseHTTPRequestHandler):
             if method == "PUT" and path == "/api/markers":
                 fileformat.set_markers(p, body.get("markers", []))
                 return self._json({"markers": len(body.get("markers", []))})
-            if method == "POST" and path == "/api/annotations":
+            if method == "POST" and path == "/api/annotations":       # every part's, each row naming its part
                 from . import annotate
-                from .analyze import load
-                doc = annotate.build(load(p))
+                doc = annotate.build_file(p)
                 annotate.save(p, doc)
                 return self._json(doc)
             return self._send(404, b"no such API\n")
@@ -199,9 +208,9 @@ class _Handler(BaseHTTPRequestHandler):
             if path == "/browse":
                 return self._browse(query.get("dir", [""])[0])
             if path == "/api/annotations":
-                return self._annotations(query.get("file", [""])[0])
+                return self._annotations(query.get("file", [""])[0], _part(query))
             if path == "/api/checks":
-                return self._checks(query.get("file", [""])[0])
+                return self._checks(query.get("file", [""])[0], _part(query))
             return self._static(path)
         except FileNotFoundError as e:
             return self._send(404, f"{e}\n".encode())
@@ -238,29 +247,31 @@ class _Handler(BaseHTTPRequestHandler):
             raise FileNotFoundError(rel)
         return p
 
-    def _annotations(self, rel: str) -> None:
-        """The file's decode/annotations.json, or the analysis run now (not stored)."""
+    def _annotations(self, rel: str, part: int | None = None) -> None:
+        """The file's decode/annotations.json (every part's), or the analysis run now (not stored): of `part` for a
+        file of several parts (each row naming it, wireskein-format §5.3), of every part when not given."""
         from . import annotate
-        from .analyze import load
         p = self._capture_path(rel)
         stored = annotate.load(p) if fileformat.sniff(p) == "wireskein" else None
         if stored is not None:
             return self._json({**stored, "stored": True})
-        key = (str(p), p.stat().st_mtime_ns)
+        key = (str(p), p.stat().st_mtime_ns, part)
         cache = self.server_gui.cache
         if key not in cache:
-            cache[key] = annotate.build(load(p))
+            cache[key] = annotate.build_file(p, part=part)
         return self._json({**cache[key], "stored": False})
 
-    def _checks(self, rel: str) -> None:
-        """The run's check results for this capture (when it belongs to a recorded run)."""
+    def _checks(self, rel: str, part: int | None = None) -> None:
+        """The run's check results for this capture (when it belongs to a recorded run): of `part` when the file has
+        several (verify names them FILE#partK, K from 0 as here)."""
         from . import verify
         p = self._capture_path(rel)
         run = p.parent / "run.json"
         if not run.is_file():
             return self._json({"run": None, "results": []})
         rep = verify.verify(p.parent)
-        mine = [r for r in rep["results"] if r.get("capture") == p.name]
+        names = {p.name} if part is None else {f"{p.name}#part{part}", p.name}   # the capture's own (a loss): any part
+        mine = [r for r in rep["results"] if r.get("capture") in names]
         keep = ("path", "check", "status", "ok", "reason", "expected", "measured")
         return self._json({"run": p.parent.name, "summary": rep["summary"],
                            "results": json.loads(verify.dumps([{k: r.get(k) for k in keep} for r in mine]))})

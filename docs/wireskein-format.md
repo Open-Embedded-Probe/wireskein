@@ -338,7 +338,9 @@ Marker:
 | `note` | string (optional) | Description |
 | `by` | string (optional) | Who placed it (`"viewer"`, a tool name, etc.) |
 | `time` | string (optional) | When it was placed (ISO 8601, with time zone offset) |
+| `part` | integer (optional) | The part (§3.4, from 0) whose ticks these are. Absent: part 0. In a file of two parts or more, writers always give it |
 
+- `t` and `end` are ticks of the `part` (from that part's tick 0). A viewer draws the marker while it shows that part.
 - Unlike notes (§5), markers may be rewritten. Rewriting rewrites the whole file (the same as replacing an attachment in §5).
 
 ### 5.3 Decode annotations (`decode/annotations.json`)
@@ -361,8 +363,9 @@ Row:
 | `near` | string (optional) | Name of the channel under which this row is placed |
 | `verdict`, `score` | string, number (optional) | Certainty of the judgment this row is based on (e.g. `"confirmed"`, `"likely"`, and a score from 0 to 1). Viewers show uncertain rows so that they are recognizable as such |
 | `items` | array | Segments: `s` (start tick), `e` (end tick; optional, a point if absent), `text` (string to display), `level` (optional: `"ok"`, `"warn"`, `"error"`), `detail` (optional: the original value, JSON) |
+| `part` | integer (optional) | The part (§3.4, from 0) the row decodes. Absent: part 0. In a file of two parts or more, writers always give it |
 
-- Ticks are the ticks of §3.
+- Ticks are the ticks of §3, of the row's `part` (from that part's tick 0). Decoding never crosses parts (§3.4), so rows are per part.
 - When decoded again, the entry is replaced.
 
 ## 6. Relation to other formats

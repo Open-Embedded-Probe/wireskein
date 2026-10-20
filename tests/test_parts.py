@@ -94,3 +94,18 @@ def test_a_large_channel_is_deflated_in_pieces_at_once(tmp_path, monkeypatch):
     with zipfile.ZipFile(out) as z:
         assert z.getinfo("part/0/ch/0.bits").compress_type == zipfile.ZIP_DEFLATED
         assert z.read("part/0/ch/0.bits") == bits
+
+
+def test_markers_name_their_part(tmp_path):
+    """wireskein-format §5.2: in a file of several parts a marker always names its part (0 when not given)."""
+    chans = [fileformat.Channel("A", fileformat.pack(bytes(8)), 8)]
+    out = tmp_path / "m.wireskein"
+    fileformat.write(out, 1000, parts=[fileformat.Part(chans, {}, 0), fileformat.Part(chans, {}, 20)])
+    fileformat.set_markers(out, [{"t": 3, "label": "a"}, {"t": 5, "label": "b", "part": 1}])
+    assert [(m["label"], m["part"]) for m in fileformat.markers(out)] == [("a", 0), ("b", 1)]
+    with pytest.raises(ValueError, match="part"):
+        fileformat.set_markers(out, [{"t": 3, "label": "c", "part": 2}])
+    one = tmp_path / "one.wireskein"
+    fileformat.write(one, 1000, chans)
+    fileformat.set_markers(one, [{"t": 3, "label": "a"}])
+    assert "part" not in fileformat.markers(one)[0]                 # one part: nothing to name

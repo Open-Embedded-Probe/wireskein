@@ -590,14 +590,22 @@ def markers(path: str | Path) -> list[dict]:
 
 
 def set_markers(path: str | Path, items: list[dict]) -> None:
-    """Replace the markers. Each needs "t" (ticks) and "label"; "end" makes it a span."""
+    """Replace the markers. Each needs "t" (ticks) and "label"; "end" makes it a span; "part" the part its ticks are
+    of (wireskein-format §5.2: in a file of several parts always written, 0 when not given)."""
+    n = len(read_header(path)["parts"])
     clean = []
     for m in items:
         if not isinstance(m.get("t"), (int, float)) or not isinstance(m.get("label"), str):
             raise ValueError(f"a marker needs a number t and a text label: {m!r}")
         if m.get("end") is not None and not isinstance(m["end"], (int, float)):
             raise ValueError(f"marker end must be a number: {m!r}")
-        clean.append({k: v for k, v in m.items() if v is not None})
+        part = m.get("part")
+        if part is not None and (not isinstance(part, int) or isinstance(part, bool) or not 0 <= part < n):
+            raise ValueError(f"marker part must be a part of the file (0 .. {n - 1}): {m!r}")
+        m = {k: v for k, v in m.items() if v is not None}
+        if n > 1:
+            m["part"] = part or 0
+        clean.append(m)
     put(path, MARKERS, json.dumps({"format": MARKERS_FORMAT, "markers": clean}, ensure_ascii=False, indent=1))
 
 

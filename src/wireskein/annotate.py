@@ -114,6 +114,24 @@ def build(cap, hints: dict | None = None) -> dict:
     return {"format": FORMAT, "source": f"wireskein {__version__} analyze", "rows": rows_of(doc)}
 
 
+def build_file(path: str | Path, hints: dict | None = None, prepare=None, part: int | None = None) -> dict:
+    """The annotations document of a file: each part decoded on its own (analysis never crosses parts,
+    wireskein-format §3.4), its rows naming it (`part`, §5.3) when the file has several. part: that one only.
+    prepare: a step from the loaded capture to the one decoded (e.g. analog read as logic)."""
+    from . import fileformat
+    from .analyze import load
+    prepare = prepare or (lambda cap: cap)
+    n = len(fileformat.read_header(path)["parts"]) if fileformat.sniff(path) == "wireskein" else 1
+    if n == 1:
+        return build(prepare(load(path)), hints)
+    rows = []
+    for k in ([part] if part is not None else range(n)):
+        if not 0 <= k < n:
+            raise ValueError(f"part {k}: the file has {n} (0 .. {n - 1})")
+        rows += [{**r, "part": k} for r in build(prepare(load(path, k)), hints)["rows"]]
+    return {"format": FORMAT, "source": f"wireskein {__version__} analyze", "rows": rows}
+
+
 def save(path: str | Path, doc: dict) -> None:
     from . import fileformat
     fileformat.put(path, ENTRY, json.dumps(doc, ensure_ascii=False, separators=(",", ":")))
