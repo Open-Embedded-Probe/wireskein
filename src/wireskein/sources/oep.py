@@ -505,6 +505,9 @@ def _from_blocks(blocks, names: list[str], samples: int, cfg) -> list:
 
 
 STREAM_POLL_S = 0.2       # how often a stream looks for a loss while collecting
+STREAM_MIN_BYTES = 16384  # a stream's notifications (core §10.3): at least this much a frame ...
+STREAM_MAX_DELAY_MS = 20  # ... or after this long. With (0, 0) the P4X sent each format 1 block (tens of bytes on
+                          # quiet lines) as a transfer of its own, 2000 a second, and dropped 35 % it could not send
 
 
 def _stream_result(cap, hst, cfg, req: Request, names, ids, probe, fast, open_s, clock_before, oc) -> Result:
@@ -521,7 +524,7 @@ def _stream_result(cap, hst, cfg, req: Request, names, ids, probe, fast, open_s,
                 * float(cfg.rate) / cfg.block
         probe["stream_buffer"] = {"bytes": cfg.stream_buffer, "tolerable_delay_s": cfg.tolerable_delay_s(worst)}
     spool = _Spool(cap, cfg, names, ids, req) if _spools(cfg) else None
-    cap.subscribe()
+    cap.subscribe(STREAM_MIN_BYTES, STREAM_MAX_DELAY_MS)   # batched: a capture wants bandwidth, not a frame per block
     cap.start()
     t_read = time.monotonic()
     deadline, got = t_read + req.duration, oc.Received()
