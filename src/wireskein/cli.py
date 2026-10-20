@@ -328,6 +328,11 @@ def capture_cmd(args) -> None:
         kb = st["bytes"] / 1000
         print(f"stream: {kb:.1f} KB in {st['frames']} frames over {st['read_s']:.2f} s"
               + (f" ({kb / st['read_s']:.1f} KB/s)" if st["read_s"] > 0 else ""))
+    odd = ((raw or {}).get("meta", {}).get("repeat") or {}).get("without_trigger")
+    if odd:                                      # the probe's: rearm 1 asks a trigger for every segment (capture §2.1)
+        print(f"note: {len(odd)} of the {len(raw['parts'])} acquisitions came without a trigger (parts "
+              f"{', '.join(map(str, odd[:8]))}{', ...' if len(odd) > 8 else ''}): the probe took them straight after "
+              f"the one before", file=sys.stderr)
     if raw and not raw.get("complete", True):    # a loss is a failure (wireskein-format §3.4): kept, but said and exit 1
         for line in _loss_lines(raw):
             print(line, file=sys.stderr)

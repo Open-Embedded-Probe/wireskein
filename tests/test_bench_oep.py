@@ -104,6 +104,7 @@ def test_repeat_one_part_per_trigger(uart_while_capturing, tmp_path):
         raise
     head = fileformat.read_header(out)
     assert head["layout"] == "segments" and len(head["parts"]) == 5
+    assert "without_trigger" not in head["meta"]["repeat"], head["meta"]["repeat"]   # every one on its own trigger
     for k, p in enumerate(head["parts"]):
         assert p["meta"]["trigger_tick"] == 2_000
         tx = fileformat.unpack(fileformat.read(out, part=k)[1][4])

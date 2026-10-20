@@ -755,6 +755,10 @@ def _repeat_result(cap, hst, cfg, req: Request, names, ids, probe, fast, open_s,
         probe["generation"] = {"logic": cap.generation}
     meta = {"probe_channels": dict(zip(names, ids)), "probe": probe,
             "repeat": {"segments": len(parts), "triggered": bool(req.trigger)}}
+    if req.trigger:               # each should start on its own trigger (rearm 1): one that did not is named
+        untriggered = [k for k, p in enumerate(parts) if "trigger_tick" not in p.meta]
+        if untriggered:
+            meta["repeat"]["without_trigger"] = untriggered
     return Result(rate, parts[0].channels, meta, parts, [], "segments" if req.trigger else "timeline")
 
 
