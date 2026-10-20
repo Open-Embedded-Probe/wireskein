@@ -85,9 +85,6 @@ class Request:
             raise ValueError("segments is for repeat only")
         if self.mode == "stream" and not (self.duration and self.duration > 0):
             raise ValueError("a stream needs a duration (seconds)")
-        if self.mode == "stream" and self.channels and self.analog:
-            raise ValueError("a stream takes logic channels or analog channels, not both yet (two tracks in one "
-                             "stream are not done)")
         if self.arm not in ("pretrigger", "now"):
             raise ValueError(f"arm {self.arm!r}: pretrigger or now")
         logic = {n for n, _ in self.channels}

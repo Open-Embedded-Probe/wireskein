@@ -215,8 +215,34 @@ def test_an_analog_stream_alone(probe, tmp_path):
     _, (sq,) = fileformat.read(out)
     assert sq.n > 1000 and sq.acquisition["pin"] == 16
     assert list(sq.values()[:200]) == [analog_value(0, i) for i in range(200)]   # the track's channel 0
-    with pytest.raises(ValueError, match="not both"):
-        sources.Request([("A", "10")], 1000, 0, mode="stream", duration=1, analog=[("SQ", "16", None)])
+
+
+def test_logic_and_analog_streamed_together(probe, tmp_path):
+    """--mode stream with logic and analog: both tracks streamed in one group (capture §4.1), each part given the
+    analog samples of its time, placed by the segments' start_ns."""
+    from oep_client import capture as oc
+    if not hasattr(oc.CaptureGroup, "stream"):
+        pytest.skip("oep-client-python without CaptureGroup.stream")
+    from oep_client.virtual_bench_capture import analog_value
+    req = sources.Request([("A", "10"), ("B", "11")], 1_000_000, 0, mode="stream", duration=0.3,
+                          analog=[("SQ", "16", None)], analog_rate=20_000)
+    out = sources.capture(probe(), req, tmp_path / "g.wireskein")
+    head = fileformat.read_header(out)
+    assert head["complete"] is True and len(head["parts"]) == 1
+    _, (a, b, sq) = fileformat.read(out)
+    span = a.n / 1e6                                              # the logic's seconds
+    rate = sq.rate_hz.numerator / sq.rate_hz.denominator
+    assert abs(sq.n / rate - span) < 0.01                          # the analog over the same time
+    assert 0 <= sq.t0_ticks < 1e6 / rate * 2                       # from about the logic's start
+    assert list(sq.values()[:100]) == [analog_value(0, i) for i in range(100)]
+
+
+def test_logic_and_analog_streamed_together_needs_the_client(monkeypatch):
+    from oep_client import capture as oc
+    monkeypatch.delattr(oc.CaptureGroup, "stream", raising=False)
+    req = sources.Request([("A", "10")], 1_000_000, 0, mode="stream", duration=0.3, analog=[("SQ", "16", None)])
+    with pytest.raises(ValueError, match="CaptureGroup.stream"):
+        sources.run("oep:tcp://127.0.0.1:1", req)
 
 
 def test_an_analog_trigger_needs_its_voltage():

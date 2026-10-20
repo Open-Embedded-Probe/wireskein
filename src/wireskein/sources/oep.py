@@ -70,11 +70,13 @@ def capture(target: str, req: Request) -> Result:
                          f"{[c for _, c in req.channels] + [c for _, c, _ in req.analog]}") from None
     if req.resolution and not hasattr(oc, "DATA_FORMAT"):
         raise ValueError("a resolution (NAME=ID/D) needs an oep-client-python with capture format 1")
-    if req.mode == "stream" and (req.trigger or (aids and ids)):
-        raise ValueError("a stream (--mode stream) takes logic channels or analog channels, started at once, for now")
+    if req.mode == "stream" and req.trigger:
+        raise ValueError("a stream (--mode stream) is started at once: no trigger, for now")
+    if req.mode == "stream" and aids and ids and not hasattr(getattr(oc, "CaptureGroup", None), "stream"):
+        raise ValueError("a stream of logic and analog together needs an oep-client-python with CaptureGroup.stream")
     try:
         res = _capture(link, core, oc, oh, message, target, req, ids, aids, fast)
-        if isinstance(res, _Streamed):           # put together after the session closed: it may take a while
+        if isinstance(res, (_Streamed, _GroupStreamed)):   # put together after the session closed: it may take a while
             res = res.result()
         return res
     except oh.OepError as e:        # the probe refused or failed: say what, not where
@@ -371,6 +373,14 @@ def _capture(link, core, oc, oh, message, target: str, req: Request, ids: list[i
                     blocks["trigger_opts"] = oc.TriggerOpts(arm=0)
                 if req.mode == "stream":
                     cfg = _configure(cap, oc, oh, target, "logic", oc.STREAMING, rate=req.rate, **blocks)
+                    if an:                     # logic and analog: both streamed in one group (capture §4.1)
+                        arate = req.analog_rate or req.rate
+                        fes = {k: fe for k, (_, _, fe) in enumerate(req.analog) if fe is not None}
+                        acfg = _configure(an, oc, oh, target, "analog", oc.STREAMING, rate=arate,
+                                          **({"frontends": fes} if fes else {}))
+                        return _group_stream_result(cap, an, hst, cfg, acfg, req, names, ids, aids, probe, fast,
+                                                    open_s, clock_before, oc, an.calibration(),
+                                                    _frontends(core, hst, an.fn))
                     return _stream_result(cap, hst, cfg, req, names, ids, probe, fast, open_s, clock_before, oc)
                 if req.mode == "repeat":       # with a trigger, one per segment (rearm 1, capture §2.1 / §3.3)
                     if trigger:
@@ -768,6 +778,54 @@ STREAM_MAX_DELAY_MS = 20  # ... or after this long. With (0, 0) the P4X sent eac
                           # quiet lines) as a transfer of its own, 2000 a second, and dropped 35 % it could not send
 
 
+def _collect_group(group, tracks, link, req: Request, oc, spool=None):
+    """_collect for a group's streaming tracks (capture §4.1: each subscribed, started at once): -> ({fn: Received},
+    seconds). The first track's Received goes to the spool as it comes; a loss in any track stops it with "stop"."""
+    import time
+    for t in tracks:
+        t.subscribe(STREAM_MIN_BYTES, STREAM_MAX_DELAY_MS)
+    group.start(tracks)
+    t_read = time.monotonic()
+    deadline, got = t_read + req.duration, {t.fn: oc.Received() for t in tracks}
+    lead = tracks[0].fn
+    while True:
+        now = time.monotonic()
+        if now >= deadline:
+            break
+        got = group.stream(link, tracks, seconds=min(STREAM_POLL_S, deadline - now), into=got)
+        if spool is not None:
+            spool.take(got[lead])
+        lost = (spool is not None and spool.lost) or any(
+            g.gaps or (g.start or 0) > 0 for fn, g in got.items() if spool is None or fn != lead)
+        if req.on_loss == "stop" and lost:
+            break
+    group.stop()
+    got = group.finish(link, tracks, got)
+    return got, time.monotonic() - t_read
+
+
+def _analog_runs(an, acfg, got) -> tuple[list, list]:
+    """An analog track's stream -> its gapless runs (start_ns, start_uncertainty_ns, bytes, samples) and the stream
+    positions it skipped (each a loss: where, as the next run's start_ns or None)."""
+    frame = acfg.slot // 8 * len(acfg.order)
+    segs = sorted(got.segments.values(), key=lambda x: x.position)
+    runs, skips, pos, at = [], [], got.start or 0, 0
+    if got.start:
+        skips.append(None)
+    for index, skipped in sorted(got.gaps) + [(len(got.data), 0)]:
+        n = index - at
+        inside = [x for x in segs if pos <= x.position < pos + n]
+        samples = n // frame
+        if samples and inside:
+            runs.append((inside[0].start_ns, inside[0].start_uncertainty_ns, bytes(got.data[at:at + samples * frame]),
+                         samples))
+        if skipped:
+            skips.append(len(runs))
+        pos += n + skipped
+        at = index
+    return runs, skips
+
+
 def _collect(track, link, req: Request, oc, spool=None):
     """Subscribe, start, collect for req.duration, stop and collect the rest -> (Received, seconds). A loss stops it
     at once with on_loss "stop"."""
@@ -790,6 +848,103 @@ def _collect(track, link, req: Request, oc, spool=None):
     track.stop()
     got = track.finish(link, got)
     return got, time.monotonic() - t_read
+
+
+def _group_stream_result(cap, an, hst, cfg, acfg, req: Request, names, ids, aids, probe, fast, open_s, clock_before,
+                         oc, calib, frontends):
+    """Logic and analog streamed in one group (capture §4.1, §4.2: each track's pushes to its own fn): the logic put
+    together as a stream alone is (its parts and losses), each part then given the analog samples of its time
+    (placed by the segments' start_ns); an analog loss is a loss of the capture too."""
+    group = oc.CaptureGroup(hst)
+    group.bind([cap, an])
+    try:
+        if getattr(cfg, "stream_buffer", None) is not None:
+            probe["stream_buffer"] = {"bytes": cfg.stream_buffer, "tolerable_delay_s": cfg.tolerable_delay_s(None)}
+        spool = _Spool(cap, cfg, names, ids, req) if _spools(cfg) else None
+        got, read_s = _collect_group(group, [cap, an], hst.link, req, oc, spool)
+    finally:
+        group.bind([])
+    lg, ag = got[cap.fn], got[an.fn]
+    st, ast = cap.status(), an.status()
+    if spool is not None:
+        spool.give(lg, write_pos=st.write_pos if st.state == oc.STATE["error"] else None)
+    drops = oc.CaptureDrops.of(st) if hasattr(oc, "CaptureDrops") else None
+    if drops is not None:
+        import dataclasses
+        probe["drops"] = dataclasses.asdict(drops)
+    received = (spool.received if spool is not None else len(lg.data)) + len(ag.data)
+    tail = None
+    if st.state != oc.STATE["error"]:
+        end = spool.end if spool is not None else (lg.start or 0) + len(lg.data) + sum(n for _, n in lg.gaps)
+        if st.write_pos > end:
+            tail = st.write_pos - end
+    probe["link"] = _link_info(hst, fast, open_s, received, read_s)
+    clock = _clock_info(clock_before, _clock(hst))
+    if clock:
+        probe["clock"] = clock
+    probe["generation"] = {k: t.generation for k, t in (("logic", cap), ("analog", an)) if t.generation is not None}
+    if calib is not None and calib.factory:
+        probe["calibration"] = [{"frontend": fe, "scheme": scheme, "raw": bytes(raw).hex()}
+                                for fe, scheme, raw in calib.factory]
+    meta = {"probe_channels": {**dict(zip(names, ids)), **dict(zip([n for n, *_ in req.analog], aids))},
+            "probe": probe,
+            "stream": {"duration_s": req.duration, "on_loss": req.on_loss, "frames": lg.frames + ag.frames,
+                       "bytes": received, "read_s": round(read_s, 3)}}
+    logic = _Streamed(cap, cfg, lg, st, names, ids, req, meta, oc, spool, tail)
+    aend = (ag.start or 0) + len(ag.data) + sum(n for _, n in ag.gaps)
+    atail = ast.write_pos - aend if ast.state != oc.STATE["error"] and ast.write_pos > aend else None
+    return _GroupStreamed(logic, an, acfg, ag, ast, req, aids, calib, frontends, atail, oc)
+
+
+class _GroupStreamed:
+    """A group stream collected: the logic put together (after the session), then each part given its analog."""
+    def __init__(self, logic, an, acfg, ag, ast, req, aids, calib, frontends, atail, oc):
+        self.logic, self.an, self.acfg, self.ag, self.ast, self.req, self.aids = logic, an, acfg, ag, ast, req, aids
+        self.calib, self.frontends, self.atail, self.oc = calib, frontends, atail, oc
+
+    def result(self) -> Result:
+        res = self.logic.result()
+        tick = Fraction(res.tick_hz)
+        arate = Fraction(self.acfg.rate)
+        runs, skips = _analog_runs(self.an, self.acfg, self.ag)
+        frame = self.acfg.slot // 8 * len(self.acfg.order)
+        first_ns = min((p.meta.get("start_ns") for p in res.parts if p.meta.get("start_ns") is not None), default=None)
+        for part in res.parts:
+            s_ns = part.meta.get("start_ns")
+            span = Fraction(max(c.end if hasattr(c, "end") else c.n for c in part.channels), 1) / tick
+            best = None                          # the analog run that covers most of this part's time
+            if s_ns is not None:
+                for r0, unc, data, n in runs:
+                    a = max(Fraction(s_ns, 10**9), Fraction(r0, 10**9))
+                    b = min(Fraction(s_ns, 10**9) + span, Fraction(r0, 10**9) + n / arate)
+                    if b > a and (best is None or b - a > best[0]):
+                        best = (b - a, r0, unc, data, n, a, b)
+            if best is None:
+                part.channels += _analog_chans(self.an, self.acfg, self.req, self.aids, b"", 0, Fraction(0), tick,
+                                               self.frontends, self.calib, None, None)
+                continue
+            _, r0, unc, data, n, a, b = best
+            k0 = max(0, -(-((a - Fraction(r0, 10**9)) * arate) // 1))
+            k1 = min(n, int((b - Fraction(r0, 10**9)) * arate))
+            t0 = (Fraction(r0, 10**9) + k0 / arate - Fraction(s_ns, 10**9)) * tick
+            part.channels += _analog_chans(self.an, self.acfg, self.req, self.aids,
+                                           data[k0 * frame:k1 * frame], max(0, k1 - k0), t0, tick,
+                                           self.frontends, self.calib, unc, None)
+        lost = list(res.lost)
+        for k in skips:                          # analog losses: after the logic part its run starts in, roughly
+            at = len(res.parts) - 1
+            if k is not None and k < len(runs) and first_ns is not None:
+                r0 = runs[k][0]
+                at = max([i for i, p in enumerate(res.parts) if (p.meta.get("start_ns") or 0) <= r0] or [0])
+            lost.append({"after_part": -1 if k is None else at, "reason": "analog: the probe dropped a segment (no "
+                         "room to send)"})
+        if self.ast.state == self.oc.STATE["error"]:
+            lost.append({"after_part": len(res.parts) - 1, "stopped": True,
+                         "reason": f"analog: the probe stopped in error ({self.ast.error_name})"})
+        if self.atail:
+            lost.append({"after_part": len(res.parts) - 1, "stopped": True,
+                         "reason": f"analog: the stream's last {self.atail} bytes did not arrive after the stop"})
+        return Result(res.tick_hz, res.parts[0].channels, res.meta, res.parts, lost, res.layout, res.temp_dir)
 
 
 def _analog_stream_result(an, hst, acfg, req: Request, aids, probe, fast, open_s, clock_before, oc, calib,

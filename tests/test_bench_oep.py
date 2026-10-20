@@ -124,3 +124,18 @@ def test_an_analog_stream_alone(tmp_path):
     (an,) = fileformat.read(out)[1]
     rate = an.rate_hz.numerator / an.rate_hz.denominator
     assert an.n >= 0.9 * 3.0 * rate and an.zero is not None and an.scale_nv
+
+
+def test_logic_and_analog_streamed_together(tmp_path):
+    from oep_client import capture as oc
+    if not hasattr(oc.CaptureGroup, "stream"):
+        pytest.skip("oep-client-python without CaptureGroup.stream")
+    req = sources.Request(LOGIC, 10_000_000, 0, mode="stream", duration=5.0, analog=[("AN", "17", None)],
+                          analog_rate=20_000)
+    out = sources.capture(f"oep:{TARGET}", req, tmp_path / "g.wireskein")
+    head = fileformat.read_header(out)
+    assert head["complete"] is True, head.get("lost")
+    chans = fileformat.read(out)[1]
+    an = chans[-1]
+    rate = an.rate_hz.numerator / an.rate_hz.denominator
+    assert abs(an.n / rate - chans[0].n / 10_000_000) < 0.05      # the analog over the logic's time
