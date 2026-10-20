@@ -488,7 +488,7 @@ def _stream_result(cap, hst, cfg, req: Request, names, ids, probe, fast, open_s,
     cap.start()
     t_read = time.monotonic()
     deadline, got = t_read + req.duration, None
-    while True:
+    while True:                                  # stream() renews the lease across calls on the same Received
         now = time.monotonic()
         if now >= deadline:
             break
