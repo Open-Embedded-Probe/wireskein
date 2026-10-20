@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) A stream says before it starts how long this host may pause before the probe drops (OEP capture §3.3 `stream_buffer` over the data rate; format 1 over its worst bandwidth), warns under 5 ms, and keeps it in `meta.probe.stream_buffer`. A rate the probe rounded down is named (`note: the probe took ...`). `meta.probe.link.reader` says how a USB probe was read; a loss read one transfer at a time suggests `oep-client-python[usb-async]`.
+- (JA) ストリームは、プローブが落とす前に host がどれだけ止まってよいかを示す（OEP capture §3.3 の `stream_buffer` をデータの速さで割ったもの。形式 1 は最悪の帯域で割る）。5 ms 未満なら警告し、`meta.probe.stream_buffer` に残す。プローブが rate を切り下げたら、そう示す（`note: the probe took ...`）。`meta.probe.link.reader` に USB のプローブの読み方を残し、1 本ずつの読みで欠落したら `oep-client-python[usb-async]` を勧める。
 - (EN) The `oep` extra pulls `oep-client-python[usb-async]` (libusb1): a USB probe's stream is read with queued asynchronous IN transfers, which ride out the host's jitter. Measured on the P4X (w 8, 2 s): 5 and 10 MHz lossless (with synchronous reads 0.45 % and 1.2 % were lost), 20 MHz 0.5 % (was 15 %), 30 MHz 4.3 % at 27 MB/s; what is left is the probe's own buffer (four 8 KB stages).
 - (JA) 追加の依存 `oep` は `oep-client-python[usb-async]`（libusb1）を入れる: USB のプローブのストリームを、出したままの非同期の IN 転送で読み、host の揺れを吸収する。P4X（w 8、2 秒）での実測: 5 MHz と 10 MHz は欠落なし（同期の読みでは 0.45 % と 1.2 % を落としていた）、20 MHz は 0.5 %（前は 15 %）、30 MHz は 27 MB/s で 4.3 %。残りはプローブ自身のバッファ（8 KB の stage が 4 個）による。
 - (EN) A stream from a probe whose status carries the reference firmware's capture-drops diagnostics (oep-client-python 56468dd and later) keeps them in `meta.probe.drops`, and a loss's reason names the counters that are not 0 (bytes no stage took, bytes the transport would not queue, DMA overruns, harvest queue overflows).

@@ -218,6 +218,9 @@ def _link_info(hst, rates: list[int], open_s: float, read_bytes: int, read_s: fl
     the record skipped, steps down while in use, and the read."""
     out = {"open_s": round(open_s, 3), "read_bytes": read_bytes, "read_s": round(read_s, 3)}
     lk = getattr(hst, "link", None)
+    reader = getattr(lk, "reader", None)
+    if isinstance(reader, str):
+        out["reader"] = reader                            # usb-async / usb-sync (a one-read host's pauses drop data)
     rep = getattr(lk, "speed", None)
     if rates:
         out["asked"] = rates
@@ -474,6 +477,13 @@ def _stream_result(cap, hst, cfg, req: Request, names, ids, probe, fast, open_s,
     (the default), else it goes on; either way the capture is incomplete, a failure (wireskein-format §3.4)."""
     import time
     link = hst.link
+    if getattr(cfg, "stream_buffer", None) is not None:   # how long this host may pause (§3.3), before it starts
+        worst = None
+        if getattr(cfg, "event_d", None):                 # format 1: over its worst bandwidth, a lower bound
+            from oep_client import capture_blocks
+            worst = capture_blocks.worst_bytes(len(cfg.raw_roles), list(cfg.event_d.values()), cfg.block) \
+                * float(cfg.rate) / cfg.block
+        probe["stream_buffer"] = {"bytes": cfg.stream_buffer, "tolerable_delay_s": cfg.tolerable_delay_s(worst)}
     cap.subscribe()
     cap.start()
     t_read = time.monotonic()

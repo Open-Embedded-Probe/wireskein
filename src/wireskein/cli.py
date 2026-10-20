@@ -298,6 +298,15 @@ def capture_cmd(args) -> None:
     if data:                # format 1: what the probe sent against what the format allows at worst, and format 0
         print(f"data: format {data['format']}, {data['bytes'] / 1000:.1f} KB (worst {data['worst_bytes'] / 1000:.1f} KB, "
               f"format 0 {data['format0_bytes'] / 1000:.1f} KB), blocks of {data['block']} samples")
+    asked = cap.meta.get("requested_rate")
+    if asked and abs(cap.rate - asked) > 1e-6 * asked:   # the probe rounds to a rate it keeps (capture §3.3)
+        print(f"note: the probe took {cap.rate:g} Hz (asked {asked:g}): the nearest it keeps")
+    buf = (cap.meta.get("probe") or {}).get("stream_buffer")
+    if buf and buf.get("tolerable_delay_s") is not None:
+        ms = buf["tolerable_delay_s"] * 1e3
+        print(f"buffer: {buf['bytes']} B on the probe: this host may pause {ms:.3g} ms before it drops"
+              + (" (short: a busy host will lose data; a lower --rate or fewer channels gives more)"
+                 if ms < BUFFER_WARN_MS else ""))
     st = cap.meta.get("stream")
     if st:
         kb = st["bytes"] / 1000
@@ -306,11 +315,15 @@ def capture_cmd(args) -> None:
     if raw and not raw.get("complete", True):    # a loss is a failure (wireskein-format §3.4): kept, but said and exit 1
         for line in _loss_lines(raw):
             print(line, file=sys.stderr)
+        if (link or {}).get("reader") == "usb-sync":
+            print("  the USB link was read one transfer at a time: pip install 'oep-client-python[usb-async]' "
+                  "(queued reads ride out the host's pauses)", file=sys.stderr)
         print(f"{out}: kept what was taken; the capture failed", file=sys.stderr)
         raise SystemExit(1)
 
 
 LOSS_LINES = 3      # the first losses shown in full; the rest summed
+BUFFER_WARN_MS = 5  # a stream whose probe holds less than this is said to be short of buffer
 
 
 def _loss_lines(raw: dict) -> list[str]:
