@@ -149,6 +149,17 @@ def _configure(track, oc, oh, target: str, what: str, mode=None, **kw):
         raise RuntimeError(f"probe {target} cannot capture {what} with {_what(e.tag, oc)}") from e
 
 
+def _query(track, oc, oh, message, kw: dict):
+    """configure's query (capture §3.3: the same rules, nothing set) -> the answer, the refusal (the exception), or None
+    when the probe has no query (OEP v1: optional)."""
+    try:
+        return track.configure(mode=oc.ONE_SHOT, query=True, **kw)
+    except oh.Rejected as e:
+        if not isinstance(e, oh.Unsupported) and e.result.detail == message.UNKNOWN_OPERATION:
+            return None
+        return e
+
+
 def _clock(hst):
     """The probe's clock against this host's (core §7.7): the reading with the shortest round trip of a few, or None
     when it could not be read (the capture goes on without it)."""
@@ -310,8 +321,13 @@ def _capture(link, core, oc, oh, message, target: str, req: Request, ids: list[i
                 if req.mode == "stream":
                     cfg = _configure(cap, oc, oh, target, "logic", oc.STREAMING, rate=req.rate, **blocks)
                     return _stream_result(cap, hst, cfg, req, names, ids, probe, fast, open_s, clock_before, oc)
-                cfg = _configure(cap, oc, oh, target, "logic", rate=req.rate, samples=req.samples, trigger=trigger,
-                                 pretrigger=req.pretrigger, **blocks)
+                lkw = dict(rate=req.rate, samples=req.samples, trigger=trigger, pretrigger=req.pretrigger, **blocks)
+                if grouped:          # both tracks asked first (query), set only when neither refuses (below)
+                    lq = _query(cap, oc, oh, message, lkw)
+                    lrate = Fraction(lq.rate) if getattr(lq, "rate", None) else Fraction(req.rate)
+                else:
+                    cfg = _configure(cap, oc, oh, target, "logic", **lkw)
+                    lrate = Fraction(cfg.rate)
             if an:
                 arate = req.analog_rate or req.rate
                 asamples = req.analog_samples
@@ -327,7 +343,7 @@ def _capture(link, core, oc, oh, message, target: str, req: Request, ids: list[i
                     except oh.Rejected as e:       # query is optional (OEP v1): absent = unknown_operation
                         if e.result.detail != message.UNKNOWN_OPERATION:
                             raise
-                    asamples = max(1, round(Fraction(req.samples) / Fraction(cfg.rate) * real))
+                    asamples = max(1, round(Fraction(req.samples) / lrate * real))
                 elif asamples is None:
                     asamples = req.samples
                 linked = {}
@@ -336,15 +352,25 @@ def _capture(link, core, oc, oh, message, target: str, req: Request, ids: list[i
                     if cap and pre:
                         real = Fraction(an.configure(mode=oc.ONE_SHOT, rate=arate, samples=1, query=True,
                                                      **({"frontends": fes} if fes else {})).rate)
-                        pre = round(Fraction(pre) * real / Fraction(cfg.rate))
+                        pre = round(Fraction(pre) * real / lrate)
                     linked = {"trigger": (oc.LINKED, 0, 0), **({"pretrigger": pre} if pre else {})}
                 what = "analog"
                 if linked.get("pretrigger") and cap:    # say where the number came from when it is refused
                     what = (f"analog (its pretrigger {linked['pretrigger']} of {asamples} samples is the logic's "
-                            f"{req.pretrigger} at {float(cfg.rate):g} Hz, counted at the analog rate; a longer capture "
+                            f"{req.pretrigger} at {float(lrate):g} Hz, counted at the analog rate; a longer capture "
                             f"or a lower logic rate gives it more)")
-                acfg = _configure(an, oc, oh, target, what, rate=arate, samples=asamples,
-                                  **({"frontends": fes} if fes else {}), **linked)
+                akw = dict(rate=arate, samples=asamples, **({"frontends": fes} if fes else {}), **linked)
+                if grouped:          # every refusal at once, before either track is set (capture §3.3 query)
+                    asked = ([("logic", lq)] if cap else []) + [(what, _query(an, oc, oh, message, akw))]
+                    refused = [(w, r) for w, r in asked if isinstance(r, Exception)]
+                    if refused:
+                        raise RuntimeError(f"probe {target} cannot capture these together (each track asked before "
+                                           f"either was set): " + "; ".join(
+                                               f"{w} with {_what(r.tag, oc)}" if isinstance(r, oh.Unsupported)
+                                               else f"{w}: {r}" for w, r in refused)) from refused[0][1]
+                    if cap:
+                        cfg = _configure(cap, oc, oh, target, "logic", **lkw)
+                acfg = _configure(an, oc, oh, target, what, **akw)
             group = None
             if an and (cap or grouped):
                 group = oc.CaptureGroup(hst)

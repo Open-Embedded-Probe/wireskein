@@ -137,6 +137,16 @@ def test_an_analog_trigger_starts_the_logic_too(probe, tmp_path):
     assert "trigger_tick" in head["meta"] and "trigger_ns" in head["meta"]["probe"]
 
 
+def test_a_group_refused_says_which_track_before_setting_either(probe, tmp_path):
+    """Both tracks asked with the values they would be set to (capture §3.3 query) before either is set: the analog's
+    pretrigger, the logic's counted at the analog rate, is not below its 4 samples - refused, and where it came from."""
+    req = sources.Request([("A", "10")], 20_000_000, 2000, trigger=("A", "rise"), pretrigger=1900,
+                          analog=[("SQ", "16", None)], analog_rate=48_000, analog_samples=4)
+    with pytest.raises(RuntimeError, match=r"each track asked before either was set\): analog \(its pretrigger \d+ of 4 "
+                                           r"samples is the logic's 1900 .*\) with a pretrigger"):
+        sources.capture(probe(), req, tmp_path / "a.wireskein")
+
+
 def test_an_analog_trigger_needs_its_voltage():
     with pytest.raises(ValueError, match="volts it crosses"):
         sources.Request([("A", "10")], 1_000_000, 100, trigger=("SQ", "rise"), analog=[("SQ", "16", None)])
