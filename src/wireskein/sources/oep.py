@@ -174,6 +174,12 @@ def _configure(track, oc, oh, target: str, what: str, mode=None, **kw):
     except oh.Unsupported as e:
         raise RuntimeError(f"probe {target} cannot capture {what} with {_what(e.tag, oc)}"
                            f"{_most_said(track, oc, oh, e, kw) if mode is None else ''}") from e
+    except oh.Rejected as e:
+        if "data_format" not in kw:
+            raise
+        raise RuntimeError(f"probe {target} cannot capture {what} with lines kept as their changes (NAME=ID/D, "
+                           f"capture format 1) this way: {e} - the probe has not the room for it here; without "
+                           f"/D the lines go as samples") from e
 
 
 def _most_said(track, oc, oh, e, kw: dict) -> str:
