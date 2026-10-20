@@ -40,6 +40,7 @@ import json
 import zipfile
 import sys
 import time
+from fractions import Fraction
 from pathlib import Path
 
 from . import __version__
@@ -282,33 +283,43 @@ def capture_cmd(args) -> None:
         if fileformat.sniff(out) == "wireskein":
             fileformat.note(out, args.note)
     from . import fileformat
-    from .analyze import load
     raw = fileformat.read_header(out) if fileformat.sniff(out) == "wireskein" else None
-    n_parts = len(raw["parts"]) if raw else 1
-    cap = load(out, part=0 if n_parts > 1 else None)
-    if n_parts > 1:
-        total = sum(p["ticks"] for p in raw["parts"])
-        print(f"{out}: {_count(cap)}, {n_parts} parts, {total} ticks taken at {cap.rate:g} Hz ({total / cap.rate:.6g} s)")
+    if raw:                 # from the header alone: a long stream's channels are not read back to say what it holds
+        chans = [c for p in raw["parts"][:1] for c in p["channels"]]
+        rate, meta = float(Fraction(*raw["tick_hz"])), raw.get("meta", {})
+        coarse = sum(c.get("encoding") == "events" for c in chans)
+        n_analog = sum(str(c.get("encoding", "")).startswith("analog") for c in chans)
+        what = (f"{len(chans) - n_analog} logic" + (f" ({coarse} as changes at a coarser step)" if coarse else "")
+                + (f" + {n_analog} analog" if n_analog else "") + " channels")
     else:
-        print(f"{out}: {_count(cap)}, {cap.n_samples} ticks at {cap.rate:g} Hz ({cap.duration:.6g} s)")
-        _fewer(out, req)
-    link = (cap.meta.get("probe") or {}).get("link")
+        from .analyze import load
+        cap = load(out)
+        rate, meta, what = cap.rate, cap.meta, _count(cap)
+    n_parts = len(raw["parts"]) if raw else 1
+    total = sum(p["ticks"] for p in raw["parts"]) if raw else cap.n_samples
+    if n_parts > 1:
+        print(f"{out}: {what}, {n_parts} parts, {total} ticks taken at {rate:g} Hz ({total / rate:.6g} s)")
+    else:
+        print(f"{out}: {what}, {total} ticks at {rate:g} Hz ({total / rate:.6g} s)")
+        if raw:
+            _fewer(raw, req)
+    link = (meta.get("probe") or {}).get("link")
     if link:
         print("link: " + _link_line(link))
-    data = (cap.meta.get("probe") or {}).get("data")
+    data = (meta.get("probe") or {}).get("data")
     if data:                # format 1: what the probe sent against what the format allows at worst, and format 0
         print(f"data: format {data['format']}, {data['bytes'] / 1000:.1f} KB (worst {data['worst_bytes'] / 1000:.1f} KB, "
               f"format 0 {data['format0_bytes'] / 1000:.1f} KB), blocks of {data['block']} samples")
-    asked = cap.meta.get("requested_rate")
-    if asked and abs(cap.rate - asked) > 1e-6 * asked:   # the probe rounds to a rate it keeps (capture §3.3)
-        print(f"note: the probe took {cap.rate:g} Hz (asked {asked:g}): the nearest it keeps")
-    buf = (cap.meta.get("probe") or {}).get("stream_buffer")
+    asked = meta.get("requested_rate")
+    if asked and abs(rate - asked) > 1e-6 * asked:   # the probe rounds to a rate it keeps (capture §3.3)
+        print(f"note: the probe took {rate:g} Hz (asked {asked:g}): the nearest it keeps")
+    buf = (meta.get("probe") or {}).get("stream_buffer")
     if buf and buf.get("tolerable_delay_s") is not None:
         ms = buf["tolerable_delay_s"] * 1e3
         print(f"buffer: {buf['bytes']} B on the probe: this host may pause {ms:.3g} ms before it drops"
               + (" (short: a busy host will lose data; a lower --rate or fewer channels gives more)"
                  if ms < BUFFER_WARN_MS else ""))
-    st = cap.meta.get("stream")
+    st = meta.get("stream")
     if st:
         kb = st["bytes"] / 1000
         print(f"stream: {kb:.1f} KB in {st['frames']} frames over {st['read_s']:.2f} s"
@@ -370,21 +381,20 @@ def _link_line(link: dict) -> str:
     return ", ".join(parts)
 
 
-def _fewer(out, req) -> None:
-    """Say when the probe gave fewer samples than asked (its buffer limit): easy to miss otherwise."""
-    from . import fileformat
-    if fileformat.sniff(out) != "wireskein":
-        return
-    _, chans = fileformat.read(out)
-    for c in chans:
-        if isinstance(c, fileformat.AnalogChannel):
-            if req.analog_samples and c.n < req.analog_samples:
-                print(f"note: {c.name}: {c.n} samples of the {req.analog_samples} asked (the probe's limit)")
-        elif isinstance(c, fileformat.Channel) and c.step == 1:
-            if req.samples and c.n < req.samples:
-                print(f"note: {c.name}: {c.n} samples of the {req.samples} asked (the probe's limit)")
-        elif req.samples and c.end < req.samples:            # kept at a coarser step: it covers fewer ticks
-            print(f"note: {c.name}: covers {c.end} of the {req.samples} samples asked (the probe's limit)")
+def _fewer(raw: dict, req) -> None:
+    """Say when the probe gave fewer samples than asked (its buffer limit): easy to miss otherwise. From the header."""
+    for c in raw["parts"][0]["channels"]:
+        enc, n, name = c.get("encoding", ""), c.get("n", 0), c.get("name")
+        if enc.startswith("analog"):
+            if req.analog_samples and n < req.analog_samples:
+                print(f"note: {name}: {n} samples of the {req.analog_samples} asked (the probe's limit)")
+        elif enc == "bits" and c.get("step", 1) == 1:
+            if req.samples and n < req.samples:
+                print(f"note: {name}: {n} samples of the {req.samples} asked (the probe's limit)")
+        elif enc in ("bits", "events"):
+            end = c.get("phase", 0) + n * c.get("step", 1)
+            if req.samples and end < req.samples:          # kept at a coarser step: it covers fewer ticks
+                print(f"note: {name}: covers {end} of the {req.samples} samples asked (the probe's limit)")
 
 
 def convert(args) -> None:

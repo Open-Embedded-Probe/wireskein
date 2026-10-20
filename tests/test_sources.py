@@ -161,7 +161,7 @@ def test_fewer_samples_than_asked_are_named(tmp_path, capsys):
     out = tmp_path / "c.wireskein"
     fileformat.write(out, 1000, [fileformat.Channel("A", fileformat.pack(bytes(64)), 64),
                                  fileformat.analog_volts("V", [1.0] * 10, 100)])
-    _fewer(out, sources.Request([("A", "0")], 1000, 400, analog_samples=10))
+    _fewer(fileformat.read_header(out), sources.Request([("A", "0")], 1000, 400, analog_samples=10))
     assert capsys.readouterr().out == "note: A: 64 samples of the 400 asked (the probe's limit)\n"
 
 

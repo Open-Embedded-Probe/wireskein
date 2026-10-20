@@ -433,15 +433,18 @@ def write(path: str | Path, tick_hz: int | float | Fraction | tuple[int, int],
             if isinstance(data, OnDisk):          # a chunk at a time, zip64 when it is large
                 info = zipfile.ZipInfo(name, (1980, 1, 1, 0, 0, 0))
                 info.compress_type = _compression(data)
+                info._compresslevel = DATA_LEVEL     # compress_level from 3.13, this name an alias of it there
                 with z.open(info, "w", force_zip64=len(data) >= 1 << 31) as out:
                     data.copy_to(out)
             else:
-                z.writestr(name, data, _compression(data))
+                z.writestr(name, data, _compression(data), DATA_LEVEL)
         for name, data in (attachments or {}).items():
             z.writestr(_attach_name(name), _encode(data))
     return path
 
 
+DATA_LEVEL = 1            # a channel's data deflated fast: 2-3 x level 6's speed, a few hundred KB for 50 MB of a quiet,
+                          # clocked or UART line either way (level 6 kept 1/2-1/4 of that); a 40 MB/s stream's GB waits on it
 TRY_BYTES = 1 << 20       # a channel's data is deflated unless its first MiB does not shrink by a tenth
 
 
