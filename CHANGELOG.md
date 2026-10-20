@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) A refused pretrigger says the most the probe takes in that setting, found by query and bisection (capture §3.3: nothing set; about log2 of it queries): `... with a pretrigger (at most 3 samples before the trigger here, of 4)`. The declared max_pretrigger is not used for it (OEP declares it at w 1).
+- (JA) 断られたプリトリガには、その設定でプローブが受ける最大を添える。query の二分探索で求める（capture §3.3: 何も設定しない。回数はおよそ log2）: `... with a pretrigger (at most 3 samples before the trigger here, of 4)`。宣言の max_pretrigger は使わない（OEP は w 1 での値を宣言する）。
 - (EN) Needs oep-client-python 0.0.36 (the `oep` extra and the dev group): format 1 read by columns, the capture group's trigger source and trigger_caps, judge_latency_ns, the usb-async stream of 128 URBs. Probes: oep-probe-arduino 0.0.36 (the P4X's 40 MB/s stream, judging handed over at once, long triggered one-shots).
 - (JA) oep-client-python 0.0.36 が要る（追加の依存 `oep` と dev の組）: 形式 1 を列で読む、組のトリガの出来事の元と trigger_caps、judge_latency_ns、URB 128 本の usb-async のストリーム。プローブは oep-probe-arduino 0.0.36（P4X の 40 MB/s のストリーム、判定の即時の受け渡し、長いトリガ付きの one-shot）。
 - (EN) Markers and decoding annotations name their part (wireskein-format §5.2 / §5.3 `part`, from 0; none: part 0): their ticks are that part's. In a file of several parts writers always give it (`set_markers` fills 0 when missing and refuses a part the file does not have). `annotate` decodes each part on its own (analysis never crosses parts), each row naming its part (`--save` stores every part's); `wireskein gui` takes `&part=K` for the decoding and the checks of the part shown. The viewer reading parts, losses and events is wireskein-web c5fe6cb (not released yet: run it with `WIRESKEIN_WEB_DIR` at its `site/`).

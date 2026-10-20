@@ -164,7 +164,36 @@ def _configure(track, oc, oh, target: str, what: str, mode=None, **kw):
     try:
         return track.configure(mode=oc.ONE_SHOT if mode is None else mode, **kw)
     except oh.Unsupported as e:
-        raise RuntimeError(f"probe {target} cannot capture {what} with {_what(e.tag, oc)}") from e
+        raise RuntimeError(f"probe {target} cannot capture {what} with {_what(e.tag, oc)}"
+                           f"{_most_said(track, oc, oh, e, kw) if mode is None else ''}") from e
+
+
+def _most_said(track, oc, oh, e, kw: dict) -> str:
+    """For a refused pretrigger: the most this setting takes, found by query (nothing set), as words; else ""."""
+    if e.tag is None or e.tag & 0x7F != oc.PRETRIGGER or not kw.get("pretrigger"):
+        return ""
+    most = _most_pretrigger(track, oc, oh, kw)
+    return f" (at most {most} samples before the trigger here, of {kw.get('samples')})" if most is not None else ""
+
+
+def _most_pretrigger(track, oc, oh, kw: dict) -> int | None:
+    """The largest pretrigger the probe takes with these settings, by query and bisection (about log2 of it queries;
+    capture §3.3: the same rules as configure, nothing set). None: no query, or not even a small one."""
+    from oep_client import message
+    lo, hi = 0, int(kw["pretrigger"]) - 1
+    if hi < 1 or not isinstance(_query(track, oc, oh, message, {**kw, "pretrigger": 1}), oc.Config):
+        return None
+    lo = 1
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        r = _query(track, oc, oh, message, {**kw, "pretrigger": mid})
+        if r is None:
+            return None
+        if isinstance(r, Exception):
+            hi = mid - 1
+        else:
+            lo = mid
+    return lo
 
 
 def _query(track, oc, oh, message, kw: dict):
@@ -383,10 +412,12 @@ def _capture(link, core, oc, oh, message, target: str, req: Request, ids: list[i
                     asked = ([("logic", lq)] if cap else []) + [(what, _query(an, oc, oh, message, akw))]
                     refused = [(w, r) for w, r in asked if isinstance(r, Exception)]
                     if refused:
+                        kws = {"logic": (cap, lkw), what: (an, akw)}
                         raise RuntimeError(f"probe {target} cannot capture these together (each track asked before "
                                            f"either was set): " + "; ".join(
-                                               f"{w} with {_what(r.tag, oc)}" if isinstance(r, oh.Unsupported)
-                                               else f"{w}: {r}" for w, r in refused)) from refused[0][1]
+                                               f"{w} with {_what(r.tag, oc)}{_most_said(*kws[w][:1], oc, oh, r, kws[w][1])}"
+                                               if isinstance(r, oh.Unsupported) else f"{w}: {r}"
+                                               for w, r in refused)) from refused[0][1]
                     if cap:
                         cfg = _configure(cap, oc, oh, target, "logic", **lkw)
                 acfg = _configure(an, oc, oh, target, what, **akw)

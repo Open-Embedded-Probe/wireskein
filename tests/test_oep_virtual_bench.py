@@ -162,7 +162,8 @@ def test_a_group_refused_says_which_track_before_setting_either(probe, tmp_path)
     req = sources.Request([("A", "10")], 20_000_000, 2000, trigger=("A", "rise"), pretrigger=1900,
                           analog=[("SQ", "16", None)], analog_rate=48_000, analog_samples=4)
     with pytest.raises(RuntimeError, match=r"each track asked before either was set\): analog \(its pretrigger \d+ of 4 "
-                                           r"samples is the logic's 1900 .*\) with a pretrigger"):
+                                           r"samples is the logic's 1900 .*\) with a pretrigger \(at most 3 samples "
+                                           r"before the trigger here, of 4\)"):   # found by query: below its 4 samples
         sources.capture(probe(), req, tmp_path / "a.wireskein")
 
 
