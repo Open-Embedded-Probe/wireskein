@@ -489,6 +489,10 @@ def _stream_result(cap, hst, cfg, req: Request, names, ids, probe, fast, open_s,
     got = cap.finish(link, got or oc.Received())
     read_s = time.monotonic() - t_read
     st = cap.status()
+    drops = oc.CaptureDrops.of(st) if hasattr(oc, "CaptureDrops") else None   # the reference firmware's own
+    if drops is not None:
+        import dataclasses
+        probe["drops"] = dataclasses.asdict(drops)
     probe["link"] = _link_info(hst, fast, open_s, len(got.data), read_s)
     clock = _clock_info(clock_before, _clock(hst))
     if clock:
@@ -511,12 +515,26 @@ class _Streamed:
     def result(self) -> Result:
         parts, lost = _stream_parts(self.cap, self.cfg, self.got, self.names, self.ids, self.req)
         st = self.st
+        why = _drops_line(self.meta["probe"].get("drops"))
         if st.state == self.oc.STATE["error"]:
             lost.append({"after_part": len(parts) - 1, "reason": f"the probe stopped in error ({st.error_name})",
                          "stopped": True})
         elif st.dropped and not lost:
             lost.append({"after_part": len(parts) - 1, "reason": "the probe dropped data (status flags bit 0)"})
+        if why:                                  # where the probe says the data went (its own diagnostics)
+            for x in lost:
+                x["reason"] += f" - the probe's counts: {why}"
         return Result(Fraction(self.cfg.rate), parts[0].channels, self.meta, parts, lost, "timeline")
+
+
+DROP_COUNTS = ("no_stage_bytes", "unqueued_bytes", "dma_overruns", "queue_overflows")
+
+
+def _drops_line(drops: dict | None) -> str:
+    """The reference firmware's capture-drops counters that are not 0, in one line."""
+    if not drops:
+        return ""
+    return ", ".join(f"{k} {drops[k]}" for k in DROP_COUNTS if drops.get(k))
 
 
 def _stream_parts(cap, cfg, got, names, ids, req: Request) -> tuple[list, list]:
