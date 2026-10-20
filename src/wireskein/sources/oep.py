@@ -449,7 +449,7 @@ def _capture(link, core, oc, oh, message, target: str, req: Request, ids: list[i
             meta["trigger_tick"] = seg.trigger_index
         tick = Fraction(cfg.rate)
         if getattr(cfg, "event_d", None):
-            chans = _from_blocks(cap.blocks(data, seg.samples), names, seg.samples, cfg)
+            chans = _from_blocks(cap, data, names, seg.samples, cfg)
             probe["data"] = _budget(oc, cfg, len(data), seg.samples, len(names))
         else:
             chans = fileformat.from_interleaved(data, names, cfg.width, cfg.positions, seg.samples)
@@ -500,11 +500,11 @@ def _capture(link, core, oc, oh, message, target: str, req: Request, ids: list[i
     return Result(tick, chans, meta)
 
 
-def _from_blocks(blocks, names: list[str], samples: int, cfg) -> list:
-    """A format 1 segment's blocks (oep-client's capture_blocks) -> the file's channels, in the order asked: a raw
-    channel as bits, an events channel as `events` at its D (_block_columns)."""
+def _from_blocks(cap, data: bytes, names: list[str], samples: int, cfg) -> list:
+    """A format 1 segment's bytes -> the file's channels, in the order asked: a raw channel as bits, an events channel
+    as `events` at its D (_segment_columns)."""
     out = []
-    for name, col in zip(names, _block_columns(blocks, len(names), cfg)):
+    for name, col in zip(names, _segment_columns(cap, data, samples, len(names), cfg)):
         if isinstance(col, bytes):
             out.append(fileformat.Channel(name, col[:(samples + 7) // 8], samples))
         else:
@@ -980,7 +980,7 @@ def _stream_parts(cap, cfg, got, names, ids, req: Request) -> tuple[list, list]:
                 samples = min(samples, len(data) * 8 // cfg.width)
                 chans = fileformat.from_interleaved(data, names, cfg.width, cfg.positions, samples)
             else:
-                chans = _from_blocks(cap.blocks(data, samples), names, samples, cfg)
+                chans = _from_blocks(cap, data, names, samples, cfg)
             restart = acc is not None and (acc_samples % 8 or any(acc_samples % d for d in ds))
             if acc is None or restart:           # a grid restart (format 1) is not a loss: the next part follows on
                 if acc is not None:
