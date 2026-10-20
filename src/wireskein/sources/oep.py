@@ -338,7 +338,12 @@ def _capture(link, core, oc, oh, message, target: str, req: Request, ids: list[i
                                                      **({"frontends": fes} if fes else {})).rate)
                         pre = round(Fraction(pre) * real / Fraction(cfg.rate))
                     linked = {"trigger": (oc.LINKED, 0, 0), **({"pretrigger": pre} if pre else {})}
-                acfg = _configure(an, oc, oh, target, "analog", rate=arate, samples=asamples,
+                what = "analog"
+                if linked.get("pretrigger") and cap:    # say where the number came from when it is refused
+                    what = (f"analog (its pretrigger {linked['pretrigger']} of {asamples} samples is the logic's "
+                            f"{req.pretrigger} at {float(cfg.rate):g} Hz, counted at the analog rate; a longer capture "
+                            f"or a lower logic rate gives it more)")
+                acfg = _configure(an, oc, oh, target, what, rate=arate, samples=asamples,
                                   **({"frontends": fes} if fes else {}), **linked)
             group = None
             if an and (cap or grouped):
