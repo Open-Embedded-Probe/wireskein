@@ -579,7 +579,7 @@ def _stream_parts(cap, cfg, got, names, ids, req: Request) -> tuple[list, list]:
         if r:
             lost.append({"after_part": len(parts) - 1, "reason": "the probe dropped a segment (no room to send)"})
         inside = [x for x in segs if p0 <= x.position < p0 + n]
-        run = bytes(got.data[i0:i0 + n])
+        run = memoryview(got.data)[i0:i0 + n]   # no copy: a 30 s stream at 40 MB/s is 1.2 GB
         if not ds and cfg.width % 8 == 0:        # format 0, whole bytes a sample: the stretch at once (no padding)
             samples = min(sum(x.samples for x in inside), len(run) * 8 // cfg.width)
             parts.append(_part(_samples_at_once(run, names, ids, cfg, samples), _seg_meta(inside[0]),
@@ -588,7 +588,7 @@ def _stream_parts(cap, cfg, got, names, ids, req: Request) -> tuple[list, list]:
         acc, acc_samples, acc_meta, tick0 = None, 0, None, None
         for k, x in enumerate(inside):
             end_ = inside[k + 1].position if k + 1 < len(inside) else p0 + n
-            data = run[x.position - p0:end_ - p0]
+            data = bytes(run[x.position - p0:end_ - p0])
             samples = x.samples
             if not ds:
                 samples = min(samples, len(data) * 8 // cfg.width)
@@ -625,16 +625,48 @@ def _seg_meta(x) -> dict:
     return {"start_ns": x.start_ns, "start_uncertainty_ns": x.start_uncertainty_ns}
 
 
-def _samples_at_once(run: bytes, names, ids, cfg, samples: int) -> list:
-    """Format 0 with whole bytes a sample: channel k is bit pos[k] of each little-endian sample."""
+AT_ONCE = 1 << 22         # samples unpacked at a time (a sample's byte per channel would be GBs for a long stream)
+WORDS_AT_ONCE = 1 << 15   # 64-bit words of samples worked on at a time (256 KiB: stays in the cache)
+
+
+def _samples_at_once(run, names, ids, cfg, samples: int) -> list:
+    """Format 0 with whole bytes a sample: channel k is bit pos[k] of each little-endian sample, packed a chunk of
+    AT_ONCE samples at a time (a multiple of 8, so the chunks' bytes join as they are)."""
     import numpy as np
     b = cfg.width // 8
-    a = np.frombuffer(run[:samples * b], np.uint8).reshape(samples, b)
-    out = []
-    for name, ch, pos in zip(names, ids, cfg.positions):
-        lv = (a[:, pos // 8] >> (pos % 8)) & 1
-        out.append(fileformat.Channel(name, np.packbits(lv, bitorder="little").tobytes(), samples, 1, 0, {"pin": ch}))
-    return out
+    if b == 1:                   # 8 samples a 64-bit word: each channel's bits gathered into a byte by one multiply
+        whole = samples // 8 * 8
+        words = np.frombuffer(run, "<u8", whole // 8)
+        planes = np.empty((len(names), whole // 8), np.uint8)
+        lo, mul, sh = np.uint64(0x0101010101010101), np.uint64(0x0102040810204080), np.uint64(56)
+        tmp = np.empty(WORDS_AT_ONCE, np.uint64)
+        for at in range(0, len(words), WORDS_AT_ONCE):       # a cache-sized run of words at a time
+            w = words[at:at + WORDS_AT_ONCE]
+            t = tmp[:len(w)]
+            for k, pos in enumerate(cfg.positions):
+                np.right_shift(w, np.uint64(pos), out=t)
+                np.bitwise_and(t, lo, out=t)
+                np.multiply(t, mul, out=t)
+                np.right_shift(t, sh, out=t)
+                planes[k, at:at + len(w)] = t
+        out = []
+        for k, (name, ch, pos) in enumerate(zip(names, ids, cfg.positions)):
+            bits = planes[k].tobytes()
+            if whole < samples:              # the last few samples
+                tail = np.frombuffer(run, np.uint8, samples - whole, whole)
+                bits += np.packbits((tail >> pos) & 1, bitorder="little").tobytes()
+            out.append(fileformat.Channel(name, bits, samples, 1, 0, {"pin": ch}))
+        return out
+    a = np.frombuffer(run, np.uint8, samples * b).reshape(samples, b)
+    pos = np.array(cfg.positions)
+    packed = [bytearray() for _ in names]
+    for at in range(0, samples, AT_ONCE):
+        bits = np.unpackbits(a[at:at + AT_ONCE], axis=1, bitorder="little")   # (samples, w): bit j of each sample
+        planes = np.packbits(np.ascontiguousarray(bits[:, pos].T), axis=1, bitorder="little")   # (channels, bytes)
+        for k in range(len(names)):
+            packed[k] += planes[k].tobytes()
+    return [fileformat.Channel(name, bytes(bits), samples, 1, 0, {"pin": ch})
+            for name, ch, bits in zip(names, ids, packed)]
 
 
 class _Acc:

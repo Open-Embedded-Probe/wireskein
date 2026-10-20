@@ -403,10 +403,23 @@ def write(path: str | Path, tick_hz: int | float | Fraction | tuple[int, int],
         z.writestr(zipfile.ZipInfo(IDENT, (1980, 1, 1, 0, 0, 0)), json.dumps({"format": FORMAT}), zipfile.ZIP_STORED)
         z.writestr(CAPTURE, json.dumps(head, indent=1, default=str))
         for name, data in files:
-            z.writestr(name, data)
+            z.writestr(name, data, _compression(data))
         for name, data in (attachments or {}).items():
             z.writestr(_attach_name(name), _encode(data))
     return path
+
+
+TRY_BYTES = 1 << 20       # a channel's data is deflated unless its first MiB does not shrink by a tenth
+
+
+def _compression(data) -> int:
+    """deflate, or stored for data that does not shrink (a noisy or floating line: deflating 37 MB of it takes 2.5 s
+    and saves nothing, where a quiet or clocked line's 37 MB goes to a few hundred KB in 0.3 s)."""
+    if len(data) < TRY_BYTES:
+        return zipfile.ZIP_DEFLATED
+    import zlib
+    head = bytes(data[:TRY_BYTES])
+    return zipfile.ZIP_STORED if len(zlib.compress(head, 1)) > 0.9 * len(head) else zipfile.ZIP_DEFLATED
 
 
 # ---------------- attachments and notes ----------------
