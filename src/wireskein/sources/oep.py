@@ -129,6 +129,7 @@ def _check_caps(group, source, req: Request, target: str, probe: dict) -> None:
 
 
 MODE_TAG = 0x01        # capture configure's mode TLV (capture §3.3)
+FORMAT_TAG = 0x08      # ... and its format (format 1: NAME=ID/D)
 
 
 def _what(tag, oc) -> str:
@@ -137,6 +138,7 @@ def _what(tag, oc) -> str:
     base = tag & 0x7F if isinstance(tag, int) else tag
     return {oc.TRIGGER: "a trigger", oc.PRETRIGGER: "a pretrigger",
             MODE_TAG: "this mode (--mode: the probe does not take it on this track)",
+            FORMAT_TAG: "this data format (NAME=ID/D: the probe keeps a line as its changes only in some modes)",
             getattr(oc, "TRIGGER_OPTS", None): "these trigger options (--arm now)"}.get(
         base, f"configure item 0x{base:02x}" if isinstance(base, int) else f"configure item {tag}")
 
