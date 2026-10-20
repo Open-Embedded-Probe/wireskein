@@ -535,8 +535,8 @@ def _stream_result(cap, hst, cfg, req: Request, names, ids, probe, fast, open_s,
     got = cap.finish(link, got)
     read_s = time.monotonic() - t_read
     st = cap.status()
-    if spool is not None:
-        spool.take(got, final=True, write_pos=st.write_pos if st.state == oc.STATE["error"] else None)
+    if spool is not None:                        # handed over now; waited for once the session is closed (the worker
+        spool.give(got, write_pos=st.write_pos if st.state == oc.STATE["error"] else None)   # may be behind)
     drops = oc.CaptureDrops.of(st) if hasattr(oc, "CaptureDrops") else None   # the reference firmware's own
     if drops is not None:
         import dataclasses
@@ -564,6 +564,7 @@ class _Streamed:
 
     def result(self) -> Result:
         if self.spool is not None:
+            self.spool.finish()                  # after the session closed: the lease does not wait for it
             parts, lost = self.spool.parts, self.spool.done_lost
             if not parts:
                 raise RuntimeError("the stream brought no data" + (" (the probe dropped it all)" if lost else ""))
@@ -616,6 +617,20 @@ class _Spool:
         self._worker.start()
 
     # -- taking what arrived (the caller's thread: O(1), so its polls keep coming) --
+    def give(self, got, write_pos: int | None = None) -> None:
+        """The last of the stream: handed over with the end mark, not waited for (finish() waits)."""
+        self.take(got)
+        self._queue.put(("final", write_pos))
+        self._given = True
+
+    def finish(self) -> None:
+        """Wait for the worker to put everything together (its error raised here)."""
+        self._worker.join()
+        if self._error is not None:
+            raise self._error
+
+    _given = False
+
     def take(self, got, final: bool = False, write_pos: int | None = None) -> None:
         """Hand what arrived to the worker: the client's buffers are swapped for empty ones (no copy) and its start
         moved on, so it goes on counting positions. final: wait for the worker to finish (its error raised here)."""
