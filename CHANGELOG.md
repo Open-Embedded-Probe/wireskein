@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Logic and analog together: the analog is sized to the logic capture the probe answered, not the one asked (the P4X holds 65408 samples at w 8 in one shot: with 200000 asked at 5 MHz, the analog covered 40 ms where the logic had 13 ms).
+- (JA) ロジックとアナログを一緒に取るとき、アナログの長さを、頼んだロジックではなく、プローブが答えたロジックの長さに合わせる（P4X は 1 回で w 8 の 65408 サンプルまで。5 MHz で 200000 を頼むと、ロジックは 13 ms なのに、アナログは 40 ms 取っていた）。
 - (EN) A trigger through the group reads the group's `trigger_caps` (OEP capture §4.4, oep-client-python c651af5) into `meta.probe.trigger_caps`, and a condition type it does not declare is refused before bind, saying what it takes (`probe ... cannot start its tracks on AN:high:0.0061V together: its capture group triggers on level, edge, cross_up, cross_down`). Checked on the P4X (oep-probe-arduino 5a61110): an analog crossing cut 8 logic lines at 5, 10 and 20 MHz (refused at bind before, by the judging delay).
 - (JA) 組を通したトリガでは、組の `trigger_caps`（OEP capture §4.4、oep-client-python c651af5）を読んで `meta.probe.trigger_caps` に残す。宣言に無い条件の型は、bind の前に断り、何を受け付けるかを示す（`probe ... cannot start its tracks on AN:high:0.0061V together: its capture group triggers on level, edge, cross_up, cross_down`）。P4X（oep-probe-arduino 5a61110）で確かめた: アナログの横切りで、ロジック 8 本を 5、10、20 MHz で切れた（前は判定の遅れのため bind で断られていた）。
 - (EN) A channel's data over 64 MiB is deflated by every core: cut into 1 MiB pieces, each a raw deflate stream ended by a sync flush, joined into one stream (pigz's way; zlib lets go of the GIL), through zipfile's writer with its compressor swapped (one core, or a zipfile without the hook: as before). The same bytes read back; the file 0.1 % larger. On the loaded host (24 on 4 cores) 1.0-1.7 x; to be measured again on a quiet one.

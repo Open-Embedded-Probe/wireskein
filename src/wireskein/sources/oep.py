@@ -343,16 +343,17 @@ def _capture(link, core, oc, oh, message, target: str, req: Request, ids: list[i
                 if grouped:          # both tracks asked first (query), set only when neither refuses (below)
                     lq = _query(cap, oc, oh, message, lkw)
                     lrate = Fraction(lq.rate) if getattr(lq, "rate", None) else Fraction(req.rate)
+                    lsamples = getattr(lq, "samples", None) or req.samples
                 else:
                     cfg = _configure(cap, oc, oh, target, "logic", **lkw)
-                    lrate = Fraction(cfg.rate)
+                    lrate, lsamples = Fraction(cfg.rate), getattr(cfg, "samples", None) or req.samples
             if an:
                 arate = req.analog_rate or req.rate
                 asamples = req.analog_samples
                 fes = {k: fe for k, (_, _, fe) in enumerate(req.analog) if fe is not None}
                 if asamples is None and cap:
-                    # as long as the logic capture, at the rate the probe will really use
-                    # (channels share the ADC, so it may answer less than asked)
+                    # as long as the logic capture the probe answered (it may hold fewer samples than asked), at
+                    # the rate it will really use (channels share the ADC, so it may answer less than asked)
                     real = Fraction(arate)
                     try:
                         q = an.configure(mode=oc.ONE_SHOT, rate=arate, samples=1, query=True,
@@ -361,7 +362,7 @@ def _capture(link, core, oc, oh, message, target: str, req: Request, ids: list[i
                     except oh.Rejected as e:       # query is optional (OEP v1): absent = unknown_operation
                         if e.result.detail != message.UNKNOWN_OPERATION:
                             raise
-                    asamples = max(1, round(Fraction(req.samples) / lrate * real))
+                    asamples = max(1, round(Fraction(lsamples) / lrate * real))
                 elif asamples is None:
                     asamples = req.samples
                 linked = {}
