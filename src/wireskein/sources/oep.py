@@ -72,10 +72,6 @@ def capture(target: str, req: Request) -> Result:
         raise ValueError("a resolution (NAME=ID/D) needs an oep-client-python with capture format 1")
     if req.mode == "stream" and (aids or req.trigger or not ids):
         raise ValueError("a stream (--mode stream) takes logic channels only, started at once, for now")
-    if req.trigger and aids and ids and not _group_trigger(oc):
-        raise ValueError("this oep-client-python starts logic and analog together only at once (capture-group, "
-                         "capture §4: the linked trigger is out of the current OEP v1 draft): leave out --trigger, or "
-                         "capture the logic alone")
     try:
         res = _capture(link, core, oc, oh, message, target, req, ids, aids, fast)
         if isinstance(res, _Streamed):           # put together after the session closed: it may take a while
@@ -88,10 +84,28 @@ def capture(target: str, req: Request) -> Result:
         raise RuntimeError(f"probe {target}: {e}{hint}") from e
 
 
-def _group_trigger(oc) -> bool:
-    """Whether this client's capture-group takes a trigger track (bind(..., trigger=))."""
-    import inspect
-    return "trigger" in inspect.signature(oc.CaptureGroup.bind).parameters
+def _trigger_source(oc, req: Request, cap, an, names: list[str], acfg):
+    """--trigger as the group's trigger source (capture §4.4): one stage of one condition - a logic channel's edge or
+    level, or an analog channel crossing / staying beyond a voltage (in its ADC values by the answer's scale)."""
+    name, kind, *volts = req.trigger
+    if name in names:
+        role = names.index(name)
+        cond = (oc.Cond.edge(cap, role, {"rise": 0, "fall": 1, "both": 2}[kind]) if kind in ("rise", "fall", "both")
+                else oc.Cond.level(cap, role, 1 if kind == "high" else 0))
+    else:
+        role = [n for n, *_ in req.analog].index(name)
+        zero, scale = acfg.zero.get(role), acfg.scale_nv.get(role)
+        if zero is None or not scale:
+            raise ValueError(f"trigger {name}: the probe gives no volt conversion for it")
+        value = round(volts[0] * 1e9 / scale + zero)
+        top = (1 << acfg.bits) - 1 if acfg.bits else None
+        if value < 0 or top is not None and value > top:
+            raise ValueError(f"trigger {name}:{kind}:{volts[0]}: outside the input's range")
+        make = {"rise": oc.Cond.cross_up, "fall": oc.Cond.cross_down, "high": oc.Cond.above, "low": oc.Cond.below}
+        if scale < 0:                            # an inverting frontend: up in volts is down in values
+            make = {"rise": oc.Cond.cross_down, "fall": oc.Cond.cross_up, "high": oc.Cond.below, "low": oc.Cond.above}
+        cond = make[kind](an, role, value)
+    return oc.TriggerSource([oc.Stage([[cond]])], arm=0 if req.arm == "now" else 1)
 
 
 def _what(tag, oc) -> str:
@@ -110,7 +124,9 @@ def _waiting(wait, cap, req):
     except TimeoutError:
         if req.trigger and cap is not None:
             try:
-                waiting = cap.status()[0] == oc_state("waiting")
+                st = cap.status()
+                waiting = getattr(st, "state", None) == oc_state("waiting") if hasattr(st, "state") else \
+                    st[0] == oc_state("waiting")
             except Exception:           # the timeout is the news; a failed status read must not hide it
                 waiting = False
             if waiting:
@@ -275,16 +291,19 @@ def _capture(link, core, oc, oh, message, target: str, req: Request, ids: list[i
         fns = sorted({fn for fn, _, _ in plan})
         try:
             cfg = acfg = None
+            grouped = bool(req.trigger and an)        # a trigger with analog: the group's trigger source (§4.4)
             if cap:
                 trigger = None
-                if req.trigger:
+                if req.trigger and grouped:                # the group's event starts it (capture §4.4)
+                    trigger = (oc.LINKED, 0, 0)
+                elif req.trigger:
                     kind, value = TRIGGER[req.trigger[1]]
                     trigger = (kind, names.index(req.trigger[0]), value)
                 blocks = {}
                 if req.resolution:          # format 1: these lines as their changes, the others raw (§1.3)
                     blocks = dict(data_format=oc.DATA_FORMAT["logic_blocks"], roles=list(range(len(ids))),
                                   events={names.index(n): d for n, d in req.resolution.items()})
-                if req.arm == "now" and trigger:     # arm 0 (§3.3): optional, so it goes critical; arm 1 is the default
+                if req.arm == "now" and trigger and not grouped:   # arm 0 (§3.3): optional, so critical; 1 the default
                     if not hasattr(oc, "TriggerOpts"):
                         raise ValueError("--arm now needs an oep-client-python with trigger_opts")
                     blocks["trigger_opts"] = oc.TriggerOpts(arm=0)
@@ -311,26 +330,38 @@ def _capture(link, core, oc, oh, message, target: str, req: Request, ids: list[i
                     asamples = max(1, round(Fraction(req.samples) / Fraction(cfg.rate) * real))
                 elif asamples is None:
                     asamples = req.samples
+                linked = {}
+                if grouped:                             # its own pretrigger, in its own samples (§4.4)
+                    pre = req.pretrigger or 0
+                    if cap and pre:
+                        real = Fraction(an.configure(mode=oc.ONE_SHOT, rate=arate, samples=1, query=True,
+                                                     **({"frontends": fes} if fes else {})).rate)
+                        pre = round(Fraction(pre) * real / Fraction(cfg.rate))
+                    linked = {"trigger": (oc.LINKED, 0, 0), **({"pretrigger": pre} if pre else {})}
                 acfg = _configure(an, oc, oh, target, "analog", rate=arate, samples=asamples,
-                                  **({"frontends": fes} if fes else {}))
+                                  **({"frontends": fes} if fes else {}), **linked)
             group = None
-            if cap and an:
+            if an and (cap or grouped):
                 group = oc.CaptureGroup(hst)
-                if req.trigger:
-                    group.bind([cap, an], trigger=cap)
-                else:
-                    group.bind([cap, an])
+                tracks = [t for t in (cap, an) if t]
+                source = _trigger_source(oc, req, cap, an, names, acfg) if grouped else None
                 try:
-                    started = group.start([cap, an])
-                    group_start = started[1] if isinstance(started, tuple) else started
-                    st = _waiting(lambda: group.wait(req.timeout), cap, req)
-                    seg = _segment(cap)
+                    group.bind(tracks, source)
+                except (oh.Unsupported, oh.Rejected) as e:
+                    if source is None:
+                        raise
+                    raise RuntimeError(f"probe {target} cannot start its tracks on a trigger together (capture-group "
+                                       f"trigger source, capture §4.4: {e})") from e
+                try:
+                    group_start = group.start(tracks)
+                    st = _waiting(lambda: group.wait(req.timeout), group, req)
+                    seg = _segment(cap) if cap else None
                     aseg = _segment(an)
                 finally:
                     group.bind([])
                 probe["group_start_ns"] = group_start
-                if getattr(st, "trigger_ns", None) is not None:
-                    probe["trigger_ns"] = st.trigger_ns
+                if st.trigger is not None:              # (fn judging, ns, +-ns) once the event happened
+                    probe["trigger_ns"], probe["trigger_uncertainty_ns"] = st.trigger[1], st.trigger[2]
             else:
                 track = cap or an
                 track.start()

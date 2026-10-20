@@ -196,7 +196,7 @@ wf.write("m.wireskein", 20_000_000, [
 ], probe={"chip": "ESP32-P4", "calibration": {"scheme": "curve-fitting-v1", "raw": "..."}})
 ```
 
-An OEP probe starts logic and analog together in a capture-group (the current OEP v1 draft leaves the group's linked trigger out and bringing it back is under discussion; a client without it refuses `--trigger` with both).
+An OEP probe starts logic and analog together in a capture-group; with `--trigger` every track is cut on the one event (OEP capture §4.4's trigger source), each keeping its own pretrigger. An analog line can be the trigger too: `--trigger VDD:fall:2.9` (crossing down through 2.9 V) or `VDD:low:2.9` (staying below it); the event's time and uncertainty go to `meta.probe`.
 
 `wireskein capture --source sigrok:<driver>` takes analog channels too (`--channels CLK=D0,VBUS=A0`). The analysis reads the logic channels; the checks read analog channels too (`voltage()`, and `threshold=` on the logic checks). The format is specified in `docs/wireskein-format.md`.
 

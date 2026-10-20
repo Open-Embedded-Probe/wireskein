@@ -6,7 +6,8 @@
     wireskein verify RUN_DIR [--junit FILE] [--json FILE]
     wireskein convert IN OUT            (WireSkein / .sr / fixture directory -> WireSkein, or .sr by the name)
     wireskein capture --source oep:PORT|sigrok:DRIVER --channels NAME=ID,... --rate 20M --samples 1M
-                      [--trigger NAME:rise|fall|both|high|low] [--pretrigger N] [--note TEXT] -o OUT.wireskein
+                      [--trigger NAME:rise|fall|both|high|low | NAME:rise|fall|high|low:VOLTS] [--pretrigger N]
+                      [--note TEXT] -o OUT.wireskein
     wireskein info FILE.wireskein       channels, rates, metadata, attachments, notes
     wireskein gui [FILE | DIR] [--port N] [--no-browser]   the viewer in the browser (localhost only)
     wireskein note FILE.wireskein TEXT [--json] [--kind K]
@@ -488,7 +489,9 @@ def main() -> None:
     cp.add_argument("--analog-samples", default=None, help="default: as long as the logic capture")
     cp.add_argument("--rate", default=None, help="logic samples per second, e.g. 20M, 500k (analog too unless --analog-rate)")
     cp.add_argument("--samples", default=None, help="logic samples, e.g. 1M, 200000 (analog only: --analog-samples does)")
-    cp.add_argument("--trigger", default=None, help="NAME:rise|fall|both|high|low (default: start at once)")
+    cp.add_argument("--trigger", default=None, help="NAME:rise|fall|both|high|low on a logic channel, or "
+                    "NAME:rise|fall|high|low:VOLTS on an analog one (crossing or staying beyond it); with analog channels "
+                    "every track is cut on the one event (OEP capture-group trigger source). Default: start at once")
     cp.add_argument("--mode", choices=("oneshot", "stream"), default="oneshot",
                     help="oneshot (--samples, in the probe's memory) or stream (--duration, sent as it is taken: "
                          "longer than the probe's memory; logic channels started at once)")

@@ -107,21 +107,40 @@ def test_logic_and_analog_together_in_a_group(probe, tmp_path):
     assert sq.n == round(2000 * 48_000 / 20_000_000) or sq.n >= 1
 
 
-def test_group_trigger(probe, tmp_path):
-    """A trigger on a logic channel with analog: both tracks marked when the client's group takes a trigger track,
-    else refused in one line before opening (the current OEP v1 draft's group starts at once only, capture §4)."""
-    from oep_client import capture as oc
-    from wireskein.sources.oep import _group_trigger
+def test_a_logic_trigger_starts_the_analog_too(probe, tmp_path):
+    """--trigger on a logic line with analog channels: the capture-group's trigger source (capture §4.4) - both
+    tracks linked, each with its own pretrigger, cut on the one event; its time and uncertainty kept."""
     req = sources.Request([("A", "10"), ("B", "11")], 20_000_000, 2000, trigger=("B", "rise"), pretrigger=100,
                           analog=[("SQ", "16", None)], analog_rate=48_000, analog_samples=64)
-    if not _group_trigger(oc):
-        with pytest.raises(ValueError, match="only at once"):
-            sources.capture(probe(), req, tmp_path / "t.wireskein")
-        return
     out = sources.capture(probe(), req, tmp_path / "t.wireskein")
     head, chans = fileformat.read(out)
-    assert "trigger_tick" in head["meta"] and "trigger_index" in chans[2].acquisition
-    assert "trigger_ns" in head["meta"]["probe"]
+    b = np.frombuffer(fileformat.unpack(chans[1]), np.uint8)
+    t = head["meta"]["trigger_tick"]
+    assert t == 100 and b[t] == 1 and b[t - 1] == 0               # armed after the pretrigger: the rise at its end
+    assert "trigger_index" in chans[2].acquisition
+    probe_meta = head["meta"]["probe"]
+    assert "trigger_ns" in probe_meta and probe_meta["trigger_uncertainty_ns"] >= 0
+
+
+def test_an_analog_trigger_starts_the_logic_too(probe, tmp_path):
+    """--trigger SQ:rise:VOLTS: the analog line crossing up through that voltage (in its ADC values by the answer's
+    scale) is the group's event."""
+    req = sources.Request([("A", "10")], 20_000_000, 2000, trigger=("SQ", "rise", 1.0), pretrigger=100,
+                          analog=[("SQ", "16", None)], analog_rate=48_000, analog_samples=64)
+    out = sources.capture(probe(), req, tmp_path / "a.wireskein")
+    head, chans = fileformat.read(out)
+    sq = chans[1]
+    i = sq.acquisition["trigger_index"]
+    v = sq.values()
+    volts = lambda x: (x - sq.zero) * sq.scale_nv * 1e-9            # noqa: E731
+    assert volts(v[i]) >= 1.0 > volts(v[i - 1])                      # it crossed up there
+    assert "trigger_tick" in head["meta"] and "trigger_ns" in head["meta"]["probe"]
+
+
+def test_an_analog_trigger_needs_its_voltage():
+    with pytest.raises(ValueError, match="volts it crosses"):
+        sources.Request([("A", "10")], 1_000_000, 100, trigger=("SQ", "rise"), analog=[("SQ", "16", None)])
+    assert sources.parse_trigger("VDD:fall:2.9V") == ("VDD", "fall", 2.9)
 
 
 def test_cli_analog_only_needs_no_logic_rate(probe, tmp_path):

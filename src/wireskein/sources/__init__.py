@@ -30,6 +30,7 @@ from .. import fileformat
 
 BUILTIN = {"oep": "wireskein.sources.oep", "sigrok": "wireskein.sources.sigrok"}
 TRIGGERS = ("rise", "fall", "both", "high", "low")
+ANALOG_TRIGGERS = ("rise", "fall", "high", "low")   # crossing up / down, staying above / below a voltage
 
 
 @dataclass
@@ -37,7 +38,8 @@ class Request:
     channels: list[tuple[str, str]]          # logic: (name to record, the device's channel id), in this order
     rate: int                                # logic samples per second asked for (the device may answer another)
     samples: int
-    trigger: tuple[str, str] | None = None   # (logic channel name, one of TRIGGERS); None: start at once
+    trigger: tuple | None = None             # (logic channel, one of TRIGGERS) or (analog channel, rise / fall / high /
+                                             # low, volts); None: start at once
     pretrigger: int | None = None            # samples kept before the trigger
     arm: str = "pretrigger"                  # when the trigger is looked for: "pretrigger" (once it is there: the
                                              # samples before the trigger are always that many) or "now" (at once:
@@ -59,9 +61,14 @@ class Request:
         if not names or len(set(names)) != len(names):
             raise ValueError(f"channel names must be given and differ: {names}")
         if self.trigger is not None:
-            name, kind = self.trigger
-            if name not in [n for n, _ in self.channels] or kind not in TRIGGERS:
-                raise ValueError(f"trigger {name}:{kind}: the channel must be one captured, the kind one of {', '.join(TRIGGERS)}")
+            name, kind, *volts = self.trigger
+            if name in [n for n, *_ in self.analog]:
+                if kind not in ANALOG_TRIGGERS or len(volts) != 1:
+                    raise ValueError(f"trigger {name}:{kind}: an analog channel takes {'/'.join(ANALOG_TRIGGERS)} and "
+                                     f"the volts it crosses or stays beyond ({name}:fall:2.9)")
+            elif name not in [n for n, _ in self.channels] or kind not in TRIGGERS or volts:
+                raise ValueError(f"trigger {name}:{kind}: the channel must be one captured, the kind one of {', '.join(TRIGGERS)} "
+                                 f"(volts only for an analog channel)")
         if self.mode not in ("oneshot", "stream") or self.on_loss not in ("stop", "continue"):
             raise ValueError(f"mode {self.mode!r} / on_loss {self.on_loss!r}: oneshot or stream / stop or continue")
         if self.mode == "stream" and not (self.duration and self.duration > 0):
@@ -174,7 +181,13 @@ def parse_analog(text: str) -> list[tuple[str, str, int | None]]:
     return out
 
 
-def parse_trigger(text: str) -> tuple[str, str]:
-    """"SDA:fall" -> ("SDA", "fall")."""
+def parse_trigger(text: str) -> tuple:
+    """"SDA:fall" -> ("SDA", "fall"); "VDD:fall:2.9" (or 2.9V) -> ("VDD", "fall", 2.9), an analog channel's voltage."""
+    parts = text.split(":")
+    if len(parts) == 3:
+        try:
+            return parts[0], parts[1], float(parts[2].rstrip("Vv"))
+        except ValueError:
+            raise ValueError(f"trigger {text}: NAME:KIND:VOLTS (VDD:fall:2.9)") from None
     name, _, kind = text.rpartition(":")
     return name, kind
