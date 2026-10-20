@@ -476,43 +476,93 @@ def _capture(link, core, oc, oh, message, target: str, req: Request, ids: list[i
 
 def _from_blocks(blocks, names: list[str], samples: int, cfg) -> list:
     """A format 1 segment's blocks (oep-client's capture_blocks) -> the file's channels, in the order asked: a raw
-    channel as bits (L is a multiple of 8, so the blocks' bytes join as they are), an events channel as `events` at
-    its D (each block's ticks as quanta of the segment: L is a multiple of D). A block the probe carried raw
-    (fallback) is counted here from its samples and the block's start level, the same way the probe counts (§1.3)."""
+    channel as bits, an events channel as `events` at its D (_block_columns)."""
+    out = []
+    for name, col in zip(names, _block_columns(blocks, len(names), cfg)):
+        if isinstance(col, bytes):
+            out.append(fileformat.Channel(name, col[:(samples + 7) // 8], samples))
+        else:
+            d = col[4]
+            out.append(_events_np(name, *col[:4], -(-samples // d), d))
+    return out
+
+
+def _block_columns(blocks, roles: int, cfg) -> list:
+    """A format 1 segment's blocks -> per role, a raw channel's bits (L is a multiple of 8, so the blocks' bytes join
+    as they are; the last block's tail 0, §1.3), or an events channel's (quanta of the segment, levels after, counts,
+    start level, D) as numpy arrays (L is a multiple of D). A block the probe carried raw (fallback) is counted here
+    from its samples and the block's start level, the same way the probe counts (§1.3)."""
     import numpy as np
     out = []
-    for role, name in enumerate(names):
+    for role in range(roles):
         d = cfg.event_d.get(role)
-        if d is None:                   # packed already (sample i at bit i % 8), the last block's tail 0 (§1.3)
-            bits = b"".join(b.raw[role] for b in blocks)[:(samples + 7) // 8]
-            out.append(fileformat.Channel(name, bits, samples))
+        if d is None:
+            out.append(b"".join(b.raw[role] for b in blocks))
             continue
-        quanta, levels, counts, start, level = [], [], [], None, None
+        qs, ls, cs = [], [], []
         for b in blocks:
             q0 = b.first // d
             if role in b.fallback:
-                lv = np.unpackbits(np.frombuffer(b.raw[role], np.uint8), bitorder="little")[:b.samples].astype(np.int8)
-                if start is None:
-                    start = level = int(b.start_levels[role])   # the level before the block (§1.3)
-                prev = np.concatenate(([level], lv[:-1]))
-                change = (lv != prev).astype(np.int64)
-                per = np.add.reduceat(change, np.arange(0, b.samples, d))
-                for t in np.flatnonzero(per):
-                    quanta.append(q0 + int(t))
-                    levels.append(int(lv[min((t + 1) * d, b.samples) - 1]))
-                    counts.append(int(per[t]))
-                level = int(lv[-1])
+                lv = np.unpackbits(np.frombuffer(b.raw[role], np.uint8), bitorder="little")[:b.samples]
+                change = np.empty(b.samples, np.uint8)
+                change[0] = lv[0] != b.start_levels[role]       # the level before the block (§1.3)
+                np.not_equal(lv[1:], lv[:-1], out=change[1:])
+                per = np.add.reduceat(change.astype(np.int64), np.arange(0, b.samples, d))
+                t = np.flatnonzero(per)
+                qs.append(q0 + t)
+                ls.append(lv[np.minimum((t + 1) * d, b.samples) - 1])
+                cs.append(per[t])
             else:
                 e = b.events[role]
-                if start is None:
-                    start = level = int(e.start_level)
-                quanta += [q0 + int(t) for t in e.ticks]
-                levels += [int(x) for x in e.levels]
-                counts += [int(x) for x in e.counts]
-                if len(e.levels):
-                    level = int(e.levels[-1])
-        out.append(fileformat.events(name, quanta, levels, counts, -(-samples // d), d, 0, start or 0))
+                qs.append(q0 + np.asarray(e.ticks, np.int64))
+                ls.append(np.asarray(e.levels, np.uint8))
+                cs.append(np.asarray(e.counts, np.int64))
+        start = int(blocks[0].start_levels[role]) if blocks else 0
+        out.append((np.concatenate(qs).astype(np.int64) if qs else np.zeros(0, np.int64),
+                    np.concatenate(ls).astype(np.uint8) if ls else np.zeros(0, np.uint8),
+                    np.concatenate(cs).astype(np.int64) if cs else np.zeros(0, np.int64), start, d))
     return out
+
+
+def _segment_columns(cap, data: bytes, samples: int, roles: int, cfg) -> list:
+    """_block_columns of a format 1 segment's bytes; read by columns when the client can (no block objects)."""
+    columns = getattr(cap, "columns", None)
+    if columns is None:
+        return _block_columns(cap.blocks(data, samples), roles, cfg)
+    got = columns(data, samples)
+    return [got[r] if r not in cfg.event_d else (*got[r], cfg.event_d[r]) for r in range(roles)]
+
+
+def _events_np(name: str, quanta, levels, counts, start_level: int, n: int, step: int, **acquisition):
+    """fileformat.events() over numpy arrays, at once: the same checks and the same bytes (wireskein-format §4.4)."""
+    import numpy as np
+    q = np.asarray(quanta, np.int64)
+    lv = np.asarray(levels, np.int64)
+    c = np.asarray(counts, np.int64)
+    if len(q):
+        before = np.concatenate(([start_level], lv[:-1]))
+        sat = np.minimum(c, 127)
+        bad = (np.diff(q, prepend=-1) <= 0) | (q >= n) | ((lv != 0) & (lv != 1)) | (c < 1) | \
+            ((sat < 127) & (lv != before ^ (sat & 1)))
+        if step == 1:
+            bad |= c != 1
+        if bad.any():
+            k = int(np.flatnonzero(bad)[0])
+            raise ValueError(f"{name}: event (quantum {q[k]}, level {lv[k]}, count {c[k]}) out of order or impossible")
+        gap = np.diff(q, prepend=-1) - 1
+        nb = np.ones(len(q), np.int64)
+        for j in range(1, 10):
+            nb += gap >= (1 << (7 * j))
+        at = np.concatenate(([0], np.cumsum(nb + 1)[:-1]))
+        out = np.empty(int((nb + 1).sum()), np.uint8)
+        for j in range(int(nb.max())):
+            m = nb > j
+            out[at[m] + j] = ((gap[m] >> (7 * j)) & 0x7F) | np.where(nb[m] > j + 1, 0x80, 0)
+        out[at + nb] = (lv << 7) | sat
+        data = out.tobytes()
+    else:
+        data = b""
+    return fileformat.EventsChannel(name, data, n, step, 0, start_level, len(q), acquisition)
 
 
 STREAM_POLL_S = 0.2       # how often a stream looks for a loss while collecting
@@ -754,30 +804,39 @@ class _Spool:
     def _segments(self, final: bool, write_pos: int | None) -> None:
         end = self.at + len(self.pending)
         starts = sorted(p for p in self.segs if self.at <= p < end)
+        ready = []
         for k, p in enumerate(starts):
             nxt = starts[k + 1] if k + 1 < len(starts) else (end if final else None)
             if nxt is None or (write_pos is not None and p >= write_pos):
                 break
-            data = bytes(self.pending[p - self.at:nxt - self.at])
-            x = self.segs.pop(p)
+            ready.append((p, nxt))
+        L = self.cfg.block
+        k = 0
+        while k < len(ready):                    # segments of whole blocks run on: their blocks read in one go
+            j = k
+            while j + 1 < len(ready) and self.segs[ready[j][0]].samples % L == 0:
+                j += 1
+            p, nxt = ready[k][0], ready[j][1]
+            x = self.segs[p]
+            samples = sum(self.segs.pop(q).samples for q, _ in ready[k:j + 1])
             if self.cur is not None and (self.cur["samples"] % 8 or any(self.cur["samples"] % d for d in self.ds)):
                 self._close(follows=True)      # a grid restart (format 1) is not a loss: the next part follows on
             self._open(p, x)
-            chans = _from_blocks(self.cap.blocks(data, x.samples), self.names, x.samples, self.cfg)
-            for c, f, ev in zip(chans, self.cur["files"], self.cur["events"]):
-                if isinstance(c, fileformat.EventsChannel):
-                    ks, lv, ct = c.decode()
-                    q = self.cur["samples"] // c.step
-                    ev[0].extend(q + k_ for k_ in ks)
-                    ev[1].extend(lv)
-                    ev[2].extend(ct)
-                    if ev[3] is None:
-                        ev[3] = c.start_level
+            data = bytes(self.pending[p - self.at:nxt - self.at])
+            cols = _segment_columns(self.cap, data, samples, len(self.names), self.cfg)
+            for col, f, ev in zip(cols, self.cur["files"], self.cur["events"]):
+                if isinstance(col, bytes):
+                    f.write(col[:(samples + 7) // 8])
                 else:
-                    f.write(c.bits)
-            self.cur["samples"] += x.samples
+                    ev[0].append(col[0] + self.cur["samples"] // col[4])
+                    ev[1].append(col[1])
+                    ev[2].append(col[2])
+                    if ev[3] is None:
+                        ev[3] = col[3]
+            self.cur["samples"] += samples
             del self.pending[:nxt - self.at]
             self.at = nxt
+            k = j + 1
         if final:
             self.pending = bytearray()
 
@@ -814,7 +873,9 @@ class _Spool:
             d = self.cfg.event_d.get(role) if self.blocks else None
             if d is not None:
                 os.unlink(f.name)
-                chans.append(fileformat.events(name, ev[0], ev[1], ev[2], -(-n // d), d, 0, ev[3] or 0, pin=ch))
+                import numpy as np
+                cat = [np.concatenate(x) if x else np.zeros(0, np.int64) for x in ev[:3]]
+                chans.append(_events_np(name, *cat, ev[3] or 0, -(-n // d), d, pin=ch))
             else:
                 os.truncate(f.name, (n + 7) // 8)
                 chans.append(fileformat.Channel(name, fileformat.OnDisk(f.name), n, 1, 0, {"pin": ch}))
