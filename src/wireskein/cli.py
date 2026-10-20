@@ -273,6 +273,7 @@ def capture_cmd(args) -> None:
     req = sources.Request(
         channels=logic, rate=sources.parse_count(rate), samples=sources.parse_count(samples) if samples else 0,
         mode=args.mode, duration=_seconds(args.duration) if args.duration else None, on_loss=args.on_loss,
+        segments=args.segments,
         trigger=sources.parse_trigger(args.trigger) if args.trigger else None,
         pretrigger=sources.parse_count(args.pretrigger) if args.pretrigger else None, timeout=args.timeout,
         arm=args.arm,
@@ -505,9 +506,11 @@ def main() -> None:
     cp.add_argument("--trigger", default=None, help="NAME:rise|fall|both|high|low on a logic channel, or "
                     "NAME:rise|fall|high|low:VOLTS on an analog one (crossing or staying beyond it); with analog channels "
                     "every track is cut on the one event (OEP capture-group trigger source). Default: start at once")
-    cp.add_argument("--mode", choices=("oneshot", "stream"), default="oneshot",
-                    help="oneshot (--samples, in the probe's memory) or stream (--duration, sent as it is taken: "
-                         "longer than the probe's memory; logic channels started at once)")
+    cp.add_argument("--mode", choices=("oneshot", "stream", "repeat"), default="oneshot",
+                    help="oneshot (--samples, in the probe's memory), stream (--duration, sent as it is taken: "
+                         "longer than the probe's memory; logic channels started at once) or repeat (--segments "
+                         "acquisitions of --samples: with --trigger one per trigger, into one file as its parts)")
+    cp.add_argument("--segments", type=int, default=None, help="repeat: how many acquisitions")
     cp.add_argument("--duration", default=None, help="stream: how long, e.g. 2s, 500ms")
     cp.add_argument("--on-loss", choices=("stop", "continue"), default="stop",
                     help="stream: when the probe drops data, stop there (default) or go on to the end; either way "

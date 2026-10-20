@@ -167,6 +167,43 @@ def test_a_group_refused_says_which_track_before_setting_either(probe, tmp_path)
         sources.capture(probe(), req, tmp_path / "a.wireskein")
 
 
+def test_repeat_without_a_trigger_runs_on_as_a_timeline(probe, tmp_path):
+    """--mode repeat (capture mode 2): segments read and released as they come, each a part right after the one
+    before; the counter's waveform runs on across them."""
+    req = sources.Request([("A", "10"), ("B", "11")], 1_000_000, 2000, mode="repeat", segments=4)
+    out = sources.capture(probe(), req, tmp_path / "r.wireskein")
+    head = fileformat.read_header(out)
+    assert head["layout"] == "timeline" and head["complete"] is True
+    assert [(p["ticks"], p["tick0"]) for p in head["parts"]] == [(2000, 2000 * k) for k in range(4)]
+    _, (a0, _) = fileformat.read(out, part=0)
+    _, (a3, _) = fileformat.read(out, part=3)
+    first = np.frombuffer(fileformat.unpack(a0), np.uint8)[:a0.n]
+    last = np.frombuffer(fileformat.unpack(a3), np.uint8)[:a3.n]
+    start = int(np.flatnonzero(first != first[0])[0])            # where bit 0 of the counter first moves
+    i = np.arange(2000)
+    phase = (i + 6000 + (1 - start) % 2) & 1                      # four segments on: the same counter, 6000 later
+    assert np.array_equal(last, phase) or np.array_equal(last, 1 - phase)
+
+
+def test_repeat_with_a_trigger_is_one_part_per_trigger(probe, tmp_path):
+    """--mode repeat with --trigger: rearm 1, each segment its own trigger (layout segments, its trigger_tick and
+    start_ns); more segments than the probe holds, as it is read and released."""
+    req = sources.Request([("A", "10")], 1_000_000, 500, mode="repeat", segments=40, trigger=("A", "rise"),
+                          pretrigger=100)
+    out = sources.capture(probe(), req, tmp_path / "r.wireskein")
+    head = fileformat.read_header(out)
+    assert head["layout"] == "segments" and len(head["parts"]) == 40
+    assert all(p["meta"]["trigger_tick"] == 100 and "start_ns" in p["meta"] for p in head["parts"])
+    for k in (0, 39):
+        _, (a,) = fileformat.read(out, part=k)
+        v = np.frombuffer(fileformat.unpack(a), np.uint8)[:a.n]
+        assert v[99] == 0 and v[100] == 1                         # the rise at the trigger
+    with pytest.raises(ValueError, match="segments"):
+        sources.Request([("A", "10")], 1_000_000, 500, mode="repeat")
+    with pytest.raises(ValueError, match="repeat only"):
+        sources.Request([("A", "10")], 1_000_000, 500, segments=3)
+
+
 def test_an_analog_trigger_needs_its_voltage():
     with pytest.raises(ValueError, match="volts it crosses"):
         sources.Request([("A", "10")], 1_000_000, 100, trigger=("SQ", "rise"), analog=[("SQ", "16", None)])

@@ -51,8 +51,11 @@ class Request:
     # logic channels kept as their changes (OEP capture's format 1 events): name -> D, the resolution in samples
     # (1: every change exact; D > 1: per D samples, how many times it changed and the level after)
     resolution: dict[str, int] = field(default_factory=dict)
-    mode: str = "oneshot"                    # "oneshot" (samples, in the probe's memory) or "stream" (for duration
-    duration: float | None = None            # seconds, sent as it is taken: longer than the probe's memory)
+    mode: str = "oneshot"                    # "oneshot" (samples, in the probe's memory), "stream" (for duration
+    duration: float | None = None            # seconds, sent as it is taken: longer than the probe's memory) or "repeat"
+    segments: int | None = None              # (`segments` acquisitions of `samples` each, read and released as they
+                                             # come: with a trigger, one per trigger - layout "segments"; without, run
+                                             # on - a timeline)
     on_loss: str = "stop"                    # stream: "stop" at the first loss (the default), or "continue" to the end;
                                              # either way a loss makes the capture a failure (wireskein-format §3.4)
     spool_dir: str | None = None             # stream: where its channels are put together on disk while it runs
@@ -71,8 +74,15 @@ class Request:
             elif name not in [n for n, _ in self.channels] or kind not in TRIGGERS or volts:
                 raise ValueError(f"trigger {name}:{kind}: the channel must be one captured, the kind one of {', '.join(TRIGGERS)} "
                                  f"(volts only for an analog channel)")
-        if self.mode not in ("oneshot", "stream") or self.on_loss not in ("stop", "continue"):
-            raise ValueError(f"mode {self.mode!r} / on_loss {self.on_loss!r}: oneshot or stream / stop or continue")
+        if self.mode not in ("oneshot", "stream", "repeat") or self.on_loss not in ("stop", "continue"):
+            raise ValueError(f"mode {self.mode!r} / on_loss {self.on_loss!r}: oneshot, stream or repeat / stop or continue")
+        if self.mode == "repeat":
+            if not (self.segments and self.segments >= 1) or not self.samples:
+                raise ValueError("repeat needs samples and segments (how many acquisitions, 1 or more)")
+            if self.analog:
+                raise ValueError("repeat: logic channels only (an analog track in repeat is not done yet)")
+        elif self.segments is not None:
+            raise ValueError("segments is for repeat only")
         if self.mode == "stream" and not (self.duration and self.duration > 0):
             raise ValueError("a stream needs a duration (seconds)")
         if self.arm not in ("pretrigger", "now"):

@@ -116,6 +116,9 @@ wireskein capture --source sigrok:fx2lafw --channels SDA=D0,SCL=D1 --rate 12M --
 - `--mode stream --duration 2s` で、ロジックのチャンネルを、プローブのメモリより長く取りながら送ります。
   - プローブがデータを落としたら、`--on-loss stop`（既定）はそこで止め、`--on-loss continue` は最後まで取ります。
   - どちらでも、取れたところは保存しますが、取得は失敗です（`INCOMPLETE` を出し、終了コード 1。ファイルは `complete: false`）。
+- `--mode repeat --segments 20` で、`--samples` の取得を 20 回、1 つのファイルに取ります（OEP の repeat）。終わった区画から読んで返すので、プローブが持てる数より多く取れます。
+  - `--trigger` を付けると、取得ごとにトリガをかけ直し（rearm）、ファイルは `layout: segments` になります。区間ごとに、自分のトリガの位置と時刻を持ちます。ビューアはタブで切り替えます。
+  - トリガが無ければ、区画は隙間なく続き、`timeline` の区間として並びます。
 - `--analog 名前=番号[@入力範囲],...` で、アナログのチャンネルを足します（`--analog-rate`、`--analog-samples`。サンプル数の既定は、ロジックと同じ時間）。
   - OEP のプローブでは、ロジックとアナログを組（capture-group）で一緒に始めます。`--trigger` を付けると、組の出来事の元（OEP capture §4.4）で、すべてのトラックを 1 つの出来事で切ります。プリトリガは、各トラックが自分のサンプル数で持ちます。
   - アナログの線もトリガにできます: `--trigger VDD:fall:2.9`（2.9 V を下向きに横切った）、`VDD:low:2.9`（2.9 V より下にいる）。出来事の時刻と不確かさは `meta.probe` に残ります。

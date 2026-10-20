@@ -368,6 +368,12 @@ def _capture(link, core, oc, oh, message, target: str, req: Request, ids: list[i
                 if req.mode == "stream":
                     cfg = _configure(cap, oc, oh, target, "logic", oc.STREAMING, rate=req.rate, **blocks)
                     return _stream_result(cap, hst, cfg, req, names, ids, probe, fast, open_s, clock_before, oc)
+                if req.mode == "repeat":       # with a trigger, one per segment (rearm 1, capture §2.1 / §3.3)
+                    if trigger:
+                        blocks["trigger_opts"] = oc.TriggerOpts(arm=0 if req.arm == "now" else 1, rearm=1)
+                    cfg = _configure(cap, oc, oh, target, "logic", oc.REPEAT, rate=req.rate, samples=req.samples,
+                                     segments=req.segments, trigger=trigger, pretrigger=req.pretrigger, **blocks)
+                    return _repeat_result(cap, hst, cfg, req, names, ids, probe, fast, open_s, clock_before, oc, oh)
                 lkw = dict(rate=req.rate, samples=req.samples, trigger=trigger, pretrigger=req.pretrigger, **blocks)
                 if grouped:          # both tracks asked first (query), set only when neither refuses (below)
                     lq = _query(cap, oc, oh, message, lkw)
@@ -641,6 +647,85 @@ def _events_np(name: str, quanta, levels, counts, start_level: int, n: int, step
     else:
         data = b""
     return fileformat.EventsChannel(name, data, n, step, 0, start_level, len(q), acquisition)
+
+
+REPEAT_POLL_S = 0.002   # how often repeat looks for finished segments
+
+
+def _repeat_result(cap, hst, cfg, req: Request, names, ids, probe, fast, open_s, clock_before, oc, oh) -> Result:
+    """Repeat (capture §2.1 mode 2): req.segments acquisitions of req.samples, each read and released as soon as it
+    is finished (the probe takes the next only into a free segment: none is lost, a pause is a gap in time). With a
+    trigger each starts on its own (rearm 1): parts of layout "segments", each its trigger_tick and start_ns, tick0
+    from the first one's time. Without, they run on: a timeline, the next part right after unless the probe paused
+    (flags gap). A wait past req.timeout for the next one ends it: a trigger that does not come is named."""
+    import time
+    gap, slipped = oc._CAP.enum["segment_flag"]["gap"], oc._CAP.enum["segment_flag"]["slipped"]
+    rate = Fraction(cfg.rate)
+    if cfg.segments:
+        probe["repeat"] = {"ring": cfg.segments}        # the probe's segments: it takes into a free one only
+    parts, nxt, first_ns, prev, received = [], 0, None, None, 0
+    t0 = time.monotonic()
+    cap.start()
+    try:
+        last = kept = time.monotonic()
+        while len(parts) < req.segments:
+            now = time.monotonic()
+            if now - kept >= 1.0 and hst.session is not None:
+                hst.keepalive()
+                kept = now
+            st = cap.status()
+            if st.state == oc.STATE["error"]:
+                raise oh.Failed(None, f"the capture stopped with an error ({st.error_name or 'unknown'})")
+            ready = [x for x in cap.segments(nxt) if x.serial < st.serial_done] if st.serial_done > nxt else []
+            if not ready:
+                if now - last > req.timeout:
+                    what = f"no trigger ({req.trigger[0]}:{req.trigger[1]})" if req.trigger else "no segment"
+                    raise TimeoutError(f"{what} within {req.timeout:g} s (--timeout) after {len(parts)} of "
+                                       f"{req.segments} segments")
+                time.sleep(REPEAT_POLL_S)
+                continue
+            for seg in sorted(ready, key=lambda x: x.serial):
+                if len(parts) == req.segments:
+                    break
+                data = cap.read_segment(seg)
+                received += len(data)
+                cap.release(seg.serial, seg.generation or None)
+                nxt = seg.serial + 1
+                if getattr(cfg, "event_d", None):
+                    chans = _from_blocks(cap, data, names, seg.samples, cfg)
+                else:
+                    chans = fileformat.from_interleaved(data, names, cfg.width, cfg.positions, seg.samples)
+                for c, ch in zip(chans, ids):
+                    c.acquisition = {"pin": ch}
+                meta = {"start_ns": seg.start_ns, "start_uncertainty_ns": seg.start_uncertainty_ns}
+                if seg.trigger_index is not None:
+                    meta["trigger_tick"] = seg.trigger_index
+                if seg.flags & slipped:
+                    meta["time_base_slipped"] = True
+                if first_ns is None:
+                    first_ns = seg.start_ns
+                if prev is not None and not req.trigger and not seg.flags & gap:
+                    tick0 = prev.tick0 + prev_samples                # right after the one before
+                else:
+                    tick0 = round(Fraction(seg.start_ns - first_ns, 10**9) * rate)
+                prev, prev_samples = fileformat.Part(chans, meta, tick0), seg.samples
+                parts.append(prev)
+            last = time.monotonic()
+    finally:
+        try:
+            cap.stop()
+        except Exception:                 # noqa: BLE001 - stopping is tidying up; the capture's own error is the news
+            pass
+    read_s = time.monotonic() - t0
+    probe["link"] = _link_info(hst, fast, open_s, received, read_s)
+    clock = _clock_info(clock_before, _clock(hst))
+    if clock:
+        probe["clock"] = clock
+    if cap.generation is not None:
+        probe["generation"] = {"logic": cap.generation}
+    meta = {"probe_channels": dict(zip(names, ids)), "probe": probe,
+            "repeat": {"segments": len(parts), "triggered": bool(req.trigger)}}
+    return Result(rate, parts[0].channels, meta, parts, [], "segments" if req.trigger else "timeline")
 
 
 STREAM_POLL_S = 0.2       # how often a stream looks for a loss while collecting
