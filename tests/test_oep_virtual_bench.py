@@ -135,6 +135,25 @@ def test_an_analog_trigger_starts_the_logic_too(probe, tmp_path):
     volts = lambda x: (x - sq.zero) * sq.scale_nv * 1e-9            # noqa: E731
     assert volts(v[i]) >= 1.0 > volts(v[i - 1])                      # it crossed up there
     assert "trigger_tick" in head["meta"] and "trigger_ns" in head["meta"]["probe"]
+    assert "cross_up" in head["meta"]["probe"]["trigger_caps"]["kinds"]   # the group's declaration, kept
+
+
+def test_a_condition_the_group_does_not_declare_is_refused_before_bind():
+    from oep_client import capture as oc
+    from wireskein.sources.oep import _check_caps
+
+    class Group:
+        def trigger_caps(self):
+            return oc.TriggerCaps(1, 1, 1, False, sum(1 << oc.COND[k] for k in ("level", "edge")), 0, None)
+
+    an = type("T", (), {"fn": 3})()
+    source = oc.TriggerSource([oc.Stage([[oc.Cond.above(an, 0, 100)]])])
+    req = sources.Request([("A", "10")], 1_000_000, 100, trigger=("SQ", "high", 1.0), analog=[("SQ", "16", None)])
+    probe = {}
+    with pytest.raises(RuntimeError, match=r"cannot start its tracks on SQ:high:1.0V together: its capture group "
+                                           r"triggers on level, edge \(trigger_caps"):
+        _check_caps(Group(), source, req, "x", probe)
+    assert probe["trigger_caps"]["kinds"] == ["level", "edge"]
 
 
 def test_a_group_refused_says_which_track_before_setting_either(probe, tmp_path):

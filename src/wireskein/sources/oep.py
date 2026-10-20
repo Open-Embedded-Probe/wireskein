@@ -108,6 +108,24 @@ def _trigger_source(oc, req: Request, cap, an, names: list[str], acfg):
     return oc.TriggerSource([oc.Stage([[cond]])], arm=0 if req.arm == "now" else 1)
 
 
+def _check_caps(group, source, req: Request, target: str, probe: dict) -> None:
+    """The group's trigger_caps (capture §4.4, a declaration: bind has the last word) kept in meta.probe, and a
+    condition type it does not declare refused before bind, saying which it takes."""
+    try:
+        caps = group.trigger_caps() if hasattr(group, "trigger_caps") else None
+    except Exception:              # noqa: BLE001 - a declaration is a bonus: bind still answers
+        caps = None
+    if caps is None:
+        return
+    probe["trigger_caps"] = {"stages": caps.max_stages, "terms": caps.max_terms, "conds": caps.max_conds,
+                             "cross_track": caps.cross_track, "kinds": caps.kinds()}
+    kinds = {c.kind for st in source.stages for term in st.terms for c in term}
+    if not all(caps.takes(k) for k in kinds):
+        what = ":".join(str(x) for x in req.trigger[:2]) + (f":{req.trigger[2]}V" if len(req.trigger) > 2 else "")
+        raise RuntimeError(f"probe {target} cannot start its tracks on {what} together: its capture group triggers on "
+                           f"{', '.join(caps.kinds()) or 'nothing'} (trigger_caps, capture §4.4)")
+
+
 def _what(tag, oc) -> str:
     """A configure item for people. The probe names the TLV it refused with its
     tag as sent (bit 7 is the critical mark)."""
@@ -380,6 +398,8 @@ def _capture(link, core, oc, oh, message, target: str, req: Request, ids: list[i
                 latency = getattr(judge.config, "judge_latency_ns", None) if judge is not None else None
                 if latency is not None:                 # how long the judging track takes to know the event (§3.3)
                     probe["judge_latency_ns"] = latency
+                if source is not None:
+                    _check_caps(group, source, req, target, probe)
                 try:
                     group.bind(tracks, source)
                 except (oh.Unsupported, oh.Rejected) as e:
