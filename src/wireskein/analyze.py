@@ -18,15 +18,15 @@ from ._engine.srio import read_sr, write_sr
 __all__ = ["Capture", "Channel", "load", "save", "as_logic", "analyze", "export", "dumps"]
 
 
-def load(path: str | Path) -> Capture:
-    """A WireSkein file (wireskein.fileformat), a sigrok .sr, or a fixture
+def load(path: str | Path, part: int | None = None) -> Capture:
+    """A WireSkein file (wireskein.fileformat; a capture of several parts needs `part`), a sigrok .sr, or a fixture
     directory (capture.json + edges). Files are told apart by their content."""
     path = Path(path)
     if path.is_dir():
         return fixture.load_capture(path)
     kind = fileformat.sniff(path)
     if kind == "wireskein":
-        return fileio.load(path)
+        return fileio.load(path, part)
     if kind == "sr":
         return read_sr(path)
     if kind == "vcd":

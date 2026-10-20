@@ -46,11 +46,21 @@ class Result:
             self.status = {True: "ok", False: "ng", None: "unchecked"}[self.ok]
 
 
-def load_capture(run_dir: Path, c: dict) -> Capture:
+def load_capture(run_dir: Path, c: dict) -> list[Capture]:
+    """A recorded capture's parts (wireskein-format §3.4), each checked on its own."""
     from ._engine import fileio
-    cap = fileio.load(run_dir / c["file"])
-    cap.meta.update(file=c["file"], t0=c["t0"])
-    return cap
+    parts = fileio.load_parts(run_dir / c["file"])
+    for cap in parts:
+        label = c["file"] if len(parts) == 1 else f"{c['file']}#part{cap.meta['part']}"
+        cap.meta.update(file=c["file"], t0=c["t0"], label=label)
+    return parts
+
+
+def _lost(cap: Capture) -> str:
+    """Why a capture is incomplete (wireskein-format §3.4), in one line."""
+    return "data lost while capturing: " + "; ".join(
+        f"after part {x['after_part']}: {x['reason']}" + (f" ({x['ticks']} ticks)" if x.get("ticks") else "")
+        + (", stopped there" if x.get("stopped") else "") for x in cap.meta.get("lost", []))
 
 
 def segment_tree(doc: dict):
@@ -653,7 +663,11 @@ def verify(run_dir: str | Path) -> dict:
         if not inside:
             results.append(Result(path, None, "capture", False, reason="no capture inside the segment"))
             continue
-        loaded = [(c, load_capture(run_dir, c)) for c in inside]
+        loaded = [(c, cap) for c in inside for cap in load_capture(run_dir, c)]
+        for c in inside:                 # a loss fails the capture, whatever its parts say (§3.4)
+            first = next(cap for cc, cap in loaded if cc is c)
+            if not first.meta.get("complete", True):
+                results.append(Result(path, c["file"], "capture", False, reason=_lost(first)))
         for x in spec["checks"]:
             pins = _pins_of(x)
             hit = [(c, cap) for c, cap in loaded
@@ -669,13 +683,14 @@ def verify(run_dir: str | Path) -> dict:
                 results.append(Result(path, None, x["kind"], None, x, reason=why))
                 continue
             for c, cap in hit:
+                label = cap.meta.get("label", c["file"])
                 cap, why = _as_logic(cap, x)
                 if cap is None:
-                    results.append(Result(path, c["file"], x["kind"], None, x, reason=why))
+                    results.append(Result(path, label, x["kind"], None, x, reason=why))
                     continue
                 hid = [t for t in cap.events if t.name in pins and t.hidden]
                 if hid and x["kind"] not in EVENT_CHECKS:
-                    results.append(Result(path, c["file"], x["kind"], None, x, reason="; ".join(
+                    results.append(Result(path, label, x["kind"], None, x, reason="; ".join(
                         events.describe(t) for t in hid) + f": {x['kind']} needs every edge"))
                     continue
                 ok, got, why = CHECKS[x["kind"]](cap, x)
@@ -685,7 +700,7 @@ def verify(run_dir: str | Path) -> dict:
                     got = {**got, "time_base_slipped": True}
                     if ok is False:
                         why = (why + "; " if why else "") + "the probe reported a time base slip in this capture"
-                results.append(Result(path, c["file"], x["kind"], ok, x, got, why))
+                results.append(Result(path, label, x["kind"], ok, x, got, why))
     # marker problems anywhere in the tree fail the run: a wrong structure means
     # captures may be checked against the wrong expectations
     for path, seg in segs.items():

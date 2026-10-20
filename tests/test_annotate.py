@@ -53,6 +53,6 @@ def test_rows_from_an_i2c_document():
 def test_put_cannot_touch_the_capture(tmp_path):
     import pytest
     p = uart_file(tmp_path)
-    for entry in ("capture.json", "wireskein.json", "ch/0.bits", "../x", "decode/"):
+    for entry in ("capture.json", "wireskein.json", "part/0/ch/0.bits", "../x", "decode/"):
         with pytest.raises(ValueError):
             fileformat.put(p, entry, "x")

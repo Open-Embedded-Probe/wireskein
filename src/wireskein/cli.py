@@ -52,10 +52,32 @@ def load(path: Path):
 
 def info(args) -> None:
     from . import fileformat
-    head, chans = fileformat.read(args.file)
-    tick = fileformat.tick_hz(head)
-    print(f"{args.file}: {fileformat.FORMAT}, tick {float(tick):g} Hz ({tick}), {head['ticks']} ticks "
-          f"({head['ticks'] / float(tick):.6g} s), id {head.get('id', '-')}")
+    raw = fileformat.read_header(args.file)
+    parts = fileformat.read_parts(args.file)
+    tick = fileformat.tick_hz(raw)
+    many = len(parts) > 1
+    total = parts[-1][0].get("tick0", 0) + parts[-1][0]["ticks"] if raw.get("layout") == "timeline" else \
+        sum(h["ticks"] for h, _ in parts)
+    print(f"{args.file}: {fileformat.FORMAT}, tick {float(tick):g} Hz ({tick}), {total} ticks "
+          f"({total / float(tick):.6g} s), id {raw.get('id', '-')}"
+          + (f", {len(parts)} parts ({raw.get('layout')})" if many else ""))
+    if not raw.get("complete", True):     # a loss makes the capture a failure (wireskein-format §3.4): say it first
+        for x in raw.get("lost", []):
+            print(f"INCOMPLETE: data lost after part {x['after_part']}: {x['reason']}"
+                  + (f" ({x['ticks']} ticks)" if x.get("ticks") else "") + (", the capture stopped there" if x.get("stopped") else ""))
+    if raw.get("meta"):
+        print("meta: " + json.dumps(raw["meta"], ensure_ascii=False, default=str))
+    for head, chans in parts:
+        if many:
+            pm = raw["parts"][head["part"]].get("meta") or {}
+            print(f"part {head['part']}: {head['ticks']} ticks" + (f" from tick {head['tick0']}" if "tick0" in head else "")
+                  + (f", meta {json.dumps(pm, ensure_ascii=False, default=str)}" if pm else ""))
+        _info_part(head, chans, tick, raw, many)
+    _info_files(args)
+
+
+def _info_part(head, chans, tick, raw, many) -> None:
+    from . import fileformat
     for c in chans:
         if isinstance(c, fileformat.AnalogChannel):
             conv = (f"raw {c.width}-bit" + (f" ({c.value_bits} valid)" if c.value_bits else "")
@@ -85,11 +107,15 @@ def info(args) -> None:
             print(f"  {'':12s} acquisition: {json.dumps(c.acquisition, ensure_ascii=False)}")
     for c in fileformat.skipped(head):
         print(f"  {c['name']:12s} encoding {c['encoding']!r}: not read by this version")
-    meta = head.get("meta") or {}
-    if meta:
-        print("meta: " + json.dumps(meta, ensure_ascii=False, default=str))
-    for line in _meta_notes(meta, tick):
+    pmeta = raw["parts"][head["part"]].get("meta") or {}
+    if pmeta and not many:
+        print("part meta: " + json.dumps(pmeta, ensure_ascii=False, default=str))
+    for line in _meta_notes(head.get("meta") or {}, tick):
         print("  " + line)
+
+
+def _info_files(args) -> None:
+    from . import fileformat
     for name, data in fileformat.attachments(args.file).items():
         print(f"attach/{name}: {len(data)} bytes")
     for k, n in enumerate(fileformat.notes(args.file), 1):

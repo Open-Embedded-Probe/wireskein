@@ -10,8 +10,11 @@ from .. import fileformat
 from .model import AnalogTrace, Capture, Channel, EventTrace, edges_from_dense
 
 
-def load(path: str | Path) -> Capture:
-    head, chans = fileformat.read(path)
+def load(path: str | Path, part: int | None = None) -> Capture:
+    """One part of a WireSkein file (a capture of several parts needs `part`, wireskein-format §3.4). meta carries
+    whether the capture is complete and what was lost (a loss makes the whole capture a failure), the layout, and
+    which part of how many."""
+    head, chans = fileformat.read(path, part=part)
     out, analog, events = [], [], []
     for c in chans:
         if isinstance(c, fileformat.EventsChannel):
@@ -38,8 +41,15 @@ def load(path: str | Path) -> Capture:
     tick = fileformat.tick_hz(head)
     return Capture(float(tick), int(head["ticks"]), out,
                    meta={**head.get("meta", {}), "file": str(path), "tick_hz": tick, "extras": fileformat.extras(path),
-                         "capture_id": head.get("id"),
+                         "capture_id": head.get("id"), "complete": head.get("complete", True),
+                         "lost": head.get("lost", []), "layout": head.get("layout", "timeline"),
+                         "part": head.get("part", 0), "n_parts": head.get("n_parts", 1),
                          "skipped_channels": fileformat.skipped(head)}, analog=analog, events=events)
+
+
+def load_parts(path: str | Path) -> list[Capture]:
+    """Every part of a WireSkein file, in order (wireskein-format §3.4: analysis never crosses them)."""
+    return [load(path, k) for k in range(len(fileformat.read_header(path)["parts"]))]
 
 
 def to_channel(ch: Channel, n_ticks: int) -> fileformat.Channel:
@@ -103,12 +113,17 @@ def save(path: str | Path, cap: Capture, **meta) -> Path:
     cap.meta["extras"] (as read from a .wireskein or .sr) are copied as they are."""
     import zipfile
     refuse_if_skipped(cap, path)
+    if cap.meta.get("n_parts", 1) > 1:
+        raise ValueError(f"not writing {path}: the capture has {cap.meta['n_parts']} parts and this is one of them "
+                         f"(the others would be dropped)")
     tick = cap.meta.get("tick_hz", cap.rate)
     meta.pop("capture_id", None)
+    for k in ("complete", "lost", "layout", "part", "n_parts"):
+        meta.pop(k, None)
     kept = {t.name for t in cap.events}          # their Channel view is not written; the events are
     path = fileformat.write(path, tick, [to_logic(c, cap.n_samples) for c in cap.channels if c.name not in kept]
                      + [to_events(t) for t in cap.events] + [to_analog(a) for a in cap.analog],
-                     capture_id=cap.meta.get("capture_id"),
+                     capture_id=cap.meta.get("capture_id"), lost=cap.meta.get("lost") or None,
                      **meta)
     if cap.meta.get("extras"):
         with zipfile.ZipFile(path, "a", zipfile.ZIP_DEFLATED) as z:

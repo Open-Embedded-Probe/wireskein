@@ -309,48 +309,94 @@ def from_interleaved(data: bytes | bytearray | memoryview, names: list[str], wid
 
 # ---------------- files ----------------
 
+PART_META = ("start_ns", "start_uncertainty_ns", "trigger_tick", "time_base_slipped")   # a part's own facts (§3.3)
+LAYOUTS = ("timeline", "segments")
+
+
+@dataclass
+class Part:
+    """One part of a capture (wireskein-format §3.4): channels with contiguous ticks from the part's tick 0, its own
+    facts (start_ns, trigger_tick, ...), and where it starts after the first part's tick 0 (required in a timeline)."""
+    channels: list
+    meta: dict = field(default_factory=dict)
+    tick0: int | None = None
+
+
+def _entry(c, prefix: str) -> tuple[dict, bytes]:
+    if isinstance(c, AnalogChannel):
+        e = {"name": c.name, "file": f"{prefix}.{'f32' if c.encoding == 'analog-f32' else 'raw'}",
+             "encoding": c.encoding, "n": c.n, "rate_hz": _terms(c.rate_hz, f"{c.name} rate_hz"),
+             "t0_ticks": _terms(c.t0_ticks, f"{c.name} t0_ticks")}
+        if c.encoding == "analog":
+            e["width"] = c.width
+            e.update({k2: v for k2, v in (("value_bits", c.value_bits), ("zero", c.zero), ("scale_nv", c.scale_nv))
+                      if v is not None})
+        if c.unit != "V":
+            e["unit"] = c.unit
+        data = c.data
+    elif isinstance(c, EventsChannel):
+        e = {"name": c.name, "file": f"{prefix}.events", "encoding": "events", "n": c.n, "step": c.step,
+             "phase": c.phase, "start_level": c.start_level, "events": c.count}
+        data = c.data
+    else:
+        e = {"name": c.name, "file": f"{prefix}.bits", "encoding": "bits", "n": c.n, "step": c.step, "phase": c.phase}
+        data = c.bits
+    if c.acquisition:
+        e["acquisition"] = c.acquisition
+    return e, data
+
+
 def write(path: str | Path, tick_hz: int | float | Fraction | tuple[int, int],
-          channels: list[Channel | EventsChannel | AnalogChannel],
+          channels: list[Channel | EventsChannel | AnalogChannel] | None = None,
           attachments: dict[str, str | bytes | dict | list] | None = None, *, capture_id: str | None = None,
+          parts: list[Part] | None = None, layout: str = "timeline", lost: list[dict] | None = None,
           **meta) -> Path:
     """Write a .wireskein file (any name; SUFFIX is the usual one). tick_hz is the tick clock (a Fraction keeps an exact rate
-    such as 160 MHz / 3). meta: small JSON-able facts about the capture, e.g.
-    start_ns / start_uncertainty_ns (probe clock of tick 0), trigger_tick, time_base_slipped, probe.
+    such as 160 MHz / 3). Either `channels` (one part) or `parts` (wireskein-format §3.4, with `layout`
+    "timeline" or "segments"). meta: small JSON-able facts about the capture, e.g. probe; with `channels`,
+    start_ns / start_uncertainty_ns / trigger_tick / time_base_slipped go to the part (PART_META).
+    `lost`: what was lost while capturing ({"after_part", "reason", "stopped", "ticks"?}); any makes the capture
+    incomplete (a failure, §3.4).
     attachments: free-form files stored as attach/<name> (see attach()). capture_id: the capture's id
     (a new one when not given; a conversion passes the original's on)."""
     path = Path(path)
     tick = _fraction(tick_hz)
     if capture_id is not None and not re.fullmatch(r"[0-9a-f]{32}", capture_id):
         raise ValueError(f"capture id {capture_id!r}: 32 lowercase hex digits")
-    names = [c.name for c in channels]
-    if len(set(names)) != len(names):
-        raise ValueError(f"channel names repeat: {names}")
-    entries, files = [], []
-    for k, c in enumerate(channels):
-        if isinstance(c, AnalogChannel):
-            e = {"name": c.name, "file": f"ch/{k}.{'f32' if c.encoding == 'analog-f32' else 'raw'}",
-                 "encoding": c.encoding, "n": c.n, "rate_hz": _terms(c.rate_hz, f"{c.name} rate_hz"),
-                 "t0_ticks": _terms(c.t0_ticks, f"{c.name} t0_ticks")}
-            if c.encoding == "analog":
-                e["width"] = c.width
-                e.update({k2: v for k2, v in (("value_bits", c.value_bits), ("zero", c.zero), ("scale_nv", c.scale_nv))
-                          if v is not None})
-            if c.unit != "V":
-                e["unit"] = c.unit
-            files.append((e["file"], c.data))
-        elif isinstance(c, EventsChannel):
-            e = {"name": c.name, "file": f"ch/{k}.events", "encoding": "events", "n": c.n, "step": c.step,
-                 "phase": c.phase, "start_level": c.start_level, "events": c.count}
-            files.append((e["file"], c.data))
-        else:
-            e = {"name": c.name, "file": f"ch/{k}.bits", "encoding": "bits", "n": c.n, "step": c.step, "phase": c.phase}
-            files.append((e["file"], c.bits))
-        if c.acquisition:
-            e["acquisition"] = c.acquisition
-        entries.append(e)
-    ends = [c.end(tick) if isinstance(c, AnalogChannel) else c.end for c in channels]
-    head = {"id": capture_id or new_id(), "tick_hz": _terms(tick, "tick_hz"), "ticks": max(ends, default=0),
-            "channels": entries, "meta": meta}
+    if (channels is None) == (parts is None):
+        raise ValueError("give channels (one part) or parts")
+    if parts is None:
+        parts = [Part(channels, {k: meta.pop(k) for k in PART_META if k in meta}, 0)]
+    if layout not in LAYOUTS or not parts:
+        raise ValueError(f"layout {layout!r}: one of {', '.join(LAYOUTS)}, with one part or more")
+    names0 = None
+    out_parts, files = [], []
+    for i, part in enumerate(parts):
+        names = [c.name for c in part.channels]
+        if len(set(names)) != len(names):
+            raise ValueError(f"part {i}: channel names repeat: {names}")
+        if names0 is not None and set(names) != names0:
+            raise ValueError(f"part {i}: channels {sorted(names)}, part 0 has {sorted(names0)} (every part has the same)")
+        names0 = set(names)
+        if layout == "timeline" and part.tick0 is None:
+            if i:
+                raise ValueError(f"part {i}: a timeline part needs its tick0")
+            part.tick0 = 0
+        entries = []
+        for k, c in enumerate(part.channels):
+            e, data = _entry(c, f"part/{i}/ch/{k}")
+            entries.append(e)
+            files.append((e["file"], data))
+        ends = [c.end(tick) if isinstance(c, AnalogChannel) else c.end for c in part.channels]
+        out_parts.append({"ticks": max(ends, default=0), **({"tick0": part.tick0} if part.tick0 is not None else {}),
+                          "channels": entries, "meta": part.meta})
+    lost = list(lost or [])
+    for x in lost:
+        if not isinstance(x.get("after_part"), int) or not -1 <= x["after_part"] < len(parts) or "reason" not in x:
+            raise ValueError(f"a loss needs after_part (-1 .. {len(parts) - 1}) and a reason: {x!r}")
+        x.setdefault("stopped", False)
+    head = {"id": capture_id or new_id(), "tick_hz": _terms(tick, "tick_hz"), "layout": layout,
+            "complete": not lost, **({"lost": lost} if lost else {}), "parts": out_parts, "meta": meta}
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
         z.writestr(zipfile.ZipInfo(IDENT, (1980, 1, 1, 0, 0, 0)), json.dumps({"format": FORMAT}), zipfile.ZIP_STORED)
         z.writestr(CAPTURE, json.dumps(head, indent=1, default=str))
@@ -417,7 +463,7 @@ def put(path: str | Path, entry: str, data: str | bytes | dict | list) -> None:
     with zipfile.ZipFile(path) as z:
         _check(z, path)
         head = json.loads(z.read(CAPTURE)) if CAPTURE in z.namelist() else {}
-        if entry in {IDENT, CAPTURE} | {c.get("file") for c in head.get("channels", [])}:
+        if entry in {IDENT, CAPTURE} | _channel_files(head):
             raise ValueError(f"{entry} is part of the capture itself")
         exists = entry in z.namelist()
     if exists:
@@ -473,7 +519,7 @@ def extras(path: str | Path) -> dict[str, bytes]:
     version does not know), as stored: to carry them into another file."""
     with zipfile.ZipFile(path) as z:
         head = json.loads(z.read(CAPTURE)) if CAPTURE in z.namelist() else {}
-        own = {IDENT, CAPTURE} | {c.get("file") for c in head.get("channels", [])}
+        own = {IDENT, CAPTURE} | _channel_files(head)
         return {x: z.read(x) for x in z.namelist() if x not in own and not x.endswith("/")}
 
 
@@ -527,18 +573,48 @@ def read_header(path: str | Path) -> dict:
         return json.loads(z.read(CAPTURE))
 
 
+def _channel_files(head: dict) -> set:
+    return {c.get("file") for p in head.get("parts", []) for c in p.get("channels", [])}
+
+
 def skipped(head: dict) -> list[dict]:
-    """Channels whose encoding this version does not read: [{"name", "encoding"}]."""
-    return [{"name": c.get("name"), "encoding": c.get("encoding")} for c in head.get("channels", [])
-            if c.get("encoding") not in ENCODINGS]
+    """Channels whose encoding this version does not read: [{"name", "encoding"}] (of the part read(), or of every
+    part of a raw header)."""
+    chans = head["channels"] if "channels" in head else [c for p in head.get("parts", []) for c in p["channels"]]
+    seen, out = set(), []
+    for c in chans:
+        if c.get("encoding") not in ENCODINGS and c.get("name") not in seen:
+            seen.add(c.get("name"))
+            out.append({"name": c.get("name"), "encoding": c.get("encoding")})
+    return out
 
 
-def read(path: str | Path, analog: bool = True) -> tuple[dict, list[Channel | EventsChannel | AnalogChannel]]:
-    """(header, channels): Channel for logic, AnalogChannel for analog (left
-    out with analog=False), EventsChannel for a logic line kept as its changes. header["tick_hz"] is [numerator, denominator].
-    Channels of an encoding this version does not read are left out (never
-    read as something else); skipped(header) names them."""
-    head = read_header(path)
+def part_view(head: dict, part: int) -> dict:
+    """capture.json seen from one part: the capture's keys, that part's channels / ticks / tick0, the capture's and
+    the part's meta together, and which part of how many."""
+    p = head["parts"][part]
+    view = {k: v for k, v in head.items() if k != "parts"}
+    view.update(channels=p["channels"], ticks=p["ticks"], meta={**head.get("meta", {}), **p.get("meta", {})},
+                part=part, n_parts=len(head["parts"]))
+    if "tick0" in p:
+        view["tick0"] = p["tick0"]
+    return view
+
+
+def read(path: str | Path, analog: bool = True, part: int | None = None) -> tuple[dict, list[Channel | EventsChannel | AnalogChannel]]:
+    """(header, channels) of one part (wireskein-format §3.4): Channel for logic, AnalogChannel for analog (left
+    out with analog=False), EventsChannel for a logic line kept as its changes. The header is part_view(): the
+    capture's keys (complete, lost, layout), that part's channels and ticks, the capture's and part's meta merged.
+    header["tick_hz"] is [numerator, denominator]. A capture of several parts needs `part` (never the first one
+    silently). Channels of an encoding this version does not read are left out (never read as something else);
+    skipped(header) names them."""
+    raw = read_header(path)
+    n = len(raw["parts"])
+    if part is None:
+        if n > 1:
+            raise ValueError(f"{path}: {n} parts ({raw.get('layout')}): read one with part=, or all with read_parts()")
+        part = 0
+    head = part_view(raw, part)
     chans = []
     with zipfile.ZipFile(path) as z:
         for c in head["channels"]:
@@ -555,6 +631,11 @@ def read(path: str | Path, analog: bool = True) -> tuple[dict, list[Channel | Ev
                                            c.get("zero"), c.get("scale_nv"), c.get("unit", "V"),
                                            c.get("acquisition", {})))
     return head, chans
+
+
+def read_parts(path: str | Path, analog: bool = True) -> list[tuple[dict, list]]:
+    """Every part: [(header seen from it, its channels)] in order."""
+    return [read(path, analog, k) for k in range(len(read_header(path)["parts"]))]
 
 
 def tick_hz(head: dict) -> Fraction:

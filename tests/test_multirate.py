@@ -155,10 +155,10 @@ def test_unknown_encoding_is_skipped_and_rewriting_refused(tmp_path):
     with zipfile.ZipFile(tmp_path / "a.wireskein") as z:
         items = {n: z.read(n) for n in z.namelist()}
     head = json.loads(items["capture.json"])
-    head["channels"].append({"name": "VBUS", "file": "ch/2.a16", "encoding": "edges", "n": 10,
-                             "rate_hz": [48000, 1], "t0_ticks": [0, 1]})
+    head["parts"][0]["channels"].append({"name": "VBUS", "file": "part/0/ch/2.a16", "encoding": "edges", "n": 10,
+                                         "rate_hz": [48000, 1], "t0_ticks": [0, 1]})
     items["capture.json"] = json.dumps(head).encode()
-    items["ch/2.a16"] = bytes(20)
+    items["part/0/ch/2.a16"] = bytes(20)
     with zipfile.ZipFile(tmp_path / "b.wireskein", "w") as z:
         for n, d in items.items():
             z.writestr(n, d)
