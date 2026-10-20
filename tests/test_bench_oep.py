@@ -83,3 +83,28 @@ def test_an_analog_crossing_starts_the_logic_too(tmp_path):
     head, chans = fileformat.read(sources.capture(f"oep:{TARGET}", req, tmp_path / "a.wireskein"))
     assert chans[0].n >= 200_000 and head["meta"]["trigger_tick"] == 20_000
     assert chans[-1].acquisition["trigger_index"] == 40
+
+
+def test_repeat_runs_on_as_a_timeline(tmp_path):
+    req = sources.Request(LOGIC, 1_000_000, 20_000, mode="repeat", segments=10)
+    head = fileformat.read_header(sources.capture(f"oep:{TARGET}", req, tmp_path / "r.wireskein"))
+    assert head["layout"] == "timeline" and head["complete"] is True and len(head["parts"]) == 10
+    assert all(p["ticks"] >= 20_000 for p in head["parts"])
+
+
+def test_repeat_one_part_per_trigger(uart_while_capturing, tmp_path):
+    """Each acquisition on its own falling edge of the fixture UART's TX (rearm 1)."""
+    req = sources.Request(LOGIC, 10_000_000, 20_000, mode="repeat", segments=5, trigger=("L4", "fall"),
+                          pretrigger=2_000, timeout=15)
+    try:
+        out = sources.capture(f"oep:{TARGET}", req, tmp_path / "r.wireskein")
+    except RuntimeError as e:      # oep-probe-arduino 0.0.36 takes a trigger in one-shot only
+        if "logic in repeat with a trigger" in str(e):
+            pytest.xfail(f"the probe has no trigger in repeat: {e}")
+        raise
+    head = fileformat.read_header(out)
+    assert head["layout"] == "segments" and len(head["parts"]) == 5
+    for k, p in enumerate(head["parts"]):
+        assert p["meta"]["trigger_tick"] == 2_000
+        tx = fileformat.unpack(fileformat.read(out, part=k)[1][4])
+        assert tx[1_999] == 1 and tx[2_000] == 0

@@ -371,7 +371,7 @@ def _capture(link, core, oc, oh, message, target: str, req: Request, ids: list[i
                 if req.mode == "repeat":       # with a trigger, one per segment (rearm 1, capture §2.1 / §3.3)
                     if trigger:
                         blocks["trigger_opts"] = oc.TriggerOpts(arm=0 if req.arm == "now" else 1, rearm=1)
-                    cfg = _configure(cap, oc, oh, target, "logic", oc.REPEAT, rate=req.rate, samples=req.samples,
+                    cfg = _configure(cap, oc, oh, target, "logic in repeat", oc.REPEAT, rate=req.rate, samples=req.samples,
                                      segments=req.segments, trigger=trigger, pretrigger=req.pretrigger, **blocks)
                     return _repeat_result(cap, hst, cfg, req, names, ids, probe, fast, open_s, clock_before, oc, oh)
                 lkw = dict(rate=req.rate, samples=req.samples, trigger=trigger, pretrigger=req.pretrigger, **blocks)
