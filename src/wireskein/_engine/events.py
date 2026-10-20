@@ -30,6 +30,14 @@ def rises(t: EventTrace) -> tuple[int, bool]:
     return n, not bool(np.any(c >= SATURATED))
 
 
+def first_level(t: EventTrace) -> int | None:
+    """The level at the first tick: start_level unless quantum 0 changed - then, with step > 1, whether at its first
+    tick or later is not known (None)."""
+    if len(t.quanta) and t.quanta[0] == 0:
+        return None
+    return int(t.start_level)
+
+
 def end_level(t: EventTrace) -> int:
     return int(t.levels[-1]) if len(t.levels) else int(t.start_level)
 

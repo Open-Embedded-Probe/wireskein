@@ -21,7 +21,10 @@ def load(path: str | Path, part: int | None = None) -> Capture:
             ks, levels, counts = c.decode()
             ks = np.array(ks, np.int64)
             if c.step == 1:                      # lossless: each event is one change, at its tick
-                out.append(Channel(c.name, c.start_level, c.phase + ks, 1, c.phase, dict(c.acquisition)))
+                init = c.start_level
+                if len(ks) and ks[0] == 0:       # a change at the first tick: the Channel starts at the level after it
+                    init, ks = init ^ 1, ks[1:]
+                out.append(Channel(c.name, init, c.phase + ks, 1, c.phase, dict(c.acquisition)))
                 continue
             t = EventTrace(c.name, c.step, c.phase, c.n, c.start_level, ks, np.array(levels, np.uint8),
                            np.array(counts, np.uint8), dict(c.acquisition))

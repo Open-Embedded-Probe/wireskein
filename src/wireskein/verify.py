@@ -129,7 +129,10 @@ def _levels(cap, want: dict, at_end: bool):
         ch = _ch(cap, pin)
         t = _ev(cap, pin)
         if t is not None:
-            got[pin] = events.end_level(t) if at_end else t.start_level
+            got[pin] = events.end_level(t) if at_end else events.first_level(t)
+            if got[pin] is None:
+                unknown.append(f"{t.name}: quantum 0 changed and its {t.step} ticks do not say whether at the first")
+                continue
         elif ch is None:
             missing.append(pin)
             continue

@@ -260,11 +260,15 @@ def capture_cmd(args) -> None:
     logic = sources.parse_channels(args.channels or "")
     rate = args.rate or (args.analog_rate if not logic else None)        # analog only: its own rate / samples do
     samples = args.samples or (args.analog_samples if not logic else None)
-    if not rate or not samples:
+    stream = args.mode == "stream"
+    if stream and not (rate and args.duration):
+        raise ValueError("--mode stream: give --rate and --duration")
+    if not stream and (not rate or not samples):
         need = "--rate and --samples" if logic else "--analog-rate (or --rate) and --analog-samples (or --samples)"
         raise ValueError(f"give {need}")
     req = sources.Request(
-        channels=logic, rate=sources.parse_count(rate), samples=sources.parse_count(samples),
+        channels=logic, rate=sources.parse_count(rate), samples=sources.parse_count(samples) if samples else 0,
+        mode=args.mode, duration=_seconds(args.duration) if args.duration else None, on_loss=args.on_loss,
         trigger=sources.parse_trigger(args.trigger) if args.trigger else None,
         pretrigger=sources.parse_count(args.pretrigger) if args.pretrigger else None, timeout=args.timeout,
         arm=args.arm,
@@ -277,10 +281,17 @@ def capture_cmd(args) -> None:
         from . import fileformat
         if fileformat.sniff(out) == "wireskein":
             fileformat.note(out, args.note)
+    from . import fileformat
     from .analyze import load
-    cap = load(out)
-    print(f"{out}: {_count(cap)}, {cap.n_samples} ticks at {cap.rate:g} Hz ({cap.duration:.6g} s)")
-    _fewer(out, req)
+    raw = fileformat.read_header(out) if fileformat.sniff(out) == "wireskein" else None
+    n_parts = len(raw["parts"]) if raw else 1
+    cap = load(out, part=0 if n_parts > 1 else None)
+    if n_parts > 1:
+        total = sum(p["ticks"] for p in raw["parts"])
+        print(f"{out}: {_count(cap)}, {n_parts} parts, {total} ticks taken at {cap.rate:g} Hz ({total / cap.rate:.6g} s)")
+    else:
+        print(f"{out}: {_count(cap)}, {cap.n_samples} ticks at {cap.rate:g} Hz ({cap.duration:.6g} s)")
+        _fewer(out, req)
     link = (cap.meta.get("probe") or {}).get("link")
     if link:
         print("link: " + _link_line(link))
@@ -288,6 +299,18 @@ def capture_cmd(args) -> None:
     if data:                # format 1: what the probe sent against what the format allows at worst, and format 0
         print(f"data: format {data['format']}, {data['bytes'] / 1000:.1f} KB (worst {data['worst_bytes'] / 1000:.1f} KB, "
               f"format 0 {data['format0_bytes'] / 1000:.1f} KB), blocks of {data['block']} samples")
+    st = cap.meta.get("stream")
+    if st:
+        kb = st["bytes"] / 1000
+        print(f"stream: {kb:.1f} KB in {st['frames']} frames over {st['read_s']:.2f} s"
+              + (f" ({kb / st['read_s']:.1f} KB/s)" if st["read_s"] > 0 else ""))
+    if raw and not raw.get("complete", True):    # a loss is a failure (wireskein-format §3.4): kept, but said and exit 1
+        for x in raw["lost"]:
+            print(f"INCOMPLETE: data lost after part {x['after_part']}: {x['reason']}"
+                  + (f" ({x['ticks']} ticks)" if x.get("ticks") else "") + (", stopped there" if x.get("stopped") else ""),
+                  file=sys.stderr)
+        print(f"{out}: kept what was taken; the capture failed", file=sys.stderr)
+        raise SystemExit(1)
 
 
 def _link_line(link: dict) -> str:
@@ -434,6 +457,13 @@ def main() -> None:
     cp.add_argument("--rate", default=None, help="logic samples per second, e.g. 20M, 500k (analog too unless --analog-rate)")
     cp.add_argument("--samples", default=None, help="logic samples, e.g. 1M, 200000 (analog only: --analog-samples does)")
     cp.add_argument("--trigger", default=None, help="NAME:rise|fall|both|high|low (default: start at once)")
+    cp.add_argument("--mode", choices=("oneshot", "stream"), default="oneshot",
+                    help="oneshot (--samples, in the probe's memory) or stream (--duration, sent as it is taken: "
+                         "longer than the probe's memory; logic channels started at once)")
+    cp.add_argument("--duration", default=None, help="stream: how long, e.g. 2s, 500ms")
+    cp.add_argument("--on-loss", choices=("stop", "continue"), default="stop",
+                    help="stream: when the probe drops data, stop there (default) or go on to the end; either way "
+                         "what was taken is kept and the capture fails (exit 1)")
     cp.add_argument("--pretrigger", default=None, help="samples kept before the trigger")
     cp.add_argument("--arm", choices=("pretrigger", "now"), default="pretrigger",
                     help="look for the trigger once the pretrigger is there (default: always that many samples before "

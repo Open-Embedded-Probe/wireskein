@@ -234,17 +234,17 @@ The time resolution is `step` ticks: **quantum** k is ticks `[phase + k × step,
 | --- | --- | --- |
 | `n` | integer | Number of quanta (the channel runs to tick `phase + n × step`) |
 | `step`, `phase` | §3 | Required. Quantum length and start of the first quantum |
-| `start_level` | 0 or 1 | The line's level at tick `phase`. Required |
+| `start_level` | 0 or 1 | The line's level **before** the first quantum. Required. At the start of an acquisition, the first sample's level (so there is no change at tick `phase`); in a part that follows on from the one before without a gap (§3.4), that part's last level, and a change at tick `phase` is counted in quantum 0 (as OEP format 1's start_level) |
 | `events` | integer | Number of events. Required |
 
 - **Events**: one per quantum in which the line changed at least once, in quantum order. A quantum without a change has no event.
 - The data is, per event:
   1. The quantum number's gap: unsigned LEB128 (7 bits at a time, low first, bit 7 set when more follow). The value is "this event's quantum − the previous event's quantum − 1"; for the first event, the quantum number itself.
   2. One byte: bit 7 the level at the quantum's last tick, bits 0-6 the number of changes in it (1-127; 127 means at least 127).
-- Changes are counted against the tick before (the channel's first tick is compared with `start_level`, so there is no change at tick `phase` itself). When the count is not 127, the level after a quantum follows from the level before and the count's parity (a file where it does not is wrong).
+- Changes are counted against the tick before (the channel's first tick is compared with `start_level`). When the count is not 127, the level after a quantum follows from the level before and the count's parity (a file where it does not is wrong).
 - **`step` 1**: every event is one change, at that tick. Lossless; it says the same as `bits` (§4.1), and a writer may choose the smaller.
 - **`step` 2 or more**: what is sure is the level at each quantum boundary, whether the line changed, and how many times (a lower bound at 127). Where in the quantum it changed, and the levels in between (count 2 or more), are not known.
-  - Checks follow this: `level()`, `starts()`, `ends()`, `only_moving()` and the count of `pulses()` are answered exactly (rising edges from the level b before and count c: ceil(c/2) when b is 0, floor(c/2) when 1).
+  - Checks follow this: `level()`, `ends()`, `only_moving()` and the count of `pulses()` are answered exactly; `starts()` (the level at tick `phase`) too, except when quantum 0 has an event and `step` is 2 or more (whether it changed at the first tick or later is not known), which is unchecked (rising edges from the level b before and count c: ceil(c/2) when b is 0, floor(c/2) when 1).
   - When no quantum holds more than one change, the line is known at a resolution of `step` ticks, so the other checks and the decoders read it at that resolution (each change happened somewhere in its quantum).
   - On a channel with a quantum of two or more changes, checks that need the time of every change (`square()`, periods, decoding) are unchecked.
 - `.sr` and VCD: a channel with at most one change a quantum is written as samples at `step` ticks; one with a quantum of two or more changes has no form there, and is refused.

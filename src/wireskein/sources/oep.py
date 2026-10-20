@@ -70,12 +70,17 @@ def capture(target: str, req: Request) -> Result:
                          f"{[c for _, c in req.channels] + [c for _, c, _ in req.analog]}") from None
     if req.resolution and not hasattr(oc, "DATA_FORMAT"):
         raise ValueError("a resolution (NAME=ID/D) needs an oep-client-python with capture format 1")
+    if req.mode == "stream" and (aids or req.trigger or not ids):
+        raise ValueError("a stream (--mode stream) takes logic channels only, started at once, for now")
     if req.trigger and aids and ids and not _group_trigger(oc):
         raise ValueError("this oep-client-python starts logic and analog together only at once (capture-group, "
                          "capture §4: the linked trigger is out of the current OEP v1 draft): leave out --trigger, or "
                          "capture the logic alone")
     try:
-        return _capture(link, core, oc, oh, message, target, req, ids, aids, fast)
+        res = _capture(link, core, oc, oh, message, target, req, ids, aids, fast)
+        if isinstance(res, _Streamed):           # put together after the session closed: it may take a while
+            res = res.result()
+        return res
     except oh.OepError as e:        # the probe refused or failed: say what, not where
         hint = ""
         if "(storage)" in str(e):     # capture §2.2: data lost inside a segment stops the track with error 2
@@ -119,11 +124,11 @@ def oc_state(name: str) -> int:
     return STATE[name]
 
 
-def _configure(track, oc, oh, target: str, what: str, **kw):
+def _configure(track, oc, oh, target: str, what: str, mode=None, **kw):
     """configure; a refusal (unsupported, naming the TLV) in one line. Every probe knows the configure TLVs of OEP
     v1 (capture §3.3), so one it cannot honour is refused, not ignored."""
     try:
-        return track.configure(mode=oc.ONE_SHOT, **kw)
+        return track.configure(mode=oc.ONE_SHOT if mode is None else mode, **kw)
     except oh.Unsupported as e:
         raise RuntimeError(f"probe {target} cannot capture {what} with {_what(e.tag, oc)}") from e
 
@@ -280,6 +285,9 @@ def _capture(link, core, oc, oh, message, target: str, req: Request, ids: list[i
                     if not hasattr(oc, "TriggerOpts"):
                         raise ValueError("--arm now needs an oep-client-python with trigger_opts")
                     blocks["trigger_opts"] = oc.TriggerOpts(arm=0)
+                if req.mode == "stream":
+                    cfg = _configure(cap, oc, oh, target, "logic", oc.STREAMING, rate=req.rate, **blocks)
+                    return _stream_result(cap, hst, cfg, req, names, ids, probe, fast, open_s, clock_before, oc)
                 cfg = _configure(cap, oc, oh, target, "logic", rate=req.rate, samples=req.samples, trigger=trigger,
                                  pretrigger=req.pretrigger, **blocks)
             if an:
@@ -425,11 +433,9 @@ def _from_blocks(blocks, names: list[str], samples: int, cfg) -> list:
     out = []
     for role, name in enumerate(names):
         d = cfg.event_d.get(role)
-        if d is None:
-            bits = b"".join(b.raw[role] for b in blocks)
-            out.append(fileformat.Channel(name, fileformat.pack(np.unpackbits(np.frombuffer(bits, np.uint8),
-                                                                              bitorder="little")[:samples].tobytes()),
-                                          samples))
+        if d is None:                   # packed already (sample i at bit i % 8), the last block's tail 0 (§1.3)
+            bits = b"".join(b.raw[role] for b in blocks)[:(samples + 7) // 8]
+            out.append(fileformat.Channel(name, bits, samples))
             continue
         quanta, levels, counts, start, level = [], [], [], None, None
         for b in blocks:
@@ -456,6 +462,199 @@ def _from_blocks(blocks, names: list[str], samples: int, cfg) -> list:
                 if len(e.levels):
                     level = int(e.levels[-1])
         out.append(fileformat.events(name, quanta, levels, counts, -(-samples // d), d, 0, start or 0))
+    return out
+
+
+STREAM_POLL_S = 0.2       # how often a stream looks for a loss while collecting
+
+
+def _stream_result(cap, hst, cfg, req: Request, names, ids, probe, fast, open_s, clock_before, oc) -> Result:
+    """A stream (capture §2.1 mode 3): subscribe, start, collect for req.duration, stop and collect the rest. A loss
+    (a skipped position: the probe dropped a segment it had no room to send) stops it at once with on_loss "stop"
+    (the default), else it goes on; either way the capture is incomplete, a failure (wireskein-format §3.4)."""
+    import time
+    link = hst.link
+    cap.subscribe()
+    cap.start()
+    t_read = time.monotonic()
+    deadline, got = t_read + req.duration, None
+    while True:
+        now = time.monotonic()
+        if now >= deadline:
+            break
+        got = cap.stream(link, seconds=min(STREAM_POLL_S, deadline - now), into=got)
+        if req.on_loss == "stop" and (got.gaps or (got.start or 0) > 0):
+            break
+    cap.stop()
+    got = cap.finish(link, got or oc.Received())
+    read_s = time.monotonic() - t_read
+    st = cap.status()
+    probe["link"] = _link_info(hst, fast, open_s, len(got.data), read_s)
+    clock = _clock_info(clock_before, _clock(hst))
+    if clock:
+        probe["clock"] = clock
+    if cap.generation is not None:
+        probe["generation"] = {"logic": cap.generation}
+    meta = {"probe_channels": dict(zip(names, ids)), "probe": probe,
+            "stream": {"duration_s": req.duration, "on_loss": req.on_loss, "frames": got.frames,
+                       "bytes": len(got.data), "read_s": round(read_s, 3)}}
+    return _Streamed(cap, cfg, got, st, names, ids, req, meta, oc)
+
+
+class _Streamed:
+    """A stream collected, to be put together once the session is closed (decoding takes time; the lease does not
+    wait for it). cap.blocks only reads the configure answer kept in the client."""
+    def __init__(self, cap, cfg, got, st, names, ids, req, meta, oc):
+        self.cap, self.cfg, self.got, self.st, self.names, self.ids, self.req, self.meta, self.oc = (
+            cap, cfg, got, st, names, ids, req, meta, oc)
+
+    def result(self) -> Result:
+        parts, lost = _stream_parts(self.cap, self.cfg, self.got, self.names, self.ids, self.req)
+        st = self.st
+        if st.state == self.oc.STATE["error"]:
+            lost.append({"after_part": len(parts) - 1, "reason": f"the probe stopped in error ({st.error_name})",
+                         "stopped": True})
+        elif st.dropped and not lost:
+            lost.append({"after_part": len(parts) - 1, "reason": "the probe dropped data (status flags bit 0)"})
+        return Result(Fraction(self.cfg.rate), parts[0].channels, self.meta, parts, lost, "timeline")
+
+
+def _stream_parts(cap, cfg, got, names, ids, req: Request) -> tuple[list, list]:
+    """What a stream collected -> parts on one timeline and the losses (wireskein-format §3.4). Segments run in
+    order; a skipped position is a loss, and a part ends there (with on_loss "stop", the capture too). Each segment
+    is read as a one-shot one is and joined to the part; tick0 within a part is exact (samples), across a loss from
+    the segments' start_ns. A format 1 segment whose samples are not a multiple of every D starts a new part
+    without a loss (the next segment's ticks restart, capture §1.3)."""
+    import numpy as np
+    if not got.data or not got.segments:
+        raise RuntimeError("the stream brought no data" + (" (the probe dropped it all)" if got.gaps else ""))
+    runs, pos, at = [], got.start, 0            # (stream position, data index, length) of each gapless stretch
+    marks = sorted(got.gaps) + [(len(got.data), 0)]
+    for index, skipped in marks:
+        runs.append((pos, at, index - at))
+        pos += index - at + skipped
+        at = index
+    segs = sorted(got.segments.values(), key=lambda x: x.position)
+    rate = Fraction(cfg.rate)
+    first_ns = segs[0].start_ns
+    ds = [d for d in getattr(cfg, "event_d", {}).values()]
+    parts, lost = [], []
+    if got.start != 0:                           # positions count from the generation's start: the first is gone
+        if req.on_loss == "stop":
+            raise RuntimeError(f"the probe dropped the stream's first {got.start} bytes before any arrived: nothing "
+                               f"to keep (a lower --rate or fewer channels, or --on-loss continue)")
+        lost.append({"after_part": -1, "reason": f"the probe dropped the first {got.start} bytes (no room to send)"})
+    for r, (p0, i0, n) in enumerate(runs):
+        if r and req.on_loss == "stop":
+            lost.append({"after_part": len(parts) - 1, "reason": "the probe dropped a segment (no room to send)",
+                         "stopped": True})
+            break
+        if r:
+            lost.append({"after_part": len(parts) - 1, "reason": "the probe dropped a segment (no room to send)"})
+        inside = [x for x in segs if p0 <= x.position < p0 + n]
+        run = bytes(got.data[i0:i0 + n])
+        if not ds and cfg.width % 8 == 0:        # format 0, whole bytes a sample: the stretch at once (no padding)
+            samples = min(sum(x.samples for x in inside), len(run) * 8 // cfg.width)
+            parts.append(_part(_samples_at_once(run, names, ids, cfg, samples), _seg_meta(inside[0]),
+                               round(Fraction(inside[0].start_ns - first_ns, 10**9) * rate)))
+            continue
+        acc, acc_samples, acc_meta, tick0 = None, 0, None, None
+        for k, x in enumerate(inside):
+            end_ = inside[k + 1].position if k + 1 < len(inside) else p0 + n
+            data = run[x.position - p0:end_ - p0]
+            samples = x.samples
+            if not ds:
+                samples = min(samples, len(data) * 8 // cfg.width)
+                chans = fileformat.from_interleaved(data, names, cfg.width, cfg.positions, samples)
+            else:
+                chans = _from_blocks(cap.blocks(data, samples), names, samples, cfg)
+            restart = acc is not None and (acc_samples % 8 or any(acc_samples % d for d in ds))
+            if acc is None or restart:           # a grid restart (format 1) is not a loss: the next part follows on
+                before = [None] * len(chans)
+                if acc is not None:
+                    parts.append(_part(_built(acc, acc_samples, ids), acc_meta, tick0))
+                    tick0 += acc_samples
+                    before = [a_.level for a_ in acc]     # it follows on: a change at its first sample counts
+                else:
+                    tick0 = round(Fraction(x.start_ns - first_ns, 10**9) * rate)
+                acc, acc_samples, acc_meta = [_Acc(c, b) for c, b in zip(chans, before)], 0, _seg_meta(x)
+            for a_, c in zip(acc, chans):
+                a_.add(c, acc_samples)
+            acc_samples += samples
+        if acc is not None:
+            parts.append(_part(_built(acc, acc_samples, ids), acc_meta, tick0))
+    for x in lost:                               # how long, when the segments' times say
+        k = x["after_part"]
+        if 0 <= k < len(parts) - 1:
+            gap = parts[k + 1].tick0 - parts[k].tick0 - parts[k].channels[0].end
+            if gap > 0:
+                x["ticks"] = int(gap)
+    return parts, lost
+
+
+def _part(chans, meta, tick0):
+    return fileformat.Part(chans, dict(meta), int(tick0))
+
+
+def _seg_meta(x) -> dict:
+    return {"start_ns": x.start_ns, "start_uncertainty_ns": x.start_uncertainty_ns}
+
+
+def _samples_at_once(run: bytes, names, ids, cfg, samples: int) -> list:
+    """Format 0 with whole bytes a sample: channel k is bit pos[k] of each little-endian sample."""
+    import numpy as np
+    b = cfg.width // 8
+    a = np.frombuffer(run[:samples * b], np.uint8).reshape(samples, b)
+    out = []
+    for name, ch, pos in zip(names, ids, cfg.positions):
+        lv = (a[:, pos // 8] >> (pos % 8)) & 1
+        out.append(fileformat.Channel(name, np.packbits(lv, bitorder="little").tobytes(), samples, 1, 0, {"pin": ch}))
+    return out
+
+
+class _Acc:
+    """One channel of a part being joined from its segments (bits: whole bytes, the part's samples so far a multiple
+    of 8; events: quanta offset by the samples so far, a multiple of D).
+
+    A segment that follows on carries the level before it as its start (§1.3), but when its first block came raw
+    (fallback) the client gives no start level for it, so _from_blocks starts from the first sample: a level there
+    unlike the part's end is then exactly one change at the segment's first sample (two samples apart: at most one),
+    put into that quantum."""
+    def __init__(self, c, before: int | None = None):
+        """before: the level just before this part when it follows on from the part before (a grid restart)."""
+        self.first, self.pieces = c, []
+        self.start = self.level = before if before is not None else getattr(c, "start_level", None)
+
+    def add(self, c, offset: int) -> None:
+        if isinstance(c, fileformat.EventsChannel):
+            ks, lv, ct = c.decode()
+            q = offset // c.step
+            ks = [q + k for k in ks]
+            if c.start_level != self.level:                       # the change at the segment's first sample
+                if ks and ks[0] == q:
+                    ct[0] = min(ct[0] + 1, 127)
+                else:
+                    ks, lv, ct = [q] + ks, [c.start_level] + lv, [1] + ct
+            self.pieces.append((ks, lv, ct, c.n))
+            self.level = lv[-1] if lv else self.level
+        else:
+            self.pieces.append((c.bits, c.n))
+
+
+def _built(acc: list, samples: int, ids) -> list:
+    out = []
+    for a, ch in zip(acc, ids):
+        c = a.first
+        if isinstance(c, fileformat.EventsChannel):
+            ks, lv, ct = [], [], []
+            for k_, l_, c_, _ in a.pieces:
+                ks += k_
+                lv += l_
+                ct += c_
+            out.append(fileformat.events(c.name, ks, lv, ct, -(-samples // c.step), c.step, 0, a.start, pin=ch))
+        else:
+            out.append(fileformat.Channel(c.name, b"".join(b for b, _ in a.pieces)[:(samples + 7) // 8], samples, 1, 0,
+                                          {"pin": ch}))
     return out
 
 

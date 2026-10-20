@@ -195,3 +195,93 @@ def test_arm_now_may_leave_a_shorter_pretrigger(probe, tmp_path):
     b = levels(out)[1]
     t = meta["trigger_tick"]
     assert 1 <= t < 50 and b[t] == 1 and b[t - 1] == 0
+
+
+def test_a_stream_is_one_part_when_nothing_is_lost(probe, tmp_path):
+    """--mode stream on the bench (capture mode 3): longer than one segment, every byte arrived, one timeline part
+    with the counter's waveform throughout."""
+    req = sources.Request([("A", "10"), ("B", "11")], 1_000_000, 0, mode="stream", duration=0.3)
+    out = sources.capture(probe(), req, tmp_path / "s.wireskein")
+    raw = fileformat.read_header(out)
+    assert raw["complete"] is True and len(raw["parts"]) == 1 and raw["meta"]["stream"]["frames"] >= 2
+    head, (a, b) = fileformat.read(out)
+    n = a.n
+    assert n > 1000 and "start_ns" in head["meta"]
+    i = np.arange(n)
+    assert np.array_equal(np.frombuffer(fileformat.unpack(b), np.uint8)[:n], (i >> 1) & 1)
+
+
+def test_a_format_1_stream(probe, tmp_path):
+    req = sources.Request([("A", "10"), ("D", "13")], 1_000_000, 0, mode="stream", duration=0.3,
+                          resolution={"D": 64})
+    out = sources.capture(probe(), req, tmp_path / "f.wireskein")
+    raw = fileformat.read_header(out)
+    assert raw["complete"] is True
+    for head, chans in fileformat.read_parts(out):              # a grid restart may cut parts: never a loss
+        assert [c.encoding for c in chans] == ["bits", "events"]
+
+
+class FakeCap:
+    """Stands for oep-client's LogicCapture in _stream_parts (format 0)."""
+
+
+def fake_stream(segments, gaps):
+    """A Received of format 0 (w 8, one channel at bit 0): segments as (position, samples, start_ns), each sample a
+    byte; `gaps` (data index, bytes skipped) as the probe's drops."""
+    from oep_client import capture as oc
+    got = oc.Received()
+    got.start = segments[0][0]
+    for pos, n, ns in segments:
+        got.segments[pos] = oc.SegmentInfo(pos, n, ns, 100)
+        got.data += bytes([(pos + k) & 1 for k in range(n)])
+    got.gaps = gaps
+    return got
+
+
+def test_stream_parts_split_at_a_loss_and_stop_there_by_default():
+    from types import SimpleNamespace
+    from wireskein.sources.oep import _stream_parts
+    cfg = SimpleNamespace(rate=1_000_000, width=8, positions=[0], event_d={})
+    # segments of 100 samples at 1 MHz (100 us each); the one at position 200 was dropped (a gap of 100 bytes)
+    got = fake_stream([(0, 100, 0), (100, 100, 100_000), (300, 100, 300_000)], [(200, 100)])
+    req = sources.Request([("A", "1")], 1_000_000, 0, mode="stream", duration=1)
+    parts, lost = _stream_parts(FakeCap(), cfg, got, ["A"], [1], req)
+    assert len(parts) == 1 and parts[0].channels[0].n == 200 and lost == [
+        {"after_part": 0, "reason": "the probe dropped a segment (no room to send)", "stopped": True}]
+    req = sources.Request([("A", "1")], 1_000_000, 0, mode="stream", duration=1, on_loss="continue")
+    parts, lost = _stream_parts(FakeCap(), cfg, got, ["A"], [1], req)
+    assert [p.tick0 for p in parts] == [0, 300] and [p.channels[0].n for p in parts] == [200, 100]
+    assert lost == [{"after_part": 0, "reason": "the probe dropped a segment (no room to send)", "ticks": 100}]
+    assert parts[1].meta["start_ns"] == 300_000
+
+
+def test_a_stream_that_lost_its_start_keeps_nothing_by_default():
+    from types import SimpleNamespace
+    from wireskein.sources.oep import _stream_parts
+    cfg = SimpleNamespace(rate=1_000_000, width=8, positions=[0], event_d={})
+    got = fake_stream([(100, 100, 100_000)], [])
+    req = sources.Request([("A", "1")], 1_000_000, 0, mode="stream", duration=1)
+    with pytest.raises(RuntimeError, match="dropped the stream's first 100 bytes"):
+        _stream_parts(FakeCap(), cfg, got, ["A"], [1], req)
+    req = sources.Request([("A", "1")], 1_000_000, 0, mode="stream", duration=1, on_loss="continue")
+    parts, lost = _stream_parts(FakeCap(), cfg, got, ["A"], [1], req)
+    assert parts[0].tick0 == 0 and lost[0]["after_part"] == -1
+
+
+def test_a_format_1_stream_reads_the_same_line_as_format_0(probe, tmp_path):
+    """The same UART-like line streamed as samples (format 0) and as every change (/1, format 1): equal where both
+    have it, across segments and the blocks the probe carried raw (a change at a segment's first sample counted)."""
+    from wireskein.analyze import load
+    src = probe("--logic-wave", "10=uart:115200", "--logic-wave", "11=square:8")
+    got = {}
+    for name, res in (("f0", {}), ("f1", {"TX": 1, "CLK": 1})):
+        req = sources.Request([("TX", "10"), ("CLK", "11")], 200_000, 0, mode="stream", duration=0.3, resolution=res)
+        out = sources.capture(src, req, tmp_path / f"{name}.wireskein")
+        assert fileformat.read_header(out)["complete"] is True
+        caps = [load(out, part=k) for k in range(len(fileformat.read_header(out)["parts"]))]
+        got[name] = caps
+    for line in ("TX", "CLK"):
+        a, b = got["f0"][0].channel(line), got["f1"][0].channel(line)
+        n = min(got["f0"][0].n_samples, got["f1"][0].n_samples)
+        i = np.arange(n)
+        assert np.array_equal(a.level_at(i), b.level_at(i)), line

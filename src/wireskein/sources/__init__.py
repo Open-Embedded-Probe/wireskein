@@ -49,6 +49,10 @@ class Request:
     # logic channels kept as their changes (OEP capture's format 1 events): name -> D, the resolution in samples
     # (1: every change exact; D > 1: per D samples, how many times it changed and the level after)
     resolution: dict[str, int] = field(default_factory=dict)
+    mode: str = "oneshot"                    # "oneshot" (samples, in the probe's memory) or "stream" (for duration
+    duration: float | None = None            # seconds, sent as it is taken: longer than the probe's memory)
+    on_loss: str = "stop"                    # stream: "stop" at the first loss (the default), or "continue" to the end;
+                                             # either way a loss makes the capture a failure (wireskein-format §3.4)
 
     def __post_init__(self):
         names = [n for n, _ in self.channels] + [n for n, *_ in self.analog]
@@ -58,6 +62,10 @@ class Request:
             name, kind = self.trigger
             if name not in [n for n, _ in self.channels] or kind not in TRIGGERS:
                 raise ValueError(f"trigger {name}:{kind}: the channel must be one captured, the kind one of {', '.join(TRIGGERS)}")
+        if self.mode not in ("oneshot", "stream") or self.on_loss not in ("stop", "continue"):
+            raise ValueError(f"mode {self.mode!r} / on_loss {self.on_loss!r}: oneshot or stream / stop or continue")
+        if self.mode == "stream" and not (self.duration and self.duration > 0):
+            raise ValueError("a stream needs a duration (seconds)")
         if self.arm not in ("pretrigger", "now"):
             raise ValueError(f"arm {self.arm!r}: pretrigger or now")
         logic = {n for n, _ in self.channels}
@@ -71,6 +79,13 @@ class Result:
     tick_hz: Fraction
     channels: list[fileformat.Channel]
     meta: dict = field(default_factory=dict)
+    parts: list[fileformat.Part] | None = None   # instead of channels: a capture in parts (wireskein-format §3.4)
+    lost: list[dict] = field(default_factory=list)   # what was lost while capturing (a failure)
+    layout: str = "timeline"
+
+    @property
+    def complete(self) -> bool:
+        return not self.lost
 
 
 def _module(scheme: str):
@@ -96,7 +111,11 @@ def capture(source: str, request: Request, out: str | Path, attachments: dict | 
     res = run(source, request)
     out = Path(out)
     tmp = out if out.suffix != ".sr" else out.with_name(out.name + fileformat.SUFFIX)
-    fileformat.write(tmp, res.tick_hz, res.channels, attachments, **{**res.meta, **meta})
+    if res.parts is not None:
+        fileformat.write(tmp, res.tick_hz, None, attachments, parts=res.parts, layout=res.layout, lost=res.lost or None,
+                         **{**res.meta, **meta})
+    else:
+        fileformat.write(tmp, res.tick_hz, res.channels, attachments, lost=res.lost or None, **{**res.meta, **meta})
     if tmp != out:
         from ..analyze import load, save
         try:

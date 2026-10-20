@@ -82,8 +82,10 @@ class Channel:
 @dataclass
 class EventsChannel:
     """A logic channel kept as its changes (wireskein-format §4.4), at a resolution of `step` ticks: quantum k is ticks
-    [phase + k * step, phase + (k + 1) * step), n quanta. The line is at start_level at tick `phase`; an event says
-    that in quantum k the line changed `count` times (1-127, 127: at least 127) and was at `level` at its last tick.
+    [phase + k * step, phase + (k + 1) * step), n quanta. start_level is the line's level before quantum 0 (at a
+    capture's start its first sample's; in a part that follows on from the one before, that part's last level, so a
+    change at tick `phase` counts in quantum 0); an event says that in quantum k the line changed `count` times
+    (1-127, 127: at least 127) and was at `level` at its last tick.
     A quantum without a change has no event. step 1 is lossless (each event is one change, count 1)."""
     name: str
     data: bytes          # per event: a varint (k minus the previous event's k plus one; the first counts from 0), then
@@ -136,7 +138,7 @@ def events(name: str, quanta, levels, counts, n: int, step: int = 1, phase: int 
     prev, level = -1, start_level
     quanta, levels, counts = list(quanta), list(levels), list(counts)
     for k, lv, c in zip(quanta, levels, counts):
-        if not prev < k < n or lv not in (0, 1) or c < 1 or (step == 1 and (c != 1 or k == 0)):
+        if not prev < k < n or lv not in (0, 1) or c < 1 or (step == 1 and c != 1):
             raise ValueError(f"{name}: event (quantum {k}, level {lv}, count {c}) out of order or impossible")
         c = min(c, 127)
         if c < 127 and lv != level ^ (c & 1):
