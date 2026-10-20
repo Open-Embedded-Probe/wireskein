@@ -108,3 +108,18 @@ def test_repeat_one_part_per_trigger(uart_while_capturing, tmp_path):
         assert p["meta"]["trigger_tick"] == 2_000
         tx = fileformat.unpack(fileformat.read(out, part=k)[1][4])
         assert tx[1_999] == 1 and tx[2_000] == 0
+
+
+def test_an_analog_stream_alone(tmp_path):
+    req = sources.Request([], 20_000, 0, mode="stream", duration=3.0, analog=[("AN", "17", None)], analog_rate=20_000)
+    try:
+        out = sources.capture(f"oep:{TARGET}", req, tmp_path / "a.wireskein")
+    except RuntimeError as e:      # oep-probe-arduino 0.0.36: the analog track has no streaming
+        if "cannot capture analog with this mode" in str(e):
+            pytest.xfail(f"the probe does not stream its analog track: {e}")
+        raise
+    head = fileformat.read_header(out)
+    assert head["complete"] is True, head.get("lost")
+    (an,) = fileformat.read(out)[1]
+    rate = an.rate_hz.numerator / an.rate_hz.denominator
+    assert an.n >= 0.9 * 3.0 * rate and an.zero is not None and an.scale_nv

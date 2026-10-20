@@ -204,6 +204,21 @@ def test_repeat_with_a_trigger_is_one_part_per_trigger(probe, tmp_path):
         sources.Request([("A", "10")], 1_000_000, 500, segments=3)
 
 
+def test_an_analog_stream_alone(probe, tmp_path):
+    """--mode stream with analog channels only: the analog track streamed, a timeline at its own rate, the values as
+    a one-shot reads them (the bench's analog_value)."""
+    from oep_client.virtual_bench_capture import analog_value
+    req = sources.Request([], 20_000, 0, mode="stream", duration=0.3, analog=[("SQ", "16", None)], analog_rate=20_000)
+    out = sources.capture(probe(), req, tmp_path / "a.wireskein")
+    head = fileformat.read_header(out)
+    assert head["complete"] is True and head["layout"] == "timeline" and head["meta"]["stream"]["frames"] >= 1
+    _, (sq,) = fileformat.read(out)
+    assert sq.n > 1000 and sq.acquisition["pin"] == 16
+    assert list(sq.values()[:200]) == [analog_value(0, i) for i in range(200)]   # the track's channel 0
+    with pytest.raises(ValueError, match="not both"):
+        sources.Request([("A", "10")], 1000, 0, mode="stream", duration=1, analog=[("SQ", "16", None)])
+
+
 def test_an_analog_trigger_needs_its_voltage():
     with pytest.raises(ValueError, match="volts it crosses"):
         sources.Request([("A", "10")], 1_000_000, 100, trigger=("SQ", "rise"), analog=[("SQ", "16", None)])

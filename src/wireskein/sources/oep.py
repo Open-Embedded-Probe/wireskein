@@ -70,8 +70,8 @@ def capture(target: str, req: Request) -> Result:
                          f"{[c for _, c in req.channels] + [c for _, c, _ in req.analog]}") from None
     if req.resolution and not hasattr(oc, "DATA_FORMAT"):
         raise ValueError("a resolution (NAME=ID/D) needs an oep-client-python with capture format 1")
-    if req.mode == "stream" and (aids or req.trigger or not ids):
-        raise ValueError("a stream (--mode stream) takes logic channels only, started at once, for now")
+    if req.mode == "stream" and (req.trigger or (aids and ids)):
+        raise ValueError("a stream (--mode stream) takes logic channels or analog channels, started at once, for now")
     try:
         res = _capture(link, core, oc, oh, message, target, req, ids, aids, fast)
         if isinstance(res, _Streamed):           # put together after the session closed: it may take a while
@@ -126,11 +126,15 @@ def _check_caps(group, source, req: Request, target: str, probe: dict) -> None:
                            f"{', '.join(caps.kinds()) or 'nothing'} (trigger_caps, capture §4.4)")
 
 
+MODE_TAG = 0x01        # capture configure's mode TLV (capture §3.3)
+
+
 def _what(tag, oc) -> str:
     """A configure item for people. The probe names the TLV it refused with its
     tag as sent (bit 7 is the critical mark)."""
     base = tag & 0x7F if isinstance(tag, int) else tag
     return {oc.TRIGGER: "a trigger", oc.PRETRIGGER: "a pretrigger",
+            MODE_TAG: "this mode (--mode: the probe does not take it on this track)",
             getattr(oc, "TRIGGER_OPTS", None): "these trigger options (--arm now)"}.get(
         base, f"configure item 0x{base:02x}" if isinstance(base, int) else f"configure item {tag}")
 
@@ -382,6 +386,13 @@ def _capture(link, core, oc, oh, message, target: str, req: Request, ids: list[i
                 else:
                     cfg = _configure(cap, oc, oh, target, "logic", **lkw)
                     lrate, lsamples = Fraction(cfg.rate), getattr(cfg, "samples", None) or req.samples
+            if an and req.mode == "stream":           # analog alone (Request refuses it beside logic, for now)
+                arate = req.analog_rate or req.rate
+                fes = {k: fe for k, (_, _, fe) in enumerate(req.analog) if fe is not None}
+                acfg = _configure(an, oc, oh, target, "analog", oc.STREAMING, rate=arate,
+                                  **({"frontends": fes} if fes else {}))
+                return _analog_stream_result(an, hst, acfg, req, aids, probe, fast, open_s, clock_before, oc,
+                                             an.calibration(), _frontends(core, hst, an.fn))
             if an:
                 arate = req.analog_rate or req.rate
                 asamples = req.analog_samples
@@ -526,36 +537,55 @@ def _capture(link, core, oc, oh, message, target: str, req: Request, ids: list[i
         if calib is not None and (calib.factory or calib.vrefint):
             probe["calibration"] = [{"frontend": fe, "scheme": scheme, "raw": bytes(raw).hex()}
                                     for fe, scheme, raw in calib.factory]
-        a_ns = aseg.start_ns
-        for k, ((name, _, _), ch) in enumerate(zip(req.analog, aids)):
-            values = an.values(adata, k, aseg.samples)
-            t0 = Fraction(0)
-            if t_ref is not None:
-                t0 = Fraction(a_ns - t_ref) * tick / 10**9
-            t0 += Fraction(acfg.skew_ns.get(k, 0)) * tick / 10**9
-            acq = {"pin": ch}
-            fe = acfg.frontend.get(k)
-            if fe is not None:
-                acq["frontend"] = frontends.get(fe, {"frontend": fe})
-                if "attenuation_db" in acq["frontend"]:
-                    acq["attenuation_db"] = acq["frontend"]["attenuation_db"]
-            if acfg.reference:
-                source, mv, measured = acfg.reference
-                acq["reference"] = {"source": source, "mv": mv, "measured": bool(measured)}
-            if calib is not None and calib.vrefint:
-                acq["vrefint_raw"], acq["vrefint_ns"] = calib.vrefint
-            if calib is not None and calib.vrefint_nominal_mv is not None:
-                acq["vrefint_nominal_mv"] = calib.vrefint_nominal_mv
-            acq["start_uncertainty_ns"] = aseg.start_uncertainty_ns
-            if aseg.trigger_index is not None:
-                acq["trigger_index"] = aseg.trigger_index
-            width = {8: 8, 16: 16, 32: 32}[acfg.slot]
-            chans.append(fileformat.analog_raw(name, values, Fraction(acfg.rate), width=width, t0_ticks=t0,
-                                        value_bits=acfg.bits or None, zero=acfg.zero.get(k),
-                                        scale_nv=acfg.scale_nv.get(k), **acq))
+        t0 = Fraction(aseg.start_ns - t_ref) * tick / 10**9 if t_ref is not None else Fraction(0)
+        chans += _analog_chans(an, acfg, req, aids, adata, aseg.samples, t0, tick, frontends, calib,
+                               aseg.start_uncertainty_ns, aseg.trigger_index)
     if probe:
         meta["probe"] = probe
     return Result(tick, chans, meta)
+
+
+def _analog_values(an, acfg, data: bytes, k: int, samples: int):
+    """Channel k's raw values (capture §1.2): at once with numpy for whole-byte slots (a stream's millions), else the
+    client's reader."""
+    if acfg.slot not in (8, 16, 32):
+        return an.values(data, k, samples)
+    import numpy as np
+    width = acfg.slot // 8
+    frames = np.frombuffer(data, f"<u{width}", count=samples * len(acfg.order)).reshape(samples, len(acfg.order))
+    v = (frames[:, acfg.order.index(k)] >> acfg.offset) & ((1 << acfg.bits) - 1)
+    return v.astype(f"<u{width}").tobytes()
+
+
+def _analog_chans(an, acfg, req: Request, aids, data: bytes, samples: int, t0: Fraction, tick: Fraction, frontends,
+                  calib, uncertainty_ns, trigger_index) -> list:
+    """An analog track's data -> its channels: raw values at its own rate, the first sample at tick t0 (plus each
+    channel's skew), with what was used to take them (pin, frontend, reference, Vrefint, the start's uncertainty)."""
+    out = []
+    for k, ((name, _, _), ch) in enumerate(zip(req.analog, aids)):
+        values = _analog_values(an, acfg, data, k, samples)
+        acq = {"pin": ch}
+        fe = acfg.frontend.get(k)
+        if fe is not None:
+            acq["frontend"] = frontends.get(fe, {"frontend": fe})
+            if "attenuation_db" in acq["frontend"]:
+                acq["attenuation_db"] = acq["frontend"]["attenuation_db"]
+        if acfg.reference:
+            source, mv, measured = acfg.reference
+            acq["reference"] = {"source": source, "mv": mv, "measured": bool(measured)}
+        if calib is not None and calib.vrefint:
+            acq["vrefint_raw"], acq["vrefint_ns"] = calib.vrefint
+        if calib is not None and calib.vrefint_nominal_mv is not None:
+            acq["vrefint_nominal_mv"] = calib.vrefint_nominal_mv
+        acq["start_uncertainty_ns"] = uncertainty_ns
+        if trigger_index is not None:
+            acq["trigger_index"] = trigger_index
+        width = {8: 8, 16: 16, 32: 32}[acfg.slot]
+        out.append(fileformat.analog_raw(name, values, Fraction(acfg.rate), width=width,
+                                         t0_ticks=t0 + Fraction(acfg.skew_ns.get(k, 0)) * tick / 10**9,
+                                         value_bits=acfg.bits or None, zero=acfg.zero.get(k),
+                                         scale_nv=acfg.scale_nv.get(k), **acq))
+    return out
 
 
 def _from_blocks(cap, data: bytes, names: list[str], samples: int, cfg) -> list:
@@ -734,6 +764,98 @@ STREAM_MAX_DELAY_MS = 20  # ... or after this long. With (0, 0) the P4X sent eac
                           # quiet lines) as a transfer of its own, 2000 a second, and dropped 35 % it could not send
 
 
+def _collect(track, link, req: Request, oc, spool=None):
+    """Subscribe, start, collect for req.duration, stop and collect the rest -> (Received, seconds). A loss stops it
+    at once with on_loss "stop"."""
+    import time
+    track.subscribe(STREAM_MIN_BYTES, STREAM_MAX_DELAY_MS)   # batched: a capture wants bandwidth, not a frame per block
+    track.start()
+    t_read = time.monotonic()
+    deadline, got = t_read + req.duration, oc.Received()
+    while True:                                  # stream() renews the lease across calls on the same Received
+        now = time.monotonic()
+        if now >= deadline:
+            break
+        got = track.stream(link, seconds=min(STREAM_POLL_S, deadline - now), into=got)
+        if spool is not None:                    # put together as it comes: memory holds a poll's worth, not the stream
+            spool.take(got)
+            if req.on_loss == "stop" and spool.lost:
+                break
+        elif req.on_loss == "stop" and (got.gaps or (got.start or 0) > 0):
+            break
+    track.stop()
+    got = track.finish(link, got)
+    return got, time.monotonic() - t_read
+
+
+def _analog_stream_result(an, hst, acfg, req: Request, aids, probe, fast, open_s, clock_before, oc, calib,
+                          frontends) -> Result:
+    """An analog track alone, streamed (capture §2.1 mode 3): its frames of values joined per gapless stretch, a part
+    each on one timeline (tick: the analog rate), placed by the segments' start_ns; a skipped position is a loss."""
+    if getattr(acfg, "stream_buffer", None) is not None:
+        probe["stream_buffer"] = {"bytes": acfg.stream_buffer, "tolerable_delay_s": acfg.tolerable_delay_s(None)}
+    got, read_s = _collect(an, hst.link, req, oc)
+    st = an.status()
+    drops = oc.CaptureDrops.of(st) if hasattr(oc, "CaptureDrops") else None
+    if drops is not None:
+        import dataclasses
+        probe["drops"] = dataclasses.asdict(drops)
+    tail = None
+    end = (got.start or 0) + len(got.data) + sum(n for _, n in got.gaps)
+    if st.state != oc.STATE["error"] and st.write_pos > end:
+        tail = st.write_pos - end
+    probe["link"] = _link_info(hst, fast, open_s, len(got.data), read_s)
+    clock = _clock_info(clock_before, _clock(hst))
+    if clock:
+        probe["clock"] = clock
+    if an.generation is not None:
+        probe["generation"] = {"analog": an.generation}
+    if calib is not None and calib.factory:
+        probe["calibration"] = [{"frontend": fe, "scheme": scheme, "raw": bytes(raw).hex()}
+                                for fe, scheme, raw in calib.factory]
+    names = [n for n, *_ in req.analog]
+    meta = {"probe_channels": dict(zip(names, aids)), "probe": probe,
+            "stream": {"duration_s": req.duration, "on_loss": req.on_loss, "frames": got.frames,
+                       "bytes": len(got.data), "read_s": round(read_s, 3)}}
+
+    def build():
+        if not got.data or not got.segments:
+            raise RuntimeError("the stream brought no data" + (" (the probe dropped it all)" if got.gaps else ""))
+        frame = acfg.slot // 8 * len(acfg.order)
+        rate = Fraction(acfg.rate)
+        segs = sorted(got.segments.values(), key=lambda x: x.position)
+        first_ns = segs[0].start_ns
+        parts, lost, pos, at = [], [], got.start, 0
+        if got.start != 0:
+            if req.on_loss == "stop":
+                raise RuntimeError(f"the probe dropped the stream's first {got.start} bytes before any arrived")
+            lost.append({"after_part": -1, "reason": f"the probe dropped the first {got.start} bytes (no room to send)"})
+        for r, (index, skipped) in enumerate(sorted(got.gaps) + [(len(got.data), 0)]):
+            n = index - at
+            if r and req.on_loss == "stop":
+                lost[-1]["stopped"] = True
+                break
+            inside = [x for x in segs if pos <= x.position < pos + n] or [None]
+            samples = n // frame
+            if samples:
+                x = inside[0]
+                chans = _analog_chans(an, acfg, req, aids, bytes(got.data[at:at + samples * frame]), samples,
+                                      Fraction(0), rate, frontends, calib,
+                                      x.start_uncertainty_ns if x else None, None)
+                tick0 = round(Fraction(x.start_ns - first_ns, 10**9) * rate) if x else \
+                    (parts[-1].tick0 + parts[-1].channels[0].n if parts else 0)
+                parts.append(fileformat.Part(chans, _seg_meta(x) if x else {}, tick0))
+            if skipped:
+                lost.append({"after_part": len(parts) - 1, "reason": "the probe dropped a segment (no room to send)"})
+            pos += n + skipped
+            at = index
+        if not parts:
+            raise RuntimeError("the stream brought no whole sample")
+        return parts, lost
+
+    return _Streamed(an, acfg, got, st, names, aids, req, meta, oc, None, tail, build)
+
+
 def _stream_result(cap, hst, cfg, req: Request, names, ids, probe, fast, open_s, clock_before, oc) -> Result:
     """A stream (capture §2.1 mode 3): subscribe, start, collect for req.duration, stop and collect the rest. A loss
     (a skipped position: the probe dropped a segment it had no room to send) stops it at once with on_loss "stop"
@@ -748,24 +870,7 @@ def _stream_result(cap, hst, cfg, req: Request, names, ids, probe, fast, open_s,
                 * float(cfg.rate) / cfg.block
         probe["stream_buffer"] = {"bytes": cfg.stream_buffer, "tolerable_delay_s": cfg.tolerable_delay_s(worst)}
     spool = _Spool(cap, cfg, names, ids, req) if _spools(cfg) else None
-    cap.subscribe(STREAM_MIN_BYTES, STREAM_MAX_DELAY_MS)   # batched: a capture wants bandwidth, not a frame per block
-    cap.start()
-    t_read = time.monotonic()
-    deadline, got = t_read + req.duration, oc.Received()
-    while True:                                  # stream() renews the lease across calls on the same Received
-        now = time.monotonic()
-        if now >= deadline:
-            break
-        got = cap.stream(link, seconds=min(STREAM_POLL_S, deadline - now), into=got)
-        if spool is not None:                    # put together as it comes: memory holds a poll's worth, not the stream
-            spool.take(got)
-            if req.on_loss == "stop" and spool.lost:
-                break
-        elif req.on_loss == "stop" and (got.gaps or (got.start or 0) > 0):
-            break
-    cap.stop()
-    got = cap.finish(link, got)
-    read_s = time.monotonic() - t_read
+    got, read_s = _collect(cap, link, req, oc, spool)
     st = cap.status()
     if spool is not None:                        # handed over now; waited for once the session is closed (the worker
         spool.give(got, write_pos=st.write_pos if st.state == oc.STATE["error"] else None)   # may be behind)
@@ -794,10 +899,10 @@ def _stream_result(cap, hst, cfg, req: Request, names, ids, probe, fast, open_s,
 class _Streamed:
     """A stream collected, to be put together once the session is closed (decoding takes time; the lease does not
     wait for it). cap.blocks only reads the configure answer kept in the client."""
-    def __init__(self, cap, cfg, got, st, names, ids, req, meta, oc, spool=None, tail=None):
+    def __init__(self, cap, cfg, got, st, names, ids, req, meta, oc, spool=None, tail=None, build=None):
         self.cap, self.cfg, self.got, self.st, self.names, self.ids, self.req, self.meta, self.oc = (
             cap, cfg, got, st, names, ids, req, meta, oc)
-        self.spool, self.tail = spool, tail
+        self.spool, self.tail, self.build = spool, tail, build
 
     def result(self) -> Result:
         if self.spool is not None:
@@ -805,6 +910,8 @@ class _Streamed:
             parts, lost = self.spool.parts, self.spool.done_lost
             if not parts:
                 raise RuntimeError("the stream brought no data" + (" (the probe dropped it all)" if lost else ""))
+        elif self.build is not None:             # an analog stream: its own parts
+            parts, lost = self.build()
         else:
             parts, lost = _stream_parts(self.cap, self.cfg, self.got, self.names, self.ids, self.req)
         st = self.st

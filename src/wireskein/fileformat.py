@@ -231,6 +231,11 @@ def new_id() -> str:
 
 
 def _packed(values, code: str) -> bytes:
+    """values -> little-endian bytes of `code`; bytes given are taken as those already (a reader's at-once output)."""
+    if isinstance(values, (bytes, bytearray, memoryview)):
+        if len(values) % array.array(code).itemsize:
+            raise ValueError(f"{len(values)} bytes are not whole {code!r} values")
+        return bytes(values)
     a = array.array(code, values)
     if sys.byteorder == "big":
         a.byteswap()
