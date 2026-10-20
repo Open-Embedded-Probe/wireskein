@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) A trigger through the group keeps the judging track's `judge_latency_ns` (OEP capture §3.3, oep-client-python 708a5e5) in `meta.probe`; when the probe refuses the group, the message says that the judging track takes that long to know the event and the others must hold that long besides their pretrigger.
+- (JA) 組を通したトリガでは、判定するトラックの `judge_latency_ns`（OEP capture §3.3、oep-client-python 708a5e5）を `meta.probe` に残す。プローブが組を断ったときは、判定するトラックが出来事を知るのにその時間がかかり、ほかのトラックはプリトリガとは別にその間を溜める必要がある、と示す。
 - (EN) A stream subscribes batched (core §10.3: at least 16 KiB a frame or after 20 ms): a capture wants bandwidth, not a frame per block - with (0, 0) the P4X sent each format 1 block of quiet lines (tens of bytes) as a USB transfer of its own, about 2000 a second, and dropped 35 % it had no stage for.
 - (JA) ストリームの購読を、まとめて送る条件にする（core §10.3: 1 frame に 16 KiB 以上か、20 ms 経ったら）。キャプチャに要るのは帯域で、ブロックごとの frame ではない。(0, 0) では、P4X が静かな線の形式 1 のブロック（数十 byte）を 1 つずつ USB の転送にし、1 秒に約 2000 回送って、stage の無い 35 % を落としていた。
 - (EN) Checked on the P4X (oep-probe-arduino ed51b03): an analog trigger (`--trigger AN:rise:VOLTS` on a floating GPIO17) cut 8 logic lines and the analog on one event - the logic's trigger_tick at its pretrigger (10000), the analog's trigger_index at its own (200) where the values crossed the threshold (6 -> 9 through 8), the event's ns and its uncertainty (50 us, one analog sample) kept. When the analog's pretrigger (the logic's counted at the analog rate) is refused, the message says where the number came from.

@@ -350,13 +350,24 @@ def _capture(link, core, oc, oh, message, target: str, req: Request, ids: list[i
                 group = oc.CaptureGroup(hst)
                 tracks = [t for t in (cap, an) if t]
                 source = _trigger_source(oc, req, cap, an, names, acfg) if grouped else None
+                judge = (cap if req.trigger[0] in names else an) if grouped else None
+                latency = getattr(judge.config, "judge_latency_ns", None) if judge is not None else None
+                if latency is not None:                 # how long the judging track takes to know the event (§3.3)
+                    probe["judge_latency_ns"] = latency
                 try:
                     group.bind(tracks, source)
                 except (oh.Unsupported, oh.Rejected) as e:
                     if source is None:
                         raise
+                    why = ""
+                    if latency is not None:
+                        others = ", ".join(f"{'logic' if t is cap else 'analog'} {float(t.config.rate):g} Hz"
+                                           for t in tracks if t is not judge)
+                        why = (f"; the {'logic' if judge is cap else 'analog'} track takes up to {latency / 1e6:.3g} ms "
+                               f"to know the event, and the others ({others}) must hold that long besides their "
+                               f"pretrigger - a lower rate or fewer channels on them, or the trigger on the other track")
                     raise RuntimeError(f"probe {target} cannot start its tracks on a trigger together (capture-group "
-                                       f"trigger source, capture §4.4: {e})") from e
+                                       f"trigger source, capture §4.4: {e}){why}") from e
                 try:
                     group_start = group.start(tracks)
                     st = _waiting(lambda: group.wait(req.timeout), group, req)
