@@ -428,7 +428,7 @@ def _from_blocks(blocks, names: list[str], samples: int, cfg) -> list:
     """A format 1 segment's blocks (oep-client's capture_blocks) -> the file's channels, in the order asked: a raw
     channel as bits (L is a multiple of 8, so the blocks' bytes join as they are), an events channel as `events` at
     its D (each block's ticks as quanta of the segment: L is a multiple of D). A block the probe carried raw
-    (fallback) is counted here from its samples, the same way the probe counts (§1.3)."""
+    (fallback) is counted here from its samples and the block's start level, the same way the probe counts (§1.3)."""
     import numpy as np
     out = []
     for role, name in enumerate(names):
@@ -443,7 +443,7 @@ def _from_blocks(blocks, names: list[str], samples: int, cfg) -> list:
             if role in b.fallback:
                 lv = np.unpackbits(np.frombuffer(b.raw[role], np.uint8), bitorder="little")[:b.samples].astype(np.int8)
                 if start is None:
-                    start = level = int(lv[0])
+                    start = level = int(b.start_levels[role])   # the level before the block (§1.3)
                 prev = np.concatenate(([level], lv[:-1]))
                 change = (lv != prev).astype(np.int64)
                 per = np.add.reduceat(change, np.arange(0, b.samples, d))
@@ -570,14 +570,12 @@ def _stream_parts(cap, cfg, got, names, ids, req: Request) -> tuple[list, list]:
                 chans = _from_blocks(cap.blocks(data, samples), names, samples, cfg)
             restart = acc is not None and (acc_samples % 8 or any(acc_samples % d for d in ds))
             if acc is None or restart:           # a grid restart (format 1) is not a loss: the next part follows on
-                before = [None] * len(chans)
                 if acc is not None:
                     parts.append(_part(_built(acc, acc_samples, ids), acc_meta, tick0))
                     tick0 += acc_samples
-                    before = [a_.level for a_ in acc]     # it follows on: a change at its first sample counts
                 else:
                     tick0 = round(Fraction(x.start_ns - first_ns, 10**9) * rate)
-                acc, acc_samples, acc_meta = [_Acc(c, b) for c, b in zip(chans, before)], 0, _seg_meta(x)
+                acc, acc_samples, acc_meta = [_Acc(c) for c in chans], 0, _seg_meta(x)
             for a_, c in zip(acc, chans):
                 a_.add(c, acc_samples)
             acc_samples += samples
@@ -614,29 +612,17 @@ def _samples_at_once(run: bytes, names, ids, cfg, samples: int) -> list:
 
 class _Acc:
     """One channel of a part being joined from its segments (bits: whole bytes, the part's samples so far a multiple
-    of 8; events: quanta offset by the samples so far, a multiple of D).
-
-    A segment that follows on carries the level before it as its start (§1.3), but when its first block came raw
-    (fallback) the client gives no start level for it, so _from_blocks starts from the first sample: a level there
-    unlike the part's end is then exactly one change at the segment's first sample (two samples apart: at most one),
-    put into that quantum."""
-    def __init__(self, c, before: int | None = None):
-        """before: the level just before this part when it follows on from the part before (a grid restart)."""
+    of 8; events: quanta offset by the samples so far, a multiple of D). A segment that follows on carries the level
+    before it as its start (§1.3), so its changes join the part's as they are."""
+    def __init__(self, c):
         self.first, self.pieces = c, []
-        self.start = self.level = before if before is not None else getattr(c, "start_level", None)
+        self.start = getattr(c, "start_level", None)
 
     def add(self, c, offset: int) -> None:
         if isinstance(c, fileformat.EventsChannel):
             ks, lv, ct = c.decode()
             q = offset // c.step
-            ks = [q + k for k in ks]
-            if c.start_level != self.level:                       # the change at the segment's first sample
-                if ks and ks[0] == q:
-                    ct[0] = min(ct[0] + 1, 127)
-                else:
-                    ks, lv, ct = [q] + ks, [c.start_level] + lv, [1] + ct
-            self.pieces.append((ks, lv, ct, c.n))
-            self.level = lv[-1] if lv else self.level
+            self.pieces.append(([q + k for k in ks], lv, ct, c.n))
         else:
             self.pieces.append((c.bits, c.n))
 
