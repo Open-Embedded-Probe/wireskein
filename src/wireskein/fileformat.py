@@ -276,9 +276,9 @@ class OnDisk:
             f.seek(start)
             return f.read(max(0, stop - start))
 
-    def copy_to(self, out) -> None:
+    def copy_to(self, out, chunk_bytes: int | None = None) -> None:
         with open(self.path, "rb") as f:
-            while chunk := f.read(self.CHUNK):
+            while chunk := f.read(chunk_bytes or self.CHUNK):
                 out.write(chunk)
 
 
@@ -435,12 +435,58 @@ def write(path: str | Path, tick_hz: int | float | Fraction | tuple[int, int],
                 info.compress_type = _compression(data)
                 info._compresslevel = DATA_LEVEL     # compress_level from 3.13, this name an alias of it there
                 with z.open(info, "w", force_zip64=len(data) >= 1 << 31) as out:
-                    data.copy_to(out)
+                    pool = _parallel(out, len(data)) if info.compress_type == zipfile.ZIP_DEFLATED else None
+                    try:
+                        data.copy_to(out, PARALLEL_CHUNK if pool else OnDisk.CHUNK)
+                    finally:
+                        if pool:
+                            pool.shutdown()
             else:
                 z.writestr(name, data, _compression(data), DATA_LEVEL)
         for name, data in (attachments or {}).items():
             z.writestr(_attach_name(name), _encode(data))
     return path
+
+
+PARALLEL_BYTES = 64 << 20  # a channel's data larger than this is deflated by every core (a 40 MB/s stream's 1.2 GB) ...
+PARALLEL_CHUNK = 16 << 20  # ... read this much at a time ...
+PARALLEL_PIECE = 1 << 20   # ... and cut into pieces of this, each deflated on its own and joined (below)
+
+
+class _PiecesDeflate:
+    """deflate in pieces at once (pigz's way): each piece a raw deflate stream ended by a sync flush (byte-aligned,
+    not final), so the pieces joined are one stream; flush() adds the empty final block. Each piece starts without
+    the one before as its dictionary: a little larger than one stream, the same bytes when inflated. zlib lets go of
+    the GIL while it works, so threads do."""
+
+    def __init__(self, pool, level: int):
+        self.pool, self.level = pool, level
+
+    def _piece(self, data) -> bytes:
+        import zlib
+        c = zlib.compressobj(self.level, zlib.DEFLATED, -15)
+        return c.compress(data) + c.flush(zlib.Z_SYNC_FLUSH)
+
+    def compress(self, data) -> bytes:
+        view = memoryview(data)
+        return b"".join(self.pool.map(self._piece, [view[i:i + PARALLEL_PIECE]
+                                                    for i in range(0, len(view), PARALLEL_PIECE)]))
+
+    def flush(self) -> bytes:
+        return b"\x03\x00"                      # an empty final block (fixed Huffman): the stream's end
+
+
+def _parallel(out, size: int):
+    """For a large entry being written (zipfile's writer `out`, deflate): its compressor swapped for _PiecesDeflate
+    over a thread a core -> the pool to shut down after, or None (small, one core, or a zipfile without the hook)."""
+    import os
+    workers = os.cpu_count() or 1
+    if size < PARALLEL_BYTES or workers < 2 or not hasattr(out, "_compressor"):
+        return None
+    from concurrent.futures import ThreadPoolExecutor
+    pool = ThreadPoolExecutor(workers, thread_name_prefix="wireskein-deflate")
+    out._compressor = _PiecesDeflate(pool, DATA_LEVEL)
+    return pool
 
 
 DATA_LEVEL = 1            # a channel's data deflated fast: 2-3 x level 6's speed, a few hundred KB for 50 MB of a quiet,

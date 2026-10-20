@@ -75,3 +75,22 @@ def test_segments_need_no_tick0_and_a_rewrite_refuses_one_part_of_many(tmp_path)
     assert raw["layout"] == "segments" and "tick0" not in raw["parts"][1]
     with pytest.raises(ValueError, match="2 parts and this is one of them"):
         save(tmp_path / "t.wireskein", load(p, part=0))
+
+
+def test_a_large_channel_is_deflated_in_pieces_at_once(tmp_path, monkeypatch):
+    """Data past PARALLEL_BYTES is deflated in pieces by a thread a core and joined (pigz's way): one deflate stream,
+    the same bytes read back, the zip's CRC checked."""
+    import zipfile
+    import numpy as np
+    monkeypatch.setattr(fileformat, "PARALLEL_BYTES", 1 << 16)
+    monkeypatch.setattr(fileformat, "PARALLEL_CHUNK", 1 << 16)
+    monkeypatch.setattr(fileformat, "PARALLEL_PIECE", 1 << 12)
+    rng = np.random.default_rng(0)
+    bits = np.packbits(np.cumsum(rng.random(8 * 300_001) < 0.01) & 1, bitorder="little").astype(np.uint8).tobytes()
+    raw = tmp_path / "a.bits"
+    raw.write_bytes(bits)
+    out = tmp_path / "a.wireskein"
+    fileformat.write(out, 1000, [fileformat.Channel("A", fileformat.OnDisk(str(raw)), 8 * 300_001)])
+    with zipfile.ZipFile(out) as z:
+        assert z.getinfo("part/0/ch/0.bits").compress_type == zipfile.ZIP_DEFLATED
+        assert z.read("part/0/ch/0.bits") == bits
