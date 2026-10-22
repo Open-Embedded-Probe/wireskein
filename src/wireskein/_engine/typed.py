@@ -308,6 +308,19 @@ def i2c_from_words(fr: Frames, w: Words) -> list[dict]:
     return out
 
 
+def _unfold(runs: np.ndarray, unit: float) -> float:
+    """The bit time, not a fraction of it: short runs that are no bits (a floating line's noise, glitches) make
+    half the bit time fit as well, and every real run is then an even multiple of it. While the runs of at least
+    a bit at that unit are nearly all even multiples, the unit doubles."""
+    while True:
+        r = runs[runs >= 0.75 * unit] / unit
+        k = np.round(r)
+        real = r[(np.abs(r - k) < 0.25) & (k >= 1)]
+        if len(real) < 12 or np.mean(np.round(real) % 2 == 0) < 0.9:
+            return unit
+        unit *= 2
+
+
 def async_segments(cap, sv: Survey, pin: str, half: int = 10, change: float = 1.5) -> list[tuple[int, int, float]]:
     """Split an async line where its bit time changes (e.g. a bootloader that
     switches baud rate mid-stream). The local bit time is the shortest run among
@@ -370,7 +383,7 @@ def async_segments(cap, sv: Survey, pin: str, half: int = 10, change: float = 1.
         shortest = float(np.quantile(rr, 0.02)) if len(rr) else cands[0].samples
         best = max(c.fit for c in cands)
         ok = [c for c in cands if c.fit >= best - 0.05 and 0.7 * shortest <= c.samples <= 1.15 * shortest]
-        return max(ok, key=lambda c: c.samples).samples if ok else cands[0].samples
+        return _unfold(runs, max(ok, key=lambda c: c.samples).samples if ok else cands[0].samples)
 
     bounds = [0, *cuts, cap.n_samples]
     # refine every cut: among idle runs around it, pick the one that best splits

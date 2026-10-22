@@ -70,3 +70,18 @@ def test_uart_measure_only_out_of_range_brr():
 
 def test_manifest_matches_files():
     assert sorted(p.name.removesuffix(".bin.gz") for p in DATA.glob("*.bin.gz")) == sorted(MANIFEST)
+
+
+def test_uart_with_a_floating_line_between_bursts_keeps_its_bit_time():
+    """A real UART (CH32M030, 115200 8N1, taken by the P4X at 2 MHz) whose line floats between bursts: the noise's
+    short runs make half the bit time fit as well; the bit time is the one every real run is a multiple of (17.4
+    samples), not its half, and the text decodes without a hint."""
+    from wireskein import annotate
+    from wireskein._engine import survey, typed
+    d = json.loads((DATA / "p4x-m030-uart-115200-floating-gaps.json").read_text())
+    cap = Capture(float(d["rate"]), d["n"], [Channel("TX", d["initial"], np.array(d["edges"], np.int64))])
+    (_, _, unit), = typed.async_segments(cap, survey.survey(cap), "TX")
+    assert abs(unit - 2e6 / 115200) < 0.5
+    rows = annotate.build(cap)["rows"]
+    text = "".join(i["text"] if len(i["text"]) == 1 else "|" for r in rows for i in r["items"])
+    assert text.count("M030␣route␣2␣tx␣PB6␣n␣30") >= 6
