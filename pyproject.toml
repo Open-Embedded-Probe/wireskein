@@ -24,7 +24,7 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-oep = ["oep-client-python[usb-async]>=0.0.36"]   # usb-async: queued IN transfers, so a stream rides out the host's jitter
+oep = ["oep-client-python[usb-async]>=0.0.39"]   # usb-async: queued IN transfers, so a stream rides out the host's jitter
 
 [project.scripts]
 wireskein = "wireskein.cli:main"
@@ -34,7 +34,7 @@ Homepage = "https://github.com/Open-Embedded-Probe/wireskein"
 Repository = "https://github.com/Open-Embedded-Probe/wireskein"
 
 [dependency-groups]
-dev = ["pytest>=8", "oep-client-python[usb-async]>=0.0.36"]
+dev = ["pytest>=8", "oep-client-python[usb-async]>=0.0.39"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/wireskein"]

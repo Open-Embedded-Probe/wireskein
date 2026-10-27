@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Needs oep-client-python 0.0.39 (PyPI): it brings `CaptureGroup.stream`, so logic and analog streamed together work from a released client; the USB IN transfers in a process of their own by default, 32 KiB x 480.
+- (JA) oep-client-python 0.0.39（PyPI）が要る: `CaptureGroup.stream` が入ったので、ロジックとアナログを一緒のストリームがリリースの版で動く。USB の受け取りは、既定で別のプロセス、32 KiB × 480 本。
 - (EN) An async line's bit time is no longer its half when the line floats between bursts: the noise's short runs made half the bit time fit as well (every real run is then an even multiple of it), so a UART read as twice its baud and decoded nothing without a hint. While the runs of at least a bit at the estimated unit are nearly all even multiples, the unit doubles. Found on a real CH32M030 at 115200 on the P4X (the test keeps its 1510 edges); the evaluation corpus (mixed 200, uartlike with glitch / baudhop) gives the same results as before.
 - (JA) 取得の合間に線が浮く非同期の線で、1 ビットの長さを、その半分と見誤らなくなった: 雑音の短い変化のせいで、半分の長さもよく合ってしまい（本物の変化はどれもその偶数倍になる）、UART を倍のボーレートと読んで、指示なしでは何も復号できなかった。見積もった長さで 1 ビット以上の変化が、ほとんどすべて偶数倍なら、長さを 2 倍にする。P4X で取った本物の CH32M030 の 115200 で見つけた（試験に、その 1510 個のエッジを残した）。評価コーパス（mixed 200、uartlike の glitch / baudhop）の結果は前と同じ。
 - (EN) `wireskein gui` ships wireskein-web 0.0.7 (`tools/web.json`): a capture's parts (a timeline on one time axis with its losses shaded, segments as tabs), a failed capture said first, events channels drawn per quantum, markers and annotations per part.
