@@ -79,6 +79,8 @@ def test_an_analog_crossing_starts_the_logic_too(tmp_path):
                                                             analog_rate=20_000), tmp_path / "look.wireskein")
     (a,) = fileformat.read(look)[1]
     v = a.values()
+    if max(v) - min(v) < 2:        # a pin that barely moves (GPIO17 on the P4): nothing would cross its middle
+        pytest.skip(f"the floating analog {ANALOG} hardly moves ({min(v)}..{max(v)})")
     volts = ((min(v) + max(v)) // 2 + 1 - a.zero) * a.scale_nv * 1e-9
     req = sources.Request(LOGIC, 10_000_000, 200_000, trigger=("AN", "rise", volts), pretrigger=20_000, timeout=15,
                           analog=[("AN", ANALOG, None)], analog_rate=20_000)
