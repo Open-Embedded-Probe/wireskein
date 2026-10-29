@@ -1,0 +1,22 @@
+{
+ "name": "onewire-reset-cc44",
+ "case": 18,
+ "arg": 0,
+ "rate_hz": 4000000.0,
+ "samples": 20000,
+ "pads": {
+  "dq": 32,
+  "p33": 33,
+  "p46": 46,
+  "p47": 47
+ },
+ "trigger": {
+  "channel": "dq",
+  "edge": "falling"
+ },
+ "log": [
+  "## case 18 arg 0",
+  "1-wire pad32: reset 480 us low, 480 us high (no presence), then cc 44 LSB first; 1 = 6/64 us, 0 = 60/10 us",
+  "##"
+ ]
+}

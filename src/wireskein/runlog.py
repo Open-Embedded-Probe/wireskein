@@ -299,10 +299,11 @@ def phase(a: str, b: str, phase_deg: float | None = None, tol_deg: float = 2.0, 
                "tol_freq": tol_freq, "edge": edge}, threshold)
 
 
-def skew(a: str, b: str, tol_s: float, delay_s: float = 0.0, threshold=None) -> dict:
+def skew(a: str, b: str, tol_s: float, delay_s: float = 0.0, edge: str = "both", threshold=None) -> dict:
     """Two lines that change together (patterns, parallel outputs): every edge of b within tol_s of delay_s after
-    a's edge of the same direction (negative: before), and no edge of either without a partner."""
-    return _t({"kind": "skew", "a": a, "b": b, "tol_s": tol_s, "delay_s": delay_s}, threshold)
+    a's edge of the same direction (negative: before), and no edge of either without a partner. edge "rise" /
+    "fall": only those (two outputs of one timer at different duties rise together)."""
+    return _t({"kind": "skew", "a": a, "b": b, "tol_s": tol_s, "delay_s": delay_s, "edge": edge}, threshold)
 
 
 def dead_time(hi: str, lo: str, min_s: float | None = None, max_s: float | None = None, active: int = 1,
@@ -343,6 +344,83 @@ def pulses(pin: str, count: int | None = None, period_s: float | None = None, to
     """Rising edges counted, optional period (TOGGLE / MILLIS style tests); tol_period is relative."""
     return _t({"kind": "pulses", "pin": pin, "count": count, "period_s": period_s, "tol_period": tol_period},
               threshold)
+
+
+def rgb_led(pin: str, data=None, t0h=(0.25e-6, 0.55e-6), t1h=(0.65e-6, 0.95e-6), period=(0.65e-6, 1.85e-6),
+            reset_min_s: float | None = 50e-6, threshold=None) -> dict:
+    """A WS2812-like line: data, the bytes of each frame between resets as hex in the order sent (one string for
+    one frame); every T0H, T1H and bit period within its (min_s, max_s) (the defaults: WS2812B's 0.4 / 0.8 /
+    1.25 us +- 150 / 150 / 600 ns; None: not checked), and every low between frames, and the one after the last,
+    at least reset_min_s."""
+    return _t({"kind": "rgb_led", "pin": pin, "data": data, "t0h": t0h and list(t0h), "t1h": t1h and list(t1h),
+               "period": period and list(period), "reset_min_s": reset_min_s}, threshold)
+
+
+def onewire(pin: str, data=None, presence: bool | None = True, speed: str = "standard", threshold=None) -> dict:
+    """A 1-Wire line: data, the bytes after each reset as hex (one string per reset; read slots read as the bits
+    they carried); presence: each reset answered by a presence pulse (False: none; None: not checked); every reset,
+    presence, slot and low within the limits of speed ("standard" / "overdrive")."""
+    return _t({"kind": "onewire", "pin": pin, "data": data, "presence": presence, "speed": speed}, threshold)
+
+
+def ir(pin: str, frames: list[dict] | None = None, carrier_hz: float | None = None, tol_carrier: float = 0.05,
+       tol_time: float | None = 0.1, protocol: str = "nec", threshold=None) -> dict:
+    """An IR remote line, as the LED is driven (a carrier) or as a receiver gives it (idle high): frames
+    [{"addr", "cmd"} or {"repeat": True}] in order (addr above 0xFF: NEC's extended address); every frame's
+    command with its inverse; the carrier within tol_carrier (relative) of carrier_hz; every mark and space within
+    tol_time (relative) of NEC's lengths (None: not checked)."""
+    return _t({"kind": "ir", "pin": pin, "frames": frames, "carrier_hz": carrier_hz, "tol_carrier": tol_carrier,
+               "tol_time": tol_time, "protocol": protocol}, threshold)
+
+
+def lin(pin: str, baud: float, frames: list[dict] | None = None, tol_baud: float | None = 0.02,
+        min_break_bits: float = 13, checksum: str = "auto", threshold=None) -> dict:
+    """LIN frames [{"id": 0x10, "data": "01020304"}] in order; every frame's sync 0x55, identifier parity, framing
+    and checksum ("enhanced", "classic", or "auto": classic for the diagnostic ids 0x3C / 0x3D, else enhanced);
+    every break at least min_break_bits and its delimiter at least one bit at baud; each frame's baud from its
+    sync field within tol_baud (relative; None: not checked)."""
+    return _t({"kind": "lin", "pin": pin, "baud": baud, "frames": frames, "tol_baud": tol_baud,
+               "min_break_bits": min_break_bits, "checksum": checksum}, threshold)
+
+
+def i2s(bclk: str, ws: str, sd: str, format: str = "i2s", bits: int | None = None, fs_hz: float | None = None,
+        tol_fs: float = 0.01, samples: list | None = None, slot_bits: int | None = None, left_ws: int | None = None,
+        threshold=None) -> dict:
+    """I2S-like audio read on BCLK's rising edges: format "i2s" (Philips), "left" or "right" (-justified); bits,
+    the word (default: the slot; needed for "right"); the sample rate (WS) within tol_fs (relative) of fs_hz;
+    slot_bits, BCLKs a channel; samples [(left, right), ...] found in a row among the frames read. left_ws: the
+    WS level of the left channel when not the format's (i2s 0, else 1). Nothing expected: measured."""
+    return _t({"kind": "i2s", "bclk": bclk, "ws": ws, "sd": sd, "format": format, "bits": bits, "fs_hz": fs_hz,
+               "tol_fs": tol_fs, "samples": samples and [list(v) for v in samples], "slot_bits": slot_bits,
+               "left_ws": left_ws}, threshold)
+
+
+def quadrature(a: str, b: str, steps: int | None = None, cycles: float | None = None, direction: str | None = None,
+               max_errors: int | None = 0, threshold=None) -> dict:
+    """A quadrature encoder's lines: the net count in steps (every edge; positive with a leading b) or in cycles
+    (steps / 4); direction "forward" / "backward": no step the other way; max_errors: changes of both lines on one
+    tick (a skipped state) allowed (None: not checked)."""
+    return _t({"kind": "quadrature", "a": a, "b": b, "steps": steps, "cycles": cycles, "direction": direction,
+               "max_errors": max_errors}, threshold)
+
+
+def sd_spi(clk: str, mosi: str, miso: str, cs: str | None = None, commands: list[dict] | None = None,
+           mode: int | None = 0, cs_active: int = 0, max_ncr: int = 8, threshold=None) -> dict:
+    """SD in SPI mode: commands [{"cmd": 17, "arg": 0, "r1": 0, "data": ["..."]}, {"acmd": 41, ...}] in order,
+    each compared on the keys given ("cmd" / "acmd", "arg", "r1", "resp": the R7 / R3 / R2 bytes as hex,
+    "data": the blocks as hex); every command answered within max_ncr bytes, with its end bit, CMD0 and CMD8 with
+    a right CRC7, the card's blocks with a right CRC16. mode None: read from the lines."""
+    return _t({"kind": "sd_spi", "clk": clk, "mosi": mosi, "miso": miso, "cs": cs,
+               "commands": None if commands is None else [_sd_command(c) for c in commands], "mode": mode,
+               "cs_active": cs_active, "max_ncr": max_ncr}, threshold)
+
+
+def _sd_command(c: dict) -> dict:
+    """{"acmd": 41, ...} as {"cmd": 41, "acmd": True, ...}."""
+    c = dict(c)
+    if isinstance(c.get("acmd"), int) and not isinstance(c["acmd"], bool):
+        c["cmd"], c["acmd"] = c["acmd"], True
+    return c
 
 
 def voltage(pin: str, volts: float | None = None, tol_v: float = 0.05, min_v: float | None = None,

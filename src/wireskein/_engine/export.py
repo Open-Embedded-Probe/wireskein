@@ -82,6 +82,13 @@ def layers_of(n) -> dict:
                 rec[pin] = _hex(frames[i]) if i < len(frames) else ""
             tr.append(rec)
         out["transfers"] = tr
+        sd = [ch for ch in n.children if ch.analyzer == "sd_spi"]
+        if sd:
+            out["sd"] = [{"s": c["t"], "cmd": ("ACMD" if c["acmd"] else "CMD") + str(c["cmd"]), "arg": c["arg"],
+                          "r1": c.get("r1"), **{k: c[k] for k in ("resp", "ncr", "crc_ok") if k in c},
+                          **({"blocks": [{"s": b["t"], "token": b["token"], "len": b.get("len"),
+                                          "crc_ok": b.get("crc_ok")} for b in c["blocks"]]} if "blocks" in c else {})}
+                         for c in sd[0].output.items]
     elif a == "sync_unknown":
         out["summary"] = {"frame_bits": n.metrics.get("frame_bits"), "delimiter": n.metrics.get("delimiter")}
     elif a in ("rvswd", "swio"):
@@ -119,11 +126,20 @@ def layers_of(n) -> dict:
             out["frames"] = n.output.items
         else:
             out["packets"] = n.output.items
+    elif a == "rgb_led":
+        out["frames"] = [{"s": f["t"], "bits": f["bits"], "data": f["data"]} for f in n.output.items["frames"]]
+    elif a == "onewire":
+        out["resets"] = [{"s": z["t"], "reset_ticks": z["reset"], "presence": z["presence"], "data": z["data"]}
+                         for z in n.output.items]
+    elif a == "ir_nec":
+        out["frames"] = [{"s": f["t"], **{k: f[k] for k in ("repeat", "addr", "ext", "cmd", "cmd_ok") if k in f}}
+                         for f in n.output.items]
     return out
 
 
-FINAL = {"i2c": "transactions", "spi": "transfers", "uart": ("lines", "nmea", "modbus_rtu", "bytes"),
-         "lin": "frames", "dmx512": "packets", "rvswd": ("dm", "dmi"), "swio": ("dm", "dmi"), "sync_unknown": "summary"}
+FINAL = {"i2c": "transactions", "spi": ("sd", "transfers"), "uart": ("lines", "nmea", "modbus_rtu", "bytes"),
+         "lin": "frames", "dmx512": "packets", "rvswd": ("dm", "dmi"), "swio": ("dm", "dmi"), "sync_unknown": "summary",
+         "rgb_led": "frames", "onewire": "resets", "ir_nec": "frames"}
 
 
 def final_of(n, lay: dict) -> dict:
@@ -164,7 +180,8 @@ def _window(lay: dict, s0: int, s1: int) -> dict:
 
 DEPTHS = ("transport", "frames", "protocol", "device")
 LOWER = {"i2c": "transactions", "spi": "transfers", "uart": "bytes", "lin": "frames", "dmx512": "packets",
-         "rvswd": "dmi", "swio": "dmi", "sync_unknown": "summary"}
+         "rvswd": "dmi", "swio": "dmi", "sync_unknown": "summary", "rgb_led": "frames", "onewire": "resets",
+         "ir_nec": "frames"}
 
 
 def devices_of(n, with_candidates: bool) -> list[dict]:

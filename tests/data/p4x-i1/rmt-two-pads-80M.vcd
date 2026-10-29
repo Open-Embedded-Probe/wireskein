@@ -1,0 +1,55 @@
+$comment OEP probe e8f60ae84e28 (P4X), PlayLab case 13 arg 80000000, rate 40000000 $end
+$timescale 1 ns $end
+$scope module probe $end
+$var wire 1 ! rmt_a $end
+$var wire 1 " rmt_b $end
+$upscope $end
+$enddefinitions $end
+#0
+0!
+0"
+#50000
+1!
+1"
+#459625
+0!
+0"
+#869225
+1!
+1"
+#869250
+0!
+0"
+#869275
+1!
+1"
+#869300
+0!
+0"
+#869325
+1!
+1"
+#869375
+0!
+0"
+#869425
+1!
+1"
+#869475
+0!
+0"
+#869525
+1!
+1"
+#869625
+0!
+0"
+#869725
+1!
+1"
+#879725
+0!
+0"
+#964325
+1!
+#1000000

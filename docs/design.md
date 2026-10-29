@@ -30,13 +30,15 @@ Edges
        ├ Synchronous: SyncBits → Frames (CS / START・STOP / gaps) → Words → I²C, SPI, RVSWD, SWD, unknown synchronous serial
        ├ Asynchronous: RateBlocks (blocks per bit time) → Chars (with breaks) → UART, LIN, DMX512
        │    └ Timestamped bytes → lines, NMEA, Modbus RTU, markers / TX・RX pairs → SCPI
-       └ Pulse: PulseSymbols → SWIO
+       ├ Pulse: PulseSymbols → SWIO
+       └ The lone line itself (pulse widths): RGB LED (WS2812 and its kind), 1-Wire, IR (NEC)
                     RVSWD・SWIO → DMI → RISC-V Debug Module
 ```
 
 Decisions and reasons:
 
 - **Frequency, bit count and pin correlation are estimated in the common survey, not in the protocol analyzers.** Each analyzer does not repeat the same estimation; analyzers do not touch edges and receive typed streams (SyncBits, Chars, etc.). Adding a protocol only requires writing how to delimit and how to interpret.
+- **Protocols of one line told by pulse widths read the line itself** (`_engine/pulsecode.py`, `analyzers/pulse.py`): how widths are split (a bit's 0 and 1, resets, a carrier's bursts) differs per protocol, so it is no shared stage. Lines the survey calls clocks (an LED chain, a carrier) are read too.
 - **A stage is split out when it reduces later processing or has two or more users.** A stage that does neither is merged. For example, RateBlocks → Chars is kept separate because UART, LIN and DMX512 share it.
 - **What a stage cannot decide is passed down as sibling candidates.** The sampling edge, the glitch-filter width, the frame-delimiting threshold and similar choices are not fixed to one option; views for both are built, and the score from the plugin checks selects one. Fixing one choice in an early stage lost the correct answer in some cases.
 - **Clocked protocols are not split on rate changes. UART is.** Protocols that sample bits on clock edges do not depend on frequency, so a rate change is only kept as an annotation. UART has no clock, so it is split into blocks per bit time before reading (for example, writes that raise the rate midway).

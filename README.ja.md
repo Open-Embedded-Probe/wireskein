@@ -7,7 +7,7 @@
 WireSkein は、ロジックアナライザのキャプチャを**テストと分析に使うため**のツールです（MIT ライセンス）。波形を人が眺めて終わりにせず、「期待どおりか」をコードで照合し、「何が流れたか」を後工程のスクリプトや AI が読める形で取り出します。
 
 - **実機のテストの記録を照合する。** テストは、送ったコマンド、キャプチャ、各ステップの線の上であるべき姿（1 kHz の方形波、0x42 への I2C の書き込み、F_CPU / BRR の UART、3.3 V ± 0.1 V の電源など）を記録します。`wireskein verify` は、その期待とキャプチャを照らし合わせます。結果は、測定値付きの OK / NG として、テキスト、JSON、JUnit XML で出します。pytest からは [pytest-embedded-wireskein](https://github.com/Open-Embedded-Probe/pytest-embedded-wireskein) で使えます。
-- **中身の分からないキャプチャを復号する。** `wireskein analyze` は、どのピンが I2C、SPI、UART、RVSWD / SWIO、SWD、CAN かを見つけて復号します。その上の層（NMEA、Modbus、既知の I2C / SPI デバイス）も試します。
+- **中身の分からないキャプチャを復号する。** `wireskein analyze` は、どのピンが I2C、SPI、UART、RVSWD / SWIO、SWD、CAN、RGB LED（WS2812）、1-Wire、IR（NEC）かを見つけて復号します。その上の層（NMEA、Modbus、既知の I2C / SPI デバイス、SPI のモードの SD カード）も試します。
 - **取って、保存して、見る。** `wireskein capture` でプローブから取り、`.wireskein` に保存し、`wireskein gui` でブラウザに表示します。
 
 状態: **β 版**です。版 1 までは、互換のない変更が入ります（[安定性](#安定性)を参照）。

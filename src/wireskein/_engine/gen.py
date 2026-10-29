@@ -310,3 +310,108 @@ def can(w: Wave, t: float, frames: list[dict], bitrate: float, ifs_bits: float =
             t += bt
         t += ifs_bits * bt
     return t
+
+
+def rgb_led(w: Wave, t: float, data: bytes, t0h: float = 0.4e-6, t1h: float = 0.8e-6, period: float = 1.25e-6,
+            reset: float = 80e-6) -> float:
+    """WS2812-like: each bit a high of t0h / t1h in a period, MSB first, then a low of `reset`."""
+    for b in data:
+        for k in range(7, -1, -1):
+            w.set(t, 1)
+            w.set(t + (t1h if (b >> k) & 1 else t0h), 0)
+            t += period
+    return t + reset
+
+
+def onewire(w: Wave, t: float, data: bytes, presence: bool = True, reset: float = 500e-6, low_0: float = 65e-6,
+            low_1: float = 6e-6, slot: float = 70e-6) -> float:
+    """A reset (and the slave's presence pulse), then `data` written LSB first. The line idles high."""
+    w.set(t, 0)
+    w.set(t + reset, 1)
+    if presence:
+        w.set(t + reset + 30e-6, 0)
+        w.set(t + reset + 150e-6, 1)
+    t += 2 * reset
+    for b in data:
+        for k in range(8):
+            w.set(t, 0)
+            w.set(t + (low_1 if (b >> k) & 1 else low_0), 1)
+            t += slot
+    return t + 100e-6
+
+
+def nec(w: Wave, t: float, frames: list, carrier_hz: float | None = 38e3, duty: float = 1 / 3) -> float:
+    """NEC frames ({"addr", "cmd"} or {"repeat": True}) on an IR line: with a carrier, the LED's drive (idle low,
+    marks of carrier pulses); without, a receiver's output (idle high, marks low)."""
+    idle = w.initial
+
+    def mark(t, d):
+        if carrier_hz is None:
+            w.set(t, 1 - idle)
+            w.set(t + d, idle)
+            return
+        p = 1 / carrier_hz
+        k = 0
+        while (k + duty) * p <= d:
+            w.set(t + k * p, 1 - idle)
+            w.set(t + (k + duty) * p, idle)
+            k += 1
+
+    for f in frames:
+        mark(t, 9e-3)
+        if f.get("repeat"):
+            t += 9e-3 + 2.25e-3
+            mark(t, 562.5e-6)
+            t += 562.5e-6 + 40e-3
+            continue
+        t += 9e-3 + 4.5e-3
+        a = f["addr"]
+        data = [a & 0xFF, (a >> 8) if a > 0xFF else a ^ 0xFF, f["cmd"], f["cmd"] ^ 0xFF]
+        for byte in data:
+            for k in range(8):
+                mark(t, 562.5e-6)
+                t += 562.5e-6 + (1687.5e-6 if (byte >> k) & 1 else 562.5e-6)
+        mark(t, 562.5e-6)
+        t += 562.5e-6 + 40e-3
+    return t
+
+
+def i2s(bclk: Wave, ws: Wave, sd: Wave, t: float, frames: list[tuple[int, int]], fs: float, slot: int = 32,
+        bits: int = 16, fmt: str = "i2s") -> float:
+    """I2S-like audio: frames of (left, right), `slot` BCLKs a channel. SD and WS change on BCLK's falling edge;
+    "i2s" puts WS one BCLK before the word's MSB and left at WS low, "left" / "right" align the word to the start /
+    end of the slot with left at WS high."""
+    h = 0.5 / (fs * 2 * slot)
+    left = 0 if fmt == "i2s" else 1
+    total = len(frames) * 2 * slot
+    lvl, dat = [], []
+    for f in frames:
+        for c in (0, 1):
+            v = f[c] & ((1 << bits) - 1)
+            word = [(v >> (bits - 1 - j)) & 1 for j in range(bits)]
+            pad = [0] * (slot - bits)
+            dat += (pad + word) if fmt == "right" else (word + pad)
+            lvl += [left if c == 0 else 1 - left] * slot
+    if fmt == "i2s":
+        lvl = lvl[1:] + [lvl[-1]]
+    for g in range(total):
+        bclk.set(t, 0)
+        ws.set(t, lvl[g])
+        sd.set(t, dat[g])
+        bclk.set(t + h, 1)
+        t += 2 * h
+    bclk.set(t, 0)
+    return t
+
+
+def quadrature(a: Wave, b: Wave, t: float, steps: list[int], step_s: float) -> float:
+    """Each entry of steps moves the encoder that many states (positive: A leading B), one state per step_s."""
+    seq = [(0, 0), (1, 0), (1, 1), (0, 1)]
+    k = seq.index((a.level, b.level))
+    for n in steps:
+        for _ in range(abs(n)):
+            k = (k + (1 if n > 0 else -1)) % 4
+            a.set(t, seq[k][0])
+            b.set(t, seq[k][1])
+            t += step_s
+    return t

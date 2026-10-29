@@ -1,0 +1,22 @@
+{
+ "name": "mcpwm-100k-phase-deadtime",
+ "case": 15,
+ "arg": 100000,
+ "rate_hz": 20000000.0,
+ "samples": 100000,
+ "pads": {
+  "pwm_a": 32,
+  "pwm_b_90deg": 33,
+  "comp_hi": 46,
+  "comp_lo": 47
+ },
+ "trigger": {
+  "channel": "pwm_a",
+  "edge": "rising"
+ },
+ "log": [
+  "## case 15 arg 100000",
+  "mcpwm: 100000 Hz (period 800 ticks of 12.5 ns); pad32 50% from 0; pad33 50% at 90 deg (high 25%..75%); pad46 30% rising +200 ns; pad47 = not pad46, falling +500",
+  "##"
+ ]
+}

@@ -7,6 +7,7 @@ Plugins declare the stream type they consume and never touch edges:
     frames.select     -> spi, sync_unknown
     frames.gap        -> spi, sync_unknown
     chars             -> uart, lin, dmx512
+    line              -> rgb_led, onewire, ir_nec (one line by pulse widths)
     bytes             -> lines, nmea, modbus_rtu, markers (upper layers, reused)
 
 Undecidable choices inside a stage (sampling edge when data changes midway,
@@ -27,6 +28,7 @@ import numpy as np
 from . import kernels as K
 from . import plugins_uartlike as UL
 from . import typed
+from .analyzers.pulse import NecPlugin, OneWirePlugin, RgbLedPlugin
 from .analyzers.upper import Lines, MarkerGrammar, ModbusRtu, Nmea
 from .model import Capture
 from .scoring import DefaultScorer
@@ -233,7 +235,8 @@ class DmxPlugin:
 
 # the plugins written in Python (state across frames, search, upper layers), then the frame-local protocols
 # declared in decl/*.toml (docs/design.ja.md §3.2)
-PLUGINS = ([SyncUnknownPlugin(), UartPlugin(), LinPlugin(), DmxPlugin(), SwioPlugin()]
+PLUGINS = ([SyncUnknownPlugin(), UartPlugin(), LinPlugin(), DmxPlugin(), SwioPlugin(), RgbLedPlugin(),
+            OneWirePlugin(), NecPlugin()]
            + load_all(["i2c", "spi", "rvswd"]) + load_all(["swd", "can"]))
 UPPER = [Lines(), Nmea(), ModbusRtu(), MarkerGrammar()]
 
@@ -336,6 +339,39 @@ def i2c_device_node(parent: Node) -> Node | None:
                 parent, layer_score=score, total=score)
 
 
+def sd_spi_node(parent: Node) -> Node | None:
+    """Upper layer over SPI transfers: SD commands in SPI mode (periph.sd_spi), with the data pins tried both ways
+    round as MOSI and MISO. The evidence is commands with their end bit answered by an R1 within NCR, the lines
+    idle (0xFF) around them as SD's are."""
+    from . import periph
+    lay = getattr(parent, "layers", None) or {}
+    fr, sb = lay.get("frames"), lay.get("bits")
+    lines = parent.output.items.get("lines", {}) if isinstance(parent.output.items, dict) else {}
+    if fr is None or sb is None or len(lines) != 2:
+        return None
+    best = None
+    pins = list(lines)
+    for mo_pin, mi_pin in ((pins[0], pins[1]), (pins[1], pins[0])):
+        rows = []
+        for i, ((a, _), mo, mi) in enumerate(zip(fr.bounds.tolist(), lines[mo_pin], lines[mi_pin])):
+            rows += [(int(sb.t[a + 8 * k]), int(x) & 0xFF, int(y) & 0xFF, i) for k, (x, y) in enumerate(zip(mo, mi))]
+        cmds = periph.sd_spi(rows)["commands"]
+        good = [c for c in cmds if c.get("r1") is not None and c["end_bit"] and c["idle_ok"]]
+        if len(good) < 2:
+            continue
+        crc = [c["crc_ok"] for c in good if c["cmd"] in (0, 8) and not c["acmd"]]
+        score = len(good) / len(cmds) * (1 - 0.5 ** (len(good) / 2)) * (1.0 if all(crc) else 0.5)
+        if best is None or score > best[0]:
+            best = (score, mo_pin, mi_pin, cmds)
+    if best is None:
+        return None
+    score, mo_pin, mi_pin, cmds = best
+    m = {"commands": len(cmds), "answered": sum(c.get("r1") is not None for c in cmds), "mosi": mo_pin,
+         "miso": mi_pin}
+    return Node("sd_spi", {}, {**parent.roles, "mosi": mo_pin, "miso": mi_pin}, Stream("sd.commands", cmds), m,
+                parent, layer_score=score, total=score)
+
+
 def value(n: Node) -> float:
     return len(n.roles) * (n.total - CLAIM_COST)
 
@@ -363,7 +399,7 @@ class StagedResult:
 
 SYNC_PROTOCOLS = {"i2c", "spi", "rvswd", "swd", "sync_unknown"}
 ASYNC_PROTOCOLS = {"uart", "lin", "dmx512", "can"}
-PULSE_PROTOCOLS = {"swio"}
+PULSE_PROTOCOLS = {"swio", "rgb_led", "onewire", "ir_nec"}
 SYNC_ROLES = {"i2c": {"scl": "clock", "sda": "data"}, "spi": {"clk": "clock", "mosi": "data", "miso": "data", "cs": "select"},
               "rvswd": {"clk": "clock", "dio": "data"}}
 
@@ -486,6 +522,11 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
         if g.kind != "single" or g.pin in sync_pins:
             continue
         pc = tx.pins[g.pin]
+        # the pulse-width protocols read any lone line (an LED chain or a carrier looks like a clock to the survey)
+        if run_pulse and pin_hint.get(g.pin, {}).get("protocol") not in ASYNC_PROTOCOLS:
+            for p in by_type.get("line", []):
+                runs += 1
+                roots += p.run(c, cap.channel(g.pin), g)
         if not ({"data", "sparse"} & set(pc.candidates)) and g.pin not in async_pins:
             continue
         hinted = pin_hint.get(g.pin, {})
@@ -548,6 +589,11 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
     for n in roots:
         if n.analyzer == "i2c" and n.output is not None:
             d = i2c_device_node(n)
+            if d is not None:
+                n.children.append(d)
+                n.total = n.layer_score + 0.5 * (1 - n.layer_score) * d.total * n.layer_score
+        if n.analyzer == "spi" and n.output is not None:
+            d = sd_spi_node(n)
             if d is not None:
                 n.children.append(d)
                 n.total = n.layer_score + 0.5 * (1 - n.layer_score) * d.total * n.layer_score

@@ -1,0 +1,22 @@
+{
+ "name": "ws2812-3px",
+ "case": 16,
+ "arg": 0,
+ "rate_hz": 20000000.0,
+ "samples": 100000,
+ "pads": {
+  "din": 32,
+  "p33": 33,
+  "p46": 46,
+  "p47": 47
+ },
+ "trigger": {
+  "channel": "din",
+  "edge": "rising"
+ },
+ "log": [
+  "## case 16 arg 0",
+  "ws2812 pad32: 9 bytes 12 34 56 a5 5a ff 00 80 01 (3 pixels, as sent, MSB first); 0 = 400/900 ns, 1 = 800/500 ns, then 60 us low; sent twice, 1 ms apart",
+  "##"
+ ]
+}

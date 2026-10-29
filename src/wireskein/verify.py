@@ -21,7 +21,7 @@ from pathlib import Path
 
 import numpy as np
 
-from ._engine import analog, events, markers, timing
+from ._engine import analog, events, markers, periph, pulsecode, timing
 from . import runlog
 from ._engine.model import AnalogTrace, Capture, Channel, EventTrace
 from .runlog import FORMAT
@@ -269,9 +269,9 @@ def _decode(cap, hints):
     return staged.analyze(cap, hints)
 
 
-def _best(res, analyzer, need: dict):
+def _best(res, analyzer, need: dict, also=None):
     cands = [n for n in res.roots if n.analyzer == analyzer and n.output is not None
-             and all(n.roles.get(k) == v for k, v in need.items())]
+             and all(n.roles.get(k) == v for k, v in need.items()) and (also is None or also(n))]
     return max(cands, key=lambda n: n.total, default=None)
 
 
@@ -357,7 +357,17 @@ def check_spi(cap, x):
         return None, {}, "pins not captured"
     res = _decode(cap, {"protocols": ["spi"], "pins": {p: {"protocol": "spi", "role": r} for r, p in pins.items()}})
     need = {"clk": x["clk"], **({"cs": x["cs"]} if x.get("cs") else {})}
+    # the mode read from the lines themselves (timing.spi_mode): SCK's level as CS becomes active, the edge MOSI
+    # (else MISO) changes after. It picks the sampling edge of the decode; the decoder's own choice is kept as
+    # decoded_mode
+    m = timing.spi_mode(cap.channel(x["clk"]), [cap.channel(x[r]) for r in ("mosi", "miso") if x.get(r)],
+                        cap.n_samples, cap.channel(x["cs"]) if x.get("cs") else None, x.get("cs_active", 0))
+    line = next((m["lines"][x[r]] for r in ("mosi", "miso") if x.get(r) and m.get("lines", {}).get(x[r], {}).get(
+        "cpha") is not None), None)
     n = _best(res, "spi", need)
+    if line is not None:
+        edge = "rise" if m["cpol"] == line["cpha"] else "fall"
+        n = _best(res, "spi", need, lambda c: c.params.get("sample_edge") == edge) or n
     if n is None:
         return False, {}, "nothing decoded as SPI on these pins"
     lines = n.output.items["lines"]
@@ -365,12 +375,6 @@ def check_spi(cap, x):
     hexes = {pin: bytes(rev(int(v) & 0xFF) for fr in frs for v in fr).hex() for pin, frs in lines.items()}
     got = {"mode": n.metrics.get("mode"), "bytes": hexes, "sck_hz": _burst_hz(cap.channel(x["clk"]), cap.rate)}
     ok, why = True, []
-    # the mode read from the lines themselves (timing.spi_mode): SCK's level as CS becomes active, the edge MOSI
-    # (else MISO) changes after; the decoder's choice is kept as decoded_mode
-    m = timing.spi_mode(cap.channel(x["clk"]), [cap.channel(x[r]) for r in ("mosi", "miso") if x.get(r)],
-                        cap.n_samples, cap.channel(x["cs"]) if x.get("cs") else None, x.get("cs_active", 0))
-    line = next((m["lines"][x[r]] for r in ("mosi", "miso") if x.get(r) and m.get("lines", {}).get(x[r], {}).get(
-        "cpha") is not None), None)
     if line is not None:
         got.update(decoded_mode=got["mode"], mode=m["cpol"] * 2 + line["cpha"], cpol=m["cpol"],
                    cpha=line["cpha"], cpha_votes={k: {e: v[e] for e in ("after_leading", "after_trailing",
@@ -470,7 +474,7 @@ def check_skew(cap, x):
     a, b = _ch(cap, x["a"]), _ch(cap, x["b"])
     if a is None or b is None:
         return None, {}, "pins not captured"
-    r = timing.skew(a, b, cap.rate)
+    r = timing.skew(a, b, cap.rate, x.get("edge", "both"))
     d = r["delays"].astype(np.float64)
     res = timing.res_of(a, b)
     got = {"pairs": int(len(d)), "unpaired_a": r["unpaired_a"], "unpaired_b": r["unpaired_b"],
@@ -541,6 +545,290 @@ def check_i2c_timing(cap, x):
                                  f"{hi / 1e3:.4g} kHz at {_si(at / cap.rate)}"))
         elif r.get(k):
             parts += _limit_of(k, r[k], res, lo, hi, cap.rate)
+    ok, why = _verdicts(parts)
+    return ok, got, why
+
+
+def _hexes(v) -> list[str] | None:
+    if v is None:
+        return None
+    return [h.lower() for h in ([v] if isinstance(v, str) else v)]
+
+
+def _seq_diff(name: str, want: list, got: list) -> tuple[bool, str]:
+    if want == got:
+        return True, ""
+    i = next((k for k, (a, b) in enumerate(zip(want, got)) if a != b), min(len(want), len(got)))
+    return False, (f"{name}: {len(want)} expected, {len(got)} read; #{i} want "
+                   f"{want[i] if i < len(want) else '-'}, got {got[i] if i < len(got) else '-'}")
+
+
+def check_rgb_led(cap, x):
+    ch = _ch(cap, x["pin"])
+    if ch is None:
+        return None, {}, "pin not captured"
+    r = pulsecode.rgb_led(ch, cap.n_samples, cap.rate)
+    res = ch.step
+    got = {"frames": [f["data"] for f in r["frames"]], "bits": [f["bits"] for f in r["frames"]],
+           **{k: _times(r[k], cap.rate) for k in ("t0h", "t1h", "period", "resets", "pauses")},
+           "resolution_s": res / cap.rate}
+    if not r["frames"]:
+        return False, got, "no pulses"
+    parts = []
+    want = _hexes(x.get("data"))
+    if want is not None:
+        parts.append(_seq_diff("frames", want, got["frames"]))
+    cut = [i for i, f in enumerate(r["frames"]) if f["leftover_bits"]]
+    if cut:
+        parts.append((False, f"frames {cut} end {[r['frames'][i]['leftover_bits'] for i in cut]} bits after a byte"))
+    for k in ("t0h", "t1h", "period"):
+        if r[k] and x.get(k) is not None:
+            parts += _limit_of(k.upper() if k != "period" else "bit period", r[k], res, *x[k], cap.rate)
+    if x.get("reset_min_s") is not None:
+        if r["resets"]:
+            parts += _limit_of("reset", r["resets"], res, x["reset_min_s"], None, cap.rate)
+        tail = r.get("tail_low")
+        if tail is None or timing.judge(tail[1], res, lo=x["reset_min_s"] * cap.rate) is not True:
+            parts.append((None, f"the window ends {_si((tail[1] if tail else 0) / cap.rate)} after the last frame, "
+                                f"before a reset of {_si(x['reset_min_s'])} latched it"))
+    ok, why = _verdicts(parts)
+    return ok, got, why
+
+
+def check_onewire(cap, x):
+    ch = _ch(cap, x["pin"])
+    if ch is None:
+        return None, {}, "pin not captured"
+    sp = pulsecode.ONEWIRE[x.get("speed", "standard")]
+    r = pulsecode.onewire(ch, cap.n_samples, cap.rate, x.get("speed", "standard"))
+    res = ch.step
+    rs = r["resets"]
+    got = {"data": [z["data"] for z in rs], "presence": [z["presence"] for z in rs],
+           **{k: _times(r[k], cap.rate) for k in ("low_0", "low_1", "slot", "recovery")},
+           "reset": _times([(z["t"], z["reset"]) for z in rs], cap.rate),
+           "wait": _times([(z["t"], z["wait"]) for z in rs if z["presence"]], cap.rate),
+           "presence_low": _times([(z["t"], z["presence_low"]) for z in rs if z["presence"]], cap.rate),
+           "slots_before_reset": r["before_reset"], "resolution_s": res / cap.rate}
+    if not rs:
+        return False, got, "no reset pulse"
+    parts = []
+    want = _hexes(x.get("data"))
+    if want is not None:
+        parts.append(_seq_diff("data after each reset", want, got["data"]))
+    cut = [i for i, z in enumerate(rs) if z["leftover_bits"]]
+    if cut:
+        parts.append((False, f"after resets {cut}, {[rs[i]['leftover_bits'] for i in cut]} bits after a byte"))
+    if x.get("presence") is not None:
+        bad = [i for i, z in enumerate(rs) if z["presence"] != x["presence"]]
+        if bad:
+            parts.append((False, f"resets {bad} {'without' if x['presence'] else 'with'} a presence pulse"))
+    parts += _limit_of("reset", [(z["t"], z["reset"]) for z in rs], res, *sp["reset"], cap.rate)
+    pres = [z for z in rs if z["presence"]]
+    if pres:
+        parts += _limit_of("presence wait", [(z["t"], z["wait"]) for z in pres], res, *sp["wait"], cap.rate)
+        parts += _limit_of("presence", [(z["t"], z["presence_low"]) for z in pres], res, *sp["presence"], cap.rate)
+    for k, name in (("slot", "slot"), ("recovery", "recovery"), ("low_0", "0 low"), ("low_1", "1 low")):
+        if r[k]:
+            parts += _limit_of(name, r[k], res, *sp[k], cap.rate)
+    ok, why = _verdicts(parts)
+    return ok, got, why
+
+
+def _ir_frame(f: dict) -> dict:
+    return {"repeat": True} if f.get("repeat") else {k: f.get(k) for k in ("addr", "cmd")}
+
+
+def check_ir(cap, x):
+    ch = _ch(cap, x["pin"])
+    if ch is None:
+        return None, {}, "pin not captured"
+    if x.get("protocol", "nec") != "nec":
+        return None, {}, f"IR protocol {x['protocol']!r} not known (nec)"
+    r = pulsecode.nec(ch, cap.n_samples, cap.rate)
+    res = ch.step
+    keys = ("leader", "space", "repeat_space", "mark", "space_0", "space_1")
+    got = {"frames": [_ir_frame(f) for f in r["frames"]], "carrier_hz": r.get("carrier_hz"),
+           "carrier_duty": r.get("carrier_duty"), **{k: _times(r[k], cap.rate) for k in keys},
+           "resolution_s": res / cap.rate}
+    if not r["frames"]:
+        return False, got, "no NEC frame"
+    parts = []
+    if x.get("frames") is not None:
+        want = [{"repeat": True} if f.get("repeat") else {"addr": f["addr"], "cmd": f["cmd"]} for f in x["frames"]]
+        parts.append(_seq_diff("frames", want, got["frames"]))
+    bad = [i for i, f in enumerate(r["frames"]) if not f.get("repeat") and not f.get("cmd_ok", False)]
+    if bad:
+        parts.append((False, f"frames {bad}: the command's inverse does not match (or fewer than 32 bits)"))
+    if x.get("carrier_hz") is not None:
+        c = r.get("carrier_hz")
+        parts.append((c is not None and abs(c / x["carrier_hz"] - 1) <= x["tol_carrier"],
+                      f"carrier {c and round(c)} Hz vs {x['carrier_hz']}" if c else "no carrier (a demodulated line?)"))
+    tol = x.get("tol_time")
+    if tol is not None:
+        for k in keys:
+            if r[k]:
+                nom = pulsecode.NEC[k]
+                parts += _limit_of(k, r[k], res, nom * (1 - tol), nom * (1 + tol), cap.rate)
+    ok, why = _verdicts(parts)
+    return ok, got, why
+
+
+LIN_CLASSIC_IDS = (0x3C, 0x3D)          # diagnostic frames keep the classic checksum in LIN 2.x
+
+
+def check_lin(cap, x):
+    ch = _ch(cap, x["pin"])
+    if ch is None:
+        return None, {}, "pin not captured"
+    r = periph.lin(ch, cap.n_samples, cap.rate, x["baud"], min(11.0, x["min_break_bits"]))
+    u0 = cap.rate / x["baud"]
+    fr = [f for f in r["frames"] if "pid" in f]
+    got = {"frames": [{"id": f["id"], "data": f.get("data")} for f in fr],
+           "baud": [cap.rate / f["bit_ticks"] for f in fr],
+           "break_bits": [f["break"] / u0 for f in fr], "delimiter_bits": [f["delimiter"] / u0 for f in fr],
+           "checksum_model": [f.get("checksum_model") for f in fr]}
+    if not fr:
+        return False, got, "no LIN frame (a break and two characters)"
+    parts = []
+    if x.get("frames") is not None:
+        want = [{"id": f["id"], "data": f["data"].lower()} for f in x["frames"]]
+        parts.append(_seq_diff("frames", want, got["frames"]))
+    for i, f in enumerate(fr):
+        bad = []
+        if f["sync"] != 0x55:
+            bad.append(f"sync 0x{f['sync']:02x}")
+        if not f["pid_ok"]:
+            bad.append(f"identifier 0x{f['pid']:02x} with wrong parity")
+        if not f["framing_ok"]:
+            bad.append("a framing error")
+        if "checksum" in f:
+            model = x.get("checksum", "auto")
+            if model == "auto":
+                model = "classic" if f["id"] in LIN_CLASSIC_IDS else "enhanced"
+            if f["checksum_model"] != model:
+                bad.append(f"checksum 0x{f['checksum']:02x} is not the {model} one")
+        if bad:
+            parts.append((False, f"frame #{i} (id 0x{f['id']:02x}): " + ", ".join(bad)))
+    res = ch.step
+    parts += _limit_of("break", [(f["t"], f["break"]) for f in fr], res, x["min_break_bits"] / x["baud"], None,
+                       cap.rate)
+    parts += _limit_of("break delimiter", [(f["t"], f["delimiter"]) for f in fr], res, 1 / x["baud"], None, cap.rate)
+    if x.get("tol_baud") is not None:
+        for f in fr:
+            err = f["bit_ticks"] / u0 - 1
+            j = timing.judge(abs(err), res / (8 * f["bit_ticks"]), hi=x["tol_baud"])
+            if j is not True:
+                parts.append((j, f"frame at {_si(f['t'] / cap.rate)}: {cap.rate / f['bit_ticks']:.1f} baud "
+                                 f"({err * 100:+.2f}%) from its sync field"))
+    ok, why = _verdicts(parts)
+    return ok, got, why
+
+
+def check_i2s(cap, x):
+    chs = [_ch(cap, x[k]) for k in ("bclk", "ws", "sd")]
+    if any(c is None for c in chs):
+        return None, {}, "pins not captured"
+    r = periph.i2s(*chs, cap.n_samples, cap.rate, x.get("format", "i2s"), x.get("bits"), x.get("left_ws"))
+    got = {k: r.get(k) for k in ("slot_bits", "fs_hz", "bclk_hz", "ws_changes_bclk_low", "sd_changes_bclk_low")}
+    got["frames"] = len(r["frames"])
+    got["first"] = [[f["left"], f["right"]] for f in r["frames"][:8]]
+    if not r["frames"]:
+        return False, got, "no whole left / right pair"
+    parts = []
+    if x.get("slot_bits") is not None and r["slot_bits"] != x["slot_bits"]:
+        parts.append((False, f"{r['slot_bits']} BCLKs a slot, want {x['slot_bits']}"))
+    if x.get("fs_hz") is not None:
+        fs = r.get("fs_hz")
+        parts.append((fs is not None and abs(fs / x["fs_hz"] - 1) <= x["tol_fs"],
+                      f"sample rate {fs and round(fs, 1)} Hz vs {x['fs_hz']}"))
+    if x.get("samples") is not None:
+        want = [list(v) for v in x["samples"]]
+        seq = [[f["left"], f["right"]] for f in r["frames"]]
+        hit = next((i for i in range(len(seq) - len(want) + 1) if seq[i:i + len(want)] == want), None)
+        if hit is None:
+            parts.append((False, f"the {len(want)} samples are not in the {len(seq)} read (first read {seq[:4]})"))
+        else:
+            got["samples_at"] = hit
+    ok, why = _verdicts(parts)
+    asked = any(x.get(k) is not None for k in ("slot_bits", "fs_hz", "samples"))
+    return (ok if asked or ok is not True else MEASURED), got, why
+
+
+def check_quadrature(cap, x):
+    a, b = _ch(cap, x["a"]), _ch(cap, x["b"])
+    if a is None or b is None:
+        return None, {}, "pins not captured"
+    r = periph.quadrature(a, b, cap.n_samples)
+    got = {**r, "min_step_s": r["min_step_ticks"] / cap.rate if r["min_step_ticks"] is not None else None}
+    got["error_at"] = [t / cap.rate for t in r["error_at"]]
+    parts = []
+    if x.get("max_errors") is not None and r["errors"] > x["max_errors"]:
+        parts.append((False, f"{r['errors']} times both lines changed at once (first at {_si(got['error_at'][0])})"))
+    if x.get("steps") is not None and r["steps"] != x["steps"]:
+        parts.append((False, f"{r['steps']} steps, want {x['steps']}"))
+    if x.get("cycles") is not None and r["steps"] != 4 * x["cycles"]:
+        parts.append((False, f"{r['steps'] / 4:g} cycles, want {x['cycles']}"))
+    if x.get("direction") == "forward" and (r["backward"] or not r["forward"]):
+        parts.append((False, f"{r['backward']} steps backward, {r['forward']} forward"))
+    if x.get("direction") == "backward" and (r["forward"] or not r["backward"]):
+        parts.append((False, f"{r['forward']} steps forward, {r['backward']} backward"))
+    ok, why = _verdicts(parts)
+    asked = any(x.get(k) is not None for k in ("steps", "cycles", "direction", "max_errors"))
+    return (ok if asked or ok is not True else MEASURED), got, why
+
+
+def _sd_row(c: dict) -> dict:
+    out = {"cmd": c["cmd"], "acmd": c["acmd"], "arg": c["arg"], "r1": c.get("r1")}
+    if "resp" in c:
+        out["resp"] = c["resp"]
+    if "blocks" in c:
+        out["data"] = [b.get("data") for b in c["blocks"]]
+    return out
+
+
+def _sd_name(c: dict) -> str:
+    return f"{'ACMD' if c.get('acmd') else 'CMD'}{c.get('cmd')}"
+
+
+def check_sd_spi(cap, x):
+    pins = {k: _ch(cap, x[k]) for k in ("clk", "mosi", "miso") if x.get(k)}
+    cs = _ch(cap, x["cs"]) if x.get("cs") else None
+    if len(pins) < 3 or (x.get("cs") and cs is None):
+        return None, {}, "pins not captured"
+    mode = x.get("mode")
+    if mode is None:
+        m = timing.spi_mode(pins["clk"], [pins["mosi"], pins["miso"]], cap.n_samples, cs, x.get("cs_active", 0))
+        line = next((v for v in m.get("lines", {}).values() if v["cpha"] is not None), None)
+        if line is None:
+            return None, {}, "the SPI mode is not on the lines: give mode="
+        mode = m["cpol"] * 2 + line["cpha"]
+    rows = periph.spi_bytes(pins["clk"], pins["mosi"], pins["miso"], cap.n_samples, mode, cs, x.get("cs_active", 0))
+    r = periph.sd_spi(rows)
+    cmds = r["commands"]
+    got = {"mode": mode, "bytes": len(rows), "commands": [{**_sd_row(c), "t_s": c["t"] / cap.rate,
+                                                           **{k: c[k] for k in ("ncr", "crc_ok", "busy_bytes")
+                                                              if k in c}} for c in cmds]}
+    if not cmds:
+        return False, got, "no SD command on MOSI"
+    parts = []
+    if x.get("commands") is not None:
+        want = [{"acmd": False, **w} if "cmd" in w else w for w in x["commands"]]
+        rows_ = [_sd_row(c) for c in cmds]
+        parts.append(_seq_diff("commands", want, [{k: g.get(k) for k in w} for w, g in zip(want, rows_)]
+                               + rows_[len(want):]))
+    for c in cmds:
+        at = f"{_sd_name(c)} at {_si(c['t'] / cap.rate)}"
+        if c.get("r1") is None:
+            parts.append((False, f"{at}: no R1 within {x.get('max_ncr', 8)} bytes"))
+        elif c.get("ncr", 0) > x.get("max_ncr", 8):
+            parts.append((False, f"{at}: R1 after {c['ncr']} bytes"))
+        if not c["end_bit"]:
+            parts.append((False, f"{at}: the end bit is 0"))
+        if c["cmd"] in (0, 8) and not c["acmd"] and not c["crc_ok"]:
+            parts.append((False, f"{at}: a wrong CRC7 (CMD0 and CMD8 need it)"))
+        for b in c.get("blocks", []):
+            if c["cmd"] not in periph.SD_WRITE and b.get("crc_ok") is False:
+                parts.append((False, f"{at}: the card's block at {_si(b['t'] / cap.rate)} has a wrong CRC16"))
     ok, why = _verdicts(parts)
     return ok, got, why
 
@@ -827,7 +1115,7 @@ def check_voltage(cap, x):
 
 
 LOGIC = {"square", "level", "ends", "starts", "pulses", "i2c", "spi", "uart", "phase", "skew", "dead_time",
-         "i2c_timing"}   # checks that read logic levels
+         "i2c_timing", "rgb_led", "onewire", "ir", "lin", "i2s", "quadrature", "sd_spi"}   # checks that read logic levels
 
 
 def _as_logic(cap: Capture, x: dict) -> tuple[Capture | None, str]:
@@ -852,12 +1140,14 @@ EVENT_CHECKS = {"level", "ends", "starts", "pulses", "only_moving"}   # what a l
 CHECKS = {"square": check_square, "level": check_level, "ends": check_ends, "starts": check_starts,
           "only_moving": check_only_moving, "pulses": check_pulses, "i2c": check_i2c, "spi": check_spi,
           "uart": check_uart, "voltage": check_voltage, "phase": check_phase, "skew": check_skew,
-          "dead_time": check_dead_time, "i2c_timing": check_i2c_timing}
+          "dead_time": check_dead_time, "i2c_timing": check_i2c_timing, "rgb_led": check_rgb_led,
+          "onewire": check_onewire, "ir": check_ir, "lin": check_lin, "i2s": check_i2s,
+          "quadrature": check_quadrature, "sd_spi": check_sd_spi}
 
 
 def _pins_of(x: dict) -> set[str]:
     out = set()
-    for k in ("pin", "scl", "sda", "clk", "mosi", "miso", "cs", "a", "b", "hi", "lo"):
+    for k in ("pin", "scl", "sda", "clk", "mosi", "miso", "cs", "a", "b", "hi", "lo", "bclk", "ws", "sd"):
         if x.get(k):
             out.add(x[k])
     out |= set(x.get("levels", {}))

@@ -42,7 +42,7 @@
 
 ### 2.3 検査
 
-`checks` の各要素は `{"kind": ..., ...}` のオブジェクトです。`kind` は `square`、`level`、`starts`、`ends`、`only_moving`、`pulses`、`i2c`、`spi`、`uart`、`voltage`、`phase`、`skew`、`dead_time`、`i2c_timing` です。各検査のキーと意味は [キャプチャで試験する](capture-test-guide.ja.md) §4 にあります（Python の `wireskein.runlog` の同名の関数が、このオブジェクトを作ります）。
+`checks` の各要素は `{"kind": ..., ...}` のオブジェクトです。`kind` は `square`、`level`、`starts`、`ends`、`only_moving`、`pulses`、`i2c`、`spi`、`uart`、`voltage`、`phase`、`skew`、`dead_time`、`i2c_timing`、`rgb_led`、`onewire`、`ir`、`lin`、`i2s`、`quadrature`、`sd_spi` です。各検査のキーと意味は [キャプチャで試験する](capture-test-guide.ja.md) §4 にあります（Python の `wireskein.runlog` の同名の関数が、このオブジェクトを作ります）。
 
 許容誤差の名前:
 
@@ -50,14 +50,16 @@
 | --- | --- | --- |
 | `tol_freq` | 相対（周波数の比のずれ） | `square` |
 | `tol_duty` | 絶対（デューティの差。0〜1 の値どうし） | `square` |
-| `tol_baud` | 相対 | `uart` |
+| `tol_baud` | 相対 | `uart`、`lin` |
 | `tol_hz` | 相対 | `i2c`、`spi` |
 | `tol_period` | 相対 | `pulses` |
 | `tol_v` | 絶対（V） | `voltage` |
 | `tol_deg` | 絶対（度） | `phase` |
 | `tol_s` | 絶対（秒） | `skew` |
+| `tol_carrier`、`tol_time` | 相対 | `ir` |
+| `tol_fs` | 相対 | `i2s` |
 
-- `threshold`（V、または `(low, high)`）を与えると、ロジックの検査（`square`、`level`、`starts`、`ends`、`pulses`、`i2c`、`spi`、`uart`、`phase`、`skew`、`dead_time`、`i2c_timing`）が、アナログのチャンネルをロジックとして読みます。
+- `threshold`（V、または `(low, high)`）を与えると、ロジックの検査（`square`、`level`、`starts`、`ends`、`pulses`、`i2c`、`spi`、`uart`、`phase`、`skew`、`dead_time`、`i2c_timing`、`rgb_led`、`onewire`、`ir`、`lin`、`i2s`、`quadrature`、`sd_spi`）が、アナログのチャンネルをロジックとして読みます。
 - `only_moving` は、ロジックのチャンネルだけを見ます。
 
 ### 2.4 プローブの時計の行

@@ -1,0 +1,22 @@
+{
+ "name": "nec-38k-repeat",
+ "case": 17,
+ "arg": 0,
+ "rate_hz": 2000000.0,
+ "samples": 300000,
+ "pads": {
+  "ir_carrier": 32,
+  "ir_envelope": 33,
+  "p46": 46,
+  "p47": 47
+ },
+ "trigger": {
+  "channel": "ir_envelope",
+  "edge": "rising"
+ },
+ "log": [
+  "## case 17 arg 0",
+  "nec pad32 (38 kHz 33% carrier on marks) and pad33 (envelope, high = mark): address 00 (ff), command 45 (ba), LSB first; a repeat code 108 ms after the frame sta",
+  "##"
+ ]
+}

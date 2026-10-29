@@ -1,0 +1,20 @@
+{
+ "name": "rmt-two-pads-80M",
+ "case": 13,
+ "arg": 80000000,
+ "rate_hz": 40000000.0,
+ "samples": 40000,
+ "pads": {
+  "rmt_a": 32,
+  "rmt_b": 33
+ },
+ "trigger": {
+  "channel": "rmt_a",
+  "edge": "rising"
+ },
+ "log": [
+  "## case 13 arg 80000000",
+  "rmt: resolution 80000000 Hz, ticks 1 2 4 8 80 800 (high then low), both pads",
+  "##"
+ ]
+}

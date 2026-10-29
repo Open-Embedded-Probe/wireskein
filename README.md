@@ -7,7 +7,7 @@
 WireSkein turns logic-analyzer captures into **tests and analysis** (MIT license). Instead of ending with someone looking at a waveform, it checks in code whether the wire did what it should, and hands what was on the wire to scripts and AI in a form they can read.
 
 - **Checking recorded hardware test runs.** A test records what it sent, the captures, and what each step should look like on the wire (a 1 kHz square wave, an I2C write to 0x42, a UART at F_CPU / BRR, a 3.3 V ± 0.1 V supply). `wireskein verify` checks every capture against these expectations and reports OK / NG with measured values, as text, JSON and JUnit XML. From pytest, use [pytest-embedded-wireskein](https://github.com/Open-Embedded-Probe/pytest-embedded-wireskein).
-- **Decoding unknown captures.** `wireskein analyze` finds which pins carry I2C, SPI, UART, RVSWD / SWIO, SWD or CAN, and decodes them. Upper layers (NMEA, Modbus, known I2C / SPI devices) are tried on top.
+- **Decoding unknown captures.** `wireskein analyze` finds which pins carry I2C, SPI, UART, RVSWD / SWIO, SWD, CAN, RGB LED (WS2812), 1-Wire or IR (NEC), and decodes them. Upper layers (NMEA, Modbus, known I2C / SPI devices, SD cards in SPI mode) are tried on top.
 - **Capturing, storing, viewing.** `wireskein capture` takes captures from a probe, stores them as `.wireskein`, and `wireskein gui` shows them in the browser.
 
 Status: **beta**. Until version 1, breaking changes happen; see [Stability](#stability).

@@ -79,11 +79,12 @@ def circular_diff(x: float, y: float) -> float:
     return (x - y + 180.0) % 360.0 - 180.0
 
 
-def skew(a: Channel, b: Channel, rate: float) -> dict:
-    """Each edge of a with b's nearest edge of the same direction (b - a, ticks). An edge without one nearer than
-    half the closest spacing of a's edges of that direction is unpaired (b moved less often, or not with a)."""
+def skew(a: Channel, b: Channel, rate: float, edge: str = "both") -> dict:
+    """Each edge of a with b's nearest edge of the same direction (b - a, ticks); edge "rise" / "fall" pairs only
+    those. An edge without one nearer than half the closest spacing of a's edges of that direction is unpaired (b
+    moved less often, or not with a)."""
     out = {"delays": np.zeros(0, np.int64), "unpaired_a": 0, "unpaired_b": 0}
-    for edge in ("rise", "fall"):
+    for edge in (("rise", "fall") if edge == "both" else (edge,)):
         ea, eb = _dirs(a, edge), _dirs(b, edge)
         if len(ea) == 0 or len(eb) == 0:
             out["unpaired_a"] += len(ea)

@@ -105,9 +105,16 @@ wireskein verify out/run1 --junit out/run1/report.xml --json out/run1/report.jso
 | `uart(pin, baud, data, tol_baud, idle, bits, parity, stop, max_errors)` | ボーレート、バイト列、アイドルレベル、フレームとパリティのエラー（下記） |
 | `voltage(pin, volts, tol_v, min_v, max_v, ripple)` | アナログのチャンネルの電圧。平均が `volts` ± `tol_v`（V）、全サンプルが `min_v`〜`max_v`、ピークからピークが `ripple` 以下。与えたものだけを見る |
 | `phase(a, b, phase_deg, tol_deg, freq_hz, tol_freq, edge)` | 2 本の周期的な線の位相。a のエッジから、同じ向きの b の次のエッジまでを、a の周期に対する角度（0〜360 度）にする。どの組も `phase_deg` ± `tol_deg`（度。0 の近くは回り込む）、両方の周波数が `freq_hz` の `tol_freq`（相対）の内 |
-| `skew(a, b, tol_s, delay_s)` | 一緒に変わる 2 本の線（パターン、並列の出力）のずれ。a のどのエッジにも、同じ向きの b のエッジが `delay_s` ± `tol_s` にある。相手の無いエッジは NG |
+| `skew(a, b, tol_s, delay_s, edge)` | 一緒に変わる 2 本の線（パターン、並列の出力）のずれ。a のどのエッジにも、同じ向きの b のエッジが `delay_s` ± `tol_s` にある。相手の無いエッジは NG。`edge` が `"rise"` / `"fall"` ならその向きだけ（1 つのタイマの、デューティの違う 2 本の出力） |
 | `dead_time(hi, lo, min_s, max_s, active, allow_overlap)` | ハーフブリッジの 2 本の出力（`active` で on）。片方が off になってから他方が on になるまでが、毎回 `min_s`〜`max_s`。両方が on（貫通）は、`allow_overlap` が無ければ NG |
 | `i2c_timing(scl, sda, mode, limits)` | UM10204 の個々の時間（§4.4） |
+| `rgb_led(pin, data, t0h, t1h, period, reset_min_s)` | WS2812 の類の線（§4.6）。リセットで区切ったフレームごとのバイト（送った順の 16 進）、T0H、T1H、ビットの周期、リセットの長さ |
+| `onewire(pin, data, presence, speed)` | 1-Wire の線（§4.6）。リセットごとの後のバイト、presence の有無、リセット、presence、スロット、low の時間 |
+| `ir(pin, frames, carrier_hz, tol_carrier, tol_time, protocol)` | IR のリモコンの線（§4.6）。NEC のフレーム（アドレス、コマンド、リピート）、コマンドとその反転、搬送波の周波数、マークとスペースの長さ |
+| `lin(pin, baud, frames, tol_baud, min_break_bits, checksum)` | LIN のフレーム（§4.7）。識別子とデータ、sync、識別子のパリティ、チェックサム、break と区切りの長さ、同期の欄から測ったボーレート |
+| `i2s(bclk, ws, sd, format, bits, fs_hz, tol_fs, samples, slot_bits, left_ws)` | I2S の類の音声（§4.7）。形式、サンプルの速さ、1 チャンネルの BCLK の数、続いて現れるサンプルの列 |
+| `quadrature(a, b, steps, cycles, direction, max_errors)` | 2 相のエンコーダ（§4.7）。数（ステップか周期）、向き、両方の線が同時に変わった回数 |
+| `sd_spi(clk, mosi, miso, cs, commands, mode, cs_active, max_ncr)` | SD カードの SPI のモード（§4.8）。コマンドの列（番号、引数、R1、R7 / R3 / R2、データのブロック）、NCR のうちの応答、CMD0 と CMD8 の CRC7、カードのブロックの CRC16 |
 
 検査に使うピンがキャプチャにないなど、検査できなかったものは未検査（`unchecked`）です。
 
@@ -138,14 +145,14 @@ uart("PB0", None)                                                         # 測�
 
 ### 4.3 アナログの線にロジックの検査をかける（`threshold=`）
 
-ロジックの検査（`square`、`level`、`starts` / `ends`、`pulses`、`i2c`、`spi`、`uart`、`phase`、`skew`、`dead_time`、`i2c_timing`）は、`threshold=` を与えると、アナログのチャンネルをその電圧でロジックとして読みます。
+ロジックの検査（`square`、`level`、`starts` / `ends`、`pulses`、`i2c`、`spi`、`uart`、`phase`、`skew`、`dead_time`、`i2c_timing`、`rgb_led`、`onewire`、`ir`、`lin`、`i2s`、`quadrature`、`sd_spi`）は、`threshold=` を与えると、アナログのチャンネルをその電圧でロジックとして読みます。
 
 - 1 つの値（例 `threshold=1.65`）か、ヒステリシスの組（例 `threshold=(1.0, 2.3)`: 2.3 V に達したら high、1.0 V まで下がったら low）。ノイズの乗った遅いエッジは、組にすると 1 本のエッジになります。
 - `threshold=` のないロジックの検査にアナログのチャンネルを渡すと、未検査になります。電圧への換算がファイルにないチャンネルも未検査です。
 
 ### 4.4 時間の限度と分解能
 
-`phase`、`skew`、`dead_time`、`i2c_timing` は、エッジの間の時間を限度と比べます。エッジは、その刻みの前の 1 サンプル（チャンネルのステップ）のどこかで変わったので、2 本の線のエッジの間の時間は、2 本のステップの大きい方（分解能）だけ不確かです。
+`phase`、`skew`、`dead_time`、`i2c_timing`、`rgb_led`、`onewire`、`ir`、`lin` は、エッジの間の時間を限度と比べます。エッジは、その刻みの前の 1 サンプル（チャンネルのステップ）のどこかで変わったので、2 本の線のエッジの間の時間は、2 本のステップの大きい方（分解能）だけ不確かです。
 
 - 測った値 ± 分解能が、すべて限度の内なら OK、すべて外なら NG、限度をまたげば未検査（理由に `near`）。未検査になったら、速いサンプルレートで取り直します。
 - 限度はどの回にもかけ、いちばん悪い回で決めます。理由に、その値と時刻を書きます。
@@ -178,6 +185,46 @@ i2c_timing("PC2", "PC1", "standard", limits={"t_su_dat": 300e-9})
 ### 4.5 SPI のモード
 
 `spi` のモードは、線そのものから読みます。CPOL は CS が有効になったときの SCK の level です（CS が無ければ、いちばん長い休みの level）。CPHA は、MOSI（無ければ MISO）の変化の前の SCK のエッジで決めます。前が先のエッジ（休みの level から離れるエッジ）なら、そこで出して後のエッジで取る CPHA 1、後のエッジなら CPHA 0 です。CS が有効になってから最初のエッジまでの変化は、ほかに変化が無いときだけ使います（どちらのモードでも、CS で最初のビットを出す相手がある）。復号器が選んだモードは `decoded_mode` に残ります。CS が active high なら `cs_active=1` です。
+
+### 4.6 1 本の線の方式
+
+- **`rgb_led`**: 線は low で休み、1 ビットは T0H か T1H の high とその後の low、MSB から。ビットの周期の 5 倍より長い low でフレームを区切ります。0 と 1 は high の幅のいちばん大きい切れ目で分けます（全部同じ幅なら、周期の半分より短い high が 0）。限度の既定は WS2812B のデータシートの T0H 0.4 µs、T1H 0.8 µs（± 150 ns）、周期 1.25 µs（± 600 ns）、リセット 50 µs 以上。ほかの LED（SK6812、WS2811 の遅いモード、新しい WS2812B のリセット 280 µs）は、その値を渡します。最後のフレームの後で、リセットの長さを待たずに窓が終わると、LED に届いたかが決まらないので未検査です。
+- **`onewire`**: 線は high で休み、どのパルスも low。`speed` の `reset_detect`（standard 288 µs、overdrive 48 µs）以上の low がリセット、その後の presence の窓の中で始まる low が presence、ほかの low がスロットです。スロットは low が `split`（standard 15 µs、overdrive 2 µs）より短ければ 1、長ければ 0、LSB から。読み出しのスロットも、運んだビットとして読みます（誰が線を下げたかは、線からは分かりません）。限度は Maxim の AN126 と DS18B20 のもの: standard ではリセット 480 µs 以上、presence の待ち 15〜60 µs、presence 60〜240 µs、スロット（low の始まりから次の始まり）61 µs 以上、スロットの間の high 1 µs 以上、0 の low 120 µs 以下、1 の low 1〜15 µs。
+- **`ir`**: LED を駆動する線（搬送波付き。low で休む）も、受光モジュールの出力（high で休み、マークが low）も読みます。アクティブなパルスがほとんど 100 µs より短ければ搬送波付きとし、150 µs より近いパルスを 1 つのマークにまとめて、搬送波の周波数とデューティを測ります。NEC は 9 ms のマークの後、4.5 ms でデータ（32 ビット、LSB から: アドレス、反転したアドレスかアドレスの上位、コマンド、反転したコマンド）、2.25 ms でリピートです。アドレスとその反転が合わなければ、16 ビットの拡張アドレスとして `addr` に入れます。コマンドとその反転が合わないフレームは NG。`tol_time`（相対、既定 0.1）で、どのマークとスペースも NEC の長さと比べます（受光モジュールはマークの幅を変えるので、その出力では広くします）。
+
+```python
+rgb_led("PA7", ["ff0000", "00ff00"])                              # 2 回の書き込み、1 個ずつ
+onewire("PD2", ["cc44", "ccbe"])                                  # Skip ROM + Convert T、Skip ROM + Read Scratchpad
+ir("PB1", [{"addr": 0x04, "cmd": 0x08}, {"repeat": True}], carrier_hz=38e3)
+```
+
+### 4.7 LIN、I2S、2 相のエンコーダ
+
+- **`lin`**: 線は high で休みます。`baud` で 11 ビット以上の low を break とし、その後の high を区切りとします。次の break か、2 文字より長い休みまでの文字（8N1）が、sync、保護された識別子、データ、チェックサム（最後の文字）です。各フレームのビットの長さは、スレーブと同じく sync の欄（0x55 の 5 つの立ち下がりが 8 ビット）から測り、その長さで文字を読みます。break は `min_break_bits`（既定 13、LIN 2.x のマスタの下限）以上、区切りは 1 ビット以上です。チェックサムは `checksum="auto"` なら、診断の 0x3C / 0x3D は classic、ほかは enhanced です。
+- **`i2s`**: SD と WS を BCLK の立ち上がりで読みます。WS が変わるまでの立ち上がりが 1 チャンネル（スロット）です。`format` の `"i2s"`（Philips）は WS が変わった 1 BCLK 後に MSB、`"left"` は変わったところに MSB、`"right"` はスロットの最後のビットで語が終わります（`bits` が要る）。語は 2 の補数、MSB から。左のチャンネルは `"i2s"` で WS が low、ほかは high（違う相手は `left_ws`）。`samples` は、読んだフレームの中に続けて現れれば OK です（窓は音の途中で始まる）。WS と SD が BCLK の low のうちに変わった割合も出します（判定はしません）。
+- **`quadrature`**: A が B より先に変わる向きを +1 とし、エッジごとに数えます（`steps`。`cycles` は 4 で割ったもの）。両方の線が同じ刻みで変わったら、状態を 1 つ飛ばしたとして誤りに数えます（エンコーダに対してサンプルが遅いか、故障）。
+
+```python
+lin("PA2", 19200, [{"id": 0x10, "data": "01020304"}])
+i2s("PB13", "PB12", "PB15", "i2s", 16, fs_hz=48000, samples=[(0, 0), (1000, -1000)])
+quadrature("PA0", "PA1", cycles=24, direction="forward")
+```
+
+### 4.8 SD カードの SPI のモード
+
+`sd_spi` は、CS の窓の中の SPI のバイト（既定はモード 0。`mode=None` なら線から読む）を、SD のホスト（DUT）とカードのやりとりとして読みます。
+
+- コマンドは MOSI の 6 バイト（`01` と番号、32 ビットの引数、CRC7 と終わりのビット）、R1 はその後 8 バイト（NCR）のうちに MISO に来る、ビット 7 が 0 の最初のバイトです。CMD8 と CMD58 は R1 の後に 4 バイト（R7、R3）、CMD13 は 1 バイト（R2）、CMD12 / 28 / 29 / 38 は busy（0x00）が続きます。CMD55 の次は ACMD です。
+- 読み出し（CMD17、18、9、10、ACMD13、22、51）の後は、カードのブロック（トークン 0xFE、データ、CRC16）を読みます。CMD18 は CMD12 まで続けます。長さは CMD16 で決めたもの（既定 512）か、コマンドの決まった長さです。書き込み（CMD24、25）の後は、ホストのブロック（0xFE / 0xFC、データ、CRC16）、カードのデータの応答（0x05 で受けた）と busy、0xFD の後の busy を読みます。
+- `commands` は順に、与えたキーだけを比べます（`cmd` か `acmd`、`arg`、`r1`、`resp`: R7 / R3 / R2 の 16 進、`data`: ブロックの 16 進の並び）。
+- どのコマンドも NCR のうちに R1 が来て、終わりのビットが 1、CMD0 と CMD8 は CRC7 が正しく（SPI のモードで CRC が要るのはこの 2 つ）、カードのブロックの CRC16 が正しいことを見ます。ホストが書くブロックの CRC16 は、SPI のモードでは使わないことが多いので、出すだけです。
+
+```python
+sd_spi("PA5", "PA7", "PA6", "PA4", [{"cmd": 0, "r1": 0x01}, {"cmd": 8, "arg": 0x1AA, "resp": "000001aa"},
+                                     {"cmd": 55}, {"acmd": 41, "r1": 0x00}, {"cmd": 17, "r1": 0x00}])
+```
+
+`wireskein analyze` も、SPI の上に SD のコマンドを探します（MOSI と MISO の向きを両方試す。コマンドの前後で線が 0xFF で待つことを証拠にする）。見つかれば、書き出しの SPI の `sd` に出します。
 
 ## 5. 許容誤差の決め方
 
