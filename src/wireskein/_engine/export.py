@@ -67,6 +67,7 @@ def layers_of(n) -> dict:
         out["transactions"] = [{"s": t.get("start"), "e": t.get("end"), "addr": t.get("addr"), "rw": t.get("rw"),
                                 "addr_ack": t.get("addr_ack"), "bytes": _hex(t.get("bytes", [])),
                                 "acks": [bool(x) for x in t.get("acks", [])],
+                                **{k: t[k] for k in ("start_cond", "end_cond", "scl_low_ticks", "scl_waits") if k in t},
                                 **({"complete": False, "pending_bits": t.get("pending_bits", [])} if t.get("complete") is False else {})}
                                for t in n.output.items if "addr" in t]
     elif a == "spi":

@@ -86,12 +86,13 @@ class Frames:
     bounds: np.ndarray          # (n_frames, 2) [first, last+1) index into source.t
     events: list = field(default_factory=list)  # startstop: ("S"/"Sr"/"P", time)
     open_tail: bool = False     # startstop: the last frame has no STOP/Sr (the capture ended inside it)
+    conds: list = field(default_factory=list)   # startstop: per frame (how it began "S"/"Sr", how it ended "P"/"Sr"/None)
 
     def closed(self) -> "Frames":
         """Without the open last frame (for consumers that only take whole frames)."""
         if not self.open_tail:
             return self
-        return Frames(self.source, self.delimiter, self.bounds[:-1], self.events)
+        return Frames(self.source, self.delimiter, self.bounds[:-1], self.events, conds=self.conds[:-1])
 
     def nbytes(self) -> int:
         # the bits inside frames (packed, all data pins) + the frame table + events
@@ -210,20 +211,24 @@ def frames_startstop(cap, sb: SyncBits) -> Frames:
     after = K.edge_levels(de, d.initial)
     ev_t = de[hi]
     ev_k = np.where(after[hi] == 0, 1, 2)  # 1 START-like, 2 STOP-like
-    events, bounds = [], []
-    open_at = None
+    events, bounds, conds = [], [], []
+    open_at, began = None, None
     pos = np.searchsorted(sb.t, ev_t)
     for tt, kind, p in zip(ev_t.tolist(), ev_k.tolist(), pos.tolist()):
         if kind == 1:
             if open_at is not None:
                 bounds.append((open_at, p))
+                conds.append((began, "Sr"))
                 events.append(("Sr", tt))
+                began = "Sr"
             else:
                 events.append(("S", tt))
+                began = "S"
             open_at = p
         else:
             if open_at is not None:
                 bounds.append((open_at, p))
+                conds.append((began, "P"))
             events.append(("P", tt))
             open_at = None
     # a START never closed (a bus left stuck, a window too short) is kept: where
@@ -231,7 +236,8 @@ def frames_startstop(cap, sb: SyncBits) -> Frames:
     open_tail = open_at is not None and open_at < len(sb.t)
     if open_tail:
         bounds.append((open_at, len(sb.t)))
-    return Frames(sb, "startstop", np.asarray(bounds, dtype=np.int64).reshape(-1, 2), events, open_tail)
+        conds.append((began, None))
+    return Frames(sb, "startstop", np.asarray(bounds, dtype=np.int64).reshape(-1, 2), events, open_tail, conds)
 
 
 def words(fr: Frames, size: int, row: int = 0, drop_tail: int = 0) -> Words:
@@ -281,11 +287,36 @@ def chars(cap, sym: AsyncSymbols, L: int) -> Chars:
 
 # ---------------- protocol on words ----------------
 
-def i2c_from_words(fr: Frames, w: Words) -> list[dict]:
+SCL_WAIT = 4          # an SCL low longer than this many times the transaction's median low is a wait
+
+
+def _scl_waits(scl, t: np.ndarray, a: int, b: int, factor: float = SCL_WAIT) -> tuple[float | None, list[dict]]:
+    """(median SCL low, the lows longer than factor times it) inside a frame: each {after_word (the last word ended
+    before it; -1 inside the first), bit (where in the next word it falls; 0: between words), ticks, s}. Whether the
+    target held SCL (a stretch) or the controller paused is not told by the lines, so it is not named."""
+    if b - a < 2:
+        return None, []
+    falls = scl.edges[(scl.edges > t[a]) & (scl.edges < t[b - 1])]
+    falls = falls[scl.level_at(falls) == 0]
+    if not len(falls):
+        return None, []
+    rises = scl.edges[np.minimum(np.searchsorted(scl.edges, falls, side="right"), len(scl.edges) - 1)]
+    lows = rises - falls
+    med = float(np.median(lows))
+    waits = []
+    for s, n in zip(falls[lows > factor * med].tolist(), lows[lows > factor * med].tolist()):
+        k = int(np.searchsorted(t[a:b], s))             # sampling edges of the frame before it
+        waits.append({"after_word": k // 9 - 1, "bit": k % 9, "ticks": int(n), "s": int(s)})
+    return med, waits
+
+
+def i2c_from_words(fr: Frames, w: Words, scl=None) -> list[dict]:
     """I2C transactions from 9-bit words (8 data MSB first + ACK) per START..STOP/Sr frame.
     Frames here exclude the extra clock pulse before STOP (bits % 9 == 1 tail).
     An open last frame (no STOP) gives complete=False, with the bits clocked after
-    its last whole byte in pending_bits."""
+    its last whole byte in pending_bits. start_cond / end_cond: how it began ("S" / "Sr") and ended ("P" / "Sr" /
+    None: still open at the window's end). With the SCL channel, scl_low_ticks (the median SCL low) and scl_waits
+    (_scl_waits)."""
     out = []
     for i in range(len(fr.bounds)):
         v = w.values[w.frame_of == i]
@@ -296,16 +327,25 @@ def i2c_from_words(fr: Frames, w: Words) -> list[dict]:
             if last_open:  # stopped inside the address byte
                 out.append({"addr": None, "rw": None, "addr_ack": False, "bytes": [], "acks": [], "start": int(t[a]),
                             "end": int(t[b - 1]), "complete": False, "pending_bits": [int(x) for x in fr.source.bits[0][a:b]]})
+                _conds(out[-1], fr, i, scl, t, a, b)
             continue
         data = [int(x >> 1) for x in v]
         acks = [int(x & 1) == 0 for x in v]
         out.append({"addr": data[0] >> 1, "rw": "read" if data[0] & 1 else "write", "addr_ack": acks[0],
                     "bytes": data[1:], "acks": acks[1:], "start": int(t[a]), "end": int(t[max(a, b - 1)])})
+        _conds(out[-1], fr, i, scl, t, a, b)
         if last_open:
             n = int(w.leftover_bits[i])
             out[-1]["complete"] = False
             out[-1]["pending_bits"] = [int(x) for x in fr.source.bits[0][b - n:b]] if n else []
     return out
+
+
+def _conds(tx: dict, fr: Frames, i: int, scl, t: np.ndarray, a: int, b: int) -> None:
+    if i < len(fr.conds):
+        tx["start_cond"], tx["end_cond"] = fr.conds[i]
+    if scl is not None:
+        tx["scl_low_ticks"], tx["scl_waits"] = _scl_waits(scl, t, a, b)
 
 
 def _unfold(runs: np.ndarray, unit: float) -> float:
