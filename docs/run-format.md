@@ -21,7 +21,7 @@ The run is a directory, with each capture in a separate file, so that if the tes
 | --- | --- | --- |
 | `format` | string | `"wireskein-run/3"`. Readers reject runs with any other value |
 | `meta` | object | Information about the run (what was passed to `Recorder(out, **meta)`) |
-| `log` | array | Log: `{"t": seconds, "src": "marker" / "host" / "dut" / "note", "text": string}`. `t` is seconds since the recorder started (host clock) |
+| `log` | array | Log: `{"t": seconds, "src": "marker" / "host" / "dut" / "note" / "lost", "text": string}`. `t` is seconds since the recorder started (host clock). Lines are in `t` order. Lines on the probe's clock also have `probe_ns` and more (§2.4) |
 | `captures` | array | Captures: `{"file": name, "t0": seconds, "channels": [name...], "path": segment path}` |
 | `expect` | object | Maps a segment path to `{"checks": [check...]}` |
 
@@ -38,6 +38,7 @@ The run is a directory, with each capture in a separate file, so that if the tes
 - `captures[].path` is the path of the deepest segment open when the capture was taken. When taken outside any segment, the key itself is omitted.
 - Verification treats a capture with `path` as belonging to that segment (and its ancestors).
 - A capture without `path` (in a run written by another tool) is assigned to the segment that contains `t0`.
+- A segment opened and closed by lines on the probe's clock is the exception: the captures holding it are assigned to it, cut to its time (§2.4).
 
 ### 2.3 Checks
 
@@ -56,6 +57,28 @@ Tolerance names:
 
 - When `threshold` (V, or `(low, high)`) is given, the logic checks (`square`, `level`, `starts`, `ends`, `pulses`, `i2c`, `spi`, `uart`) read an analog channel as logic.
 - `only_moving` looks at logic channels only.
+
+### 2.4 Lines on the probe's clock
+
+Code on the probe may keep a log on its own clock (oep-probe-arduino's `OepProbeLog.h`, oep-client-python's `oep_client.probe_log`). The lines are kept instead of sent, so it is faster than a UART and needs no pin. `Recorder.probe_lines(rows, lost=...)` writes them into the log.
+
+| Key | Type | Meaning |
+| --- | --- | --- |
+| `probe_ns` | integer | The line's time on the probe's clock (ns since its boot; the clock of OEP core §7.7's uptime_ns) |
+| `boot_id` | integer (OEP's boot_id) | The boot of that clock |
+| `probe` | string (optional) | Which probe (e.g. `"usb:30eda0ea068b"`; written as the end of a capture's `meta.source`) |
+| `uncertainty_ns` | number (optional) | Uncertainty of the line's own time (±ns) |
+
+- `t` is always given too (the probe's time converted to the host clock). The segment tree and the order of lines come from `t`.
+- Heading lines (`src: "marker"`) open and close segments like any heading. Other lines are `src: "dut"`.
+- **A segment whose opening and closing lines both have `probe_ns`** is placed by its position in the captures. When a capture part's `meta.start_ns` is on the same clock (the same `boot_id`, and the same `probe` when given), a line's tick is (`probe_ns` − `start_ns`) × the tick rate. A capture holding the segment is assigned to it whatever its recorded `path`, and only the segment's time is cut out and checked.
+- The bounds' uncertainty is the capture part's `start_uncertainty_ns` plus the lines' `uncertainty_ns`. A check runs on two windows, the bounds moved out and moved in; when the verdicts differ, it is `unchecked` (the verdict depends on where the bounds fall), never silently `ok`. A segment shorter than its uncertainty is `unchecked`.
+- A segment that begins before a capture (or ends after it) is cut at the capture's edge, said in the result's `measured` `clipped`.
+- With no capture on the same clock, the segment's expectations are `ng` for having no capture. A capture near in time is never used instead.
+- A capture's boot is read from `meta.boot_id`, `meta.probe.boot_id`, or the `boot_id` of `meta.probe.clock`; `Recorder.capture(..., boot_id=...)` puts it in.
+- What the probe dropped of its lines (its buffer overflowed, marks skipped) becomes a `src: "lost"` line, and verification gives a `probe_log` `ng`: which segments are right is not known.
+- `Recorder.close()` also copies the probe's lines into each capture file's markers (`by: "probe-log"`, [file format](wireskein-format.md) §5.2), so a viewer shows them on the waveform.
+- Expectations for a segment of the probe's lines are given with `Recorder.expect(path, [checks...])`.
 
 ## 3. Verification results
 

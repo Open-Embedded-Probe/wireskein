@@ -14,12 +14,15 @@ much evidence, but it is what the test asked for).
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass, field
+from fractions import Fraction
 from pathlib import Path
 
 import numpy as np
 
 from ._engine import analog, events, markers
+from . import runlog
 from ._engine.model import AnalogTrace, Capture, Channel, EventTrace
 from .runlog import FORMAT
 
@@ -64,9 +67,69 @@ def _lost(cap: Capture) -> str:
 
 
 def segment_tree(doc: dict):
-    lines = [(e["text"], int(e["t"] * 1e6), int(e["t"] * 1e6)) for e in doc["log"] if e["src"] == "marker"]
-    end = int(max([e["t"] for e in doc["log"]] + [c["t0"] for c in doc["captures"]] + [0]) * 1e6) + 1
-    return markers.build(lines, markers.load_dialects()["heading"], end)
+    """The sections of the log's headings, on the host clock in microseconds. Each section keeps the log lines that
+    open and close it (opened / closed: None when the log ends it), whose probe_ns place it in a capture."""
+    log = sorted(doc["log"], key=lambda e: e["t"])
+    lines = [(e["text"], i, i) for i, e in enumerate(log) if e["src"] == "marker"]
+    end = int(max([e["t"] for e in log] + [c["t0"] for c in doc["captures"]] + [0]) * 1e6) + 1
+    tree = markers.build(lines, markers.load_dialects()["heading"], len(log))
+    us = lambda i: int(log[i]["t"] * 1e6) if i < len(log) else end          # noqa: E731
+    for s in tree.walk():                      # built on the lines' order: back to their times
+        s.opened = log[s.begin] if s.kind != "root" else None
+        s.closed = log[s.end] if s.end is not None and s.end < len(log) else None
+        s.begin, s.end = (0, end) if s.kind == "root" else (us(s.begin), us(s.end) if s.end is not None else None)
+        for issue in s.issues:
+            if "at" in issue:
+                issue["at"] = us(issue["at"])
+    return tree
+
+
+def _window(cap: Capture, s0: int, s1: int) -> Capture:
+    """Ticks [s0, s1) of a capture as a capture of its own (tick 0 at s0)."""
+    chans = []
+    for ch in cap.channels:
+        e = ch.edges[(ch.edges > s0) & (ch.edges < s1)] - s0
+        chans.append(Channel(ch.name, _level_at(ch, s0), e, ch.step, (ch.phase - s0) % ch.step, ch.acquisition))
+    an = []
+    for a in cap.analog:
+        per = Fraction(cap.meta.get("tick_hz", cap.rate)) / a.rate_hz
+        k0 = max(0, math.ceil((s0 - a.t0_ticks) / per))
+        k1 = max(k0, min(len(a.values), math.ceil((s1 - a.t0_ticks) / per)))
+        an.append(AnalogTrace(a.name, a.values[k0:k1], a.rate_hz, a.t0_ticks + k0 * per - s0, a.encoding, a.width,
+                              a.value_bits, a.zero, a.scale_nv, a.unit, a.acquisition))
+    evs = []
+    for t in cap.events:
+        k0 = max(0, -(-(s0 - t.phase) // t.step))
+        k1 = max(k0, min(t.n, (s1 - t.phase) // t.step))
+        before = np.searchsorted(t.quanta, k0)
+        sel = (t.quanta >= k0) & (t.quanta < k1)
+        evs.append(EventTrace(t.name, t.step, t.phase + k0 * t.step - s0, k1 - k0,
+                              int(t.levels[before - 1]) if before else t.start_level, t.quanta[sel] - k0,
+                              t.levels[sel], t.counts[sel], t.acquisition))
+    meta = {**cap.meta, "window": [s0, s1]}
+    if meta.get("trigger_tick") is not None:
+        meta["trigger_tick"] -= s0
+    return Capture(cap.rate, s1 - s0, chans, meta, an, evs)
+
+
+def _on_probe_clock(seg, cap: Capture) -> tuple[tuple | None, str]:
+    """A section opened and closed by the probe's lines, in one capture part: ((inner, outer, clipped), "") with the
+    windows [s0, s1) the section's bounds give at either end of their uncertainty (inner: both moved in), or
+    (None, why) when they do not fall in this part."""
+    view = {"meta": cap.meta, "tick_hz": [cap.meta["tick_hz"].numerator, cap.meta["tick_hz"].denominator]}
+    (a, ua, why), (b, ub, why_b) = (runlog.place(seg.opened, view), runlog.place(seg.closed, view))
+    if a is None or b is None:
+        return None, why or why_b
+    if b < 0 or a > cap.n_samples:
+        return None, "the section is outside this capture"
+    clipped = [x for x, out in (("begin", a - ua < 0), ("end", b + ub > cap.n_samples)) if out]
+    outer = (max(0, math.floor(a - ua)), min(cap.n_samples, math.ceil(b + ub)))
+    inner = (max(0, math.ceil(a + ua)), min(cap.n_samples, math.floor(b - ub)))
+    return ((inner if inner[0] < inner[1] else None), outer, clipped), ""
+
+
+def _probe_section(seg) -> bool:
+    return all(e is not None and e.get("probe_ns") is not None for e in (seg.opened, seg.closed))
 
 
 # ---------------- checks ----------------
@@ -647,6 +710,20 @@ def _in_segment(c: dict, t: int, path: str, seg) -> bool:
     return seg.begin <= t < (seg.end if seg.end is not None else 1 << 62)
 
 
+EMPTY = object()                  # a section shorter than its bounds' uncertainty: no inner window
+
+
+def _judge(cap: Capture, x: dict, pins: set[str]):
+    """(ok, measured, why) of one check on one capture."""
+    cap, why = _as_logic(cap, x)
+    if cap is None:
+        return None, {}, why
+    hid = [t for t in cap.events if t.name in pins and t.hidden]
+    if hid and x["kind"] not in EVENT_CHECKS:
+        return None, {}, "; ".join(events.describe(t) for t in hid) + f": {x['kind']} needs every edge"
+    return CHECKS[x["kind"]](cap, x)
+
+
 def verify(run_dir: str | Path) -> dict:
     run_dir = Path(run_dir)
     doc = json.loads((run_dir / "run.json").read_text())
@@ -661,42 +738,70 @@ def verify(run_dir: str | Path) -> dict:
         if seg is None:
             results.append(Result(path, None, "segment", False, reason="no segment with this path in the log"))
             continue
-        # a capture belongs to the section it was taken in (recorded path), or else to the one its start falls in
-        inside = [c for c, t in caps if _in_segment(c, t, path, seg)]
-        if not inside:
-            results.append(Result(path, None, "capture", False, reason="no capture inside the segment"))
-            continue
-        loaded = [(c, cap) for c in inside for cap in load_capture(run_dir, c)]
-        for c in inside:                 # a loss fails the capture, whatever its parts say (§3.4)
-            first = next(cap for cc, cap in loaded if cc is c)
+        if _probe_section(seg):
+            # opened and closed on the probe's clock: the part of every capture that holds it, cut to the section
+            loaded, whys = [], set()
+            for c in doc["captures"]:
+                for cap in load_capture(run_dir, c):
+                    w, why = _on_probe_clock(seg, cap)
+                    if w is None:
+                        whys.add(why)
+                        continue
+                    inner, outer, clipped = w
+                    win = _window(cap, *outer)
+                    win.meta["label"] = f"{cap.meta['label']}@{outer[0]}:{outer[1]}"
+                    loaded.append((c, win, _window(cap, *inner) if inner else EMPTY, clipped))
+            if not loaded:
+                results.append(Result(path, None, "capture", False, reason="no capture holds the section on the "
+                                      "probe's clock (" + "; ".join(sorted(whys)) + ")"))
+                continue
+        else:
+            # a capture belongs to the section it was taken in (recorded path), or else to the one its start falls in
+            inside = [c for c, t in caps if _in_segment(c, t, path, seg)]
+            if not inside:
+                results.append(Result(path, None, "capture", False, reason="no capture inside the segment"))
+                continue
+            loaded = [(c, cap, None, []) for c in inside for cap in load_capture(run_dir, c)]
+        for c in dict.fromkeys(c["file"] for c, *_ in loaded):    # a loss fails the capture, whatever its parts say
+            first = next(cap for cc, cap, *_ in loaded if cc["file"] == c)
             if not first.meta.get("complete", True):
-                results.append(Result(path, c["file"], "capture", False, reason=_lost(first)))
+                results.append(Result(path, c, "capture", False, reason=_lost(first)))
         for x in spec["checks"]:
             pins = _pins_of(x)
-            hit = [(c, cap) for c, cap in loaded
+            hit = [(c, cap, alt, clipped) for c, cap, alt, clipped in loaded
                    if pins <= {ch.name for ch in cap.channels} | {a.name for a in cap.analog}
-                   | {t.name for t in cap.events}] or \
-                  ([(c, cap) for c, cap in loaded] if x["kind"] == "only_moving" else [])
+                   | {t.name for t in cap.events}] or (loaded if x["kind"] == "only_moving" else [])
             if not hit:
-                skipped = {c["name"]: c["encoding"] for _, cap in loaded for c in cap.meta.get("skipped_channels", [])}
+                skipped = {c["name"]: c["encoding"] for _, cap, *_ in loaded
+                           for c in cap.meta.get("skipped_channels", [])}
                 why = "pins not in any capture: " + ", ".join(sorted(pins))
                 if pins & set(skipped):
                     why += " (" + ", ".join(f"{p} has encoding {skipped[p]!r}, not read by this version"
                                             for p in sorted(pins & set(skipped))) + ")"
                 results.append(Result(path, None, x["kind"], None, x, reason=why))
                 continue
-            for c, cap in hit:
+            for c, cap, alt, clipped in hit:
                 label = cap.meta.get("label", c["file"])
-                cap, why = _as_logic(cap, x)
-                if cap is None:
-                    results.append(Result(path, label, x["kind"], None, x, reason=why))
-                    continue
-                hid = [t for t in cap.events if t.name in pins and t.hidden]
-                if hid and x["kind"] not in EVENT_CHECKS:
-                    results.append(Result(path, label, x["kind"], None, x, reason="; ".join(
-                        events.describe(t) for t in hid) + f": {x['kind']} needs every edge"))
-                    continue
-                ok, got, why = CHECKS[x["kind"]](cap, x)
+                ok, got, why = _judge(cap, x, pins)
+                if alt is EMPTY:
+                    ok, why = None, "the section is shorter than its bounds' uncertainty"
+                elif alt is not None:
+                    # the bounds are known within their uncertainty: the verdict must not depend on where
+                    ok2, got2, why2 = _judge(alt, x, pins)
+                    if ok2 != ok:
+                        st = lambda v: Result("", None, "", v).status      # noqa: E731
+                        got = {"outer": got, "inner": got2}
+                        why = (f"the verdict depends on where the section's bounds fall: {st(ok)} on "
+                               f"{cap.meta['window']} ({why or 'no reason'}), {st(ok2)} on {alt.meta['window']} "
+                               f"({why2 or 'no reason'})")
+                        ok = None
+                if alt is not None:
+                    got = {**got, "window": cap.meta["window"]}
+                if clipped:
+                    got = {**got, "clipped": clipped}
+                    if ok is False:
+                        why = (why + "; " if why else "") + "the section " + " and ".join(
+                            {"begin": "began before", "end": "ended after"}[k] for k in clipped) + " the capture"
                 if cap.meta.get("time_base_slipped"):
                     # the probe says some samples were taken late: the verdict
                     # stands (it may still read fine), a failure names it
@@ -704,6 +809,9 @@ def verify(run_dir: str | Path) -> dict:
                     if ok is False:
                         why = (why + "; " if why else "") + "the probe reported a time base slip in this capture"
                 results.append(Result(path, label, x["kind"], ok, x, got, why))
+    for e in doc["log"]:                 # what the probe dropped of its own lines: the sections are not known
+        if e["src"] == "lost":
+            results.append(Result("", None, "probe_log", False, reason=e["text"]))
     # marker problems anywhere in the tree fail the run: a wrong structure means
     # captures may be checked against the wrong expectations
     for path, seg in segs.items():
@@ -711,7 +819,7 @@ def verify(run_dir: str | Path) -> dict:
             results.append(Result(path, None, "markers", False, reason=json.dumps(issue)))
     for issue in tree.issues:
         results.append(Result("", None, "markers", False, reason=json.dumps(issue)))
-    ev = [{"t": e["t"], "src": e["src"], "text": e["text"]} for e in doc["log"]]
+    ev = [{k: e[k] for k in ("t", "src", "text", "probe_ns") if k in e} for e in doc["log"]]
     count = {k: sum(r.status == k for r in results) for k in STATUSES}
     return {"run": str(run_dir), "meta": doc.get("meta", {}), "results": [r.__dict__ for r in results],
             "summary": {**count,

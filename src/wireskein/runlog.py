@@ -57,6 +57,7 @@ class Recorder:
         self._occ: list[tuple[str, int]] = []           # the open headings: (name, occurrence under its parent)
         self._seen: dict[tuple, int] = {}               # (parent occurrences, name) -> times opened
         self._expect: dict[tuple, dict] = {}            # expectations by occurrence path, rendered in close()
+        self._paths: dict[str, dict] = {}               # expectations given by their path (expect())
 
     def now(self) -> float:
         return time.monotonic() - self.t0
@@ -105,6 +106,22 @@ class Recorder:
     def note(self, text: str) -> None:
         self._log("note", text)
 
+    def probe_lines(self, rows: list[dict], lost: list[str] = (), probe: str | None = None,
+                    boot_id: str | None = None) -> None:
+        """Lines the probe kept on its own clock (oep_client.probe_log.rows()): each {"t": time.monotonic() seconds,
+        "src", "text", "probe_ns", "boot_id", "probe"}, written on the recorder's clock with the rest kept; a
+        heading among them opens and closes sections like heading(). lost: what the probe says was dropped (its
+        log overflowed, marks missing); each fails the run (docs/run-format.ja.md §2)."""
+        for r in rows:
+            self.doc["log"].append({**r, "t": r["t"] - self.t0})
+        for why in lost:
+            self._log("lost", why)
+            self.doc["log"][-1].update({k: v for k, v in (("probe", probe), ("boot_id", boot_id)) if v is not None})
+
+    def expect(self, path: str, checks: list) -> None:
+        """Expectations for a section by its path (docs/run-format.ja.md §2.1), e.g. one the probe's lines open."""
+        self._paths.setdefault(path, {"checks": []})["checks"] += list(checks)
+
     # captures
     def armed(self) -> float:
         """time.monotonic() right after the capture was armed; pass it to capture()."""
@@ -146,9 +163,72 @@ class Recorder:
 
     def close(self) -> Path:
         self.doc["expect"] = {self._key(occ): spec for occ, spec in self._expect.items()}
+        for path, spec in self._paths.items():
+            self.doc["expect"].setdefault(path, {"checks": []})["checks"] += spec["checks"]
+        self.doc["log"].sort(key=lambda e: e["t"])       # the probe's lines come late, each at its own time
+        for c in self.doc["captures"]:
+            _probe_markers(self.dir / c["file"], self.doc["log"])
         p = self.dir / "run.json"
         p.write_text(json.dumps(self.doc, indent=1))
         return p
+
+
+# ---- the probe's clock: a log line at its tick in a capture (docs/run-format.ja.md §2.4) ----
+
+def boot_of(meta: dict) -> int | str | None:
+    """The boot of the probe clock a capture part's start_ns is on: meta["boot_id"], else the probe's (meta.probe:
+    its boot_id, or the clock read around the capture; wireskein-format §3.3)."""
+    if meta.get("boot_id") is not None:
+        return meta["boot_id"]
+    probe = meta.get("probe") or {}
+    if probe.get("boot_id") is not None:
+        return probe["boot_id"]
+    clock = probe.get("clock") or {}
+    ids = {clock[k].get("boot_id") for k in ("before", "after") if isinstance(clock.get(k), dict)} - {None}
+    return ids.pop() if len(ids) == 1 else None
+
+
+def place(entry: dict, view: dict) -> tuple[float | None, float, str]:
+    """(tick, uncertainty in ticks, why not) of a log line with probe_ns in one part (fileformat.part_view()): its
+    tick on that part's clock (float; it may fall outside the part), or None when the line is not on the clock of
+    that part's start (another boot or probe, or a part without start_ns)."""
+    meta = view.get("meta", {})
+    if entry.get("probe_ns") is None:
+        return None, 0, "the line has no probe_ns"
+    if meta.get("start_ns") is None:
+        return None, 0, "the capture has no start_ns"
+    boot = boot_of(meta)
+    if boot is None:
+        return None, 0, "the capture does not say its probe's boot_id (pass boot_id= to Recorder.capture)"
+    if entry.get("boot_id") != boot:
+        return None, 0, f"the line is of boot {entry.get('boot_id')!r}, the capture of {boot!r}"
+    src = meta.get("source")
+    if entry.get("probe") and src and not (src == entry["probe"] or src.endswith(":" + entry["probe"])):
+        return None, 0, f"the line is of probe {entry['probe']!r}, the capture of {src!r}"
+    hz = Fraction(*view["tick_hz"])
+    tick = float((entry["probe_ns"] - meta["start_ns"]) * hz / 10**9)
+    unc = float((meta.get("start_uncertainty_ns", 0) + entry.get("uncertainty_ns", 0)) * hz / 10**9)
+    return tick, unc, ""
+
+
+def _probe_markers(path: Path, log: list[dict]) -> None:
+    """The probe's lines that fall in a capture, as its markers (by "probe-log", wireskein-format §5.2), so a viewer
+    shows them on the waveform; markers of others are kept, the probe's earlier ones replaced."""
+    if not any(e.get("probe_ns") is not None for e in log):
+        return
+    head = fileformat.read_header(path)
+    out = []
+    for k in range(len(head["parts"])):
+        view = fileformat.part_view(head, k)
+        for e in log:
+            if e.get("probe_ns") is None or e["src"] not in ("marker", "dut"):
+                continue
+            tick, unc, _ = place(e, view)
+            if tick is not None and 0 <= tick <= view["ticks"]:
+                out.append({"t": tick, "label": e["text"], "by": "probe-log", "part": k, "uncertainty_ticks": unc})
+    if out:
+        keep = [m for m in fileformat.markers(path) if m.get("by") != "probe-log"]
+        fileformat.set_markers(path, keep + out)
 
 
 # ---- expectation helpers (plain dicts; verify.py is the reference for their meaning) ----

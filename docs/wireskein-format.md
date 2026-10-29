@@ -164,6 +164,8 @@ There is the capture's `meta` (the whole) and each part's `meta`. Any keys may b
 | `start_uncertainty_ns` | Uncertainty of `start_ns` (±ns; OEP section's `start_uncertainty_ns`; a guide, not a guarantee) |
 | `trigger_tick` | Trigger position, in ticks (integer). In OEP, the logic section's `trigger_index` (tick 0 is the section's sample 0, so it is the tick as is). When there is no trigger, the key itself is omitted. The trigger position of an analog track is that channel's `acquisition.trigger_index` (a sample number of that channel) |
 | `time_base_slipped` | `true`: the probe knows that sample times were delayed (OEP section flags bit 2). When there is no delay, the key itself is omitted |
+| `boot_id` | The boot of `start_ns`'s clock (OEP core §7.7), to match lines on the probe's clock ([Run format](run-format.md) §2.4) when there is no `probe.clock` |
+| `source` | Where it was taken from (e.g. `"oep:usb:30eda0ea068b"`) |
 | `probe` | Information about the acquiring device (an object). Keys are optional. The ones whose meaning WireSkein defines are: `model`, `firmware` (the probe), `chip`, `chip_revision` (the MCU acquired from), `clock` (correspondence between the probe clock and the host clock read before and after acquisition, OEP core §7.7: `before` / `after` with `host_ns` (host monotonic clock, midpoint of the round trip), `uptime_ns`, `boot_id`, `uncertainty_ns` (half the round trip); for the same boot_id, `rate_ppm` (deviation of the probe clock speed relative to the host) and `rate_ppm_uncertainty`), `generation` (OEP v1 acquisition generation: `{"logic": n, "analog": n}`, to track which start an acquisition came from), `calibration` (factory calibration values; `scheme` holds the scheme name and `raw` the raw values, stored as is without applying them. Example: ESP32 eFuse ADC calibration values) |
 
 Large information, or information added later, goes into an attachment or a note, not `meta` (§5).
@@ -336,7 +338,8 @@ Marker:
 | `end` | number (optional) | End of the segment (ticks). If present, the segment `t` to `end` |
 | `label` | string | Name |
 | `note` | string (optional) | Description |
-| `by` | string (optional) | Who placed it (`"viewer"`, a tool name, etc.) |
+| `by` | string (optional) | Who placed it (`"viewer"`, a tool name, `"probe-log"` for lines on the probe's clock, etc.) |
+| `uncertainty_ticks` | number (optional) | Uncertainty of `t` (and `end`), ±ticks |
 | `time` | string (optional) | When it was placed (ISO 8601, with time zone offset) |
 | `part` | integer (optional) | The part (§3.4, from 0) whose ticks these are. Absent: part 0. In a file of two parts or more, writers always give it |
 

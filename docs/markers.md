@@ -53,6 +53,10 @@ In long runs, the DUT or a test tool sends marker lines over UART, and `wireskei
   - Lines starting with `#` are discarded as comments, with no response and no echo.
   - Command lines do not start with `#`.
 
+### 3.3 On the probe's clock (not sent)
+
+Code running on the probe (checking a library, for instance) can keep marker lines with times on the probe's clock instead of sending them over a UART: nothing is delayed and no pin is needed. A capture's start is on the same clock, so each line is placed in the waveform (as precisely as the capture's `start_uncertainty_ns`). The rules for recording and verifying are in [Run format](run-format.md) §2.4.
+
 ## 4. Other dialects
 
 Existing run syntaxes are read by adding a TOML dialect to `decl/markers/`. There are four line kinds.

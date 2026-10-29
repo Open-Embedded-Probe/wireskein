@@ -164,6 +164,8 @@ UTF-8 の JSON のオブジェクトです。
 | `start_uncertainty_ns` | `start_ns` の不確かさ（±ns。OEP の区画の `start_uncertainty_ns`。保証ではない目安） |
 | `trigger_tick` | トリガの位置を、刻みで表したもの（整数）。OEP では、ロジックの区画の `trigger_index`（刻み 0 が区画のサンプル 0 なので、そのまま刻み）。トリガがないときは、キー自体を入れません。アナログのトラックのトリガの位置は、そのチャンネルの `acquisition.trigger_index`（そのチャンネルのサンプルの番号）です |
 | `time_base_slipped` | `true`: プローブが、サンプルの時刻が遅れたことを知っている（OEP の区画の flags bit 2）。遅れがないときは、キー自体を入れません |
+| `boot_id` | `start_ns` の時計の起動（OEP core §7.7）。`probe.clock` が無いときに、プローブの時計の行（[記録の形式](run-format.ja.md) §2.4）と合わせるため |
+| `source` | 取得した元（例 `"oep:usb:30eda0ea068b"`） |
 | `probe` | 取得した機器の情報（オブジェクト）。キーは任意です。WireSkein が意味を決めているのは次のものです。`model`、`firmware`（プローブ）、`chip`、`chip_revision`（取得した MCU）、`clock`（取得の前後に読んだ probe の時計と host の時計の対応、OEP core §7.7: `before` / `after` に `host_ns`（host の単調時計、往復の中点）、`uptime_ns`、`boot_id`、`uncertainty_ns`（往復の半分）。同じ boot_id なら `rate_ppm`（probe の時計の速さの host に対するずれ）と `rate_ppm_uncertainty`）、`generation`（OEP v1 の取得の世代: `{"logic": n, "analog": n}`。どの開始の取得かを追うため）、`calibration`（出荷時の補正値。`scheme` に方式の名前、`raw` に生の値を、適用せずにそのまま入れる。例: ESP32 の eFuse の ADC の補正値） |
 
 大きな情報や、後から足す情報は、`meta` ではなく添付かメモに入れます（§5）。
@@ -336,7 +338,8 @@ UTF-8 の JSON のオブジェクトです。
 | `end` | 数（任意） | 区間の終わり（刻み）。あれば `t`〜`end` の区間 |
 | `label` | 文字列 | 名前 |
 | `note` | 文字列（任意） | 説明 |
-| `by` | 文字列（任意） | 付けたもの（`"viewer"`、ツールの名前など） |
+| `by` | 文字列（任意） | 付けたもの（`"viewer"`、ツールの名前、プローブの時計の行なら `"probe-log"` など） |
+| `uncertainty_ticks` | 数（任意） | `t`（と `end`）の不確かさ（±刻み） |
 | `time` | 文字列（任意） | 付けた日時（ISO 8601、時差付き） |
 | `part` | 整数（任意） | どの区間の刻みか（§3.4、0 から）。無ければ区間 0。区間が 2 つ以上のファイルでは、書き手は必ず入れます |
 
