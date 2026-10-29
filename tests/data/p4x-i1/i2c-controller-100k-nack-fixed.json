@@ -1,0 +1,16 @@
+{
+ "name": "i2c-controller-100k-nack-fixed",
+ "rate_hz": 20000000.0,
+ "samples": 100000,
+ "pads": {
+  "sda": 32,
+  "scl": 33
+ },
+ "setting": {
+  "clock_hz": 100000,
+  "transfer": "write 0x50 [0x10], repeated START, read 0x50 2 bytes",
+  "target": "none: the address is not acknowledged, so the transfer stops after it (result 1) with a STOP",
+  "pull_ups": "the probe's internal",
+  "result": "I2cTransfer(result=1, at=0, index=0, data=b'')"
+ }
+}

@@ -168,7 +168,7 @@ uart("PB0", None)                                                         # 測�
 | `t_hd_sta` | START（と repeated START）から SCL が下がるまで | ≥ 4.0 / 0.6 / 0.26 µs |
 | `t_su_sta` | repeated START の前、SCL が上がってから | ≥ 4.7 / 0.6 / 0.26 µs |
 | `t_hd_dat` | SCL が下がってから、SDA の最初の変化まで | ≥ 0 |
-| `t_vd_dat` | SCL が下がってから、その low の SDA の最後の変化まで | ≤ 3.45 / 0.9 / 0.45 µs |
+| `t_vd_dat` | SCL が下がってから、その low の SDA の最後の変化まで（データのビットだけ。START か STOP を含む high の手前の low は、条件の準備なので数えない） | ≤ 3.45 / 0.9 / 0.45 µs |
 | `t_su_dat` | SDA の最後の変化から、SCL が上がるまで | ≥ 250 / 100 / 50 ns |
 | `t_su_sto` | STOP の前、SCL が上がってから | ≥ 4.0 / 0.6 / 0.26 µs |
 | `t_buf` | STOP から次の START まで | ≥ 4.7 / 1.3 / 0.5 µs |

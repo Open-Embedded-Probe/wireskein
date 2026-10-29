@@ -168,7 +168,7 @@ When given `threshold=`, the logic checks (`square`, `level`, `starts` / `ends`,
 | `t_hd_sta` | START (and repeated START) to SCL falling | ≥ 4.0 / 0.6 / 0.26 µs |
 | `t_su_sta` | before a repeated START, from SCL rising | ≥ 4.7 / 0.6 / 0.26 µs |
 | `t_hd_dat` | SCL falling to SDA's first change | ≥ 0 |
-| `t_vd_dat` | SCL falling to SDA's last change in that low | ≤ 3.45 / 0.9 / 0.45 µs |
+| `t_vd_dat` | SCL falling to SDA's last change in that low (data bits only: the low before a high holding a START or STOP sets SDA up for the condition and is not counted) | ≤ 3.45 / 0.9 / 0.45 µs |
 | `t_su_dat` | SDA's last change to SCL rising | ≥ 250 / 100 / 50 ns |
 | `t_su_sto` | before a STOP, from SCL rising | ≥ 4.0 / 0.6 / 0.26 µs |
 | `t_buf` | STOP to the next START | ≥ 4.7 / 1.3 / 0.5 µs |

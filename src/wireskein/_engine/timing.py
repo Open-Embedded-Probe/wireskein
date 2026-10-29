@@ -154,13 +154,16 @@ def i2c_times(scl: Channel, sda: Channel, n: int) -> dict:
     """Every instance of UM10204's times on the lines, as (tick, ticks) lists, and the SCL periods (rise to rise
     inside a transaction). An SDA change while SCL is low before or after its tick is data; only one with SCL high
     on both sides is a START (falling) or STOP (rising). t_su_sta is measured for repeated STARTs (a first START
-    follows the bus being free, t_buf). t_vd_dat: from SCL falling to the last SDA change of that low."""
+    follows the bus being free, t_buf). t_vd_dat: from SCL falling to the last SDA change of that low, for a data
+    bit: not the low before a high holding a START or STOP (SDA set up for the condition), nor one the window ends
+    in."""
     starts, lv = states([scl, sda], n)
     out = {k: [] for k in I2C_TIMES}
     out["periods"] = []
     in_tx = False
     last_rise = last_fall = last_stop = start_at = None
     cond = False                        # a START or STOP since SCL last rose
+    vd = None                           # this high's t_vd_dat, kept when it ends without a condition
     changes: list[int] = []             # SDA's data changes in this low
     for k in range(1, len(starts)):
         t = int(starts[k])
@@ -187,11 +190,14 @@ def i2c_times(scl: Channel, sda: Channel, n: int) -> dict:
                 out["t_low"].append((last_fall, t - last_fall))
                 if changes:
                     out["t_su_dat"].append((changes[-1], t - changes[-1]))
-                    out["t_vd_dat"].append((last_fall, changes[-1] - last_fall))
+                    vd = (last_fall, changes[-1] - last_fall)
                 if last_rise is not None and not cond:
                     out["periods"].append((last_rise, t - last_rise))
             last_rise, cond = t, False
         elif s0 != s1:                                              # SCL falls
+            if vd is not None and not cond:
+                out["t_vd_dat"].append(vd)
+            vd = None
             if start_at is not None:
                 out["t_hd_sta"].append((start_at, t - start_at))
             elif in_tx and last_rise is not None and not cond:

@@ -92,3 +92,19 @@ def test_onewire_reset_at_its_limit():
     ok, got, why = _judge("onewire-reset-cc44", R.onewire("dq", "cc44", presence=False))
     # a 480 us reset is the limit itself: within a sample of it, not decided
     assert got["data"] == ["cc44"] and ok is None and why == "reset 480 us near 480 us at 500 us"
+
+
+@pytest.mark.parametrize("f, mode", [("100k", "standard"), ("400k", "fast")])
+def test_i2c_controller_fixed(f, mode):
+    # oep-probe-arduino counts SCL's low after START from the change and its high from SCL seen high: both modes
+    # are met. SDA held low about 9 us before the STOP after the NACK is set-up for the STOP, not a data bit
+    ok, got, why = _judge(f"i2c-controller-{f}-nack-fixed", R.i2c_timing("scl", "sda", mode))
+    assert ok is True, why
+    assert got["t_hd_dat"]["max_s"] == pytest.approx(9.1e-6) and got["t_vd_dat"]["max_s"] < 1e-6
+
+
+@pytest.mark.parametrize("name, hz", [("mode0-500k-p4x", 500e3), ("mode0-750k-p4x", 750e3)])
+def test_spi_controller_fixed(name, hz):
+    ok, got, why = _judge(f"spi-controller-{name}", R.spi("sck", "mosi", None, "cs", mode=0, mosi_bytes="a53c0f81",
+                                                          hz=hz))
+    assert ok is True, why

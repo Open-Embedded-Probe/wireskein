@@ -1,0 +1,22 @@
+{
+ "name": "spi-controller-mode0-500k-p4x",
+ "rate_hz": 20000000.0,
+ "samples": 60000,
+ "pads": {
+  "sck": 32,
+  "mosi": 33,
+  "miso": 46,
+  "cs": 47
+ },
+ "setting": {
+  "mode": 0,
+  "bit_order": "msb",
+  "clock_hz": 500000,
+  "tx": "a53c0f81",
+  "cs": "low active",
+  "setup_ns": 2000,
+  "hold_ns": 2000,
+  "miso": "undriven (no target)",
+  "rx": "00000000"
+ }
+}
