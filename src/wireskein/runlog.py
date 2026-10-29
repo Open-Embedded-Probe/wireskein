@@ -282,9 +282,46 @@ def i2c(scl: str, sda: str, transactions: list[dict] | None = None, hz: float | 
 
 def spi(clk: str, mosi: str | None = None, miso: str | None = None, cs: str | None = None, mode: int | None = None,
         mosi_bytes: str | None = None, miso_bytes: str | None = None, hz: float | None = None, tol_hz: float = 0.1,
-        bit_order: str = "msb", threshold=None) -> dict:
+        bit_order: str = "msb", cs_active: int = 0, threshold=None) -> dict:
+    """mode is read from the lines: CPOL from SCK's level as CS becomes active, CPHA from the SCK edge MOSI (else
+    MISO) changes after (a leading edge: 1)."""
     return _t({"kind": "spi", "clk": clk, "mosi": mosi, "miso": miso, "cs": cs, "mode": mode, "mosi_bytes": mosi_bytes,
-               "miso_bytes": miso_bytes, "hz": hz, "tol_hz": tol_hz, "bit_order": bit_order}, threshold)
+               "miso_bytes": miso_bytes, "hz": hz, "tol_hz": tol_hz, "bit_order": bit_order, "cs_active": cs_active},
+              threshold)
+
+
+def phase(a: str, b: str, phase_deg: float | None = None, tol_deg: float = 2.0, freq_hz: float | None = None,
+          tol_freq: float = 0.02, edge: str = "rise", threshold=None) -> dict:
+    """b's edges after a's of the same direction (edge: "rise" / "fall") as a fraction of a's period: every pair
+    within tol_deg (degrees) of phase_deg, both lines' frequency within tol_freq (relative) of freq_hz. Nothing
+    expected: measured only."""
+    return _t({"kind": "phase", "a": a, "b": b, "phase_deg": phase_deg, "tol_deg": tol_deg, "freq_hz": freq_hz,
+               "tol_freq": tol_freq, "edge": edge}, threshold)
+
+
+def skew(a: str, b: str, tol_s: float, delay_s: float = 0.0, threshold=None) -> dict:
+    """Two lines that change together (patterns, parallel outputs): every edge of b within tol_s of delay_s after
+    a's edge of the same direction (negative: before), and no edge of either without a partner."""
+    return _t({"kind": "skew", "a": a, "b": b, "tol_s": tol_s, "delay_s": delay_s}, threshold)
+
+
+def dead_time(hi: str, lo: str, min_s: float | None = None, max_s: float | None = None, active: int = 1,
+              allow_overlap: bool = False, threshold=None) -> dict:
+    """The two outputs of a half bridge (on at `active`): from one turning off to the other turning on, each time
+    within [min_s, max_s]; both on at once (shoot-through) fails unless allow_overlap. Nothing expected beyond
+    that: measured."""
+    return _t({"kind": "dead_time", "hi": hi, "lo": lo, "min_s": min_s, "max_s": max_s, "active": int(active),
+               "allow_overlap": allow_overlap}, threshold)
+
+
+def i2c_timing(scl: str, sda: str, mode: str | None = "standard", limits: dict | None = None,
+               threshold=None) -> dict:
+    """UM10204's times on the bus, every instance against the limits of mode ("standard", "fast", "fast-plus";
+    None: only `limits`). limits: {"t_low": min_s, "t_vd_dat": (min_s, max_s), "f_scl": (None, max_hz), ...}
+    replaces the mode's limit of that name."""
+    return _t({"kind": "i2c_timing", "scl": scl, "sda": sda, "mode": mode,
+               "limits": {k: list(v) if isinstance(v, (list, tuple)) else v for k, v in (limits or {}).items()}},
+              threshold)
 
 
 def uart(pin: str, baud: float | None, data: str | None = None, tol_baud: float = 0.03, idle: int = 1, bits: int = 8,

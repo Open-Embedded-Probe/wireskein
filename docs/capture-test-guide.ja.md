@@ -101,9 +101,13 @@ wireskein verify out/run1 --junit out/run1/report.xml --json out/run1/report.jso
 | `only_moving([pins])` | ほかのキャプチャ対象のピンが動かない。ロジックのチャンネルだけを見る |
 | `pulses(pin, count, period_s, tol_period)` | 立ち上がりの数と周期。`tol_period` は相対 |
 | `i2c(scl, sda, transactions, hz, tol_hz, released)` | トランザクションの列（アドレス、読み書き、バイト、ACK）、SCL の周波数、終了時に両方 High |
-| `spi(clk, mosi, miso, cs, mode, mosi_bytes, miso_bytes, hz, tol_hz, bit_order)` | モード、両方向のバイト、SCK の周波数、終了時に CS が High |
+| `spi(clk, mosi, miso, cs, mode, mosi_bytes, miso_bytes, hz, tol_hz, bit_order, cs_active)` | モード、両方向のバイト、SCK の周波数、終了時に CS が High。モードは線から読む（§4.5） |
 | `uart(pin, baud, data, tol_baud, idle, bits, parity, stop, max_errors)` | ボーレート、バイト列、アイドルレベル、フレームとパリティのエラー（下記） |
 | `voltage(pin, volts, tol_v, min_v, max_v, ripple)` | アナログのチャンネルの電圧。平均が `volts` ± `tol_v`（V）、全サンプルが `min_v`〜`max_v`、ピークからピークが `ripple` 以下。与えたものだけを見る |
+| `phase(a, b, phase_deg, tol_deg, freq_hz, tol_freq, edge)` | 2 本の周期的な線の位相。a のエッジから、同じ向きの b の次のエッジまでを、a の周期に対する角度（0〜360 度）にする。どの組も `phase_deg` ± `tol_deg`（度。0 の近くは回り込む）、両方の周波数が `freq_hz` の `tol_freq`（相対）の内 |
+| `skew(a, b, tol_s, delay_s)` | 一緒に変わる 2 本の線（パターン、並列の出力）のずれ。a のどのエッジにも、同じ向きの b のエッジが `delay_s` ± `tol_s` にある。相手の無いエッジは NG |
+| `dead_time(hi, lo, min_s, max_s, active, allow_overlap)` | ハーフブリッジの 2 本の出力（`active` で on）。片方が off になってから他方が on になるまでが、毎回 `min_s`〜`max_s`。両方が on（貫通）は、`allow_overlap` が無ければ NG |
+| `i2c_timing(scl, sda, mode, limits)` | UM10204 の個々の時間（§4.4） |
 
 検査に使うピンがキャプチャにないなど、検査できなかったものは未検査（`unchecked`）です。
 
@@ -134,10 +138,46 @@ uart("PB0", None)                                                         # 測�
 
 ### 4.3 アナログの線にロジックの検査をかける（`threshold=`）
 
-`square`、`level`、`starts` / `ends`、`pulses`、`i2c`、`spi`、`uart` は、`threshold=` を与えると、アナログのチャンネルをその電圧でロジックとして読みます。
+ロジックの検査（`square`、`level`、`starts` / `ends`、`pulses`、`i2c`、`spi`、`uart`、`phase`、`skew`、`dead_time`、`i2c_timing`）は、`threshold=` を与えると、アナログのチャンネルをその電圧でロジックとして読みます。
 
 - 1 つの値（例 `threshold=1.65`）か、ヒステリシスの組（例 `threshold=(1.0, 2.3)`: 2.3 V に達したら high、1.0 V まで下がったら low）。ノイズの乗った遅いエッジは、組にすると 1 本のエッジになります。
 - `threshold=` のないロジックの検査にアナログのチャンネルを渡すと、未検査になります。電圧への換算がファイルにないチャンネルも未検査です。
+
+### 4.4 時間の限度と分解能
+
+`phase`、`skew`、`dead_time`、`i2c_timing` は、エッジの間の時間を限度と比べます。エッジは、その刻みの前の 1 サンプル（チャンネルのステップ）のどこかで変わったので、2 本の線のエッジの間の時間は、2 本のステップの大きい方（分解能）だけ不確かです。
+
+- 測った値 ± 分解能が、すべて限度の内なら OK、すべて外なら NG、限度をまたげば未検査（理由に `near`）。未検査になったら、速いサンプルレートで取り直します。
+- 限度はどの回にもかけ、いちばん悪い回で決めます。理由に、その値と時刻を書きます。
+- 期待を何も与えなければ、測るだけ（`measured`）です。
+
+`i2c_timing` は、UM10204（rev. 7）の表 10 の限度を `mode`（`"standard"`、`"fast"`、`"fast-plus"`）で選びます。`limits` で名前ごとに置き換えます（値 1 つは下限、組は `(下限, 上限)`。`mode=None` なら `limits` だけ）。
+
+| 名前 | 測るもの | standard / fast / fast-plus |
+| --- | --- | --- |
+| `f_scl` | SCL の周波数（転送の中の立ち上がりから立ち上がり。いちばん短い周期） | ≤ 100 / 400 / 1000 kHz |
+| `t_low` | SCL の low | ≥ 4.7 / 1.3 / 0.5 µs |
+| `t_high` | SCL の high（START と STOP を含まないもの） | ≥ 4.0 / 0.6 / 0.26 µs |
+| `t_hd_sta` | START（と repeated START）から SCL が下がるまで | ≥ 4.0 / 0.6 / 0.26 µs |
+| `t_su_sta` | repeated START の前、SCL が上がってから | ≥ 4.7 / 0.6 / 0.26 µs |
+| `t_hd_dat` | SCL が下がってから、SDA の最初の変化まで | ≥ 0 |
+| `t_vd_dat` | SCL が下がってから、その low の SDA の最後の変化まで | ≤ 3.45 / 0.9 / 0.45 µs |
+| `t_su_dat` | SDA の最後の変化から、SCL が上がるまで | ≥ 250 / 100 / 50 ns |
+| `t_su_sto` | STOP の前、SCL が上がってから | ≥ 4.0 / 0.6 / 0.26 µs |
+| `t_buf` | STOP から次の START まで | ≥ 4.7 / 1.3 / 0.5 µs |
+
+- 線のしきい値で測るので、立ち上がりの遅い線の時間は、規格の 30 % と 70 % の点での時間と少し違います。立ち上がりと立ち下がりの時間（tr、tf）は測りません（アナログのチャンネルで見る）。
+- SCL が high の両側で SDA が変われば START か STOP、どちらかの側で SCL が low なら、データの変化として数えます。
+- ACK を target が出すときも、`t_vd_dat` は同じ限度（tVD;ACK）です。
+
+```python
+i2c_timing("PC2", "PC1", "fast")
+i2c_timing("PC2", "PC1", "standard", limits={"t_su_dat": 300e-9})
+```
+
+### 4.5 SPI のモード
+
+`spi` のモードは、線そのものから読みます。CPOL は CS が有効になったときの SCK の level です（CS が無ければ、いちばん長い休みの level）。CPHA は、MOSI（無ければ MISO）の変化の前の SCK のエッジで決めます。前が先のエッジ（休みの level から離れるエッジ）なら、そこで出して後のエッジで取る CPHA 1、後のエッジなら CPHA 0 です。CS が有効になってから最初のエッジまでの変化は、ほかに変化が無いときだけ使います（どちらのモードでも、CS で最初のビットを出す相手がある）。復号器が選んだモードは `decoded_mode` に残ります。CS が active high なら `cs_active=1` です。
 
 ## 5. 許容誤差の決め方
 

@@ -21,7 +21,7 @@ from pathlib import Path
 
 import numpy as np
 
-from ._engine import analog, events, markers
+from ._engine import analog, events, markers, timing
 from . import runlog
 from ._engine.model import AnalogTrace, Capture, Channel, EventTrace
 from .runlog import FORMAT
@@ -365,6 +365,21 @@ def check_spi(cap, x):
     hexes = {pin: bytes(rev(int(v) & 0xFF) for fr in frs for v in fr).hex() for pin, frs in lines.items()}
     got = {"mode": n.metrics.get("mode"), "bytes": hexes, "sck_hz": _burst_hz(cap.channel(x["clk"]), cap.rate)}
     ok, why = True, []
+    # the mode read from the lines themselves (timing.spi_mode): SCK's level as CS becomes active, the edge MOSI
+    # (else MISO) changes after; the decoder's choice is kept as decoded_mode
+    m = timing.spi_mode(cap.channel(x["clk"]), [cap.channel(x[r]) for r in ("mosi", "miso") if x.get(r)],
+                        cap.n_samples, cap.channel(x["cs"]) if x.get("cs") else None, x.get("cs_active", 0))
+    line = next((m["lines"][x[r]] for r in ("mosi", "miso") if x.get(r) and m.get("lines", {}).get(x[r], {}).get(
+        "cpha") is not None), None)
+    if line is not None:
+        got.update(decoded_mode=got["mode"], mode=m["cpol"] * 2 + line["cpha"], cpol=m["cpol"],
+                   cpha=line["cpha"], cpha_votes={k: {e: v[e] for e in ("after_leading", "after_trailing",
+                                                                        "before_first")}
+                                                  for k, v in m["lines"].items()})
+        if len(set(m["cpol_votes"])) > 1:
+            ok = False
+            why.append(f"SCK's level when CS became active was {m['cpol_votes'].count(0)} times 0 and "
+                       f"{m['cpol_votes'].count(1)} times 1")
     for role in ("mosi", "miso"):
         want = x.get(f"{role}_bytes")
         if want is not None and hexes.get(x.get(role)) != want.lower():
@@ -383,6 +398,151 @@ def check_spi(cap, x):
             ok = False
             why.append("CS not high at the end")
     return ok, got, "; ".join(why)
+
+
+def _verdicts(parts: list[tuple[bool | None, str]]) -> tuple[bool | None, str]:
+    """One verdict from several: any broken limit fails, else any undecided one leaves the check unchecked."""
+    bad = [w for v, w in parts if v is False]
+    if bad:
+        return False, "; ".join(bad)
+    open_ = [w for v, w in parts if v is None]
+    return (None, "; ".join(open_)) if open_ else (True, "")
+
+
+def _limit_of(name: str, ticks: list[tuple[int, int]], res: int, lo: float | None, hi: float | None, rate: float):
+    """Every instance of a time (tick, length) against [lo, hi] seconds: the worst one decides."""
+    v = np.array([d for _, d in ticks], np.float64)
+    at = np.array([t for t, _ in ticks], np.float64)
+    out = []
+    if lo is not None:
+        k = int(np.argmin(v))
+        j = timing.judge(v[k], res, lo=lo * rate)
+        out.append((j, f"{name} {_si(v[k] / rate)} {'<' if j is False else 'near'} {_si(lo)} at {_si(at[k] / rate)}"))
+    if hi is not None:
+        k = int(np.argmax(v))
+        j = timing.judge(v[k], res, hi=hi * rate)
+        out.append((j, f"{name} {_si(v[k] / rate)} {'>' if j is False else 'near'} {_si(hi)} at {_si(at[k] / rate)}"))
+    return out
+
+
+def _si(s: float) -> str:
+    a = abs(s)
+    for unit, f in (("s", 1), ("ms", 1e3), ("us", 1e6), ("ns", 1e9)):
+        if a >= 1 / f or unit == "ns":
+            return f"{s * f:.4g} {unit}"
+
+
+def _times(ticks: list[tuple[int, int]], rate: float) -> dict:
+    v = np.array([d for _, d in ticks], np.float64)
+    if len(v) == 0:
+        return {"count": 0}
+    return {"count": int(len(v)), "min_s": float(v.min()) / rate, "max_s": float(v.max()) / rate,
+            "median_s": float(np.median(v)) / rate}
+
+
+def check_phase(cap, x):
+    a, b = _ch(cap, x["a"]), _ch(cap, x["b"])
+    if a is None or b is None:
+        return None, {}, "pins not captured"
+    p = timing.phase(a, b, cap.rate, x.get("edge", "rise"))
+    deg = p.pop("deg", None)
+    if not p["pairs"]:
+        return False, p, f"no {x['b']} edge within a period after {x['a']}'s"
+    parts = []
+    if x.get("phase_deg") is not None:
+        dev = np.abs([timing.circular_diff(float(d), x["phase_deg"]) for d in deg])
+        k = int(np.argmax(dev))
+        j = timing.judge(float(dev[k]), p["resolution_deg"], hi=x["tol_deg"])
+        parts.append((j, f"phase {deg[k]:.2f} deg vs {x['phase_deg']} +- {x['tol_deg']} "
+                         f"(resolution {p['resolution_deg']:.2f} deg)"))
+    if x.get("freq_hz") is not None:
+        for k in ("freq_hz", "freq_b_hz"):
+            err = p[k] / x["freq_hz"] - 1
+            parts.append((abs(err) <= x["tol_freq"], f"{x['a' if k == 'freq_hz' else 'b']} {p[k]:.2f} Hz is "
+                                                     f"{err * 100:+.2f}% off"))
+    if not parts:
+        return MEASURED, p, ""
+    ok, why = _verdicts(parts)
+    return ok, p, why
+
+
+def check_skew(cap, x):
+    a, b = _ch(cap, x["a"]), _ch(cap, x["b"])
+    if a is None or b is None:
+        return None, {}, "pins not captured"
+    r = timing.skew(a, b, cap.rate)
+    d = r["delays"].astype(np.float64)
+    res = timing.res_of(a, b)
+    got = {"pairs": int(len(d)), "unpaired_a": r["unpaired_a"], "unpaired_b": r["unpaired_b"],
+           "resolution_s": res / cap.rate}
+    if len(d):
+        got.update(min_s=float(d.min()) / cap.rate, max_s=float(d.max()) / cap.rate,
+                   median_s=float(np.median(d)) / cap.rate)
+    if not len(d):
+        return False, got, f"no edge of {x['b']} near {x['a']}'s"
+    parts = []
+    if r["unpaired_a"] or r["unpaired_b"]:
+        parts.append((False, f"{r['unpaired_a']} edges of {x['a']} and {r['unpaired_b']} of {x['b']} without a partner"))
+    want = x.get("delay_s", 0.0) * cap.rate
+    dev = np.abs(d - want)
+    k = int(np.argmax(dev))
+    parts.append((timing.judge(float(dev[k]), res, hi=x["tol_s"] * cap.rate),
+                  f"{x['b']} {_si(d[k] / cap.rate)} after {x['a']} vs {_si(x.get('delay_s', 0.0))} +- {_si(x['tol_s'])}"))
+    ok, why = _verdicts(parts)
+    return ok, got, why
+
+
+def check_dead_time(cap, x):
+    hi, lo = _ch(cap, x["hi"]), _ch(cap, x["lo"])
+    if hi is None or lo is None:
+        return None, {}, "pins not captured"
+    r = timing.dead_time(hi, lo, cap.n_samples, x.get("active", 1))
+    res = timing.res_of(hi, lo)
+    got = {"hi_to_lo": _times(r["hi_to_lo"], cap.rate), "lo_to_hi": _times(r["lo_to_hi"], cap.rate),
+           "overlaps": _times(r["overlaps"], cap.rate), "resolution_s": res / cap.rate}
+    if not r["hi_to_lo"] and not r["lo_to_hi"] and not r["overlaps"]:
+        return False, got, "the outputs never switched from one to the other"
+    parts = []
+    if r["overlaps"] and not x.get("allow_overlap"):
+        t, ln = max(r["overlaps"], key=lambda o: o[1])
+        parts.append((False, f"both on {len(r['overlaps'])} times, longest {_si(ln / cap.rate)} at {_si(t / cap.rate)}"))
+    for side in ("hi_to_lo", "lo_to_hi"):
+        if r[side]:
+            parts += _limit_of(side, r[side], res, x.get("min_s"), x.get("max_s"), cap.rate)
+    if not parts:
+        return MEASURED, got, ""
+    ok, why = _verdicts(parts)
+    return ok, got, why
+
+
+def check_i2c_timing(cap, x):
+    scl, sda = _ch(cap, x["scl"]), _ch(cap, x["sda"])
+    if scl is None or sda is None:
+        return None, {}, "pins not captured"
+    lim = {**(timing.I2C_MODES[x["mode"]] if x.get("mode") else {}),
+           **{k: tuple(v) if isinstance(v, (list, tuple)) else (v, None) for k, v in (x.get("limits") or {}).items()}}
+    r = timing.i2c_times(scl, sda, cap.n_samples)
+    res = timing.res_of(scl, sda)
+    got = {k: _times(r[k], cap.rate) for k in timing.I2C_TIMES}
+    got["resolution_s"] = res / cap.rate
+    per = np.array([d for _, d in r["periods"]], np.float64)
+    if len(per):
+        got["f_scl"] = {"count": int(len(per)), "max_hz": cap.rate / float(per.min()),
+                        "median_hz": cap.rate / float(np.median(per))}
+    if not r["t_low"]:
+        return None, got, "no clock pulse inside a transaction"
+    parts = []
+    for k, (lo, hi) in lim.items():
+        if k == "f_scl":
+            if hi is not None and len(per):
+                at = r["periods"][int(np.argmin(per))][0]
+                j = timing.judge(float(per.min()), res, lo=cap.rate / hi)
+                parts.append((j, f"SCL {cap.rate / float(per.min()) / 1e3:.4g} kHz {'>' if j is False else 'near'} "
+                                 f"{hi / 1e3:.4g} kHz at {_si(at / cap.rate)}"))
+        elif r.get(k):
+            parts += _limit_of(k, r[k], res, lo, hi, cap.rate)
+    ok, why = _verdicts(parts)
+    return ok, got, why
 
 
 def _uart_rx(ch: Channel, n: int, u: float, idle: int, bits: int, parity: str, stop: float) -> dict:
@@ -666,7 +826,8 @@ def check_voltage(cap, x):
     return True, got, ""
 
 
-LOGIC = {"square", "level", "ends", "starts", "pulses", "i2c", "spi", "uart"}   # checks that read logic levels
+LOGIC = {"square", "level", "ends", "starts", "pulses", "i2c", "spi", "uart", "phase", "skew", "dead_time",
+         "i2c_timing"}   # checks that read logic levels
 
 
 def _as_logic(cap: Capture, x: dict) -> tuple[Capture | None, str]:
@@ -690,12 +851,13 @@ def _as_logic(cap: Capture, x: dict) -> tuple[Capture | None, str]:
 EVENT_CHECKS = {"level", "ends", "starts", "pulses", "only_moving"}   # what a line whose quanta hide changes answers
 CHECKS = {"square": check_square, "level": check_level, "ends": check_ends, "starts": check_starts,
           "only_moving": check_only_moving, "pulses": check_pulses, "i2c": check_i2c, "spi": check_spi,
-          "uart": check_uart, "voltage": check_voltage}
+          "uart": check_uart, "voltage": check_voltage, "phase": check_phase, "skew": check_skew,
+          "dead_time": check_dead_time, "i2c_timing": check_i2c_timing}
 
 
 def _pins_of(x: dict) -> set[str]:
     out = set()
-    for k in ("pin", "scl", "sda", "clk", "mosi", "miso", "cs"):
+    for k in ("pin", "scl", "sda", "clk", "mosi", "miso", "cs", "a", "b", "hi", "lo"):
         if x.get(k):
             out.add(x[k])
     out |= set(x.get("levels", {}))

@@ -42,7 +42,7 @@ The run is a directory, with each capture in a separate file, so that if the tes
 
 ### 2.3 Checks
 
-Each element of `checks` is an object `{"kind": ..., ...}`. `kind` is one of `square`, `level`, `starts`, `ends`, `only_moving`, `pulses`, `i2c`, `spi`, `uart`, `voltage`. The keys and meaning of each check are in [Testing with captures](capture-test-guide.md) §4 (the functions of the same names in Python's `wireskein.runlog` build these objects).
+Each element of `checks` is an object `{"kind": ..., ...}`. `kind` is one of `square`, `level`, `starts`, `ends`, `only_moving`, `pulses`, `i2c`, `spi`, `uart`, `voltage`, `phase`, `skew`, `dead_time`, `i2c_timing`. The keys and meaning of each check are in [Testing with captures](capture-test-guide.md) §4 (the functions of the same names in Python's `wireskein.runlog` build these objects).
 
 Tolerance names:
 
@@ -54,8 +54,10 @@ Tolerance names:
 | `tol_hz` | Relative | `i2c`, `spi` |
 | `tol_period` | Relative | `pulses` |
 | `tol_v` | Absolute (V) | `voltage` |
+| `tol_deg` | Absolute (degrees) | `phase` |
+| `tol_s` | Absolute (seconds) | `skew` |
 
-- When `threshold` (V, or `(low, high)`) is given, the logic checks (`square`, `level`, `starts`, `ends`, `pulses`, `i2c`, `spi`, `uart`) read an analog channel as logic.
+- When `threshold` (V, or `(low, high)`) is given, the logic checks (`square`, `level`, `starts`, `ends`, `pulses`, `i2c`, `spi`, `uart`, `phase`, `skew`, `dead_time`, `i2c_timing`) read an analog channel as logic.
 - `only_moving` looks at logic channels only.
 
 ### 2.4 Lines on the probe's clock

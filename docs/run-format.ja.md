@@ -42,7 +42,7 @@
 
 ### 2.3 検査
 
-`checks` の各要素は `{"kind": ..., ...}` のオブジェクトです。`kind` は `square`、`level`、`starts`、`ends`、`only_moving`、`pulses`、`i2c`、`spi`、`uart`、`voltage` です。各検査のキーと意味は [キャプチャで試験する](capture-test-guide.ja.md) §4 にあります（Python の `wireskein.runlog` の同名の関数が、このオブジェクトを作ります）。
+`checks` の各要素は `{"kind": ..., ...}` のオブジェクトです。`kind` は `square`、`level`、`starts`、`ends`、`only_moving`、`pulses`、`i2c`、`spi`、`uart`、`voltage`、`phase`、`skew`、`dead_time`、`i2c_timing` です。各検査のキーと意味は [キャプチャで試験する](capture-test-guide.ja.md) §4 にあります（Python の `wireskein.runlog` の同名の関数が、このオブジェクトを作ります）。
 
 許容誤差の名前:
 
@@ -54,8 +54,10 @@
 | `tol_hz` | 相対 | `i2c`、`spi` |
 | `tol_period` | 相対 | `pulses` |
 | `tol_v` | 絶対（V） | `voltage` |
+| `tol_deg` | 絶対（度） | `phase` |
+| `tol_s` | 絶対（秒） | `skew` |
 
-- `threshold`（V、または `(low, high)`）を与えると、ロジックの検査（`square`、`level`、`starts`、`ends`、`pulses`、`i2c`、`spi`、`uart`）が、アナログのチャンネルをロジックとして読みます。
+- `threshold`（V、または `(low, high)`）を与えると、ロジックの検査（`square`、`level`、`starts`、`ends`、`pulses`、`i2c`、`spi`、`uart`、`phase`、`skew`、`dead_time`、`i2c_timing`）が、アナログのチャンネルをロジックとして読みます。
 - `only_moving` は、ロジックのチャンネルだけを見ます。
 
 ### 2.4 プローブの時計の行

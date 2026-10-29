@@ -101,9 +101,13 @@ For a single-shot capture, put "quiet segment before, activity, quiet segment af
 | `only_moving([pins])` | No other captured pin moves. Looks only at logic channels |
 | `pulses(pin, count, period_s, tol_period)` | Number of rising edges and the period. `tol_period` is relative |
 | `i2c(scl, sda, transactions, hz, tol_hz, released)` | Sequence of transactions (address, read/write, bytes, ACK), SCL frequency, both High at the end |
-| `spi(clk, mosi, miso, cs, mode, mosi_bytes, miso_bytes, hz, tol_hz, bit_order)` | Mode, bytes in both directions, SCK frequency, CS High at the end |
+| `spi(clk, mosi, miso, cs, mode, mosi_bytes, miso_bytes, hz, tol_hz, bit_order, cs_active)` | Mode, bytes in both directions, SCK frequency, CS High at the end. The mode is read from the lines (§4.5) |
 | `uart(pin, baud, data, tol_baud, idle, bits, parity, stop, max_errors)` | Baud rate, byte sequence, idle level, framing and parity errors (below) |
 | `voltage(pin, volts, tol_v, min_v, max_v, ripple)` | Voltage of an analog channel. Mean is `volts` ± `tol_v` (V), all samples within `min_v` to `max_v`, peak-to-peak at most `ripple`. Only the given ones are checked |
+| `phase(a, b, phase_deg, tol_deg, freq_hz, tol_freq, edge)` | Phase of two periodic lines: from an edge of a to b's next edge of the same direction, as an angle of a's period (0–360 degrees). Every pair within `phase_deg` ± `tol_deg` (degrees, wrapping near 0), both frequencies within `tol_freq` (relative) of `freq_hz` |
+| `skew(a, b, tol_s, delay_s)` | Skew of two lines that change together (patterns, parallel outputs): every edge of a has b's edge of the same direction at `delay_s` ± `tol_s`. An edge without a partner is NG |
+| `dead_time(hi, lo, min_s, max_s, active, allow_overlap)` | The two outputs of a half bridge (on at `active`): from one turning off to the other turning on, every time within `min_s`–`max_s`. Both on (shoot-through) is NG unless `allow_overlap` |
+| `i2c_timing(scl, sda, mode, limits)` | UM10204's individual times (§4.4) |
 
 Anything that could not be checked, for example because a pin used by the check is not in the capture, is unchecked (`unchecked`).
 
@@ -134,10 +138,46 @@ uart("PB0", None)                                                         # meas
 
 ### 4.3 Applying logic checks to analog lines (`threshold=`)
 
-When given `threshold=`, `square`, `level`, `starts` / `ends`, `pulses`, `i2c`, `spi` and `uart` read an analog channel as logic at that voltage.
+When given `threshold=`, the logic checks (`square`, `level`, `starts` / `ends`, `pulses`, `i2c`, `spi`, `uart`, `phase`, `skew`, `dead_time`, `i2c_timing`) read an analog channel as logic at that voltage.
 
 - Either a single value (e.g. `threshold=1.65`) or a hysteresis pair (e.g. `threshold=(1.0, 2.3)`: high on reaching 2.3 V, low on falling to 1.0 V). With a pair, a slow noisy edge becomes a single edge.
 - Passing an analog channel to a logic check without `threshold=` makes it unchecked. A channel whose voltage conversion is not in the file is also unchecked.
+
+### 4.4 Time limits and resolution
+
+`phase`, `skew`, `dead_time` and `i2c_timing` compare times between edges with limits. An edge changed somewhere in the sample (the channel's step) before its tick, so a time between edges of two lines is uncertain by the larger of their steps (the resolution).
+
+- When the measured value ± the resolution is all within the limit: OK; all outside: NG; straddling it: unchecked (`near` in the reason). Capture again at a faster rate.
+- A limit applies to every instance; the worst decides, and the reason gives its value and time.
+- With nothing expected, the check only measures (`measured`).
+
+`i2c_timing` picks the limits of UM10204 (rev. 7) table 10 by `mode` (`"standard"`, `"fast"`, `"fast-plus"`). `limits` replaces them by name (one value: a minimum; a pair: `(min, max)`; with `mode=None` only `limits`).
+
+| Name | Measures | standard / fast / fast-plus |
+| --- | --- | --- |
+| `f_scl` | SCL frequency (rise to rise inside a transaction; the shortest period) | ≤ 100 / 400 / 1000 kHz |
+| `t_low` | SCL low | ≥ 4.7 / 1.3 / 0.5 µs |
+| `t_high` | SCL high (those holding no START or STOP) | ≥ 4.0 / 0.6 / 0.26 µs |
+| `t_hd_sta` | START (and repeated START) to SCL falling | ≥ 4.0 / 0.6 / 0.26 µs |
+| `t_su_sta` | before a repeated START, from SCL rising | ≥ 4.7 / 0.6 / 0.26 µs |
+| `t_hd_dat` | SCL falling to SDA's first change | ≥ 0 |
+| `t_vd_dat` | SCL falling to SDA's last change in that low | ≤ 3.45 / 0.9 / 0.45 µs |
+| `t_su_dat` | SDA's last change to SCL rising | ≥ 250 / 100 / 50 ns |
+| `t_su_sto` | before a STOP, from SCL rising | ≥ 4.0 / 0.6 / 0.26 µs |
+| `t_buf` | STOP to the next START | ≥ 4.7 / 1.3 / 0.5 µs |
+
+- Times are taken at the line's threshold, so on a slow edge they differ a little from the standard's 30 % / 70 % points. Rise and fall times (tr, tf) are not measured (look at an analog channel).
+- An SDA change with SCL high on both sides is a START or STOP; with SCL low on either side it counts as a data change.
+- When the target drives the ACK, `t_vd_dat` has the same limit (tVD;ACK).
+
+```python
+i2c_timing("PC2", "PC1", "fast")
+i2c_timing("PC2", "PC1", "standard", limits={"t_su_dat": 300e-9})
+```
+
+### 4.5 SPI mode
+
+`spi` reads the mode from the lines themselves. CPOL is SCK's level when CS becomes active (without CS, its level over the longest pause). CPHA comes from the SCK edge before each change of MOSI (else MISO): after a leading edge (leaving the idle level) the bit was put out there and is sampled on the trailing one, CPHA 1; after a trailing edge, CPHA 0. Changes between CS becoming active and the first edge count only when there are no others (in either mode a device may put its first bit out on CS). The decoder's choice stays as `decoded_mode`. For an active-high CS give `cs_active=1`.
 
 ## 5. Choosing tolerances
 
