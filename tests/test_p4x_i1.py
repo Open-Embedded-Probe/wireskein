@@ -45,7 +45,8 @@ def test_mcpwm_phase_skew_and_dead_time():
 
 
 def test_rmt_two_pads_together():
-    # every edge of the two pads on the same sample at 40 Msps; rmt_a has one more rise near the end
+    # every edge of the two pads on the same sample at 40 Msps; rmt_a has one more rise near the end: the
+    # experiment's firmware giving the pad back (gpio_reset_pin: an input with a pull-up), not the RMT
     ok, got, why = _judge("rmt-two-pads-80M", R.skew("rmt_a", "rmt_b", 30e-9))
     assert got["max_s"] == got["min_s"] == 0 and (got["unpaired_a"], got["unpaired_b"]) == (1, 0)
     assert ok is False and "without a partner" in why
@@ -75,7 +76,7 @@ def test_ws2812_frames_and_a_pulse_after():
     ok, got, why = _judge("ws2812-3px", R.rgb_led("din", ["123456a55aff008001"] * 2))
     assert got["frames"][:2] == ["123456a55aff008001"] * 2
     assert got["t0h"]["min_s"] == pytest.approx(400e-9) and got["period"]["max_s"] == pytest.approx(1.3e-6)
-    # a 45.85 us high 89 us after the second frame: a third frame of one bit
+    # a 45.85 us high 89 us after the second frame (the pad given back with a pull-up): a frame of one bit
     assert ok is False and got["bits"][2] == 1 and "T1H 45.85 us" in why
 
 
