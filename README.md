@@ -262,6 +262,12 @@ wireskein segments capture.sr --results                   # a capture with marke
 
 `--hint` restricts what is tried. It can name protocols, or give pins with their roles and baud rates. The result is still scored by the decoders' own checks.
 
+When the wiring is known (a run that drove a part through its bus), `wireskein decode` gives the buses a spec names, decoded with exactly those roles however little a short case shows, every part of the capture on its own, with what was not read and what was lost beside them ([docs/analysis-format.md](docs/analysis-format.md)):
+
+```sh
+wireskein decode c0001.wireskein --spec '{"buses": [{"protocol": "i2c", "pins": {"scl": "SCL", "sda": "SDA"}}]}' --out analysis.json
+```
+
 ```python
 from wireskein.analyze import load, save, analyze, export
 

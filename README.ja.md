@@ -250,6 +250,12 @@ wireskein analyze m.wireskein --threshold TX=1.0,2.3        # アナログのチ
 wireskein segments capture.sr --results                   # UART にマーカーの行を流したキャプチャ
 ```
 
+配線が分かっているとき（部品をバスで動かした記録など）は、`wireskein decode` が、指定したバスをその役割のとおりに復号します。短いケースで証拠が少なくても出します。キャプチャの区間ごとに、読めなかった所と落ちた所も一緒に出します（[docs/analysis-format.ja.md](docs/analysis-format.ja.md)）:
+
+```sh
+wireskein decode c0001.wireskein --spec '{"buses": [{"protocol": "i2c", "pins": {"scl": "SCL", "sda": "SDA"}}]}' --out analysis.json
+```
+
 ```python
 from wireskein.analyze import load, save, analyze, export
 

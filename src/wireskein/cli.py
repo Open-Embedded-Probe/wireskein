@@ -176,6 +176,22 @@ def _thresholds(items: list[str] | None) -> dict:
     return out
 
 
+def decode_cmd(args) -> None:
+    from .decode import decode_file
+    src = args.spec[1:] if args.spec.startswith("@") else args.spec
+    try:
+        spec = json.loads(Path(src).read_text() if not src.lstrip().startswith("{") else src)
+        doc = decode_file(args.capture, spec)
+    except (ValueError, FileNotFoundError, zipfile.BadZipFile) as e:
+        sys.exit(f"wireskein decode: {e}")
+    text = export.dumps(doc)
+    if args.out:
+        args.out.write_text(text)
+        print(f"{len(text)} bytes -> {args.out}", file=sys.stderr)
+    else:
+        print(text)
+
+
 def _load_for_decoding(path, args):
     """load(), with the analog channels named by --threshold read as logic too."""
     cap = load(path)
@@ -499,6 +515,11 @@ def main() -> None:
                    help='marker source: {"pin": "D6", "dialect": "heading"} (default: found automatically)')
     a.add_argument("--events", action="store_true",
                    help="with --segment: include text lines as events (always included in --mode all)")
+    dc = sub.add_parser("decode", help="decode the buses a spec names with exactly those roles (wireskein-analysis/1)")
+    dc.add_argument("capture", type=Path)
+    dc.add_argument("--spec", required=True, metavar="JSON",
+                    help='{"buses": [{"protocol", "pins": {role: pin}, "params"}], "lines": [...]}; @FILE or a file path')
+    dc.add_argument("--out", type=Path, default=None)
     sg = sub.add_parser("segments", help="the marker segment tree with per-segment activity and decoded items")
     sg.add_argument("capture", type=Path)
     sg.add_argument("--hint", default=None)
@@ -604,6 +625,8 @@ def main() -> None:
             sys.exit(f"wireskein segments: {e}")
     if args.cmd == "verify":
         return verify_cmd(args)
+    if args.cmd == "decode":
+        return decode_cmd(args)
 
     hints = None
     if args.hint:
