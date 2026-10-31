@@ -1,22 +1,23 @@
 """A WireSkein file as one value: the capture, its parts, their channels (wireskein-format).
 
-    cap = capture.read("c0001.wireskein")       # the header only; channels are read when asked for
+    cap = capture.read("c0001.wireskein")       # the header only; a part's channels when first asked for
     cap.tick_hz, cap.layout, cap.complete, cap.lost, cap.meta
     for p in cap.parts:                          # analysis never crosses parts (§3.4)
         p.tick0, p.ticks, p.meta                 # start_ns, start_uncertainty_ns, trigger_tick, ...
-        scl = p.channel("SCL")                   # Channel: initial, edges (ticks from the part's tick 0)
+        initial, edges = p.channel("SCL").changes()        # ticks from the part's tick 0
         res = wireskein.analyze.analyze(p.view())
 
-    capture.write("out.wireskein", capture.Capture(Fraction(10**6), [capture.Part(1000, [capture.Channel(...)])]))
+    clk = capture.logic("CLK", 0, [10, 20, 30], n=1000)     # a line from its changes
+    capture.write("out.wireskein", capture.Capture(Fraction(10**6), [capture.Part(1000, [clk])]))
 
-A logic line is read as its changes (`Channel`: the level before the part and the ticks it changes at), whatever the
-file keeps: the samples (`bits`) are decoded when the channel is asked for, so a long fast line costs nothing until
-then. A line kept as changes at a coarser step (`events`, step > 1) is an `Events`: in each listed quantum it changed
-`counts` times and ended at `levels`; where in the quantum is not kept. Analog values are `Analog` (raw with their
-linear conversion, or volts).
+Importing this module, reading, writing and the channels as stored need only the standard library (a test script
+without numpy writes and reads captures); numpy is used when a channel is turned into its changes or a part into the
+decoders' view.
 
-Writing chooses each logic line's encoding by size: a step-1 line as its changes when they are smaller than its
-samples, else as samples (both lossless).
+Channels are kept as the file stores them (wireskein-format §4): a logic line as its samples (`Channel`, encoding
+"bits") or as its changes (`Events`, "events"), an analog one as its values (`Analog`). Every logic line reads the
+same way, `changes()`: its level before the first tick and the ticks it changes at. A line kept as changes at a
+coarser step whose quanta hide changes is read with `Events.decode()` (where they fall in the quantum is not kept).
 """
 
 from __future__ import annotations
@@ -26,13 +27,24 @@ from fractions import Fraction
 from pathlib import Path
 
 from . import fileformat
-from ._engine import fileio
-from ._engine.model import AnalogTrace as Analog
-from ._engine.model import Capture as View
-from ._engine.model import Channel
-from ._engine.model import EventTrace as Events
+from .fileformat import AnalogChannel as Analog
+from .fileformat import Channel
+from .fileformat import EventsChannel as Events
+from .fileformat import analog_raw, analog_volts, events, from_interleaved, pack
 
-__all__ = ["Analog", "Capture", "Channel", "Events", "Part", "View", "read", "write"]
+__all__ = ["Analog", "Capture", "Channel", "Events", "Part", "analog_raw", "analog_volts", "events",
+           "from_interleaved", "logic", "pack", "read", "write"]
+
+
+def logic(name: str, initial: int, edges, n: int, step: int = 1, phase: int = 0, **acquisition) -> Channel | Events:
+    """A logic line from its changes (ticks, increasing; one at tick e makes e the first tick of the new level),
+    n samples at phase + k * step: kept as its changes (Events) when that is smaller than its samples (Channel),
+    both lossless. Needs numpy."""
+    import numpy as np
+    from ._engine import fileio
+    from ._engine.model import Channel as Edges
+    return fileio.to_logic(Edges(name, int(initial), np.asarray(edges, np.int64), step, phase, dict(acquisition)),
+                           phase + n * step)
 
 
 class Part:
@@ -43,57 +55,52 @@ class Part:
         self.ticks = int(ticks)
         self.meta = dict(meta or {})
         self.tick0 = tick0
-        self._decoded = {c.name: c for c in channels or []}
-        self._names = [c.name for c in channels or []]
-        self._file = None                      # (path, index, header seen from this part, stored channels or None)
+        self._channels = None if channels is None else list(channels)
+        self._file = None                      # (path, index, header seen from this part)
         self._tick_hz = None                   # the capture's, set when the part joins one
 
     @classmethod
     def _from_file(cls, path: Path, index: int, head: dict) -> Part:
         p = cls(head["ticks"], None, head.get("meta"), head.get("tick0"))
-        p._names = [c["name"] for c in head["channels"]]
-        p._file = [path, index, head, None]
+        p._file = (path, index, head)
         return p
 
     @property
-    def names(self) -> list[str]:
-        return list(self._names)
-
-    def _stored(self) -> dict:
-        if self._file[3] is None:
-            path, index, _, _ = self._file
-            _, chans = fileformat.read(path, part=index)
-            self._file[3] = {c.name: c for c in chans}
-        return self._file[3]
-
-    def channel(self, name: str) -> Channel | Events | Analog:
-        """One channel, decoded on first use."""
-        if name not in self._decoded:
-            if self._file is None or name not in self._names:
-                raise KeyError(name)
-            stored = self._stored()
-            if name not in stored:
-                raise KeyError(f"{name}: its encoding is not one this version reads")
-            self._decoded[name] = fileio.decode(stored[name])
-        return self._decoded[name]
+    def channels(self) -> list[Channel | Events | Analog]:
+        """The channels as stored (read from the file on first use); those of an encoding this version does not
+        read are left out (`skipped`)."""
+        if self._channels is None:
+            path, index, _ = self._file
+            self._channels = fileformat.read(path, part=index)[1]
+        return self._channels
 
     @property
-    def channels(self) -> list:
-        """Every channel this version reads, decoded."""
-        if self._file is not None:
-            return [self.channel(n) for n in self._names if n in self._stored()]
-        return [self._decoded[n] for n in self._names]
+    def skipped(self) -> list[dict]:
+        """Channels of an encoding this version does not read: [{"name", "encoding"}]."""
+        return fileformat.skipped(self._file[2]) if self._file else []
 
-    def view(self) -> View:
-        """The part as the decoders and checks read it (wireskein.analyze, wireskein.verify)."""
+    @property
+    def names(self) -> list[str]:
+        return [c.name for c in self.channels]
+
+    def channel(self, name: str) -> Channel | Events | Analog:
+        for c in self.channels:
+            if c.name == name:
+                return c
+        raise KeyError(name)
+
+    def view(self):
+        """The part as the decoders and checks read it (wireskein.analyze, wireskein.verify). Needs numpy."""
+        from ._engine import fileio
+        decoded = [fileio.decode(c) for c in self.channels]
         if self._file is not None:
-            path, _, head, _ = self._file
-            return fileio.view(head, self.channels, path)
+            path, _, head = self._file
+            return fileio.view(head, decoded, path)
         if self._tick_hz is None:
             raise ValueError("a part not in a Capture has no tick rate: view it through its Capture")
         tick = Fraction(self._tick_hz)
         return fileio.view({"ticks": self.ticks, "tick_hz": [tick.numerator, tick.denominator], "meta": self.meta},
-                           self.channels)
+                           decoded)
 
 
 @dataclass
@@ -109,7 +116,7 @@ class Capture:
     path: Path | None = None
 
     def __post_init__(self):
-        self.tick_hz = Fraction(self.tick_hz)
+        self.tick_hz = fileformat._fraction(self.tick_hz)
         for p in self.parts:
             p._tick_hz = self.tick_hz
 
@@ -127,24 +134,8 @@ def read(path: str | Path) -> Capture:
                    dict(raw.get("meta", {})), raw.get("id"), path)
 
 
-def _stored(c, ticks: int):
-    if isinstance(c, Channel):
-        return fileio.to_logic(c, ticks)
-    if isinstance(c, Events):
-        return fileio.to_events(c)
-    if isinstance(c, Analog):
-        return fileio.to_analog(c)
-    return c                                     # already a stored channel (fileformat)
-
-
 def write(path: str | Path, cap: Capture) -> Path:
-    """Write a capture as a WireSkein file. A part read from a file and never decoded is copied as it is stored."""
-    parts = []
-    for p in cap.parts:
-        if p._file is not None and len(p._decoded) == 0:
-            chans = [p._stored()[n] for n in p._names if n in p._stored()]
-        else:
-            chans = [_stored(c, p.ticks) for c in p.channels]
-        parts.append(fileformat.Part(chans, dict(p.meta), p.tick0))
+    """Write a capture as a WireSkein file."""
+    parts = [fileformat.Part(list(p.channels), dict(p.meta), p.tick0) for p in cap.parts]
     return fileformat.write(path, cap.tick_hz, parts=parts, layout=cap.layout, lost=[dict(x) for x in cap.lost] or None,
                             capture_id=cap.id, **cap.meta)

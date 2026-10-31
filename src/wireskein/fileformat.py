@@ -78,6 +78,15 @@ class Channel:
         """The tick just after the last sample's step."""
         return self.phase + self.n * self.step
 
+    def changes(self):
+        """(level at the first sample, ticks of the changes as a numpy array): a change at tick e makes e the first
+        tick of the new level, and happened somewhere in the step ticks before it. Needs numpy."""
+        import numpy as np
+        bits = np.unpackbits(np.frombuffer(self.bits, np.uint8), bitorder="little")[: self.n]
+        if not len(bits):
+            return 0, np.zeros(0, np.int64)
+        return int(bits[0]), self.phase + (np.flatnonzero(bits[1:] != bits[:-1]) + 1).astype(np.int64) * self.step
+
 
 @dataclass
 class EventsChannel:
@@ -127,6 +136,23 @@ class EventsChannel:
         if len(ks) != self.count:
             raise ValueError(f"{self.name}: {len(ks)} events in the data, {self.count} in the header")
         return ks, levels, counts
+
+    def changes(self):
+        """(level before the first tick, ticks of the changes as a numpy array), as Channel.changes(). At step 1 each
+        change at its tick; at a coarser step each at its quantum's last tick (it happened somewhere in the step
+        before). ValueError when a quantum holds more than one change (where they fall is not kept). Needs numpy."""
+        import numpy as np
+        ks, _, counts = self.decode()
+        if any(c > 1 for c in counts):
+            raise ValueError(f"{self.name}: {sum(c > 1 for c in counts)} quanta of {self.step} ticks hold more than "
+                             f"one change; read them with decode()")
+        ks = np.array(ks, np.int64)
+        if self.step == 1:
+            init = self.start_level
+            if len(ks) and ks[0] == 0:           # a change at the first tick: the line starts at the level after it
+                init, ks = init ^ 1, ks[1:]
+            return init, self.phase + ks
+        return self.start_level, self.phase + ks * self.step + (self.step - 1)
 
 
 def events(name: str, quanta, levels, counts, n: int, step: int = 1, phase: int = 0, start_level: int = 0,
