@@ -28,6 +28,8 @@ from .runlog import FORMAT
 
 
 MEASURED = "measured"             # a check function's verdict for "only measure" (uart(baud=None) with nothing else)
+
+__all__ = ["MARKS", "MEASURED", "dumps", "failed", "junit", "lines", "summary_line", "verify"]
 STATUSES = ("ok", "ng", "unchecked", "measured")      # docs/run-format.ja.md §3
 
 

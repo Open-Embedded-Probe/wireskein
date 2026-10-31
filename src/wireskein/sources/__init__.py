@@ -28,6 +28,8 @@ from pathlib import Path
 
 from .. import _fileformat as fileformat
 
+__all__ = ["Request", "Result", "capture", "run"]
+
 BUILTIN = {"oep": "wireskein.sources.oep", "sigrok": "wireskein.sources.sigrok"}
 TRIGGERS = ("rise", "fall", "both", "high", "low")
 ANALOG_TRIGGERS = ("rise", "fall", "high", "low")   # crossing up / down, staying above / below a voltage
