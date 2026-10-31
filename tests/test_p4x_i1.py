@@ -34,12 +34,12 @@ MCPWM = "mcpwm-100k-phase-deadtime"
 
 def test_mcpwm_phase_skew_and_dead_time():
     # one timer at 100 kHz: b 90 deg after a; comp_hi rises 200 ns late, comp_lo (its inverse) 500 ns after it falls
-    ok, got, why = _judge(MCPWM, R.phase("pwm_a", "pwm_b_90deg", 90, tol_deg=2, freq_hz=100e3))
+    ok, got, why = _judge(MCPWM, R.phase("pwm_a", "pwm_b_90deg", 90, phase_abs_deg=2, freq_hz=100e3))
     assert ok is True and got["phase_deg"] == 90, why
-    assert _judge(MCPWM, R.phase("pwm_a", "pwm_b_90deg", 90, tol_deg=0.5))[0] is None     # 1.8 deg a sample
+    assert _judge(MCPWM, R.phase("pwm_a", "pwm_b_90deg", 90, phase_abs_deg=0.5))[0] is None     # 1.8 deg a sample
     ok, got, why = _judge(MCPWM, R.skew("pwm_a", "comp_hi", 60e-9, 200e-9, edge="rise"))
     assert ok is True and got["median_s"] == pytest.approx(200e-9), why
-    ok, got, why = _judge(MCPWM, R.dead_time("comp_hi", "comp_lo", min_s=150e-9))
+    ok, got, why = _judge(MCPWM, R.dead_time("comp_hi", "comp_lo", dead_min_s=150e-9))
     assert ok is True and got["hi_to_lo"]["min_s"] == pytest.approx(500e-9), why
     assert got["lo_to_hi"]["min_s"] == pytest.approx(200e-9) and got["overlaps"]["count"] == 0
 
@@ -107,5 +107,5 @@ def test_i2c_controller_fixed(f, mode):
 @pytest.mark.parametrize("name, hz", [("mode0-500k-p4x", 500e3), ("mode0-750k-p4x", 750e3)])
 def test_spi_controller_fixed(name, hz):
     ok, got, why = _judge(f"spi-controller-{name}", R.spi("sck", "mosi", None, "cs", mode=0, mosi_bytes="a53c0f81",
-                                                          hz=hz))
+                                                          freq_hz=hz))
     assert ok is True, why

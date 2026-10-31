@@ -45,7 +45,7 @@ def test_spi_single_cs_frame(name, mode, mosi, miso):
 
 def test_i2c_transaction_cut_at_the_window_end():
     cap, _ = capture("x035-i2c-target-left-mid-byte")
-    x = {"kind": "i2c", "scl": "PC16", "sda": "PC17", "hz": None, "tol_hz": 0.1, "released": True,
+    x = {"kind": "i2c", "scl": "PC16", "sda": "PC17", "freq_hz": None, "freq_rel": 0.1, "released": True,
          "transactions": [{"addr": 0x42, "rw": "read", "bytes": [0], "complete": False, "pending_bits": [0]}]}
     ok, got, why = check_i2c(cap, x)
     assert got["transactions"] == [{"addr": 0x42, "rw": "read", "bytes": [0], "ack": True, "complete": False,

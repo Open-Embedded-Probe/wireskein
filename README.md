@@ -98,15 +98,15 @@ Headings split the run into a tree of segments. `#` is a test, `##` is a step, a
 
 | Helper | Checks |
 | --- | --- |
-| `square(pin, freq_hz, duty, tol_freq, tol_duty, max_jitter)` | A steady square wave: frequency (relative tolerance), duty (absolute), period spread |
+| `square(pin, freq_hz, duty, freq_rel, duty_abs, jitter_max)` | A steady square wave: frequency (relative tolerance), duty (absolute), period spread |
 | `level(pin, value)` | The pin does not move |
 | `starts({pin: v})` / `ends({pin: v})` | The level at the first / last sample |
 | `only_moving([pins])` | No other captured pin moves |
-| `pulses(pin, count, period_s, tol_period)` | Number of rising edges and their period (`tol_period` relative) |
-| `i2c(scl, sda, transactions, hz, tol_hz, released)` | Transactions (address, direction, bytes, ACK, `complete`), SCL rate, and a released bus at the end |
-| `spi(clk, mosi, miso, cs, mode, mosi_bytes, miso_bytes, hz)` | Mode, bytes on both lines, SCK rate, and CS high at the end |
-| `uart(pin, baud, data, tol_baud, idle, bits, parity, stop, max_errors)` | Bit rate measured from the edges, data, idle level, and framing / parity errors. `baud=None` only measures |
-| `voltage(pin, volts, tol_v, min_v, max_v, ripple)` | An analog channel: mean within `volts` ± `tol_v` (V), every sample within `min_v`..`max_v`, peak-to-peak at most `ripple`. Only what is given is checked |
+| `pulses(pin, count, period_s, period_rel)` | Number of rising edges and their period (`period_rel` relative) |
+| `i2c(scl, sda, transactions, freq_hz, freq_rel, released)` | Transactions (address, direction, bytes, ACK, `complete`), SCL rate, and a released bus at the end |
+| `spi(clk, mosi, miso, cs, mode, mosi_bytes, miso_bytes, freq_hz)` | Mode, bytes on both lines, SCK rate, and CS high at the end |
+| `uart(pin, baud, data, baud_rel, idle, bits, parity, stop, errors_max)` | Bit rate measured from the edges, data, idle level, and framing / parity errors. `baud=None` only measures |
+| `voltage(pin, level_v, level_abs_v, level_min_v, level_max_v, ripple_max_v)` | An analog channel: mean within `level_v` ± `level_abs_v`, every sample within `level_min_v`..`level_max_v`, peak-to-peak at most `ripple_max_v`. Only what is given is checked |
 
 The logic checks (`square`, `level`, `starts` / `ends`, `pulses`, `i2c`, `spi`, `uart`) also run on analog channels when given `threshold=`: one voltage, or `(low, high)` for hysteresis (a noisy slow edge then makes one edge). Edges are placed where the line between two samples crosses the threshold; the resolution is one ADC sample, added to the tolerances. Without `threshold=`, an analog channel in a logic check is unchecked, and the reason says so.
 

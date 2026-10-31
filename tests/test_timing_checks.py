@@ -27,17 +27,17 @@ def _pwm(t0, freq=10e3, duty=0.5, end=1e-3):
 
 def test_the_phase_of_two_pwms():
     cap = _cap({"A": _pwm(1e-6), "B": _pwm(1e-6 + 25e-6)}, 1e-3)          # a quarter of 100 us
-    ok, got, why = _judge(cap, phase("A", "B", 90, tol_deg=1, freq_hz=10e3))
+    ok, got, why = _judge(cap, phase("A", "B", 90, phase_abs_deg=1, freq_hz=10e3))
     assert ok is True and abs(got["phase_deg"] - 90) < 0.5, why
-    ok, _, why = _judge(cap, phase("A", "B", 0, tol_deg=1))
+    ok, _, why = _judge(cap, phase("A", "B", 0, phase_abs_deg=1))
     assert ok is False and "phase" in why
     assert _judge(cap, phase("A", "B"))[0] == verify.MEASURED
 
 
 def test_a_phase_near_zero_wraps():
     cap = _cap({"A": _pwm(2e-6), "B": _pwm(2e-6 + 99e-6)}, 1e-3)           # 356.4 deg: 3.6 deg before
-    assert _judge(cap, phase("A", "B", -4, tol_deg=1))[0] is True
-    assert _judge(cap, phase("A", "B", 356, tol_deg=1))[0] is True
+    assert _judge(cap, phase("A", "B", -4, phase_abs_deg=1))[0] is True
+    assert _judge(cap, phase("A", "B", 356, phase_abs_deg=1))[0] is True
 
 
 def test_skew_of_two_patterns():
@@ -46,13 +46,13 @@ def test_skew_of_two_patterns():
         a.set(t, 1 - a.level)
         b.set(t + 50e-9, 1 - b.level)
     cap = _cap({"A": a, "B": b}, 10e-6)
-    ok, got, why = _judge(cap, skew("A", "B", tol_s=100e-9))
+    ok, got, why = _judge(cap, skew("A", "B", delay_abs_s=100e-9))
     assert ok is True and got["pairs"] == 6 and abs(got["median_s"] - 50e-9) < 1e-12, why
-    ok, _, why = _judge(cap, skew("A", "B", tol_s=10e-9))
+    ok, _, why = _judge(cap, skew("A", "B", delay_abs_s=10e-9))
     assert ok is False, why
-    assert _judge(cap, skew("A", "B", tol_s=30e-9, delay_s=50e-9))[0] is True
+    assert _judge(cap, skew("A", "B", delay_abs_s=30e-9, delay_s=50e-9))[0] is True
     # within the resolution: 50 ns +- 25 ns against 40 ns
-    assert _judge(cap, skew("A", "B", tol_s=40e-9))[0] is None
+    assert _judge(cap, skew("A", "B", delay_abs_s=40e-9))[0] is None
 
 
 def test_a_missing_edge_fails_the_skew():
@@ -61,7 +61,7 @@ def test_a_missing_edge_fails_the_skew():
         a.set(t, 1 - a.level)
     for t in [1e-6, 2e-6]:
         b.set(t, 1 - b.level)
-    ok, got, why = _judge(_cap({"A": a, "B": b}, 6e-6), skew("A", "B", tol_s=50e-9))
+    ok, got, why = _judge(_cap({"A": a, "B": b}, 6e-6), skew("A", "B", delay_abs_s=50e-9))
     assert ok is False and got["unpaired_a"] == 2 and "without a partner" in why
 
 
@@ -80,17 +80,17 @@ def _bridge(dead_hl, dead_lh, freq=20e3, duty=0.5, end=1e-3):
 
 def test_the_dead_time_of_a_half_bridge():
     cap = _cap(_bridge(500e-9, 1e-6), 1e-3)
-    ok, got, why = _judge(cap, dead_time("HI", "LO", min_s=400e-9))
+    ok, got, why = _judge(cap, dead_time("HI", "LO", dead_min_s=400e-9))
     assert ok is True, why
     assert abs(got["hi_to_lo"]["min_s"] - 500e-9) < 30e-9 and abs(got["lo_to_hi"]["min_s"] - 1e-6) < 30e-9
-    ok, _, why = _judge(cap, dead_time("HI", "LO", min_s=600e-9))
+    ok, _, why = _judge(cap, dead_time("HI", "LO", dead_min_s=600e-9))
     assert ok is False and "hi_to_lo" in why and "lo_to_hi" not in why
     assert _judge(cap, dead_time("HI", "LO"))[0] == verify.MEASURED
 
 
 def test_shoot_through_fails():
     cap = _cap(_bridge(-200e-9, 500e-9), 1e-3)                       # LO turns on before HI is off
-    ok, got, why = _judge(cap, dead_time("HI", "LO", min_s=0))
+    ok, got, why = _judge(cap, dead_time("HI", "LO", dead_min_s=0))
     assert ok is False and "both on" in why and got["overlaps"]["count"] > 10
 
 
@@ -116,17 +116,17 @@ def test_i2c_times_against_um10204():
     # fast mode's minimums are met at 100 kHz, but the data is valid 2.5 us after SCL falls, not within 0.9 us
     ok, _, why = _judge(cap, i2c_timing("SCL", "SDA", "fast"))
     assert ok is False and why.startswith("t_vd_dat 2.5 us > 900 ns") and ";" not in why, why
-    assert _judge(cap, i2c_timing("SCL", "SDA", "fast", limits={"t_vd_dat": (None, 3e-6)}))[0] is True
+    assert _judge(cap, i2c_timing("SCL", "SDA", "fast", limits={"t_vd_dat_max_s": 3e-6}))[0] is True
     ok, _, why = _judge(_i2c(500e3), i2c_timing("SCL", "SDA", "fast"))
     assert ok is False and "kHz" in why
 
 
 def test_an_i2c_time_within_the_resolution_is_unchecked():
     cap = _i2c(100e3, rate=1e6)                     # 1 us a tick: the shortest low reads 4 us, so 3 to 5 us
-    ok, _, why = _judge(cap, i2c_timing("SCL", "SDA", None, limits={"t_low": 4.7e-6}))
+    ok, _, why = _judge(cap, i2c_timing("SCL", "SDA", None, limits={"t_low_min_s": 4.7e-6}))
     assert ok is None and "t_low" in why
-    assert _judge(cap, i2c_timing("SCL", "SDA", None, limits={"t_low": 2.5e-6}))[0] is True
-    assert _judge(cap, i2c_timing("SCL", "SDA", None, limits={"t_low": 5.5e-6}))[0] is False
+    assert _judge(cap, i2c_timing("SCL", "SDA", None, limits={"t_low_min_s": 2.5e-6}))[0] is True
+    assert _judge(cap, i2c_timing("SCL", "SDA", None, limits={"t_low_min_s": 5.5e-6}))[0] is False
 
 
 @pytest.mark.parametrize("mode", [0, 1, 2, 3])

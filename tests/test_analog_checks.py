@@ -31,8 +31,8 @@ def pwm_volts(n, rate, freq, duty, lo=0.0, hi=3.3, noise=0.02):
 def test_voltage_mean_range_and_ripple(tmp_path):
     v = 3.30 + RNG.normal(0, 0.01, 2000)
     chans = [fileformat.analog_volts("VBUS", v.tolist(), 100_000)]
-    got = run(tmp_path, [voltage("VBUS", 3.3, tol_v=0.05, min_v=3.2, max_v=3.4, ripple=0.1),
-                         voltage("VBUS", 5.0, tol_v=0.25), voltage("VBUS", ripple=0.01)], chans, 100_000)
+    got = run(tmp_path, [voltage("VBUS", 3.3, level_abs_v=0.05, level_min_v=3.2, level_max_v=3.4, ripple_max_v=0.1),
+                         voltage("VBUS", 5.0, level_abs_v=0.25), voltage("VBUS", ripple_max_v=0.01)], chans, 100_000)
     assert [ok for _, ok, _ in got] == [True, False, False]
     assert got[1][2].startswith("mean 3.") and "vs 5.0000" in got[1][2]
     assert "peak-to-peak" in got[2][2]
@@ -42,7 +42,7 @@ def test_voltage_from_raw_values_and_without_a_conversion(tmp_path):
     raw = [4095 * 1650 // 3300] * 100                                    # 1.65 V on a 12-bit ADC at 3.3 V
     chans = [fileformat.analog_raw("MID", raw, 100_000, value_bits=12, zero=0, scale_nv=3300e6 / 4095),
              fileformat.analog_raw("RAW", raw, 100_000)]
-    got = run(tmp_path, [voltage("MID", 1.65, tol_v=0.01), voltage("RAW", 1.65)], chans, 100_000)
+    got = run(tmp_path, [voltage("MID", 1.65, level_abs_v=0.01), voltage("RAW", 1.65)], chans, 100_000)
     assert got[0][1] is True
     assert got[1][1] is None and "no conversion to volts" in got[1][2]
 
@@ -147,12 +147,12 @@ def test_clipped_codes_are_not_voltages(tmp_path):
     mid = [2048] * 50                                                     # 1.30 V
     chans = [esp32_12db("RAIL", rail), esp32_12db("GND", gnd), esp32_12db("MID", mid)]
     got = run(tmp_path, [
-        voltage("RAIL", min_v=3.0),                  # >= 2.45 V cannot tell whether it reaches 3.0 V
-        voltage("RAIL", max_v=2.0),                  # >= 2.45 V is above 2.0 V for sure
-        voltage("GND", max_v=0.5),                   # <= 0.15 V is below 0.5 V for sure: fine
-        voltage("GND", min_v=0.2),                   # <= 0.15 V is below 0.2 V for sure
-        voltage("RAIL", 3.3, tol_v=0.1),             # a mean of clipped samples is no voltage
-        voltage("MID", 1.30, tol_v=0.01),
+        voltage("RAIL", level_min_v=3.0),                  # >= 2.45 V cannot tell whether it reaches 3.0 V
+        voltage("RAIL", level_max_v=2.0),                  # >= 2.45 V is above 2.0 V for sure
+        voltage("GND", level_max_v=0.5),                   # <= 0.15 V is below 0.5 V for sure: fine
+        voltage("GND", level_min_v=0.2),                   # <= 0.15 V is below 0.2 V for sure
+        voltage("RAIL", 3.3, level_abs_v=0.1),             # a mean of clipped samples is no voltage
+        voltage("MID", 1.30, level_abs_v=0.01),
     ], chans, 100_000)
     assert [ok for _, ok, _ in got] == [None, False, True, False, None, True], got
     assert "cannot be told" in got[0][2] and "clipped at the high end" in got[1][2]
@@ -168,5 +168,5 @@ def test_a_threshold_outside_the_range_is_refused():
 
 def test_an_inverting_frontend_clips_code_0_at_the_high_end(tmp_path):
     inv = fileformat.analog_raw("INV", [0] * 20, 100_000, value_bits=12, zero=4095, scale_nv=-600_000)   # 0 -> +2.457 V
-    got = run(tmp_path, [voltage("INV", max_v=2.0), voltage("INV", min_v=0.1)], [inv], 100_000)
+    got = run(tmp_path, [voltage("INV", level_max_v=2.0), voltage("INV", level_min_v=0.1)], [inv], 100_000)
     assert [ok for _, ok, _ in got] == [False, True], got                   # >= the high end: above 2.0 for sure

@@ -63,7 +63,7 @@ def fmt(kw):
 ])
 def test_rate_is_measured_and_cut_characters_are_no_errors(rate, actual, kw):
     payload = bytes(b & ((1 << kw.get("bits", 8)) - 1) for b in PAYLOAD)
-    ok, got, why = check_uart(line(rate, actual, payload, **kw), uart("TX", actual, tol_baud=0.015, max_errors=0, **fmt(kw)))
+    ok, got, why = check_uart(line(rate, actual, payload, **kw), uart("TX", actual, baud_rel=0.015, errors_max=0, **fmt(kw)))
     assert ok, why
     assert abs(got["baud"] / actual - 1) < 1e-4
     assert got["frame_errors"] == got["parity_errors"] == 0
@@ -72,13 +72,13 @@ def test_rate_is_measured_and_cut_characters_are_no_errors(rate, actual, kw):
 
 
 def test_nominal_rate_off_by_2_5_percent():
-    ok, got, why = check_uart(line(2e6, 115200 * 0.975), uart("TX", 115200, tol_baud=0.015))
+    ok, got, why = check_uart(line(2e6, 115200 * 0.975), uart("TX", 115200, baud_rel=0.015))
     assert not ok and abs(got["baud_error"] + 0.025) < 1e-4 and "-2.50% off" in why
 
 
 @pytest.mark.parametrize("kw,x,reason", [
-    ({"parity": "even"}, uart("TX", 1e6, max_errors=0), "framing"),
-    ({}, uart("TX", 1e6, stop=2, max_errors=0), "framing"),
+    ({"parity": "even"}, uart("TX", 1e6, errors_max=0), "framing"),
+    ({}, uart("TX", 1e6, stop=2, errors_max=0), "framing"),
     ({}, uart("TX", 1e6, idle=0), "idle level 1, not 0"),
 ])
 def test_wrong_expectations_fail(kw, x, reason):
@@ -88,7 +88,7 @@ def test_wrong_expectations_fail(kw, x, reason):
 
 
 def test_back_to_back_stream_without_an_idle_gap():
-    ok, got, why = check_uart(line(20e6, 1e6, gap_bits=0), uart("TX", 1e6, tol_baud=0.015, max_errors=0))
+    ok, got, why = check_uart(line(20e6, 1e6, gap_bits=0), uart("TX", 1e6, baud_rel=0.015, errors_max=0))
     assert ok, why
     assert got["frame_errors"] == 0 and got["chars"] > 300 and got["idle"] == 1
 
@@ -106,13 +106,13 @@ def test_short_idle_before_back_to_back_bytes_at_a_low_rate():
     lv = np.array(lv, np.uint8)
     init, edges = int(lv[0]), np.flatnonzero(np.diff(lv)) + 1
     cap = Capture(rate, len(lv), [Channel("TX", init, edges)])
-    ok, got, why = check_uart(cap, uart("TX", baud, tol_baud=0.015, max_errors=0))
+    ok, got, why = check_uart(cap, uart("TX", baud, baud_rel=0.015, errors_max=0))
     assert ok, why
     assert got["idle"] == 1 and got["chars"] == len(payload) and got["data"] == payload.hex()
 
 
 def test_rate_far_off_is_still_measured():
-    ok, got, why = check_uart(line(20e6, 1e6), uart("TX", 1.1e6, max_errors=0))
+    ok, got, why = check_uart(line(20e6, 1e6), uart("TX", 1.1e6, errors_max=0))
     assert not ok and abs(got["baud"] / 1e6 - 1) < 1e-4
 
 

@@ -39,7 +39,7 @@ def test_lin_frames_breaks_and_checksums():
 def test_a_short_lin_break_and_a_slow_master():
     ok, _, why = _judge(_lin([(0x10, b"\x01")], break_bits=11), lin("L", 19200))
     assert ok is False and why.startswith("break 573 us < 677.1 us"), why
-    ok, _, why = _judge(_lin([(0x10, b"\x01")], baud=18800), lin("L", 19200, tol_baud=0.01))
+    ok, _, why = _judge(_lin([(0x10, b"\x01")], baud=18800), lin("L", 19200, baud_rel=0.01))
     assert ok is False and "baud" in why, why
 
 

@@ -44,20 +44,16 @@
 
 `checks` の各要素は `{"kind": ..., ...}` のオブジェクトです。`kind` は `square`、`level`、`starts`、`ends`、`only_moving`、`pulses`、`i2c`、`spi`、`uart`、`voltage`、`phase`、`skew`、`dead_time`、`i2c_timing`、`rgb_led`、`onewire`、`ir`、`lin`、`i2s`、`quadrature`、`sd_spi` です。各検査のキーと意味は [キャプチャで試験する](capture-test-guide.ja.md) §4 にあります（Python の `wireskein.runlog` の同名の関数が、このオブジェクトを作ります）。
 
-許容誤差の名前:
+検査が比べる値の名前（どの検査も同じ規則）:
 
-| 名前 | 相対 / 絶対 | 使う検査 |
+| 形 | 意味 | 例 |
 | --- | --- | --- |
-| `tol_freq` | 相対（周波数の比のずれ） | `square` |
-| `tol_duty` | 絶対（デューティの差。0〜1 の値どうし） | `square` |
-| `tol_baud` | 相対 | `uart`、`lin` |
-| `tol_hz` | 相対 | `i2c`、`spi` |
-| `tol_period` | 相対 | `pulses` |
-| `tol_v` | 絶対（V） | `voltage` |
-| `tol_deg` | 絶対（度） | `phase` |
-| `tol_s` | 絶対（秒） | `skew` |
-| `tol_carrier`、`tol_time` | 相対 | `ir` |
-| `tol_fs` | 相対 | `i2s` |
+| `<量>_<単位>` | 期待の値 | `freq_hz`、`delay_s`、`level_v`、`phase_deg`。比は単位なし（`duty`） |
+| `<量>_rel` | 期待の値に対する相対の許容（`pytest.approx` の `rel` と同じ） | `freq_rel`、`baud_rel`、`period_rel` |
+| `<量>_abs_<単位>` | 量の単位での許容（`pytest.approx` の `abs` と同じ）。比は単位なし | `delay_abs_s`、`level_abs_v`、`phase_abs_deg`、`duty_abs` |
+| `<量>_min_<単位>`、`<量>_max_<単位>` | 限度。片側だけでもよい | `dead_min_s`、`t0h_max_s`、`reset_min_s`、`break_min_bits`、`ncr_max_bytes`、`errors_max` |
+
+量は、期待の値と同じ語（`freq_hz` → `freq_rel`）。単位は最後（`_s`、`_hz`、`_v`、`_deg`、`_bits`、`_bytes`）。数と比には付けない。
 
 - `threshold`（V、または `(low, high)`）を与えると、ロジックの検査（`square`、`level`、`starts`、`ends`、`pulses`、`i2c`、`spi`、`uart`、`phase`、`skew`、`dead_time`、`i2c_timing`、`rgb_led`、`onewire`、`ir`、`lin`、`i2s`、`quadrature`、`sd_spi`）が、アナログのチャンネルをロジックとして読みます。
 - `only_moving` は、ロジックのチャンネルだけを見ます。

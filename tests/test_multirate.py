@@ -64,12 +64,12 @@ def test_square_resolution_is_the_slow_channels_sample(tmp_path):
     fast, pwm = signals()
     native = write(tmp_path / "n.wireskein", fast, pwm)
     held = write(tmp_path / "h.wireskein", fast, pwm, held=True)
-    x = square("SLOW", 1000, 0.3, tol_freq=0.001, tol_duty=0.001)
+    x = square("SLOW", 1000, 0.3, freq_rel=0.001, duty_abs=0.001)
     ok_n, got_n, _ = check_square(native, x)
     ok_h, got_h, _ = check_square(held, x)
     assert ok_n and ok_h and got_n["freq_hz"] == got_h["freq_hz"] and got_n["duty"] == got_h["duty"]
     assert got_n["resolution"] == pytest.approx(STEP * got_h["resolution"])
-    ok_f, got_f, _ = check_square(native, square("FAST", 1e6, 0.25, tol_freq=0.001, tol_duty=0.001))
+    ok_f, got_f, _ = check_square(native, square("FAST", 1e6, 0.25, freq_rel=0.001, duty_abs=0.001))
     assert ok_f and got_f["resolution"] == pytest.approx(0.01)
 
 
@@ -77,7 +77,7 @@ def test_uart_on_a_slow_channel(tmp_path):
     fast, _ = signals()
     line = uart_samples(N // STEP, 27)                      # 115.7 kbaud at 3.125 Msps
     cap = write(tmp_path / "u.wireskein", fast, line)
-    ok, got, why = check_uart(cap, uart("SLOW", TICK / STEP / 27, tol_baud=0.005, max_errors=0))
+    ok, got, why = check_uart(cap, uart("SLOW", TICK / STEP / 27, baud_rel=0.005, errors_max=0))
     assert ok, why
     assert got["samples_per_bit"] == pytest.approx(27, rel=1e-3)
     assert got["data"].startswith(b"hello".hex())

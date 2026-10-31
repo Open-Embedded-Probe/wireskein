@@ -51,7 +51,7 @@ from wireskein.runlog import Recorder, square, level, only_moving
 rec = Recorder("out/run1", target="x035")
 with rec.section(1, "test_pwm"):
     for duty in (64, 128, 192, 255, 0):
-        want = ([square("PA1", 1000, duty / 255, tol_freq=0.02, tol_duty=0.01)] if 0 < duty < 255
+        want = ([square("PA1", 1000, duty / 255, freq_rel=0.02, duty_abs=0.01)] if 0 < duty < 255
                 else [level("PA1", 1 if duty == 255 else 0)]) + [only_moving(["PA1"])]
         with rec.section(2, f"duty={duty}", expect=want):
             rec.command(f"PWM {duty}")
@@ -95,26 +95,26 @@ For a single-shot capture, put "quiet segment before, activity, quiet segment af
 
 | Check | Description |
 | --- | --- |
-| `square(pin, freq_hz, duty, tol_freq, tol_duty, max_jitter)` | A regular square wave. Tolerance is relative for frequency and absolute for duty cycle. `max_jitter` is the upper limit of period variation (relative). The resolution from the sample rate is added automatically |
+| `square(pin, freq_hz, duty, freq_rel, duty_abs, jitter_max)` | A regular square wave. Tolerance is relative for frequency and absolute for duty cycle. `jitter_max` is the upper limit of period variation (relative). The resolution from the sample rate is added automatically |
 | `level(pin, value)` | Constant throughout the window |
 | `starts({pin: v})` / `ends({pin: v})` | Level at the first / last sample of the window |
 | `only_moving([pins])` | No other captured pin moves. Looks only at logic channels |
-| `pulses(pin, count, period_s, tol_period)` | Number of rising edges and the period. `tol_period` is relative |
-| `i2c(scl, sda, transactions, hz, tol_hz, released)` | Sequence of transactions (address, read/write, bytes, ACK), SCL frequency, both High at the end |
-| `spi(clk, mosi, miso, cs, mode, mosi_bytes, miso_bytes, hz, tol_hz, bit_order, cs_active)` | Mode, bytes in both directions, SCK frequency, CS High at the end. The mode is read from the lines (§4.5) |
-| `uart(pin, baud, data, tol_baud, idle, bits, parity, stop, max_errors)` | Baud rate, byte sequence, idle level, framing and parity errors (below) |
-| `voltage(pin, volts, tol_v, min_v, max_v, ripple)` | Voltage of an analog channel. Mean is `volts` ± `tol_v` (V), all samples within `min_v` to `max_v`, peak-to-peak at most `ripple`. Only the given ones are checked |
-| `phase(a, b, phase_deg, tol_deg, freq_hz, tol_freq, edge)` | Phase of two periodic lines: from an edge of a to b's next edge of the same direction, as an angle of a's period (0–360 degrees). Every pair within `phase_deg` ± `tol_deg` (degrees, wrapping near 0), both frequencies within `tol_freq` (relative) of `freq_hz` |
-| `skew(a, b, tol_s, delay_s, edge)` | Skew of two lines that change together (patterns, parallel outputs): every edge of a has b's edge of the same direction at `delay_s` ± `tol_s`. An edge without a partner is NG. With `edge` `"rise"` / `"fall"` only those (two outputs of one timer at different duties) |
-| `dead_time(hi, lo, min_s, max_s, active, allow_overlap)` | The two outputs of a half bridge (on at `active`): from one turning off to the other turning on, every time within `min_s`–`max_s`. Both on (shoot-through) is NG unless `allow_overlap` |
+| `pulses(pin, count, period_s, period_rel)` | Number of rising edges and the period. `period_rel` is relative |
+| `i2c(scl, sda, transactions, freq_hz, freq_rel, released)` | Sequence of transactions (address, read/write, bytes, ACK), SCL frequency, both High at the end |
+| `spi(clk, mosi, miso, cs, mode, mosi_bytes, miso_bytes, freq_hz, freq_rel, bit_order, cs_active)` | Mode, bytes in both directions, SCK frequency, CS High at the end. The mode is read from the lines (§4.5) |
+| `uart(pin, baud, data, baud_rel, idle, bits, parity, stop, errors_max)` | Baud rate, byte sequence, idle level, framing and parity errors (below) |
+| `voltage(pin, level_v, level_abs_v, level_min_v, level_max_v, ripple_max_v)` | Voltage of an analog channel. Mean is `level_v` ± `level_abs_v`, all samples within `level_min_v` to `level_max_v`, peak-to-peak at most `ripple_max_v`. Only the given ones are checked |
+| `phase(a, b, phase_deg, phase_abs_deg, freq_hz, freq_rel, edge)` | Phase of two periodic lines: from an edge of a to b's next edge of the same direction, as an angle of a's period (0–360 degrees). Every pair within `phase_deg` ± `phase_abs_deg` (degrees, wrapping near 0), both frequencies within `freq_rel` (relative) of `freq_hz` |
+| `skew(a, b, delay_abs_s, delay_s, edge)` | Skew of two lines that change together (patterns, parallel outputs): every edge of a has b's edge of the same direction at `delay_s` ± `delay_abs_s`. An edge without a partner is NG. With `edge` `"rise"` / `"fall"` only those (two outputs of one timer at different duties) |
+| `dead_time(hi, lo, dead_min_s, dead_max_s, active, allow_overlap)` | The two outputs of a half bridge (on at `active`): from one turning off to the other turning on, every time within `dead_min_s`–`dead_max_s`. Both on (shoot-through) is NG unless `allow_overlap` |
 | `i2c_timing(scl, sda, mode, limits)` | UM10204's individual times (§4.4) |
-| `rgb_led(pin, data, t0h, t1h, period, reset_min_s)` | A WS2812-like line (§4.6): the bytes of each frame between resets (hex, in the order sent), T0H, T1H, the bit period, the reset's length |
+| `rgb_led(pin, data, t0h_min_s, t0h_max_s, t1h_min_s, t1h_max_s, period_min_s, period_max_s, reset_min_s)` | A WS2812-like line (§4.6): the bytes of each frame between resets (hex, in the order sent), T0H, T1H, the bit period, the reset's length |
 | `onewire(pin, data, presence, speed)` | A 1-Wire line (§4.6): the bytes after each reset, presence pulses, the reset, presence, slot and low times |
-| `ir(pin, frames, carrier_hz, tol_carrier, tol_time, protocol)` | An IR remote line (§4.6): NEC frames (address, command, repeat), the command with its inverse, the carrier's frequency, the marks' and spaces' lengths |
-| `lin(pin, baud, frames, tol_baud, min_break_bits, checksum)` | LIN frames (§4.7): identifier and data, sync, identifier parity, checksum, break and delimiter lengths, the baud measured from the sync field |
-| `i2s(bclk, ws, sd, format, bits, fs_hz, tol_fs, samples, slot_bits, left_ws)` | I2S-like audio (§4.7): format, sample rate, BCLKs a channel, a run of samples found in a row |
-| `quadrature(a, b, steps, cycles, direction, max_errors)` | A quadrature encoder (§4.7): the count (steps or cycles), the direction, changes of both lines at once |
-| `sd_spi(clk, mosi, miso, cs, commands, mode, cs_active, max_ncr)` | An SD card in SPI mode (§4.8): the commands in order (index, argument, R1, R7 / R3 / R2, data blocks), answers within NCR, CMD0's and CMD8's CRC7, the card's blocks' CRC16 |
+| `ir(pin, frames, carrier_hz, carrier_rel, timing_rel, protocol)` | An IR remote line (§4.6): NEC frames (address, command, repeat), the command with its inverse, the carrier's frequency, the marks' and spaces' lengths |
+| `lin(pin, baud, frames, baud_rel, break_min_bits, checksum)` | LIN frames (§4.7): identifier and data, sync, identifier parity, checksum, break and delimiter lengths, the baud measured from the sync field |
+| `i2s(bclk, ws, sd, format, bits, fs_hz, fs_rel, samples, slot_bits, left_ws)` | I2S-like audio (§4.7): format, sample rate, BCLKs a channel, a run of samples found in a row |
+| `quadrature(a, b, steps, cycles, direction, errors_max)` | A quadrature encoder (§4.7): the count (steps or cycles), the direction, changes of both lines at once |
+| `sd_spi(clk, mosi, miso, cs, commands, mode, cs_active, ncr_max_bytes)` | An SD card in SPI mode (§4.8): the commands in order (index, argument, R1, R7 / R3 / R2, data blocks), answers within NCR, CMD0's and CMD8's CRC7, the card's blocks' CRC16 |
 
 Anything that could not be checked, for example because a pin used by the check is not in the capture, is unchecked (`unchecked`).
 
@@ -132,14 +132,14 @@ i2c("PC16", "PC17", [{"addr": 0x42, "rw": "read", "bytes": [0x00], "complete": F
 - Pass to `baud` not the nominal value but the value the transmitter should actually produce (for CH32, F_CPU / BRR).
 - The format is `bits` (number of data bits), `parity` (`"none"` / `"even"` / `"odd"`), `stop` (1, 1.5, 2).
 - A window that starts or ends in the middle of a character is not an error (reading starts after at least one character's worth of idle; what comes before is counted as `lead_in`, and a character cut at the end as `cut_at_end`).
-- If `max_errors` is given, the result is NG when the total of framing and parity errors exceeds it (if not given, they are only counted and reported).
+- If `errors_max` is given, the result is NG when the total of framing and parity errors exceeds it (if not given, they are only counted and reported).
 - The baud rate is found by a least-squares fit of the bit width from the intervals between same-direction edges within one character. This method cancels the difference between rising and falling delays. The expected value is used only to choose among the candidates derived from the edges. It is reported when there are 8 or more samples per bit.
-- To **measure only**, pass `None` to `baud`. If there are no other expectations (`data`, `max_errors`), the result is `measured`, with the measured baud rate, character count and error count. Use this to record what the DUT outputs for out-of-range settings.
+- To **measure only**, pass `None` to `baud`. If there are no other expectations (`data`, `errors_max`), the result is `measured`, with the measured baud rate, character count and error count. Use this to record what the DUT outputs for out-of-range settings.
 - If every error character has edges clearly more shifted than the other characters, the NG reason says "suspect the capture's time base" (for example when a software-paced sampler stalled). For captures where the probe itself reported a delay (`time_base_slipped`), the NG reason also says so.
 
 ```python
-uart("PA2", 8_000_000 / 9, tol_baud=0.015, max_errors=0)                  # 8N1
-uart("PA2", 8_000_000 / 9, tol_baud=0.015, parity="even", max_errors=0)   # 8E1
+uart("PA2", 8_000_000 / 9, baud_rel=0.015, errors_max=0)                  # 8N1
+uart("PA2", 8_000_000 / 9, baud_rel=0.015, parity="even", errors_max=0)   # 8E1
 uart("PB0", None)                                                         # measure only
 ```
 
@@ -158,7 +158,7 @@ When given `threshold=`, the logic checks (`square`, `level`, `starts` / `ends`,
 - A limit applies to every instance; the worst decides, and the reason gives its value and time.
 - With nothing expected, the check only measures (`measured`).
 
-`i2c_timing` picks the limits of UM10204 (rev. 7) table 10 by `mode` (`"standard"`, `"fast"`, `"fast-plus"`). `limits` replaces them by name (one value: a minimum; a pair: `(min, max)`; with `mode=None` only `limits`).
+`i2c_timing` picks the limits of UM10204 (rev. 7) table 10 by `mode` (`"standard"`, `"fast"`, `"fast-plus"`). `limits` replaces one side of a limit by name: `t_low_min_s`, `t_vd_dat_max_s`, `f_scl_max_hz` (with `mode=None` only `limits`).
 
 | Name | Measures | standard / fast / fast-plus |
 | --- | --- | --- |
@@ -179,7 +179,7 @@ When given `threshold=`, the logic checks (`square`, `level`, `starts` / `ends`,
 
 ```python
 i2c_timing("PC2", "PC1", "fast")
-i2c_timing("PC2", "PC1", "standard", limits={"t_su_dat": 300e-9})
+i2c_timing("PC2", "PC1", "standard", limits={"t_su_dat_min_s": 300e-9})
 ```
 
 ### 4.5 SPI mode
@@ -190,7 +190,7 @@ i2c_timing("PC2", "PC1", "standard", limits={"t_su_dat": 300e-9})
 
 - **`rgb_led`**: the line idles low; a bit is a high of T0H or T1H and the low after it, MSB first. A low longer than 5 bit periods ends a frame. 0 and 1 are split at the widest gap between the highs' widths (when all are alike, a high shorter than half the period is a 0). The default limits are WS2812B's datasheet: T0H 0.4 µs, T1H 0.8 µs (± 150 ns), period 1.25 µs (± 600 ns), reset at least 50 µs. For other LEDs (SK6812, WS2811's slow mode, newer WS2812B's 280 µs reset) pass their values. When the window ends after the last frame before a reset's length, whether the LEDs took it is not known: unchecked.
 - **`onewire`**: the line idles high; every pulse is low. A low of at least `speed`'s `reset_detect` (standard 288 µs, overdrive 48 µs) is a reset, a low starting in the presence window after it the presence pulse, every other low a slot: 1 when its low is shorter than `split` (standard 15 µs, overdrive 2 µs), else 0, LSB first. Read slots read as the bits they carried (who pulled the line low is not on the line). The limits are Maxim AN126's and DS18B20's: at standard speed a reset of at least 480 µs, presence wait 15–60 µs, presence 60–240 µs, slot (low start to the next) at least 61 µs, high between slots at least 1 µs, a 0's low at most 120 µs, a 1's low 1–15 µs.
-- **`ir`**: reads the line driving the LED (with a carrier, idling low) and a receiver module's output (idling high, marks low). When the active pulses are mostly shorter than 100 µs the line carries a carrier: pulses closer than 150 µs make one mark, and the carrier's frequency and duty are measured. NEC: a 9 ms mark, then 4.5 ms for data (32 bits, LSB first: address, inverted address or the address's high byte, command, inverted command) or 2.25 ms for a repeat. An address that does not match its inverse is a 16-bit extended address in `addr`. A frame whose command does not match its inverse is NG. With `tol_time` (relative, default 0.1) every mark and space is held against NEC's lengths (a receiver module changes mark widths: widen it for its output).
+- **`ir`**: reads the line driving the LED (with a carrier, idling low) and a receiver module's output (idling high, marks low). When the active pulses are mostly shorter than 100 µs the line carries a carrier: pulses closer than 150 µs make one mark, and the carrier's frequency and duty are measured. NEC: a 9 ms mark, then 4.5 ms for data (32 bits, LSB first: address, inverted address or the address's high byte, command, inverted command) or 2.25 ms for a repeat. An address that does not match its inverse is a 16-bit extended address in `addr`. A frame whose command does not match its inverse is NG. With `timing_rel` (relative, default 0.1) every mark and space is held against NEC's lengths (a receiver module changes mark widths: widen it for its output).
 
 ```python
 rgb_led("PA7", ["ff0000", "00ff00"])                              # two writes of one LED each
@@ -200,7 +200,7 @@ ir("PB1", [{"addr": 0x04, "cmd": 0x08}, {"repeat": True}], carrier_hz=38e3)
 
 ### 4.7 LIN, I2S, quadrature encoders
 
-- **`lin`**: the line idles high. A low of at least 11 bits at `baud` is a break, the high after it the delimiter. The characters (8N1) up to the next break or a pause longer than 2 characters are sync, protected identifier, data and checksum (the last). Each frame's bit time is measured from its sync field (0x55: its five falling edges span 8 bits), as a slave synchronizes, and its characters are read at that rate. A break must be at least `min_break_bits` (default 13, LIN 2.x's master minimum), a delimiter at least one bit. With `checksum="auto"` the diagnostic ids 0x3C / 0x3D take the classic checksum, the others the enhanced one.
+- **`lin`**: the line idles high. A low of at least 11 bits at `baud` is a break, the high after it the delimiter. The characters (8N1) up to the next break or a pause longer than 2 characters are sync, protected identifier, data and checksum (the last). Each frame's bit time is measured from its sync field (0x55: its five falling edges span 8 bits), as a slave synchronizes, and its characters are read at that rate. A break must be at least `break_min_bits` (default 13, LIN 2.x's master minimum), a delimiter at least one bit. With `checksum="auto"` the diagnostic ids 0x3C / 0x3D take the classic checksum, the others the enhanced one.
 - **`i2s`**: SD and WS are read on BCLK's rising edges; the rising edges until WS changes are one channel (a slot). `format` `"i2s"` (Philips) puts the MSB one BCLK after WS changes, `"left"` at the change, `"right"` ends the word at the slot's last bit (`bits` needed). Words are two's complement, MSB first. The left channel is WS low in `"i2s"`, high otherwise (`left_ws` for others). `samples` is OK when found in a row among the frames read (the window starts mid-stream). The share of WS and SD changes made while BCLK is low is reported (not judged).
 - **`quadrature`**: +1 for each edge with A changing ahead of B (`steps`; `cycles` is that over 4). Both lines changing on one tick is counted as an error: a state skipped (sampled too slowly for the encoder, or a fault).
 

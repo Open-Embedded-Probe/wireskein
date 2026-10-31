@@ -159,15 +159,15 @@ def check_square(cap, x):
     if p is None:
         return False, {"edges": int(len(ch.edges))}, "no steady square wave"
     ferr = p["freq_hz"] / x["freq_hz"] - 1
-    ok = abs(ferr) <= x["tol_freq"]
+    ok = abs(ferr) <= x["freq_rel"]
     why = [] if ok else [f"frequency {p['freq_hz']:.2f} Hz is {ferr * 100:+.2f}% off"]
     if x.get("duty") is not None:
-        if p["duty"] is None or abs(p["duty"] - x["duty"]) > x["tol_duty"] + p["resolution"]:
+        if p["duty"] is None or abs(p["duty"] - x["duty"]) > x["duty_abs"] + p["resolution"]:
             ok = False
             why.append(f"duty {p['duty']:.4f} vs {x['duty']:.4f}")
-    if x.get("max_jitter") is not None and p["period_spread"] > x["max_jitter"]:
+    if x.get("jitter_max") is not None and p["period_spread"] > x["jitter_max"]:
         ok = False
-        why.append(f"period spread {p['period_spread']:.4f} > {x['max_jitter']}")
+        why.append(f"period spread {p['period_spread']:.4f} > {x['jitter_max']}")
     return ok, {**p, "freq_error": ferr}, "; ".join(why)
 
 
@@ -258,7 +258,7 @@ def check_pulses(cap, x):
     if x.get("period_s") is not None and len(rises) >= 2:
         per = float(np.median(np.diff(rises))) / cap.rate
         got["period_s"] = per
-        if abs(per / x["period_s"] - 1) > x["tol_period"]:
+        if abs(per / x["period_s"] - 1) > x["period_rel"]:
             ok = False
             why.append(f"period {per * 1e6:.2f} us vs {x['period_s'] * 1e6:.2f} us")
     return ok, got, "; ".join(why)
@@ -339,9 +339,9 @@ def check_i2c(cap, x):
             why.append("transactions differ: " + diff)
     hz = _burst_hz(scl, cap.rate)
     got["scl_hz"] = hz
-    if x.get("hz") is not None and (hz is None or abs(hz / x["hz"] - 1) > x["tol_hz"]):
+    if x.get("freq_hz") is not None and (hz is None or abs(hz / x["freq_hz"] - 1) > x["freq_rel"]):
         ok = False
-        why.append(f"SCL {hz and round(hz)} Hz vs {x['hz']}")
+        why.append(f"SCL {hz and round(hz)} Hz vs {x['freq_hz']}")
     if x.get("released", True):
         end = {"scl": _level_at(scl, cap.n_samples - 1), "sda": _level_at(sda, cap.n_samples - 1)}
         got["end_levels"] = end
@@ -392,9 +392,9 @@ def check_spi(cap, x):
     if x.get("mode") is not None and got["mode"] != x["mode"]:
         ok = False
         why.append(f"mode {got['mode']} vs {x['mode']}")
-    if x.get("hz") is not None and (got["sck_hz"] is None or abs(got["sck_hz"] / x["hz"] - 1) > x["tol_hz"]):
+    if x.get("freq_hz") is not None and (got["sck_hz"] is None or abs(got["sck_hz"] / x["freq_hz"] - 1) > x["freq_rel"]):
         ok = False
-        why.append(f"SCK {got['sck_hz'] and round(got['sck_hz'])} Hz vs {x['hz']}")
+        why.append(f"SCK {got['sck_hz'] and round(got['sck_hz'])} Hz vs {x['freq_hz']}")
     if x.get("cs"):
         cs_end = _level_at(cap.channel(x["cs"]), cap.n_samples - 1)
         got["cs_end"] = cs_end
@@ -456,13 +456,13 @@ def check_phase(cap, x):
     if x.get("phase_deg") is not None:
         dev = np.abs([timing.circular_diff(float(d), x["phase_deg"]) for d in deg])
         k = int(np.argmax(dev))
-        j = timing.judge(float(dev[k]), p["resolution_deg"], hi=x["tol_deg"])
-        parts.append((j, f"phase {deg[k]:.2f} deg vs {x['phase_deg']} +- {x['tol_deg']} "
+        j = timing.judge(float(dev[k]), p["resolution_deg"], hi=x["phase_abs_deg"])
+        parts.append((j, f"phase {deg[k]:.2f} deg vs {x['phase_deg']} +- {x['phase_abs_deg']} "
                          f"(resolution {p['resolution_deg']:.2f} deg)"))
     if x.get("freq_hz") is not None:
         for k in ("freq_hz", "freq_b_hz"):
             err = p[k] / x["freq_hz"] - 1
-            parts.append((abs(err) <= x["tol_freq"], f"{x['a' if k == 'freq_hz' else 'b']} {p[k]:.2f} Hz is "
+            parts.append((abs(err) <= x["freq_rel"], f"{x['a' if k == 'freq_hz' else 'b']} {p[k]:.2f} Hz is "
                                                      f"{err * 100:+.2f}% off"))
     if not parts:
         return MEASURED, p, ""
@@ -490,8 +490,8 @@ def check_skew(cap, x):
     want = x.get("delay_s", 0.0) * cap.rate
     dev = np.abs(d - want)
     k = int(np.argmax(dev))
-    parts.append((timing.judge(float(dev[k]), res, hi=x["tol_s"] * cap.rate),
-                  f"{x['b']} {_si(d[k] / cap.rate)} after {x['a']} vs {_si(x.get('delay_s', 0.0))} +- {_si(x['tol_s'])}"))
+    parts.append((timing.judge(float(dev[k]), res, hi=x["delay_abs_s"] * cap.rate),
+                  f"{x['b']} {_si(d[k] / cap.rate)} after {x['a']} vs {_si(x.get('delay_s', 0.0))} +- {_si(x['delay_abs_s'])}"))
     ok, why = _verdicts(parts)
     return ok, got, why
 
@@ -512,7 +512,7 @@ def check_dead_time(cap, x):
         parts.append((False, f"both on {len(r['overlaps'])} times, longest {_si(ln / cap.rate)} at {_si(t / cap.rate)}"))
     for side in ("hi_to_lo", "lo_to_hi"):
         if r[side]:
-            parts += _limit_of(side, r[side], res, x.get("min_s"), x.get("max_s"), cap.rate)
+            parts += _limit_of(side, r[side], res, x.get("dead_min_s"), x.get("dead_max_s"), cap.rate)
     if not parts:
         return MEASURED, got, ""
     ok, why = _verdicts(parts)
@@ -523,8 +523,10 @@ def check_i2c_timing(cap, x):
     scl, sda = _ch(cap, x["scl"]), _ch(cap, x["sda"])
     if scl is None or sda is None:
         return None, {}, "pins not captured"
-    lim = {**(timing.I2C_MODES[x["mode"]] if x.get("mode") else {}),
-           **{k: tuple(v) if isinstance(v, (list, tuple)) else (v, None) for k, v in (x.get("limits") or {}).items()}}
+    lim = {k: list(v) for k, v in (timing.I2C_MODES[x["mode"]] if x.get("mode") else {}).items()}
+    for k, v in (x.get("limits") or {}).items():          # "t_low_min_s", "t_vd_dat_max_s", "f_scl_max_hz"
+        name, side, _ = k.rsplit("_", 2)
+        lim.setdefault(name, [None, None])[side == "max"] = v
     r = timing.i2c_times(scl, sda, cap.n_samples)
     res = timing.res_of(scl, sda)
     got = {k: _times(r[k], cap.rate) for k in timing.I2C_TIMES}
@@ -582,8 +584,9 @@ def check_rgb_led(cap, x):
     if cut:
         parts.append((False, f"frames {cut} end {[r['frames'][i]['leftover_bits'] for i in cut]} bits after a byte"))
     for k in ("t0h", "t1h", "period"):
-        if r[k] and x.get(k) is not None:
-            parts += _limit_of(k.upper() if k != "period" else "bit period", r[k], res, *x[k], cap.rate)
+        lo, hi = x.get(f"{k}_min_s"), x.get(f"{k}_max_s")
+        if r[k] and (lo is not None or hi is not None):
+            parts += _limit_of(k.upper() if k != "period" else "bit period", r[k], res, lo, hi, cap.rate)
     if x.get("reset_min_s") is not None:
         if r["resets"]:
             parts += _limit_of("reset", r["resets"], res, x["reset_min_s"], None, cap.rate)
@@ -661,9 +664,9 @@ def check_ir(cap, x):
         parts.append((False, f"frames {bad}: the command's inverse does not match (or fewer than 32 bits)"))
     if x.get("carrier_hz") is not None:
         c = r.get("carrier_hz")
-        parts.append((c is not None and abs(c / x["carrier_hz"] - 1) <= x["tol_carrier"],
+        parts.append((c is not None and abs(c / x["carrier_hz"] - 1) <= x["carrier_rel"],
                       f"carrier {c and round(c)} Hz vs {x['carrier_hz']}" if c else "no carrier (a demodulated line?)"))
-    tol = x.get("tol_time")
+    tol = x.get("timing_rel")
     if tol is not None:
         for k in keys:
             if r[k]:
@@ -680,7 +683,7 @@ def check_lin(cap, x):
     ch = _ch(cap, x["pin"])
     if ch is None:
         return None, {}, "pin not captured"
-    r = periph.lin(ch, cap.n_samples, cap.rate, x["baud"], min(11.0, x["min_break_bits"]))
+    r = periph.lin(ch, cap.n_samples, cap.rate, x["baud"], min(11.0, x["break_min_bits"]))
     u0 = cap.rate / x["baud"]
     fr = [f for f in r["frames"] if "pid" in f]
     got = {"frames": [{"id": f["id"], "data": f.get("data")} for f in fr],
@@ -710,13 +713,13 @@ def check_lin(cap, x):
         if bad:
             parts.append((False, f"frame #{i} (id 0x{f['id']:02x}): " + ", ".join(bad)))
     res = ch.step
-    parts += _limit_of("break", [(f["t"], f["break"]) for f in fr], res, x["min_break_bits"] / x["baud"], None,
+    parts += _limit_of("break", [(f["t"], f["break"]) for f in fr], res, x["break_min_bits"] / x["baud"], None,
                        cap.rate)
     parts += _limit_of("break delimiter", [(f["t"], f["delimiter"]) for f in fr], res, 1 / x["baud"], None, cap.rate)
-    if x.get("tol_baud") is not None:
+    if x.get("baud_rel") is not None:
         for f in fr:
             err = f["bit_ticks"] / u0 - 1
-            j = timing.judge(abs(err), res / (8 * f["bit_ticks"]), hi=x["tol_baud"])
+            j = timing.judge(abs(err), res / (8 * f["bit_ticks"]), hi=x["baud_rel"])
             if j is not True:
                 parts.append((j, f"frame at {_si(f['t'] / cap.rate)}: {cap.rate / f['bit_ticks']:.1f} baud "
                                  f"({err * 100:+.2f}%) from its sync field"))
@@ -739,7 +742,7 @@ def check_i2s(cap, x):
         parts.append((False, f"{r['slot_bits']} BCLKs a slot, want {x['slot_bits']}"))
     if x.get("fs_hz") is not None:
         fs = r.get("fs_hz")
-        parts.append((fs is not None and abs(fs / x["fs_hz"] - 1) <= x["tol_fs"],
+        parts.append((fs is not None and abs(fs / x["fs_hz"] - 1) <= x["fs_rel"],
                       f"sample rate {fs and round(fs, 1)} Hz vs {x['fs_hz']}"))
     if x.get("samples") is not None:
         want = [list(v) for v in x["samples"]]
@@ -762,7 +765,7 @@ def check_quadrature(cap, x):
     got = {**r, "min_step_s": r["min_step_ticks"] / cap.rate if r["min_step_ticks"] is not None else None}
     got["error_at"] = [t / cap.rate for t in r["error_at"]]
     parts = []
-    if x.get("max_errors") is not None and r["errors"] > x["max_errors"]:
+    if x.get("errors_max") is not None and r["errors"] > x["errors_max"]:
         parts.append((False, f"{r['errors']} times both lines changed at once (first at {_si(got['error_at'][0])})"))
     if x.get("steps") is not None and r["steps"] != x["steps"]:
         parts.append((False, f"{r['steps']} steps, want {x['steps']}"))
@@ -773,7 +776,7 @@ def check_quadrature(cap, x):
     if x.get("direction") == "backward" and (r["forward"] or not r["backward"]):
         parts.append((False, f"{r['forward']} steps forward, {r['backward']} backward"))
     ok, why = _verdicts(parts)
-    asked = any(x.get(k) is not None for k in ("steps", "cycles", "direction", "max_errors"))
+    asked = any(x.get(k) is not None for k in ("steps", "cycles", "direction", "errors_max"))
     return (ok if asked or ok is not True else MEASURED), got, why
 
 
@@ -819,8 +822,8 @@ def check_sd_spi(cap, x):
     for c in cmds:
         at = f"{_sd_name(c)} at {_si(c['t'] / cap.rate)}"
         if c.get("r1") is None:
-            parts.append((False, f"{at}: no R1 within {x.get('max_ncr', 8)} bytes"))
-        elif c.get("ncr", 0) > x.get("max_ncr", 8):
+            parts.append((False, f"{at}: no R1 within {x.get('ncr_max_bytes', 8)} bytes"))
+        elif c.get("ncr", 0) > x.get("ncr_max_bytes", 8):
             parts.append((False, f"{at}: R1 after {c['ncr']} bytes"))
         if not c["end_bit"]:
             parts.append((False, f"{at}: the end bit is 0"))
@@ -1030,10 +1033,10 @@ def check_uart(cap, x):
     elif u is None:
         ok = False
         why.append("no edges to measure the bit time")
-    elif abs(got["baud_error"]) > x.get("tol_baud", 0.03):
+    elif abs(got["baud_error"]) > x.get("baud_rel", 0.03):
         ok = False
         why.append(f"baud {got['baud']:.0f} is {got['baud_error'] * 100:+.2f}% off {x['baud']:.0f}")
-    if x.get("max_errors") is not None and frame_err + par_err > x["max_errors"]:
+    if x.get("errors_max") is not None and frame_err + par_err > x["errors_max"]:
         ok = False
         msg = f"{frame_err} framing and {par_err} parity errors"
         skewed = [o for _, o in bad if o > max(0.2, 2 * got["edge_offset_p99"])]
@@ -1047,7 +1050,7 @@ def check_uart(cap, x):
     if got["idle"] != idle:
         ok = False
         why.append(f"idle level {got['idle']}")
-    if not x.get("baud") and ok and x.get("data") is None and x.get("max_errors") is None:
+    if not x.get("baud") and ok and x.get("data") is None and x.get("errors_max") is None:
         # nothing was expected: a measurement (status "measured", not a failure)
         return MEASURED, got, (f"measured {got['baud']:.0f} baud, " if got["baud"] else "") + \
             f"{got['chars']} chars, {frame_err} framing / {par_err} parity errors"
@@ -1074,39 +1077,39 @@ def check_voltage(cap, x):
     if not got["samples"] and not (c_lo or c_hi):
         return False, got, "no samples"
     ok, why, open_ = True, [], []
-    if x.get("min_v") is not None:
-        if c_lo and lo_v < x["min_v"]:
+    if x.get("level_min_v") is not None:
+        if c_lo and lo_v < x["level_min_v"]:
             ok = False
-            why.append(f"{c_lo} samples clipped at the low end (<= {lo_v:.3f} V) < {x['min_v']:g} V")
+            why.append(f"{c_lo} samples clipped at the low end (<= {lo_v:.3f} V) < {x['level_min_v']:g} V")
         elif c_lo:
-            open_.append(f"{c_lo} samples clipped at <= {lo_v:.3f} V: min_v {x['min_v']:g} V cannot be told")
-        elif got["samples"] and got["min_v"] < x["min_v"]:
+            open_.append(f"{c_lo} samples clipped at <= {lo_v:.3f} V: level_min_v {x['level_min_v']:g} V cannot be told")
+        elif got["samples"] and got["min_v"] < x["level_min_v"]:
             ok = False
-            why.append(f"min {got['min_v']:.4f} V < {x['min_v']:g} V")
-        if c_hi and hi_v < x["min_v"]:                  # >= the high end, but the high end is under min_v
-            open_.append(f"{c_hi} samples clipped at >= {hi_v:.3f} V: min_v {x['min_v']:g} V cannot be told")
-    if x.get("max_v") is not None:
-        if c_hi and hi_v > x["max_v"]:
+            why.append(f"min {got['min_v']:.4f} V < {x['level_min_v']:g} V")
+        if c_hi and hi_v < x["level_min_v"]:                  # >= the high end, but the high end is under min_v
+            open_.append(f"{c_hi} samples clipped at >= {hi_v:.3f} V: level_min_v {x['level_min_v']:g} V cannot be told")
+    if x.get("level_max_v") is not None:
+        if c_hi and hi_v > x["level_max_v"]:
             ok = False
-            why.append(f"{c_hi} samples clipped at the high end (>= {hi_v:.3f} V) > {x['max_v']:g} V")
+            why.append(f"{c_hi} samples clipped at the high end (>= {hi_v:.3f} V) > {x['level_max_v']:g} V")
         elif c_hi:
-            open_.append(f"{c_hi} samples clipped at >= {hi_v:.3f} V: max_v {x['max_v']:g} V cannot be told")
-        elif got["samples"] and got["max_v"] > x["max_v"]:
+            open_.append(f"{c_hi} samples clipped at >= {hi_v:.3f} V: level_max_v {x['level_max_v']:g} V cannot be told")
+        elif got["samples"] and got["max_v"] > x["level_max_v"]:
             ok = False
-            why.append(f"max {got['max_v']:.4f} V > {x['max_v']:g} V")
-        if c_lo and lo_v > x["max_v"]:                  # <= the low end, but the low end is over max_v
-            open_.append(f"{c_lo} samples clipped at <= {lo_v:.3f} V: max_v {x['max_v']:g} V cannot be told")
-    if x.get("volts") is not None or x.get("ripple") is not None:
+            why.append(f"max {got['max_v']:.4f} V > {x['level_max_v']:g} V")
+        if c_lo and lo_v > x["level_max_v"]:                  # <= the low end, but the low end is over max_v
+            open_.append(f"{c_lo} samples clipped at <= {lo_v:.3f} V: level_max_v {x['level_max_v']:g} V cannot be told")
+    if x.get("level_v") is not None or x.get("ripple_max_v") is not None:
         if c_lo or c_hi:
             open_.append(f"{c_lo + c_hi} samples clipped at an end of {lo_v:.3f}..{hi_v:.3f} V: "
                          "mean and ripple cannot be told")
         else:
-            if x.get("volts") is not None and abs(got["mean_v"] - x["volts"]) > x["tol_v"]:
+            if x.get("level_v") is not None and abs(got["mean_v"] - x["level_v"]) > x["level_abs_v"]:
                 ok = False
-                why.append(f"mean {got['mean_v']:.4f} V vs {x['volts']:.4f} +- {x['tol_v']:g} V")
-            if x.get("ripple") is not None and got["p2p_v"] > x["ripple"]:
+                why.append(f"mean {got['mean_v']:.4f} V vs {x['level_v']:.4f} +- {x['level_abs_v']:g} V")
+            if x.get("ripple_max_v") is not None and got["p2p_v"] > x["ripple_max_v"]:
                 ok = False
-                why.append(f"peak-to-peak {got['p2p_v']:.4f} V > {x['ripple']:g} V")
+                why.append(f"peak-to-peak {got['p2p_v']:.4f} V > {x['ripple_max_v']:g} V")
     if not ok:
         return False, got, "; ".join(why + open_)
     if open_:

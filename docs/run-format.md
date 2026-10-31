@@ -44,20 +44,16 @@ The run is a directory, with each capture in a separate file, so that if the tes
 
 Each element of `checks` is an object `{"kind": ..., ...}`. `kind` is one of `square`, `level`, `starts`, `ends`, `only_moving`, `pulses`, `i2c`, `spi`, `uart`, `voltage`, `phase`, `skew`, `dead_time`, `i2c_timing`, `rgb_led`, `onewire`, `ir`, `lin`, `i2s`, `quadrature`, `sd_spi`. The keys and meaning of each check are in [Testing with captures](capture-test-guide.md) §4 (the functions of the same names in Python's `wireskein.runlog` build these objects).
 
-Tolerance names:
+Names of the values a check compares (one rule for every check):
 
-| Name | Relative / absolute | Used by |
+| Form | Meaning | Example |
 | --- | --- | --- |
-| `tol_freq` | Relative (deviation of the frequency ratio) | `square` |
-| `tol_duty` | Absolute (difference of duty; between values in 0–1) | `square` |
-| `tol_baud` | Relative | `uart`, `lin` |
-| `tol_hz` | Relative | `i2c`, `spi` |
-| `tol_period` | Relative | `pulses` |
-| `tol_v` | Absolute (V) | `voltage` |
-| `tol_deg` | Absolute (degrees) | `phase` |
-| `tol_s` | Absolute (seconds) | `skew` |
-| `tol_carrier`, `tol_time` | Relative | `ir` |
-| `tol_fs` | Relative | `i2s` |
+| `<quantity>_<unit>` | The expected value | `freq_hz`, `delay_s`, `level_v`, `phase_deg`; a ratio has no unit (`duty`) |
+| `<quantity>_rel` | Tolerance relative to the expected value (as `pytest.approx`'s `rel`) | `freq_rel`, `baud_rel`, `period_rel` |
+| `<quantity>_abs_<unit>` | Tolerance in the quantity's unit (as `pytest.approx`'s `abs`); a ratio has no unit | `delay_abs_s`, `level_abs_v`, `phase_abs_deg`, `duty_abs` |
+| `<quantity>_min_<unit>`, `<quantity>_max_<unit>` | A limit; either side alone | `dead_min_s`, `t0h_max_s`, `reset_min_s`, `break_min_bits`, `ncr_max_bytes`, `errors_max` |
+
+The quantity is the same word as the expected value's (`freq_hz` → `freq_rel`). Units come last (`_s`, `_hz`, `_v`, `_deg`, `_bits`, `_bytes`); a count or a ratio has none.
 
 - When `threshold` (V, or `(low, high)`) is given, the logic checks (`square`, `level`, `starts`, `ends`, `pulses`, `i2c`, `spi`, `uart`, `phase`, `skew`, `dead_time`, `i2c_timing`, `rgb_led`, `onewire`, `ir`, `lin`, `i2s`, `quadrature`, `sd_spi`) read an analog channel as logic.
 - `only_moving` looks at logic channels only.
