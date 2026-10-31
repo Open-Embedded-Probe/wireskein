@@ -17,7 +17,7 @@ def capture(target: str, req: Request) -> Result:
     try:
         from oep_client import acquire
     except ImportError as e:
-        raise RuntimeError('the oep source needs oep-client-python with acquire: pip install "wireskein[oep]"') from e
+        raise RuntimeError('the oep source needs oep-client-python: pip install "wireskein[oep]"') from e
     if not target:
         raise ValueError("oep:<address>: an OEP address (oep://UNIT_ID[?via=ROUTE]), a serial port or tcp://HOST:PORT")
     areq = acquire.Request(list(req.channels), req.rate, req.samples, trigger=req.trigger, pretrigger=req.pretrigger,

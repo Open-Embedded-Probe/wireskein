@@ -66,7 +66,8 @@ def _acquire_stand_in(calls, res):
 
 
 def test_oep_source_writes_the_clients_result_one_to_one(tmp_path, monkeypatch):
-    acq = pytest.importorskip("oep_client.acquire")
+    pytest.importorskip("oep_client")
+    from oep_client import acquire as acq
     a = acq.Bits("SDA", acq.pack(bytes([0, 1, 1, 0, 1])), 5, acquisition={"pin": 47})
     b = acq.changes("SCL", [1, 3], [1, 0], [1, 1], 5, pin=48)
     v = acq.analog_raw("VBUS", [100, 200], 1000, width=16, value_bits=12, zero=0, scale_nv=805_860, pin=17)

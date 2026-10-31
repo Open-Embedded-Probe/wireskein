@@ -10,7 +10,7 @@ import pytest
 
 from wireskein import sources, _fileformat as fileformat
 
-pytest.importorskip("oep_client.acquire")
+pytest.importorskip("oep_client")
 SERVE = "oep_client.virtual_bench_serve"
 
 
