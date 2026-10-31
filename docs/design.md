@@ -13,7 +13,7 @@ This document collects the decisions made for the implementation, with their rea
 
 - **The reference implementation is developed in Python.** Its only dependency is numpy. The file format and the run format are defined as language-independent specifications, and other languages may implement them as long as they are compatible.
   - Reason: for verification in tests (given pins and protocol, read short segments), Python and numpy are enough. The only slow part is Python loops that step through one bit at a time; those are moved to numpy batch processing (kernels).
-  - In the Python implementation, run logging and saving (`wireskein.runlog`, `wireskein.fileformat`) work with the standard library only, so that test scripts can import them as they are.
+  - In the Python implementation, run logging and saving (`wireskein.runlog`, `wireskein.capture`) work with the standard library only, so that test scripts can import them as they are.
 - **A native implementation (Rust etc.), if made, goes in a separate repository.** It is not added to this repository. The shared assets are the TOML definitions (`decl/`) and the evaluation corpus with ground truth (`corpus/fixtures/`).
   - For this reason, TOML expressions are not defined as "Python eval" (they are a restricted syntax, §3.2).
 

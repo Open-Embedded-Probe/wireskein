@@ -53,7 +53,7 @@ def load(path: Path):
 
 
 def info(args) -> None:
-    from . import fileformat
+    from . import _fileformat as fileformat
     raw = fileformat.read_header(args.file)
     parts = fileformat.read_parts(args.file)
     tick = fileformat.tick_hz(raw)
@@ -78,7 +78,7 @@ def info(args) -> None:
 
 
 def _info_part(head, chans, tick, raw, many) -> None:
-    from . import fileformat
+    from . import _fileformat as fileformat
     for c in chans:
         if isinstance(c, fileformat.AnalogChannel):
             conv = (f"raw {c.width}-bit" + (f" ({c.value_bits} valid)" if c.value_bits else "")
@@ -116,7 +116,7 @@ def _info_part(head, chans, tick, raw, many) -> None:
 
 
 def _info_files(args) -> None:
-    from . import fileformat
+    from . import _fileformat as fileformat
     for name, data in fileformat.attachments(args.file).items():
         print(f"attach/{name}: {len(data)} bytes")
     for k, n in enumerate(fileformat.notes(args.file), 1):
@@ -141,13 +141,13 @@ def _meta_notes(meta: dict, tick) -> list[str]:
 
 
 def note_cmd(args) -> None:
-    from . import fileformat
+    from . import _fileformat as fileformat
     content = json.loads(args.text) if args.json else args.text
     print(fileformat.note(args.file, content, **({"kind": args.kind} if args.kind else {})))
 
 
 def attach_cmd(args) -> None:
-    from . import fileformat
+    from . import _fileformat as fileformat
     if (args.src is None) == (args.text is None):
         sys.exit("give SRC (a file) or --text")
     data = args.src.read_bytes() if args.src else args.text
@@ -299,10 +299,10 @@ def capture_cmd(args) -> None:
         resolution=sources.parse_resolution(args.channels or ""))
     out = sources.capture(args.source, req, args.output)
     if args.note:
-        from . import fileformat
+        from . import _fileformat as fileformat
         if fileformat.sniff(out) == "wireskein":
             fileformat.note(out, args.note)
-    from . import fileformat
+    from . import _fileformat as fileformat
     raw = fileformat.read_header(out) if fileformat.sniff(out) == "wireskein" else None
     if raw:                 # from the header alone: a long stream's channels are not read back to say what it holds
         chans = [c for p in raw["parts"][:1] for c in p["channels"]]
@@ -425,7 +425,7 @@ def _fewer(raw: dict, req) -> None:
 def convert(args) -> None:
     from .decode import load as load_file, save
     part = getattr(args, "part", None)
-    from . import fileformat
+    from . import _fileformat as fileformat
     if part is None and fileformat.sniff(args.input) == "wireskein":
         head = fileformat.read_header(args.input)
         if len(head["parts"]) > 1:

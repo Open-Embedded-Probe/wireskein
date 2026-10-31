@@ -157,16 +157,20 @@ wireskein gui runs/                # runs/ の下のキャプチャと記録の�
 
 ## WireSkein のファイル（.wireskein）と変換
 
-WireSkein のファイル（`.wireskein`、中身は zip）は、キャプチャと、それに付くもの（添付、メモ、マーカー、復号の注釈）を 1 つに持ちます。道具は、名前ではなく中身で見分けます。キャプチャは、各チャンネルを自分のサンプルレートのまま持ちます。帯域に収めるために一部のチャンネルを間引くプローブ（例: 32 サンプルに 1 つ）は、取ったサンプルだけを `step=32` で保存します。間を埋める水増しはしないので、ビューアは実際にあるサンプルだけを見せられます。読み書きは、標準ライブラリだけで動く `wireskein.fileformat` で行います。
+WireSkein のファイル（`.wireskein`、中身は zip）は、キャプチャと、それに付くもの（添付、メモ、マーカー、復号の注釈）を 1 つに持ちます。道具は、名前ではなく中身で見分けます。キャプチャは、各チャンネルを自分のサンプルレートのまま持ちます。帯域に収めるために一部のチャンネルを間引くプローブ（例: 32 サンプルに 1 つ）は、取ったサンプルだけを `step=32` で保存します。間を埋める水増しはしないので、ビューアは実際にあるサンプルだけを見せられます。読み書きは、標準ライブラリだけで動く `wireskein.capture` で行います（numpy は、線を変化にするときだけ使います）。
 
 ```python
-from wireskein import fileformat as wf
+from wireskein import capture as wc
 
-wf.write("c.wireskein", 100_000_000, [
-    wf.Channel("PA5", wf.pack(pa5_samples), n),                 # samples: 1 サンプル 1 バイト（0 か 1）
-    wf.Channel("PB0", wf.pack(pb0_samples), n // 32, step=32),  # 1/32 のレートで取ったチャンネル
-], start_ns=seg.start_ns, start_uncertainty_ns=seg.start_uncertainty_ns)
-channels = wf.from_interleaved(data, ["PA5", "PA7"], width=8)    # プローブの並び: 1 サンプル width ビット、ビット k がチャンネル k
+part = wc.Part(n, [
+    wc.Channel("PA5", wc.pack(pa5_samples), n),                 # samples: 1 サンプル 1 バイト（0 か 1）
+    wc.Channel("PB0", wc.pack(pb0_samples), n // 32, step=32),  # 1/32 のレートで取ったチャンネル
+], {"start_ns": seg.start_ns, "start_uncertainty_ns": seg.start_uncertainty_ns})
+wc.write("c.wireskein", wc.Capture(100_000_000, [part]))
+channels = wc.from_interleaved(data, ["PA5", "PA7"], width=8)    # プローブの並び: 1 サンプル width ビット、ビット k がチャンネル k
+
+cap = wc.read("c.wireskein")                                     # すべての区間と、落ちたもの（cap.lost）
+initial, edges = cap.parts[0].channel("PA5").changes()           # 区間の刻み 0 からの刻み
 ```
 
 アナログのチャンネルも、同じファイルに入れられます。
@@ -176,12 +180,12 @@ channels = wf.from_interleaved(data, ["PA5", "PA7"], width=8)    # プローブ�
 - 取ったときの情報（ピン、減衰、基準電圧、プローブの出荷時の補正値）も、分析で使うかにかかわらず保存します。
 
 ```python
-wf.write("m.wireskein", 20_000_000, [
-    wf.Channel("CLK", wf.pack(clk_samples), n),
-    wf.analog_raw("VBUS", raw_values, Fraction(80_000_000, 1667), width=16, value_bits=12, zero=0, scale_nv=805_860,
+wc.write("m.wireskein", wc.Capture(20_000_000, [wc.Part(n, [
+    wc.Channel("CLK", wc.pack(clk_samples), n),
+    wc.analog_raw("VBUS", raw_values, Fraction(80_000_000, 1667), width=16, value_bits=12, zero=0, scale_nv=805_860,
                    pin=22, attenuation_db=12, reference={"source": "vdd", "mv": 3300}),
-    wf.analog_volts("SINE", volts, 1_000_000),                     # 電圧（sigrok や Saleae から）
-], probe={"chip": "ESP32-P4", "calibration": {"scheme": "curve-fitting-v1", "raw": "..."}})
+    wc.analog_volts("SINE", volts, 1_000_000),                     # 電圧（sigrok や Saleae から）
+])], meta={"probe": {"chip": "ESP32-P4", "calibration": {"scheme": "curve-fitting-v1", "raw": "..."}}}))
 ```
 
 `wireskein capture --source sigrok:<ドライバ>` で、アナログのチャンネルも取れます（`--channels CLK=D0,VBUS=A0`）。解析は、ロジックのチャンネルを読みます。照合は、アナログのチャンネルも読みます（`voltage()` と、ロジックの検査の `threshold=`）。形式の仕様は `docs/wireskein-format.ja.md` にあります。

@@ -8,7 +8,7 @@ import sys
 import numpy as np
 import pytest
 
-from wireskein import fileformat
+from wireskein import _fileformat as fileformat
 from wireskein.decode import FORMAT, decode_file
 from wireskein._engine import fileio, gen
 

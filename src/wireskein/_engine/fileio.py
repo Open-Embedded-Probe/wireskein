@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .. import fileformat
+from .. import _fileformat as fileformat
 from .model import AnalogTrace, Capture, Channel, EventTrace, edges_from_dense
 
 

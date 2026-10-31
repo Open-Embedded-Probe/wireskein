@@ -22,7 +22,7 @@ some channels (keeps every 32nd sample to fit its link) stores those with
 step=32 and only the samples it really took. Nothing is repeated to fill the
 gaps, so a viewer can show exactly the samples that exist.
 
-    from wireskein import fileformat as wf
+    from wireskein import _fileformat as fileformat as wf
     wf.write("c.wireskein", 100_000_000,
              [wf.Channel("PA5", wf.pack(samples_pa5), n),                   # samples: 0/1 per byte
               wf.Channel("PB0", wf.pack(samples_pb0), n // 32, step=32)],

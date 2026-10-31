@@ -4,7 +4,7 @@
 import json
 import time
 
-from wireskein import fileformat, verify
+from wireskein import _fileformat as fileformat, verify
 from wireskein.runlog import Recorder, pulses
 
 START_NS = 5_000_000_000              # the capture's first sample on the probe's clock

@@ -20,7 +20,7 @@ from __future__ import annotations
 import struct
 from fractions import Fraction
 
-from .. import fileformat
+from .. import _fileformat as fileformat
 from . import Request, Result
 
 TRIGGER = {"high": (1, 1), "low": (1, 0), "rise": (2, 0), "fall": (2, 1), "both": (2, 2)}   # (type, value), oep-if-capture

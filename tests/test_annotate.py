@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from wireskein import annotate, fileformat
+from wireskein import annotate, _fileformat as fileformat
 from wireskein._engine import fileio
 
 

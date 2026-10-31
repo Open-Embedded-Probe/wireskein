@@ -42,7 +42,7 @@ from contextlib import contextmanager
 from fractions import Fraction
 from pathlib import Path
 
-from . import fileformat
+from . import _fileformat as fileformat
 
 FORMAT = "wireskein-run/3"          # docs/run-format.ja.md
 

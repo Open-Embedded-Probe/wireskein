@@ -10,7 +10,7 @@ from fractions import Fraction
 import numpy as np
 import pytest
 
-from wireskein import sources, fileformat
+from wireskein import sources, _fileformat as fileformat
 
 
 def test_parsers():

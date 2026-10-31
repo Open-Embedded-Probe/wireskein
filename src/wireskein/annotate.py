@@ -118,7 +118,7 @@ def build_file(path: str | Path, hints: dict | None = None, prepare=None, part: 
     """The annotations document of a file: each part decoded on its own (analysis never crosses parts,
     wireskein-format §3.4), its rows naming it (`part`, §5.3) when the file has several. part: that one only.
     prepare: a step from the loaded capture to the one decoded (e.g. analog read as logic)."""
-    from . import fileformat
+    from . import _fileformat as fileformat
     from .decode import load
     prepare = prepare or (lambda cap: cap)
     n = len(fileformat.read_header(path)["parts"]) if fileformat.sniff(path) == "wireskein" else 1
@@ -133,12 +133,12 @@ def build_file(path: str | Path, hints: dict | None = None, prepare=None, part: 
 
 
 def save(path: str | Path, doc: dict) -> None:
-    from . import fileformat
+    from . import _fileformat as fileformat
     fileformat.put(path, ENTRY, json.dumps(doc, ensure_ascii=False, separators=(",", ":")))
 
 
 def load(path: str | Path) -> dict | None:
-    from . import fileformat
+    from . import _fileformat as fileformat
     data = fileformat.get(path, ENTRY)
     if data is None:
         return None

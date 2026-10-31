@@ -8,7 +8,7 @@ from fractions import Fraction
 import numpy as np
 import pytest
 
-from wireskein import align, fileformat
+from wireskein import align, _fileformat as fileformat
 from wireskein._engine import fileio
 
 TICK = 10_000_000                         # logic at 10 MHz

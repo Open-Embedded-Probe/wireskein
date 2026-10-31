@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) **Breaking:** `wireskein.fileformat` is internal (`wireskein._fileformat`): write and read files through `wireskein.capture` (the same channel types: `Channel`, `Events`, `Analog`, with `pack`, `from_interleaved`, `events`, `analog_raw`, `analog_volts`).
+- (JA) **互換のない変更:** `wireskein.fileformat` は内部にした（`wireskein._fileformat`）: ファイルの読み書きは `wireskein.capture` で行う（チャンネルの型は同じ: `Channel`、`Events`、`Analog`。`pack`、`from_interleaved`、`events`、`analog_raw`、`analog_volts` も）。
 - (EN) **Breaking:** `wireskein.analyze` is gone: its `load`, `save`, `as_logic`, `analyze`, `export` and `dumps` are in `wireskein.decode`, with `decode_file`. The public modules are `capture`, `runlog`, `verify`, `decode` and `sources`.
 - (JA) **互換のない変更:** `wireskein.analyze` は無くなった: `load`、`save`、`as_logic`、`analyze`、`export`、`dumps` は `wireskein.decode` に、`decode_file` と一緒にある。公開の module は `capture`、`runlog`、`verify`、`decode`、`sources`。
 - (EN) `wireskein.capture`: a WireSkein file as one value, with the standard library only (numpy only to turn a line into its changes). `read(path)` gives a `Capture` (`tick_hz` exact, `layout`, `lost` / `complete`, `meta`, `id`) with every `Part` (`tick0`, `ticks`, `meta`); a part's channels are read when first asked for, kept as stored: `Channel` (samples), `Events` (changes), `Analog`. Every logic line reads as `changes()` (its level before the first tick, the ticks it changes at); `logic(name, initial, edges, n)` makes one from its changes in the smaller form. `part.view()` is what the decoders and checks read; `write(path, capture)` writes one.

@@ -6,7 +6,7 @@ import sys
 
 import pytest
 
-from wireskein import fileformat
+from wireskein import _fileformat as fileformat
 from wireskein.runlog import FORMAT, Recorder, level, pulses, uart, voltage
 from wireskein.verify import failed, junit, verify
 

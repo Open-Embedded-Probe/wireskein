@@ -26,7 +26,7 @@ from fractions import Fraction
 from importlib.metadata import entry_points
 from pathlib import Path
 
-from .. import fileformat
+from .. import _fileformat as fileformat
 
 BUILTIN = {"oep": "wireskein.sources.oep", "sigrok": "wireskein.sources.sigrok"}
 TRIGGERS = ("rise", "fall", "both", "high", "low")

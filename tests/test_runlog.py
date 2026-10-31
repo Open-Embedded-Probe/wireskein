@@ -2,7 +2,7 @@ import json
 import subprocess
 import sys
 
-from wireskein import fileformat
+from wireskein import _fileformat as fileformat
 from wireskein.runlog import FORMAT, Recorder, level
 
 

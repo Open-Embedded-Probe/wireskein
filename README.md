@@ -173,27 +173,31 @@ It serves nothing but the viewer and the capture files below the directory given
 
 ## WireSkein files (.wireskein) and conversion
 
-A WireSkein file (`.wireskein`, a zip) holds a capture and what goes with it: attachments, notes, markers and decode annotations. Tools tell it apart by its content, not its name. A capture keeps each channel at its own sample rate. A probe that decimates some channels to fit its link (every 32nd sample, say) stores only the samples it took, with `step=32`. Nothing is repeated to fill the gaps, so a viewer can show exactly the samples that exist. The module `wireskein.fileformat` reads and writes it with the standard library only:
+A WireSkein file (`.wireskein`, a zip) holds a capture and what goes with it: attachments, notes, markers and decode annotations. Tools tell it apart by its content, not its name. A capture keeps each channel at its own sample rate. A probe that decimates some channels to fit its link (every 32nd sample, say) stores only the samples it took, with `step=32`. Nothing is repeated to fill the gaps, so a viewer can show exactly the samples that exist. The module `wireskein.capture` reads and writes it with the standard library only (numpy only to turn a line into its changes):
 
 ```python
-from wireskein import fileformat as wf
+from wireskein import capture as wc
 
-wf.write("c.wireskein", 100_000_000, [
-    wf.Channel("PA5", wf.pack(pa5_samples), n),                 # samples: one byte per sample, 0 or 1
-    wf.Channel("PB0", wf.pack(pb0_samples), n // 32, step=32),  # a channel kept at 1/32 of the rate
-], start_ns=seg.start_ns, start_uncertainty_ns=seg.start_uncertainty_ns)
-channels = wf.from_interleaved(data, ["PA5", "PA7"], width=8)    # a probe's stream: width bits per sample, bit k = channel k
+part = wc.Part(n, [
+    wc.Channel("PA5", wc.pack(pa5_samples), n),                 # samples: one byte per sample, 0 or 1
+    wc.Channel("PB0", wc.pack(pb0_samples), n // 32, step=32),  # a channel kept at 1/32 of the rate
+], {"start_ns": seg.start_ns, "start_uncertainty_ns": seg.start_uncertainty_ns})
+wc.write("c.wireskein", wc.Capture(100_000_000, [part]))
+channels = wc.from_interleaved(data, ["PA5", "PA7"], width=8)    # a probe's stream: width bits per sample, bit k = channel k
+
+cap = wc.read("c.wireskein")                                     # every part, with what was lost (cap.lost)
+initial, edges = cap.parts[0].channel("PA5").changes()           # ticks from the part's tick 0
 ```
 
 Analog channels can sit in the same file, each with its own rate and start time (`t0_ticks`), so an ADC whose real rate is not a whole number of logic ticks keeps its true timing. ADC values are kept raw with their linear conversion (`zero`, `scale_nv`), and how they were taken (pin, attenuation, reference voltage, the probe's factory calibration values) is stored too, whether or not the analysis uses it:
 
 ```python
-wf.write("m.wireskein", 20_000_000, [
-    wf.Channel("CLK", wf.pack(clk_samples), n),
-    wf.analog_raw("VBUS", raw_values, Fraction(80_000_000, 1667), width=16, value_bits=12, zero=0, scale_nv=805_860,
+wc.write("m.wireskein", wc.Capture(20_000_000, [wc.Part(n, [
+    wc.Channel("CLK", wc.pack(clk_samples), n),
+    wc.analog_raw("VBUS", raw_values, Fraction(80_000_000, 1667), width=16, value_bits=12, zero=0, scale_nv=805_860,
                    pin=22, attenuation_db=12, reference={"source": "vdd", "mv": 3300}),
-    wf.analog_volts("SINE", volts, 1_000_000),                     # volts, e.g. from sigrok or Saleae
-], probe={"chip": "ESP32-P4", "calibration": {"scheme": "curve-fitting-v1", "raw": "..."}})
+    wc.analog_volts("SINE", volts, 1_000_000),                     # volts, e.g. from sigrok or Saleae
+])], meta={"probe": {"chip": "ESP32-P4", "calibration": {"scheme": "curve-fitting-v1", "raw": "..."}}}))
 ```
 
 An OEP probe starts logic and analog together in a capture-group; with `--trigger` every track is cut on the one event (OEP capture §4.4's trigger source), each keeping its own pretrigger. An analog line can be the trigger too: `--trigger VDD:fall:2.9` (crossing down through 2.9 V) or `VDD:low:2.9` (staying below it); the event's time and uncertainty go to `meta.probe`.

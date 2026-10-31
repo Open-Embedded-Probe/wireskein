@@ -6,7 +6,7 @@ import sys
 
 import pytest
 
-from wireskein import fileformat
+from wireskein import _fileformat as fileformat
 from wireskein.decode import load
 from wireskein.runlog import Recorder, level, pulses
 from wireskein.verify import verify

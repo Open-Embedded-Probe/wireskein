@@ -8,7 +8,7 @@ import sys
 import numpy as np
 import pytest
 
-from wireskein import sources, fileformat
+from wireskein import sources, _fileformat as fileformat
 
 pytest.importorskip("oep_client")
 SERVE = "oep_client.virtual_bench_serve"

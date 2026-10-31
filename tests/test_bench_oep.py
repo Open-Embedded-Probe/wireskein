@@ -10,7 +10,7 @@ import os
 
 import pytest
 
-from wireskein import fileformat, sources
+from wireskein import _fileformat as fileformat, sources
 
 TARGET = os.environ.get("WIRESKEIN_BENCH_OEP")
 pytestmark = pytest.mark.skipif(not TARGET, reason="no bench probe (WIRESKEIN_BENCH_OEP)")

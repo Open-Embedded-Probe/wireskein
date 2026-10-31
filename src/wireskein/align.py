@@ -266,7 +266,7 @@ def between(ref_cap: Capture, reference: str, cap: Capture, via: str, threshold=
 
 def capture_id(path: str | Path) -> str:
     """The id of the capture in a WireSkein file (wireskein-format §3), which alignment.json["files"] refers to."""
-    from . import fileformat
+    from . import _fileformat as fileformat
     cid = fileformat.read_header(path).get("id")
     if not cid:
         raise ValueError(f"{path}: its capture has no id")
@@ -302,7 +302,7 @@ def apply(cap: Capture, alignment: dict) -> Capture:
 def save(path: str | Path, alignment: dict) -> None:
     """Store it in a WireSkein file as attach/alignment.json (replacing an older one; the alignments to
     other files it held are kept unless `alignment` has its own "files")."""
-    from . import fileformat
+    from . import _fileformat as fileformat
     old = load(path) if Path(path).exists() else None
     if old and old.get("files") and "files" not in alignment:
         alignment = {**alignment, "files": old["files"]}
@@ -311,6 +311,6 @@ def save(path: str | Path, alignment: dict) -> None:
 
 def load(path: str | Path) -> dict | None:
     """The alignment stored in a WireSkein file, or None."""
-    from . import fileformat
+    from . import _fileformat as fileformat
     data = fileformat.attachments(path).get(NAME)
     return json.loads(data) if data else None

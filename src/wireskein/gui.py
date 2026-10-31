@@ -28,7 +28,7 @@ from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import __version__, fileformat
+from . import __version__, _fileformat as fileformat
 
 API = 1
 COOKIE = "wireskein_token"

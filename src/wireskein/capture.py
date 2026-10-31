@@ -26,11 +26,11 @@ from dataclasses import dataclass, field
 from fractions import Fraction
 from pathlib import Path
 
-from . import fileformat
-from .fileformat import AnalogChannel as Analog
-from .fileformat import Channel
-from .fileformat import EventsChannel as Events
-from .fileformat import analog_raw, analog_volts, events, from_interleaved, pack
+from . import _fileformat as fileformat
+from ._fileformat import AnalogChannel as Analog
+from ._fileformat import Channel
+from ._fileformat import EventsChannel as Events
+from ._fileformat import analog_raw, analog_volts, events, from_interleaved, pack
 
 __all__ = ["Analog", "Capture", "Channel", "Events", "Part", "analog_raw", "analog_volts", "events",
            "from_interleaved", "logic", "pack", "read", "write"]

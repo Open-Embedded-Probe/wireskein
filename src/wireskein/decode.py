@@ -29,7 +29,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from . import __version__, fileformat
+from . import __version__, _fileformat as fileformat
 from ._engine import export as _exp
 from ._engine import fileio, fixture, staged, timing
 from ._engine.export import dumps, export

@@ -6,7 +6,7 @@ import urllib.parse
 
 import pytest
 
-from wireskein import fileformat
+from wireskein import _fileformat as fileformat
 from wireskein.gui import Gui
 
 

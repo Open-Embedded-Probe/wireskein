@@ -6,7 +6,7 @@ from fractions import Fraction
 import numpy as np
 import pytest
 
-from wireskein import fileformat
+from wireskein import _fileformat as fileformat
 from wireskein._engine.analog import schmitt, to_logic
 from wireskein._engine.model import AnalogTrace
 from wireskein.runlog import Recorder, level, pulses, square, uart, voltage

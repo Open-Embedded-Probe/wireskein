@@ -8,7 +8,7 @@ from fractions import Fraction
 import numpy as np
 import pytest
 
-from wireskein import fileformat
+from wireskein import _fileformat as fileformat
 from wireskein._engine import fileio
 from wireskein.decode import load
 
