@@ -4,7 +4,7 @@ RVSWD frames are declared in decl/rvswd.toml; this module gives the re-framing
 at stop intervals the declaration names (frame.reframe = "rvswd_stop"), the
 SWIO plugin (one wire, pulse widths) and the Debug Module above both.
 
-Frame layout (53 clocks, from wch-protocols tools/dmi_decode.py): addr7, R/W
+Frame layout (53 clocks, from wch-protocols captures/tools/rvswd.py): addr7, R/W
 (1 = write), header parity, park, ctl4, data32, data parity, park, status2,
 pad2, stop. A 54-clock frame is a read with one extra turnaround clock (data
 at bits 15..46).
