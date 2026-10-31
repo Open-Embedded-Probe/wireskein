@@ -10,7 +10,7 @@ import pytest
 
 from wireskein import sources, _fileformat as fileformat
 
-pytest.importorskip("oep_client")
+pytest.importorskip("oep_client.acquire")
 SERVE = "oep_client.virtual_bench_serve"
 
 
@@ -140,7 +140,7 @@ def test_an_analog_trigger_starts_the_logic_too(probe, tmp_path):
 
 def test_a_condition_the_group_does_not_declare_is_refused_before_bind():
     from oep_client import capture as oc
-    from wireskein.sources.oep import _check_caps
+    from oep_client.acquire import _check_caps
 
     class Group:
         def trigger_caps(self):
@@ -237,14 +237,6 @@ def test_logic_and_analog_streamed_together(probe, tmp_path):
     assert list(sq.values()[:100]) == [analog_value(0, i) for i in range(100)]
 
 
-def test_logic_and_analog_streamed_together_needs_the_client(monkeypatch):
-    from oep_client import capture as oc
-    monkeypatch.delattr(oc.CaptureGroup, "stream", raising=False)
-    req = sources.Request([("A", "10")], 1_000_000, 0, mode="stream", duration=0.3, analog=[("SQ", "16", None)])
-    with pytest.raises(ValueError, match="CaptureGroup.stream"):
-        sources.run("oep:tcp://127.0.0.1:1", req)
-
-
 def test_an_analog_trigger_needs_its_voltage():
     with pytest.raises(ValueError, match="volts it crosses"):
         sources.Request([("A", "10")], 1_000_000, 100, trigger=("SQ", "rise"), analog=[("SQ", "16", None)])
@@ -265,7 +257,7 @@ def test_cli_analog_only_needs_no_logic_rate(probe, tmp_path):
 
 
 def test_a_trigger_that_never_comes_is_named():
-    from wireskein.sources.oep import _waiting, oc_state
+    from oep_client.acquire import _waiting, oc_state
 
     class Waiting:
         def status(self):
@@ -367,7 +359,7 @@ def fake_stream(segments, gaps):
 
 def test_stream_parts_split_at_a_loss_and_stop_there_by_default():
     from types import SimpleNamespace
-    from wireskein.sources.oep import _stream_parts
+    from oep_client.acquire import _stream_parts
     cfg = SimpleNamespace(rate=1_000_000, width=8, positions=[0], event_d={})
     # segments of 100 samples at 1 MHz (100 us each); the one at position 200 was dropped (a gap of 100 bytes)
     got = fake_stream([(0, 100, 0), (100, 100, 100_000), (300, 100, 300_000)], [(200, 100)])
@@ -384,7 +376,7 @@ def test_stream_parts_split_at_a_loss_and_stop_there_by_default():
 
 def test_a_stream_that_lost_its_start_keeps_nothing_by_default():
     from types import SimpleNamespace
-    from wireskein.sources.oep import _stream_parts
+    from oep_client.acquire import _stream_parts
     cfg = SimpleNamespace(rate=1_000_000, width=8, positions=[0], event_d={})
     got = fake_stream([(100, 100, 100_000)], [])
     req = sources.Request([("A", "1")], 1_000_000, 0, mode="stream", duration=1)
@@ -426,7 +418,7 @@ def test_a_spooled_stream_is_the_same_as_one_put_together_at_the_end(tmp_path):
     that _stream_parts gives from everything at once - and keeps the bits on disk."""
     from types import SimpleNamespace
     from oep_client import capture as oc
-    from wireskein.sources.oep import _Spool, _stream_parts
+    from oep_client.acquire import _Spool, _stream_parts
     cfg = SimpleNamespace(rate=1_000_000, width=8, positions=[0], event_d={})
     segs = [(0, 100, 0), (100, 100, 100_000), (300, 100, 300_000), (400, 60, 400_000)]
     req = sources.Request([("A", "1")], 1_000_000, 0, mode="stream", duration=1, on_loss="continue",

@@ -4,8 +4,8 @@ A source turns a Request (channel names and the device's channel ids, rate,
 samples, trigger) into a Result (tick clock, fileformat.Channels, metadata). The
 built-in sources:
 
-    oep:<target>      an OEP probe through oep-client-python (pip install "wireskein[oep]");
-                      <target> as oep-client opens it: a serial port, tcp://HOST:PORT (a broker), usb[:VID:PID[:SERIAL]]
+    oep:<address>     an OEP probe through oep-client-python (pip install "wireskein[oep]"); <address> as oep-client
+                      opens it: oep://UNIT_ID[?via=ROUTE], a serial port, tcp://HOST:PORT
     sigrok:<driver>   a device sigrok supports, through sigrok-cli (e.g. sigrok:fx2lafw, sigrok:demo,
                       sigrok:dreamsourcelab-dslogic:conn=1.6)
 
@@ -62,6 +62,8 @@ class Request:
                                              # either way a loss makes the capture a failure (wireskein-format §3.4)
     spool_dir: str | None = None             # stream: where its channels are put together on disk while it runs
                                              # (capture() puts them by the output; not /tmp, which may be memory)
+    fast: list[int] | None = None            # oep: the rates a UART probe's link is raised to for reading back (None: the
+                                             # client's record of this port and probe; []: keep the boot speed)
 
     def __post_init__(self):
         names = [n for n, _ in self.channels] + [n for n, *_ in self.analog]
@@ -162,6 +164,19 @@ def _save(res: "Result", out: Path, attachments, meta) -> Path:
 # ---------------- command-line helpers ----------------
 
 _SUFFIX = {"": 1, "k": 10**3, "K": 10**3, "M": 10**6, "G": 10**9}
+
+
+def parse_fast(text: str | None) -> list[int] | None:
+    """--fast: absent or "1": None (the client's record decides); "0": [] (the boot speed); "1500000,921600": those
+    rates, in that order."""
+    if text is None or text.lower() in ("1", "yes", "on", "true"):
+        return None
+    if text.lower() in ("", "0", "no", "off", "false"):
+        return []
+    try:
+        return [int(r) for r in text.split(",")]
+    except ValueError:
+        raise ValueError(f"--fast {text}: 0, 1, or link rates (1500000,921600)") from None
 
 
 def parse_count(text: str) -> int:

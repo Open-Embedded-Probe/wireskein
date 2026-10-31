@@ -2,7 +2,7 @@
 the capture waits. wireskein only captures; the stimulus is this test's: the UART's TX planned onto the line logic
 role 4 watches (channel 34, as dev-oep's checks), written from the same session right after the tracks start.
 
-Run with WIRESKEIN_BENCH_OEP=usb:<serial>; skipped otherwise. The probe is held by its own lease (the capture takes
+Run with WIRESKEIN_BENCH_OEP=oep://<unit_id> (or with ?via=usb); skipped otherwise. The probe is held by its own lease (the capture takes
 it). WIRESKEIN_BENCH_ANALOG picks the analog channel (default 17, a floating GPIO on the P4X: its values wander, so an
 analog trigger is crossed soon)."""
 

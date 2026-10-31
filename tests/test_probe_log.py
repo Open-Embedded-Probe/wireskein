@@ -24,14 +24,14 @@ def _rows(lines: list[tuple[int, str]], armed: float, boot=7, probe="usb:p4x"):
              "probe_ns": START_NS + tick * 1000, "boot_id": boot, "probe": probe} for tick, text in lines]
 
 
-def _run(tmp_path, lines, highs, unc_ns=0, expect=None, lost=(), **meta):
+def _run(tmp_path, lines, highs, unc_ns=0, expect=None, lost=(), line_probe="usb:p4x", **meta):
     rec = Recorder(tmp_path)
     with rec.section(1, "test"):
         time.sleep(0.002)
         armed = rec.armed()
         rec.capture(armed, RATE, interleaved=_wave(1000, highs), names=["P0"], start_ns=START_NS,
                     start_uncertainty_ns=unc_ns, **{"boot_id": 7, "source": "oep:usb:p4x", **meta})
-        rec.probe_lines(_rows(lines, armed), lost=list(lost), probe="usb:p4x", boot_id=7)
+        rec.probe_lines(_rows(lines, armed, probe=line_probe), lost=list(lost), probe=line_probe, boot_id=7)
         time.sleep(0.002)                     # the probe's lines end before the test does
     rec.expect("test/burst", expect or [pulses("P0", count=3)])
     rec.close()
@@ -82,3 +82,13 @@ def test_lines_the_probe_lost_fail_the_run(tmp_path):
     rep = _run(tmp_path, [(100, "## burst"), (300, "##")], BURST, lost=["log overflowed: 2 lines"])
     assert [(r["check"], r["status"]) for r in rep["results"]] == [("pulses", "ok"), ("probe_log", "ng")]
     assert verify.failed(rep)
+
+
+def test_a_probe_is_its_place_whatever_route_reached_it(tmp_path):
+    # the capture opened as oep://p4x?via=usb, the lines' probe its place oep://p4x (host guide §5.3: no route)
+    lines = [(100, "## burst"), (250, "wrote 3"), (300, "##")]
+    at = {"source": "oep:oep://p4x?via=usb", "probe": {"address": "oep://p4x", "boot_id": 7}}
+    (r,) = _run(tmp_path / "same", lines, BURST, line_probe="oep://p4x", **at)["results"]
+    assert r["status"] == "ok", r
+    rep = _run(tmp_path / "other", lines, BURST, line_probe="oep://other", **at)
+    assert all(x["status"] != "ok" for x in rep["results"]), rep["results"]

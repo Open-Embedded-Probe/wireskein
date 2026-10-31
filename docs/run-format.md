@@ -66,7 +66,7 @@ Code on the probe may keep a log on its own clock (oep-probe-arduino's `OepProbe
 | --- | --- | --- |
 | `probe_ns` | integer | The line's time on the probe's clock (ns since its boot; the clock of OEP core §7.7's uptime_ns) |
 | `boot_id` | integer (OEP's boot_id) | The boot of that clock |
-| `probe` | string (optional) | Which probe (e.g. `"usb:30eda0ea068b"`; written as the end of a capture's `meta.source`) |
+| `probe` | string (optional) | Which probe (e.g. `"oep://30eda0ea068b"`: the probe's place, its OEP address without the route, so one probe has one value whatever way it was reached) |
 | `uncertainty_ns` | number (optional) | Uncertainty of the line's own time (±ns) |
 
 - `t` is always given too (the probe's time converted to the host clock). The segment tree and the order of lines come from `t`.

@@ -296,7 +296,7 @@ def capture_cmd(args) -> None:
         analog=sources.parse_analog(args.analog) if args.analog else [],
         analog_rate=sources.parse_count(args.analog_rate) if args.analog_rate else None,
         analog_samples=sources.parse_count(args.analog_samples) if args.analog_samples else None,
-        resolution=sources.parse_resolution(args.channels or ""))
+        resolution=sources.parse_resolution(args.channels or ""), fast=sources.parse_fast(args.fast))
     out = sources.capture(args.source, req, args.output)
     if args.note:
         from . import _fileformat as fileformat
@@ -543,9 +543,11 @@ def main() -> None:
                     help="of a capture in parts (wireskein-format §3.4): write this one (from 0) on its own; .sr and "
                          "VCD hold one gapless run")
     cp = sub.add_parser("capture", help="capture logic channels from a device into a .wireskein (sources: oep, sigrok)")
-    cp.add_argument("--source", required=True, help="oep:<serial port | tcp://HOST:PORT | usb | usb:UNIT_ID | usb:VID:PID>[?fast=0 | ?fast=RATE,RATE] or sigrok:<driver> "
-                         "(a UART probe's link is raised for reading back, 1.5M / 921600 / 500000 first that "
-                         "works; fast=0 keeps the boot speed)")
+    cp.add_argument("--source", required=True, help="oep:<address> (oep://UNIT_ID[?via=usb|cdc|net|tcp:HOST:PORT|"
+                         "tty:PATH], a serial port, tcp://HOST:PORT) or sigrok:<driver>")
+    cp.add_argument("--fast", default=None, help="oep: the rates a UART probe's link is raised to for reading back "
+                         "(default: 1.5M / 921600 / 500000 as the client's record of this port and probe says; 0 keeps "
+                         "the boot speed; RATE,RATE tries those)")
     cp.add_argument("--channels", default=None, help='logic: "NAME=ID,..." (ID: the probe channel number / sigrok channel) or "ID,..."; '
                          'NAME=ID/D keeps a line as its changes, per D samples how many and the level after (OEP '
                          'format 1; /1 is every change exact)')

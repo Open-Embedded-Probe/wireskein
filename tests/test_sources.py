@@ -10,7 +10,7 @@ from fractions import Fraction
 import numpy as np
 import pytest
 
-from wireskein import sources, _fileformat as fileformat
+from wireskein import capture, sources, _fileformat as fileformat
 
 
 def test_parsers():
@@ -51,109 +51,54 @@ def test_sigrok_to_sr(tmp_path):
     assert out.suffix == ".sr" and load(out).channel("D0") and not list(tmp_path.glob("*.wireskein"))
 
 
-class StandIn:
-    """Just enough of oep-client for the source: a 3-channel probe answering w=4 (two samples per byte)."""
+def _acquire_stand_in(calls, res):
+    """oep_client.acquire as far as the oep source uses it: its types, and capture_at answering `res`."""
+    from oep_client import acquire as real
+    mod = types.ModuleType("oep_client.acquire")
+    for name in ("Request", "Result", "Part", "Bits", "Changes", "Analog", "OnDisk", "changes", "analog_raw", "pack"):
+        setattr(mod, name, getattr(real, name))
 
-    def __init__(self, n=10, refuse=()):
-        self.calls, self.n, self.refuse = [], n, set(refuse)
-        rng = np.random.default_rng(0)
-        self.levels = rng.integers(0, 2, (3, n)).astype(np.uint8)
-        nib = self.levels[0] | self.levels[1] << 1 | self.levels[2] << 2           # bit 3 undefined
-        nib = np.concatenate([nib, np.zeros(n % 2, np.uint8)])
-        self.data = (nib[0::2] | (nib[1::2] << 4) | 0x88).astype(np.uint8).tobytes()   # undefined bits set on purpose
-
-    def modules(self):
-        me = self
-
-        class OepError(Exception):
-            pass
-
-        class Unsupported(OepError):
-            def __init__(self, tag):
-                super().__init__(f"unsupported {tag}")
-                self.tag = tag
-
-        class Cap:
-            def __init__(self, hst):
-                self.fn = 7
-                self.generation = None
-
-            def configure(self, **kw):
-                me.calls.append(("configure", kw))
-                if kw.get("trigger") and 0x45 in me.refuse:
-                    raise Unsupported(0x45)                      # the tag as sent
-                return types.SimpleNamespace(rate=Fraction(160_000_000, 8), width=4, positions=[0, 1, 2], block=None)
-
-            def start(self):
-                me.calls.append(("start",))
-                self.generation = 3                     # the capture's generation
-
-            def wait(self, timeout):
-                return [types.SimpleNamespace(samples=me.n, start_ns=123_000, start_uncertainty_ns=500, trigger_index=4,
-                                              slipped=True)]
-
-            def read_segment(self, seg):
-                return me.data
-
-        host = types.SimpleNamespace(end=lambda: me.calls.append(("end",)))
-        link = types.SimpleNamespace(open_host=lambda t: me.calls.append(("open", t)) or host)
-        core = types.SimpleNamespace(take=lambda h, ms, owner: me.calls.append(("take", owner)) or
-                                     types.SimpleNamespace(boot_id=9),
-                                     plan_apply=lambda h, a: me.calls.append(("plan", a)),
-                                     plan_release=lambda h, f: me.calls.append(("release", f)))
-        capture = types.SimpleNamespace(LogicCapture=Cap, ONE_SHOT=0, TRIGGER=0x45, PRETRIGGER=0x46,
-                                        mr=types.SimpleNamespace(TAG=0x60))
-        message = types.SimpleNamespace(UNKNOWN_OPERATION=2)
-        pkg = types.ModuleType("oep_client")
-        pkg.link, pkg.core, pkg.capture, pkg.message = link, core, capture, message
-        pkg.host = types.SimpleNamespace(OepError=OepError, Unsupported=Unsupported)
-        return {"oep_client": pkg, "oep_client.link": link, "oep_client.core": core, "oep_client.capture": capture,
-                "oep_client.host": pkg.host, "oep_client.message": message}
+    def capture_at(address, req, fast=None, owner=None):
+        calls.append((address, req, fast, owner))
+        return res
+    mod.capture_at = capture_at
+    return mod
 
 
-def test_oep_source_against_a_stand_in(tmp_path, monkeypatch):
-    stand_in = StandIn(n=11)
-    for name, mod in stand_in.modules().items():
-        monkeypatch.setitem(sys.modules, name, mod)
-    req = sources.Request([("SDA", "47"), ("SCL", "48"), ("INT", "5")], 20_000_000, 11, trigger=("SCL", "fall"),
-                          pretrigger=3)
-    out = sources.capture("oep:/dev/ttyACM9", req, tmp_path / "o.wireskein")
-    assert ("plan", [(7, 0, 47), (7, 1, 48), (7, 2, 5)]) in stand_in.calls
-    conf = next(kw for c, *kw in stand_in.calls if c == "configure")[0]
-    assert conf["trigger"] == (2, 1, 1) and conf["pretrigger"] == 3 and conf["samples"] == 11 and conf["rate"] == 20_000_000
-    assert "critical" not in conf                                               # OEP v1: refused, never ignored
-    assert [c[0] for c in stand_in.calls][-2:] == ["release", "end"]                 # plan released, session ended
-    head, chans = fileformat.read(out)
-    assert head["tick_hz"] == [20_000_000, 1]
-    assert [fileformat.unpack(c) for c in chans] == [row.tobytes() for row in stand_in.levels]
-    meta = head["meta"]
-    assert meta["source"] == "oep:/dev/ttyACM9" and meta["start_ns"] == 123_000
-    assert meta["start_uncertainty_ns"] == 500 and meta["probe"]["boot_id"] == 9
-    assert meta["probe"]["generation"] == {"logic": 3}
-    assert meta["time_base_slipped"] is True
-    assert meta["trigger_tick"] == 4 and meta["probe_channels"] == {"SDA": 47, "SCL": 48, "INT": 5}
+def test_oep_source_writes_the_clients_result_one_to_one(tmp_path, monkeypatch):
+    acq = pytest.importorskip("oep_client.acquire")
+    a = acq.Bits("SDA", acq.pack(bytes([0, 1, 1, 0, 1])), 5, acquisition={"pin": 47})
+    b = acq.changes("SCL", [1, 3], [1, 0], [1, 1], 5, pin=48)
+    v = acq.analog_raw("VBUS", [100, 200], 1000, width=16, value_bits=12, zero=0, scale_nv=805_860, pin=17)
+    parts = [acq.Part([a, b, v], {"start_ns": 123_000, "start_uncertainty_ns": 500}, 0),
+             acq.Part([a, b, v], {"start_ns": 999_000}, 40)]
+    res = acq.Result(Fraction(20_000_000), parts[0].channels, {"start_ns": 123_000, "probe": {"boot_id": 9}}, parts,
+                     [{"after_part": 0, "reason": "probe dropped a segment", "ticks": 30}])
+    calls = []
+    monkeypatch.setitem(sys.modules, "oep_client.acquire", _acquire_stand_in(calls, res))
+    import oep_client
+    monkeypatch.setattr(oep_client, "acquire", sys.modules["oep_client.acquire"], raising=False)
+    req = sources.Request([("SDA", "47"), ("SCL", "48")], 20_000_000, 5, trigger=("SCL", "fall"), pretrigger=3,
+                          analog=[("VBUS", "17", None)], fast=[])
+    out = sources.capture("oep:oep://30eda0ea068b?via=usb", req, tmp_path / "o.wireskein")
+    (address, areq, fast, owner), = calls
+    assert address == "oep://30eda0ea068b?via=usb" and fast == [] and owner == "wireskein capture"
+    assert (areq.channels, areq.trigger, areq.pretrigger, areq.analog) == (req.channels, req.trigger, 3, req.analog)
+    cap = capture.read(out)
+    assert cap.tick_hz == 20_000_000 and cap.lost[0]["ticks"] == 30 and [p.tick0 for p in cap.parts] == [0, 40]
+    p0 = cap.parts[0]
+    assert p0.meta["start_ns"] == 123_000 and cap.meta["source"] == "oep:oep://30eda0ea068b?via=usb"
+    sda, scl, vbus = p0.channels
+    assert isinstance(sda, capture.Channel) and sda.changes()[1].tolist() == [1, 3, 4] and sda.acquisition["pin"] == 47
+    assert isinstance(scl, capture.Events) and scl.decode() == ([1, 3], [1, 0], [1, 1])
+    assert isinstance(vbus, capture.Analog) and vbus.values() == [100, 200] and vbus.scale_nv == 805_860
 
 
-def test_oep_source_names_a_refusal(monkeypatch):
-    stand_in = StandIn()
-    mods = stand_in.modules()
-
-    def refuse(h, a):
-        raise mods["oep_client.host"].OepError("rejected: unavailable")
-    mods["oep_client.core"].plan_apply = refuse
-    for name, mod in mods.items():
-        monkeypatch.setitem(sys.modules, name, mod)
-    with pytest.raises(RuntimeError, match="probe /dev/x: rejected: unavailable"):
-        sources.run("oep:/dev/x", sources.Request([("A", "1")], 1000, 10))
-
-
-def test_oep_trigger_the_probe_cannot_do_is_an_error(monkeypatch):
-    stand_in = StandIn(refuse={0x45})
-    for name, mod in stand_in.modules().items():
-        monkeypatch.setitem(sys.modules, name, mod)
-    with pytest.raises(RuntimeError, match="a trigger"):
-        sources.run("oep:/dev/x", sources.Request([("A", "1")], 1000, 10, trigger=("A", "rise")))
-    assert [c[0] for c in stand_in.calls][-2:] == ["release", "end"]
+def test_fast_is_this_sources_option():
+    assert sources.parse_fast(None) is None and sources.parse_fast("1") is None
+    assert sources.parse_fast("0") == [] and sources.parse_fast("1500000,921600") == [1_500_000, 921_600]
+    with pytest.raises(ValueError, match="--fast x"):
+        sources.parse_fast("x")
 
 
 def test_fewer_samples_than_asked_are_named(tmp_path, capsys):
@@ -180,39 +125,6 @@ def test_a_probe_error_ends_in_one_line(monkeypatch, capsys):
     with pytest.raises(SystemExit) as e:
         cli.main()
     assert str(e.value) == "wireskein capture: Expired: the lease (5000 ms) ran out"
-
-
-def test_uart_link_speed_is_asked_for_unless_turned_off(tmp_path, monkeypatch):
-    import types
-    from wireskein.sources import oep
-
-    calls = []
-
-    class Link:
-        @staticmethod
-        def raise_speed(hst, rates, *, flows=None, record=False, max_tries=None):
-            calls.append((rates, record, max_tries))
-            assert flows == oep.FLOWS                                     # a capture verifies the read-back way
-
-    assert oep._raise(Link, "H", [1_500_000, 921_600]) == [1_500_000, 921_600]
-    assert oep._raise(Link, "H", []) == []
-    assert calls == [([1_500_000, 921_600], False, None)]                  # asked rates: tried as given
-    calls.clear()
-    hst = types.SimpleNamespace(link=types.SimpleNamespace(speed=types.SimpleNamespace(skipped=[1_500_000], retried=None)))
-    assert oep._raise_default(Link, hst, "/dev/X") == (oep.FAST, True)     # the record shaped them
-    assert calls == [(oep.FAST, True, oep.PER_SESSION)]                    # the default: the client's record decides
-    assert oep._raise_default(Link, hst, None) == ([], False)              # not a serial port this host opened
-    assert oep._rates("") == [] and oep.FAST[0] == 1_500_000
-    stand_in = StandIn(n=11)
-    for name, mod in stand_in.modules().items():
-        monkeypatch.setitem(sys.modules, name, mod)
-    req = sources.Request([("SDA", "47"), ("SCL", "48"), ("INT", "5")], 20_000_000, 11)
-    out = sources.capture("oep:/dev/ttyACM9?fast=0", req, tmp_path / "o.wireskein")
-    assert ("open", "/dev/ttyACM9") in stand_in.calls                              # the option is not part of the port
-    link = fileformat.read(out)[0]["meta"]["probe"]["link"]
-    assert set(link) == {"open_s", "read_bytes", "read_s"} and link["read_bytes"] == len(stand_in.data)
-    with pytest.raises(ValueError, match="unknown option speed"):
-        sources.capture("oep:/dev/ttyACM9?speed=2", req, tmp_path / "p.wireskein")
 
 
 def test_link_line():
@@ -242,13 +154,3 @@ def test_a_busy_port_ends_in_one_line(monkeypatch):
     assert str(e.value) == "wireskein capture: PortBusy: /dev/ttyUSB0 is open in another program"
 
 
-def test_probe_clock_against_the_host():
-    import types
-    from wireskein.sources import oep
-    r = lambda host, up, unc, boot=7: types.SimpleNamespace(host_ns=host, uptime_ns=up, boot_id=boot, uncertainty_ns=unc)  # noqa: E731
-    info = oep._clock_info(r(1_000_000_000, 5_000_000_000, 50_000), r(2_000_000_000, 6_000_100_000, 50_000))
-    assert info["before"]["uptime_ns"] == 5_000_000_000 and info["after"]["host_ns"] == 2_000_000_000
-    assert abs(info["rate_ppm"] - 100) < 1e-6 and abs(info["rate_ppm_uncertainty"] - 100) < 1e-6
-    assert "rate_ppm" not in oep._clock_info(r(1, 5, 1), r(2, 6, 1, boot=8))        # restarted between: no rate
-    assert oep._clock_info(None, None) == {}
-    assert oep._clock(types.SimpleNamespace()) is None                              # no reading: the capture goes on

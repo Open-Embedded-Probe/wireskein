@@ -97,14 +97,14 @@ pytest からは、[pytest-embedded-wireskein](https://github.com/Open-Embedded-
 
 ```sh
 pip install "wireskein[oep]"      # OEP のプローブを使うとき（oep-client-python）。sigrok は sigrok-cli が PATH に要る
-wireskein capture --source oep:/dev/ttyACM0 --channels SDA=47,SCL=48 --rate 20M --samples 200k -o i2c.wireskein
+wireskein capture --source oep:oep://30eda0ea068b --channels SDA=47,SCL=48 --rate 20M --samples 200k -o i2c.wireskein
 wireskein capture --source sigrok:fx2lafw --channels SDA=D0,SCL=D1 --rate 12M --samples 1M \
                   --trigger SCL:fall --pretrigger 1k --note "リフローの後" -o i2c.wireskein
 ```
 
 | 取得元 | 機器 | チャンネルの番号 |
 | --- | --- | --- |
-| `oep:<接続先>` | oep-client-python を使う OEP のプローブ。接続先は、シリアルポート、`tcp://HOST:PORT`（ブローカー）、`usb`（プロジェクトの USB ID 1209:4F45 で見つける OEP のプローブ）、`usb:<unit_id>`（その個体）、`usb:VID:PID[:SERIAL]` | プローブのチャンネル番号 |
+| `oep:<アドレス>` | oep-client-python（その `acquire`）を使う OEP のプローブ。アドレスは OEP のアドレス `oep://<unit_id>`（経路を選ぶなら `?via=usb`、`cdc`、`net`、`tcp:HOST:PORT`、`tty:PATH`）、または短い形（シリアルポート、`tcp://HOST:PORT`） | プローブのチャンネル番号 |
 | `sigrok:<ドライバ>` | sigrok が対応する機器（`fx2lafw`、`dreamsourcelab-dslogic`、`demo` など）。`sigrok-cli` を使う | sigrok のチャンネル名（`D0` など） |
 
 - `--channels` は、ロジックの各チャンネルに名前を付けます（`名前=番号`）。
@@ -127,8 +127,8 @@ wireskein capture --source sigrok:fx2lafw --channels SDA=D0,SCL=D1 --rate 12M --
   - sigrok では、アナログはデバイスの 1 つのレートで取ります。
 - ファイルには、機器が実際に使ったレートを入れます。取得元が知っている情報（プローブの時計での最初のサンプルの時刻 `start_ns` とその不確かさ `start_uncertainty_ns`、`time_base_slipped` の印（プローブが、サンプルを取るのが遅れたと知っている。バッファの上限などで起きる。その辺りの時刻が伸びている可能性がある。`wireskein info` がそう説明し、NG の検査は理由にそれを添える）、トリガの位置を刻みで表した `trigger_tick`）も入れます。
 - UART のプローブ（classic ESP32 の治具など）では、キャプチャの読み出しのためにリンクを速い速度に上げます。通る速度を試して選び、口とプローブごとに結果を覚えます（oep-client-python の機能）。
-  - `?fast=0` で起動時の速度のまま、`?fast=921600`（並べることもできる）でその速度だけを試します。
-- USB のあるプローブ（ESP32-P4 など）は、`oep:usb:<unit_id>`（1 台だけなら `oep:usb`）で開くのがよいです。vendor bulk のインターフェースで、毎秒数 MB を落とさずに読み出せます。USB シリアル（CDC）の口は遅く、負荷が高いと応答を落とすことがあります。
+  - `--fast 0` で起動時の速度のまま、`--fast 921600`（並べることもできる）でその速度だけを試します。
+- USB のあるプローブ（ESP32-P4 など）は、USB で開くのがよいです（`oep:oep://<unit_id>` か `?via=usb`）。vendor bulk のインターフェースで、毎秒数 MB を落とさずに読み出せます。USB シリアル（CDC）の口は遅く、負荷が高いと応答を落とすことがあります。
   - `capture` は、リンクがどうなったか（速度、試した結果、読み出しの時間）を表示し、`meta.probe.link` に残します。
 - Python からは `wireskein.sources.capture(取得元, Request(...), 出力先)` です。
 - 別の package から、entry point の `wireskein.sources` で取得元を足せます。

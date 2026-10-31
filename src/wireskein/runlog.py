@@ -207,9 +207,15 @@ def place(entry: dict, view: dict) -> tuple[float | None, float, str]:
         return None, 0, "the capture does not say its probe's boot_id (pass boot_id= to Recorder.capture)"
     if entry.get("boot_id") != boot:
         return None, 0, f"the line is of boot {entry.get('boot_id')!r}, the capture of {boot!r}"
+    here = (meta.get("probe") or {}).get("address")    # the probe's place, without the route (an OEP address)
     src = meta.get("source")
-    if entry.get("probe") and src and not (src == entry["probe"] or src.endswith(":" + entry["probe"])):
-        return None, 0, f"the line is of probe {entry['probe']!r}, the capture of {src!r}"
+    if entry.get("probe") and here:
+        if entry["probe"] != here:
+            return None, 0, f"the line is of probe {entry['probe']!r}, the capture of {here!r}"
+    elif entry.get("probe") and src:
+        src = src.partition("?")[0]                       # the route is not the probe
+        if not (src == entry["probe"] or src.endswith(":" + entry["probe"])):
+            return None, 0, f"the line is of probe {entry['probe']!r}, the capture of {src!r}"
     hz = Fraction(*view["tick_hz"])
     tick = float((entry["probe_ns"] - meta["start_ns"]) * hz / 10**9)
     unc = float((meta.get("start_uncertainty_ns", 0) + entry.get("uncertainty_ns", 0)) * hz / 10**9)
