@@ -158,8 +158,9 @@ class Recorder:
 
     @property
     def is_empty(self) -> bool:
-        """Nothing to check: no expectations and no captures."""
-        return not self._expect and not self.doc["captures"]
+        """Nothing to check: no expectations (by section or by path), no captures and nothing lost."""
+        return (not self._expect and not self._paths and not self.doc["captures"]
+                and not any(x["src"] == "lost" for x in self.doc["log"]))
 
     def close(self) -> Path:
         self.doc["expect"] = {self._key(occ): spec for occ, spec in self._expect.items()}

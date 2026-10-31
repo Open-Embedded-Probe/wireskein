@@ -76,6 +76,13 @@ def test_is_empty(tmp_path):
     with rec.section(1, "t", expect=[level("P0", 0)]):
         pass
     assert not rec.is_empty
+    # expectations given by path, and lines the probe lost, are something to check too (a loss fails the run)
+    rec = Recorder(tmp_path / "by-path")
+    rec.expect("t/step", [level("P0", 0)])
+    assert not rec.is_empty
+    rec = Recorder(tmp_path / "lost")
+    rec.probe_lines([], lost=["probe log overflowed"])
+    assert not rec.is_empty
 
 
 def test_measure_only_is_measured_and_passes(tmp_path):
