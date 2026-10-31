@@ -37,7 +37,7 @@ def levels(path):
 
 def test_three_channels_of_a_four_bit_stream(probe, tmp_path):
     src = probe()
-    out = sources.capture(src, sources.Request([("A", "10"), ("B", "11"), ("C", "12")], 20_000_000, 1000), tmp_path / "a.wireskein")
+    out = sources.capture(src, sources.Request([("A", "GPIO10"), ("B", "GPIO11"), ("C", "GPIO12")], 20_000_000, 1000), tmp_path / "a.wireskein")
     head, chans = fileformat.read(out)
     assert head["tick_hz"] == [20_000_000, 1] and [c.n for c in chans] == [1000] * 3
     i = np.arange(1000)
@@ -49,7 +49,7 @@ def test_three_channels_of_a_four_bit_stream(probe, tmp_path):
 
 def test_trigger_and_slip(probe, tmp_path):
     src = probe("--capture-slipped")
-    req = sources.Request([("A", "10"), ("B", "11")], 20_000_000, 400, trigger=("B", "rise"), pretrigger=50)
+    req = sources.Request([("A", "GPIO10"), ("B", "GPIO11")], 20_000_000, 400, trigger=("B", "rise"), pretrigger=50)
     out = sources.capture(src, req, tmp_path / "t.wireskein")
     meta = fileformat.read(out)[0]["meta"]
     assert meta["time_base_slipped"] is True
@@ -61,20 +61,20 @@ def test_trigger_and_slip(probe, tmp_path):
 
 
 def test_rate_is_the_probes_answer(probe, tmp_path):
-    out = sources.capture(probe(), sources.Request([("A", "10")], 3_000_000, 100), tmp_path / "r.wireskein")
+    out = sources.capture(probe(), sources.Request([("A", "GPIO10")], 3_000_000, 100), tmp_path / "r.wireskein")
     tick = fileformat.tick_hz(fileformat.read(out)[0])
     assert tick <= 3_000_000 and 20_000_000 % tick == 0           # source / integer, at most what was asked
 
 
 def test_esp32_sampler_profile(probe, tmp_path):
-    out = sources.capture(probe(profile="esp32-v003"), sources.Request([("A", "4"), ("B", "5")], 1_000_000, 200),
+    out = sources.capture(probe(profile="esp32-v003"), sources.Request([("A", "GPIO4"), ("B", "GPIO5")], 1_000_000, 200),
                           tmp_path / "v.wireskein")
     i = np.arange(200)
     assert [np.array_equal(lv, (i >> k) & 1) for k, lv in enumerate(levels(out))] == [True, True]
 
 
 def test_analog_alone_keeps_raw_values_and_what_the_probe_knows(probe, tmp_path):
-    req = sources.Request([], 20_000_000, 512, analog=[("SQ", "16", None), ("SINE", "17", 3)], analog_rate=48_000)
+    req = sources.Request([], 20_000_000, 512, analog=[("SQ", "GPIO16", None), ("SINE", "GPIO17", 3)], analog_rate=48_000)
     out = sources.capture(probe(), req, tmp_path / "a.wireskein")
     head, chans = fileformat.read(out)
     sq, sine = chans
@@ -93,7 +93,7 @@ def test_analog_alone_keeps_raw_values_and_what_the_probe_knows(probe, tmp_path)
 
 
 def test_logic_and_analog_together_in_a_group(probe, tmp_path):
-    req = sources.Request([("A", "10"), ("B", "11")], 20_000_000, 2000, analog=[("SQ", "16", None)],
+    req = sources.Request([("A", "GPIO10"), ("B", "GPIO11")], 20_000_000, 2000, analog=[("SQ", "GPIO16", None)],
                           analog_rate=48_000)
     out = sources.capture(probe(), req, tmp_path / "g.wireskein")
     head, chans = fileformat.read(out)
@@ -110,8 +110,8 @@ def test_logic_and_analog_together_in_a_group(probe, tmp_path):
 def test_a_logic_trigger_starts_the_analog_too(probe, tmp_path):
     """--trigger on a logic line with analog channels: the capture-group's trigger source (capture §4.4) - both
     tracks linked, each with its own pretrigger, cut on the one event; its time and uncertainty kept."""
-    req = sources.Request([("A", "10"), ("B", "11")], 20_000_000, 2000, trigger=("B", "rise"), pretrigger=100,
-                          analog=[("SQ", "16", None)], analog_rate=48_000, analog_samples=64)
+    req = sources.Request([("A", "GPIO10"), ("B", "GPIO11")], 20_000_000, 2000, trigger=("B", "rise"), pretrigger=100,
+                          analog=[("SQ", "GPIO16", None)], analog_rate=48_000, analog_samples=64)
     out = sources.capture(probe(), req, tmp_path / "t.wireskein")
     head, chans = fileformat.read(out)
     b = np.frombuffer(fileformat.unpack(chans[1]), np.uint8)
@@ -125,8 +125,8 @@ def test_a_logic_trigger_starts_the_analog_too(probe, tmp_path):
 def test_an_analog_trigger_starts_the_logic_too(probe, tmp_path):
     """--trigger SQ:rise:VOLTS: the analog line crossing up through that voltage (in its ADC values by the answer's
     scale) is the group's event."""
-    req = sources.Request([("A", "10")], 20_000_000, 2000, trigger=("SQ", "rise", 1.0), pretrigger=100,
-                          analog=[("SQ", "16", None)], analog_rate=48_000, analog_samples=64)
+    req = sources.Request([("A", "GPIO10")], 20_000_000, 2000, trigger=("SQ", "rise", 1.0), pretrigger=100,
+                          analog=[("SQ", "GPIO16", None)], analog_rate=48_000, analog_samples=64)
     out = sources.capture(probe(), req, tmp_path / "a.wireskein")
     head, chans = fileformat.read(out)
     sq = chans[1]
@@ -148,7 +148,7 @@ def test_a_condition_the_group_does_not_declare_is_refused_before_bind():
 
     an = type("T", (), {"fn": 3})()
     source = oc.TriggerSource([oc.Stage([[oc.Cond.above(an, 0, 100)]])])
-    req = sources.Request([("A", "10")], 1_000_000, 100, trigger=("SQ", "high", 1.0), analog=[("SQ", "16", None)])
+    req = sources.Request([("A", "GPIO10")], 1_000_000, 100, trigger=("SQ", "high", 1.0), analog=[("SQ", "GPIO16", None)])
     probe = {}
     with pytest.raises(RuntimeError, match=r"cannot start its tracks on SQ:high:1.0V together: its capture group "
                                            r"triggers on level, edge \(trigger_caps"):
@@ -159,8 +159,8 @@ def test_a_condition_the_group_does_not_declare_is_refused_before_bind():
 def test_a_group_refused_says_which_track_before_setting_either(probe, tmp_path):
     """Both tracks asked with the values they would be set to (capture §3.3 query) before either is set: the analog's
     pretrigger, the logic's counted at the analog rate, is not below its 4 samples - refused, and where it came from."""
-    req = sources.Request([("A", "10")], 20_000_000, 2000, trigger=("A", "rise"), pretrigger=1900,
-                          analog=[("SQ", "16", None)], analog_rate=48_000, analog_samples=4)
+    req = sources.Request([("A", "GPIO10")], 20_000_000, 2000, trigger=("A", "rise"), pretrigger=1900,
+                          analog=[("SQ", "GPIO16", None)], analog_rate=48_000, analog_samples=4)
     with pytest.raises(RuntimeError, match=r"each track asked before either was set\): analog \(its pretrigger \d+ of 4 "
                                            r"samples is the logic's 1900 .*\) with a pretrigger \(at most 3 samples "
                                            r"before the trigger here, of 4\)"):   # found by query: below its 4 samples
@@ -170,7 +170,7 @@ def test_a_group_refused_says_which_track_before_setting_either(probe, tmp_path)
 def test_repeat_without_a_trigger_runs_on_as_a_timeline(probe, tmp_path):
     """--mode repeat (capture mode 2): segments read and released as they come, each a part right after the one
     before; the counter's waveform runs on across them."""
-    req = sources.Request([("A", "10"), ("B", "11")], 1_000_000, 2000, mode="repeat", segments=4)
+    req = sources.Request([("A", "GPIO10"), ("B", "GPIO11")], 1_000_000, 2000, mode="repeat", segments=4)
     out = sources.capture(probe(), req, tmp_path / "r.wireskein")
     head = fileformat.read_header(out)
     assert head["layout"] == "timeline" and head["complete"] is True
@@ -188,7 +188,7 @@ def test_repeat_without_a_trigger_runs_on_as_a_timeline(probe, tmp_path):
 def test_repeat_with_a_trigger_is_one_part_per_trigger(probe, tmp_path):
     """--mode repeat with --trigger: rearm 1, each segment its own trigger (layout segments, its trigger_tick and
     start_ns); more segments than the probe holds, as it is read and released."""
-    req = sources.Request([("A", "10")], 1_000_000, 500, mode="repeat", segments=40, trigger=("A", "rise"),
+    req = sources.Request([("A", "GPIO10")], 1_000_000, 500, mode="repeat", segments=40, trigger=("A", "rise"),
                           pretrigger=100)
     out = sources.capture(probe(), req, tmp_path / "r.wireskein")
     head = fileformat.read_header(out)
@@ -199,16 +199,16 @@ def test_repeat_with_a_trigger_is_one_part_per_trigger(probe, tmp_path):
         v = np.frombuffer(fileformat.unpack(a), np.uint8)[:a.n]
         assert v[99] == 0 and v[100] == 1                         # the rise at the trigger
     with pytest.raises(ValueError, match="segments"):
-        sources.Request([("A", "10")], 1_000_000, 500, mode="repeat")
+        sources.Request([("A", "GPIO10")], 1_000_000, 500, mode="repeat")
     with pytest.raises(ValueError, match="repeat only"):
-        sources.Request([("A", "10")], 1_000_000, 500, segments=3)
+        sources.Request([("A", "GPIO10")], 1_000_000, 500, segments=3)
 
 
 def test_an_analog_stream_alone(probe, tmp_path):
     """--mode stream with analog channels only: the analog track streamed, a timeline at its own rate, the values as
     a one-shot reads them (the bench's analog_value)."""
     from oep_client.virtual_bench_capture import analog_value
-    req = sources.Request([], 20_000, 0, mode="stream", duration=0.3, analog=[("SQ", "16", None)], analog_rate=20_000)
+    req = sources.Request([], 20_000, 0, mode="stream", duration=0.3, analog=[("SQ", "GPIO16", None)], analog_rate=20_000)
     out = sources.capture(probe(), req, tmp_path / "a.wireskein")
     head = fileformat.read_header(out)
     assert head["complete"] is True and head["layout"] == "timeline" and head["meta"]["stream"]["frames"] >= 1
@@ -224,8 +224,8 @@ def test_logic_and_analog_streamed_together(probe, tmp_path):
     if not hasattr(oc.CaptureGroup, "stream"):
         pytest.skip("oep-client-python without CaptureGroup.stream")
     from oep_client.virtual_bench_capture import analog_value
-    req = sources.Request([("A", "10"), ("B", "11")], 1_000_000, 0, mode="stream", duration=0.3,
-                          analog=[("SQ", "16", None)], analog_rate=20_000)
+    req = sources.Request([("A", "GPIO10"), ("B", "GPIO11")], 1_000_000, 0, mode="stream", duration=0.3,
+                          analog=[("SQ", "GPIO16", None)], analog_rate=20_000)
     out = sources.capture(probe(), req, tmp_path / "g.wireskein")
     head = fileformat.read_header(out)
     assert head["complete"] is True and len(head["parts"]) == 1
@@ -239,19 +239,19 @@ def test_logic_and_analog_streamed_together(probe, tmp_path):
 
 def test_an_analog_trigger_needs_its_voltage():
     with pytest.raises(ValueError, match="volts it crosses"):
-        sources.Request([("A", "10")], 1_000_000, 100, trigger=("SQ", "rise"), analog=[("SQ", "16", None)])
+        sources.Request([("A", "GPIO10")], 1_000_000, 100, trigger=("SQ", "rise"), analog=[("SQ", "GPIO16", None)])
     assert sources.parse_trigger("VDD:fall:2.9V") == ("VDD", "fall", 2.9)
 
 
 def test_cli_analog_only_needs_no_logic_rate(probe, tmp_path):
     src = probe()
     out = tmp_path / "a.wireskein"
-    r = subprocess.run([sys.executable, "-m", "wireskein", "capture", "--source", src, "--analog", "SQ=16",
+    r = subprocess.run([sys.executable, "-m", "wireskein", "capture", "--source", src, "--analog", "SQ=GPIO16",
                         "--analog-rate", "20k", "--analog-samples", "200", "-o", str(out)], capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     (sq,) = fileformat.read(out)[1]
     assert sq.n == 200
-    r = subprocess.run([sys.executable, "-m", "wireskein", "capture", "--source", src, "--channels", "A=10",
+    r = subprocess.run([sys.executable, "-m", "wireskein", "capture", "--source", src, "--channels", "A=GPIO10",
                         "--analog-rate", "20k", "-o", str(out)], capture_output=True, text=True)
     assert r.returncode != 0 and "give --rate and --samples" in r.stderr
 
@@ -266,11 +266,11 @@ def test_a_trigger_that_never_comes_is_named():
     def never():
         raise TimeoutError("capture did not finish")
 
-    req = sources.Request([("A", "10")], 1_000_000, 100, trigger=("A", "rise"), timeout=2)
+    req = sources.Request([("A", "GPIO10")], 1_000_000, 100, trigger=("A", "rise"), timeout=2)
     with pytest.raises(TimeoutError, match=r"no trigger \(A:rise\) within 2 s"):
         _waiting(never, Waiting(), req)
     with pytest.raises(TimeoutError, match="did not finish"):          # no trigger asked: the plain timeout
-        _waiting(never, Waiting(), sources.Request([("A", "10")], 1_000_000, 100, timeout=2))
+        _waiting(never, Waiting(), sources.Request([("A", "GPIO10")], 1_000_000, 100, timeout=2))
 
 
 
@@ -279,7 +279,7 @@ def test_format_1_keeps_each_line_at_its_resolution(probe, tmp_path):
     (/1; it changes every sample, so the probe carries it raw), B raw, C per 4 (one change a quantum: also a Channel
     of step 4), D per 64 (8 changes a quantum: the count exact, where in the quantum hidden)."""
     from wireskein.decode import load
-    text = "A=10/1,B=11,C=12/4,D=13/64"
+    text = "A=GPIO10/1,B=GPIO11,C=GPIO12/4,D=GPIO13/64"
     req = sources.Request(sources.parse_channels(text), 20_000_000, 4096, resolution=sources.parse_resolution(text))
     out = sources.capture(probe(), req, tmp_path / "f1.wireskein")
     head, chans = fileformat.read(out)
@@ -308,7 +308,7 @@ def test_a_resolution_on_sigrok_is_refused():
 def test_arm_now_may_leave_a_shorter_pretrigger(probe, tmp_path):
     """--arm now (trigger_opts arm 0): looked for at once, so B's first rise (sample 2 of the counter) triggers before
     the 50 samples of pretrigger are there."""
-    req = sources.Request([("A", "10"), ("B", "11")], 20_000_000, 400, trigger=("B", "rise"), pretrigger=50, arm="now")
+    req = sources.Request([("A", "GPIO10"), ("B", "GPIO11")], 20_000_000, 400, trigger=("B", "rise"), pretrigger=50, arm="now")
     out = sources.capture(probe(), req, tmp_path / "n.wireskein")
     meta = fileformat.read(out)[0]["meta"]
     b = levels(out)[1]
@@ -319,7 +319,7 @@ def test_arm_now_may_leave_a_shorter_pretrigger(probe, tmp_path):
 def test_a_stream_is_one_part_when_nothing_is_lost(probe, tmp_path):
     """--mode stream on the bench (capture mode 3): longer than one segment, every byte arrived, one timeline part
     with the counter's waveform throughout."""
-    req = sources.Request([("A", "10"), ("B", "11")], 1_000_000, 0, mode="stream", duration=0.3)
+    req = sources.Request([("A", "GPIO10"), ("B", "GPIO11")], 1_000_000, 0, mode="stream", duration=0.3)
     out = sources.capture(probe(), req, tmp_path / "s.wireskein")
     raw = fileformat.read_header(out)
     assert raw["complete"] is True and len(raw["parts"]) == 1 and raw["meta"]["stream"]["frames"] >= 2
@@ -331,7 +331,7 @@ def test_a_stream_is_one_part_when_nothing_is_lost(probe, tmp_path):
 
 
 def test_a_format_1_stream(probe, tmp_path):
-    req = sources.Request([("A", "10"), ("D", "13")], 1_000_000, 0, mode="stream", duration=0.3,
+    req = sources.Request([("A", "GPIO10"), ("D", "GPIO13")], 1_000_000, 0, mode="stream", duration=0.3,
                           resolution={"D": 64})
     out = sources.capture(probe(), req, tmp_path / "f.wireskein")
     raw = fileformat.read_header(out)
@@ -363,11 +363,11 @@ def test_stream_parts_split_at_a_loss_and_stop_there_by_default():
     cfg = SimpleNamespace(rate=1_000_000, width=8, positions=[0], event_d={})
     # segments of 100 samples at 1 MHz (100 us each); the one at position 200 was dropped (a gap of 100 bytes)
     got = fake_stream([(0, 100, 0), (100, 100, 100_000), (300, 100, 300_000)], [(200, 100)])
-    req = sources.Request([("A", "1")], 1_000_000, 0, mode="stream", duration=1)
+    req = sources.Request([("A", "GPIO1")], 1_000_000, 0, mode="stream", duration=1)
     parts, lost = _stream_parts(FakeCap(), cfg, got, ["A"], [1], req)
     assert len(parts) == 1 and parts[0].channels[0].n == 200 and lost == [
         {"after_part": 0, "reason": "the probe dropped a segment (no room to send)", "stopped": True}]
-    req = sources.Request([("A", "1")], 1_000_000, 0, mode="stream", duration=1, on_loss="continue")
+    req = sources.Request([("A", "GPIO1")], 1_000_000, 0, mode="stream", duration=1, on_loss="continue")
     parts, lost = _stream_parts(FakeCap(), cfg, got, ["A"], [1], req)
     assert [p.tick0 for p in parts] == [0, 300] and [p.channels[0].n for p in parts] == [200, 100]
     assert lost == [{"after_part": 0, "reason": "the probe dropped a segment (no room to send)", "ticks": 100}]
@@ -379,10 +379,10 @@ def test_a_stream_that_lost_its_start_keeps_nothing_by_default():
     from oep_client.acquire import _stream_parts
     cfg = SimpleNamespace(rate=1_000_000, width=8, positions=[0], event_d={})
     got = fake_stream([(100, 100, 100_000)], [])
-    req = sources.Request([("A", "1")], 1_000_000, 0, mode="stream", duration=1)
+    req = sources.Request([("A", "GPIO1")], 1_000_000, 0, mode="stream", duration=1)
     with pytest.raises(RuntimeError, match="dropped the stream's first 100 bytes"):
         _stream_parts(FakeCap(), cfg, got, ["A"], [1], req)
-    req = sources.Request([("A", "1")], 1_000_000, 0, mode="stream", duration=1, on_loss="continue")
+    req = sources.Request([("A", "GPIO1")], 1_000_000, 0, mode="stream", duration=1, on_loss="continue")
     parts, lost = _stream_parts(FakeCap(), cfg, got, ["A"], [1], req)
     assert parts[0].tick0 == 0 and lost[0]["after_part"] == -1
 
@@ -394,7 +394,7 @@ def test_a_format_1_stream_reads_the_same_line_as_format_0(probe, tmp_path):
     src = probe("--logic-wave", "10=uart:115200", "--logic-wave", "11=square:8")
     got = {}
     for name, res in (("f0", {}), ("f1", {"TX": 1, "CLK": 1})):
-        req = sources.Request([("TX", "10"), ("CLK", "11")], 200_000, 0, mode="stream", duration=0.3, resolution=res)
+        req = sources.Request([("TX", "GPIO10"), ("CLK", "GPIO11")], 200_000, 0, mode="stream", duration=0.3, resolution=res)
         out = sources.capture(src, req, tmp_path / f"{name}.wireskein")
         assert fileformat.read_header(out)["complete"] is True
         caps = [load(out, part=k) for k in range(len(fileformat.read_header(out)["parts"]))]
@@ -421,7 +421,7 @@ def test_a_spooled_stream_is_the_same_as_one_put_together_at_the_end(tmp_path):
     from oep_client.acquire import _Spool, _stream_parts
     cfg = SimpleNamespace(rate=1_000_000, width=8, positions=[0], event_d={})
     segs = [(0, 100, 0), (100, 100, 100_000), (300, 100, 300_000), (400, 60, 400_000)]
-    req = sources.Request([("A", "1")], 1_000_000, 0, mode="stream", duration=1, on_loss="continue",
+    req = sources.Request([("A", "GPIO1")], 1_000_000, 0, mode="stream", duration=1, on_loss="continue",
                           spool_dir=str(tmp_path))
     once = fake_stream(segs, [(200, 100)])
     want_parts, want_lost = _stream_parts(FakeCap(), cfg, once, ["A"], [1], req)

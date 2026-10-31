@@ -548,7 +548,7 @@ def main() -> None:
     cp.add_argument("--fast", default=None, help="oep: the rates a UART probe's link is raised to for reading back "
                          "(default: 1.5M / 921600 / 500000 as the client's record of this port and probe says; 0 keeps "
                          "the boot speed; RATE,RATE tries those)")
-    cp.add_argument("--channels", default=None, help='logic: "NAME=ID,..." (ID: the probe channel number / sigrok channel) or "ID,..."; '
+    cp.add_argument("--channels", default=None, help='logic: "NAME=ID,..." (ID: an OEP probe channel name or line label, GPIO47 / x035.scl; a sigrok channel) or "ID,..."; '
                          'NAME=ID/D keeps a line as its changes, per D samples how many and the level after (OEP '
                          'format 1; /1 is every change exact)')
     cp.add_argument("--analog", default=None, help='analog: "NAME=ID[@FRONTEND],..." (FRONTEND: the input range number, OEP)')

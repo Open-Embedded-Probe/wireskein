@@ -3,7 +3,7 @@ the capture waits. wireskein only captures; the stimulus is this test's: the UAR
 role 4 watches (channel 34, as dev-oep's checks), written from the same session right after the tracks start.
 
 Run with WIRESKEIN_BENCH_OEP=oep://<unit_id> (or with ?via=usb); skipped otherwise. The probe is held by its own lease (the capture takes
-it). WIRESKEIN_BENCH_ANALOG picks the analog channel (default 17, a floating GPIO on the P4X: its values wander, so an
+it). WIRESKEIN_BENCH_ANALOG picks the analog channel (default GPIO17, a floating pin on the P4X: its values wander, so an
 analog trigger is crossed soon)."""
 
 import os
@@ -15,8 +15,8 @@ from wireskein import _fileformat as fileformat, sources
 TARGET = os.environ.get("WIRESKEIN_BENCH_OEP")
 pytestmark = pytest.mark.skipif(not TARGET, reason="no bench probe (WIRESKEIN_BENCH_OEP)")
 TX_CHANNEL = 34                      # fixture uart role 2 (TX) and logic role 4 on the same pin
-LOGIC = [(f"L{k}", str(30 + k)) for k in range(8)]
-ANALOG = os.environ.get("WIRESKEIN_BENCH_ANALOG", "17")
+LOGIC = [(f"L{k}", f"GPIO{30 + k}") for k in range(8)]
+ANALOG = os.environ.get("WIRESKEIN_BENCH_ANALOG", "GPIO17")
 TEXT = b"\x55" * 2048                # 8N1 0x55: a start bit, then every bit toggles; 180 ms, past the arming
 
 

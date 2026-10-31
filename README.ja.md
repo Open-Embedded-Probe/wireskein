@@ -97,14 +97,14 @@ pytest からは、[pytest-embedded-wireskein](https://github.com/Open-Embedded-
 
 ```sh
 pip install "wireskein[oep]"      # OEP のプローブを使うとき（oep-client-python）。sigrok は sigrok-cli が PATH に要る
-wireskein capture --source oep:oep://30eda0ea068b --channels SDA=47,SCL=48 --rate 20M --samples 200k -o i2c.wireskein
+wireskein capture --source oep:oep://30eda0ea068b --channels SDA=GPIO47,SCL=x035.scl --rate 20M --samples 200k -o i2c.wireskein
 wireskein capture --source sigrok:fx2lafw --channels SDA=D0,SCL=D1 --rate 12M --samples 1M \
                   --trigger SCL:fall --pretrigger 1k --note "リフローの後" -o i2c.wireskein
 ```
 
-| 取得元 | 機器 | チャンネルの番号 |
+| 取得元 | 機器 | チャンネルの指定 |
 | --- | --- | --- |
-| `oep:<アドレス>` | oep-client-python（その `acquire`）を使う OEP のプローブ。アドレスは OEP のアドレス `oep://<unit_id>`（経路を選ぶなら `?via=usb`、`cdc`、`net`、`tcp:HOST:PORT`、`tty:PATH`）、または短い形（シリアルポート、`tcp://HOST:PORT`） | プローブのチャンネル番号 |
+| `oep:<アドレス>` | oep-client-python（その `acquire`）を使う OEP のプローブ。アドレスは OEP のアドレス `oep://<unit_id>`（経路を選ぶなら `?via=usb`、`cdc`、`net`、`tcp:HOST:PORT`、`tty:PATH`）、または短い形（シリアルポート、`tcp://HOST:PORT`） | プローブのチャンネルの名前（`GPIO47`）か、口の線の label（`x035.scl`）。番号は 1 回の起動の間しか通らない |
 | `sigrok:<ドライバ>` | sigrok が対応する機器（`fx2lafw`、`dreamsourcelab-dslogic`、`demo` など）。`sigrok-cli` を使う | sigrok のチャンネル名（`D0` など） |
 
 - `--channels` は、ロジックの各チャンネルに名前を付けます（`名前=番号`）。

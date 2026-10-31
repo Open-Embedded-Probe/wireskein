@@ -13,7 +13,7 @@ Other packages add sources through the entry point group "wireskein.sources"
 (name = module or object with capture(target: str, request: Request) -> Result).
 
     from wireskein import sources
-    req = sources.Request([("SDA", "47"), ("SCL", "48")], rate=20_000_000, samples=200_000)
+    req = sources.Request([("SDA", "GPIO47"), ("SCL", "x035.scl")], rate=20_000_000, samples=200_000)
     sources.capture("oep:/dev/ttyACM0", req, "i2c.wireskein")
 """
 

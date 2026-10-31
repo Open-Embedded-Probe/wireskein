@@ -23,7 +23,7 @@ def capture(target: str, req: Request) -> Result:
     areq = acquire.Request(list(req.channels), req.rate, req.samples, trigger=req.trigger, pretrigger=req.pretrigger,
                            arm=req.arm, timeout=req.timeout, analog=list(req.analog), analog_rate=req.analog_rate,
                            analog_samples=req.analog_samples, resolution=dict(req.resolution), mode=req.mode,
-                           duration=req.duration, segments=req.segments, on_loss=req.on_loss, spool_dir=req.spool_dir)
+                           seconds=req.duration, segments=req.segments, on_loss=req.on_loss, spool_dir=req.spool_dir)
     res = acquire.capture_at(target, areq, fast=req.fast, owner="wireskein capture")
     parts = None
     if res.parts is not None:
