@@ -266,18 +266,16 @@ def _probe_info(core, hst, opened) -> dict:
 
 
 def _frontends(core, hst, fn: int) -> dict[int, dict]:
-    """The analog describe's frontends (capture §3.5): number -> its measurable range."""
+    """The analog describe's frontends (capture §3.5): number -> its measurable range. The value is 9 bytes; one of
+    another length is broken and not used (core §2.3). The volts are the input pin's, any attenuation before the ADC
+    already in the scale (capture §1.2), so none is read here."""
     from oep_client import registry
     want = registry.FIXTURE_ANALOG.tlv["describe"]["frontend"]
     out = {}
     for tag, v in _describe(core, hst, fn):
-        if tag == want and len(v) >= 9:
-            fe, lo, hi = struct.unpack_from("<Bii", v)
+        if tag == want and len(v) == 9:
+            fe, lo, hi = struct.unpack("<Bii", v)
             out[fe] = {"frontend": fe, "range_min_mv": lo, "range_max_mv": hi}
-            if len(v) >= 13:            # the attenuation (milli dB), when the probe gives it (asked back of oep-spec)
-                (att,) = struct.unpack_from("<I", v, 9)
-                if att != 0xFFFFFFFF:
-                    out[fe]["attenuation_db"] = att / 1000
     return out
 
 
@@ -588,8 +586,6 @@ def _analog_chans(an, acfg, req: Request, aids, data: bytes, samples: int, t0: F
         fe = acfg.frontend.get(k)
         if fe is not None:
             acq["frontend"] = frontends.get(fe, {"frontend": fe})
-            if "attenuation_db" in acq["frontend"]:
-                acq["attenuation_db"] = acq["frontend"]["attenuation_db"]
         if acfg.reference:
             source, mv, measured = acfg.reference
             acq["reference"] = {"source": source, "mv": mv, "measured": bool(measured)}
