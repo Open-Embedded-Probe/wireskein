@@ -247,7 +247,7 @@ def _t(x: dict, threshold) -> dict:
 def square(pin: str, freq_hz: float, duty: float | None = None, freq_rel: float = 0.02, duty_abs: float = 0.01,
            jitter_max: float | None = None, threshold=None) -> dict:
     """A steady square wave (PWM, tone): frequency within freq_rel (relative) of freq_hz, duty within duty_abs
-    (absolute), the periods' spread at most jitter_max (relative)."""
+    (absolute), the standard deviation of the periods at most jitter_max of their median (a ratio)."""
     return _t({"kind": "square", "pin": pin, "freq_hz": freq_hz, "duty": duty, "freq_rel": freq_rel,
                "duty_abs": duty_abs, "jitter_max": jitter_max}, threshold)
 

@@ -202,3 +202,20 @@ def test_browse_can_open_files_together(served):
     gui, _ = served
     text = get(gui, "/browse", cookie=cookie(gui))[2].decode()
     assert 'type="checkbox" value="/files/a.wireskein"' in text and 'id=together' in text and "&with=" in text
+
+
+def test_the_bundled_viewer_reads_what_wireskein_writes():
+    # the pinned wireskein-web (tools/web.json, fetched by tools/fetch_web.py) declares the formats it reads; every
+    # one must be the number this wireskein writes
+    import re
+    from pathlib import Path
+
+    from wireskein import align, annotate
+
+    src = Path(__file__).parents[1] / "src" / "wireskein" / "web" / "src"
+    if not src.is_dir():
+        pytest.skip("the viewer is not fetched (python tools/fetch_web.py)")
+    text = "".join(p.read_text() for p in src.glob("*.js"))
+    declared = dict(re.findall(r"\b((?:ALIGNMENT_|ANNOTATIONS_|MARKERS_)?FORMAT)\s*=\s*'([^']+)'", text))
+    assert declared == {"FORMAT": fileformat.FORMAT, "ALIGNMENT_FORMAT": align.FORMAT,
+                        "ANNOTATIONS_FORMAT": annotate.FORMAT, "MARKERS_FORMAT": fileformat.MARKERS_FORMAT}

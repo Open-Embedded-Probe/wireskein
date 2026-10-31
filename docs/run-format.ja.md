@@ -51,7 +51,7 @@
 | `<量>_<単位>` | 期待の値 | `freq_hz`、`delay_s`、`level_v`、`phase_deg`。比は単位なし（`duty`） |
 | `<量>_rel` | 期待の値に対する相対の許容（`pytest.approx` の `rel` と同じ） | `freq_rel`、`baud_rel`、`period_rel` |
 | `<量>_abs_<単位>` | 量の単位での許容（`pytest.approx` の `abs` と同じ）。比は単位なし | `delay_abs_s`、`level_abs_v`、`phase_abs_deg`、`duty_abs` |
-| `<量>_min_<単位>`、`<量>_max_<単位>` | 限度。片側だけでもよい | `dead_min_s`、`t0h_max_s`、`reset_min_s`、`break_min_bits`、`ncr_max_bytes`、`errors_max` |
+| `<量>_min_<単位>`、`<量>_max_<単位>` | 限度。片側だけでもよい | `dead_min_s`、`t0h_max_s`、`reset_min_s`、`break_min_bits`、`ncr_max_bytes`、`errors_max`（数）、`jitter_max`（周期の標準偏差の、中央値に対する比） |
 
 量は、期待の値と同じ語（`freq_hz` → `freq_rel`）。単位は最後（`_s`、`_hz`、`_v`、`_deg`、`_bits`、`_bytes`）。数と比には付けない。
 
