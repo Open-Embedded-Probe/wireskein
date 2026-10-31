@@ -1,4 +1,9 @@
-"""`ws decode`: the buses a spec names, decoded with exactly those roles, as one document for a data repository.
+"""Decoding a capture: finding what it holds (`analyze`), or decoding the buses a spec names (`decode_file`).
+
+    cap = load("capture.wireskein", part=0)  # one part as the decoders read it; a .sr, a VCD or a fixture directory too
+    res = analyze(cap, {"protocols": ["i2c"]})
+    doc = export(res, cap)                   # JSON-ready dict, as `wireskein analyze` prints
+    doc = decode_file("c0001.wireskein", {"buses": [{"protocol": "i2c", "pins": {"scl": "SCL", "sda": "SDA"}}]})
 
 analyze finds what a capture holds and claims only what the evidence carries: a short case (one transfer) is too
 little to claim. When the roles are known (the run wired them), the decode of exactly those roles is what is
@@ -25,12 +30,74 @@ from types import SimpleNamespace
 import numpy as np
 
 from . import __version__, fileformat
-from ._engine import export, fileio, staged, timing
-from ._engine.model import Capture
+from ._engine import export as _exp
+from ._engine import fileio, fixture, staged, timing
+from ._engine.export import dumps, export
+from ._engine.model import Capture, Channel
+from ._engine.srio import read_sr, write_sr
+
+__all__ = ["Capture", "Channel", "analyze", "as_logic", "decode_file", "dumps", "export", "load", "save"]
 
 FORMAT = "wireskein-analysis/1"
 IDLE_S = 1e-3          # a bus with no bit times of its own: activity apart by more than this is two bursts
 IDLE_BITS = 16         # else: more than this many bit times without a change
+
+
+def load(path: str | Path, part: int | None = None) -> Capture:
+    """A WireSkein file (wireskein.fileformat; a capture of several parts needs `part`), a sigrok .sr, or a fixture
+    directory (capture.json + edges). Files are told apart by their content."""
+    path = Path(path)
+    if path.is_dir():
+        return fixture.load_capture(path)
+    kind = fileformat.sniff(path)
+    if kind == "wireskein":
+        return fileio.load(path, part)
+    if kind == "sr":
+        return read_sr(path)
+    if kind == "vcd":
+        from ._engine.vcdio import read_vcd
+        return read_vcd(path)
+    raise ValueError(f"{path}: not a WireSkein file, a sigrok session (.sr) or a VCD")
+
+
+def save(path: str | Path, cap: Capture, **meta) -> Path:
+    """By the name: .sr (one rate: slow channels are repeated, their real rate
+    kept in wireskein.json inside the zip), .vcd (the changes; wireskein's own
+    data in a $comment), anything else a WireSkein file
+    (each channel at its own rate; .wireskein is the usual name)."""
+    path = Path(path)
+    fileio.refuse_if_skipped(cap, path)
+    if path.suffix in (".sr", ".vcd"):
+        fileio.refuse_if_hidden(cap, path)
+    if path.suffix == ".sr":
+        return write_sr(path, cap, **meta)
+    if path.suffix == ".vcd":
+        from ._engine.vcdio import write_vcd
+        return write_vcd(path, cap, **meta)
+    return fileio.save(path, cap, **meta)
+
+
+def as_logic(cap: Capture, thresholds: dict) -> Capture:
+    """The capture with these analog channels also read as logic (name -> volts,
+    or (low, high) for hysteresis), so the decoders see them: a UART or I2C line
+    captured by an ADC. The analog channels stay as they are."""
+    from ._engine import analog
+    names = {c.name for c in cap.channels}
+    extra = []
+    for name, th in thresholds.items():
+        trace = next((a for a in cap.analog if a.name == name), None)
+        if trace is None:
+            raise ValueError(f"{name}: not an analog channel in this capture")
+        if name in names:
+            raise ValueError(f"{name}: already a logic channel")
+        extra.append(analog.to_logic(trace, cap.meta.get("tick_hz", cap.rate), th))
+    return Capture(cap.rate, cap.n_samples, cap.channels + extra, cap.meta, cap.analog, cap.events)
+
+
+def analyze(cap: Capture, hints: dict | None = None):
+    """hints (all optional): {"protocols": [...], "pins": {pin: {"protocol", "role", "baud"}},
+    "exclude_pins": [...], "devices": ["i2c/**", ...]} restrict what is tried."""
+    return staged.analyze(cap, hints)
 
 
 def _spec(spec: dict) -> dict:
@@ -41,8 +108,8 @@ def _spec(spec: dict) -> dict:
             raise ValueError(f"a bus needs protocol and pins: {b}")
         out["buses"].append({"protocol": b["protocol"], "pins": dict(b["pins"]), "params": dict(b.get("params") or {}),
                              **({"idle_s": b["idle_s"]} if "idle_s" in b else {})})
-    if out["depth"] not in export.DEPTHS:
-        raise ValueError(f"depth: one of {', '.join(export.DEPTHS)}")
+    if out["depth"] not in _exp.DEPTHS:
+        raise ValueError(f"depth: one of {', '.join(_exp.DEPTHS)}")
     return out
 
 
@@ -119,23 +186,23 @@ def _bus(res, cap: Capture, b: dict, depth: str, claimed: list) -> dict:
         out.update(decoded=False, result={})
         lay = {}
     else:
-        lay = export.layers_of(n)
+        lay = _exp.layers_of(n)
         c = next((c for c in claimed if c.node is n), None)
         out.update(decoded=True, params={k: (float(v) if isinstance(v, (np.floating, float)) else v)
                                                     for k, v in n.params.items()},
                    fit={"score": round(float(n.total), 4), "claimed": c is not None,
                         **({"verdict": c.verdict} if c is not None else {})})
-        k = export.LOWER.get(n.analyzer)
+        k = _exp.LOWER.get(n.analyzer)
         if depth == "transport":
             out["result"] = {}
         elif depth == "frames":
             out["result"] = {k: lay[k]} if k and k in lay else {}
         else:
-            out["result"] = export.final_of(n, lay)
+            out["result"] = _exp.final_of(n, lay)
             if k and k in lay and k not in out["result"]:
                 out["result"][k] = lay[k]          # the transfers stay beside a higher reading (sd over spi)
             if depth == "device":
-                ds = export.devices_of(n, with_candidates=True)
+                ds = _exp.devices_of(n, with_candidates=True)
                 if ds:
                     out["devices"] = ds
     idle = _idle(cap, b, n)
@@ -180,7 +247,7 @@ def _part(cap: Capture, spec: dict, head: dict) -> dict:
     out["undeclared"] = rest
     others = [c for c in res.claims if not set(c.roles.values()) & named]
     if others:
-        out["claims"] = export.export(SimpleNamespace(claims=others), cap)["claims"]
+        out["claims"] = _exp.export(SimpleNamespace(claims=others), cap)["claims"]
     return out
 
 

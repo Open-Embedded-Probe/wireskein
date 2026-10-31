@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 from wireskein import fileformat
-from wireskein.analyze import load, save
+from wireskein.decode import load, save
 from wireskein._engine import fileio
 from wireskein.runlog import Recorder, square, uart
 from wireskein.verify import check_square, check_uart, verify

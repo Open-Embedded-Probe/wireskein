@@ -284,7 +284,7 @@ class _Handler(BaseHTTPRequestHandler):
         if kind == "wireskein":
             return self._send(200, p.read_bytes(), "application/octet-stream")
         # a .sr is shown as the WireSkein file it converts to (slow channels get their real rate back when it came from one)
-        from .analyze import load, save
+        from .decode import load, save
         cap = load(p)
         meta = {k: v for k, v in cap.meta.items()
                 if k not in ("file", "sr_file", "vcd_file", "vcd_not_read", "tick_hz", "unitsize", "fixture", "extras",

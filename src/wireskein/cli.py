@@ -48,7 +48,7 @@ from ._engine import export, markers, staged
 
 
 def load(path: Path):
-    from .analyze import load as _load
+    from .decode import load as _load
     return _load(path)
 
 
@@ -197,7 +197,7 @@ def _load_for_decoding(path, args):
     cap = load(path)
     th = _thresholds(getattr(args, "threshold", None))
     if th:
-        from .analyze import as_logic
+        from .decode import as_logic
         cap = as_logic(cap, th)
     return cap
 
@@ -215,7 +215,7 @@ def annotate_cmd(args) -> None:
     from . import annotate
     hints = json.loads(Path(args.hint[1:]).read_text() if args.hint.startswith("@") else args.hint) if args.hint else None
     th = _thresholds(getattr(args, "threshold", None))
-    from .analyze import as_logic
+    from .decode import as_logic
     doc = annotate.build_file(args.file, hints, (lambda cap: as_logic(cap, th)) if th else None)
     for r in doc["rows"]:
         bad = sum(i["level"] != "ok" for i in r["items"])
@@ -230,7 +230,7 @@ def annotate_cmd(args) -> None:
 
 def align_cmd(args) -> None:
     from . import align
-    from .analyze import load
+    from .decode import load
     cap = load(args.file)
     th = [float(v) for v in args.threshold.split(",")] if args.threshold else None
     if args.to:                                               # onto another file's ticks (spec §5.1.1)
@@ -312,7 +312,7 @@ def capture_cmd(args) -> None:
         what = (f"{len(chans) - n_analog} logic" + (f" ({coarse} as changes at a coarser step)" if coarse else "")
                 + (f" + {n_analog} analog" if n_analog else "") + " channels")
     else:
-        from .analyze import load
+        from .decode import load
         cap = load(out)
         rate, meta, what = cap.rate, cap.meta, _count(cap)
     n_parts = len(raw["parts"]) if raw else 1
@@ -423,7 +423,7 @@ def _fewer(raw: dict, req) -> None:
 
 
 def convert(args) -> None:
-    from .analyze import load as load_file, save
+    from .decode import load as load_file, save
     part = getattr(args, "part", None)
     from . import fileformat
     if part is None and fileformat.sniff(args.input) == "wireskein":

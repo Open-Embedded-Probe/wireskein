@@ -149,7 +149,7 @@ def _save(res: "Result", out: Path, attachments, meta) -> Path:
     else:
         fileformat.write(tmp, res.tick_hz, res.channels, attachments, lost=res.lost or None, **{**res.meta, **meta})
     if tmp != out:
-        from ..analyze import load, save
+        from ..decode import load, save
         try:
             save(out, load(tmp), **{**res.meta, **meta})
         finally:

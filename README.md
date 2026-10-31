@@ -269,7 +269,7 @@ wireskein decode c0001.wireskein --spec '{"buses": [{"protocol": "i2c", "pins": 
 ```
 
 ```python
-from wireskein.analyze import load, save, analyze, export
+from wireskein.decode import load, save, analyze, export
 
 cap = load("capture.wireskein")                                     # or .sr / a fixture directory
 res = analyze(cap, {"protocols": ["spi"]})

@@ -5,7 +5,7 @@
     for p in cap.parts:                          # analysis never crosses parts (§3.4)
         p.tick0, p.ticks, p.meta                 # start_ns, start_uncertainty_ns, trigger_tick, ...
         initial, edges = p.channel("SCL").changes()        # ticks from the part's tick 0
-        res = wireskein.analyze.analyze(p.view())
+        res = wireskein.decode.analyze(p.view())
 
     clk = capture.logic("CLK", 0, [10, 20, 30], n=1000)     # a line from its changes
     capture.write("out.wireskein", capture.Capture(Fraction(10**6), [capture.Part(1000, [clk])]))
@@ -90,7 +90,7 @@ class Part:
         raise KeyError(name)
 
     def view(self):
-        """The part as the decoders and checks read it (wireskein.analyze, wireskein.verify). Needs numpy."""
+        """The part as the decoders and checks read it (wireskein.decode, wireskein.verify). Needs numpy."""
         from ._engine import fileio
         decoded = [fileio.decode(c) for c in self.channels]
         if self._file is not None:

@@ -84,7 +84,7 @@ def test_only_capture_files(served):
 
 def test_sr_is_served_as_wsc(served, tmp_path):
     gui, data = served
-    from wireskein.analyze import load, save
+    from wireskein.decode import load, save
     save(data / "b.sr", load(data / "a.wireskein"))
     status, _, body = get(gui, "/files/b.sr", cookie=cookie(gui))
     assert status == 200
@@ -188,7 +188,7 @@ def test_annotations_of_a_capture_in_parts(served):
 
 def test_vcd_is_served_as_wireskein(served, tmp_path):
     gui, data = served
-    from wireskein.analyze import load, save
+    from wireskein.decode import load, save
     save(data / "v.vcd", load(data / "a.wireskein"))
     assert "v.vcd" in get(gui, "/browse", cookie=cookie(gui))[2].decode()
     status, _, body = get(gui, "/files/v.vcd", cookie=cookie(gui))

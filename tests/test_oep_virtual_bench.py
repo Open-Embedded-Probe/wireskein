@@ -286,7 +286,7 @@ def test_format_1_keeps_each_line_at_its_resolution(probe, tmp_path):
     """OEP capture format 1 (§1.3) on the bench's counter (channel k is bit k of the sample number): A every change
     (/1; it changes every sample, so the probe carries it raw), B raw, C per 4 (one change a quantum: also a Channel
     of step 4), D per 64 (8 changes a quantum: the count exact, where in the quantum hidden)."""
-    from wireskein.analyze import load
+    from wireskein.decode import load
     text = "A=10/1,B=11,C=12/4,D=13/64"
     req = sources.Request(sources.parse_channels(text), 20_000_000, 4096, resolution=sources.parse_resolution(text))
     out = sources.capture(probe(), req, tmp_path / "f1.wireskein")
@@ -398,7 +398,7 @@ def test_a_stream_that_lost_its_start_keeps_nothing_by_default():
 def test_a_format_1_stream_reads_the_same_line_as_format_0(probe, tmp_path):
     """The same UART-like line streamed as samples (format 0) and as every change (/1, format 1): equal where both
     have it, across segments and the blocks the probe carried raw (a change at a segment's first sample counted)."""
-    from wireskein.analyze import load
+    from wireskein.decode import load
     src = probe("--logic-wave", "10=uart:115200", "--logic-wave", "11=square:8")
     got = {}
     for name, res in (("f0", {}), ("f1", {"TX": 1, "CLK": 1})):

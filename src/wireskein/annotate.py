@@ -119,7 +119,7 @@ def build_file(path: str | Path, hints: dict | None = None, prepare=None, part: 
     wireskein-format §3.4), its rows naming it (`part`, §5.3) when the file has several. part: that one only.
     prepare: a step from the loaded capture to the one decoded (e.g. analog read as logic)."""
     from . import fileformat
-    from .analyze import load
+    from .decode import load
     prepare = prepare or (lambda cap: cap)
     n = len(fileformat.read_header(path)["parts"]) if fileformat.sniff(path) == "wireskein" else 1
     if n == 1:

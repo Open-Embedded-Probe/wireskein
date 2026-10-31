@@ -47,7 +47,7 @@ def test_sigrok_demo_through_the_cli(tmp_path):
 @pytest.mark.skipif(shutil.which("sigrok-cli") is None, reason="sigrok-cli not installed")
 def test_sigrok_to_sr(tmp_path):
     out = sources.capture("sigrok:demo", sources.Request([("D0", "D0")], 100_000, 1000), tmp_path / "d.sr")
-    from wireskein.analyze import load
+    from wireskein.decode import load
     assert out.suffix == ".sr" and load(out).channel("D0") and not list(tmp_path.glob("*.wireskein"))
 
 

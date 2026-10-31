@@ -8,8 +8,8 @@ Python の package `wireskein` です（`pip install wireskein` で入るもの�
 | --- | --- |
 | `wireskein/runlog.py` | 試験の記録器と検査の helper。標準ライブラリだけで動く（[記録の形式](../docs/run-format.ja.md)） |
 | `wireskein/verify.py` | 記録の照合（`wireskein verify`） |
-| `wireskein/fileformat.py` | `.wireskein` の読み書き。標準ライブラリだけで動く（[ファイル形式](../docs/wireskein-format.ja.md)） |
-| `wireskein/analyze.py`、`annotate.py` | 復号（`wireskein analyze`）と、復号の注釈の保存 |
+| `wireskein/capture.py`、`fileformat.py` | `.wireskein` を 1 つの値として扱う（`capture`、公開）と、その入れ物（`fileformat`）。標準ライブラリだけ（[ファイルの形式](../docs/wireskein-format.ja.md)） |
+| `wireskein/decode.py`、`annotate.py` | 復号（`wireskein analyze`、`wireskein decode`）と、復号の注釈の保存 |
 | `wireskein/align.py` | アナログやほかのファイルとの時刻の合わせ込み（`wireskein align`） |
 | `wireskein/sources/` | 取得元（`oep:`、`sigrok:`）。entry point の `wireskein.sources` で足せる |
 | `wireskein/gui.py` | ビューアのサーバー（`wireskein gui`）。ビューアの本体 `wireskein/web/` は git に入れず、`tools/fetch_web.py` で取ってきて wheel に入れる |

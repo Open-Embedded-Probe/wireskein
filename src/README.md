@@ -8,8 +8,8 @@ The Python package `wireskein` (what `pip install wireskein` installs).
 | --- | --- |
 | `wireskein/runlog.py` | The test-run recorder and the check helpers. Standard library only ([run format](../docs/run-format.md)) |
 | `wireskein/verify.py` | Checking a recorded run (`wireskein verify`) |
-| `wireskein/fileformat.py` | Reading and writing `.wireskein`. Standard library only ([file format](../docs/wireskein-format.md)) |
-| `wireskein/analyze.py`, `annotate.py` | Decoding (`wireskein analyze`) and storing decode annotations |
+| `wireskein/capture.py`, `fileformat.py` | A `.wireskein` as one value (`capture`, public) and its container (`fileformat`). Standard library only ([file format](../docs/wireskein-format.md)) |
+| `wireskein/decode.py`, `annotate.py` | Decoding (`wireskein analyze`, `wireskein decode`) and storing decode annotations |
 | `wireskein/align.py` | Aligning analog channels and other files in time (`wireskein align`) |
 | `wireskein/sources/` | Capture sources (`oep:`, `sigrok:`). More can be added through the `wireskein.sources` entry point |
 | `wireskein/gui.py` | The viewer's server (`wireskein gui`). The viewer itself, `wireskein/web/`, is not in git: `tools/fetch_web.py` fetches it into the wheel |

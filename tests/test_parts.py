@@ -7,7 +7,7 @@ import sys
 import pytest
 
 from wireskein import fileformat
-from wireskein.analyze import load
+from wireskein.decode import load
 from wireskein.runlog import Recorder, level, pulses
 from wireskein.verify import verify
 
@@ -69,7 +69,7 @@ def test_a_loss_is_shown_first_and_fails_the_capture(tmp_path):
 
 
 def test_segments_need_no_tick0_and_a_rewrite_refuses_one_part_of_many(tmp_path):
-    from wireskein.analyze import save
+    from wireskein.decode import save
     p = two_parts(tmp_path / "s.wireskein", layout="segments")
     raw = fileformat.read_header(p)
     assert raw["layout"] == "segments" and "tick0" not in raw["parts"][1]
@@ -128,6 +128,6 @@ def test_convert_writes_one_part_when_asked(tmp_path):
     assert head["parts"][0]["meta"]["start_ns"] == 5
     assert head["complete"] is False and "part 0 of a capture that lost data" in head["lost"][0]["reason"]
     assert run(src, tmp_path / "one.sr", "--part", "1").returncode == 0
-    from wireskein.analyze import load
+    from wireskein.decode import load
     sr = load(tmp_path / "one.sr")
     assert sr.meta["complete"] is False and sr.meta["from_part"]["part"] == 1   # still a failed capture's

@@ -5,7 +5,7 @@ quantum), and the checks that need every edge unchecked only when a quantum hide
 import pytest
 
 from wireskein import fileformat
-from wireskein.analyze import load, save
+from wireskein.decode import load, save
 from wireskein.runlog import Recorder, ends, level, only_moving, pulses, square, starts
 from wireskein.verify import verify
 
