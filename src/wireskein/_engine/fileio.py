@@ -10,44 +10,58 @@ from .. import fileformat
 from .model import AnalogTrace, Capture, Channel, EventTrace, edges_from_dense
 
 
+def decode(c) -> Channel | EventTrace | AnalogTrace:
+    """One stored channel as the edge-list model: bits and lossless events (step 1) as a Channel, events of a
+    coarser step as an EventTrace, analog as an AnalogTrace."""
+    if isinstance(c, fileformat.EventsChannel):
+        ks, levels, counts = c.decode()
+        ks = np.array(ks, np.int64)
+        if c.step == 1:                          # lossless: each event is one change, at its tick
+            init = c.start_level
+            if len(ks) and ks[0] == 0:           # a change at the first tick: the Channel starts at the level after it
+                init, ks = init ^ 1, ks[1:]
+            return Channel(c.name, init, c.phase + ks, 1, c.phase, dict(c.acquisition))
+        return EventTrace(c.name, c.step, c.phase, c.n, c.start_level, ks, np.array(levels, np.uint8),
+                          np.array(counts, np.uint8), dict(c.acquisition))
+    if isinstance(c, fileformat.AnalogChannel):
+        dtype = np.float32 if c.encoding == "analog-f32" else {8: np.uint8, 16: "<u2", 32: "<u4"}[c.width]
+        return AnalogTrace(c.name, np.frombuffer(c.data, dtype), c.rate_hz, c.t0_ticks, c.encoding, c.width,
+                           c.value_bits, c.zero, c.scale_nv, c.unit, dict(c.acquisition))
+    bits = np.unpackbits(np.frombuffer(c.bits, np.uint8), bitorder="little")[: c.n]
+    init, edges = edges_from_dense(bits, c.step, c.phase)
+    return Channel(c.name, init, edges, c.step, c.phase, dict(c.acquisition))
+
+
+def view(head: dict, decoded: list, path: str | Path | None = None) -> Capture:
+    """The decoders' Capture of one part: its decoded channels (an EventTrace also as a Channel of its step when no
+    quantum hides a change), with what the capture says about itself in meta."""
+    out, analog, events = [], [], []
+    for d in decoded:
+        if isinstance(d, EventTrace):
+            events.append(d)
+            ch = d.as_channel()                  # at most one change a quantum: the decoders read it at that step
+            if ch is not None:
+                out.append(ch)
+        elif isinstance(d, AnalogTrace):
+            analog.append(d)
+        else:
+            out.append(d)
+    tick = fileformat.tick_hz(head)
+    return Capture(float(tick), int(head["ticks"]), out,
+                   meta={**head.get("meta", {}), **({"file": str(path)} if path is not None else {}), "tick_hz": tick,
+                         "extras": fileformat.extras(path) if path is not None else {},
+                         "capture_id": head.get("id"), "complete": head.get("complete", True),
+                         "lost": head.get("lost", []), "layout": head.get("layout", "timeline"),
+                         "part": head.get("part", 0), "n_parts": head.get("n_parts", 1),
+                         "skipped_channels": fileformat.skipped(head)}, analog=analog, events=events)
+
+
 def load(path: str | Path, part: int | None = None) -> Capture:
     """One part of a WireSkein file (a capture of several parts needs `part`, wireskein-format §3.4). meta carries
     whether the capture is complete and what was lost (a loss makes the whole capture a failure), the layout, and
     which part of how many."""
     head, chans = fileformat.read(path, part=part)
-    out, analog, events = [], [], []
-    for c in chans:
-        if isinstance(c, fileformat.EventsChannel):
-            ks, levels, counts = c.decode()
-            ks = np.array(ks, np.int64)
-            if c.step == 1:                      # lossless: each event is one change, at its tick
-                init = c.start_level
-                if len(ks) and ks[0] == 0:       # a change at the first tick: the Channel starts at the level after it
-                    init, ks = init ^ 1, ks[1:]
-                out.append(Channel(c.name, init, c.phase + ks, 1, c.phase, dict(c.acquisition)))
-                continue
-            t = EventTrace(c.name, c.step, c.phase, c.n, c.start_level, ks, np.array(levels, np.uint8),
-                           np.array(counts, np.uint8), dict(c.acquisition))
-            events.append(t)
-            ch = t.as_channel()                  # at most one change a quantum: the decoders read it at that step
-            if ch is not None:
-                out.append(ch)
-            continue
-        if isinstance(c, fileformat.AnalogChannel):
-            dtype = np.float32 if c.encoding == "analog-f32" else {8: np.uint8, 16: "<u2", 32: "<u4"}[c.width]
-            analog.append(AnalogTrace(c.name, np.frombuffer(c.data, dtype), c.rate_hz, c.t0_ticks, c.encoding, c.width,
-                                      c.value_bits, c.zero, c.scale_nv, c.unit, dict(c.acquisition)))
-            continue
-        bits = np.unpackbits(np.frombuffer(c.bits, np.uint8), bitorder="little")[: c.n]
-        init, edges = edges_from_dense(bits, c.step, c.phase)
-        out.append(Channel(c.name, init, edges, c.step, c.phase, dict(c.acquisition)))
-    tick = fileformat.tick_hz(head)
-    return Capture(float(tick), int(head["ticks"]), out,
-                   meta={**head.get("meta", {}), "file": str(path), "tick_hz": tick, "extras": fileformat.extras(path),
-                         "capture_id": head.get("id"), "complete": head.get("complete", True),
-                         "lost": head.get("lost", []), "layout": head.get("layout", "timeline"),
-                         "part": head.get("part", 0), "n_parts": head.get("n_parts", 1),
-                         "skipped_channels": fileformat.skipped(head)}, analog=analog, events=events)
+    return view(head, [decode(c) for c in chans], path)
 
 
 def load_parts(path: str | Path) -> list[Capture]:
