@@ -118,7 +118,23 @@ With the parts and `capture.lost`, three cases are told apart:
 - **not seen**: between parts, or in a loss
 - **not read**: an uninterpreted burst
 
-## 4. Stability
+## 4. What analyze finds
+
+`wireskein analyze CAPTURE` (Python: `wireskein.decode.analyze_file(path, hints, ...)`) writes the same family of
+document, with no roles given: `format`, `wireskein`, `capture` (§2) and `parts[]`, but `hints` (what was asked to be
+tried, `--hint` / `--devices`) in place of `spec`, and in each part, in place of `buses`:
+
+| Key | Meaning |
+| --- | --- |
+| `part`, `ticks`, `tick0`, `start_ns`, ... | As in §2.1 |
+| `claims[]` | What the evidence carries: `protocol`, `roles` (role → channel), `verdict` (`confirmed` / `likely` / `ambiguous` / `unknown-sync`), `score`, `margin`, `params`, and `result` (`--mode final`, at `--depth`), `layers` and `evidence` (`--mode all`) or the layers `--select` names. Ticks from the part's tick 0 |
+| `relations[]` | Pairs of claims read together (a command line and its answers: `scpi`) |
+| `window`, `segment`, `events` | With `--window` / `--segment` (a range inside one part: `--part` names it when there are several) |
+
+A WireSkein file is analysed part by part; a `.sr`, a VCD or a fixture directory is one part. What is claimed, and
+how sure, may change between versions (the analysis is tuned on an evaluation corpus); the keys are kept.
+
+## 5. Stability
 
 The format number stays 1 until the first release, also through incompatible changes. A reader checks `format`
 and ignores keys it does not know.

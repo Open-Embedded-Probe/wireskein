@@ -39,7 +39,6 @@ import argparse
 import json
 import zipfile
 import sys
-import time
 from fractions import Fraction
 from pathlib import Path
 
@@ -513,6 +512,8 @@ def main() -> None:
                    help='only items inside a marker segment, e.g. "session/pwm/1kHz-25[1]" (glob; first match)')
     a.add_argument("--markers", default=None, metavar="JSON",
                    help='marker source: {"pin": "D6", "dialect": "heading"} (default: found automatically)')
+    a.add_argument("--part", type=int, default=None, help="only this part (from 0) of a capture in parts; needed for "
+                   "--window / --segment when there are several")
     a.add_argument("--events", action="store_true",
                    help="with --segment: include text lines as events (always included in --mode all)")
     dc = sub.add_parser("decode", help="decode the buses a spec names with exactly those roles (wireskein-analysis/1)")
@@ -635,32 +636,13 @@ def main() -> None:
         hints = json.loads(Path(args.hint[1:]).read_text() if args.hint.startswith("@") else args.hint)
     if args.devices is not None:
         hints = (hints or {}) | {"devices": args.devices}
+    from .decode import analyze_file
     try:
-        cap = _load_for_decoding(args.capture, args)
+        doc = analyze_file(args.capture, hints, args.mode, args.select, args.alternatives, args.depth, args.window,
+                           args.segment, json.loads(args.markers) if args.markers else None, args.events,
+                           _thresholds(getattr(args, "threshold", None)), args.part)
     except (ValueError, FileNotFoundError, zipfile.BadZipFile) as e:
         sys.exit(f"wireskein analyze: {e}")
-    t0 = time.perf_counter()
-    res = staged.analyze(cap, hints)
-    mode = "select" if args.select else args.mode
-    window = (int(args.window[0] * cap.rate), int(args.window[1] * cap.rate)) if args.window else None
-    if args.segment:
-        found = markers.find(res, cap, hint=json.loads(args.markers) if args.markers else None)
-        if found is None:
-            sys.exit("no marker stream found (give --markers)")
-        hit = markers.select(found["tree"], args.segment)
-        if not hit:
-            sys.exit(f"no segment matches {args.segment!r}; see: wireskein segments CAPTURE")
-        window = (hit[0].begin, hit[0].end)
-        seg_events = markers.events_in(res, cap, found, window)
-    else:
-        seg_events = None
-    doc = export.export(res, cap, mode, args.select, args.alternatives, window, args.depth)
-    if seg_events is not None:
-        doc["segment"] = {"path": hit[0].path(), "raw": hit[0].raw, "issues": hit[0].issues}
-        if args.events or mode == "all":
-            doc["events"] = seg_events
-    doc["analysis_seconds"] = round(time.perf_counter() - t0, 3)
-    doc["hints"] = hints
     text = export.dumps(doc)
     if args.out:
         args.out.write_text(text)

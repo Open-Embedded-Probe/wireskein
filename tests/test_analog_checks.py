@@ -128,7 +128,9 @@ def test_analyze_decodes_an_adc_line(tmp_path):
                        capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     doc = json.loads(r.stdout)
-    (claim,) = [c for c in doc["claims"] if c["protocol"] == "uart"]
+    assert doc["format"] == "wireskein-analysis/1" and doc["capture"]["tick_hz"] == [1_000_000, 1]
+    (part,) = doc["parts"]
+    (claim,) = [c for c in part["claims"] if c["protocol"] == "uart"]
     assert claim["roles"] == {"data": "TX"}
     assert "hello adc" in json.dumps(claim["result"])
     r = subprocess.run([sys.executable, "-m", "wireskein", "analyze", str(p), "--threshold", "NOPE=1"],

@@ -77,3 +77,16 @@ def test_cli(tmp_path):
                     "--out", str(out)], check=True)
     doc = json.loads(out.read_text())
     assert doc["format"] == FORMAT and doc["capture"]["complete"] is True and "lost" not in doc["capture"]
+
+
+def test_analyze_is_the_same_family_of_document(tmp_path):
+    from wireskein.decode import analyze_file
+    lost = [{"after_part": 0, "reason": "probe dropped a segment (no room)", "ticks": 2000}]
+    doc = analyze_file(_file(tmp_path / "c.wireskein", lost), {"protocols": ["i2c"]})
+    assert doc["format"] == FORMAT and doc["hints"] == {"protocols": ["i2c"]} and doc["capture"]["complete"] is False
+    assert [(p["part"], p["tick0"], p["start_ns"]) for p in doc["parts"]] == [(0, 0, 5_000_000), (1, 3000, 9_000_000)]
+    assert all("claims" in p for p in doc["parts"])                    # each part analysed on its own
+    with pytest.raises(ValueError, match="--part"):
+        analyze_file(tmp_path / "c.wireskein", window_s=(0, 0.0005))
+    one = analyze_file(tmp_path / "c.wireskein", window_s=(0, 0.0005), part=1)
+    assert [p["part"] for p in one["parts"]] == [1] and one["parts"][0]["window"] == [0, 500]

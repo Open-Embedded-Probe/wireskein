@@ -116,6 +116,22 @@ analyze の書き出し（`--mode final`、`depth` まで）の層。刻みは�
 - **見えなかった**: 区間の間、または欠落
 - **読めなかった**: 未解釈のかたまり
 
-## 4. 安定性
+## 4. analyze が見つけたもの
+
+`wireskein analyze CAPTURE`（Python では `wireskein.decode.analyze_file(path, hints, ...)`）は、役割を与えずに、同じ
+家族の文書を書きます: `format`、`wireskein`、`capture`（§2）と `parts[]`。ただし `spec` の代わりに `hints`（試すよう
+頼んだもの。`--hint` / `--devices`）を持ち、各区間は `buses` の代わりに次を持ちます。
+
+| キー | 意味 |
+| --- | --- |
+| `part`、`ticks`、`tick0`、`start_ns` など | §2.1 と同じ |
+| `claims[]` | 証拠が支えるもの: `protocol`、`roles`（役割 → チャンネル）、`verdict`（`confirmed` / `likely` / `ambiguous` / `unknown-sync`）、`score`、`margin`、`params`。さらに `result`（`--mode final`、`--depth` まで）、`layers` と `evidence`（`--mode all`）、または `--select` で選んだ層。刻みは区間の刻み 0 から |
+| `relations[]` | 一緒に読む主張の組（コマンドの行とその応答: `scpi`） |
+| `window`、`segment`、`events` | `--window` / `--segment` のとき（1 つの区間の中の範囲。区間が 2 つ以上なら `--part` で選ぶ） |
+
+WireSkein のファイルは区間ごとに解析します。`.sr`、VCD、fixture のディレクトリは 1 つの区間です。何をどれだけ確かに
+主張するかは版で変わることがあります（評価のコーパスで調整するため）。キーは保ちます。
+
+## 5. 安定性
 
 形式の番号は、最初のリリースまで 1 のまま（互換の無い変更でも）。読み手は `format` を確かめ、知らないキーは無視する。

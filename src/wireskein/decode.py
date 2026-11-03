@@ -36,7 +36,7 @@ from ._engine.export import dumps, export
 from ._engine.model import Capture, Channel
 from ._engine.srio import read_sr, write_sr
 
-__all__ = ["Capture", "Channel", "analyze", "as_logic", "decode_file", "dumps", "export", "load", "save"]
+__all__ = ["Capture", "Channel", "analyze", "analyze_file", "as_logic", "decode_file", "dumps", "export", "load", "save"]
 
 FORMAT = "wireskein-analysis/1"
 IDLE_S = 1e-3          # a bus with no bit times of its own: activity apart by more than this is two bursts
@@ -259,20 +259,84 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def _capture_of(path: Path, raw: dict) -> dict:
+    tick = Fraction(*raw["tick_hz"])
+    return {"file": path.name, "sha256": _sha256(path) if path.is_file() else None, "id": raw.get("id"),
+            "tick_hz": [tick.numerator, tick.denominator], "complete": raw["complete"],
+            **({"lost": raw["lost"]} if raw.get("lost") else {}), "layout": raw["layout"], "parts": len(raw["parts"])}
+
+
+def _part_head(head: dict, k: int, ticks: int) -> dict:
+    meta = head.get("meta", {})
+    return {"part": k, "ticks": ticks, **({"tick0": head["tick0"]} if "tick0" in head else {}),
+            **{x: meta[x] for x in ("start_ns", "start_uncertainty_ns", "boot_id") if x in meta}}
+
+
 def decode_file(path: str | Path, spec: dict) -> dict:
     """The document for a WireSkein file: every part decoded with the spec's roles."""
     path = Path(path)
     spec = _spec(spec)
     raw = fileformat.read_header(path)
-    tick = Fraction(*raw["tick_hz"])
-    doc = {"format": FORMAT, "wireskein": __version__, "spec": spec,
-           "capture": {"file": path.name, "sha256": _sha256(path), "id": raw.get("id"),
-                       "tick_hz": [tick.numerator, tick.denominator], "complete": raw.get("complete", True),
-                       **({"lost": raw["lost"]} if raw.get("lost") else {}), "layout": raw.get("layout", "timeline"),
-                       "parts": len(raw["parts"])},
-           "parts": []}
+    doc = {"format": FORMAT, "wireskein": __version__, "spec": spec, "capture": _capture_of(path, raw), "parts": []}
     for k in range(len(raw["parts"])):
         head = fileformat.part_view(raw, k)
         cap = fileio.load(path, k)
         doc["parts"].append(_part(cap, spec, head))
+    return doc
+
+
+def analyze_file(path: str | Path, hints: dict | None = None, mode: str = "final", select: list[str] | None = None,
+                 alternatives: bool = False, depth: str = "protocol", window_s: tuple[float, float] | None = None,
+                 segment: str | None = None, markers_hint: dict | None = None, events: bool = False,
+                 thresholds: dict | None = None, part: int | None = None) -> dict:
+    """What analyze finds in a capture, as the same family of document as decode_file (wireskein-analysis): the
+    capture, then each part with its claims (the export of `mode`, ticks from the part's tick 0). A WireSkein file
+    is analysed part by part (analysis never crosses a gap); a .sr, a VCD or a fixture directory is one part.
+    window_s / segment pick a time range inside one part: `part` names it when the file has several."""
+    import time
+    from ._engine import markers
+    path = Path(path)
+    if path.is_file() and fileformat.sniff(path) == "wireskein":
+        raw = fileformat.read_header(path)
+        heads = [fileformat.part_view(raw, k) for k in range(len(raw["parts"]))]
+        views = None
+    else:
+        v = load(path)
+        tick = Fraction(v.meta.get("tick_hz") or Fraction(v.rate).limit_denominator(10**9))
+        raw = {"id": v.meta.get("capture_id"), "tick_hz": [tick.numerator, tick.denominator],
+               "complete": v.meta.get("complete", True), "lost": v.meta.get("lost", []),
+               "layout": v.meta.get("layout", "timeline"), "parts": [{}]}
+        heads, views = [{"meta": v.meta, "tick0": 0}], [v]
+    if (window_s or segment) and part is None and len(heads) > 1:
+        raise ValueError(f"{path}: {len(heads)} parts: give the part a window or segment is inside (--part)")
+    ks = [part] if part is not None else range(len(heads))
+    doc = {"format": FORMAT, "wireskein": __version__, "hints": hints, "capture": _capture_of(path, raw), "parts": []}
+    t0 = time.perf_counter()
+    for k in ks:
+        if not 0 <= k < len(heads):
+            raise ValueError(f"{path}: part {k} of {len(heads)}")
+        cap = views[k] if views is not None else fileio.load(path, k)
+        if thresholds:
+            cap = as_logic(cap, thresholds)
+        res = staged.analyze(cap, hints)
+        window = (int(window_s[0] * cap.rate), int(window_s[1] * cap.rate)) if window_s else None
+        seg_events = hit = None
+        if segment:
+            found = markers.find(res, cap, hint=markers_hint)
+            if found is None:
+                raise ValueError("no marker stream found (give --markers)")
+            hit = markers.select(found["tree"], segment)
+            if not hit:
+                raise ValueError(f"no segment matches {segment!r}; see: wireskein segments CAPTURE")
+            window = (hit[0].begin, hit[0].end)
+            seg_events = markers.events_in(res, cap, found, window)
+        ex = export(res, cap, "select" if select else mode, select, alternatives, window, depth)
+        out = {**_part_head(heads[k], k, cap.n_samples), "claims": ex["claims"],
+               **{x: ex[x] for x in ("window", "relations") if x in ex}}
+        if hit:
+            out["segment"] = {"path": hit[0].path(), "raw": hit[0].raw, "issues": hit[0].issues}
+            if events or mode == "all":
+                out["events"] = seg_events
+        doc["parts"].append(out)
+    doc["analysis_seconds"] = round(time.perf_counter() - t0, 3)
     return doc
