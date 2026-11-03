@@ -1,4 +1,4 @@
-"""wireskein-run/3 and the check statuses (docs/run-format.ja.md)."""
+"""wireskein-run/1 and the check statuses (docs/run-format.ja.md)."""
 
 import json
 import subprocess
@@ -22,7 +22,7 @@ def test_a_capture_belongs_to_the_section_it_was_taken_in(tmp_path):
         cap(rec, armed)
     rec.close()
     doc = json.loads((tmp_path / "run.json").read_text())
-    assert doc["format"] == FORMAT == "wireskein-run/3"
+    assert doc["format"] == FORMAT == "wireskein-run/1"
     assert doc["captures"][0]["path"] == "t"
     assert [r["status"] for r in verify(tmp_path)["results"]] == ["ok"]      # by time it would have missed
 

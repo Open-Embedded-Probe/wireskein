@@ -57,7 +57,7 @@ def load_capture(run_dir: Path, c: dict) -> list[Capture]:
     parts = fileio.load_parts(run_dir / c["file"])
     for cap in parts:
         label = c["file"] if len(parts) == 1 else f"{c['file']}#part{cap.meta['part']}"
-        cap.meta.update(file=c["file"], t0=c["t0"], label=label)
+        cap.meta.update(file=c["file"], host_ns=c["host_ns"], label=label)
     return parts
 
 
@@ -71,11 +71,11 @@ def _lost(cap: Capture) -> str:
 def segment_tree(doc: dict):
     """The sections of the log's headings, on the host clock in microseconds. Each section keeps the log lines that
     open and close it (opened / closed: None when the log ends it), whose probe_ns place it in a capture."""
-    log = sorted(doc["log"], key=lambda e: e["t"])
+    log = sorted(doc["log"], key=lambda e: e["host_ns"])
     lines = [(e["text"], i, i) for i, e in enumerate(log) if e["src"] == "marker"]
-    end = int(max([e["t"] for e in log] + [c["t0"] for c in doc["captures"]] + [0]) * 1e6) + 1
+    end = max([e["host_ns"] for e in log] + [c["host_ns"] for c in doc["captures"]] + [0]) // 1000 + 1
     tree = markers.build(lines, markers.load_dialects()["heading"], len(log))
-    us = lambda i: int(log[i]["t"] * 1e6) if i < len(log) else end          # noqa: E731
+    us = lambda i: log[i]["host_ns"] // 1000 if i < len(log) else end       # noqa: E731
     for s in tree.walk():                      # built on the lines' order: back to their times
         s.opened = log[s.begin] if s.kind != "root" else None
         s.closed = log[s.end] if s.end is not None and s.end < len(log) else None
@@ -1188,7 +1188,7 @@ def verify(run_dir: str | Path) -> dict:
         raise ValueError(f"{run_dir}: format {doc.get('format')!r}, expected {FORMAT!r}")
     tree = segment_tree(doc)
     segs = {s.path(): s for s in tree.walk() if s.kind != "root"}
-    caps = [(c, int(c["t0"] * 1e6)) for c in doc["captures"]]
+    caps = [(c, c["host_ns"] // 1000) for c in doc["captures"]]
     results: list[Result] = []
     for path, spec in doc["expect"].items():
         seg = segs.get(path)

@@ -19,8 +19,8 @@ def _wave(n: int, highs: list[tuple[int, int]]) -> bytes:
 
 
 def _rows(lines: list[tuple[int, str]], armed: float, boot=7, probe="usb:p4x"):
-    """(tick, text) as probe_log.rows() gives them: t on time.monotonic() (the capture's start at armed)."""
-    return [{"t": armed + tick * 1e-6, "src": "marker" if text.startswith("#") else "dut", "text": text,
+    """(tick, text) as probe_log.rows() gives them: t on time.monotonic() seconds (the capture's start at armed, ns)."""
+    return [{"t": armed / 1e9 + tick * 1e-6, "src": "marker" if text.startswith("#") else "dut", "text": text,
              "probe_ns": START_NS + tick * 1000, "boot_id": boot, "probe": probe} for tick, text in lines]
 
 

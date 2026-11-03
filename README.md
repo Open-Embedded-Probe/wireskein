@@ -69,7 +69,7 @@ with rec.section(1, "test_pwm"):
         with rec.section(2, f"duty={duty}", expect=want):
             rec.command(f"PWM {duty}")          # what the host sent
             rec.reply(reply_line)               # what the device answered
-            t = rec.armed()                     # time.monotonic() right after arming the capture
+            t = rec.armed()                     # time.monotonic_ns() right after arming the capture
             data = read_capture()               # the probe's samples: one byte per sample, bit k = pin k
             rec.capture(t, rate, interleaved=data, names=["PA1", "PA0"], start_ns=seg.start_ns, start_uncertainty_ns=seg.start_uncertainty_ns)
 rec.close()
@@ -284,7 +284,7 @@ doc = export(res, cap)
 
 Until version 1, breaking changes are allowed and backward compatibility is not kept.
 
-- The run format (`wireskein-run/N`) and the file format (`wireskein/N`) get a new number on every incompatible change. An unknown number is refused with a clear error; older numbers are not read.
+- Every format is number 1 until the first release (`wireskein/1`, `wireskein-run/1`, `wireskein-analysis/1` and the parts of a file), also through incompatible changes; from then on an incompatible change raises the number, an addition does not. A reader refuses a number it does not know, with a clear error, and ignores keys it does not know; older numbers are not read.
 - Additions (new keys, new arguments) keep the current meaning by default.
 - `wireskein._engine` is internal.
 

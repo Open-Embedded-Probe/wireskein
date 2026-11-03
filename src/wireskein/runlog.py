@@ -5,7 +5,8 @@ A run is a directory:
     run.json          log, captures and expectations
     c0001.wireskein   one capture (wireskein.fileformat: each channel at its own rate)
 
-The log is on the host clock (seconds from the recorder's start). It holds heading
+The log is on the host clock (host_ns: time.monotonic_ns(), the clock a capture's meta.probe.clock reads the host
+on). It holds heading
 markers ("# test", "## step", "##" closes; docs/markers.ja.md), the
 commands sent and the replies received. Commands go over the probe's console, not
 a captured line, so the markers live here, not in the waveform; each capture is
@@ -17,7 +18,7 @@ expectations recorded for its path.
     with rec.section(1, "test_pwm"):
         with rec.section(2, "duty=64", expect=[square("PA1", 1000, 64 / 255)]):
             rec.command("PWM 64"); rec.reply("PWM duty=64")
-            armed = rec.armed()                       # time.monotonic() right after arming
+            armed = rec.armed()                       # time.monotonic_ns() right after arming
             data = capture.read_all(n)
             rec.capture(armed, 2_000_000, interleaved=data, names=["PA1", "PA0"],
                         start_ns=seg.start_ns, start_uncertainty_ns=seg.start_uncertainty_ns)
@@ -44,7 +45,7 @@ from pathlib import Path
 
 from . import _fileformat as fileformat
 
-FORMAT = "wireskein-run/3"          # docs/run-format.ja.md
+FORMAT = "wireskein-run/1"          # docs/run-format.ja.md
 
 __all__ = ["FORMAT", "Recorder", "dead_time", "ends", "i2c", "i2c_timing", "i2s", "ir", "level", "lin", "only_moving",
            "onewire", "phase", "pulses", "quadrature", "rgb_led", "sd_spi", "skew", "spi", "square", "starts", "uart",
@@ -55,7 +56,7 @@ class Recorder:
     def __init__(self, out: str | Path, **meta):
         self.dir = Path(out)
         self.dir.mkdir(parents=True, exist_ok=True)
-        self.t0 = time.monotonic()
+        self.started_ns = time.monotonic_ns()
         self.doc = {"format": FORMAT, "meta": meta, "log": [], "captures": [], "expect": {}}
         self.path: list[str] = []
         self._occ: list[tuple[str, int]] = []           # the open headings: (name, occurrence under its parent)
@@ -63,11 +64,12 @@ class Recorder:
         self._expect: dict[tuple, dict] = {}            # expectations by occurrence path, rendered in close()
         self._paths: dict[str, dict] = {}               # expectations given by their path (expect())
 
-    def now(self) -> float:
-        return time.monotonic() - self.t0
+    def now(self) -> int:
+        """The host clock the log is on: time.monotonic_ns()."""
+        return time.monotonic_ns()
 
-    def _log(self, src: str, text: str, t: float | None = None) -> None:
-        self.doc["log"].append({"t": self.now() if t is None else t, "src": src, "text": text})
+    def _log(self, src: str, text: str) -> None:
+        self.doc["log"].append({"host_ns": self.now(), "src": src, "text": text})
 
     # markers
     def heading(self, level: int, name: str = "") -> None:
@@ -113,11 +115,12 @@ class Recorder:
     def probe_lines(self, rows: list[dict], lost: list[str] = (), probe: str | None = None,
                     boot_id: str | None = None) -> None:
         """Lines the probe kept on its own clock (oep_client.probe_log.rows()): each {"t": time.monotonic() seconds,
-        "src", "text", "probe_ns", "boot_id", "probe"}, written on the recorder's clock with the rest kept; a
-        heading among them opens and closes sections like heading(). lost: what the probe says was dropped (its
-        log overflowed, marks missing); each fails the run (docs/run-format.ja.md §2)."""
+        "src", "text", "probe_ns", "boot_id", "probe"}, written with host_ns (that host time in ns) and the rest
+        kept; a heading among them opens and closes sections like heading(). lost: what the probe says was dropped
+        (its log overflowed, marks missing); each fails the run (docs/run-format.ja.md §2)."""
         for r in rows:
-            self.doc["log"].append({**r, "t": r["t"] - self.t0})
+            line = {k: v for k, v in r.items() if k != "t"}
+            self.doc["log"].append({"host_ns": round(r["t"] * 1e9), **line})
         for why in lost:
             self._log("lost", why)
             self.doc["log"][-1].update({k: v for k, v in (("probe", probe), ("boot_id", boot_id)) if v is not None})
@@ -127,19 +130,21 @@ class Recorder:
         self._paths.setdefault(path, {"checks": []})["checks"] += list(checks)
 
     # captures
-    def armed(self) -> float:
-        """time.monotonic() right after the capture was armed; pass it to capture()."""
-        return time.monotonic()
+    def armed(self) -> int:
+        """time.monotonic_ns() right after the capture was armed; pass it to capture()."""
+        return time.monotonic_ns()
 
-    def capture(self, armed: float, tick_hz: int | float | Fraction, *, interleaved: bytes | None = None,
+    def capture(self, armed: int, tick_hz: int | float | Fraction, *, interleaved: bytes | None = None,
                 names: list[str] | None = None, width: int = 8, positions: list[int] | None = None,
                 n: int | None = None, channels: list[fileformat.Channel] | None = None,
                 attachments: dict | None = None, **meta) -> str:
-        """Store one capture as cNNNN.wireskein. armed: time.monotonic() when it was
+        """Store one capture as cNNNN.wireskein. armed: time.monotonic_ns() when it was
         armed (Recorder.armed(), or the capture client's own stamp). Give either
         interleaved + names (+ width / positions / n for other sample layouts)
         or channels. meta goes into the capture file (start_ns, start_uncertainty_ns, trigger_tick, time_base_slipped, ...);
         attachments are free-form files stored with it (see wireskein.fileformat.attach)."""
+        if not isinstance(armed, int):
+            raise TypeError(f"armed is time.monotonic_ns() (an int, Recorder.armed()), not {armed!r}")
         if (interleaved is None) == (channels is None):
             raise ValueError("give either interleaved (with names) or channels")
         if channels is None:
@@ -148,7 +153,7 @@ class Recorder:
             channels = fileformat.from_interleaved(interleaved, names, width, positions, n)
         name = f"c{len(self.doc['captures']) + 1:04d}{fileformat.SUFFIX}"
         fileformat.write(self.dir / name, tick_hz, channels, attachments, **meta)
-        entry = {"file": name, "t0": armed - self.t0, "channels": [c.name for c in channels]}
+        entry = {"file": name, "host_ns": armed, "channels": [c.name for c in channels]}
         if any(n for n, _ in self._occ):
             entry["path"] = self._key(tuple(self._occ))       # the section open now: verify assigns it there
         self.doc["captures"].append(entry)
@@ -170,7 +175,7 @@ class Recorder:
         self.doc["expect"] = {self._key(occ): spec for occ, spec in self._expect.items()}
         for path, spec in self._paths.items():
             self.doc["expect"].setdefault(path, {"checks": []})["checks"] += spec["checks"]
-        self.doc["log"].sort(key=lambda e: e["t"])       # the probe's lines come late, each at its own time
+        self.doc["log"].sort(key=lambda e: e["host_ns"])     # the probe's lines come late, each at its own time
         for c in self.doc["captures"]:
             _probe_markers(self.dir / c["file"], self.doc["log"])
         p = self.dir / "run.json"

@@ -69,7 +69,7 @@ with rec.section(1, "test_pwm"):
         with rec.section(2, f"duty={duty}", expect=want):
             rec.command(f"PWM {duty}")          # PC が送ったもの
             rec.reply(reply_line)               # デバイスの応答
-            t = rec.armed()                     # キャプチャを開始した直後の time.monotonic()
+            t = rec.armed()                     # キャプチャを開始した直後の time.monotonic_ns()
             data = read_capture()               # プローブのサンプル。1 サンプル 1 バイト、ビット k がピン k
             rec.capture(t, rate, interleaved=data, names=["PA1", "PA0"], start_ns=seg.start_ns, start_uncertainty_ns=seg.start_uncertainty_ns)
 rec.close()
@@ -271,7 +271,7 @@ doc = export(analyze(cap, {"protocols": ["spi"]}), cap)
 
 版 1 までは、互換のない変更をしてよいものとし、後方互換は保ちません。
 
-- 記録の形式（`wireskein-run/N`）とファイルの形式（`wireskein/N`）は、互換のない変更のたびに番号を上げます。知らない番号のものは、はっきりしたエラーで断ります（古い番号を読み続ける口は作りません）。
+- どの形式も、最初のリリースまでは番号 1 です（`wireskein/1`、`wireskein-run/1`、`wireskein-analysis/1`、ファイルの中の部分）。互換のない変更でも上げません。リリースの後は、互換のない変更で番号を上げ、足す変更では上げません。読み手は、知らない番号ははっきりしたエラーで断り、知らないキーは無視します。古い番号を読み続ける口は作りません。
 - 足す変更（新しいキー、新しい引数）は、既定で今の意味を保つ形で入れます。
 - `wireskein._engine` は内部です。
 

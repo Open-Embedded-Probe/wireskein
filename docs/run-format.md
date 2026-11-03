@@ -1,4 +1,4 @@
-# Run format `wireskein-run/3` and verification results
+# Run format `wireskein-run/1` and verification results
 
 [日本語](run-format.ja.md)
 
@@ -19,10 +19,10 @@ The run is a directory, with each capture in a separate file, so that if the tes
 
 | Key | Type | Meaning |
 | --- | --- | --- |
-| `format` | string | `"wireskein-run/3"`. Readers reject runs with any other value |
+| `format` | string | `"wireskein-run/1"`. Readers reject runs with any other value |
 | `meta` | object | Information about the run (what was passed to `Recorder(out, **meta)`) |
-| `log` | array | Log: `{"t": seconds, "src": "marker" / "host" / "dut" / "note" / "lost", "text": string}`. `t` is seconds since the recorder started (host clock). Lines are in `t` order. Lines on the probe's clock also have `probe_ns` and more (§2.4) |
-| `captures` | array | Captures: `{"file": name, "t0": seconds, "channels": [name...], "path": segment path}` |
+| `log` | array | Log: `{"host_ns": integer, "src": "marker" / "host" / "dut" / "note" / "lost", "text": string}`. `host_ns` is the host clock, `time.monotonic_ns()` (the clock a capture's `meta.probe.clock` reads the host on). Lines are in `host_ns` order. Lines on the probe's clock also have `probe_ns` and more (§2.4) |
+| `captures` | array | Captures: `{"file": name, "host_ns": integer, "channels": [name...], "path": segment path}`; `host_ns` is when it was armed |
 | `expect` | object | Maps a segment path to `{"checks": [check...]}` |
 
 ### 2.1 Segments and paths
@@ -37,7 +37,7 @@ The run is a directory, with each capture in a separate file, so that if the tes
 
 - `captures[].path` is the path of the deepest segment open when the capture was taken. When taken outside any segment, the key itself is omitted.
 - Verification treats a capture with `path` as belonging to that segment (and its ancestors).
-- A capture without `path` (in a run written by another tool) is assigned to the segment that contains `t0`.
+- A capture without `path` (in a run written by another tool) is assigned to the segment that contains its `host_ns`.
 - A segment opened and closed by lines on the probe's clock is the exception: the captures holding it are assigned to it, cut to its time (§2.4).
 
 ### 2.3 Checks
@@ -69,7 +69,7 @@ Code on the probe may keep a log on its own clock (oep-probe-arduino's `OepProbe
 | `probe` | string (optional) | Which probe (e.g. `"oep://30eda0ea068b"`: the probe's place, its OEP address without the route, so one probe has one value whatever way it was reached) |
 | `uncertainty_ns` | number (optional) | Uncertainty of the line's own time (±ns) |
 
-- `t` is always given too (the probe's time converted to the host clock). The segment tree and the order of lines come from `t`.
+- `host_ns` is always given too (the probe's time converted to the host clock). The segment tree and the order of lines come from `host_ns`.
 - Heading lines (`src: "marker"`) open and close segments like any heading. Other lines are `src: "dut"`.
 - **A segment whose opening and closing lines both have `probe_ns`** is placed by its position in the captures. When a capture part's `meta.start_ns` is on the same clock (the same `boot_id`, and the same `probe` when given), a line's tick is (`probe_ns` − `start_ns`) × the tick rate. A capture holding the segment is assigned to it whatever its recorded `path`, and only the segment's time is cut out and checked.
 - The bounds' uncertainty is the capture part's `start_uncertainty_ns` plus the lines' `uncertainty_ns`. A check runs on two windows, the bounds moved out and moved in; when the verdicts differ, it is `unchecked` (the verdict depends on where the bounds fall), never silently `ok`. A segment shorter than its uncertainty is `unchecked`.

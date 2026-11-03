@@ -6,7 +6,7 @@ This document collects the decisions made for the implementation, with their rea
 
 ## 1. Versions and compatibility
 
-- **Until version 1, incompatible changes are allowed. Backward compatibility is not considered.** There is no path for reading files in old formats, and no aliases for old names. The format names (`wireskein/1`, `wireskein-run/3`) are bumped on every incompatible change, and unknown versions are rejected with a clear error.
+- **Until version 1, incompatible changes are allowed. Backward compatibility is not considered.** There is no path for reading files in old formats, and no aliases for old names. Every format is number 1 until the first release, also through incompatible changes; from then on an incompatible change raises it. Unknown numbers are rejected with a clear error.
   - Reason: so that mistakes in the formats and the API can be fixed now, while users are few. Silently reading an old format would misinterpret keys whose meaning has changed.
 
 ## 2. Implementation language and location

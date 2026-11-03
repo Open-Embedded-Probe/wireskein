@@ -180,7 +180,7 @@ def test_unknown_encoding_is_skipped_and_rewriting_refused(tmp_path):
     import shutil
     shutil.copy(tmp_path / "b.wireskein", tmp_path / "run" / "c0001.wireskein")
     doc = json.loads((tmp_path / "run" / "run.json").read_text())
-    doc["captures"] = [{"file": "c0001.wireskein", "t0": doc["log"][0]["t"], "channels": ["FAST", "SLOW", "VBUS"]}]
+    doc["captures"] = [{"file": "c0001.wireskein", "host_ns": doc["log"][0]["host_ns"], "channels": ["FAST", "SLOW", "VBUS"]}]
     (tmp_path / "run" / "run.json").write_text(json.dumps(doc))
     (res,) = verify(tmp_path / "run")["results"]
     assert res["ok"] is None and "VBUS has encoding 'edges'" in res["reason"]
