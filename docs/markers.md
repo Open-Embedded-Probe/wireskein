@@ -68,4 +68,30 @@ Existing run syntaxes are read by adding a TOML dialect to `decl/markers/`. Ther
 | `point` | A segment that lasts until the next `point` at the same level, or the end of the parent |
 | `attr` | Attaches a key and value to the innermost segment (as JSON if it parses as JSON) |
 
-Example: `i2cdb` (a syntax that wraps with `CASE_BEGIN` / `CASE_END`, treats `PHASE` as segments, and `INPUT` and `RESULT` as attributes).
+Example: a run that wraps each case in `CASE_BEGIN` / `CASE_END`, marks its steps with `PHASE` and its results with `RESULT`, as a TOML file in `decl/markers/`:
+
+```toml
+[dialect]
+name = "cases"
+levels = ["case", "phase"]
+
+[[marker]]                       # CASE_BEGIN name ... CASE_END name encloses a case
+pattern = '^CASE_BEGIN (?P<name>.+)$'
+action = "begin"
+level = "case"
+
+[[marker]]
+pattern = '^CASE_END (?P<name>.+)$'
+action = "end"
+level = "case"
+
+[[marker]]                       # PHASE name: a section until the next PHASE or the case's end
+pattern = '^PHASE (?P<name>\S+)'
+action = "point"
+level = "phase"
+
+[[marker]]                       # INPUT / RESULT: attributes of the innermost open segment
+pattern = '^RESULT (?P<value>.+)$'
+action = "attr"
+key = "result"
+```

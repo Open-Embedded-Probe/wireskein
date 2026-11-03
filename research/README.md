@@ -36,14 +36,6 @@ Generator profiles: `mixed` (UART / I²C / SPI and decoys), `uartlike` (UART / L
 
 | Script | What it checks |
 | --- | --- |
-| `stage_eval.py [n]` | Whether each stage reduces the information, whether the typed results are right, the time per stage |
-| `device_eval.py [n]` | Devices with evidence are identified; nothing is claimed without evidence |
-| `hint_eval.py [n]` | The effect of hints (a protocol list; per pin protocol, role and baud rate) |
-| `upper_eval.py [n]` | Whether upper-layer support (NMEA, Modbus RTU, text) helps UART verdicts |
-| `scpi_eval.py [n]` | TX / RX pairs and SCPI |
-| `baud_segment_eval.py [n] [--stress baudhop]` | UART baud rate changes mid-stream |
-| `plugin_reuse_eval.py [n]` | Whether UART, LIN and DMX512 can share RateBlocks -> Chars |
-| `m2_eval.py [n]` | Single-line features (idle lines, idle level, bit time, clock-likeness) |
 | `large_eval.py` | Real records with a million edges (RVSWD / SWIO flash writes) |
 
 ## Rebuilding the corpus

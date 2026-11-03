@@ -36,14 +36,6 @@ uv run python evaluate.py --synth 200 --tag NAME                   # 実記録�
 
 | スクリプト | 確かめること |
 | --- | --- |
-| `stage_eval.py [n]` | 段ごとに情報量が減っているか、型付きの結果が正しいか、段ごとの時間 |
-| `device_eval.py [n]` | 証拠のあるデバイスを識別し、証拠のないものを主張しないか |
-| `hint_eval.py [n]` | ヒント（方式の一覧、ピンごとの方式・役割・ボーレート）の効果 |
-| `upper_eval.py [n]` | 上位（NMEA、Modbus RTU、テキスト）の支持が UART の判定に効くか |
-| `scpi_eval.py [n]` | TX / RX の組と SCPI |
-| `baud_segment_eval.py [n] [--stress baudhop]` | UART の途中のボーレート切り替え |
-| `plugin_reuse_eval.py [n]` | RateBlocks → Chars を UART・LIN・DMX512 が共有できるか |
-| `m2_eval.py [n]` | 単線の特徴（静止線、アイドルレベル、ビット時間、クロックらしさ） |
 | `large_eval.py` | 100 万エッジ級の実記録（RVSWD / SWIO の書き込み） |
 
 ## コーパスの作り直し

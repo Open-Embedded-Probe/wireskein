@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) The I2CDeviceDB harness's marker dialect (`i2cdb`) is gone (nothing used it; docs/markers §4 shows a dialect inline instead), and so are research/'s one-off comparisons (stage_eval, device_eval, hint_eval, upper_eval, scpi_eval, baud_segment_eval, plugin_reuse_eval, m2_eval); evaluate, large_eval and the corpus tools stay.
+- (JA) I2CDeviceDB の harness のマーカーの方言（`i2cdb`）を消した（どこからも使われていない。docs/markers §4 には方言を例として直に書いた）。research/ の一度きりの比較（stage_eval、device_eval、hint_eval、upper_eval、scpi_eval、baud_segment_eval、plugin_reuse_eval、m2_eval）も消した。evaluate、large_eval とコーパスの道具は残す。
 - (EN) The report of `wireskein verify --json` says its format, `"wireskein-report/1"` (run-format §3, which now lists its keys); its `log` lines carry `host_ns`.
 - (JA) `wireskein verify --json` の報告は、形式 `"wireskein-report/1"` を持つ（run-format §3 に、キーの一覧を書いた）。その `log` の行は `host_ns` を持つ。
 - (EN) **Breaking:** `wireskein analyze` writes the same family of document as `decode` (`wireskein-analysis/1`, analysis-format §4; `wireskein.decode.analyze_file`): `format`, `wireskein`, `hints`, `capture` (file, sha256, id, `tick_hz` exact, complete, lost, layout) and `parts[]` (part, ticks, tick0, start_ns, its `claims`, `relations`), in place of one export with a float `rate`. A capture in parts is analysed part by part (it was refused); `--window` / `--segment` take `--part` when there are several.

@@ -68,4 +68,30 @@ PWM duty=64
 | `point` | 次の同じ階層の `point` か、親の終わりまで続く区間 |
 | `attr` | いちばん内側の区間にキーと値を付ける（JSON として読めれば JSON） |
 
-例: `i2cdb`（`CASE_BEGIN` / `CASE_END` で囲み、`PHASE` を区間、`INPUT` と `RESULT` を属性にする書式）。
+例: ケースを `CASE_BEGIN` / `CASE_END` で囲み、ステップを `PHASE`、結果を `RESULT` で示す記録。`decl/markers/` に置く TOML:
+
+```toml
+[dialect]
+name = "cases"
+levels = ["case", "phase"]
+
+[[marker]]                       # CASE_BEGIN name ... CASE_END name encloses a case
+pattern = '^CASE_BEGIN (?P<name>.+)$'
+action = "begin"
+level = "case"
+
+[[marker]]
+pattern = '^CASE_END (?P<name>.+)$'
+action = "end"
+level = "case"
+
+[[marker]]                       # PHASE name: a section until the next PHASE or the case's end
+pattern = '^PHASE (?P<name>\S+)'
+action = "point"
+level = "phase"
+
+[[marker]]                       # INPUT / RESULT: attributes of the innermost open segment
+pattern = '^RESULT (?P<value>.+)$'
+action = "attr"
+key = "result"
+```
