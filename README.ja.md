@@ -240,7 +240,6 @@ wireskein convert c0001.wireskein c0001.sr     # PulseView 用: 1 つのレー�
 wireskein convert c0001.sr c0001.wireskein     # 戻す: チャンネルは本当のレートに戻る
 wireskein convert c0001.wireskein c0001.vcd    # GTKWave など: 変化点だけ。各チャンネルは自分のレートのまま
 wireskein convert saleae.vcd s.wireskein       # ほかの道具の VCD: 刻みは変化の時刻の最大公約数
-wireskein convert corpus/fixtures/real/<id> capture.sr
 ```
 
 `.sr` は全チャンネルで 1 つのレートなので、遅いチャンネルは最も速いレートに水増しします。各チャンネルの本当のレートは、`.sr` の中の `wireskein.json` に残します。sigrok はこのファイルを無視し、WireSkein は読み戻します。PulseView では、水増しした値も取った値と同じに見えます。
@@ -248,7 +247,7 @@ wireskein convert corpus/fixtures/real/<id> capture.sr
 ## キャプチャを復号する
 
 ```sh
-wireskein analyze capture.wireskein          # WireSkein のファイル、sigrok の .sr、VCD、fixture のディレクトリ
+wireskein analyze capture.wireskein          # WireSkein のファイル、sigrok の .sr、VCD
 wireskein analyze capture.sr --hint '{"protocols": ["i2c"]}'
 wireskein analyze m.wireskein --threshold TX=1.0,2.3        # アナログのチャンネルも、ロジックとして読んで復号する
 wireskein segments capture.sr --results                   # UART にマーカーの行を流したキャプチャ
@@ -263,7 +262,7 @@ wireskein decode c0001.wireskein --spec '{"buses": [{"protocol": "i2c", "pins": 
 ```python
 from wireskein.decode import load, save, analyze, export
 
-cap = load("capture.wireskein")                                     # .sr や fixture のディレクトリも
+cap = load("capture.wireskein")                                     # .sr や .vcd も
 doc = export(analyze(cap, {"protocols": ["spi"]}), cap)
 ```
 
@@ -278,10 +277,9 @@ doc = export(analyze(cap, {"protocols": ["spi"]}), cap)
 ## リポジトリの構成
 
 ```text
-src/wireskein/          package（runlog、verify、analyze、cli、_engine、decl/ のデータ）
-tests/                  pytest
-research/               推定の評価のスクリプト（package に入れない）
-corpus/                 research/ が使う実記録と合成の fixture
+src/wireskein/          package（capture、runlog、verify、decode、sources、cli、_engine、decl/ のデータ）
+tests/                  pytest（tests/data: 実機のキャプチャと例）
+eval/                   analyze の推定を測る: 正解付きのコーパスとスクリプト（package に入れない）
 docs/                   仕様と設計の決定
 tools/                  ビューアの取得とリリースのスクリプト
 ```

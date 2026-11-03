@@ -249,7 +249,6 @@ wireskein convert c0001.wireskein c0001.sr     # for PulseView: one rate, slow c
 wireskein convert c0001.sr c0001.wireskein     # back: channels get their real rate again
 wireskein convert c0001.wireskein c0001.vcd    # GTKWave etc.: only the changes, each channel at its own rate
 wireskein convert saleae.vcd s.wireskein       # a VCD from elsewhere: the tick is the common divisor of its times
-wireskein convert corpus/fixtures/real/<id> capture.sr
 ```
 
 A `.sr` has one sample rate for all channels, so slow channels are repeated to the fastest rate there. The real rate of each channel is kept in `wireskein.json` inside the `.sr`. sigrok ignores this file, and WireSkein reads it back. In PulseView, the repeated samples look like real ones.
@@ -257,7 +256,7 @@ A `.sr` has one sample rate for all channels, so slow channels are repeated to t
 ## Decoding a capture
 
 ```sh
-wireskein analyze capture.wireskein          # a WireSkein file, a sigrok .sr, a VCD, or a fixture directory
+wireskein analyze capture.wireskein          # a WireSkein file, a sigrok .sr or a VCD
 wireskein analyze capture.sr --hint '{"protocols": ["i2c"]}'
 wireskein analyze m.wireskein --threshold TX=1.0,2.3        # also decode an analog channel, read as logic
 wireskein analyze capture.sr --mode all --out result.json
@@ -275,7 +274,7 @@ wireskein decode c0001.wireskein --spec '{"buses": [{"protocol": "i2c", "pins": 
 ```python
 from wireskein.decode import load, save, analyze, export
 
-cap = load("capture.wireskein")                                     # or .sr / a fixture directory
+cap = load("capture.wireskein")                                     # or .sr / .vcd
 res = analyze(cap, {"protocols": ["spi"]})
 doc = export(res, cap)
 ```
@@ -291,15 +290,14 @@ Until version 1, breaking changes are allowed and backward compatibility is not 
 ## Repository layout
 
 ```text
-src/wireskein/          the package (runlog, verify, analyze, cli, _engine, decl/ data)
-tests/                  pytest
-research/               evaluation scripts for the protocol inference (not packaged)
-corpus/                 real and synthetic fixtures for research/
+src/wireskein/          the package (capture, runlog, verify, decode, sources, cli, _engine, decl/ data)
+tests/                  pytest (tests/data: real captures and examples)
+eval/                   measuring what analyze infers: the corpus with ground truth and the scripts (not packaged)
 docs/                   specifications and design decisions (English and Japanese)
 tools/                  fetching the viewer, release scripts
 ```
 
-To run the research scripts: `uv sync`, then `cd research && uv run python evaluate.py --set heldout`. See `research/README.md`.
+To measure the inference: `uv sync`, then `cd eval && uv run python evaluate.py --set heldout`. See `eval/README.md`.
 
 ## Development
 

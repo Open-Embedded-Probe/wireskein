@@ -287,7 +287,7 @@ class _Handler(BaseHTTPRequestHandler):
         from .decode import load, save
         cap = load(p)
         meta = {k: v for k, v in cap.meta.items()
-                if k not in ("file", "sr_file", "vcd_file", "vcd_not_read", "tick_hz", "unitsize", "fixture", "extras",
+                if k not in ("file", "sr_file", "vcd_file", "vcd_not_read", "tick_hz", "unitsize", "extras",
                              "skipped_channels")}
         with tempfile.TemporaryDirectory() as d:
             out = save(Path(d) / (p.stem + fileformat.SUFFIX), cap, **meta)

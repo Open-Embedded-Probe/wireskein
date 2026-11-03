@@ -1,5 +1,5 @@
-corpus/raw/
-corpus/work/
+eval/raw/
+eval/work/
 __pycache__/
 *.py[cod]
 .venv/

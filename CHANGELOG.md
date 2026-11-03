@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) The evaluation of the inference is `eval/` (not packaged): the corpus as WireSkein files beside their truth (`corpus/real/`, `corpus/synth/<set>/`; the fixture directories of capture.json + edges.npz are gone, and so is reading them: `wireskein analyze` and `convert` take a WireSkein file, a .sr or a VCD), the generator (`eval/synth.py`, out of the package), and scripts that read only what analyze exports (`wireskein.decode.analyze` / `export`). Their summaries on heldout, glitch, uartlike and the real records are the same as before. The export gives SWD's `packets` and CAN's `frames`.
+- (JA) 推定の評価は `eval/` にした（package に入れない）: コーパスは WireSkein のファイルと正解の組（`corpus/real/`、`corpus/synth/<組>/`。capture.json + edges.npz の fixture のディレクトリは無くなり、それを読む口も無くなった: `wireskein analyze` と `convert` は WireSkein のファイル、.sr、VCD を受ける）、生成器（`eval/synth.py`。package の外へ）、analyze の書き出し（`wireskein.decode.analyze` / `export`）だけを読むスクリプト。heldout、glitch、uartlike、実記録でのまとめは前と同じ。書き出しは SWD の `packets` と CAN の `frames` を出す。
 - (EN) tests/data/examples: four captures to run analyze on (a SWIO and an RVSWD session from a WCH-LinkE, two generated mixed buses), each with the buses it holds, taken from the evaluation corpus and checked as tests (analysis-format §4).
 - (JA) tests/data/examples: analyze を試す 4 つのキャプチャ（WCH-LinkE の SWIO と RVSWD のやりとり、生成した 2 つの混ざったバス）と、それぞれが持つバス。評価のコーパスから取り、試験で確かめる（analysis-format §4）。
 - (EN) The I2CDeviceDB harness's marker dialect (`i2cdb`) is gone (nothing used it; docs/markers §4 shows a dialect inline instead), and so are research/'s one-off comparisons (stage_eval, device_eval, hint_eval, upper_eval, scpi_eval, baud_segment_eval, plugin_reuse_eval, m2_eval); evaluate, large_eval and the corpus tools stay.

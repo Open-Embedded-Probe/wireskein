@@ -131,7 +131,7 @@ tried, `--hint` / `--devices`) in place of `spec`, and in each part, in place of
 | `relations[]` | Pairs of claims read together (a command line and its answers: `scpi`) |
 | `window`, `segment`, `events` | With `--window` / `--segment` (a range inside one part: `--part` names it when there are several) |
 
-Examples to run it on are in tests/data/examples (a SWIO and an RVSWD session from a WCH-LinkE, and generated I2C and SPI buses side by side), each with the buses it holds in `truth.json`: `wireskein analyze tests/data/examples/mixed-0.wireskein`. A WireSkein file is analysed part by part; a `.sr`, a VCD or a fixture directory is one part. What is claimed, and
+Examples to run it on are in tests/data/examples (a SWIO and an RVSWD session from a WCH-LinkE, and generated I2C and SPI buses side by side), each with the buses it holds in `truth.json`: `wireskein analyze tests/data/examples/mixed-0.wireskein`. A WireSkein file is analysed part by part; a `.sr` or a VCD is one part. What is claimed, and
 how sure, may change between versions (the analysis is tuned on an evaluation corpus); the keys are kept.
 
 ## 5. Stability

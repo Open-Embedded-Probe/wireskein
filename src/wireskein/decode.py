@@ -1,6 +1,6 @@
 """Decoding a capture: finding what it holds (`analyze`), or decoding the buses a spec names (`decode_file`).
 
-    cap = load("capture.wireskein", part=0)  # one part as the decoders read it; a .sr, a VCD or a fixture directory too
+    cap = load("capture.wireskein", part=0)  # one part as the decoders read it; a .sr or a VCD too
     res = analyze(cap, {"protocols": ["i2c"]})
     doc = export(res, cap)                   # JSON-ready dict, as `wireskein analyze` prints
     doc = decode_file("c0001.wireskein", {"buses": [{"protocol": "i2c", "pins": {"scl": "SCL", "sda": "SDA"}}]})
@@ -31,7 +31,7 @@ import numpy as np
 
 from . import __version__, _fileformat as fileformat
 from ._engine import export as _exp
-from ._engine import fileio, fixture, staged, timing
+from ._engine import fileio, staged, timing
 from ._engine.export import dumps, export
 from ._engine.model import Capture, Channel
 from ._engine.srio import read_sr, write_sr
@@ -44,11 +44,8 @@ IDLE_BITS = 16         # else: more than this many bit times without a change
 
 
 def load(path: str | Path, part: int | None = None) -> Capture:
-    """A WireSkein file (wireskein.fileformat; a capture of several parts needs `part`), a sigrok .sr, or a fixture
-    directory (capture.json + edges). Files are told apart by their content."""
+    """A WireSkein file (a capture of several parts needs `part`), a sigrok .sr or a VCD, told apart by content."""
     path = Path(path)
-    if path.is_dir():
-        return fixture.load_capture(path)
     kind = fileformat.sniff(path)
     if kind == "wireskein":
         return fileio.load(path, part)
@@ -291,7 +288,7 @@ def analyze_file(path: str | Path, hints: dict | None = None, mode: str = "final
                  thresholds: dict | None = None, part: int | None = None) -> dict:
     """What analyze finds in a capture, as the same family of document as decode_file (wireskein-analysis): the
     capture, then each part with its claims (the export of `mode`, ticks from the part's tick 0). A WireSkein file
-    is analysed part by part (analysis never crosses a gap); a .sr, a VCD or a fixture directory is one part.
+    is analysed part by part (analysis never crosses a gap); a .sr or a VCD is one part.
     window_s / segment pick a time range inside one part: `part` names it when the file has several."""
     import time
     from ._engine import markers

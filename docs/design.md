@@ -14,7 +14,7 @@ This document collects the decisions made for the implementation, with their rea
 - **The reference implementation is developed in Python.** Its only dependency is numpy. The file format and the run format are defined as language-independent specifications, and other languages may implement them as long as they are compatible.
   - Reason: for verification in tests (given pins and protocol, read short segments), Python and numpy are enough. The only slow part is Python loops that step through one bit at a time; those are moved to numpy batch processing (kernels).
   - In the Python implementation, run logging and saving (`wireskein.runlog`, `wireskein.capture`) work with the standard library only, so that test scripts can import them as they are.
-- **A native implementation (Rust etc.), if made, goes in a separate repository.** It is not added to this repository. The shared assets are the TOML definitions (`decl/`) and the evaluation corpus with ground truth (`corpus/fixtures/`).
+- **A native implementation (Rust etc.), if made, goes in a separate repository.** It is not added to this repository. The shared assets are the TOML definitions (`decl/`) and the evaluation corpus with ground truth (`eval/corpus/`: WireSkein files with their truth).
   - For this reason, TOML expressions are not defined as "Python eval" (they are a restricted syntax, §3.2).
 
 ## 3. Decoding (`wireskein analyze`)
@@ -106,6 +106,6 @@ For connecting a high-speed parallel-output ADC to the probe's digital inputs, *
 
 ## 6. Evaluation
 
-- Estimation correctness is measured on the corpus with ground truth (`corpus/`). Channel names are replaced with `D0…Dn` and their order shuffled, and the ground truth (`truth.json`) is kept where the estimator cannot see it.
+- Estimation correctness is measured on the corpus with ground truth (`eval/corpus/`). Channel names are replaced with `D0…Dn` and their order shuffled, and the ground truth (`truth.json`) is kept where the estimator cannot see it.
 - Seeds used for tuning and seeds not used, and noise conditions (glitches, mid-stream start, low sampling rate, jitter, rate changes), are measured separately to check for overfitting and weakness to noise.
-- The evaluation scripts are in [`research/`](../research/README.md).
+- The evaluation scripts are in [`eval/`](../eval/README.md). They read only what analyze exports (`wireskein.decode`), so they measure what a user gets.

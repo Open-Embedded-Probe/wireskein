@@ -4,7 +4,7 @@
                               [--hint JSON|@file.json] [--alternatives] [--out FILE]
     wireskein segments CAPTURE [--results] [--markers JSON]
     wireskein verify RUN_DIR [--junit FILE] [--json FILE]
-    wireskein convert IN OUT            (WireSkein / .sr / fixture directory -> WireSkein, or .sr by the name)
+    wireskein convert IN OUT            (WireSkein / .sr / VCD -> WireSkein, or .sr / VCD by the name)
     wireskein capture --source oep:PORT|sigrok:DRIVER --channels NAME=ID,... --rate 20M --samples 1M
                       [--trigger NAME:rise|fall|both|high|low | NAME:rise|fall|high|low:VOLTS] [--pretrigger N]
                       [--note TEXT] -o OUT.wireskein
@@ -18,7 +18,7 @@
     wireskein align B.wireskein --to A.wireskein --reference A_LOGIC --via B_CHANNEL [--save]
                                                                another probe's capture onto A's ticks
 
-CAPTURE is a WireSkein file (.wireskein), a sigrok .sr file or a fixture directory (corpus/fixtures/real/<id>).
+CAPTURE is a WireSkein file (.wireskein), a sigrok .sr file or a VCD.
 Files are told apart by their content, not their name; an output is a .sr when its name ends in .sr.
 Paths for --select: "<protocol>.<layer>" with wildcards, e.g. i2c.transactions,
 uart.lines, spi.transfers, rvswd.dm, *.final, i2c.* .
@@ -432,7 +432,7 @@ def convert(args) -> None:
                              f"them (from 0); a .sr or a VCD holds one gapless run")
     cap = load_file(args.input, part) if part is not None else load(args.input)
     meta = {k: v for k, v in cap.meta.items()
-            if k not in ("file", "sr_file", "vcd_file", "tick_hz", "unitsize", "fixture", "extras", "skipped_channels",
+            if k not in ("file", "sr_file", "vcd_file", "tick_hz", "unitsize", "extras", "skipped_channels",
                          "vcd_not_read")}
     if part is not None and cap.meta.get("n_parts", 1) > 1:   # one part, asked for: the others are left on purpose
         n = cap.meta["n_parts"]
