@@ -80,6 +80,13 @@ def match(bus: dict, claim: dict) -> dict:
             r["decode"] = _ratio([(op, addr(nm), d) for op, nm, d in bus["expect"]["dmi"]], got)
         else:
             r["decode"] = None
+    elif bus["protocol"] in ("lin", "dmx512"):
+        r["roles"] = nr.get("data") == tr["data"]
+        r["params"] = abs(pm["baud"] / bus["params"]["baud"] - 1) <= 0.03
+        if bus["protocol"] == "lin":
+            r["decode"] = _ratio([tuple(f) for f in bus["expect"]["frames"]], [tuple(f) for f in lay["frames"]])
+        else:
+            r["decode"] = _ratio(bus["expect"]["packets"], lay["packets"])
     elif bus["protocol"] == "swd":
         r["roles"] = nr == tr
         r["params"] = r["roles"]
