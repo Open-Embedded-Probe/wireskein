@@ -185,7 +185,24 @@ class UartPlugin:
         sync = max((r.data_score * c.sv.clocks[k].clock_score for (k, o), r in c.sv.pairs.items()
                     if o == rb.pin and k != rb.pin and k in c.sv.clocks), default=0.0)
         m["sync_with_clock"] = sync
-        score = framing * coverage * q(ok_n) * degenerate(v & 0xFF) * (1 - 0.5 * clock_like) * (1 - sync)
+        # characters framed by breaks the way LIN (sync 0x55, PID parity, checksum) or DMX512 (250 kbaud, start code
+        # 0) frames them are that protocol's, not a plain UART's: weigh that evidence against this claim
+        framed = 0.0
+        for (s0, s1, u), cands, ch in blocks:
+            if ch is None or len(ch.breaks) < 2:
+                continue
+            lk = UL.lin(ch)["checks"]
+            if lk["frames"] >= 2:
+                framed = max(framed, (lk["sync"] + lk["pid_parity"] + lk["checksum"]) / (3 * lk["frames"]))
+            dk = UL.dmx512(ch)["checks"]
+            if dk["packets"] >= 2 and abs(c.cap.rate / u / 250000 - 1) < 0.03:
+                framed = max(framed, dk["start_code_0"] / dk["packets"])
+        m["framed_by_breaks"] = framed
+        # only what is above chance counts: a UART whose rate changes mid-stream breaks into framing errors, and a
+        # few of its "frames" fit by luck (up to a third on the evaluation corpus; LIN and DMX512 lines fit wholly)
+        framed = max(0.0, (framed - 0.5) / 0.5)
+        score = (framing * coverage * q(ok_n) * degenerate(v & 0xFF) * (1 - 0.5 * clock_like) * (1 - sync)
+                 * (1 - framed))
         params = {"baud": c.cap.rate / u_main, "idle": rb.idle, "L": m["L"], "blocks": len(units)}
         items = {"value": v, "start": np.concatenate(starts), "char_samples": u_main * (m["L"] or 10)}
         return [Node("uart", params, {"data": rb.pin}, Stream("bytes", items, meta={"char_samples": u_main * (m["L"] or 10)}),
