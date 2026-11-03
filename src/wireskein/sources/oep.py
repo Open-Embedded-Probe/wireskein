@@ -32,6 +32,18 @@ def capture(target: str, req: Request) -> Result:
                   res.layout, res.temp_dir)
 
 
+def capture_of(res):
+    """oep_client.acquire's Result as a wireskein.capture.Capture: for Recorder.add() when the capture was taken on a
+    session the caller holds (acquire.capture(hst, req)). The probe's facts go to the capture's meta (probe), each
+    part's own to the part."""
+    from oep_client import acquire
+    from .. import capture as wc
+    meta = {k: v for k, v in res.meta.items() if k not in fileformat.PART_META}
+    parts = [wc.Part(max((c.end(res.tick_hz) if isinstance(c, acquire.Analog) else c.end) for c in p.channels),
+                     [_channel(c, acquire) for c in p.channels], dict(p.meta), p.tick0) for p in res.all_parts]
+    return wc.Capture(res.tick_hz, parts, res.layout, list(res.lost), meta)
+
+
 def _channel(c, acquire):
     """The client's channel as the file's (wireskein-format §4): the same data, one to one."""
     if isinstance(c, acquire.Bits):

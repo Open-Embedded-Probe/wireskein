@@ -95,6 +95,21 @@ def test_oep_source_writes_the_clients_result_one_to_one(tmp_path, monkeypatch):
     assert isinstance(vbus, capture.Analog) and vbus.values() == [100, 200] and vbus.scale_nv == 805_860
 
 
+def test_an_acquire_result_on_a_held_session_joins_a_run(tmp_path):
+    pytest.importorskip("oep_client")
+    from oep_client import acquire as acq
+    from wireskein.runlog import Recorder
+    from wireskein.sources.oep import capture_of
+    a = acq.Bits("SDA", acq.pack(bytes([0, 1, 1, 0])), 4, acquisition={"pin": 47})
+    res = acq.Result(Fraction(1_000_000), [a], {"start_ns": 5, "trigger_tick": 1, "probe": {"address": "oep://p"}})
+    cap = capture_of(res)
+    assert cap.meta == {"probe": {"address": "oep://p"}} and cap.parts[0].meta == {"start_ns": 5, "trigger_tick": 1}
+    rec = Recorder(tmp_path / "run")
+    name = rec.add(rec.armed(), cap)
+    got = capture.read(rec.close().parent / name)
+    assert got.parts[0].channel("SDA").changes()[1].tolist() == [1, 3] and got.meta["probe"]["address"] == "oep://p"
+
+
 def test_fast_is_this_sources_option():
     assert sources.parse_fast(None) is None and sources.parse_fast("1") is None
     assert sources.parse_fast("0") == [] and sources.parse_fast("1500000,921600") == [1_500_000, 921_600]

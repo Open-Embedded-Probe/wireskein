@@ -63,12 +63,18 @@ class Recorder:
         self._seen: dict[tuple, int] = {}               # (parent occurrences, name) -> times opened
         self._expect: dict[tuple, dict] = {}            # expectations by occurrence path, rendered in close()
         self._paths: dict[str, dict] = {}               # expectations given by their path (expect())
+        self._closed = False
 
     def now(self) -> int:
         """The host clock the log is on: time.monotonic_ns()."""
         return time.monotonic_ns()
 
+    def _open(self) -> None:
+        if self._closed:
+            raise RuntimeError("the run is closed (run.json written and verified): nothing more is recorded")
+
     def _log(self, src: str, text: str) -> None:
+        self._open()
         self.doc["log"].append({"host_ns": self.now(), "src": src, "text": text})
 
     # markers
@@ -118,6 +124,7 @@ class Recorder:
         "src", "text", "probe_ns", "boot_id", "probe"}, written with host_ns (that host time in ns) and the rest
         kept; a heading among them opens and closes sections like heading(). lost: what the probe says was dropped
         (its log overflowed, marks missing); each fails the run (docs/run-format.ja.md §2)."""
+        self._open()
         for r in rows:
             line = {k: v for k, v in r.items() if k != "t"}
             self.doc["log"].append({"host_ns": round(r["t"] * 1e9), **line})
@@ -127,6 +134,7 @@ class Recorder:
 
     def expect(self, path: str, checks: list) -> None:
         """Expectations for a section by its path (docs/run-format.ja.md §2.1), e.g. one the probe's lines open."""
+        self._open()
         self._paths.setdefault(path, {"checks": []})["checks"] += list(checks)
 
     # captures
@@ -143,6 +151,7 @@ class Recorder:
         interleaved + names (+ width / positions / n for other sample layouts)
         or channels. meta goes into the capture file (start_ns, start_uncertainty_ns, trigger_tick, time_base_slipped, ...);
         attachments are free-form files stored with it (see wireskein.fileformat.attach)."""
+        self._open()
         if not isinstance(armed, int):
             raise TypeError(f"armed is time.monotonic_ns() (an int, Recorder.armed()), not {armed!r}")
         if (interleaved is None) == (channels is None):
@@ -151,9 +160,32 @@ class Recorder:
             if not names:
                 raise ValueError("interleaved needs names")
             channels = fileformat.from_interleaved(interleaved, names, width, positions, n)
-        name = f"c{len(self.doc['captures']) + 1:04d}{fileformat.SUFFIX}"
+        name = self._next_name()
         fileformat.write(self.dir / name, tick_hz, channels, attachments, **meta)
-        entry = {"file": name, "host_ns": armed, "channels": [c.name for c in channels]}
+        return self._entry(name, armed, [c.name for c in channels])
+
+    def add(self, armed: int, cap) -> str:
+        """Store a whole capture - a wireskein.capture.Capture (all its parts and what was lost, e.g. a stream or a
+        repeat; wireskein.sources.oep.capture_of() makes one of oep_client.acquire's result), or the path of a
+        .wireskein already written - as cNNNN.wireskein of this run. armed: time.monotonic_ns() when it was armed."""
+        self._open()
+        if not isinstance(armed, int):
+            raise TypeError(f"armed is time.monotonic_ns() (an int, Recorder.armed()), not {armed!r}")
+        from . import capture as wc
+        name = self._next_name()
+        if isinstance(cap, (str, Path)):
+            import shutil
+            shutil.copyfile(cap, self.dir / name)
+            cap = wc.read(self.dir / name)
+        else:
+            wc.write(self.dir / name, cap)
+        return self._entry(name, armed, cap.parts[0].names if cap.parts else [])
+
+    def _next_name(self) -> str:
+        return f"c{len(self.doc['captures']) + 1:04d}{fileformat.SUFFIX}"
+
+    def _entry(self, name: str, armed: int, channels: list[str]) -> str:
+        entry = {"file": name, "host_ns": armed, "channels": channels}
         if any(n for n, _ in self._occ):
             entry["path"] = self._key(tuple(self._occ))       # the section open now: verify assigns it there
         self.doc["captures"].append(entry)
@@ -172,6 +204,9 @@ class Recorder:
                 and not any(x["src"] == "lost" for x in self.doc["log"]))
 
     def close(self) -> Path:
+        """Write run.json; nothing more is recorded after it (a call then raises)."""
+        self._open()
+        self._closed = True
         self.doc["expect"] = {self._key(occ): spec for occ, spec in self._expect.items()}
         for path, spec in self._paths.items():
             self.doc["expect"].setdefault(path, {"checks": []})["checks"] += spec["checks"]

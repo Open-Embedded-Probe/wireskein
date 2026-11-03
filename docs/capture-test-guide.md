@@ -64,7 +64,9 @@ rec.close()
 
 - When you try several frequencies and duty cycles, make one step per combination. If the whole test is one segment, you cannot tell which condition failed.
 - In a step that runs several peripherals at once, write all of them in that step's expectation, and list every pin allowed to move in `only_moving`.
-- Write the expectation and the capture `names` with DUT pin names (`PA1` etc.). Keep the mapping between probe channel numbers and DUT pin names in one place on the test side.
+- Write the expectation and the capture `names` with DUT pin names (`PA1` etc.). Keep the mapping between the probe's lines and DUT pin names in one place on the test side.
+- A capture that comes whole - in parts, with what was lost (a stream, a repeat) - is added as it is: `rec.add(t, cap)` with a `wireskein.capture.Capture` (on an OEP probe, `wireskein.sources.oep.capture_of(acquire.capture(hst, req))` on the session the test holds), or the path of a `.wireskein` already written.
+- Once `rec.close()` has written the run (pytest-embedded-wireskein closes it when the test body ends), anything more raises: nothing is silently left out of the run.
 
 ### 2.3 Checking
 

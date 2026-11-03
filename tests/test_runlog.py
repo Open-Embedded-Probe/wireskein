@@ -2,6 +2,8 @@ import json
 import subprocess
 import sys
 
+import pytest
+
 from wireskein import _fileformat as fileformat
 from wireskein.runlog import FORMAT, Recorder, level
 
@@ -46,3 +48,30 @@ def test_repeated_headings_keep_their_own_expectations(tmp_path):
     doc = json.loads(rec.close().read_text())
     assert list(doc["expect"]) == ["t/hold", "t/hold[1]", "t/hold[2]", "t/once", "t[1]/hold"]   # repeats: [1], [2], ...
     assert [spec["checks"][0]["value"] for spec in doc["expect"].values()] == [0, 1, 0, 1, 1]
+
+
+def test_a_closed_run_refuses_more(tmp_path):
+    from wireskein.runlog import Recorder
+    rec = Recorder(tmp_path)
+    rec.note("x")
+    rec.close()
+    for call in (lambda: rec.note("late"), lambda: rec.heading(1, "t"), lambda: rec.close(),
+                 lambda: rec.capture(rec.armed(), 1000, interleaved=bytes(8), names=["P0"])):
+        with pytest.raises(RuntimeError, match="closed"):
+            call()
+
+
+def test_a_whole_capture_is_added_with_its_parts_and_losses(tmp_path):
+    from fractions import Fraction
+    from wireskein import capture as wc, verify
+    from wireskein.runlog import Recorder, pulses
+    a = wc.Channel("P0", wc.pack(bytes([0, 1, 0, 0] * 4)), 16)
+    cap = wc.Capture(Fraction(1000), [wc.Part(16, [a], {"start_ns": 1}, 0), wc.Part(16, [a], {"start_ns": 2}, 40)],
+                     lost=[{"after_part": 0, "reason": "probe dropped a segment", "ticks": 24}])
+    rec = Recorder(tmp_path / "run")
+    with rec.section(1, "t", expect=[pulses("P0", count=4)]):
+        name = rec.add(rec.armed(), cap)
+    path = rec.close()
+    assert wc.read(path.parent / name).lost[0]["ticks"] == 24
+    rep = verify.verify(path.parent)
+    assert any(r["status"] == "ng" and "lost" in r["reason"] for r in rep["results"])     # a loss fails the run

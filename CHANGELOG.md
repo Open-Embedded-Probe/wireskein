@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) `Recorder.add(armed, cap)` stores a whole capture - a `wireskein.capture.Capture` with its parts and losses (a stream, a repeat), or a `.wireskein` already written - as a capture of the run; `wireskein.sources.oep.capture_of(result)` makes one of oep-client-python's `acquire` result, taken on a session the test holds. A closed Recorder refuses anything more (RuntimeError) instead of leaving it out of run.json.
+- (JA) `Recorder.add(armed, cap)` は、まとまったキャプチャ（区間と欠落を持つ `wireskein.capture.Capture`。ストリームや repeat）か、書いた `.wireskein` を、記録のキャプチャとして入れる。`wireskein.sources.oep.capture_of(result)` は、試験が持つセッションで取った oep-client-python の `acquire` の結果から、それを作る。閉じた Recorder は、それ以上の記録を断る（RuntimeError）。run.json から黙って落とさない。
 - (EN) **Breaking:** the run format is `wireskein-run/1` (every format is 1 until the first release), and its times are the host's clock in ns: each log line's `host_ns` and each capture's `host_ns` (when armed) are `time.monotonic_ns()`, the clock a capture's `meta.probe.clock` reads the host on, in place of seconds from the recorder's start (`t`, `t0`). `Recorder.armed()` and `now()` give that clock; `capture(armed, ...)` takes it (an int). Runs of `wireskein-run/3` are not read.
 - (JA) **互換のない変更:** 記録の形式は `wireskein-run/1`（どの形式も最初のリリースまで 1）。時刻はホストの時計の ns: ログの各行の `host_ns` と、各キャプチャの `host_ns`（arm した時刻）は `time.monotonic_ns()`。キャプチャの `meta.probe.clock` がホストを読む時計と同じ。記録器の開始からの秒（`t`、`t0`）の代わり。`Recorder.armed()` と `now()` がこの時計を返し、`capture(armed, ...)` はこれ（整数）を受ける。`wireskein-run/3` の記録は読まない。
 - (EN) Needs oep-client-python 0.0.41 (the `oep` extra and the dev group): its `acquire` and OEP addresses.
