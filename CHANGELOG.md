@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) tests/data/examples: four captures to run analyze on (a SWIO and an RVSWD session from a WCH-LinkE, two generated mixed buses), each with the buses it holds, taken from the evaluation corpus and checked as tests (analysis-format §4).
+- (JA) tests/data/examples: analyze を試す 4 つのキャプチャ（WCH-LinkE の SWIO と RVSWD のやりとり、生成した 2 つの混ざったバス）と、それぞれが持つバス。評価のコーパスから取り、試験で確かめる（analysis-format §4）。
 - (EN) The I2CDeviceDB harness's marker dialect (`i2cdb`) is gone (nothing used it; docs/markers §4 shows a dialect inline instead), and so are research/'s one-off comparisons (stage_eval, device_eval, hint_eval, upper_eval, scpi_eval, baud_segment_eval, plugin_reuse_eval, m2_eval); evaluate, large_eval and the corpus tools stay.
 - (JA) I2CDeviceDB の harness のマーカーの方言（`i2cdb`）を消した（どこからも使われていない。docs/markers §4 には方言を例として直に書いた）。research/ の一度きりの比較（stage_eval、device_eval、hint_eval、upper_eval、scpi_eval、baud_segment_eval、plugin_reuse_eval、m2_eval）も消した。evaluate、large_eval とコーパスの道具は残す。
 - (EN) The report of `wireskein verify --json` says its format, `"wireskein-report/1"` (run-format §3, which now lists its keys); its `log` lines carry `host_ns`.

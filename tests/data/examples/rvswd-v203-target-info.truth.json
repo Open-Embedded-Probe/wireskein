@@ -1,0 +1,12 @@
+{
+ "buses": [
+  {
+   "protocol": "rvswd",
+   "roles": {
+    "clk": "D4",
+    "dio": "D1"
+   },
+   "params": {}
+  }
+ ]
+}

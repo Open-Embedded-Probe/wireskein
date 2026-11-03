@@ -129,7 +129,7 @@ analyze の書き出し（`--mode final`、`depth` まで）の層。刻みは�
 | `relations[]` | 一緒に読む主張の組（コマンドの行とその応答: `scpi`） |
 | `window`、`segment`、`events` | `--window` / `--segment` のとき（1 つの区間の中の範囲。区間が 2 つ以上なら `--part` で選ぶ） |
 
-WireSkein のファイルは区間ごとに解析します。`.sr`、VCD、fixture のディレクトリは 1 つの区間です。何をどれだけ確かに
+試す例は tests/data/examples にあります（WCH-LinkE の SWIO と RVSWD のやりとり、生成した I2C と SPI のバスを並べたもの）。それぞれ、持っているバスを `truth.json` に書いてあります: `wireskein analyze tests/data/examples/mixed-0.wireskein`。WireSkein のファイルは区間ごとに解析します。`.sr`、VCD、fixture のディレクトリは 1 つの区間です。何をどれだけ確かに
 主張するかは版で変わることがあります（評価のコーパスで調整するため）。キーは保ちます。
 
 ## 5. 安定性
