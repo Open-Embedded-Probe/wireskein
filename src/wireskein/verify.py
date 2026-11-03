@@ -27,9 +27,10 @@ from ._engine.model import AnalogTrace, Capture, Channel, EventTrace
 from .runlog import FORMAT
 
 
+REPORT_FORMAT = "wireskein-report/1"   # docs/run-format.ja.md §3
 MEASURED = "measured"             # a check function's verdict for "only measure" (uart(baud=None) with nothing else)
 
-__all__ = ["MARKS", "MEASURED", "dumps", "failed", "junit", "lines", "summary_line", "verify"]
+__all__ = ["MARKS", "MEASURED", "REPORT_FORMAT", "dumps", "failed", "junit", "lines", "summary_line", "verify"]
 STATUSES = ("ok", "ng", "unchecked", "measured")      # docs/run-format.ja.md §3
 
 
@@ -1276,9 +1277,10 @@ def verify(run_dir: str | Path) -> dict:
             results.append(Result(path, None, "markers", False, reason=json.dumps(issue)))
     for issue in tree.issues:
         results.append(Result("", None, "markers", False, reason=json.dumps(issue)))
-    ev = [{k: e[k] for k in ("t", "src", "text", "probe_ns") if k in e} for e in doc["log"]]
+    ev = [{k: e[k] for k in ("host_ns", "src", "text", "probe_ns") if k in e} for e in doc["log"]]
     count = {k: sum(r.status == k for r in results) for k in STATUSES}
-    return {"run": str(run_dir), "meta": doc.get("meta", {}), "results": [r.__dict__ for r in results],
+    return {"format": REPORT_FORMAT, "run": str(run_dir), "meta": doc.get("meta", {}),
+            "results": [r.__dict__ for r in results],
             "summary": {**count,
                         "segments": len(segs), "captures": len(caps)},
             "tree_issues": tree.issues, "log": ev}

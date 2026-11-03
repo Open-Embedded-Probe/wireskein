@@ -82,7 +82,9 @@ Code on the probe may keep a log on its own clock (oep-probe-arduino's `OepProbe
 
 ## 3. Verification results
 
-Verification returns one result per check (the report of `wireskein verify`).
+Verification returns a report (`wireskein verify --json`): `format` (`"wireskein-report/1"`), `run` (the run directory), `meta` (the run's), `results` (one per check, below), `summary` (how many of each status, segments and captures), `tree_issues` (problems of the heading structure), and `log` with `--log` (each line's `host_ns`, `src`, `text`, `probe_ns`).
+
+A result:
 
 | Key | Meaning |
 | --- | --- |

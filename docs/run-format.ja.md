@@ -82,7 +82,9 @@
 
 ## 3. 照合の結果
 
-照合は、検査ごとに 1 つの結果を返します（`wireskein verify` の報告）。
+照合は報告を返します（`wireskein verify --json`）: `format`（`"wireskein-report/1"`）、`run`（記録のディレクトリ）、`meta`（記録のもの）、`results`（検査ごとに 1 つ。下）、`summary`（状態ごとの数、区間とキャプチャの数）、`tree_issues`（見出しの組み立ての問題）、`--log` のときは `log`（各行の `host_ns`、`src`、`text`、`probe_ns`）。
+
+結果の 1 つ:
 
 | キー | 意味 |
 | --- | --- |

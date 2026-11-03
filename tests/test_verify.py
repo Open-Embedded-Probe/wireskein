@@ -1,3 +1,4 @@
+import json
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
@@ -37,6 +38,8 @@ def test_cli_exit_code(demo, tmp_path):
     assert r.returncode == 1
     assert "13 ok, 4 ng, 0 unchecked" in r.stdout
     assert (tmp_path / "r.xml").exists() and (tmp_path / "r.json").exists()
+    rep = json.loads((tmp_path / "r.json").read_text())
+    assert rep["format"] == "wireskein-report/1" and rep["summary"]["ng"] == 4
 
 
 def test_missing_pin_is_unchecked(tmp_path):
