@@ -4,6 +4,8 @@
 
 A definition lives at `<protocol>/<maker or category>/<model>.toml` (e.g. `i2c/sensirion/sht30.toml`, `spi/flash/spi_nor.toml`).
 
+The chips' knowledge is kept in EmbedBenchDeviceData (`knowledge/<chip>.yaml`, the addresses in `chips/<chip>.yaml`); the I²C definitions here are generated from it by its `tools/knowledge_decl.py` (each says so in its first lines). Correct the knowledge and generate again rather than edit a generated file.
+
 - The top folder is the protocol and must equal `device.bus` in the file; a mismatch is an error when loading.
 - The definitions to use are chosen by path patterns relative to this folder; a pattern starting with `!` excludes.
   - CLI: `wireskein analyze CAPTURE --depth device --devices "i2c/**" "!i2c/qst/**"`

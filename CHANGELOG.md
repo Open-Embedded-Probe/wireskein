@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) The I²C device definitions (QMP6988, SHT30) are generated from EmbedBenchDeviceData's chip knowledge (0c56bed, tools/knowledge_decl.py): QMP6988 names its 9 known registers (identified by CHIP_ID 0xD1 = 0x5C as before), SHT30 its 13 commands (its CRC-8 as before). The names are the knowledge's ("single shot, high repeatability, polling", "DATA").
+- (JA) I²C のデバイスの定義（QMP6988、SHT30）は、EmbedBenchDeviceData のチップの知識から作る（0c56bed、tools/knowledge_decl.py）: QMP6988 は分かっている 9 個のレジスタに名前を付ける（見分け方は前と同じ CHIP_ID 0xD1 = 0x5C）。SHT30 は 13 個のコマンド（前と同じ CRC-8）。名前は知識のもの（"single shot, high repeatability, polling"、"DATA"）。
 - (EN) A line framed by breaks the way LIN (sync 0x55, PID parity, checksum) or DMX512 (250 kbaud, start code 0) frames it is no longer claimed as a plain UART: that evidence, above chance, is weighed against the UART claim. On the uartlike set: false confirmed 3 -> 0, false likely 11 -> 0, confirmed-correct 0.283 -> 0.650, confirmed-or-likely 0.467 -> 0.967; heldout, glitch, the other stress sets, duplex, upper, swdcan and the real records unchanged.
 - (JA) LIN（sync 0x55、PID のパリティ、チェックサム）や DMX512（250 kbaud、start code 0）の形で break に区切られた線を、ふつうの UART として主張しなくなった: その手がかり（偶然を超える分）を UART の主張と比べる。uartlike の組で、誤った confirmed 3 -> 0、誤った likely 11 -> 0、confirmed で正しい率 0.283 -> 0.650、confirmed か likely で正しい率 0.467 -> 0.967。heldout、glitch、ほかの負荷の組、duplex、upper、swdcan、実記録は変わらない。
 - (EN) eval: LIN and DMX512 claims are scored (the line, the baud within 3 %, the frames / packets decoded); right ones were counted as wrong. On uartlike: confirmed-correct 0.217 -> 0.283, confirmed-or-likely 0.233 -> 0.467; false confirmed 7 -> 3 and false likely 21 -> 11, the rest real (a UART claimed on a LIN or DMX512 line).
