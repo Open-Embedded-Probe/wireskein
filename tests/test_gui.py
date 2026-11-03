@@ -162,7 +162,7 @@ def test_annotations_and_checks(served, tmp_path):
     assert [(r["check"], r["ok"]) for r in doc["results"]] == [("level", True), ("level", False)]
     assert json.loads(get(gui, "/api/checks?file=a.wireskein", cookie=cookie(gui))[2]) == {"run": None, "results": []}
     ann = json.loads(get(gui, "/api/annotations?file=a.wireskein", cookie=cookie(gui))[2])
-    assert ann["format"] == "wireskein-annotations/0" and ann["stored"] is False
+    assert ann["format"] == "wireskein-annotations/1" and ann["stored"] is False
     assert call(gui, "POST", "/api/annotations?file=a.wireskein", {})[0] == 200
     assert json.loads(get(gui, "/api/annotations?file=a.wireskein", cookie=cookie(gui))[2])["stored"] is True
 

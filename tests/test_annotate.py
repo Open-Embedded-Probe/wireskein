@@ -22,7 +22,7 @@ def uart_file(tmp_path, text=b"Hi!\n"):
 def test_uart_characters_become_a_row_under_their_line(tmp_path):
     p = uart_file(tmp_path)
     doc = annotate.build(fileio.load(p))
-    assert doc["format"] == "wireskein-annotations/0"
+    assert doc["format"] == "wireskein-annotations/1"
     (row,) = [r for r in doc["rows"] if r["name"].startswith("uart")]
     assert row["near"] == "TX"
     assert "".join(i["text"] for i in row["items"][:3]) == "Hi!"

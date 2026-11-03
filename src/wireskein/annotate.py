@@ -18,7 +18,7 @@ from pathlib import Path
 
 from . import __version__
 
-FORMAT = "wireskein-annotations/0"
+FORMAT = "wireskein-annotations/1"
 ENTRY = "decode/annotations.json"
 MAX_ITEMS = 50_000                     # per row: beyond this the viewer would only draw noise
 DATA_ROLES = ("sda", "data", "dio", "mosi", "miso", "rx", "tx")
@@ -143,4 +143,10 @@ def load(path: str | Path) -> dict | None:
     if data is None:
         return None
     doc = json.loads(data)
-    return doc if doc.get("format") == FORMAT else None
+    if doc.get("format") != FORMAT:
+        raise ValueError(f"{path}: annotations format {doc.get('format')!r}, this version reads {FORMAT!r}")
+    n = len(fileformat.read_header(path)["parts"])
+    bad = [r.get("part") for r in doc.get("rows", []) if not 0 <= r.get("part", 0) < n]
+    if bad:
+        raise ValueError(f"{path}: annotation rows of a part the file does not have (of {n}): {bad[:3]}")
+    return doc

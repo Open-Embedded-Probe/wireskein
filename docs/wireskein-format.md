@@ -188,6 +188,7 @@ A **part** is a block of samples with contiguous ticks: inside a part, no channe
 
 - **A capture with a loss is a failure.** Readers show the loss so that the user sees it (`wireskein info` prints it near the top). Checks report the capture as failed (NG, the reason from `lost`), with the results on the parts that were taken alongside, for reference. They MUST NOT pass a capture by looking only at what was taken.
 - A writer does not put `lost` in a capture without a loss. `complete` is always written (a file without the key is wrong).
+- **Readers refuse a capture.json that breaks these rules**, saying which: no `complete`, `complete` disagreeing with `lost`, a `layout` other than `timeline` / `segments`, no part, a part of a timeline without its `tick0`. A reader never takes a missing `complete` as complete, nor an unknown layout as a timeline.
 
 ## 4. Channel data (`encoding`)
 
@@ -275,7 +276,7 @@ A UTF-8 JSON object.
 
 | Key | Type | Meaning |
 | --- | --- | --- |
-| `format` | string | `"wireskein-alignment/0"`. Readers MUST NOT use one with an unknown value |
+| `format` | string | `"wireskein-alignment/1"`. Readers MUST NOT use one with an unknown value |
 | `channels` | object | From channel name to its correction (table below) |
 
 Correction:
@@ -327,7 +328,7 @@ A UTF-8 JSON object.
 
 | Key | Type | Meaning |
 | --- | --- | --- |
-| `format` | string | `"wireskein-markers/0"`. Readers MUST NOT use one with an unknown value |
+| `format` | string | `"wireskein-markers/1"`. Readers MUST NOT use one with an unknown value |
 | `markers` | array | Markers (table below). The order has no meaning |
 
 Marker:
@@ -344,6 +345,7 @@ Marker:
 | `part` | integer (optional) | The part (§3.4, from 0) whose ticks these are. Absent: part 0. In a file of two parts or more, writers always give it |
 
 - `t` and `end` are ticks of the `part` (from that part's tick 0). A viewer draws the marker while it shows that part.
+- Readers refuse markers whose `part` the file does not have (writers refuse to write them).
 - Unlike notes (§5), markers may be rewritten. Rewriting rewrites the whole file (the same as replacing an attachment in §5).
 
 ### 5.3 Decode annotations (`decode/annotations.json`)
@@ -354,7 +356,7 @@ A UTF-8 JSON object.
 
 | Key | Type | Meaning |
 | --- | --- | --- |
-| `format` | string | `"wireskein-annotations/0"`. Readers MUST NOT use one with an unknown value |
+| `format` | string | `"wireskein-annotations/1"`. Readers MUST NOT use one with an unknown value |
 | `source` | string (optional) | What produced it (e.g. `"wireskein analyze"`) |
 | `rows` | array | Rows (table below) |
 
@@ -369,6 +371,7 @@ Row:
 | `part` | integer (optional) | The part (§3.4, from 0) the row decodes. Absent: part 0. In a file of two parts or more, writers always give it |
 
 - Ticks are the ticks of §3, of the row's `part` (from that part's tick 0). Decoding never crosses parts (§3.4), so rows are per part.
+- Readers refuse rows whose `part` the file does not have.
 - When decoded again, the entry is replaced.
 
 ## 6. Relation to other formats

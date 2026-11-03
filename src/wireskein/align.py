@@ -28,7 +28,7 @@ import numpy as np
 from ._engine import analog
 from ._engine.model import AnalogTrace, Capture
 
-FORMAT = "wireskein-alignment/0"
+FORMAT = "wireskein-alignment/1"
 NAME = "alignment.json"                  # attach/alignment.json
 
 
@@ -313,4 +313,9 @@ def load(path: str | Path) -> dict | None:
     """The alignment stored in a WireSkein file, or None."""
     from . import _fileformat as fileformat
     data = fileformat.attachments(path).get(NAME)
-    return json.loads(data) if data else None
+    if not data:
+        return None
+    doc = json.loads(data)
+    if doc.get("format") != FORMAT:
+        raise ValueError(f"{path}: alignment format {doc.get('format')!r}, this version reads {FORMAT!r}")
+    return doc

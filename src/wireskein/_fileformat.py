@@ -606,7 +606,7 @@ def get(path: str | Path, entry: str) -> bytes | None:
         return z.read(entry) if entry in z.namelist() else None
 
 
-MARKERS, MARKERS_FORMAT = "markers/markers.json", "wireskein-markers/0"
+MARKERS, MARKERS_FORMAT = "markers/markers.json", "wireskein-markers/1"
 
 
 def markers(path: str | Path) -> list[dict]:
@@ -617,7 +617,12 @@ def markers(path: str | Path) -> list[dict]:
     doc = json.loads(data)
     if doc.get("format") != MARKERS_FORMAT:
         raise ValueError(f"{path}: markers format {doc.get('format')!r}, this version reads {MARKERS_FORMAT!r}")
-    return doc.get("markers", [])
+    out = doc.get("markers", [])
+    n = len(read_header(path)["parts"])
+    bad = [m for m in out if not 0 <= m.get("part", 0) < n]
+    if bad:
+        raise ValueError(f"{path}: markers of a part the file does not have (of {n}): {bad[:3]}")
+    return out
 
 
 def set_markers(path: str | Path, items: list[dict]) -> None:
@@ -682,7 +687,7 @@ def sniff(path: str | Path) -> str | None:
             return "vcd" if re.match(r"\$(date|version|timescale|comment|scope|var)\b", text) else None
         with zipfile.ZipFile(path) as z:
             names = set(z.namelist())
-            if IDENT in names:          # (a .sr written by wireskein has one too, "wireskein-sr-extra/0")
+            if IDENT in names:          # (a .sr written by wireskein has one too, "wireskein-sr-extra/1")
                 fmt = json.loads(z.read(IDENT)).get("format", "")
                 if isinstance(fmt, str) and fmt.startswith("wireskein/"):
                     return "wireskein"
@@ -706,7 +711,25 @@ def read_header(path: str | Path) -> dict:
         _check(z, path)
         if CAPTURE not in z.namelist():
             raise ValueError(f"{path}: holds no capture")
-        return json.loads(z.read(CAPTURE))
+        head = json.loads(z.read(CAPTURE))
+    _check_head(head, path)
+    return head
+
+
+def _check_head(head: dict, path) -> None:
+    """ValueError for a capture.json against the reader's rules (wireskein-format §3, §3.4): `complete` is a boolean and
+    `lost` agrees with it, `layout` is one of LAYOUTS, there is a part, and every part of a timeline has its tick0."""
+    if not isinstance(head.get("complete"), bool):
+        raise ValueError(f"{path}: capture.json has no complete (true / false): not a file to read as complete")
+    if head["complete"] == bool(head.get("lost")):
+        raise ValueError(f"{path}: complete is {head['complete']} but lost has {len(head.get('lost') or [])} entries")
+    if head.get("layout") not in LAYOUTS:
+        raise ValueError(f"{path}: layout {head.get('layout')!r}: one of {', '.join(LAYOUTS)}")
+    parts = head.get("parts")
+    if not isinstance(parts, list) or not parts:
+        raise ValueError(f"{path}: capture.json has no parts")
+    if head["layout"] == "timeline" and any("tick0" not in p for p in parts):
+        raise ValueError(f"{path}: a timeline part without its tick0")
 
 
 def _channel_files(head: dict) -> set:
