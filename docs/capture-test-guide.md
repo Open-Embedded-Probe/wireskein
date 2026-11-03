@@ -249,7 +249,7 @@ sd_spi("PA5", "PA7", "PA6", "PA4", [{"cmd": 0, "r1": 0x01}, {"cmd": 8, "arg": 0x
 
 WS2812 and tone() have no receiver, so checking the capture is the main verdict for them. I2C and SPI are judged both by value checks with a stub on the probe side (pair test) and by waveform checks on the capture.
 
-There are no checks yet for I2C tLOW and tHIGH, SPI CS timing, or WS2812 bit widths.
+I2C tLOW and tHIGH are checked by `i2c_timing` (§4.4), WS2812 bit widths by `rgb_led` (§4.6). There is no check of SPI CS timing (CS to the first clock, the last clock to CS).
 
 ## 7. Time accuracy
 

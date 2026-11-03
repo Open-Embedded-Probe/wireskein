@@ -252,9 +252,9 @@ The time resolution is `step` ticks: **quantum** k is ticks `[phase + k × step,
   - On a channel with a quantum of two or more changes, checks that need the time of every change (`square()`, periods, decoding) are unchecked.
 - `.sr` and VCD: a channel with at most one change a quantum is written as samples at `step` ticks; one with a quantum of two or more changes has no form there, and is refused.
 
-### 4.5 Reserved (not yet defined)
+### 4.5 Values from a parallel-output ADC
 
-An ADC with parallel output whose pins are captured as logic and turned back into values is planned to be held as `analog` (§4.2), without creating a new `encoding` ([design decisions](design.md) §5.1).
+An ADC with parallel output whose pins are captured as logic and turned back into values is held as `analog` (§4.2); it has no `encoding` of its own. The board's description goes in that channel's `acquisition` ([design decisions](design.md) §5.1).
 
 ## 5. Attachments and notes
 
@@ -401,4 +401,4 @@ Row:
 - Other changes (changing the meaning of existing keys or the required entries) increment the `format` number. Readers do not read files with an unknown number (§2.1).
 - There are no minor numbers within a version. Additive changes are absorbed by the rule that readers ignore what they do not know (§2.2, §3.2).
 - Until WireSkein version 1, incompatible changes are allowed, and files with old numbers are not read ([design decisions](design.md) §1). The number stays `wireskein/1` until the official release (it is not raised for incompatible changes before then).
-- The reserved parts (`verify/`, `view/`, §2.4) and edge lists (§4.5) will be defined later as additive changes.
+- Defining a reserved part (`verify/`, `view/`, §2.4) is an additive change.

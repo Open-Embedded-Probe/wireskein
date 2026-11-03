@@ -95,14 +95,15 @@ The rules of the file format and the reason for each are in [File format](wiresk
 - ADC values are stored raw; conversion to voltage and correction are chosen at analysis time.
 - Times returned by the probe are recorded as estimates, and alignment computed by analysis goes into a separate attachment.
 
-### 5.1 Parallel-output ADC (not implemented yet)
+### 5.1 Parallel-output ADC
 
 For connecting a high-speed parallel-output ADC to the probe's digital inputs, **the probe does not know about the ADC; converting bits back to values is done on the analysis side.**
 
 - If the probe only captures the data pins and CLK as an ordinary logic analyzer, the same board and the same conversion work with both OEP and sigrok.
 - Board knowledge (pin order, code format, pipeline delay, input range) comes with the board; putting it in the probe would mean changing the probe every time the board changes.
 - Converting to values on the probe does not reduce bandwidth, and with the raw bits, mistakes in the code format or delay can be fixed at analysis time.
-- The converted values can be held with the current `analog` encoding. The board description goes in that channel's `acquisition`.
+- The converted values are held with the `analog` encoding ([file format](wireskein-format.md) §4.5). The board description goes in that channel's `acquisition`.
+- WireSkein has no conversion from the bits to values.
 
 ## 6. Evaluation
 
