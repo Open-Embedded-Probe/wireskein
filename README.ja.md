@@ -81,13 +81,49 @@ rec.close()
 wireskein verify out/run1 --junit out/run1/report.xml --json out/run1/report.json
 ```
 
+```text
+OK  test_pwm/duty=64  square  c0001.wireskein
+NG  test_pwm/duty=128  square  c0002.wireskein  duty 0.6999 vs 0.5020
+OK  test_pwm/duty=0  level  c0003.wireskein
+2 ok, 1 ng, 0 unchecked, 0 measured (4 segments, 3 captures)
+```
+
 キャプチャは `.wireskein`（後述）で保存されます。NG があれば、終了コードは 1 です。検査に使うピンがキャプチャにないなど、検査できなかったものは未検査（`--`）で、**既定で失敗**にします（多くは試験の書き間違いか配線の抜けだからです。`--allow-unchecked` で失敗にしません）。測るだけと頼んだもの（`uart(baud=None)` など）は measured（`ME`）で、失敗にしません。記録の形式と結果の意味は [docs/run-format.ja.md](docs/run-format.ja.md) にあります。
 
-- 見出し（`#` がテスト、`##` がステップ、名前のない `##` で閉じる）で、区間の木を作ります。
-- キャプチャは、開始した時刻を含む区間に割り当てます。
-- 期待は、区間のパス（例 `test_pwm/duty=64`）に付けます。同じ親の下で名前が重なると、最初のものは名前のまま、2 回目から `duty=64[1]`、`duty=64[2]` のように番号を付け、それぞれが自分の期待を持ちます。あとから同じ名前を足しても、前のキーは変わりません。
+### 見出しと区間
 
-検査の一覧、窓と許容誤差の決め方、実機の例は [docs/capture-test-guide.ja.md](docs/capture-test-guide.ja.md) にあります。
+見出しで、実行を区間の木に分けます。`#` がテスト、`##` がステップで、名前のない見出し（`##`）がその段を閉じます。`Recorder.section()` は見出しを開き、`with` の終わりで閉じます。キャプチャは、記録したときに開いていた区間のものになります（そのパスを一緒に記録します）。期待は、区間のパス（例 `test_pwm/duty=64`）に付けます。同じ親の下で名前が重なると、最初のものは名前のまま、2 回目から番号を付け（`duty=64`、`duty=64[1]`、`duty=64[2]`）、それぞれが自分の期待を持ちます。あとから同じ名前を足しても、前の名前は変わりません。段を飛ばすなど、壊れた構造は必ず NG と報告します。
+
+### 検査
+
+| 関数 | 検査すること |
+| --- | --- |
+| `square(pin, freq_hz, duty, freq_rel, duty_abs, jitter_max)` | 安定した矩形波: 周波数（相対の許容）、デューティ（絶対）、周期のばらつき |
+| `level(pin, value)` | ピンが動かない |
+| `starts({pin: v})` / `ends({pin: v})` | 最初 / 最後のサンプルでのレベル |
+| `only_moving([pins])` | 取ったほかのピンが動かない |
+| `pulses(pin, count, period_s, period_rel)` | 立ち上がりの数と周期（`period_rel` は相対） |
+| `i2c(scl, sda, transactions, freq_hz, freq_rel, released)` | 取引（アドレス、向き、バイト、ACK、`complete`）、SCL の速さ、終わりにバスが離されていること |
+| `spi(clk, mosi, miso, cs, mode, mosi_bytes, miso_bytes, freq_hz)` | モード、両方の線のバイト、SCK の速さ、終わりに CS が High |
+| `uart(pin, baud, data, baud_rel, idle, bits, parity, stop, errors_max)` | エッジから測ったビットレート、データ、アイドルのレベル、フレーミング / パリティの誤り。`baud=None` は測るだけ |
+| `voltage(pin, level_v, level_abs_v, level_min_v, level_max_v, ripple_max_v)` | アナログのチャンネル: 平均が `level_v` ± `level_abs_v`、すべてのサンプルが `level_min_v`..`level_max_v`、ピークトゥピークが `ripple_max_v` 以下。与えたものだけを検査する |
+
+ロジックの検査（`square`、`level`、`starts` / `ends`、`pulses`、`i2c`、`spi`、`uart`）は、`threshold=` を与えるとアナログのチャンネルでも動きます。電圧 1 つか、ヒステリシスの `(low, high)` です（ノイズのある遅いエッジが 1 つのエッジになります）。エッジは、2 つのサンプルを結ぶ線がしきい値を横切る所に置きます。分解能は ADC の 1 サンプルで、許容に足します。`threshold=` が無ければ、ロジックの検査の中のアナログのチャンネルは未検査で、理由にそう書きます。
+
+ピンと役割は与えるので、これらの検査は照合で、推定ではありません。キャプチャの窓と許容誤差の決め方は、実機の例とともに [docs/capture-test-guide.ja.md](docs/capture-test-guide.ja.md) にあります（ここに挙げたものだけでなく、すべての検査も）。
+
+キャプチャの meta に `time_base_slipped: true`（プローブが、いくつかのサンプルを遅れて取ったと知っている）があっても判定は変わりませんが、失敗の理由にそう書きます。
+
+### Python API
+
+```python
+from wireskein.verify import verify, junit, dumps, lines, summary_line
+
+report = verify("out/run1")          # dict: results（測った値つき）、summary、log
+xml = junit(report)                  # JUnit XML
+text = dumps(report)                 # JSON
+print(summary_line(report), *lines(report), sep="\n")   # NG と未検査の行。CLI が出すのと同じ
+```
 
 pytest からは、[pytest-embedded-wireskein](https://github.com/Open-Embedded-Probe/pytest-embedded-wireskein) を使います。test ごとに記録器 `ws_run` を渡し、test の後に照合します。
 

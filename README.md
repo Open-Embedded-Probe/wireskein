@@ -110,7 +110,7 @@ Headings split the run into a tree of segments. `#` is a test, `##` is a step, a
 
 The logic checks (`square`, `level`, `starts` / `ends`, `pulses`, `i2c`, `spi`, `uart`) also run on analog channels when given `threshold=`: one voltage, or `(low, high)` for hysteresis (a noisy slow edge then makes one edge). Edges are placed where the line between two samples crosses the threshold; the resolution is one ADC sample, added to the tolerances. Without `threshold=`, an analog channel in a logic check is unchecked, and the reason says so.
 
-Pins and roles are given, so these checks are verification, not discovery. `docs/capture-test-guide.md` explains how to choose capture windows and tolerances, with examples from real runs.
+Pins and roles are given, so these checks are verification, not discovery. How to choose capture windows and tolerances, with examples from real runs, is in [docs/capture-test-guide.md](docs/capture-test-guide.md) (with every check, not only these).
 
 If a capture has the meta `time_base_slipped: true` (the probe knows some samples were taken late), the verdict does not change, but a failure's reason says so.
 
