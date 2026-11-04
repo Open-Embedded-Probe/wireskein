@@ -83,9 +83,11 @@ wireskein verify out/run1 --junit out/run1/report.xml --json out/run1/report.jso
 
 ```text
 OK  test_pwm/duty=64  square  c0001.wireskein
+OK  test_pwm/duty=64  only_moving  c0001.wireskein
 NG  test_pwm/duty=128  square  c0002.wireskein  duty 0.6999 vs 0.5020
+OK  test_pwm/duty=128  only_moving  c0002.wireskein
 OK  test_pwm/duty=0  level  c0003.wireskein
-2 ok, 1 ng, 0 unchecked, 0 measured (4 segments, 3 captures)
+4 ok, 1 ng, 0 unchecked, 0 measured (4 segments, 3 captures)
 ```
 
 キャプチャは `.wireskein`（後述）で保存されます。NG があれば、終了コードは 1 です。検査に使うピンがキャプチャにないなど、検査できなかったものは未検査（`--`）で、**既定で失敗**にします（多くは試験の書き間違いか配線の抜けだからです。`--allow-unchecked` で失敗にしません）。測るだけと頼んだもの（`uart(baud=None)` など）は measured（`ME`）で、失敗にしません。記録の形式と結果の意味は [docs/run-format.ja.md](docs/run-format.ja.md) にあります。

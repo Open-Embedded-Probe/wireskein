@@ -83,9 +83,11 @@ wireskein verify out/run1 --junit out/run1/report.xml --json out/run1/report.jso
 
 ```text
 OK  test_pwm/duty=64  square  c0001.wireskein
+OK  test_pwm/duty=64  only_moving  c0001.wireskein
 NG  test_pwm/duty=128  square  c0002.wireskein  duty 0.6999 vs 0.5020
+OK  test_pwm/duty=128  only_moving  c0002.wireskein
 OK  test_pwm/duty=0  level  c0003.wireskein
-2 ok, 1 ng, 0 unchecked, 0 measured (4 segments, 3 captures)
+4 ok, 1 ng, 0 unchecked, 0 measured (4 segments, 3 captures)
 ```
 
 The captures are stored as `.wireskein` files (below). The exit code is 1 when a check fails. A check that could not be made (its pins are not in the capture, ...) is **unchecked** (`--`) and **fails the run by default**, since it is usually a mistake in the test or the wiring (`--allow-unchecked` lets it pass). A check asked only to measure (`uart(baud=None)`, ...) is **measured** (`ME`) and does not fail. The run format and the result statuses: [docs/run-format.md](docs/run-format.md).
