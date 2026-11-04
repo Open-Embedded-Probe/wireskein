@@ -454,7 +454,7 @@ def i2s(bclk: str, ws: str, sd: str, format: str = "i2s", bits: int | None = Non
 
 def quadrature(a: str, b: str, steps: int | None = None, cycles: float | None = None, direction: str | None = None,
                errors_max: int | None = 0, threshold=None) -> dict:
-    """A quadrature encoder's lines: the net count in steps (every edge; positive with a leading b) or in cycles
+    """A quadrature encoder's lines: the net count in steps (every edge; positive with a leading a) or in cycles
     (steps / 4); direction "forward" / "backward": no step the other way; errors_max: changes of both lines on one
     tick (a skipped state) allowed (None: not checked)."""
     return _t({"kind": "quadrature", "a": a, "b": b, "steps": steps, "cycles": cycles, "direction": direction,

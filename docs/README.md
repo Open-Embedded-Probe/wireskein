@@ -10,5 +10,6 @@ The repository's [README](../README.md) gives an overview of using WireSkein. Th
 | [Design decisions and reasons](design.md) | Versions and compatibility, implementation language, the decoding stages and verdicts, how checks work, evaluation |
 | [The WireSkein file format](wireskein-format.md) | The `.wireskein` specification: container, `capture.json`, channel `encoding`s, attachments, notes, markers, annotations, relation to `.sr` and VCD |
 | [The run format](run-format.md) | Recorded test runs (`run.json`) and check results |
+| [The analysis format](analysis-format.md) | `wireskein-analysis/1`: what `decode` and `analyze` write |
 | [Markers](markers.md) | Heading markers and the segment rules |
 | [Checking captures in tests](capture-test-guide.md) | How to record a test run, capture windows, the list of checks, how to choose tolerances |

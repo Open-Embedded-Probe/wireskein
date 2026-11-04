@@ -7,7 +7,7 @@ This document collects the decisions made for the implementation, with their rea
 ## 1. Versions and compatibility
 
 - **Until version 1, incompatible changes are allowed. Backward compatibility is not considered.** There is no path for reading files in old formats, and no aliases for old names. Every format is number 1 until the first release, also through incompatible changes; from then on an incompatible change raises it. Unknown numbers are rejected with a clear error.
-  - Reason: so that mistakes in the formats and the API can be fixed now, while users are few. Silently reading an old format would misinterpret keys whose meaning has changed.
+  - Reason: so that mistakes in the formats and the API can be fixed now, before version 1. Silently reading an old format would misinterpret keys whose meaning has changed.
 
 ## 2. Implementation language and location
 
@@ -40,7 +40,7 @@ Decisions and reasons:
 - **Frequency, bit count and pin correlation are estimated in the common survey, not in the protocol analyzers.** Each analyzer does not repeat the same estimation; analyzers do not touch edges and receive typed streams (SyncBits, Chars, etc.). Adding a protocol only requires writing how to delimit and how to interpret.
 - **Protocols of one line told by pulse widths read the line itself** (`_engine/pulsecode.py`, `analyzers/pulse.py`): how widths are split (a bit's 0 and 1, resets, a carrier's bursts) differs per protocol, so it is no shared stage. Lines the survey calls clocks (an LED chain, a carrier) are read too.
 - **A stage is split out when it reduces later processing or has two or more users.** A stage that does neither is merged. For example, RateBlocks → Chars is kept separate because UART, LIN and DMX512 share it.
-- **What a stage cannot decide is passed down as sibling candidates.** The sampling edge, the glitch-filter width, the frame-delimiting threshold and similar choices are not fixed to one option; views for both are built, and the score from the plugin checks selects one. Fixing one choice in an early stage lost the correct answer in some cases.
+- **What a stage cannot decide is passed down as sibling candidates.** The sampling edge, the glitch-filter width, the frame-delimiting threshold and similar choices are not fixed to one option; views for both are built, and the score from the plugin checks selects one. Fixing one choice in an early stage can lose the correct answer.
 - **Clocked protocols are not split on rate changes. UART is.** Protocols that sample bits on clock edges do not depend on frequency, so a rate change is only kept as an annotation. UART has no clock, so it is split into blocks per bit time before reading (for example, writes that raise the rate midway).
 - **Timing estimation does not depend on frequency.** Clock-likeness, burst boundaries and phase between pins are measured as ratios to the neighboring intervals, not to a period of the whole run.
 
@@ -107,6 +107,6 @@ For connecting a high-speed parallel-output ADC to the probe's digital inputs, *
 
 ## 6. Evaluation
 
-- Estimation correctness is measured on the corpus with ground truth (`eval/corpus/`). Channel names are replaced with `D0…Dn` and their order shuffled, and the ground truth (`truth.json`) is kept where the estimator cannot see it.
+- Estimation correctness is measured on the corpus with ground truth (`eval/corpus/`). Channel names are replaced with `D0…Dn` and their order shuffled, and the ground truth (`<id>.truth.json`) is kept where the estimator cannot see it.
 - Seeds used for tuning and seeds not used, and noise conditions (glitches, mid-stream start, low sampling rate, jitter, rate changes), are measured separately to check for overfitting and weakness to noise.
 - The evaluation scripts are in [`eval/`](../eval/README.md). They read only what analyze exports (`wireskein.decode`), so they measure what a user gets.

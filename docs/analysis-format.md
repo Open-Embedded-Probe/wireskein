@@ -34,7 +34,7 @@ the lines fit, whether analyze would have claimed it, and what was not read or n
 
 ```json
 {"format": "wireskein-analysis/1",
- "wireskein": "0.0.16",
+ "wireskein": "...",
  "spec": {...},
  "capture": {"file": "c0001.wireskein", "sha256": "...", "id": "...", "tick_hz": [1000000, 1],
              "complete": true, "layout": "timeline", "parts": 1},
@@ -61,7 +61,7 @@ the lines fit, whether analyze would have claimed it, and what was not read or n
 | `ticks` | Its length in ticks. Every tick below counts from this part's tick 0 |
 | `tick0` | Where it starts after the first part's tick 0 (in a timeline) |
 | `start_ns` | Its tick 0 on the probe's clock, when the capture gives it. A tick `s` is at `start_ns + s / tick_hz` seconds × 1e9 |
-| `start_uncertainty_ns`, `boot_id` | As in the capture's part, when given (run-format §2.4) |
+| `start_uncertainty_ns`, `boot_id` | As in the capture's part, when given (wireskein-format §3.3) |
 | `buses[]` | One entry a spec bus, in the spec's order (§3) |
 | `lines[]` | `{"pin", "initial", "edges"}`: the level before the part, and each change's tick |
 | `undeclared[]` | Pins the spec does not name that changed: `{"pin", "edges", "s", "e", "bursts"}` (bursts apart by over 1 ms) |
@@ -127,14 +127,15 @@ tried, `--hint` / `--devices`) in place of `spec`, and in each part, in place of
 | Key | Meaning |
 | --- | --- |
 | `part`, `ticks`, `tick0`, `start_ns`, ... | As in §2.1 |
-| `claims[]` | What the evidence carries: `protocol`, `roles` (role → channel), `verdict` (`confirmed` / `likely` / `ambiguous` / `unknown-sync`), `score`, `margin`, `params`, and `result` (`--mode final`, at `--depth`), `layers` and `evidence` (`--mode all`) or the layers `--select` names. Ticks from the part's tick 0 |
+| `claims[]` | What the evidence carries: `protocol`, `roles` (role → channel), `verdict` (`confirmed` / `likely` / `ambiguous` / `unknown-sync`), `score`, `margin`, `params`, and `result` (`--mode final`, at `--depth`), `layers` and `evidence` (`--mode all`) or the layers `--select` names, `devices` (`--depth device`), `runner_up` (`--alternatives`). Ticks from the part's tick 0 |
 | `relations[]` | Pairs of claims read together (a command line and its answers: `scpi`) |
+| `analysis_seconds` | At the top: how long the analysis took (differs every run) |
 | `window`, `segment`, `events` | With `--window` / `--segment` (a range inside one part: `--part` names it when there are several) |
 
-Examples to run it on are in tests/data/examples (a SWIO and an RVSWD session from a WCH-LinkE, and generated I2C and SPI buses side by side), each with the buses it holds in `truth.json`: `wireskein analyze tests/data/examples/mixed-0.wireskein`. A WireSkein file is analysed part by part; a `.sr` or a VCD is one part. What is claimed, and
+Examples to run it on are in tests/data/examples (a SWIO and an RVSWD session from a WCH-LinkE, and generated I2C and SPI buses side by side), each with the buses it holds in `<name>.truth.json`: `wireskein analyze tests/data/examples/mixed-0.wireskein`. A WireSkein file is analysed part by part; a `.sr` or a VCD is one part. What is claimed, and
 how sure, may change between versions (the analysis is tuned on an evaluation corpus); the keys are kept.
 
 ## 5. Stability
 
-The format number stays 1 until the first release, also through incompatible changes. A reader checks `format`
+The format number stays 1 until version 1, also through incompatible changes. A reader checks `format`
 and ignores keys it does not know.

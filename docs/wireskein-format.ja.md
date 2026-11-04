@@ -166,7 +166,7 @@ UTF-8 の JSON のオブジェクトです。
 | `time_base_slipped` | `true`: プローブが、サンプルの時刻が遅れたことを知っている（OEP の区画の flags bit 2）。遅れがないときは、キー自体を入れません |
 | `boot_id` | `start_ns` の時計の起動（OEP core §7.7）。`probe.clock` が無いときに、プローブの時計の行（[記録の形式](run-format.ja.md) §2.4）と合わせるため |
 | `source` | 取得した元（例 `"oep:oep://30eda0ea068b?via=usb"`） |
-| `probe` | 取得した機器の情報（オブジェクト）。キーは任意です。WireSkein が意味を決めているのは次のものです。`model`、`firmware`（プローブ）、`chip`、`chip_revision`（取得した MCU）、`clock`（取得の前後に読んだ probe の時計と host の時計の対応、OEP core §7.7: `before` / `after` に `host_ns`（host の単調時計、往復の中点）、`uptime_ns`、`boot_id`、`uncertainty_ns`（往復の半分）。同じ boot_id なら `rate_ppm`（probe の時計の速さの host に対するずれ）と `rate_ppm_uncertainty`）、`generation`（OEP v1 の取得の世代: `{"logic": n, "analog": n}`。どの開始の取得かを追うため）、`calibration`（出荷時の補正値。`scheme` に方式の名前、`raw` に生の値を、適用せずにそのまま入れる。例: ESP32 の eFuse の ADC の補正値） |
+| `probe` | 取得した機器の情報（オブジェクト）。キーは任意です。WireSkein が意味を決めているのは次のものです。`address`（プローブの場所。経路を除いた OEP のアドレスで、run-format §2.4 のプローブの行の照合に使う）、`model`、`firmware`（プローブ）、`chip`、`chip_revision`（取得した MCU）、`clock`（取得の前後に読んだ probe の時計と host の時計の対応、OEP core §7.7: `before` / `after` に `host_ns`（host の単調時計、往復の中点）、`uptime_ns`、`boot_id`、`uncertainty_ns`（往復の半分）。同じ boot_id なら `rate_ppm`（probe の時計の速さの host に対するずれ）と `rate_ppm_uncertainty`）、`generation`（OEP v1 の取得の世代: `{"logic": n, "analog": n}`。どの開始の取得かを追うため）、`calibration`（出荷時の補正値。`scheme` に方式の名前、`raw` に生の値を、適用せずにそのまま入れる。例: ESP32 の eFuse の ADC の補正値） |
 
 大きな情報や、後から足す情報は、`meta` ではなく添付かメモに入れます（§5）。
 
@@ -393,7 +393,7 @@ UTF-8 の JSON のオブジェクトです。
     - 1 ビットの変数はロジック、ベクタはビットごとのチャンネル（`NAME[k]`）になります。x と z は 0 として読み、その数を `meta.vcd_x_or_z` に入れます。
     - `real` は、変化の間隔が一定のとき（サンプルした信号）だけアナログとして読みます。そうでないものは読まずに名前を示します（ないサンプルを作らないため）。
   - sigrok は、`$timescale` をサンプルレートとして読みます（上の 20 MHz の例では 100 MHz。変化点の位置は同じ）。
-- **記録（run）**: 試験の記録は、キャプチャを 1 つずつ `cNNNN.wireskein` として保存します（記録の形式 `wireskein-run/3`、[記録の形式](run-format.ja.md)）。記録の途中で 1 つの zip に追記し続けると、途中で落ちたときに zip の目次が書かれず、全体が読めなくなります。そのため記録はディレクトリのままにし、1 回ごとに別のファイルにします。
+- **記録（run）**: 試験の記録は、キャプチャを 1 つずつ `cNNNN.wireskein` として保存します（記録の形式 `wireskein-run/1`、[記録の形式](run-format.ja.md)）。記録の途中で 1 つの zip に追記し続けると、途中で落ちたときに zip の目次が書かれず、全体が読めなくなります。そのため記録はディレクトリのままにし、1 回ごとに別のファイルにします。
 
 ## 7. 版の上げ方
 

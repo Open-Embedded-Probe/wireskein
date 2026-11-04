@@ -34,7 +34,7 @@ wireskein の中を知らない道具が後で読みます。
 
 ```json
 {"format": "wireskein-analysis/1",
- "wireskein": "0.0.16",
+ "wireskein": "...",
  "spec": {...},
  "capture": {"file": "c0001.wireskein", "sha256": "...", "id": "...", "tick_hz": [1000000, 1],
              "complete": true, "layout": "timeline", "parts": 1},
@@ -61,7 +61,7 @@ wireskein の中を知らない道具が後で読みます。
 | `ticks` | 長さ（刻み）。以下の刻みはすべて、この区間の刻み 0 から数える |
 | `tick0` | 最初の区間の刻み 0 から、どれだけ後に始まるか（timeline のとき） |
 | `start_ns` | この区間の刻み 0 の、プローブの時計での時刻（キャプチャが持つとき）。刻み `s` は `start_ns + s / tick_hz` 秒 × 1e9 |
-| `start_uncertainty_ns`、`boot_id` | キャプチャの区間が持てば、そのまま（run-format §2.4） |
+| `start_uncertainty_ns`、`boot_id` | キャプチャの区間が持てば、そのまま（wireskein-format §3.3） |
 | `buses[]` | 指定のバスごとに 1 つ、指定の順（§3） |
 | `lines[]` | `{"pin", "initial", "edges"}`: 区間の前のレベルと、変化ごとの刻み |
 | `undeclared[]` | 指定に無いピンで変化したもの: `{"pin", "edges", "s", "e", "bursts"}`（1 ms より離れたものを別のかたまりとする） |
@@ -125,13 +125,14 @@ analyze の書き出し（`--mode final`、`depth` まで）の層。刻みは�
 | キー | 意味 |
 | --- | --- |
 | `part`、`ticks`、`tick0`、`start_ns` など | §2.1 と同じ |
-| `claims[]` | 証拠が支えるもの: `protocol`、`roles`（役割 → チャンネル）、`verdict`（`confirmed` / `likely` / `ambiguous` / `unknown-sync`）、`score`、`margin`、`params`。さらに `result`（`--mode final`、`--depth` まで）、`layers` と `evidence`（`--mode all`）、または `--select` で選んだ層。刻みは区間の刻み 0 から |
+| `claims[]` | 証拠が支えるもの: `protocol`、`roles`（役割 → チャンネル）、`verdict`（`confirmed` / `likely` / `ambiguous` / `unknown-sync`）、`score`、`margin`、`params`。さらに `result`（`--mode final`、`--depth` まで）、`layers` と `evidence`（`--mode all`）、または `--select` で選んだ層、`devices`（`--depth device`）、`runner_up`（`--alternatives`）。刻みは区間の刻み 0 から |
 | `relations[]` | 一緒に読む主張の組（コマンドの行とその応答: `scpi`） |
+| `analysis_seconds` | 文書の一番上: 解析にかかった秒（実行ごとに変わる） |
 | `window`、`segment`、`events` | `--window` / `--segment` のとき（1 つの区間の中の範囲。区間が 2 つ以上なら `--part` で選ぶ） |
 
-試す例は tests/data/examples にあります（WCH-LinkE の SWIO と RVSWD のやりとり、生成した I2C と SPI のバスを並べたもの）。それぞれ、持っているバスを `truth.json` に書いてあります: `wireskein analyze tests/data/examples/mixed-0.wireskein`。WireSkein のファイルは区間ごとに解析します。`.sr` と VCD は 1 つの区間です。何をどれだけ確かに
+試す例は tests/data/examples にあります（WCH-LinkE の SWIO と RVSWD のやりとり、生成した I2C と SPI のバスを並べたもの）。それぞれ、持っているバスを `<名前>.truth.json` に書いてあります: `wireskein analyze tests/data/examples/mixed-0.wireskein`。WireSkein のファイルは区間ごとに解析します。`.sr` と VCD は 1 つの区間です。何をどれだけ確かに
 主張するかは版で変わることがあります（評価のコーパスで調整するため）。キーは保ちます。
 
 ## 5. 安定性
 
-形式の番号は、最初のリリースまで 1 のまま（互換の無い変更でも）。読み手は `format` を確かめ、知らないキーは無視する。
+形式の番号は、版 1 まで 1 のまま（互換の無い変更でも）。読み手は `format` を確かめ、知らないキーは無視する。

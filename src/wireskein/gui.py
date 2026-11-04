@@ -1,12 +1,12 @@
 """`wireskein gui`: the viewer (wireskein-web) on a local web server.
 
-    wireskein gui capture.wireskein    # opens the browser on that capture (a .sr is converted on the fly)
+    wireskein gui capture.wireskein    # opens the browser on that capture (a .sr or VCD is converted on the fly)
     wireskein gui runs/                # a page listing the captures and runs below that directory
 
 The server listens on 127.0.0.1 only (a remote bench: `ssh -L PORT:127.0.0.1:PORT bench` and open the printed
 URL). Every start makes a token; the URL printed carries it once, the browser keeps it as a cookie, and requests
 without it, or with a Host other than the local one, are refused - another web page cannot read local files
-through it. It serves only the viewer and the WireSkein and .sr files below the directory given (told apart
+through it. It serves only the viewer and the WireSkein, .sr and VCD files below the directory given (told apart
 by their content, not their names).
 
 The viewer comes with the wheel (src/wireskein/web, the pinned wireskein-web release, tools/fetch_web.py);
@@ -283,7 +283,7 @@ class _Handler(BaseHTTPRequestHandler):
             raise FileNotFoundError(rel)
         if kind == "wireskein":
             return self._send(200, p.read_bytes(), "application/octet-stream")
-        # a .sr is shown as the WireSkein file it converts to (slow channels get their real rate back when it came from one)
+        # a .sr or VCD is shown as the WireSkein file it converts to (slow channels get their real rate back when it came from one)
         from .decode import load, save
         cap = load(p)
         meta = {k: v for k, v in cap.meta.items()
@@ -314,7 +314,7 @@ class _Handler(BaseHTTPRequestHandler):
         title = html.escape(str(base))
         body = (f"<!doctype html><meta charset=utf-8><title>wireskein gui</title>"
                 f"<style>body{{font:14px system-ui;margin:20px}}small{{color:#777}}</style>"
-                f"<h1>{title}</h1><ul>{''.join(rows) or '<li>no WireSkein or .sr files here</li>'}</ul>"
+                f"<h1>{title}</h1><ul>{''.join(rows) or '<li>no WireSkein, .sr or VCD files here</li>'}</ul>"
                 f"<p><button id=together disabled>Open the checked ones together</button> "
                 f"<small>the first checked is the time reference; the others are drawn on its time "
                 f"(aligned with <code>wireskein align --to</code>)</small></p>"

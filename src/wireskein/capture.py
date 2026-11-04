@@ -9,6 +9,7 @@
 
     clk = capture.logic("CLK", 0, [10, 20, 30], n=1000)     # a line from its changes
     capture.write("out.wireskein", capture.Capture(Fraction(10**6), [capture.Part(1000, [clk])]))
+    capture.attach("out.wireskein", "setup.json", {...}); capture.note("out.wireskein", "re-taken")   # without rewriting
 
 Importing this module, reading, writing and the channels as stored need only the standard library (a test script
 without numpy writes and reads captures); numpy is used when a channel is turned into its changes or a part into the
@@ -30,10 +31,10 @@ from . import _fileformat as fileformat
 from ._fileformat import AnalogChannel as Analog
 from ._fileformat import Channel
 from ._fileformat import EventsChannel as Events
-from ._fileformat import analog_raw, analog_volts, events, from_interleaved, pack
+from ._fileformat import analog_raw, analog_volts, attach, attachments, events, from_interleaved, note, notes, pack
 
-__all__ = ["Analog", "Capture", "Channel", "Events", "Part", "analog_raw", "analog_volts", "events",
-           "from_interleaved", "logic", "pack", "read", "write"]
+__all__ = ["Analog", "Capture", "Channel", "Events", "Part", "analog_raw", "analog_volts", "attach", "attachments",
+           "events", "from_interleaved", "logic", "note", "notes", "pack", "read", "write"]
 
 
 def logic(name: str, initial: int, edges, n: int, step: int = 1, phase: int = 0, **acquisition) -> Channel | Events:

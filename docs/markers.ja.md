@@ -59,7 +59,7 @@ PWM duty=64
 
 ## 4. ほかの方言
 
-既存の記録の書式は、`decl/markers/` に TOML の方言を足して読みます。行の種類は 4 つです。
+既存の記録の書式は、`decl/markers/` に TOML の方言を足して読みます。既定の方言の `heading`（§1）のほかに、行の種類は 4 つです。
 
 | 種類 | 意味 |
 | --- | --- |
@@ -90,7 +90,7 @@ pattern = '^PHASE (?P<name>\S+)'
 action = "point"
 level = "phase"
 
-[[marker]]                       # INPUT / RESULT: attributes of the innermost open segment
+[[marker]]                       # RESULT: attributes of the innermost open segment
 pattern = '^RESULT (?P<value>.+)$'
 action = "attr"
 key = "result"

@@ -29,7 +29,7 @@ The run is a directory, with each capture in a separate file, so that if the tes
 
 - Headings (`#` is a test, `##` is a step; a heading with no name closes) are written to `log` with `src: "marker"`, and build the segment tree.
 - A segment path is the heading names joined with `/` (e.g. `test_pwm/duty=64`).
-- **When the same name repeats under the same parent, the first keeps the name as is, and from the second on `[1]`, `[2]`, ... are appended** (e.g. `duty=64`, `duty=64[1]`). Adding the same name later does not change the paths of earlier segments.
+- **When the same name repeats under the same parent, the first keeps the name as is, and from the second on `[1]`, `[2]`, ... are appended** (e.g. `duty=64`, `duty=64[1]`).
 - Numbering starts from the second occurrence so that adding the same name later does not change the paths of earlier segments or the expectation keys attached to them.
 - Marker segment paths such as those of `wireskein analyze --segment` follow the same rule.
 
@@ -71,7 +71,7 @@ Code on the probe may keep a log on its own clock (oep-probe-arduino's `OepProbe
 
 - `host_ns` is always given too (the probe's time converted to the host clock). The segment tree and the order of lines come from `host_ns`.
 - Heading lines (`src: "marker"`) open and close segments like any heading. Other lines are `src: "dut"`.
-- **A segment whose opening and closing lines both have `probe_ns`** is placed by its position in the captures. When a capture part's `meta.start_ns` is on the same clock (the same `boot_id`, and the same `probe` when given), a line's tick is (`probe_ns` − `start_ns`) × the tick rate. A capture holding the segment is assigned to it whatever its recorded `path`, and only the segment's time is cut out and checked.
+- **A segment whose opening and closing lines both have `probe_ns`** is placed by its position in the captures. When a capture part's `meta.start_ns` is on the same clock (the same `boot_id`; when the line gives `probe`, the capture's `meta.probe.address` is the same, or without it its `meta.source` with the route after `?` dropped), a line's tick is (`probe_ns` − `start_ns`) × the tick rate. A capture holding the segment is assigned to it whatever its recorded `path`, and only the segment's time is cut out and checked.
 - The bounds' uncertainty is the capture part's `start_uncertainty_ns` plus the lines' `uncertainty_ns`. A check runs on two windows, the bounds moved out and moved in; when the verdicts differ, it is `unchecked` (the verdict depends on where the bounds fall), never silently `ok`. A segment shorter than its uncertainty is `unchecked`.
 - A segment that begins before a capture (or ends after it) is cut at the capture's edge, said in the result's `measured` `clipped`.
 - With no capture on the same clock, the segment's expectations are `ng` for having no capture. A capture near in time is never used instead.
@@ -90,7 +90,7 @@ A result:
 | --- | --- |
 | `path` | Segment path |
 | `capture` | Capture file name (null if no capture matched) |
-| `check` | Check kind (`kind`) |
+| `check` | Check kind (`kind`), or a check of the record itself: `segment` (no segment with the path), `capture` (no capture in the segment, or a capture that lost data), `markers`, `probe_log` |
 | `status` | One of the four below |
 | `ok` | true if `status` is `ok`, false if `ng`, null otherwise (reading `status` is more reliable) |
 | `expected`, `measured`, `reason` | Expectation, measured value, reason |
@@ -100,8 +100,8 @@ Statuses:
 | `status` | Meaning | Fails by default |
 | --- | --- | --- |
 | `ok` | As expected | No |
-| `ng` | Differs from the expectation | Yes |
-| `unchecked` | Could not be checked (pin not in the capture, no voltage conversion, no segment or capture, etc.) | **Yes** (No with `--allow-unchecked`) |
+| `ng` | Differs from the expectation; also no segment, no capture, or lost data | Yes |
+| `unchecked` | Could not be checked (pin not in the capture, no voltage conversion, etc.) | **Yes** (No with `--allow-unchecked`) |
 | `measured` | Requested as measured only (`uart(baud=None)` etc.). Returns the measured value | No |
 
 - `unchecked` fails by default because most such cases are mistakes in the test or missing wiring or capture.

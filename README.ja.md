@@ -14,15 +14,15 @@ WireSkein は、ロジックアナライザのキャプチャを**テストと�
 
 ## なぜ WireSkein か
 
-組み込みの開発で、ロジックアナライザは欠かせません。けれども、今までの道具は「人が画面で波形を見る」ことが中心で、次のことが難しいままでした。
+組み込みの開発で、ロジックアナライザは欠かせません。けれども、今までの道具は「人が画面で波形を見る」ことが中心で、次のことが難しくなります。
 
-| 困っていたこと | WireSkein での解決 |
+| 困ること | WireSkein での解決 |
 | --- | --- |
 | **テストにならない。** 波形を見て「たぶん合っている」で終わる。キャプチャを期待と照らし合わせて OK / NG を出し、CI に載せる口がない | テストの中で期待をコードとして書き（`square`、`uart`、`i2c`、`voltage` など）、`wireskein verify` が測定値付きで照合する。JUnit XML と pytest のプラグインで、そのまま CI に載る |
 | **機材に縛られる。** 使いやすいアプリほど専用の機材が前提で、手元の安いロジアナや自作のプローブと組み合わせにくい。ライセンスが組み込みや改変に合わないこともある | 取得元を選ばない。sigrok の `.sr` や VCD をそのまま読み、sigrok 対応の機器や、ESP32 などで作る OEP のプローブから直接取れる。MIT ライセンス |
 | **間引いた・遅いチャンネルが偽のサンプルで埋まる。** 既存の形式は全チャンネルが 1 つのレートなので、帯域のために一部を間引くと、取っていないサンプルが水増しされる | `.wireskein` は各チャンネルを自分のレートのまま持ち、取ったサンプルだけを保存する。ビューアも、実際のサンプルとエッジの不確かさの幅を示す |
 | **ロジックとアナログが別々。** 別の記録を別の道具で見て、時刻を手で合わせる | ロジックとアナログを 1 つのファイルに持ち、`wireskein align` が同じ信号のエッジから時刻のずれと倍率を求める。アナログにもロジックの検査（`threshold=`）と電圧の検査をかけられる |
-| **情報が多すぎる。** 全波形や全イベントを人や AI が毎回読むのは重い。一方で、要約の途中で大事な信号を落とすこともある（RVSWD の調査で、途中で速くなった通信をノイズと見なした例がある） | 必要な層だけを構造化して出す（コマンド列だけ、区間だけ、詳細まで）。未解釈の区間、候補ごとの根拠、取得の品質は隠さずに残す |
+| **情報が多すぎる。** 全波形や全イベントを人や AI が毎回読むのは重い。一方で、要約の途中で大事な信号を落とすこともある（途中で速くなった通信を、ノイズと見なしてしまうなど） | 必要な層だけを構造化して出す（コマンド列だけ、区間だけ、詳細まで）。未解釈の区間、候補ごとの根拠、取得の品質は隠さずに残す |
 | **出力を使うたびに加工が要る。** 表示用の文字列を読み直したり、ツールごとに変換スクリプトを書いたりする | 出力は安定した構造の JSON。時刻は刻みの整数で、元のキャプチャへ戻れる |
 
 ### AI フレンドリー
@@ -122,7 +122,7 @@ from wireskein.verify import verify, junit, dumps, lines, summary_line
 report = verify("out/run1")          # dict: results（測った値つき）、summary、log
 xml = junit(report)                  # JUnit XML
 text = dumps(report)                 # JSON
-print(summary_line(report), *lines(report), sep="\n")   # NG と未検査の行。CLI が出すのと同じ
+print(*lines(report, ok=True), summary_line(report), sep="\n")   # CLI が出すのと同じ（ok=True が無ければ OK 以外の行だけ）
 ```
 
 pytest からは、[pytest-embedded-wireskein](https://github.com/Open-Embedded-Probe/pytest-embedded-wireskein) を使います。test ごとに記録器 `ws_run` を渡し、test の後に照合します。
@@ -196,6 +196,7 @@ wireskein gui runs/                # runs/ の下のキャプチャと記録の�
 WireSkein のファイル（`.wireskein`、中身は zip）は、キャプチャと、それに付くもの（添付、メモ、マーカー、復号の注釈）を 1 つに持ちます。道具は、名前ではなく中身で見分けます。キャプチャは、各チャンネルを自分のサンプルレートのまま持ちます。帯域に収めるために一部のチャンネルを間引くプローブ（例: 32 サンプルに 1 つ）は、取ったサンプルだけを `step=32` で保存します。間を埋める水増しはしないので、ビューアは実際にあるサンプルだけを見せられます。読み書きは、標準ライブラリだけで動く `wireskein.capture` で行います（numpy は、線を変化にするときだけ使います）。
 
 ```python
+from fractions import Fraction
 from wireskein import capture as wc
 
 part = wc.Part(n, [
@@ -224,6 +225,8 @@ wc.write("m.wireskein", wc.Capture(20_000_000, [wc.Part(n, [
 ])], meta={"probe": {"chip": "ESP32-P4", "calibration": {"scheme": "curve-fitting-v1", "raw": "..."}}}))
 ```
 
+テストの記録では、同じチャンネルを `rec.capture(t, tick_hz, channels=[...])` に渡します。
+
 `wireskein capture --source sigrok:<ドライバ>` で、アナログのチャンネルも取れます（`--channels CLK=D0,VBUS=A0`）。解析は、ロジックのチャンネルを読みます。照合は、アナログのチャンネルも読みます（`voltage()` と、ロジックの検査の `threshold=`）。形式の仕様は `docs/wireskein-format.ja.md` にあります。
 
 プローブが返すアナログの開始時刻は、推定値です（ADC は数百 µs ずれて始まったり、少し速く・遅く動いたりします）。同じ信号をロジックとアナログの両方で取っておけば（同じネットを両方につなぐ、または目印のパルス）、`wireskein align` がそのエッジからオフセットと時間の倍率を求め、`attach/alignment.json` に入れます。サンプルと記録した時刻は変えません。
@@ -244,8 +247,6 @@ wireskein align B.wireskein --to A.wireskein --reference SYNC --via SYNC --save
 
 結果は、B の `alignment.json` に（A を見分ける情報と一緒に）入ります。どちらのファイルのサンプルも変えません。ビューアの「Add another probe's file」で、B のチャンネルを A の時間軸に並べて表示できます（Python からは `align.between()`）。
 
-テストの記録では、同じものを `rec.capture(t, tick_hz, channels=[...])` に渡します。
-
 WireSkein のファイルには、キャプチャについてのほかの情報も入れられます（取得の設定、配線のメモ、分析の結果など）。
 
 - **添付**: 名前付きのファイルです（テキスト、JSON、bytes）。後から差し替えられます。
@@ -254,10 +255,10 @@ WireSkein のファイルには、キャプチャについてのほかの情報�
 どちらも、既存のファイルに、チャンネルのデータを書き直さずに足せます。
 
 ```python
-wf.attach("c.wireskein", "probe.json", {"fw": "1.2", "plan": plan})   # dict / list は JSON、str はテキスト、bytes はそのまま
-wf.note("c.wireskein", "PA5 がうるさい。次は線を短く")
-wf.note("c.wireskein", {"i2c": transactions}, kind="analysis")
-wf.attachments("c.wireskein"), wf.notes("c.wireskein")
+wc.attach("c.wireskein", "probe.json", {"fw": "1.2", "plan": plan})   # dict / list は JSON、str はテキスト、bytes はそのまま
+wc.note("c.wireskein", "PA5 がうるさい。次は線を短く")
+wc.note("c.wireskein", {"i2c": transactions}, kind="analysis")
+wc.attachments("c.wireskein"), wc.notes("c.wireskein")
 ```
 
 ```sh
@@ -306,7 +307,7 @@ doc = export(analyze(cap, {"protocols": ["spi"]}), cap)
 
 版 1 までは、互換のない変更をしてよいものとし、後方互換は保ちません。
 
-- どの形式も、最初のリリースまでは番号 1 です（`wireskein/1`、`wireskein-run/1`、`wireskein-analysis/1`、ファイルの中の部分）。互換のない変更でも上げません。リリースの後は、互換のない変更で番号を上げ、足す変更では上げません。読み手は、知らない番号ははっきりしたエラーで断り、知らないキーは無視します。古い番号を読み続ける口は作りません。
+- どの形式も、版 1 までは番号 1 です（`wireskein/1`、`wireskein-run/1`、`wireskein-analysis/1`、ファイルの中の部分）。互換のない変更でも上げません。版 1 からは、互換のない変更で番号を上げ、足す変更では上げません。読み手は、知らない番号ははっきりしたエラーで断り、知らないキーは無視します。古い番号を読み続ける口は作りません。
 - 足す変更（新しいキー、新しい引数）は、既定で今の意味を保つ形で入れます。
 - `wireskein._engine` は内部です。
 
@@ -316,9 +317,11 @@ doc = export(analyze(cap, {"protocols": ["spi"]}), cap)
 src/wireskein/          package（capture、runlog、verify、decode、sources、cli、_engine、decl/ のデータ）
 tests/                  pytest（tests/data: 実機のキャプチャと例）
 eval/                   analyze の推定を測る: 正解付きのコーパスとスクリプト（package に入れない）
-docs/                   仕様と設計の決定
+docs/                   仕様と設計の決定（英語と日本語）
 tools/                  ビューアの取得とリリースのスクリプト
 ```
+
+推定を測るには、`uv sync` の後、`cd eval && uv run python evaluate.py --set heldout` です。[eval/README.ja.md](eval/README.ja.md) を参照。
 
 ## 開発
 
@@ -332,7 +335,7 @@ uv build
 pytest-embedded-arduino-cli と同じく、GitHub Actions で出します。
 
 1. `CHANGELOG.md` の `## Unreleased` を更新します。
-2. `Release` の workflow を手で実行し、版（例 `0.0.2`）を入れます。
+2. `Release` の workflow を手で実行し、版（`X.Y.Z`）を入れます。
 3. 残りは workflow が行います。
    - `pyproject.toml` と `src/wireskein/__init__.py` の版を書き換える
    - 変更履歴を新しい版の見出しの下へ移す

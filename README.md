@@ -22,7 +22,7 @@ A logic analyzer is essential in embedded work, but the usual tools are built ar
 | **Tied to the hardware.** The easiest apps expect their own analyzers; cheap analyzers and home-made probes do not fit, and licenses may not allow embedding or changes | Any source: sigrok `.sr` and VCD files are read as they are; capture directly from sigrok devices or from OEP probes built on boards such as the ESP32. MIT license |
 | **Decimated or slow channels are padded with fake samples.** Existing formats have one rate for all channels, so a channel kept at a lower rate is filled with samples that were never taken | A `.wireskein` keeps each channel at its own rate and stores only the samples taken; the viewer shows the real samples and how uncertain each edge is |
 | **Logic and analog live apart.** Separate recordings, separate tools, times lined up by hand | Logic and analog in one file; `wireskein align` finds the offset and time scale from the edges of a signal seen on both; analog channels take logic checks (`threshold=`) and voltage checks |
-| **Too much data.** Having people or AI read every waveform and event is heavy, yet summarizing can drop what matters (in one RVSWD investigation, a link that sped up mid-capture was taken for noise) | Structured output of just the layers needed (a command list, spans, or full detail), without hiding undecoded spans, the evidence for each candidate, or the capture quality |
+| **Too much data.** Having people or AI read every waveform and event is heavy, yet summarizing can drop what matters (a link that speeds up mid-capture can be taken for noise) | Structured output of just the layers needed (a command list, spans, or full detail), without hiding undecoded spans, the evidence for each candidate, or the capture quality |
 | **Every use of the output needs glue code.** Re-parsing display strings, one conversion script per tool | Output is JSON with a stable structure; times are integer ticks that lead back to the capture |
 
 ### AI-friendly
@@ -122,7 +122,7 @@ from wireskein.verify import verify, junit, dumps, lines, summary_line
 report = verify("out/run1")          # dict: results (with measured values), summary, log
 xml = junit(report)                  # JUnit XML
 text = dumps(report)                 # JSON
-print(summary_line(report), *lines(report), sep="\n")   # NG and unchecked lines, as the CLI prints them
+print(*lines(report, ok=True), summary_line(report), sep="\n")   # as the CLI prints them (without ok=True: the lines that are not OK)
 ```
 
 For pytest, [pytest-embedded-wireskein](https://github.com/Open-Embedded-Probe/pytest-embedded-wireskein) gives each test a `ws_run` recorder and runs `verify` after the test.
@@ -143,7 +143,7 @@ wireskein capture --source sigrok:fx2lafw --channels SDA=D0,SCL=D1 --rate 12M --
 | `oep:<address>` | An OEP probe through oep-client-python (its `acquire`). `<address>` is its OEP address, `oep://<unit_id>` with an optional route (`?via=usb`, `cdc`, `net`, `tcp:HOST:PORT`, `tty:PATH`), or a short form: a serial port, `tcp://HOST:PORT` | The probe's channel names (`GPIO47`) or its ports' line labels (`x035.scl`); a number holds for one boot only |
 | `sigrok:<driver>` | Any device sigrok supports, through `sigrok-cli` (`fx2lafw`, `dreamsourcelab-dslogic`, `demo`, ...) | sigrok's channel names (`D0`, ...) |
 
-`--channels` names each logic channel (`NAME=ID`). On an OEP probe with capture format 1, a line can be kept as its changes: `CS=5/64` keeps, per 64 samples, how many times it changed and the level after (`events` with step 64 in the file), `EN=7/1` every change exactly (the probe carries a busy stretch raw, so it never takes more than the samples would). Levels, whether a line moved and pulse counts stay exact; a line with at most one change a quantum is also decoded at that resolution. `capture` prints the bytes the probe sent against the most the format allows (`data:`, kept in `meta.probe.data`). `--mode stream --duration 2s` streams logic channels for longer than the probe's memory; if the probe drops data, `--on-loss stop` (the default) stops there and `--on-loss continue` goes on, and either way what was taken is kept but the capture fails (`INCOMPLETE`, exit 1; the file says `complete: false`). With `--analog`, a stream takes the analog channels too (both tracks started in one group; analog alone works too), each part holding the analog samples of its time. `--mode repeat --segments 20` takes 20 acquisitions of `--samples` into one file (OEP repeat), each read and released as it finishes, so more than the probe holds; with `--trigger` each starts on its own trigger (rearm) and the file is `layout: segments`, each part its own trigger and time (the viewer switches them as tabs); without, they run on as a timeline. `--analog NAME=ID[@FRONTEND],...` adds analog channels (`--analog-rate`, `--analog-samples`; by default as long as the logic capture). On an OEP probe, logic and analog are started together (capture-group); each analog channel keeps its own rate and start (the probe's estimate, with its uncertainty), raw values, input range, reference and the probe's factory calibration. With sigrok, analog ids ride at the device's one rate.
+`--channels` names each logic channel (`NAME=ID`). On an OEP probe with capture format 1, a line can be kept as its changes: `CS=5/64` keeps, per 64 samples, how many times it changed and the level after (`events` with step 64 in the file), `EN=7/1` every change exactly (the probe carries a busy stretch raw, so it never takes more than the samples would). Levels, whether a line moved and pulse counts stay exact; a line with at most one change a quantum is also decoded at that resolution. `capture` prints the bytes the probe sent against the most the format allows (`data:`, kept in `meta.probe.data`). `--mode stream --duration 2s` streams logic channels for longer than the probe's memory; if the probe drops data, `--on-loss stop` (the default) stops there and `--on-loss continue` goes on, and either way what was taken is kept but the capture fails (`INCOMPLETE`, exit 1; the file says `complete: false`). With `--analog`, a stream takes the analog channels too (both tracks started in one group; analog alone works too), each part holding the analog samples of its time. `--mode repeat --segments 20` takes 20 acquisitions of `--samples` into one file (OEP repeat), each read and released as it finishes, so more than the probe holds; with `--trigger` each starts on its own trigger (rearm) and the file is `layout: segments`, each part its own trigger and time (the viewer switches them as tabs); without, they run on as a timeline. `--analog NAME=ID[@FRONTEND],...` adds analog channels (`--analog-rate`, `--analog-samples`; by default as long as the logic capture). On an OEP probe, logic and analog are started together (capture-group); each analog channel keeps its own rate and start (the probe's estimate, with its uncertainty), raw values, input range, reference and the probe's factory calibration. With `--trigger` every track is cut on the one event (OEP capture §4.4's trigger source), each keeping its own pretrigger. An analog line can be the trigger too: `--trigger VDD:fall:2.9` (crossing down through 2.9 V) or `VDD:low:2.9` (staying below it); the event's time and uncertainty go to `meta.probe`. With sigrok, analog ids ride at the device's one rate.
 
  The file keeps the rate the device actually used, plus what the source knows: the probe's `start_ns` and `start_uncertainty_ns` (the probe clock of the first sample), a `time_base_slipped` mark (the probe knows some samples were taken late, e.g. at its buffer limit, so times may be stretched there; `wireskein info` says so, and a failed check names it), the trigger position in ticks (`trigger_tick`). On a UART probe (a classic ESP32 jig, say), the link is raised to a faster rate for reading the capture back: rates that hold are tried and chosen, and remembered per port and probe (an oep-client-python feature). `--fast 0` keeps the boot speed, `--fast 921600` (or a list) tries only those. A probe with USB (an ESP32-P4) is best opened over USB, `oep:oep://<unit_id>` or `?via=usb`: the vendor bulk interface reads back at megabytes per second without loss, where its USB serial port (CDC) is slower and can drop answers under load. `capture` prints how the link went (the rate, the trials, the read time), also kept in `meta.probe.link`. From Python: `wireskein.sources.capture(source, Request(...), out)`. Other packages can add sources through the `wireskein.sources` entry point group.
 
@@ -176,6 +176,7 @@ It serves nothing but the viewer and the capture files below the directory given
 A WireSkein file (`.wireskein`, a zip) holds a capture and what goes with it: attachments, notes, markers and decode annotations. Tools tell it apart by its content, not its name. A capture keeps each channel at its own sample rate. A probe that decimates some channels to fit its link (every 32nd sample, say) stores only the samples it took, with `step=32`. Nothing is repeated to fill the gaps, so a viewer can show exactly the samples that exist. The module `wireskein.capture` reads and writes it with the standard library only (numpy only to turn a line into its changes):
 
 ```python
+from fractions import Fraction
 from wireskein import capture as wc
 
 part = wc.Part(n, [
@@ -200,7 +201,7 @@ wc.write("m.wireskein", wc.Capture(20_000_000, [wc.Part(n, [
 ])], meta={"probe": {"chip": "ESP32-P4", "calibration": {"scheme": "curve-fitting-v1", "raw": "..."}}}))
 ```
 
-An OEP probe starts logic and analog together in a capture-group; with `--trigger` every track is cut on the one event (OEP capture §4.4's trigger source), each keeping its own pretrigger. An analog line can be the trigger too: `--trigger VDD:fall:2.9` (crossing down through 2.9 V) or `VDD:low:2.9` (staying below it); the event's time and uncertainty go to `meta.probe`.
+In a recorded run, pass the same channels to `rec.capture(t, tick_hz, channels=[...])`.
 
 `wireskein capture --source sigrok:<driver>` takes analog channels too (`--channels CLK=D0,VBUS=A0`). The analysis reads the logic channels; the checks read analog channels too (`voltage()`, and `threshold=` on the logic checks). The format is specified in `docs/wireskein-format.md`.
 
@@ -222,15 +223,13 @@ wireskein align B.wireskein --to A.wireskein --reference SYNC --via SYNC --save
 
 The result goes into B's `alignment.json` (with A's identity); neither file's samples change. The viewer's "Add another probe's file" then draws B's channels on A's time axis (`align.between()` in Python).
 
-In a recorded run, pass the same thing to `rec.capture(t, tick_hz, channels=[...])`.
-
 A WireSkein file can also carry anything else about the capture: acquisition settings, a wiring note, analysis results. Attachments are named files (text, JSON or bytes) and can be replaced. Notes form an append-only log, one entry per call, with its time. Both can be added to an existing file without rewriting the channels:
 
 ```python
-wf.attach("c.wireskein", "probe.json", {"fw": "1.2", "plan": plan})   # dict / list -> JSON, str -> text, bytes as is
-wf.note("c.wireskein", "PA5 looked noisy; shorter wire next time")
-wf.note("c.wireskein", {"i2c": transactions}, kind="analysis")
-wf.attachments("c.wireskein"), wf.notes("c.wireskein")
+wc.attach("c.wireskein", "probe.json", {"fw": "1.2", "plan": plan})   # dict / list -> JSON, str -> text, bytes as is
+wc.note("c.wireskein", "PA5 looked noisy; shorter wire next time")
+wc.note("c.wireskein", {"i2c": transactions}, kind="analysis")
+wc.attachments("c.wireskein"), wc.notes("c.wireskein")
 ```
 
 ```sh
@@ -283,7 +282,7 @@ doc = export(res, cap)
 
 Until version 1, breaking changes are allowed and backward compatibility is not kept.
 
-- Every format is number 1 until the first release (`wireskein/1`, `wireskein-run/1`, `wireskein-analysis/1` and the parts of a file), also through incompatible changes; from then on an incompatible change raises the number, an addition does not. A reader refuses a number it does not know, with a clear error, and ignores keys it does not know; older numbers are not read.
+- Every format is number 1 until version 1 (`wireskein/1`, `wireskein-run/1`, `wireskein-analysis/1` and the parts of a file), also through incompatible changes; from version 1 on an incompatible change raises the number, an addition does not. A reader refuses a number it does not know, with a clear error, and ignores keys it does not know; older numbers are not read.
 - Additions (new keys, new arguments) keep the current meaning by default.
 - `wireskein._engine` is internal.
 
@@ -297,7 +296,7 @@ docs/                   specifications and design decisions (English and Japanes
 tools/                  fetching the viewer, release scripts
 ```
 
-To measure the inference: `uv sync`, then `cd eval && uv run python evaluate.py --set heldout`. See `eval/README.md`.
+To measure the inference: `uv sync`, then `cd eval && uv run python evaluate.py --set heldout`. See [eval/README.md](eval/README.md).
 
 ## Development
 
@@ -311,7 +310,7 @@ uv build
 Releases use GitHub Actions, the same way as pytest-embedded-arduino-cli.
 
 1. Update the `## Unreleased` section of `CHANGELOG.md`.
-2. Run the `Release` workflow manually and enter the version, for example `0.0.2`.
+2. Run the `Release` workflow manually and enter the version (`X.Y.Z`).
 3. The workflow does the rest. It updates the version in `pyproject.toml` and `src/wireskein/__init__.py`, moves the changelog entries under the new version, runs the tests, builds, commits, tags `v<version>`, creates a GitHub Release, and publishes to PyPI.
 
 PyPI publishing uses Trusted Publishing.

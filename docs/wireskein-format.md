@@ -39,7 +39,7 @@ A zip file. The extension is `.wireskein`. Its contents are:
 | `verify/`, `view/` | — | Reserved (§2.4) |
 
 - Compression is zip deflate or stored. Writers store `wireskein.json` as stored and everything else as deflate.
-- Writers of the current version always include a capture (`capture.json`). Readers treat a file without `capture.json` as "containing no capture" (operations that need a waveform refuse, saying so).
+- Writers always include a capture (`capture.json`). Readers treat a file without `capture.json` as "containing no capture" (operations that need a waveform refuse, saying so).
 
 ### 2.1 `wireskein.json`
 
@@ -166,7 +166,7 @@ There is the capture's `meta` (the whole) and each part's `meta`. Any keys may b
 | `time_base_slipped` | `true`: the probe knows that sample times were delayed (OEP section flags bit 2). When there is no delay, the key itself is omitted |
 | `boot_id` | The boot of `start_ns`'s clock (OEP core §7.7), to match lines on the probe's clock ([Run format](run-format.md) §2.4) when there is no `probe.clock` |
 | `source` | Where it was taken from (e.g. `"oep:oep://30eda0ea068b?via=usb"`) |
-| `probe` | Information about the acquiring device (an object). Keys are optional. The ones whose meaning WireSkein defines are: `model`, `firmware` (the probe), `chip`, `chip_revision` (the MCU acquired from), `clock` (correspondence between the probe clock and the host clock read before and after acquisition, OEP core §7.7: `before` / `after` with `host_ns` (host monotonic clock, midpoint of the round trip), `uptime_ns`, `boot_id`, `uncertainty_ns` (half the round trip); for the same boot_id, `rate_ppm` (deviation of the probe clock speed relative to the host) and `rate_ppm_uncertainty`), `generation` (OEP v1 acquisition generation: `{"logic": n, "analog": n}`, to track which start an acquisition came from), `calibration` (factory calibration values; `scheme` holds the scheme name and `raw` the raw values, stored as is without applying them. Example: ESP32 eFuse ADC calibration values) |
+| `probe` | Information about the acquiring device (an object). Keys are optional. The ones whose meaning WireSkein defines are: `address` (the probe's place: its OEP address without the route, which run-format §2.4 matches probe lines by), `model`, `firmware` (the probe), `chip`, `chip_revision` (the MCU acquired from), `clock` (correspondence between the probe clock and the host clock read before and after acquisition, OEP core §7.7: `before` / `after` with `host_ns` (host monotonic clock, midpoint of the round trip), `uptime_ns`, `boot_id`, `uncertainty_ns` (half the round trip); for the same boot_id, `rate_ppm` (deviation of the probe clock speed relative to the host) and `rate_ppm_uncertainty`), `generation` (OEP v1 acquisition generation: `{"logic": n, "analog": n}`, to track which start an acquisition came from), `calibration` (factory calibration values; `scheme` holds the scheme name and `raw` the raw values, stored as is without applying them. Example: ESP32 eFuse ADC calibration values) |
 
 Large information, or information added later, goes into an attachment or a note, not `meta` (§5).
 
@@ -287,7 +287,7 @@ Correction:
 | `scale` | number | Time scale b |
 | `reference` | string | The logic channel used as reference |
 | `via` | string | The channel matched against the reference (one that captured the same signal). It may be the corrected channel itself |
-| `method` | string | How it was derived (currently `"edges"`: matching edge positions) |
+| `method` | string | How it was derived (`"edges"`: matching edge positions) |
 | `matched` | integer | Number of matched edges |
 | `residual_ticks` | number | Remaining error (root mean square over matched edges, in ticks) |
 | Others | — | Conditions of the derivation (threshold, search range, etc.). Optional |
@@ -393,7 +393,7 @@ Row:
     - 1-bit variables become logic; vectors become one channel per bit (`NAME[k]`). x and z are read as 0, and their count goes into `meta.vcd_x_or_z`.
     - `real` is read as analog only when the change interval is constant (a sampled signal). Others are not read; their names are shown (so as not to create samples that do not exist).
   - sigrok reads `$timescale` as the sample rate (100 MHz in the 20 MHz example above; the change positions are the same).
-- **Run (record)**: a test run saves each capture as `cNNNN.wireskein` (run format `wireskein-run/3`, [run format](run-format.md)). If a run kept appending to one zip, a crash midway would leave the zip's central directory unwritten and make the whole thing unreadable. So a run stays a directory, with a separate file for each capture.
+- **Run (record)**: a test run saves each capture as `cNNNN.wireskein` (run format `wireskein-run/1`, [run format](run-format.md)). If a run kept appending to one zip, a crash midway would leave the zip's central directory unwritten and make the whole thing unreadable. So a run stays a directory, with a separate file for each capture.
 
 ## 7. Versioning
 

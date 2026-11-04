@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) `wireskein.capture` gives `attach`, `note`, `attachments` and `notes` (adding to a file without rewriting its channels), as the README shows them.
+- (JA) `wireskein.capture` に `attach`、`note`、`attachments`、`notes` を出した（チャンネルを書き直さずにファイルに足す）。README の例のとおり。
 
 ## 0.0.17
 - (EN) `wireskein gui` ships wireskein-web 0.0.8 (`tools/web.json`): its reader refuses what wireskein-format's rules refuse (no `complete`, `complete` disagreeing with `lost`, an unknown layout, a timeline part without `tick0`, an events channel without `start_level`, a marker or annotation in a part the file lacks), and reads markers, annotations and alignment as /1.

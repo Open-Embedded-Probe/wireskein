@@ -59,7 +59,7 @@ Code running on the probe (checking a library, for instance) can keep marker lin
 
 ## 4. Other dialects
 
-Existing run syntaxes are read by adding a TOML dialect to `decl/markers/`. There are four line kinds.
+Existing run syntaxes are read by adding a TOML dialect to `decl/markers/`. Besides `heading` (the action of the default dialect, §1), there are four line kinds.
 
 | Kind | Meaning |
 | --- | --- |
@@ -90,7 +90,7 @@ pattern = '^PHASE (?P<name>\S+)'
 action = "point"
 level = "phase"
 
-[[marker]]                       # INPUT / RESULT: attributes of the innermost open segment
+[[marker]]                       # RESULT: attributes of the innermost open segment
 pattern = '^RESULT (?P<value>.+)$'
 action = "attr"
 key = "result"

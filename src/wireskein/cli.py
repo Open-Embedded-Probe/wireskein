@@ -537,7 +537,7 @@ def main() -> None:
     vf.add_argument("--log", action="store_true", help="include the host log (markers, commands, replies) in --json")
     vf.add_argument("--allow-unchecked", action="store_true",
                     help="checks that could not be made (a pin not captured, ...) do not fail the run")
-    cv = sub.add_parser("convert", help="convert a capture between formats (read by content; written as .sr when OUT ends in .sr, else WireSkein)")
+    cv = sub.add_parser("convert", help="convert a capture between formats (read by content; written as .sr or VCD when OUT ends in .sr / .vcd, else WireSkein)")
     cv.add_argument("input", type=Path)
     cv.add_argument("output", type=Path)
     cv.add_argument("--part", type=int, default=None,
