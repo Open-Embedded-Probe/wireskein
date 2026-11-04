@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 0.0.17
 - (EN) `wireskein gui` ships wireskein-web 0.0.8 (`tools/web.json`): its reader refuses what wireskein-format's rules refuse (no `complete`, `complete` disagreeing with `lost`, an unknown layout, a timeline part without `tick0`, an events channel without `start_level`, a marker or annotation in a part the file lacks), and reads markers, annotations and alignment as /1.
 - (JA) `wireskein gui` は wireskein-web 0.0.8 を同梱する（`tools/web.json`）: 読み手は wireskein-format の決まりが断るものを断る（`complete` が無い、`complete` と `lost` が合わない、知らない layout、`tick0` の無い timeline の区間、`start_level` の無い events のチャンネル、ファイルに無い区間のマーカーや注釈）。マーカー、注釈、合わせ込みは /1 で読む。
 - (EN) The I²C device definitions (QMP6988, SHT30) are generated from EmbedBenchDeviceData's chip knowledge (0c56bed, tools/knowledge_decl.py): QMP6988 names its 9 known registers (identified by CHIP_ID 0xD1 = 0x5C as before), SHT30 its 13 commands (its CRC-8 as before). The names are the knowledge's ("single shot, high repeatability, polling", "DATA").
