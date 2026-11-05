@@ -95,6 +95,7 @@ A result:
 | `status` | One of the four below |
 | `ok` | true if `status` is `ok`, false if `ng`, null otherwise (reading `status` is more reliable) |
 | `expected`, `measured`, `reason` | Expectation, measured value, reason |
+| `notices` | What the check found that the protocol allows but a test may want to see, one by one: `kind`, `tick` and `part` (where in the capture), and the kind's values ([guide](capture-test-guide.md) §4.9). Always recorded, whatever the status |
 
 Statuses:
 
@@ -106,6 +107,7 @@ Statuses:
 | `measured` | Requested as measured only (`uart(baud=None)` etc.). Returns the measured value | No |
 
 - `unchecked` fails by default because most such cases are mistakes in the test or missing wiring or capture.
-- The summary (`summary`) is the counts of `ok`, `ng`, `unchecked` and `measured`, plus the number of segments and the number of captures.
+- The summary (`summary`) is the counts of `ok`, `ng`, `unchecked` and `measured`, the number of notices (`notices`), plus the number of segments and the number of captures.
+- `wireskein verify -v` lists each notice under its result; `--mark` (`verify(run, mark=True)`) also writes the notices and the changes `becomes` found into the capture files' markers (`by: "verify"`, [file format](wireskein-format.md) §5.2), replacing verify's earlier ones.
 - The shapes of the report JSON (`--json`) and JUnit XML (`--junit`) follow this table. In JUnit, `ng` is failure, `unchecked` is failure by default (skipped when allowed), and `measured` is passed (with the measured value in system-out).
 - Text lines (`lines()`) are for people to read, and their shape is not guaranteed. Programs read the JSON.

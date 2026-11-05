@@ -203,7 +203,7 @@ WireSkein turns a capture into what a reader needs, so the samples themselves do
 | `only_moving([pins])` | No other captured pin moves. Looks only at logic channels |
 | `pulses(pin, count, period_s, period_rel)` | Number of rising edges and the period. `period_rel` is relative |
 | `i2c(scl, sda, transactions, freq_hz, freq_rel, released)` | Sequence of transactions (address, read/write, bytes, ACK), SCL frequency, both High at the end. Each transaction may name `start` (`S`, `Sr`) and `end` (`P`, `Sr`), compared when given |
-| `spi(clk, mosi, miso, cs, mode, mosi_bytes, miso_bytes, freq_hz, freq_rel, bit_order, cs_active, bits, sck_idle_outside_cs)` | Mode, bytes in both directions, SCK frequency, CS High at the end. The mode is read from the lines (§4.5). With `cs`: the clocks in each CS window (`frame_bits`; `bits` compares them), no SCK level inside a window shorter than half the median one (a glitch), and with `sck_idle_outside_cs=True` no SCK edge while CS is inactive |
+| `spi(clk, mosi, miso, cs, mode, mosi_bytes, miso_bytes, freq_hz, freq_rel, bit_order, cs_active, bits, notices)` | Mode, bytes in both directions, SCK frequency, CS High at the end. The mode is read from the lines (§4.5). With `cs`: the clocks in each CS window (`frame_bits`; `bits` compares them), and no SCK level inside a window shorter than half the median one (a glitch); SCK moving while CS is inactive and a window with no clock are notices (§4.9) |
 | `uart(pin, baud, data, baud_rel, idle, bits, parity, stop, errors_max)` | Baud rate, byte sequence, idle level, framing and parity errors (below) |
 | `voltage(pin, level_v, level_abs_v, level_min_v, level_max_v, ripple_max_v)` | Voltage of an analog channel. Mean is `level_v` ± `level_abs_v`, all samples within `level_min_v` to `level_max_v`, peak-to-peak at most `ripple_max_v`. Only the given ones are checked |
 | `phase(a, b, phase_deg, phase_abs_deg, freq_hz, freq_rel, edge)` | Phase of two periodic lines: from an edge of a to b's next edge of the same direction, as an angle of a's period (0–360 degrees). Every pair within `phase_deg` ± `phase_abs_deg` (degrees, wrapping near 0), both frequencies within `freq_rel` (relative) of `freq_hz` |
@@ -328,7 +328,20 @@ sd_spi("PA5", "PA7", "PA6", "PA4", [{"cmd": 0, "r1": 0x01}, {"cmd": 8, "arg": 0x
 
 `wireskein analyze` also looks for SD commands on SPI (trying MOSI and MISO both ways round; the lines idling at 0xFF around each command are the evidence). When found, they are in the SPI export's `sd`.
 
-## 5. Choosing tolerances
+### 4.9 Notices
+
+Some behaviour is allowed by the protocol but worth a look: a test may want to make it fail, or allow it a few times. The checks find it and say where, but it fails nothing by itself. What the protocol does not allow (a framing or parity error, a glitch on SCK inside a CS window, a byte cut short) is `ng`, not a notice.
+
+- Each notice is one place: its `kind`, its `tick` and `part` in the capture, and the kind's values. They are in the result (`notices`), always, counted in the summary, listed by `wireskein verify -v`, and written into the capture's markers with `--mark`, so the viewer shows each one on the waveform.
+- An expectation limits them in its own segment: `notices={"sck_outside_cs": 1}` allows one, `notices={"sck_outside_cs": "ng"}` none. A kind the check does not find is an error of the expectation (`ng`), so a misspelled name never passes silently.
+
+| Check | Notice | What it is |
+| --- | --- | --- |
+| `spi` (with `cs`) | `sck_outside_cs` | SCK moved while CS was inactive (at the first edge of that stretch; `count`: its edges). Allowed on a bus shared with other devices; a reconfiguration's stray edges show here too |
+| `spi` (with `cs`) | `empty_cs_window` | A window of CS active with no clock (at CS becoming active; `length_ticks`) |
+| `uart` | `baud_near_limit` | The bit rate within `baud_rel` but more than half of it off (at the line's first edge; `value`: the error, `limit`) |
+
+
 
 - **Include the oscillator error.** Running on an internal RC oscillator (such as the CH32 HSI), the frequency deviates by ±1–2 %. Separate these from tests running on a crystal, or include it in the tolerance.
 - **Include the resolution set by the sample rate.** If one period is N samples, the duty cycle resolution is 1/N. To check duty cycle to 1 %, you need 100 or more samples per period. For frequency, measuring the average over many periods increases the resolution.

@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Notices: what a protocol allows but a test may want to see, found by the checks one by one with their kind, tick and part (results' `notices`, counted in the summary and its line, listed by `wireskein verify -v`, written into the capture's markers with `--mark` / `verify(run, mark=True)` together with the changes `becomes` found). They fail nothing unless an expectation limits them in its segment: `notices={"kind": n}` or `"ng"`; an unknown kind is an error of the expectation. First kinds: `spi`'s `sck_outside_cs` and `empty_cs_window`, `uart`'s `baud_near_limit` (capture-test-guide §4.9). **Breaking:** `spi(sck_idle_outside_cs=)` is gone (`notices={"sck_outside_cs": "ng"}`), and the summary has `notices`.
+- (JA) 注意（notices）: プロトコルとしては許されるが試験が見たいかもしれない動きを、検査が 1 件ずつ、種類、tick、part とともに見つける（結果の `notices`。要約とその行で数え、`wireskein verify -v` で並べ、`--mark` / `verify(run, mark=True)` で `becomes` が見つけた変化とともにキャプチャのマーカーに書く）。期待が自分の区間で制限しない限り、何も失敗にしない: `notices={"種類": n}` か `"ng"`。知らない種類は期待の誤り。最初の種類: `spi` の `sck_outside_cs` と `empty_cs_window`、`uart` の `baud_near_limit`（capture-test-guide §4.9）。**互換のない変更:** `spi(sck_idle_outside_cs=)` は無くなった（`notices={"sck_outside_cs": "ng"}`）。要約に `notices` がある。
 
 ## 0.0.20
 - (EN) `i2c(..., transactions=[{..., "start": "S" / "Sr", "end": "P" / "Sr"}])`: how each transaction began and ended is compared when given (Arduino's `endTransmission(false)` and `requestFrom(..., stop)` keep the bus with repeated STARTs); the decoded transactions carry them, and a difference names them.

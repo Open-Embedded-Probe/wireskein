@@ -403,15 +403,16 @@ def i2c(scl: str, sda: str, transactions: list[dict] | None = None, freq_hz: flo
 def spi(clk: str, mosi: str | None = None, miso: str | None = None, cs: str | None = None, mode: int | None = None,
         mosi_bytes: str | None = None, miso_bytes: str | None = None, freq_hz: float | None = None,
         freq_rel: float = 0.1, bit_order: str = "msb", cs_active: int = 0, bits: int | list[int] | None = None,
-        sck_idle_outside_cs: bool = False, threshold=None) -> dict:
+        notices: dict | None = None, threshold=None) -> dict:
     """mode is read from the lines: CPOL from SCK's level as CS becomes active, CPHA from the SCK edge MOSI (else
     MISO) changes after (a leading edge: 1). With cs: the clocks in each window of CS active are measured
     (frame_bits) and bits (one count for every window, or a list) compared; an SCK level inside a window shorter
-    than half the median one is a glitch; sck_idle_outside_cs=True also fails SCK moving while CS is inactive (on a
-    bus shared with other devices it may)."""
+    than half the median one is a glitch. SCK moving while CS is inactive (on a bus shared with other devices it may)
+    and a window with no clock are notices (sck_outside_cs, empty_cs_window): notices={"sck_outside_cs": "ng"} or a
+    count limits them."""
     return _t({"kind": "spi", "clk": clk, "mosi": mosi, "miso": miso, "cs": cs, "mode": mode, "mosi_bytes": mosi_bytes,
                "miso_bytes": miso_bytes, "freq_hz": freq_hz, "freq_rel": freq_rel, "bit_order": bit_order,
-               "cs_active": cs_active, "bits": bits, "sck_idle_outside_cs": sck_idle_outside_cs}, threshold)
+               "cs_active": cs_active, "bits": bits, "notices": notices}, threshold)
 
 
 def phase(a: str, b: str, phase_deg: float | None = None, phase_abs_deg: float = 2.0, freq_hz: float | None = None,

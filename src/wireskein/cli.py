@@ -482,10 +482,10 @@ def segments(args) -> None:
 
 def verify_cmd(args) -> None:
     from . import verify
-    rep = verify.verify(args.run)
+    rep = verify.verify(args.run, mark=args.mark)
     if not args.log:
         rep.pop("log")
-    for line in verify.lines(rep, ok=True):
+    for line in verify.lines(rep, ok=True, notices=args.verbose):
         print(line)
     print(verify.summary_line(rep))
     if args.json:
@@ -543,6 +543,9 @@ def main() -> None:
     vf.add_argument("--log", action="store_true", help="include the host log (markers, commands, replies) in --json")
     vf.add_argument("--allow-unchecked", action="store_true",
                     help="checks that could not be made (a pin not captured, ...) do not fail the run")
+    vf.add_argument("-v", "--verbose", action="store_true", help="list each notice under its result")
+    vf.add_argument("--mark", action="store_true",
+                    help="write the notices and the changes found into the capture files' markers (for the viewer)")
     cv = sub.add_parser("convert", help="convert a capture between formats (read by content; written as .sr or VCD when OUT ends in .sr / .vcd, else WireSkein)")
     cv.add_argument("input", type=Path)
     cv.add_argument("output", type=Path)

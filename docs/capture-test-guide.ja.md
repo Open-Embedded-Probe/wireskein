@@ -203,7 +203,7 @@ WireSkein は、キャプチャを読み手に要るものに変えます。サ�
 | `only_moving([pins])` | ほかのキャプチャ対象のピンが動かない。ロジックのチャンネルだけを見る |
 | `pulses(pin, count, period_s, period_rel)` | 立ち上がりの数と周期。`period_rel` は相対 |
 | `i2c(scl, sda, transactions, freq_hz, freq_rel, released)` | トランザクションの列（アドレス、読み書き、バイト、ACK）、SCL の周波数、終了時に両方 High。トランザクションごとに `start`（`S`、`Sr`）と `end`（`P`、`Sr`）を書けば、それも比べる |
-| `spi(clk, mosi, miso, cs, mode, mosi_bytes, miso_bytes, freq_hz, freq_rel, bit_order, cs_active, bits, sck_idle_outside_cs)` | モード、両方向のバイト、SCK の周波数、最後に CS が High。モードは線から読む（§4.5）。`cs` があれば、CS の窓ごとのクロックの数（`frame_bits`。`bits` で比べる）、窓の中で SCK のレベルが中央値の半分より短くないこと（グリッチ）、`sck_idle_outside_cs=True` なら CS が非アクティブのあいだ SCK が動かないこと |
+| `spi(clk, mosi, miso, cs, mode, mosi_bytes, miso_bytes, freq_hz, freq_rel, bit_order, cs_active, bits, notices)` | モード、両方向のバイト、SCK の周波数、最後に CS が High。モードは線から読む（§4.5）。`cs` があれば、CS の窓ごとのクロックの数（`frame_bits`。`bits` で比べる）と、窓の中で SCK のレベルが中央値の半分より短くないこと（グリッチ）。CS が非アクティブのあいだの SCK の動きと、クロックの無い窓は注意（§4.9） |
 | `uart(pin, baud, data, baud_rel, idle, bits, parity, stop, errors_max)` | ボーレート、バイト列、アイドルレベル、フレームとパリティのエラー（下記） |
 | `voltage(pin, level_v, level_abs_v, level_min_v, level_max_v, ripple_max_v)` | アナログのチャンネルの電圧。平均が `level_v` ± `level_abs_v`、全サンプルが `level_min_v`〜`level_max_v`、ピークからピークが `ripple_max_v` 以下。与えたものだけを見る |
 | `phase(a, b, phase_deg, phase_abs_deg, freq_hz, freq_rel, edge)` | 2 本の周期的な線の位相。a のエッジから、同じ向きの b の次のエッジまでを、a の周期に対する角度（0〜360 度）にする。どの組も `phase_deg` ± `phase_abs_deg`（度。0 の近くは回り込む）、両方の周波数が `freq_hz` の `freq_rel`（相対）の内 |
@@ -328,7 +328,20 @@ sd_spi("PA5", "PA7", "PA6", "PA4", [{"cmd": 0, "r1": 0x01}, {"cmd": 8, "arg": 0x
 
 `wireskein analyze` も、SPI の上に SD のコマンドを探します（MOSI と MISO の向きを両方試す。コマンドの前後で線が 0xFF で待つことを証拠にする）。見つかれば、書き出しの SPI の `sd` に出します。
 
-## 5. 許容誤差の決め方
+### 4.9 注意（notices）
+
+プロトコルとしては許されるが、見ておきたい動きがあります。試験はそれを失敗にしたいことも、何回かは許したいこともあります。検査はそれを見つけて場所を言いますが、それだけでは何も失敗にしません。プロトコルとして許されないもの（フレーミングやパリティの誤り、CS の窓の中の SCK のグリッチ、途中で切れたバイト）は、注意ではなく `ng` です。
+
+- 注意は 1 件が 1 つの場所です: `kind`、キャプチャの中の `tick` と `part`、種類ごとの値。いつも結果（`notices`）に入り、要約で数え、`wireskein verify -v` で 1 件ずつ出し、`--mark` でキャプチャのマーカーにも書きます。ビューアで、波形の上に 1 件ずつ見えます。
+- 期待は、自分の区間の中の注意を制限します: `notices={"sck_outside_cs": 1}` は 1 回まで、`notices={"sck_outside_cs": "ng"}` は 0 回。その検査が見つけない種類の名前は期待の誤り（`ng`）で、打ち間違いが黙って通ることはありません。
+
+| 検査 | 注意 | 何か |
+| --- | --- | --- |
+| `spi`（`cs` あり） | `sck_outside_cs` | CS が非アクティブのあいだに SCK が動いた（その間の最初の変化の所。`count`: 変化の数）。ほかの機器と共有するバスでは正しい動き。設定し直しの余分な変化もここに出る |
+| `spi`（`cs` あり） | `empty_cs_window` | クロックの無い、CS がアクティブの窓（CS がアクティブになった所。`length_ticks`） |
+| `uart` | `baud_near_limit` | ボーレートが `baud_rel` の中だが、その半分より大きくずれている（線の最初の変化の所。`value`: ずれ、`limit`） |
+
+
 
 - **発振源の誤差を含める。** 内蔵の RC 発振（CH32 の HSI など）で動かすと、周波数は ±1〜2 % ずれます。水晶で動かす試験と分けるか、許容誤差に含めます。
 - **サンプルレートから決まる分解能を含める。** 1 周期が N サンプルなら、デューティー比の分解能は 1/N です。デューティー比を 1 % で見るなら、1 周期に 100 サンプル以上必要です。周波数は、多くの周期の平均で測れば分解能が上がります。

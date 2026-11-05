@@ -44,6 +44,7 @@ class Result:
     measured: dict = field(default_factory=dict)
     reason: str = ""
     status: str = ""
+    notices: list = field(default_factory=list)    # what the check found allowed but worth a look (NOTICES)
 
     def __post_init__(self):
         if self.ok == MEASURED:
@@ -437,8 +438,9 @@ def check_spi(cap, x):
         if cs_end != 1:
             ok = False
             why.append("CS not high at the end")
-        frames, outside, shortest, half = _spi_clocks(cap.channel(x["clk"]), cap.channel(x["cs"]), cap.n_samples,
-                                                      x.get("cs_active", 0))
+        frames, outside, shortest, half, found = _spi_clocks(cap.channel(x["clk"]), cap.channel(x["cs"]),
+                                                             cap.n_samples, x.get("cs_active", 0))
+        got["notices"] = found
         got.update(frame_bits=frames, sck_edges_outside_cs=outside, sck_shortest_s=shortest and shortest / cap.rate,
                    sck_half_period_s=half and half / cap.rate)
         want = x.get("bits")
@@ -447,9 +449,6 @@ def check_spi(cap, x):
             if frames != want:
                 ok = False
                 why.append(f"clocks while CS is active {frames}, want {want}")
-        if x.get("sck_idle_outside_cs") and outside:
-            ok = False
-            why.append(f"SCK moved {outside} times while CS was inactive")
         if shortest is not None and half and shortest < 0.5 * half:
             ok = False
             why.append(f"SCK held a level {shortest / cap.rate * 1e9:.0f} ns while CS was active, its half period "
@@ -457,25 +456,29 @@ def check_spi(cap, x):
     return ok, got, "; ".join(why)
 
 
-def _spi_clocks(sck, cs, n: int, active: int) -> tuple[list[int], int, int | None, float | None]:
+def _spi_clocks(sck, cs, n: int, active: int) -> tuple:
     """Per window of CS active: the clocks in it (SCK edges / 2); SCK edges while CS is inactive; the shortest SCK
-    level inside the windows (from one SCK edge to the next) and the median of those levels (the half period)."""
+    level inside the windows (from one SCK edge to the next) and the median of those levels (the half period); the
+    notices (sck_outside_cs at the first edge of each inactive stretch that has some, empty_cs_window)."""
     marks = np.concatenate(([0], cs.edges, [n]))
     lv = cs.initial
-    frames, outside, levels = [], 0, []
+    frames, outside, levels, found = [], 0, [], []
     for a, b in zip(marks[:-1], marks[1:]):
         e = sck.edges[(sck.edges > a) & (sck.edges < b)]
         if lv == active:
             frames.append(int(len(e) // 2))
             if len(e) > 1:
                 levels.append(np.diff(e))
-        else:
+            if not len(e) and a > 0:
+                found.append({"kind": "empty_cs_window", "tick": int(a), "length_ticks": int(b - a)})
+        elif len(e):
             outside += int(len(e))
+            found.append({"kind": "sck_outside_cs", "tick": int(e[0]), "count": int(len(e))})
         lv ^= 1
     if not levels:
-        return frames, outside, None, None
+        return frames, outside, None, None, found
     allv = np.concatenate(levels)
-    return frames, outside, int(allv.min()), float(np.median(allv))
+    return frames, outside, int(allv.min()), float(np.median(allv)), found
 
 
 def _verdicts(parts: list[tuple[bool | None, str]]) -> tuple[bool | None, str]:
@@ -1107,7 +1110,11 @@ def check_uart(cap, x):
     elif u is None:
         ok = False
         why.append("no edges to measure the bit time")
-    elif abs(got["baud_error"]) > x.get("baud_rel", 0.03):
+    elif abs(got["baud_error"]) > x.get("baud_rel", 0.03) / 2 and abs(got["baud_error"]) <= x.get("baud_rel", 0.03):
+        got["notices"] = [{"kind": "baud_near_limit", "tick": int(ch.edges[0]) if len(ch.edges) else 0,
+                           "value": round(got["baud_error"], 5),
+                           "limit": x.get("baud_rel", 0.03)}]
+    if x.get("baud") and got.get("baud_error") is not None and abs(got["baud_error"]) > x.get("baud_rel", 0.03):
         ok = False
         why.append(f"baud {got['baud']:.0f} is {got['baud_error'] * 100:+.2f}% off {x['baud']:.0f}")
     if x.get("errors_max") is not None and frame_err + par_err > x["errors_max"]:
@@ -1338,6 +1345,39 @@ def _state_text(prior, rate) -> dict | None:
     return {"period_s": prior["period_s"], "high_s": prior["high_s"]}
 
 
+# Notices: what a protocol allows but a test may want to see, found by the checks, each at its tick. They never fail
+# a check by themselves; an expectation's notices={kind: n or "ng"} limits them in its segment. Per check, the kinds
+# it finds (docs/capture-test-guide.md §4.9).
+NOTICES = {
+    "spi": {"sck_outside_cs": "SCK moved while CS was inactive (count: its edges in that stretch)",
+            "empty_cs_window": "a window of CS active with no clock"},
+    "uart": {"baud_near_limit": "the bit rate within its tolerance but more than half of it off (value: the error)"},
+}
+
+
+def _notices(ok, why: str, got: dict, x: dict, cap) -> tuple:
+    """The notices a check found (window ticks in got["notices"]) at their ticks in the capture part, and the
+    verdict with the expectation's limits on them: (ok, why, notices)."""
+    found = got.pop("notices", [])
+    base = (cap.meta.get("window") or [0])[0]
+    part = (cap.meta.get("parts") or [cap.meta.get("part", 0)])[0]
+    out = [{**n, "tick": int(n["tick"]) + base, "part": part} for n in found]
+    limits = x.get("notices") or {}
+    known = NOTICES.get(x["kind"], {})
+    bad = sorted(set(limits) - set(known))
+    if bad:
+        return False, "; ".join(filter(None, [why, f"no notice {', '.join(bad)} in {x['kind']} (it finds: "
+                                               f"{', '.join(known) or 'none'})"])), out
+    for kind, lim in limits.items():
+        most = 0 if lim == "ng" else int(lim)
+        n = sum(int(m.get("count", 1)) for m in out if m["kind"] == kind)
+        if n > most:
+            ok = False
+            why = "; ".join(filter(None, [why, f"{n} {kind}" + (f" (at most {most})" if lim != "ng" else "")
+                                          + f", first at tick {next(m['tick'] for m in out if m['kind'] == kind)}"]))
+    return ok, why, out
+
+
 LOGIC = {"becomes", "square", "level", "ends", "starts", "pulses", "i2c", "spi", "uart", "phase", "skew", "dead_time",
          "i2c_timing", "rgb_led", "onewire", "ir", "lin", "i2s", "quadrature", "sd_spi"}   # checks that read logic levels
 
@@ -1413,11 +1453,38 @@ def _judge(cap: Capture, x: dict, pins: set[str]):
     return CHECKS[x["kind"]](cap, x)
 
 
-def verify(run_dir: str | Path) -> dict:
+def verify(run_dir: str | Path, mark: bool = False) -> dict:
+    """The report of a run (docs/run-format.ja.md §3). mark=True also writes what the checks found into each
+    capture file's markers (by "verify", wireskein-format §5.2): every notice, and every change becomes found, at
+    its tick, so a viewer shows them on the waveform; the markers of others are kept, verify's earlier ones replaced."""
     try:
-        return _verify(Path(run_dir))
+        rep = _verify(Path(run_dir))
     finally:
         _LOADED.clear()                                  # the captures are read once per verify, then let go
+    if mark:
+        _mark(Path(run_dir), rep)
+    return rep
+
+
+def _mark(run_dir: Path, rep: dict) -> None:
+    from . import _fileformat as fileformat
+    per: dict[str, list] = {}
+    for r in rep["results"]:
+        if not r["capture"]:
+            continue
+        f = r["capture"].split("#")[0].split("@")[0]
+        for m in r.get("notices") or []:
+            per.setdefault(f, []).append({"t": m["tick"], "part": m["part"], "label": f"{m['kind']}: {r['path']}",
+                                          "by": "verify"})
+        got = r["measured"].get("outer", r["measured"])
+        if r["check"] == "becomes" and got.get("change_tick") is not None:
+            part = int(r["capture"].split("#part")[1].split("-")[0].split("@")[0]) if "#part" in r["capture"] else 0
+            per.setdefault(f, []).append({"t": got["change_tick"], "part": part, "label": f"change: {r['path']}",
+                                          "by": "verify"})
+    for f in {c["file"] for c in json.loads((run_dir / "run.json").read_text())["captures"]}:
+        p = run_dir / f
+        keep = [m for m in fileformat.markers(p) if m.get("by") != "verify"]
+        fileformat.set_markers(p, keep + per.get(f, []))
 
 
 def _verify(run_dir: Path) -> dict:
@@ -1497,13 +1564,14 @@ def _verify(run_dir: Path) -> dict:
                     if ok is False:
                         why = (why + "; " if why else "") + "the section " + " and ".join(
                             {"begin": "began before", "end": "ended after"}[k] for k in clipped) + " the capture"
+                ok, why, found = _notices(ok, why, got.get("outer", got), x, cap)
                 if cap.meta.get("time_base_slipped"):
                     # the probe says some samples were taken late: the verdict
                     # stands (it may still read fine), a failure names it
                     got = {**got, "time_base_slipped": True}
                     if ok is False:
                         why = (why + "; " if why else "") + "the probe reported a time base slip in this capture"
-                results.append(Result(path, label, x["kind"], ok, x, got, why))
+                results.append(Result(path, label, x["kind"], ok, x, got, why, notices=found))
     for e in doc["log"]:                 # what the probe dropped of its own lines: the sections are not known
         if e["src"] == "lost":
             results.append(Result("", None, "probe_log", False, reason=e["text"]))
@@ -1518,7 +1586,7 @@ def _verify(run_dir: Path) -> dict:
     count = {k: sum(r.status == k for r in results) for k in STATUSES}
     return {"format": REPORT_FORMAT, "run": str(run_dir), "meta": doc.get("meta", {}),
             "results": [r.__dict__ for r in results],
-            "summary": {**count,
+            "summary": {**count, "notices": sum(len(r.notices) for r in results),
                         "segments": len(segs), "captures": len(caps)},
             "tree_issues": tree.issues, "log": ev}
 
@@ -1538,21 +1606,30 @@ def failed(report: dict, allow_unchecked: bool = False) -> bool:
 MARKS = {"ok": "OK", "ng": "NG", "unchecked": "--", "measured": "ME"}
 
 
-def lines(report: dict, ok: bool = False) -> list[str]:
+def lines(report: dict, ok: bool = False, notices: bool = False) -> list[str]:
     """One line per result, as `wireskein verify` prints them, for people (the form is not promised:
-    programs read the JSON report); only the ones that are not "ok" unless ok=True."""
+    programs read the JSON report); only the ones that are not "ok" unless ok=True. A result's notices are counted
+    on its line, and with notices=True listed one a line under it."""
     out = []
     for r in report["results"]:
-        if r["status"] == "ok" and not ok:
+        ns = r.get("notices") or []
+        if r["status"] == "ok" and not ok and not (notices and ns):
             continue
-        out.append(f"{MARKS[r['status']]}  {r['path']}  {r['check']}  {r['capture'] or ''}  {r['reason']}".rstrip())
+        tail = f"  [{len(ns)} notice{'s' if len(ns) != 1 else ''}]" if ns else ""
+        out.append(f"{MARKS[r['status']]}  {r['path']}  {r['check']}  {r['capture'] or ''}  {r['reason']}".rstrip() + tail)
+        if notices:
+            for m in ns:
+                extra = ", ".join(f"{k} {v}" for k, v in m.items() if k not in ("kind", "tick", "part"))
+                out.append(f"      notice {m['kind']} at tick {m['tick']}" + (f" (part {m['part']})" if m["part"] else "")
+                           + (f": {extra}" if extra else ""))
     return out
 
 
 def summary_line(report: dict) -> str:
     s = report["summary"]
-    return (f"{s['ok']} ok, {s['ng']} ng, {s['unchecked']} unchecked, {s['measured']} measured "
-            f"({s['segments']} segments, {s['captures']} captures)")
+    return (f"{s['ok']} ok, {s['ng']} ng, {s['unchecked']} unchecked, {s['measured']} measured"
+            + (f", {s['notices']} notice{'s' if s['notices'] != 1 else ''}" if s.get("notices") else "")
+            + f" ({s['segments']} segments, {s['captures']} captures)")
 
 
 def junit(report: dict, allow_unchecked: bool = False) -> str:

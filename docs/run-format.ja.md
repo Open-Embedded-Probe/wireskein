@@ -95,6 +95,7 @@
 | `status` | 下の 4 つのどれか |
 | `ok` | `status` が `ok` なら true、`ng` なら false、それ以外は null（`status` を読むほうが確かです） |
 | `expected`、`measured`、`reason` | 期待、測った値、理由 |
+| `notices` | 検査が見つけた、プロトコルとしては許されるが試験が見たいかもしれない動きを 1 件ずつ: `kind`、`tick` と `part`（キャプチャのどこか）、種類ごとの値（[ガイド](capture-test-guide.ja.md) §4.9）。状態にかかわらず、いつも記録する |
 
 状態:
 
@@ -106,6 +107,7 @@
 | `measured` | 測るだけと頼まれた（`uart(baud=None)` など）。測った値を返す | いいえ |
 
 - `unchecked` を既定で失敗にするのは、多くが試験の書き間違いか、配線やキャプチャの抜けだからです。
-- 要約（`summary`）は、`ok`、`ng`、`unchecked`、`measured` の数と、区間の数、キャプチャの数です。
+- 要約（`summary`）は、`ok`、`ng`、`unchecked`、`measured` の数、注意の数（`notices`）、区間の数、キャプチャの数です。
+- `wireskein verify -v` は、注意を 1 件ずつ結果の下に出します。`--mark`（`verify(run, mark=True)`）は、注意と `becomes` が見つけた変化を、キャプチャのファイルのマーカーにも書きます（`by: "verify"`、[ファイル形式](wireskein-format.ja.md) §5.2）。verify が前に書いたものは置き換えます。
 - 報告の JSON（`--json`）と JUnit XML（`--junit`）の形は、この表のとおりです。JUnit では、`ng` は failure、`unchecked` は既定で failure（許すときは skipped）、`measured` は passed（system-out に測った値）です。
 - テキストの行（`lines()`）は人が読むためのもので、形を約束しません。プログラムは JSON を読みます。
