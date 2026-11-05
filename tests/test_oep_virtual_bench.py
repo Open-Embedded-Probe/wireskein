@@ -441,3 +441,37 @@ def test_a_spooled_stream_is_the_same_as_one_put_together_at_the_end(tmp_path):
     assert spool.done_lost == want_lost
     for a, b in zip(spool.parts, want_parts):
         assert a.channels[0].bits[:] == b.channels[0].bits        # the same bits, read back from disk
+
+
+def test_sections_on_the_probes_clock_cut_one_stream(probe, tmp_path):
+    """A stream taken while the script steps through sections on the same session (acquire's during=): the headings
+    on the probe's clock (Recorder.use_clock) cut each section out of the one capture (run-format §2.4)."""
+    from oep_client import acquire, core, link
+    from wireskein import verify
+    from wireskein.runlog import Recorder, square
+    from wireskein.sources.oep import capture_of
+    hst = link.open_host(probe().removeprefix("oep:"))
+    try:
+        core.take(hst, 30_000, owner="wireskein test")
+        rec = Recorder(tmp_path / "run")
+        armed = rec.armed()
+
+        def steps(wait):
+            rec.use_clock(lambda: hst.clock_best(2))
+            for k in range(2):
+                wait(0.05)                                 # a quiet gap between sections
+                with rec.section(1, f"step{k}", expect=[square("A", 500_000, 0.5)]):   # GPIO10: sample i's bit 0
+                    wait(0.1)
+            rec.use_clock(None)
+        res = acquire.capture(hst, acquire.Request([("A", "GPIO10")], 1_000_000, 0, mode="stream", during=steps,
+                                                   spool_dir=str(tmp_path)))
+        rec.add(armed, capture_of(res))
+        rec.close()
+    finally:
+        hst.end()
+        hst.link.close()
+    rep = verify.verify(tmp_path / "run")
+    assert [(r["path"], r["status"]) for r in rep["results"]] == [("step0", "ok"), ("step1", "ok")], rep["results"]
+    (a, b) = [r["measured"]["window"] for r in rep["results"]]
+    assert 0 < a[0] < a[1] < b[0] < b[1]                   # each its own stretch of the one capture
+    assert {r["capture"].partition("@")[0] for r in rep["results"]} == {"c0001.wireskein"}
