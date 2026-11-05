@@ -57,7 +57,8 @@ def test_a_change_at_a_period_boundary(tmp_path):
     r = r["d50"]
     assert r["status"] == "ok", r
     m = r["measured"]
-    assert m["change_s"] == 0.0045 and m["irregular"] == 0 and m["before"].startswith("period 1000.0 us, high 250.0")
+    assert m["change_s"] == 0.0045 and m["irregular"] == 0 and m["before"] == {"period_s": 0.001, "high_s": 0.00025}
+    assert m["change_tick"] == 20_000 and m["period_s"] == 0.001
 
 
 def test_the_state_before_is_read_from_before_the_segment(tmp_path):

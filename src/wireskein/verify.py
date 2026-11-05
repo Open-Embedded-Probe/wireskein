@@ -109,7 +109,8 @@ def _window(cap: Capture, s0: int, s1: int) -> Capture:
         evs.append(EventTrace(t.name, t.step, t.phase + k0 * t.step - s0, k1 - k0,
                               int(t.levels[before - 1]) if before else t.start_level, t.quanta[sel] - k0,
                               t.levels[sel], t.counts[sel], t.acquisition))
-    meta = {**cap.meta, "window": [s0, s1]}
+    base = (cap.meta.get("window") or [0])[0]           # a window of a window: ticks of the part all the same
+    meta = {**cap.meta, "window": [base + s0, base + s1]}
     if meta.get("trigger_tick") is not None:
         meta["trigger_tick"] -= s0
     win = Capture(cap.rate, s1 - s0, chans, meta, an, evs)
@@ -1170,14 +1171,15 @@ def check_becomes(cap, x):
     e = ch.edges
     got: dict = {}
 
-    def similar(rs, ref) -> np.ndarray:                  # pulses like ref (2 % of its period, or 2 samples)
-        t = max(2 * q, 0.02 * ref[2])
-        return (np.abs(rs[:, 2] - ref[2]) <= t) & (np.abs(rs[:, 1] - ref[1]) <= t)
+    def similar(rs, ref) -> np.ndarray:                  # pulses like ref: period and high each within 2 % (or 2 samples)
+        return (np.abs(rs[:, 2] - ref[2]) <= max(2 * q, 0.02 * ref[2])) & \
+               (np.abs(rs[:, 1] - ref[1]) <= max(2 * q, 0.02 * ref[1]))
 
     # the state the line was in as the window began: the last pulses before it, or the level it sat at
     prior = None
     if pch is not None:
-        pre = rows_all[rows_all[:, 0] < 0][-3:] if len(rows_all) else rows_all
+        # whole periods that ended before the window (one that runs into it may span a stop and a restart)
+        pre = rows_all[rows_all[:, 0] + rows_all[:, 2] <= 0][-3:] if len(rows_all) else rows_all
         running = len(pre) >= 2 and bool(np.all(similar(pre, pre[-1]))) and pre[-1, 0] + 2 * pre[-1, 2] > 0
         prior = ({"period_s": float(pre[-1, 2]) / rate, "high_s": float(pre[-1, 1]) / rate, "row": pre[-1]}
                  if running else {"level": _level_at(pch, s0)})
@@ -1194,6 +1196,14 @@ def check_becomes(cap, x):
         before = rows[rows[:, 0] + rows[:, 2] <= t] if len(rows) else rows
         changed = bool(len(e)) or (prior is not None and prior.get("level", v) != v)
         got["change_s"] = t / rate if len(e) else None
+        if not len(e) and prior is not None and "row" in prior and pch is not None:
+            # a wave that stopped between its pulses: the change is where its next pulse did not come
+            rises = pch.edges[0::2] if pch.initial == 0 else pch.edges[1::2]
+            last = rises[rises < s0]
+            due = int(last[-1]) + int(prior["row"][2]) - s0 if len(last) else None
+            if due is not None and 0 <= due < n:
+                got["change_s"] = due / rate
+                got["missed"] = True                       # the change is a pulse that did not come
         last_high = int(e[-1] - e[-2]) if v == 0 and len(e) >= 2 and (not len(before) or e[-2] > before[-1, 0]) else None
     else:
         per = rate / x["freq_hz"] if x.get("freq_hz") else x["period_s"] * rate
@@ -1212,7 +1222,8 @@ def check_becomes(cap, x):
         tail = rows[k:]
         got["periods"] = int(len(tail))
         if len(tail):
-            got.update(freq_hz=rate / float(np.median(tail[:, 2])), high_s=float(np.median(tail[:, 1])) / rate,
+            got.update(period_s=float(np.median(tail[:, 2])) / rate,
+                       freq_hz=rate / float(np.median(tail[:, 2])), high_s=float(np.median(tail[:, 1])) / rate,
                        duty=float(np.median(tail[:, 1] / tail[:, 2])),
                        worst_period_rel=float(np.max(np.abs(tail[:, 2] - per)) / per),
                        worst_high_s=(float(np.max(np.abs(tail[:, 1] - high))) / rate if high is not None else None))
@@ -1246,10 +1257,12 @@ def check_becomes(cap, x):
         return False, got, "more than one change in the window"
     odd = [{"high_s": float(r[1]) / rate, "period_s": float(r[2]) / rate} for r in rest]
     if last_high is not None and prior is not None and "row" in prior and not len(rest) \
-            and abs(last_high - prior["row"][1]) > max(2 * q, 0.02 * prior["row"][2]):
+            and abs(last_high - prior["row"][1]) > max(2 * q, 0.02 * prior["row"][1]):
         odd.append({"high_s": last_high / rate, "period_s": None})          # the last pulse, cut by the stop
     irregular = len(odd)
     got.update(before=_state_text(prior, rate), irregular=irregular, irregular_pulses=odd)
+    if got.get("change_s") is not None:                  # where in the capture part, for a viewer to go to
+        got["change_tick"] = int(round(got["change_s"] * rate)) + int((cap.meta.get("window") or [0])[0])
     if irregular > x["irregular_max"]:
         return False, got, f"{irregular} pulses of neither state at the change (at most {x['irregular_max']})"
     if irregular < x.get("irregular_min", 0):
@@ -1259,12 +1272,13 @@ def check_becomes(cap, x):
     return True, got, ""
 
 
-def _state_text(prior, rate) -> str | None:
+def _state_text(prior, rate) -> dict | None:
+    """The state before, as measured: {"level": v} or {"period_s", "high_s"}."""
     if prior is None:
         return None
     if "level" in prior:
-        return f"level {prior['level']}"
-    return f"period {prior['period_s'] * 1e6:.1f} us, high {prior['high_s'] * 1e6:.1f} us"
+        return {"level": prior["level"]}
+    return {"period_s": prior["period_s"], "high_s": prior["high_s"]}
 
 
 LOGIC = {"becomes", "square", "level", "ends", "starts", "pulses", "i2c", "spi", "uart", "phase", "skew", "dead_time",

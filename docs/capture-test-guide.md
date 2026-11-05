@@ -102,6 +102,18 @@ from oep_client import acquire
 from wireskein.runlog import becomes, level, only_moving
 from wireskein.sources.oep import capture_of
 
+def ask(wait, text, reply, timeout_s=2.0):
+    """Send a command over the console and look for its reply between short waits (the stream keeps being read)."""
+    rec.command(text)
+    send(text)
+    for _ in range(int(timeout_s / 0.01)):
+        wait(0.01)
+        line = read_reply(reply)                   # a reply line already received, or None
+        if line:
+            rec.reply(line)
+            return line
+    raise TimeoutError(f"{text!r}: no reply")
+
 def steps(wait):
     rec.use_clock(lambda: hst.clock_best(2), probe=hst.address.place)
     with rec.section(1, "servo PB6", expect=[only_moving(["PB6"])]):
@@ -109,24 +121,26 @@ def steps(wait):
             wait(0.05)
         for us in (544, 1000, 1500, 2000, 2400):
             with rec.section(2, f"us={us}", expect=[becomes("PB6", period_s=0.02, high_s=us * 1e-6, high_abs_s=20e-6)]):
-                rec.command(f"servo 6 {us}")
-                send(f"servo 6 {us}")
-                wait(0.5)                          # 25 periods; replies are looked for between short waits
+                ask(wait, f"servo 6 {us}", "SERVO")
+                wait(0.5)                          # 25 periods
         with rec.section(2, "detach", expect=[becomes("PB6", level=0)]):
-            send("servooff")
+            ask(wait, "servooff", "SERVOOFF")
             wait(0.05)
     rec.use_clock(None)
 
 t = rec.armed()
-req = acquire.Request([("PB6", "x035@pb6")], 1_000_000, 0, mode="stream", during=steps)
+lines = [("PB6", "x035@pb6"), ("PB7", "x035@pb7"), ("PB8", "x035@pb8")]   # the pin, and its neighbours for only_moving
+req = acquire.Request(lines, 1_000_000, 0, mode="stream", during=steps)
 rec.add(t, capture_of(acquire.capture(hst, req)))
 ```
 
 - **The capture** is a stream on the session the test holds. With `during=steps` it runs until `steps(wait)` returns, and `wait(seconds)` reads the stream while the test waits (oep-client-python 0.0.47 or newer). What the steps send to the probe (console commands, fixture operations) goes over the same session.
 - **Call `wait` often.** Between waits, only the probe's stream buffer holds the data. Anything else that blocks inside the steps, such as waiting for a reply, is kept short, or the reply is looked for between short waits.
 - **The headings go on the probe's clock.** `use_clock` reads the probe's clock at every heading, so each segment is cut out of the capture ([Run format](run-format.md) §2.4). `probe` is the probe's address as the capture's `meta.probe.address` gives it (in oep-client-python, `hst.address.place`). Without `use_clock`, the whole capture belongs to the segment that was open when it was armed, and the conditions are not told apart.
-- **One segment per condition, from its command to the next.** The segment holds the change and what follows it, and its expectation says both (§3.2): `becomes` for the change and the state it reaches, or a steady check with the change trimmed off. No segment is left without an expectation.
-- **Rest before and after.** A segment before the first condition and one after the last (the output stopped, the pin released) hold the line's state outside the test.
+- **One segment per condition, from its command to the next.** The segment holds the change and what follows it, and its expectation says both (§3.2). `becomes` is the default: it judges the change and the state it reaches. A steady check with the change trimmed off (`trim`) is for a test that has decided the change is not its question; the stretch it judged is in the result (`trimmed`). No segment is left without an expectation.
+- **The pins around.** `only_moving` sees only the pins in the capture: put the pin's neighbours (and any pin the test must leave alone) in the capture's channels.
+- **Rest before and after.** A segment before the first condition and one after the last (the output stopped) hold the line's state outside the test.
+- **A released pin.** Once the pin is an input again, the line is at whatever the board pulls it to; without a pull it is not defined, and the probe cannot tell a line left low from one driven low. Check the release with a level only where the board or the probe pulls the line; elsewhere the release segment has `only_moving` (nothing else moved) and the level is not asserted.
 - **The file** is one capture, `c0001.wireskein`, with the headings as its markers, which the viewer shows on the waveform. `wireskein verify` reports each segment with the stretch it judged (`c0001.wireskein@A:B`), and `wireskein states` lists what the line did (§3.3).
 - **Losses:** with `on_loss="stop"` (the default), a loss raises out of `wait` and the stream ends there. What was taken is kept, and the run fails.
 - A stream needs the probe's pushes. Through a relay that refuses subscriptions (OEP core §10.3), a stream cannot run; take one single-shot capture per condition (§2.2) instead.

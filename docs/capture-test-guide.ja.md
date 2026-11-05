@@ -102,6 +102,18 @@ from oep_client import acquire
 from wireskein.runlog import becomes, level, only_moving
 from wireskein.sources.oep import capture_of
 
+def ask(wait, text, reply, timeout_s=2.0):
+    """コンソールで命令を送り、短い wait のあいだに応答を探す（そのあいだも stream を受け取り続ける）。"""
+    rec.command(text)
+    send(text)
+    for _ in range(int(timeout_s / 0.01)):
+        wait(0.01)
+        line = read_reply(reply)                   # 受け取り済みの応答の行、または None
+        if line:
+            rec.reply(line)
+            return line
+    raise TimeoutError(f"{text!r}: no reply")
+
 def steps(wait):
     rec.use_clock(lambda: hst.clock_best(2), probe=hst.address.place)
     with rec.section(1, "servo PB6", expect=[only_moving(["PB6"])]):
@@ -109,24 +121,26 @@ def steps(wait):
             wait(0.05)
         for us in (544, 1000, 1500, 2000, 2400):
             with rec.section(2, f"us={us}", expect=[becomes("PB6", period_s=0.02, high_s=us * 1e-6, high_abs_s=20e-6)]):
-                rec.command(f"servo 6 {us}")
-                send(f"servo 6 {us}")
-                wait(0.5)                          # 25 周期。応答は短い wait のあいだに探す
+                ask(wait, f"servo 6 {us}", "SERVO")
+                wait(0.5)                          # 25 周期
         with rec.section(2, "detach", expect=[becomes("PB6", level=0)]):
-            send("servooff")
+            ask(wait, "servooff", "SERVOOFF")
             wait(0.05)
     rec.use_clock(None)
 
 t = rec.armed()
-req = acquire.Request([("PB6", "x035@pb6")], 1_000_000, 0, mode="stream", during=steps)
+lines = [("PB6", "x035@pb6"), ("PB7", "x035@pb7"), ("PB8", "x035@pb8")]   # 対象のピンと、only_moving のための隣のピン
+req = acquire.Request(lines, 1_000_000, 0, mode="stream", during=steps)
 rec.add(t, capture_of(acquire.capture(hst, req)))
 ```
 
 - **キャプチャ**は、試験が持つセッションでの stream です。`during=steps` を渡すと `steps(wait)` が戻るまで取り続け、`wait(秒)` は試験が待つあいだに stream を受け取ります（oep-client-python 0.0.47 以降）。steps の中でプローブに送るもの（コンソールの命令、治具の操作）は、同じセッションを通ります。
 - **`wait` をこまめに呼びます。** wait と wait のあいだは、プローブの stream のバッファだけがデータを持ちます。steps の中でほかに止まる処理（応答を待つなど）は短くするか、短い wait のあいだに応答を探します。
 - **見出しをプローブの時計に置きます。** `use_clock` は見出しごとにプローブの時計を読むので、区間ごとにキャプチャから切り出せます（[記録の形式](run-format.ja.md) §2.4）。`probe` は、キャプチャの `meta.probe.address` と同じプローブのアドレスです（oep-client-python では `hst.address.place`）。`use_clock` が無いと、キャプチャ全体が arm したときに開いていた区間のものになり、条件を分けられません。
-- **条件ごとに 1 つの区間にし、その命令から次の命令までとします。** 区間は変化とその後を持ち、期待はその両方を言います（§3.2）。変化と行き着く状態を見るなら `becomes`、変化を切り落として定常を見るなら定常の検査に `trim` を付けます。期待の無い区間は残しません。
-- **前後に静かな区間を置きます。** 最初の条件の前と、最後の条件の後（出力を止めた、ピンを離した）の区間が、試験の外での線の状態を持ちます。
+- **条件ごとに 1 つの区間にし、その命令から次の命令までとします。** 区間は変化とその後を持ち、期待はその両方を言います（§3.2）。既定は `becomes` で、変化と行き着く状態を判定します。変化を切り落として定常を見る（`trim`）のは、変化を問わないと決めた試験だけです。判定した範囲は結果（`trimmed`）に出ます。期待の無い区間は残しません。
+- **まわりのピン。** `only_moving` は、キャプチャに入っているピンしか見ません。対象のピンの隣（と、試験が触ってはいけないピン）をキャプチャのチャンネルに入れます。
+- **前後に静かな区間を置きます。** 最初の条件の前と、最後の条件の後（出力を止めた）の区間が、試験の外での線の状態を持ちます。
+- **離したピン。** ピンを入力に戻すと、線はボードが引く先の値になります。プルが無ければ値は決まらず、プローブからは「Low のまま浮いている」と「Low を出している」を見分けられません。離したことをレベルで確かめるのは、ボードかプローブがプルしている線だけにします。それ以外では、離す区間には `only_moving`（ほかが動かないこと）を付け、レベルは問いません。
 - **ファイル**は 1 本のキャプチャ `c0001.wireskein` で、見出しがそのマーカーになり、ビューアで波形の上に見えます。`wireskein verify` は、区間ごとに、判定した範囲（`c0001.wireskein@A:B`）を付けて報告します。線が何をしたかは `wireskein states` が並べます（§3.3）。
 - **欠損:** `on_loss="stop"`（既定）では、欠損があると `wait` から例外が出て、stream はそこで終わります。取れた分は残り、記録は失敗になります。
 - stream にはプローブからの通知が要ります。購読を断る中継（OEP core §10.3）を通すと stream は取れないので、条件ごとに単発のキャプチャ（§2.2）を取ります。

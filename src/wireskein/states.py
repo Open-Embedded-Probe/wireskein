@@ -41,9 +41,8 @@ def of_line(edges: np.ndarray, initial: int, n: int, rate: float, step: int = 1,
     rows = pulse_rows(edges, initial)
     slack = 2 * (step + 1)
 
-    def alike(a, b) -> bool:
-        t = max(slack, tol * b[2])
-        return abs(a[2] - b[2]) <= t and abs(a[1] - b[1]) <= t
+    def alike(a, b) -> bool:                            # period and high each within tol of their own (or 2 samples)
+        return abs(a[2] - b[2]) <= max(slack, tol * b[2]) and abs(a[1] - b[1]) <= max(slack, tol * b[1])
 
     # runs of alike whole pulses
     runs, i = [], 0
@@ -55,47 +54,46 @@ def of_line(edges: np.ndarray, initial: int, n: int, rate: float, step: int = 1,
         i = k
     waves = [(a, b) for a, b in runs if b - a >= min_periods]
     out: list[dict] = []
-    t = 0                                               # covered up to here
+    near = [int(rows[a:b, 2].max()) for a, b in waves]
 
-    def level_or_odd(t0: int, t1: int, lo: int, hi: int) -> None:
-        """Ticks [t0, t1) between waves: the rows lo..hi-1 in it are odd pulses; a long quiet stretch is a level."""
-        for r in rows[lo:hi]:
-            out.append({"odd": int(r[0]), "high_s": float(r[1]) / rate, "period_s": float(r[2]) / rate,
-                        "end": int(r[0] + r[2])})
-        inside = edges[(edges >= t0) & (edges < t1)]
-        # the quiet stretches: from an edge to the next (or the ends), longer than any period beside them
-        marks = np.concatenate(([t0], inside, [t1]))
-        lv = int(initial ^ (np.searchsorted(edges, t0, side="right") & 1))
-        # quiet longer than the waves' periods is a level; with no wave, longer than 10 times the edges' spacing here
-        near = [int(rows[a:b, 2].max()) for a, b in waves]
+    def between(t0: int, t1: int, before: dict | None) -> None:
+        """Ticks [t0, t1) outside the waves: quiet longer than the waves' periods (with no wave, than 10 times the
+        edges' spacing here) is a level; a shorter high is a pulse, odd unless it is the wave before it ending whole."""
+        e = edges[(edges >= t0) & (edges < t1)]
+        marks = np.concatenate(([t0], e, [t1])).astype(np.int64)
         gaps = np.diff(marks)
         floor = max(near) if near else (10 * float(np.median(gaps)) if len(gaps) > 2 else 0)
-        for a, b in zip(marks[:-1], marks[1:]):
-            here = int(initial ^ (np.searchsorted(edges, a, side="right") & 1)) if a > t0 else lv
-            if b - a > floor and b > a:
-                out.append({"t0": int(a), "t1": int(b), "level": here})
+        lv0 = int(initial ^ (np.searchsorted(edges, t0, side="left") & 1))     # the level just before t0's edge
+        for i in range(len(marks) - 1):
+            a, b = int(marks[i]), int(marks[i + 1])
+            if b <= a:
+                continue
+            here = int(initial ^ (np.searchsorted(edges, a, side="right") & 1)) if i or len(e) and e[0] == t0 else lv0
+            if b - a > floor:
+                out.append({"t0": a, "t1": b, "level": here})
+            elif here == 1 and (i or len(e) and e[0] == t0):         # a high that started at an edge here
+                c = int(marks[i + 2]) if i + 2 < len(marks) else None
+                per = c - a if c is not None and c <= t1 and c - b <= floor else None
+                if before is not None and a == before["t1"] and alike_high(b - a, before) and per is None:
+                    before["t1"] = b                                  # the wave's last pulse, whole: the wave ends here
+                    continue
+                out.append({"odd": a, "high_s": (b - a) / rate, "period_s": per / rate if per else None,
+                            "end": c if per else b})
 
+    def alike_high(high: int, w: dict) -> bool:
+        return abs(high - w["high_s"] * rate) <= max(slack, tol * w["high_s"] * rate)
+
+    t, prev = 0, None
     for a, b in waves:
         w0 = int(rows[a, 0])
-        w1 = int(rows[b - 1, 0] + rows[b - 1, 2])
-        level_or_odd(t, w0, _first_row_at(rows, t), a)
+        between(t, w0, prev)
         rs = rows[a:b]
-        out.append({"t0": w0, "t1": w1, "period_s": float(np.median(rs[:, 2])) / rate,
-                    "high_s": float(np.median(rs[:, 1])) / rate, "freq_hz": rate / float(np.median(rs[:, 2])),
-                    "duty": float(np.median(rs[:, 1] / rs[:, 2])), "periods": int(b - a)})
-        t = w1
-    level_or_odd(t, n, _first_row_at(rows, t), len(rows))
-    out.sort(key=lambda x: x.get("t0", x.get("odd")))
-    # a pulse left in a gap between stretches (a wave's last pulse cut by a stop has no next rise, so no row)
-    seen = {x["odd"] for x in out if "odd" in x}
-    spans = [(x["t0"], x["t1"]) for x in out if "t0" in x]
-    for a, b in zip([0] + [y for _, y in spans], [x for x, _ in spans] + [n]):
-        gap = edges[(edges >= a) & (edges <= b)]
-        lv = initial ^ (np.searchsorted(edges, gap, side="left") & 1)      # the level before each edge
-        for i, t0 in enumerate(gap):
-            if lv[i] == 0 and i + 1 < len(gap) and int(t0) not in seen:
-                out.append({"odd": int(t0), "high_s": float(gap[i + 1] - t0) / rate, "period_s": None,
-                            "end": int(gap[i + 1])})
+        prev = {"t0": w0, "t1": int(rows[b - 1, 0] + rows[b - 1, 2]), "period_s": float(np.median(rs[:, 2])) / rate,
+                "high_s": float(np.median(rs[:, 1])) / rate, "freq_hz": rate / float(np.median(rs[:, 2])),
+                "duty": float(np.median(rs[:, 1] / rs[:, 2])), "periods": int(b - a)}
+        out.append(prev)
+        t = prev["t1"]
+    between(t, n, prev)
     out.sort(key=lambda x: x.get("t0", x.get("odd")))
     return _collapse(_merge_levels(out), max_odd)
 
