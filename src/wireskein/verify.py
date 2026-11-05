@@ -30,8 +30,8 @@ from .runlog import FORMAT
 REPORT_FORMAT = "wireskein-report/1"   # docs/run-format.ja.md §3
 MEASURED = "measured"             # a check function's verdict for "only measure" (uart(baud=None) with nothing else)
 
-__all__ = ["MARKS", "MEASURED", "NOTICES", "REPORT_FORMAT", "dumps", "failed", "junit", "lines", "sections",
-           "summary_line", "verify"]
+__all__ = ["MARKS", "MEASURED", "NOTICES", "REPORT_FORMAT", "dumps", "failed", "junit", "lines", "register_check",
+           "sections", "summary_line", "verify"]
 STATUSES = ("ok", "ng", "unchecked", "measured")      # docs/run-format.ja.md §3
 
 
@@ -1444,7 +1444,45 @@ def _pins_of(x: dict) -> set[str]:
         if x.get(k):
             out.add(x[k])
     out |= set(x.get("levels", {}))
+    out |= set(x.get("pins", []) if x["kind"] != "only_moving" else [])   # a check from elsewhere names its pins
     return out
+
+
+def register_check(kind: str, check, *, notices: dict | None = None, logic: bool = True,
+                   every_edge: bool = True) -> None:
+    """Add a check kind (the entry point group "wireskein.checks" does it for an installed package): check(cap, x)
+    -> (ok: True / False / None for unchecked / MEASURED, measured: dict, reason: str), cap the segment's window
+    (cap.rate, cap.n_samples, cap.channel(name): .initial, .edges in ticks, .step, .level_at(ticks); cap.analog),
+    x the expectation ({"kind": kind, "pins": [...], ...}; "pins" are the channels it needs). It may put notices
+    in measured["notices"] ([{"kind", "tick", ...}], ticks of the window); notices names their kinds and meanings.
+    logic: it reads logic levels (an analog pin then needs threshold=); every_edge: it needs every edge (a line kept
+    as changes that hide some is unchecked). A kind wireskein has is not replaced."""
+    if kind in CHECKS and kind not in _ADDED:
+        raise ValueError(f"{kind!r} is a check of wireskein's own")
+    CHECKS[kind] = check
+    _ADDED.add(kind)
+    NOTICES[kind] = dict(notices or {})
+    (LOGIC.add if logic else LOGIC.discard)(kind)
+    (EVENT_CHECKS.discard if every_edge else EVENT_CHECKS.add)(kind)
+
+
+_ADDED: set[str] = set()
+_LOADED_EPS = False
+
+
+def _load_checks() -> None:
+    """The checks installed packages add (entry point group "wireskein.checks": NAME = module:object, the object a
+    check function, or one with .check and optionally .notices, .logic, .every_edge)."""
+    global _LOADED_EPS
+    if _LOADED_EPS:
+        return
+    _LOADED_EPS = True
+    from importlib.metadata import entry_points
+    for ep in entry_points(group="wireskein.checks"):
+        obj = ep.load()
+        fn = getattr(obj, "check", obj)
+        register_check(ep.name, fn, notices=getattr(obj, "notices", None), logic=getattr(obj, "logic", True),
+                       every_edge=getattr(obj, "every_edge", True))
 
 
 def _in_segment(c: dict, t: int, path: str, seg) -> bool:
@@ -1460,6 +1498,9 @@ EMPTY = object()                  # a section shorter than its bounds' uncertain
 
 def _judge(cap: Capture, x: dict, pins: set[str]):
     """(ok, measured, why) of one check on one capture."""
+    if x["kind"] not in CHECKS:
+        return False, {}, (f"no check named {x['kind']!r} (wireskein's, and those installed packages add through "
+                           f"the entry point group wireskein.checks)")
     cap, why = _as_logic(cap, x)
     if cap is None:
         return None, {}, why
@@ -1571,6 +1612,7 @@ def sections(run_dir: str | Path) -> list[dict]:
 
 
 def _verify(run_dir: Path) -> dict:
+    _load_checks()
     doc = json.loads((run_dir / "run.json").read_text())
     if doc.get("format") != FORMAT:
         raise ValueError(f"{run_dir}: format {doc.get('format')!r}, expected {FORMAT!r}")

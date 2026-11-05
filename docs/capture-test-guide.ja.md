@@ -343,7 +343,17 @@ sd_spi("PA5", "PA7", "PA6", "PA4", [{"cmd": 0, "r1": 0x01}, {"cmd": 8, "arg": 0x
 | `spi`（`cs` あり） | `empty_cs_window` | クロックの無い、CS がアクティブの窓（CS がアクティブになった所。`length_ticks`） |
 | `uart` | `baud_near_limit` | ボーレートが `baud_rel` の中だが、その半分より大きくずれている（線の最初の変化の所。`value`: ずれ、`limit`） |
 
+### 4.10 ほかから足す検査
 
+wireskein に検査の無いきまりは、検査の種類として足せます。wireskein の検査と同じに判定し、報告します（`wireskein verify` でも pytest-embedded-wireskein でも）。
+
+- 入れたパッケージが、entry point の `wireskein.checks` に宣言します: `NAME = "module:object"`。object は検査の関数か、`.check` と、あれば `.notices`（種類 -> 意味）、`.logic`、`.every_edge` を持つもの。試験から `wireskein.verify.register_check(NAME, check, notices=...)` で足すこともできます。
+- `check(cap, x)` は `(ok, measured, reason)` を返します: `ok` は True、False、None（unchecked）、`MEASURED`。`cap` は区間の窓です: `cap.rate`、`cap.n_samples`、`cap.channel(名前)`（`.initial`、tick の `.edges`、`.step`、`.level_at(ticks)`）、`cap.analog`。`x` は期待 `{"kind": NAME, "pins": [...], ...}` で、`pins` は要るチャンネルの名前です。
+- `measured["notices"]` に注意を入れられます（`[{"kind", "tick", ...}]`、窓の tick）。§4.9 のとおり、場所を付け、`notices=` で制限し、印にします。
+- wireskein の持つ種類は置き換えません。だれも足していない種類を書いた期待は `ng` です。
+- どの検査も読まないものの判定（試験が自分で分析を読んだもの）は、代わりに `rec.result()` で入れます（§3.3）。
+
+## 5. 許容誤差の決め方
 
 - **発振源の誤差を含める。** 内蔵の RC 発振（CH32 の HSI など）で動かすと、周波数は ±1〜2 % ずれます。水晶で動かす試験と分けるか、許容誤差に含めます。
 - **サンプルレートから決まる分解能を含める。** 1 周期が N サンプルなら、デューティー比の分解能は 1/N です。デューティー比を 1 % で見るなら、1 周期に 100 サンプル以上必要です。周波数は、多くの周期の平均で測れば分解能が上がります。

@@ -98,3 +98,41 @@ analyze の書き出し（`--mode final`、`depth` まで）の層。刻みは�
 | --- | --- |
 | `i2c` | `transactions`: `s`、`e`、`addr`、`rw`、`addr_ack`、`bytes`（16 進）、`acks`、`start_cond`（S / Sr）、`end_cond`（P / Sr / null: 区間の終わりで開いたまま）、`scl_low_ticks`、`scl_waits`（`[{after_word, bit, ticks, s}]`）。区間の終わりで切れたものは `complete: false` と `pending_bits` |
 | `spi` | `transfers`: `s`、`e`（最初と最後の標本のビット）と、データのピンごとのバイト（16 進、チャンネルの名前の下）。SD のコマンドを読めたら、横に `sd`（capture-test-guide §4.8）。CS があれば `modes`: SCK の待機のレベルに合う 2 つのモードそれぞれの `readable`（そのサンプルの辺でどのデータ線も変わらない）と、そのモードで読んだ `bytes`（MSB から）。`modes_ok` は読めるもの。読めるモードが 1 つならモードが決まる。読めるモードのバイトが同じなら、見分けなくてよい |
+| `uart` | `lines`、`nmea`、`modbus_rtu`（読めたもの）と `bytes`（`{"s": [...], "hex"}`） |
+| ほか | `analyze` の書き出しと同じ |
+
+上の層を読めても、下の層は横に残す（`sd` と `transfers`）。`depth: "device"` では、`devices` にバスの上で
+合ったデバイスを出す（`analyze --depth device` と同じ）。
+
+### 3.3 uninterpreted
+
+`[{"s", "e", "edges"}]`: バスのピンの活動のうち、復号したどの項目にも入らないもの。バスのすべてのピンの変化を、
+`idle_ticks` のあいだ変化が無い所で切ってかたまりにする。項目がその中で（またはその `idle_ticks` 前から）
+始まらず、どの項目の中にも無いかたまりが、未解釈: START の無い SCL のクロック、復号器が読めなかった転送、雑音など。
+
+区間と `capture.lost` と合わせて、3 つを区別する:
+
+- **何も起きなかった**: 区間の中で、ピンに変化が無い
+- **見えなかった**: 区間の間、または欠落
+- **読めなかった**: 未解釈のかたまり
+
+## 4. analyze が見つけたもの
+
+`wireskein analyze CAPTURE`（Python では `wireskein.decode.analyze_file(path, hints, ...)`）は、役割を与えずに、同じ
+家族の文書を書きます: `format`、`wireskein`、`capture`（§2）と `parts[]`。ただし `spec` の代わりに `hints`（試すよう
+頼んだもの。`--hint` / `--devices`）を持ち、各区間は `buses` の代わりに次を持ちます。
+
+| キー | 意味 |
+| --- | --- |
+| `part`、`ticks`、`tick0`、`start_ns` など | §2.1 と同じ |
+| `claims[]` | 証拠が支えるもの: `protocol`、`roles`（役割 → チャンネル）、`verdict`（`confirmed` / `likely` / `ambiguous` / `unknown-sync`）、`score`、`margin`、`params`。さらに `result`（`--mode final`、`--depth` まで）、`layers` と `evidence`（`--mode all`）、または `--select` で選んだ層、`devices`（`--depth device`）、`runner_up`（`--alternatives`）。刻みは区間の刻み 0 から |
+| `relations[]` | 一緒に読む主張の組（コマンドの行とその応答: `scpi`） |
+| `analysis_seconds` | 文書の一番上: 解析にかかった秒（実行ごとに変わる） |
+| `window`、`segment`、`events` | `--window` / `--segment` のとき（1 つの区間の中の範囲。区間が 2 つ以上なら `--part` で選ぶ） |
+
+試す例は tests/data/examples にあります（WCH-LinkE の SWIO と RVSWD のやりとり、生成した I2C と SPI のバスを並べたもの）。それぞれ、持っているバスを `<名前>.truth.json` に書いてあります: `wireskein analyze tests/data/examples/mixed-0.wireskein`。WireSkein のファイルは区間ごとに解析します。`.sr` と VCD は 1 つの区間です。何をどれだけ確かに
+主張するかは版で変わることがあります（評価のコーパスで調整するため）。キーは保ちます。
+
+## 5. 安定性
+
+形式の番号は、版 1 まで 1 のまま（互換の無い変更でも）。読み手は `format` を確かめ、知らないキーは無視する。
