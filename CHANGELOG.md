@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) `becomes(..., high_rel=)`: the high time's tolerance as a share of it (a DUT clock off by 1 % moves a pulse's width by 1 %, so a servo's 2400 us needs more room than its 544 us); with `high_abs_s` too, the larger counts.
+- (JA) `becomes(..., high_rel=)`: high の時間の許容を、その割合で言う（DUT の時計が 1 % ずれるとパルスの幅も 1 % ずれるので、サーボの 2400 us は 544 us より余裕が要る）。`high_abs_s` もあれば、大きいほう。
 
 ## 0.0.19
 - (EN) `becomes(pin, ...)`: the pin ends the segment in a level or a periodic wave, reached by at most one change from the state it was in just before the segment (read from the capture before it). At the change at most `irregular_max` pulses of neither state (default 1; `irregular_min` asks for some); after it every whole period in tolerance. Measured: `change_s` (from the segment's start; `within_s` limits it) and `change_tick` (in the capture part), `irregular_pulses` (each one's high and period), `before` (the level, or the period and high time) and after it `period_s`, `high_s`, `periods`; a wave that stopped between its pulses changes where its next pulse did not come (`missed`). `trim(check, head_s, tail_s, head_periods=, tail_periods=)` judges any check without the ends of its segment.

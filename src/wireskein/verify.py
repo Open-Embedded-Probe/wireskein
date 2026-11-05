@@ -1210,7 +1210,8 @@ def check_becomes(cap, x):
         high = (x["duty"] * per if x.get("duty") is not None else
                 x["high_s"] * rate if x.get("high_s") is not None else None)
         ptol = x["freq_rel"] * per + q
-        htol = ((x["duty_abs"] * per if x.get("duty") is not None else (x.get("high_abs_s") or 0) * rate) + q)
+        htol = max(x["duty_abs"] * per if x.get("duty") is not None else (x.get("high_abs_s") or 0) * rate,
+                   (x.get("high_rel") or 0) * (high or 0)) + q     # absolute, or a share of the high time
         if not len(rows):
             return False, {"edges": int(len(e))}, "no whole period"
         m = np.abs(rows[:, 2] - per) <= ptol

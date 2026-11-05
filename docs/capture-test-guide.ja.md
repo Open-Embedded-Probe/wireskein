@@ -196,7 +196,7 @@ WireSkein は、キャプチャを読み手に要るものに変えます。サ�
 | 検査 | 内容 |
 | --- | --- |
 | `square(pin, freq_hz, duty, freq_rel, duty_abs, jitter_max, outliers_max)` | 窓全体で規則的な方形波。すべての周期が `freq_rel`（相対）に、その high の時間が `duty_abs`（周期に対する絶対）に入ること。外れてよい周期は `outliers_max` 個まで（既定 0）。`jitter_max` は周期のばらつきの上限（相対）。サンプルレートによる分解能は自動で足す |
-| `becomes(pin, level=v)` / `becomes(pin, freq_hz= か period_s=, duty= か high_s=, irregular_max, irregular_min, min_periods, within_s)` | 線が窓の終わりにある状態（レベル、または波形）にあり、窓の前の状態から 1 度だけの変化でそこへ移ったこと（§3.2）。`change_s`、`irregular_pulses` を測る |
+| `becomes(pin, level=v)` / `becomes(pin, freq_hz= か period_s=, duty= か high_s=, high_abs_s か high_rel, irregular_max, irregular_min, min_periods, within_s)` | 線が窓の終わりにある状態（レベル、または波形）にあり、窓の前の状態から 1 度だけの変化でそこへ移ったこと（§3.2）。`change_s`、`irregular_pulses` を測る |
 | `trim(検査, head_s, tail_s, head_periods=, tail_periods=)` | どの検査も、窓の両端を除いて判定する（§3.2） |
 | `level(pin, value)` | 窓の間ずっと一定 |
 | `starts({pin: v})` / `ends({pin: v})` | 窓の最初・最後のレベル |

@@ -196,7 +196,7 @@ WireSkein turns a capture into what a reader needs, so the samples themselves do
 | Check | Description |
 | --- | --- |
 | `square(pin, freq_hz, duty, freq_rel, duty_abs, jitter_max, outliers_max)` | A regular square wave through the whole window: every whole period within `freq_rel` (relative) and its high time within `duty_abs` (absolute, of the period), at most `outliers_max` periods off (default 0). `jitter_max` is the upper limit of period variation (relative). The resolution from the sample rate is added automatically |
-| `becomes(pin, level=v)` / `becomes(pin, freq_hz=or period_s=, duty=or high_s=, irregular_max, irregular_min, min_periods, within_s)` | The line ends the window in a state (a level, or a wave), reached by at most one change from the state before the window (§3.2). Measures `change_s`, `irregular_pulses` |
+| `becomes(pin, level=v)` / `becomes(pin, freq_hz=or period_s=, duty=or high_s=, high_abs_s or high_rel, irregular_max, irregular_min, min_periods, within_s)` | The line ends the window in a state (a level, or a wave), reached by at most one change from the state before the window (§3.2). Measures `change_s`, `irregular_pulses` |
 | `trim(check, head_s, tail_s, head_periods=, tail_periods=)` | Any check, judged without the ends of its window (§3.2) |
 | `level(pin, value)` | Constant throughout the window |
 | `starts({pin: v})` / `ends({pin: v})` | Level at the first / last sample of the window |

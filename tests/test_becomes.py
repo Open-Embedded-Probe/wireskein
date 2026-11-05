@@ -133,3 +133,11 @@ def test_trim_by_periods_of_the_checks_own_frequency(tmp_path):
     sec = [("d50", 15_500, 40_000, [trim(square("P", 1000, 0.5), head_periods=6)])]
     r = run(tmp_path, wave(PWM), sec)["d50"]
     assert r["status"] == "ok" and r["measured"]["trimmed"] == [6000, 24_500], r
+
+
+def test_a_high_time_tolerance_relative_to_it(tmp_path):
+    # a 2400 us pulse 1 % short (2376 us): outside 20 us, inside 2 % of itself
+    lv = wave([("level", 0, 30_000), ("pulses", 2376, 19_800, 25)])
+    for name, kw, want in (("abs", {"high_abs_s": 20e-6}, "ng"), ("rel", {"high_rel": 0.02}, "ok")):
+        sec = [("us", 20_000, 520_000, [becomes("P", period_s=0.02, high_s=2400e-6, min_periods=20, **kw)])]
+        assert run(tmp_path / name, lv, sec)["us"]["status"] == want, name
