@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 0.0.21
 - (EN) **Breaking:** `spi(mode=)` with `cs` passes when the transfer reads in that mode: readable there (no data line changing at its sampling edges) and reading the bytes given (`mode_candidates`), not when it equals the one mode the changes say (still measured as `mode`). More than one candidate is the notice `mode_ambiguous`. Data whose bits are all alike (no change to say the CPHA) is read too.
 - (JA) **互換のない変更:** `cs` のある `spi(mode=)` は、転送がそのモードで読めるとき（そのサンプルの辺でどのデータ線も変わらず、与えたバイトとして読める。`mode_candidates`）に通る。変化の向きが言う 1 つのモードと同じかどうかではない（それは測った値の `mode` に残る）。候補が 2 つ以上なら注意 `mode_ambiguous`。ビットがすべて同じデータ（CPHA を言う変化が無い）も読む。
 - (EN) Checks from elsewhere: an installed package adds a check kind through the entry point group `wireskein.checks` (or a test with `wireskein.verify.register_check`), judged, reported, its notices limited and marked like wireskein's own; an expectation of a kind nobody added is `ng` (verify raised) (capture-test-guide §4.10).
