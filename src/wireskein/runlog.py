@@ -392,20 +392,26 @@ def i2c(scl: str, sda: str, transactions: list[dict] | None = None, freq_hz: flo
         freq_rel: float = 0.1, released: bool = True, threshold=None) -> dict:
     """transactions: [{"addr": 0x42, "rw": "write", "bytes": [..], "ack": True}], compared in order.
     Optional per transaction: "complete" (default True; False for the last one
-    when the window ends before its STOP) and "pending_bits" (bits clocked after
-    the last whole byte, compared only when given)."""
+    when the window ends before its STOP), "pending_bits" (bits clocked after
+    the last whole byte, compared only when given), "start" ("S": a START after a
+    STOP or an idle bus, "Sr": a repeated START) and "end" ("P": a STOP, "Sr": the
+    next transaction's repeated START), each compared only when given."""
     return _t({"kind": "i2c", "scl": scl, "sda": sda, "transactions": transactions, "freq_hz": freq_hz, "freq_rel": freq_rel,
                "released": released}, threshold)
 
 
 def spi(clk: str, mosi: str | None = None, miso: str | None = None, cs: str | None = None, mode: int | None = None,
         mosi_bytes: str | None = None, miso_bytes: str | None = None, freq_hz: float | None = None,
-        freq_rel: float = 0.1, bit_order: str = "msb", cs_active: int = 0, threshold=None) -> dict:
+        freq_rel: float = 0.1, bit_order: str = "msb", cs_active: int = 0, bits: int | list[int] | None = None,
+        sck_idle_outside_cs: bool = False, threshold=None) -> dict:
     """mode is read from the lines: CPOL from SCK's level as CS becomes active, CPHA from the SCK edge MOSI (else
-    MISO) changes after (a leading edge: 1)."""
+    MISO) changes after (a leading edge: 1). With cs: the clocks in each window of CS active are measured
+    (frame_bits) and bits (one count for every window, or a list) compared; an SCK level inside a window shorter
+    than half the median one is a glitch; sck_idle_outside_cs=True also fails SCK moving while CS is inactive (on a
+    bus shared with other devices it may)."""
     return _t({"kind": "spi", "clk": clk, "mosi": mosi, "miso": miso, "cs": cs, "mode": mode, "mosi_bytes": mosi_bytes,
-               "miso_bytes": miso_bytes, "freq_hz": freq_hz, "freq_rel": freq_rel, "bit_order": bit_order, "cs_active": cs_active},
-              threshold)
+               "miso_bytes": miso_bytes, "freq_hz": freq_hz, "freq_rel": freq_rel, "bit_order": bit_order,
+               "cs_active": cs_active, "bits": bits, "sck_idle_outside_cs": sck_idle_outside_cs}, threshold)
 
 
 def phase(a: str, b: str, phase_deg: float | None = None, phase_abs_deg: float = 2.0, freq_hz: float | None = None,

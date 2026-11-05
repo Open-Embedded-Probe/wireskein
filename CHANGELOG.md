@@ -1,6 +1,10 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) `i2c(..., transactions=[{..., "start": "S" / "Sr", "end": "P" / "Sr"}])`: how each transaction began and ended is compared when given (Arduino's `endTransmission(false)` and `requestFrom(..., stop)` keep the bus with repeated STARTs); the decoded transactions carry them, and a difference names them.
+- (JA) `i2c(..., transactions=[{..., "start": "S" / "Sr", "end": "P" / "Sr"}])`: 書けば、それぞれのトランザクションの始まりと終わりも比べる（Arduino の `endTransmission(false)` と `requestFrom(..., stop)` は repeated START でバスを持ち続ける）。復号したトランザクションもそれを持ち、違いの説明にも出る。
+- (EN) `spi` with `cs`: the clocks in each CS window are measured (`frame_bits`) and compared with `bits=`; an SCK level inside a window shorter than half the median one fails as a glitch; `sck_idle_outside_cs=True` fails SCK edges while CS is inactive (measured as `sck_edges_outside_cs` either way).
+- (JA) `cs` のある `spi`: CS の窓ごとのクロックの数を測り（`frame_bits`）、`bits=` と比べる。窓の中で SCK のレベルが中央値の半分より短ければ、グリッチとして失敗する。`sck_idle_outside_cs=True` なら、CS が非アクティブのあいだの SCK の変化で失敗する（どちらでも `sck_edges_outside_cs` を測る）。
 - (EN) `wireskein verify` and `wireskein states` read timeline parts that follow on without a gap as one stretch (logic channels of step 1; `fileio.load_runs`): a section across parts of a stream cut where its sample grid restarted was checked part by part, in parts that did not hold it. `verify` reads each capture once (a 546-part capture took 377 s, now 2 s).
 - (JA) `wireskein verify` と `wireskein states` は、隙間なく続く timeline の区間を 1 つの流れとして読む（刻み 1 のロジックのチャンネル。`fileio.load_runs`）: サンプルの刻みを始め直した所で区切られた stream で、区間をまたぐ区間を、それを持たない区間ごとに判定していた。`verify` はキャプチャを 1 回だけ読む（546 区間のキャプチャで 377 秒が 2 秒）。
 - (EN) `becomes(..., high_rel=)`: the high time's tolerance as a share of it (a DUT clock off by 1 % moves a pulse's width by 1 %, so a servo's 2400 us needs more room than its 544 us); with `high_abs_s` too, the larger counts.

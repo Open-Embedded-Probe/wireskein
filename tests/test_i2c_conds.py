@@ -37,3 +37,39 @@ def test_a_long_scl_low_is_a_wait_after_its_word():
 def test_no_wait_on_an_even_clock():
     _, (t,) = _transactions([{"addr": 0x50, "rw": "write", "bytes": [0x01, 0x02]}])
     assert t["scl_waits"] == [] and (t["start_cond"], t["end_cond"]) == ("S", "P")
+
+
+def _verify_with(tmp_path, bus, want):
+    from wireskein.runlog import Recorder, i2c
+    scl, sda = gen.Wave(1), gen.Wave(1)
+    end = gen.i2c(scl, sda, 20e-6, bus, 100e3)
+    cap = gen.quantize({"SCL": scl, "SDA": sda}, RATE, end + 50e-6, np.random.default_rng(0))
+    lv = np.zeros(cap.n_samples, np.uint8)
+    for k, ch in enumerate(cap.channels):
+        lv |= ch.level_at(np.arange(cap.n_samples)).astype(np.uint8) << k
+    rec = Recorder(tmp_path)
+    with rec.section(1, "t", expect=[i2c("SCL", "SDA", transactions=want)]):
+        rec.capture(rec.armed(), RATE, interleaved=lv.tobytes(), names=[c.name for c in cap.channels])
+    rec.close()
+    (r,) = verify.verify(tmp_path)["results"]
+    return r
+
+
+# Arduino's sendStop: endTransmission(false) then requestFrom(..., stop) keeps the bus with repeated STARTs
+SENDSTOP0 = [{"addr": 0x42, "rw": "write", "bytes": [0x10], "repeated_start": True},
+             {"addr": 0x42, "rw": "read", "bytes": [0xAB, 0xCD], "repeated_start": True},
+             {"addr": 0x42, "rw": "write", "bytes": [0x20]}]
+SENDSTOP1 = [{"addr": 0x42, "rw": "write", "bytes": [0x10], "repeated_start": True},
+             {"addr": 0x42, "rw": "read", "bytes": [0xAB, 0xCD]},
+             {"addr": 0x42, "rw": "write", "bytes": [0x20]}]
+
+
+def test_the_start_and_end_of_each_transaction_are_compared_when_given(tmp_path):
+    want = [{"addr": 0x42, "rw": "write", "bytes": [0x10], "start": "S", "end": "Sr"},
+            {"addr": 0x42, "rw": "read", "bytes": [0xAB, 0xCD], "ack": True, "start": "Sr", "end": "Sr"},
+            {"addr": 0x42, "rw": "write", "bytes": [0x20], "start": "Sr", "end": "P"}]
+    assert _verify_with(tmp_path / "0", SENDSTOP0, want)["status"] == "ok"
+    r = _verify_with(tmp_path / "1", SENDSTOP1, want)          # a STOP and a new START where an Sr is wanted
+    assert r["status"] == "ng" and "#1" in r["reason"] and " P" in r["reason"], r["reason"]
+    plain = [{k: v for k, v in t.items() if k not in ("start", "end")} for t in want]
+    assert _verify_with(tmp_path / "any", SENDSTOP1, plain)["status"] == "ok"   # not named: not compared

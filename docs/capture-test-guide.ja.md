@@ -202,8 +202,8 @@ WireSkein は、キャプチャを読み手に要るものに変えます。サ�
 | `starts({pin: v})` / `ends({pin: v})` | 窓の最初・最後のレベル |
 | `only_moving([pins])` | ほかのキャプチャ対象のピンが動かない。ロジックのチャンネルだけを見る |
 | `pulses(pin, count, period_s, period_rel)` | 立ち上がりの数と周期。`period_rel` は相対 |
-| `i2c(scl, sda, transactions, freq_hz, freq_rel, released)` | トランザクションの列（アドレス、読み書き、バイト、ACK）、SCL の周波数、終了時に両方 High |
-| `spi(clk, mosi, miso, cs, mode, mosi_bytes, miso_bytes, freq_hz, freq_rel, bit_order, cs_active)` | モード、両方向のバイト、SCK の周波数、終了時に CS が High。モードは線から読む（§4.5） |
+| `i2c(scl, sda, transactions, freq_hz, freq_rel, released)` | トランザクションの列（アドレス、読み書き、バイト、ACK）、SCL の周波数、終了時に両方 High。トランザクションごとに `start`（`S`、`Sr`）と `end`（`P`、`Sr`）を書けば、それも比べる |
+| `spi(clk, mosi, miso, cs, mode, mosi_bytes, miso_bytes, freq_hz, freq_rel, bit_order, cs_active, bits, sck_idle_outside_cs)` | モード、両方向のバイト、SCK の周波数、最後に CS が High。モードは線から読む（§4.5）。`cs` があれば、CS の窓ごとのクロックの数（`frame_bits`。`bits` で比べる）、窓の中で SCK のレベルが中央値の半分より短くないこと（グリッチ）、`sck_idle_outside_cs=True` なら CS が非アクティブのあいだ SCK が動かないこと |
 | `uart(pin, baud, data, baud_rel, idle, bits, parity, stop, errors_max)` | ボーレート、バイト列、アイドルレベル、フレームとパリティのエラー（下記） |
 | `voltage(pin, level_v, level_abs_v, level_min_v, level_max_v, ripple_max_v)` | アナログのチャンネルの電圧。平均が `level_v` ± `level_abs_v`、全サンプルが `level_min_v`〜`level_max_v`、ピークからピークが `ripple_max_v` 以下。与えたものだけを見る |
 | `phase(a, b, phase_deg, phase_abs_deg, freq_hz, freq_rel, edge)` | 2 本の周期的な線の位相。a のエッジから、同じ向きの b の次のエッジまでを、a の周期に対する角度（0〜360 度）にする。どの組も `phase_deg` ± `phase_abs_deg`（度。0 の近くは回り込む）、両方の周波数が `freq_hz` の `freq_rel`（相対）の内 |

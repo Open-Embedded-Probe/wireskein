@@ -318,7 +318,8 @@ def _burst_hz(ch: Channel, rate: float) -> float | None:
 
 def _i2c_tx(t: dict) -> dict:
     out = {"addr": t["addr"], "rw": t["rw"], "bytes": list(t.get("bytes", [])),
-           "ack": bool(t.get("addr_ack")) if t["addr"] is not None else None, "complete": t.get("complete", True)}
+           "ack": bool(t.get("addr_ack")) if t["addr"] is not None else None, "complete": t.get("complete", True),
+           "start": t.get("start_cond"), "end": t.get("end_cond")}   # S / Sr, and P / Sr (None: still open)
     if not out["complete"]:
         out["pending_bits"] = list(t.get("pending_bits", []))
     return out
@@ -329,13 +330,18 @@ def _i2c_want(t: dict) -> dict:
            "ack": bool(t.get("ack", True)) if t["addr"] is not None else None, "complete": bool(t.get("complete", True))}
     if "pending_bits" in t:
         out["pending_bits"] = list(t["pending_bits"])
+    for k in ("start", "end"):                       # compared only when the expectation names them
+        if k in t:
+            out[k] = t[k]
     return out
 
 
 def _i2c_fmt(t: dict) -> str:
     if t["addr"] is None:
         return f"(cut in the address, bits {t.get('pending_bits', [])})"
-    s = f"0x{t['addr']:02x} {t['rw']} [{' '.join(f'{b:02x}' for b in t['bytes'])}]" + ("" if t["ack"] else " NACK")
+    s = (f"{t['start']} " if t.get("start") else "") + \
+        f"0x{t['addr']:02x} {t['rw']} [{' '.join(f'{b:02x}' for b in t['bytes'])}]" + ("" if t["ack"] else " NACK") + \
+        (f" {t['end']}" if t.get("end") else "")
     if not t["complete"]:
         s += f" incomplete (pending bits {t.get('pending_bits', [])})"
     return s
@@ -431,7 +437,45 @@ def check_spi(cap, x):
         if cs_end != 1:
             ok = False
             why.append("CS not high at the end")
+        frames, outside, shortest, half = _spi_clocks(cap.channel(x["clk"]), cap.channel(x["cs"]), cap.n_samples,
+                                                      x.get("cs_active", 0))
+        got.update(frame_bits=frames, sck_edges_outside_cs=outside, sck_shortest_s=shortest and shortest / cap.rate,
+                   sck_half_period_s=half and half / cap.rate)
+        want = x.get("bits")
+        if want is not None:
+            want = [want] * len(frames) if isinstance(want, int) else list(want)
+            if frames != want:
+                ok = False
+                why.append(f"clocks while CS is active {frames}, want {want}")
+        if x.get("sck_idle_outside_cs") and outside:
+            ok = False
+            why.append(f"SCK moved {outside} times while CS was inactive")
+        if shortest is not None and half and shortest < 0.5 * half:
+            ok = False
+            why.append(f"SCK held a level {shortest / cap.rate * 1e9:.0f} ns while CS was active, its half period "
+                       f"{half / cap.rate * 1e9:.0f} ns: a glitch")
     return ok, got, "; ".join(why)
+
+
+def _spi_clocks(sck, cs, n: int, active: int) -> tuple[list[int], int, int | None, float | None]:
+    """Per window of CS active: the clocks in it (SCK edges / 2); SCK edges while CS is inactive; the shortest SCK
+    level inside the windows (from one SCK edge to the next) and the median of those levels (the half period)."""
+    marks = np.concatenate(([0], cs.edges, [n]))
+    lv = cs.initial
+    frames, outside, levels = [], 0, []
+    for a, b in zip(marks[:-1], marks[1:]):
+        e = sck.edges[(sck.edges > a) & (sck.edges < b)]
+        if lv == active:
+            frames.append(int(len(e) // 2))
+            if len(e) > 1:
+                levels.append(np.diff(e))
+        else:
+            outside += int(len(e))
+        lv ^= 1
+    if not levels:
+        return frames, outside, None, None
+    allv = np.concatenate(levels)
+    return frames, outside, int(allv.min()), float(np.median(allv))
 
 
 def _verdicts(parts: list[tuple[bool | None, str]]) -> tuple[bool | None, str]:
