@@ -79,6 +79,7 @@ Code on the probe may keep a log on its own clock (oep-probe-arduino's `OepProbe
 - What the probe dropped of its lines (its buffer overflowed, marks skipped) becomes a `src: "lost"` line, and verification gives a `probe_log` `ng`: which segments are right is not known.
 - `Recorder.close()` also copies the probe's lines into each capture file's markers (`by: "probe-log"`, [file format](wireskein-format.md) §5.2), so a viewer shows them on the waveform.
 - Expectations for a segment of the probe's lines are given with `Recorder.expect(path, [checks...])`.
+- **The host's headings on the probe's clock.** `Recorder.use_clock(clock, probe=...)` (or `clock=` / `probe=` of `section()` and `heading()`) reads the probe's clock (OEP core §7.7: oep-client-python's `Host.clock`) at each heading and writes it with `probe_ns` (the probe's reading), `boot_id` and `probe`, and `host_ns` the host time the reading stands for (the midpoint of the round trip). So a section the host opens and closes, changing the condition inside it (an op on the probe, a command over the console), is cut out of one long capture as above. The reading is exact on the probe's clock, and the probe handles what the host sends after it later, so the line has no `uncertainty_ns`. A clock that cannot be read leaves the heading without `probe_ns` and adds a `src: "lost"` line (`probe_log` `ng`): the section's bounds are not known.
 
 ## 3. Verification results
 

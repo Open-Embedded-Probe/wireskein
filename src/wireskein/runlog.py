@@ -63,6 +63,8 @@ class Recorder:
         self._seen: dict[tuple, int] = {}               # (parent occurrences, name) -> times opened
         self._expect: dict[tuple, dict] = {}            # expectations by occurrence path, rendered in close()
         self._paths: dict[str, dict] = {}               # expectations given by their path (expect())
+        self._clock = None                              # use_clock(): headings on the probe's clock
+        self._clock_probe: str | None = None
         self._closed = False
 
     def now(self) -> int:
@@ -78,11 +80,27 @@ class Recorder:
         self.doc["log"].append({"host_ns": self.now(), "src": src, "text": text})
 
     # markers
-    def heading(self, level: int, name: str = "") -> None:
-        """'#' * level + name; an empty name closes that level."""
+    def use_clock(self, clock, probe: str | None = None) -> None:
+        """Put every heading from now on on the probe's clock too: clock() reads it (oep_client's Host.clock, or
+        lambda: hst.clock_best(4)), probe is its place (its OEP address without the route, as the capture's
+        meta.probe.address). A section opened and closed so is cut out of a capture taken on that clock, as the
+        probe's own lines are (docs/run-format.ja.md §2.4): what a long capture holds is checked section by section.
+        use_clock(None) goes back to the host clock only."""
+        self._open()
+        self._clock, self._clock_probe = clock, probe
+
+    def heading(self, level: int, name: str = "", *, clock=None, probe: str | None = None) -> None:
+        """'#' * level + name; an empty name closes that level. clock / probe: this heading on the probe's clock
+        (as use_clock(), which they override)."""
         if "\n" in name or name.startswith("#"):
             raise ValueError(f"bad heading name {name!r}")
-        self._log("marker", "#" * level + (" " + name if name else ""))
+        clock = clock or self._clock
+        text = "#" * level + (" " + name if name else "")
+        if clock is None:
+            self._log("marker", text)
+        else:
+            self._open()
+            self._clocked(text, clock, probe or (self._clock_probe if clock is self._clock else None))
         del self.path[level - 1:]
         del self._occ[level - 1:]
         if name:
@@ -92,21 +110,40 @@ class Recorder:
             self._seen[k] = self._seen.get(k, 0) + 1
             self._occ.append((name, self._seen[k] - 1))
 
+    def _clocked(self, text: str, clock, probe: str | None) -> None:
+        """A heading at the moment the probe read its clock: probe_ns is that reading (exact on the probe's clock,
+        and before anything the host sends after it), host_ns the host time it stands for. A clock that cannot be
+        read leaves the heading on the host clock and fails the run (a lost line): its section is no longer known."""
+        try:
+            r = clock()
+            line = {"host_ns": int(r.host_ns), "src": "marker", "text": text, "probe_ns": int(r.uptime_ns),
+                    "boot_id": int(r.boot_id)}
+        except Exception as e:  # noqa: BLE001 - recorded as lost, the run goes on
+            self._log("marker", text)
+            self._log("lost", f"the probe's clock could not be read for the heading {text!r}: {e}")
+            if probe:
+                self.doc["log"][-1]["probe"] = probe
+            return
+        if probe:
+            line["probe"] = probe
+        self.doc["log"].append(line)
+
     @contextmanager
-    def section(self, level: int, name: str, expect: list | None = None):
-        """A heading closed explicitly, so its quiet tail belongs to it.
+    def section(self, level: int, name: str, expect: list | None = None, *, clock=None, probe: str | None = None):
+        """A heading closed explicitly, so its quiet tail belongs to it. clock / probe put both its headings on the
+        probe's clock (heading()).
         expect is stored for this occurrence of the section. The key in run.json
         is the segment path as markers.py writes it: the first occurrence of a
         name under a parent keeps it, repeats get [1], [2], ... ("duty=64",
         "duty=64[1]"), so each repetition keeps its own expectations and adding
         one later does not rename the earlier ones (docs/run-format.ja.md)."""
-        self.heading(level, name)
+        self.heading(level, name, clock=clock, probe=probe)
         if expect is not None:
             self._expect.setdefault(tuple(self._occ), {"checks": []})["checks"] += list(expect)
         try:
             yield self
         finally:
-            self.heading(level)
+            self.heading(level, clock=clock, probe=probe)
 
     # traffic
     def command(self, text: str) -> None:

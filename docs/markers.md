@@ -44,6 +44,8 @@ Lines that do not match the marker syntax (commands, responses, parameters) are 
 
 In short tests where commands are sent over a debug line or another path and each step's capture is a single short shot, there is no place in the waveform to put markers. So the markers are kept on the PC side, in a form where **the DUT firmware does not need to change**.
 
+When one long capture runs through several sections (the host changes the condition in each), the headings are put on the probe's clock too (`Recorder.use_clock`), and each section is cut out of the capture ([Run format](run-format.md) §2.4).
+
 ### 3.2 In the waveform (sent over UART)
 
 In long runs, the DUT or a test tool sends marker lines over UART, and `wireskein segments` or `wireskein analyze --segment PATH` divides the run into segments.

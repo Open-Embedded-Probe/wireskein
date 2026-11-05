@@ -92,3 +92,65 @@ def test_a_probe_is_its_place_whatever_route_reached_it(tmp_path):
     assert r["status"] == "ok", r
     rep = _run(tmp_path / "other", lines, BURST, line_probe="oep://other", **at)
     assert all(x["status"] != "ok" for x in rep["results"]), rep["results"]
+
+
+class _Reading:
+    """oep_client's ClockReading as Recorder reads it: the probe's uptime_ns, its boot_id, the host time."""
+    def __init__(self, tick: int, host_ns: int, boot_id: int = 7):
+        self.uptime_ns, self.boot_id, self.host_ns = START_NS + tick * 1000, boot_id, host_ns
+
+
+def _clock(ticks: list[int]):
+    """A probe clock read at these ticks of the capture, one per heading."""
+    it = iter(ticks)
+    return lambda: _Reading(next(it), time.monotonic_ns())
+
+
+def test_host_headings_on_the_probes_clock_cut_one_long_capture(tmp_path):
+    # one capture taken on and on; the host changes the condition in each section (docs/run-format.ja.md §2.4)
+    rec = Recorder(tmp_path)
+    armed = rec.armed()
+    rec.use_clock(_clock([100, 300, 450, 700]), probe="oep://p4x")
+    with rec.section(1, "burst", expect=[pulses("P0", count=3)]):
+        rec.command("PWM on")
+    with rec.section(1, "after", expect=[pulses("P0", count=2)]):
+        rec.command("PWM slow")
+    rec.use_clock(None)
+    rec.capture(armed, RATE, interleaved=_wave(1000, BURST), names=["P0"], start_ns=START_NS,
+                probe={"address": "oep://p4x", "boot_id": 7})
+    rec.close()
+    rep = verify.verify(tmp_path)
+    assert [(r["path"], r["status"], r["measured"]["window"]) for r in rep["results"]] == [
+        ("burst", "ok", [100, 300]), ("after", "ok", [450, 700])], rep["results"]
+    log = json.loads((tmp_path / "run.json").read_text())["log"]
+    assert [(e["text"], e.get("probe_ns"), e.get("probe")) for e in log if e["src"] == "marker"] == [
+        ("# burst", START_NS + 100_000, "oep://p4x"), ("#", START_NS + 300_000, "oep://p4x"),
+        ("# after", START_NS + 450_000, "oep://p4x"), ("#", START_NS + 700_000, "oep://p4x")]
+
+
+def test_a_section_on_the_probes_clock_by_its_own_argument(tmp_path):
+    rec = Recorder(tmp_path)
+    armed = rec.armed()
+    with rec.section(1, "test"):
+        with rec.section(2, "burst", expect=[pulses("P0", count=3)], clock=_clock([100, 300]), probe="oep://p4x"):
+            rec.command("PWM on")
+        rec.capture(armed, RATE, interleaved=_wave(1000, BURST), names=["P0"], start_ns=START_NS,
+                    probe={"address": "oep://p4x", "boot_id": 7})
+    rec.close()
+    (r,) = verify.verify(tmp_path)["results"]
+    assert (r["path"], r["status"], r["measured"]["window"]) == ("test/burst", "ok", [100, 300]), r
+
+
+def test_a_clock_that_cannot_be_read_fails_the_run(tmp_path):
+    def broken():
+        raise TimeoutError("no answer")
+    rec = Recorder(tmp_path)
+    armed = rec.armed()
+    with rec.section(1, "burst", expect=[pulses("P0", count=5)], clock=broken, probe="oep://p4x"):
+        rec.capture(armed, RATE, interleaved=_wave(1000, BURST), names=["P0"], start_ns=START_NS,
+                    probe={"address": "oep://p4x", "boot_id": 7})
+    rec.close()
+    rep = verify.verify(tmp_path)
+    assert [(r["check"], r["status"]) for r in rep["results"]] == [("pulses", "ok"), ("probe_log", "ng"),
+                                                                    ("probe_log", "ng")], rep["results"]
+    assert "no answer" in rep["results"][1]["reason"] and verify.failed(rep)
