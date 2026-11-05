@@ -238,7 +238,7 @@ i2c("PC16", "PC17", [{"addr": 0x42, "rw": "read", "bytes": [0x00], "complete": F
 - The format is `bits` (number of data bits), `parity` (`"none"` / `"even"` / `"odd"`), `stop` (1, 1.5, 2).
 - A window that starts or ends in the middle of a character is not an error (reading starts after at least one character's worth of idle; what comes before is counted as `lead_in`, and a character cut at the end as `cut_at_end`).
 - If `errors_max` is given, the result is NG when the total of framing and parity errors exceeds it (if not given, they are only counted and reported).
-- It reads as a receiver does. A pulse off idle that is not active at the middle of a start bit is no character: a notice `glitch` (its width), and the reading stays in step. A line held active through a whole character, stop bit included, is a break: a notice `break` (its length), not a framing error. After a framing error the reading gets in step again at the next start that follows a bit of idle and a few good characters (`resync_skipped` counts what it skipped).
+- It reads as a receiver does. A pulse off idle that is not active at the middle of a start bit is no character: a notice `glitch` (its width), and the reading stays in step. A line held active longer than a whole character is a break: a notice `break` (its length), not a framing error; a character's worth of active exactly (its stop bit too) is a framing error with data 0, as a 16550 reads it. After a framing error the reading gets in step at once at the stream's next character (a character later, after a bit of idle), so characters in error one after another each count; elsewhere it waits for a few good characters (`resync_skipped` counts what it skipped). `error_runs` counts characters in error one after another as one disturbance.
 - The baud rate is found by a least-squares fit of the bit width from the intervals between same-direction edges within one character. This method cancels the difference between rising and falling delays. The expected value is used only to choose among the candidates derived from the edges. It is reported when there are 8 or more samples per bit.
 - To **measure only**, pass `None` to `baud`. If there are no other expectations (`data`, `errors_max`), the result is `measured`, with the measured baud rate, character count and error count. Use this to record what the DUT outputs for out-of-range settings.
 - If every error character has edges clearly more shifted than the other characters, the NG reason says "suspect the capture's time base" (for example when a software-paced sampler stalled). For captures where the probe itself reported a delay (`time_base_slipped`), the NG reason also says so.
@@ -346,7 +346,7 @@ Some behaviour is allowed by the protocol but worth a look: a test may want to m
 | `spi` (with `cs`) | `mode_ambiguous` | The transfer reads as given in more than one mode (at the first CS edge; `candidates`) |
 | `uart` | `baud_near_limit` | The bit rate within `baud_rel` but more than half of it off (at the line's first edge; `value`: the error, `limit`) |
 | `uart` | `glitch` | A pulse off idle that is not active at the middle of a start bit: no character (`width_ticks`). Start-up rubbish shows here |
-| `uart` | `break` | The line held active through a whole character, stop bit included (`length_ticks`) |
+| `uart` | `break` | The line held active longer than a whole character (`length_ticks`) |
 
 ### 4.10 Checks from elsewhere
 

@@ -1115,7 +1115,7 @@ def _uart_rx(ch: Channel, n: int, u: float, idle: int, bits: int, parity: str, s
         return good >= 3 or (good >= 1 and i >= len(act))
 
     out = {"frames": [], "lead_in": 0, "resync_skipped": 0, "cut_at_end": False, "glitches": [], "breaks": []}
-    synced, lost, i = False, False, 0
+    synced, lost, i, err_at = False, False, 0, None
     while i < len(act):
         st = int(act[i])
         mid = int(st + 0.5 * u)
@@ -1125,24 +1125,29 @@ def _uart_rx(ch: Channel, n: int, u: float, idle: int, bits: int, parity: str, s
             i += 1
             continue
         if not synced:
-            # in step after an idle gap of a whole character, or (after an error) a bit of idle and a few good
-            # characters, or (at the window's start, no gap to come) a long run of good characters
-            synced = (bool(gap_at[i]) or (lost and quiet[i] >= u and short_in_step(i))
+            # in step after an idle gap of a whole character, or (at the window's start, no gap to come) a long run
+            # of good characters, or after an error as below
+            # after an error: at once when this start is where the next character of the stream would begin (a
+            # character later, give or take a parity and a longer stop bit) after a bit of idle - characters in
+            # error one after another each count, as a receiver's; else where a few good characters follow
+            boundary = err_at is not None and (L - 0.5) * u <= st - err_at <= (L + 2.5) * u
+            synced = (bool(gap_at[i]) or (lost and quiet[i] >= 0.75 * u and (boundary or short_in_step(i)))
                       or (not gap_later[i] and in_step(i)))
         if st + L * u > n:
             out["cut_at_end"] = True
             break
         value, stop_ok, par_ok = frame(st)
         end = active_until(st)
-        if synced and value == 0 and not stop_ok and end - st >= L * u:
-            # the line held active through a whole character, stop bit included: a break, not a character
+        if synced and value == 0 and not stop_ok and end - st > (L + 0.5) * u:
+            # the line held active longer than a whole character - still active half a bit past its stop bit: a
+            # break, not a character (a character's worth exactly is a framing error with data 0, as a 16550's)
             out["breaks"].append({"tick": st, "length_ticks": end - st})
             i = int(np.searchsorted(act, end))
             continue
         if synced:
             out["frames"].append((st, value, stop_ok, par_ok))
             if not stop_ok:
-                synced, lost = False, True
+                synced, lost, err_at = False, True, st
         else:
             out["resync_skipped" if lost else "lead_in"] += 1
         i = next_start(i, st)
@@ -1248,11 +1253,14 @@ def check_uart(cap, x):
         return (None, got, "measure only: " + why) if not x.get("baud") else (False, got, why)
     frame_err = sum(not f[2] for f in frames)
     par_err = sum(f[2] and not f[3] for f in frames)
+    # characters in error one after another are one disturbance (a receiver re-arming mid-stream errs on)
+    bad_seq = [not (f[2] and f[3]) for f in frames]
+    error_runs = sum(1 for k, b in enumerate(bad_seq) if b and (k == 0 or not bad_seq[k - 1]))
     data = bytes(f[1] & 0xFF for f in frames if f[2] and f[3]).hex() if bits <= 8 else None
     ref = cap.rate / x["baud"] if x.get("baud") else None
     got = {"baud": cap.rate / u if u else None, "baud_error": (ref / u - 1) if u and ref else None,
            "samples_per_bit": (u if u else u0) / ch.step,       # samples of this channel
-           "chars": len(frames), "frame_errors": frame_err, "parity_errors": par_err,
+           "chars": len(frames), "frame_errors": frame_err, "parity_errors": par_err, "error_runs": error_runs,
            "lead_in": rx["lead_in"], "resync_skipped": rx["resync_skipped"], "cut_at_end": rx["cut_at_end"], "data": data,
            "glitches": len(rx["glitches"]), "breaks": len(rx["breaks"])}
     got["notices"] = ([{"kind": "glitch", **g} for g in rx["glitches"]] + [{"kind": "break", **b} for b in rx["breaks"]])
@@ -1512,7 +1520,7 @@ NOTICES = {
             "mode_ambiguous": "the bytes read the same in more than one mode (candidates: those modes)"},
     "uart": {"baud_near_limit": "the bit rate within its tolerance but more than half of it off (value: the error)",
              "glitch": "a pulse off idle that is not low at the middle of a start bit: no character (width_ticks)",
-             "break": "the line held active through a whole character, stop bit included (length_ticks)"},
+             "break": "the line held active longer than a whole character (length_ticks)"},
 }
 
 

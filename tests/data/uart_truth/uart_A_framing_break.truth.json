@@ -1,0 +1,79 @@
+{
+ "probe": "oep://e8f60ae84e28",
+ "firmware": "0.0.49+1006b22",
+ "rate_hz": 10000000,
+ "channel": "tx",
+ "pins": {
+  "tx": "GPIO26",
+  "rx": "GPIO27"
+ },
+ "pull_check": {
+  "tx": [
+   1,
+   0
+  ],
+  "rx": [
+   1,
+   0
+  ]
+ },
+ "interface": "oep.fixture.uart (ESP-IDF UART driver)",
+ "steps": [
+  {
+   "step": "configure",
+   "baud_asked": 115200,
+   "baud_used": 115211,
+   "format": "8N1"
+  },
+  {
+   "step": "idle",
+   "s": 0.001
+  },
+  {
+   "step": "write",
+   "bytes": "4142",
+   "waited_until_sent": true,
+   "line_time_s": 0.000174
+  },
+  {
+   "step": "idle",
+   "s": 0.001
+  },
+  {
+   "step": "configure",
+   "baud_asked": 115200,
+   "baud_used": 115211,
+   "format": "8E1"
+  },
+  {
+   "step": "idle",
+   "s": 0.001
+  },
+  {
+   "step": "write",
+   "bytes": "0300",
+   "waited_until_sent": true,
+   "line_time_s": 0.000191
+  },
+  {
+   "step": "idle",
+   "s": 0.001
+  },
+  {
+   "step": "configure",
+   "baud_asked": 115200,
+   "baud_used": 115211,
+   "format": "8N1"
+  },
+  {
+   "step": "idle",
+   "s": 0.001
+  },
+  {
+   "step": "write",
+   "bytes": "4344",
+   "waited_until_sent": true,
+   "line_time_s": 0.000174
+  }
+ ]
+}

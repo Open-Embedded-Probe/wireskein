@@ -56,7 +56,7 @@ def test_i2c_transaction_cut_at_the_window_end():
 def test_uart_error_in_a_skewed_character_points_at_the_time_base():
     (x, ok, got, why), = run_expectations("v003-uart-115200-time-base-slip")
     assert ok is False
-    assert got["frame_errors"] + got["parity_errors"] == 1          # one disturbance, counted once
+    assert got["error_runs"] == 1                                    # one disturbance (a receiver errs on a while)
     assert "suspect the capture time base" in why
     assert abs(got["baud_error"]) < 0.015
 
