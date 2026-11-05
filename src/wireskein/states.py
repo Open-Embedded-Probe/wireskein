@@ -56,7 +56,7 @@ def of_line(edges: np.ndarray, initial: int, n: int, rate: float, step: int = 1,
     out: list[dict] = []
     near = [int(rows[a:b, 2].max()) for a, b in waves]
 
-    def between(t0: int, t1: int, before: dict | None) -> None:
+    def between(t0: int, t1: int, before: dict | None, t1_is_rise: bool = True) -> None:
         """Ticks [t0, t1) outside the waves: quiet longer than the waves' periods (with no wave, than 10 times the
         edges' spacing here) is a level; a shorter high is a pulse, odd unless it is the wave before it ending whole."""
         e = edges[(edges >= t0) & (edges < t1)]
@@ -73,7 +73,9 @@ def of_line(edges: np.ndarray, initial: int, n: int, rate: float, step: int = 1,
                 out.append({"t0": a, "t1": b, "level": here})
             elif here == 1 and (i or len(e) and e[0] == t0):         # a high that started at an edge here
                 c = int(marks[i + 2]) if i + 2 < len(marks) else None
-                per = c - a if c is not None and c <= t1 and c - b <= floor else None
+                # the next rise: an edge here, or the next wave's first rise at t1 (not the end of the capture)
+                real = c is not None and (c < t1 or t1_is_rise)
+                per = c - a if real and c - b <= floor else None
                 if before is not None and a == before["t1"] and alike_high(b - a, before) and per is None:
                     before["t1"] = b                                  # the wave's last pulse, whole: the wave ends here
                     continue
@@ -93,7 +95,7 @@ def of_line(edges: np.ndarray, initial: int, n: int, rate: float, step: int = 1,
                 "duty": float(np.median(rs[:, 1] / rs[:, 2])), "periods": int(b - a)}
         out.append(prev)
         t = prev["t1"]
-    between(t, n, prev)
+    between(t, n, prev, t1_is_rise=False)
     out.sort(key=lambda x: x.get("t0", x.get("odd")))
     return _collapse(_merge_levels(out), max_odd)
 
@@ -138,7 +140,7 @@ def of_file(path: str | Path, pins: list[str] | None = None, part: int | None = 
             min_periods: int = 3) -> dict:
     """{"tick_hz", "parts": [{"part", "ticks", "lines": {pin: [stretches]}}]} of a capture's logic lines."""
     from ._engine import fileio
-    caps = fileio.load_parts(Path(path))
+    caps = fileio.load_runs(Path(path))                # parts that follow on without a gap, as one
     out = {"file": str(path), "tick_hz": float(caps[0].rate) if caps else None, "parts": []}
     for k, cap in enumerate(caps):
         if part is not None and k != part:

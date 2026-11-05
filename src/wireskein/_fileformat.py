@@ -760,14 +760,15 @@ def part_view(head: dict, part: int) -> dict:
     return view
 
 
-def read(path: str | Path, analog: bool = True, part: int | None = None) -> tuple[dict, list[Channel | EventsChannel | AnalogChannel]]:
+def read(path: str | Path, analog: bool = True, part: int | None = None,
+         raw: dict | None = None) -> tuple[dict, list[Channel | EventsChannel | AnalogChannel]]:
     """(header, channels) of one part (wireskein-format §3.4): Channel for logic, AnalogChannel for analog (left
     out with analog=False), EventsChannel for a logic line kept as its changes. The header is part_view(): the
     capture's keys (complete, lost, layout), that part's channels and ticks, the capture's and part's meta merged.
     header["tick_hz"] is [numerator, denominator]. A capture of several parts needs `part` (never the first one
     silently). Channels of an encoding this version does not read are left out (never read as something else);
-    skipped(header) names them."""
-    raw = read_header(path)
+    skipped(header) names them. raw: the file's header already read (read_parts reads it once for every part)."""
+    raw = raw if raw is not None else read_header(path)
     n = len(raw["parts"])
     if part is None:
         if n > 1:
@@ -793,8 +794,9 @@ def read(path: str | Path, analog: bool = True, part: int | None = None) -> tupl
 
 
 def read_parts(path: str | Path, analog: bool = True) -> list[tuple[dict, list]]:
-    """Every part: [(header seen from it, its channels)] in order."""
-    return [read(path, analog, k) for k in range(len(read_header(path)["parts"]))]
+    """Every part: [(header seen from it, its channels)] in order (the header and the zip read once)."""
+    raw = read_header(path)
+    return [read(path, analog, k, raw) for k in range(len(raw["parts"]))]
 
 
 def tick_hz(head: dict) -> Fraction:

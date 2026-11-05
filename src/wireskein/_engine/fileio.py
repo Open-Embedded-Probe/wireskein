@@ -32,7 +32,7 @@ def decode(c) -> Channel | EventTrace | AnalogTrace:
     return Channel(c.name, init, edges, c.step, c.phase, dict(c.acquisition))
 
 
-def view(head: dict, decoded: list, path: str | Path | None = None) -> Capture:
+def view(head: dict, decoded: list, path: str | Path | None = None, extras: dict | None = None) -> Capture:
     """The decoders' Capture of one part: its decoded channels (an EventTrace also as a Channel of its step when no
     quantum hides a change), with what the capture says about itself in meta."""
     out, analog, events = [], [], []
@@ -49,7 +49,8 @@ def view(head: dict, decoded: list, path: str | Path | None = None) -> Capture:
     tick = fileformat.tick_hz(head)
     return Capture(float(tick), int(head["ticks"]), out,
                    meta={**head.get("meta", {}), **({"file": str(path)} if path is not None else {}), "tick_hz": tick,
-                         "extras": fileformat.extras(path) if path is not None else {},
+                         "extras": extras if extras is not None else (fileformat.extras(path) if path is not None
+                                                                      else {}),
                          "capture_id": head.get("id"), "complete": head.get("complete", True),
                          "lost": head.get("lost", []), "layout": head.get("layout", "timeline"),
                          "part": head.get("part", 0), "n_parts": head.get("n_parts", 1),
@@ -66,7 +67,51 @@ def load(path: str | Path, part: int | None = None) -> Capture:
 
 def load_parts(path: str | Path) -> list[Capture]:
     """Every part of a WireSkein file, in order (wireskein-format §3.4: analysis never crosses them)."""
-    return [load(path, k) for k in range(len(fileformat.read_header(path)["parts"]))]
+    ex = fileformat.extras(path)                     # read once for every part
+    return [view(head, [decode(c) for c in chans], path, ex) for head, chans in fileformat.read_parts(path)]
+
+
+def load_runs(path: str | Path) -> list[Capture]:
+    """The parts of a file, each run of timeline parts that follow on from one another without a gap joined into one
+    (a stream cut where its sample grid restarts, not where anything was lost: wireskein-format §3.4). A run is joined
+    when its parts hold only logic channels of step 1, the same ones; otherwise its parts stay apart. A joined run's
+    meta is its first part's, with `parts` [first, last]."""
+    head = fileformat.read_header(path)
+    caps = load_parts(path)
+    if head.get("layout", "timeline") != "timeline" or len(caps) < 2:
+        return caps
+    t0 = [p.get("tick0", 0) for p in head["parts"]]
+    out, run = [], [0]
+    for k in range(1, len(caps)):
+        if t0[k] == t0[k - 1] + caps[k - 1].n_samples:
+            run.append(k)
+        else:
+            out.extend(_join(caps, run, t0))
+            run = [k]
+    out.extend(_join(caps, run, t0))
+    return out
+
+
+def _join(caps: list[Capture], run: list[int], t0: list[int]) -> list[Capture]:
+    parts = [caps[k] for k in run]
+    names = [c.name for c in parts[0].channels]
+    if len(run) == 1 or any(p.analog or p.events or [c.name for c in p.channels] != names
+                            or any(c.step != 1 for c in p.channels) for p in parts):
+        return parts
+    chans = []
+    for j, name in enumerate(names):
+        first = parts[0].channels[j]
+        pieces, level = [first.edges], first.initial ^ (len(first.edges) & 1)
+        for k, p in zip(run[1:], parts[1:]):
+            c, off = p.channels[j], t0[k] - t0[run[0]]
+            if c.initial != level:
+                pieces.append(np.array([off], np.int64))     # the line changed at the parts' boundary
+            pieces.append(c.edges + off)
+            level = c.initial ^ (len(c.edges) & 1)
+        chans.append(Channel(name, first.initial, np.concatenate(pieces).astype(np.int64), 1, first.phase,
+                             dict(first.acquisition)))
+    n = t0[run[-1]] - t0[run[0]] + parts[-1].n_samples
+    return [Capture(parts[0].rate, n, chans, {**parts[0].meta, "parts": [run[0], run[-1]]})]
 
 
 def to_channel(ch: Channel, n_ticks: int) -> fileformat.Channel:

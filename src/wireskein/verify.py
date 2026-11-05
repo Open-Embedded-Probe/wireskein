@@ -52,12 +52,24 @@ class Result:
             self.status = {True: "ok", False: "ng", None: "unchecked"}[self.ok]
 
 
+_LOADED: dict = {}                   # (file, its mtime, armed) -> parts, kept while one verify runs
+
+
 def load_capture(run_dir: Path, c: dict) -> list[Capture]:
-    """A recorded capture's parts (wireskein-format §3.4), each checked on its own."""
+    """A recorded capture's parts (wireskein-format §3.4), each checked on its own; read once per verify."""
+    key = (str(run_dir / c["file"]), (run_dir / c["file"]).stat().st_mtime_ns, c["host_ns"])
+    if key not in _LOADED:
+        _LOADED[key] = _load_capture(run_dir, c)
+    return _LOADED[key]
+
+
+def _load_capture(run_dir: Path, c: dict) -> list[Capture]:
     from ._engine import fileio
-    parts = fileio.load_parts(run_dir / c["file"])
+    parts = fileio.load_runs(run_dir / c["file"])        # parts that follow on without a gap, joined
     for cap in parts:
-        label = c["file"] if len(parts) == 1 else f"{c['file']}#part{cap.meta['part']}"
+        span = cap.meta.get("parts")
+        label = c["file"] if len(parts) == 1 else (f"{c['file']}#part{span[0]}-{span[1]}" if span
+                                                   else f"{c['file']}#part{cap.meta['part']}")
         cap.meta.update(file=c["file"], host_ns=c["host_ns"], label=label)
     return parts
 
@@ -1358,7 +1370,13 @@ def _judge(cap: Capture, x: dict, pins: set[str]):
 
 
 def verify(run_dir: str | Path) -> dict:
-    run_dir = Path(run_dir)
+    try:
+        return _verify(Path(run_dir))
+    finally:
+        _LOADED.clear()                                  # the captures are read once per verify, then let go
+
+
+def _verify(run_dir: Path) -> dict:
     doc = json.loads((run_dir / "run.json").read_text())
     if doc.get("format") != FORMAT:
         raise ValueError(f"{run_dir}: format {doc.get('format')!r}, expected {FORMAT!r}")

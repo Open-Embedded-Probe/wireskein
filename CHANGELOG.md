@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) `wireskein verify` and `wireskein states` read timeline parts that follow on without a gap as one stretch (logic channels of step 1; `fileio.load_runs`): a section across parts of a stream cut where its sample grid restarted was checked part by part, in parts that did not hold it. `verify` reads each capture once (a 546-part capture took 377 s, now 2 s).
+- (JA) `wireskein verify` と `wireskein states` は、隙間なく続く timeline の区間を 1 つの流れとして読む（刻み 1 のロジックのチャンネル。`fileio.load_runs`）: サンプルの刻みを始め直した所で区切られた stream で、区間をまたぐ区間を、それを持たない区間ごとに判定していた。`verify` はキャプチャを 1 回だけ読む（546 区間のキャプチャで 377 秒が 2 秒）。
 - (EN) `becomes(..., high_rel=)`: the high time's tolerance as a share of it (a DUT clock off by 1 % moves a pulse's width by 1 %, so a servo's 2400 us needs more room than its 544 us); with `high_abs_s` too, the larger counts.
 - (JA) `becomes(..., high_rel=)`: high の時間の許容を、その割合で言う（DUT の時計が 1 % ずれるとパルスの幅も 1 % ずれるので、サーボの 2400 us は 544 us より余裕が要る）。`high_abs_s` もあれば、大きいほう。
 
