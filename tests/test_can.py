@@ -202,3 +202,39 @@ def test_random_frames_with_jitter_and_skew():
             want.append({"id": ident, "ext": ext, "data": data.hex()})
         ok, got, why = check_can(b.line(), can("CAN", bitrate, frames=want, bitrate_rel=0.002))
         assert ok is True, (bitrate, why)
+
+
+# ---- the truth from hardware: an OEP probe's ESP-IDF TWAI driver (esp_twai_onchip), its TX and RX on one pad,
+# captured at 20 MS/s (tests/data/can_truth; each .truth.json has the setup, what was sent and the driver's state) ----
+
+TRUTH = __import__("pathlib").Path(__file__).parent / "data" / "can_truth"
+
+
+def _truth(name):
+    import json
+    from wireskein._engine import fileio
+    (cap,) = fileio.load_runs(TRUTH / f"{name}.wireskein")
+    t = json.loads((TRUTH / f"{name}.truth.json").read_text())
+    assert t["interface"].startswith("io.github.open-embedded-probe.bench.twai")
+    sent = [{"id": s["id"], "ext": s["ext"], "rtr": s["rtr"], "data": s["data"]} for s in t["steps"] if s["step"] == "send"]
+    return cap, t["setup"]["nodes"][0]["timing"]["bitrate"], sent
+
+
+@pytest.mark.parametrize("name", ["can_B_self_test", "can_C_125k", "can_C_250k", "can_C_1M"])
+def test_hardware_self_test_frames(name):
+    cap, bitrate, sent = _truth(name)
+    # self-test: the node needs no ACK and sends each frame once, so the line has them unacknowledged
+    ok, got, why = check_can(cap, can("bus", bitrate, frames=sent, ack=False, bitrate_rel=0.001))
+    assert ok is True, (why, got)
+
+
+def test_hardware_no_ack_retries():
+    cap, bitrate, sent = _truth("can_B_no_ack")
+    # no other node: each ACK error, while error active, an active error flag from the ACK delimiter on (a form
+    # error there); after 16 of them (TEC 128) the node is error passive, its flags recessive: the frames then
+    # read whole and unacknowledged, sent again and again until stopped
+    ok, got, why = check_can(cap, can("bus", bitrate, ack=False, errors={"form": 16}))
+    assert ok is True, (why, got)
+    assert {e["field"] for e in got["errors_at"]} == {"ack_delimiter"}
+    assert got["frame_count"] == 41 and all(f["id"] == sent[0]["id"] and f["data"] == "0102" for f in got["frames"])
+    assert got["error_flags"] == 16

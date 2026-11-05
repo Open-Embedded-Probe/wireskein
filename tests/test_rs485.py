@@ -87,3 +87,20 @@ def test_uart_errors_are_ng_as_in_uart():
     cap = bus([(DATA, 5e-6, 2e-6)])
     ok, _, why = check_rs485(cap, rs485("TX", "DE", BAUD, parity="even"))
     assert ok is False and ("parity" in why or "framing" in why), why
+
+
+def test_hardware_esp_idf_rs485_half_duplex():
+    # an OEP probe's ESP-IDF UART in UART_MODE_RS485_HALF_DUPLEX: RTS is DE, set as the bytes go into the FIFO and
+    # put back by the TX_DONE interrupt (tests/data/rs485_truth)
+    import json
+    from pathlib import Path
+    from wireskein._engine import fileio
+    d = Path(__file__).parent / "data" / "rs485_truth"
+    (cap,) = fileio.load_runs(d / "rs485_A_blocks.wireskein")
+    t = json.loads((d / "rs485_A_blocks.truth.json").read_text())
+    sent = "".join(s["bytes"] for s in t["steps"] if s["step"] == "write")
+    ok, got, why = check_rs485(cap, rs485("tx", "de", t["driver"]["baud_used"], data=sent, baud_rel=0.001,
+                                         lead_min_s=1e-6, tail_max_s=100e-6))
+    assert ok is True, (why, got)
+    assert [w["chars"] for w in got["de_windows"]] == [1, 8, 64]
+    assert all(w["tail_s"] > 1e-6 for w in got["de_windows"])        # the interrupt's latency, never inside the stop bit

@@ -1,0 +1,58 @@
+{
+ "probe": "oep://e8f60ae84e28",
+ "firmware": "0.0.50+b9c8810.twai",
+ "rate_hz": 20000000,
+ "channels": {
+  "bus": "GPIO26"
+ },
+ "interface": "io.github.open-embedded-probe.bench.twai rev 1 (ESP-IDF esp_twai_onchip, ESP32-P4 TWAI)",
+ "setup": {
+  "note": "self-test mode at 1000000 bit/s",
+  "retry_limit": -1,
+  "nodes": [
+   {
+    "tx": "GPIO26",
+    "rx": "GPIO26",
+    "self_test": true,
+    "listen_only": false,
+    "pad": "push-pull (+ pull-up)",
+    "timing": {
+     "bitrate": 1000000.0,
+     "brp": 2,
+     "tseg1": 15,
+     "tseg2": 4,
+     "sjw": 3,
+     "tq": 20,
+     "sample_point": 0.8
+    },
+    "clock_hz": 40000000
+   }
+  ],
+  "before_capture": true
+ },
+ "steps": [
+  {
+   "step": "send",
+   "id": 1110,
+   "ext": false,
+   "rtr": false,
+   "dlc": 4,
+   "data": "deadbeef",
+   "status_after": [
+    {
+     "state": "error_active",
+     "tx_error_counter": 0,
+     "rx_error_counter": 0,
+     "bus_error_count": 0,
+     "tx_done_ok": 1,
+     "tx_done_fail": 0,
+     "rx_frames": 0,
+     "error_events": 0,
+     "error_flags_seen": [],
+     "last_rx": null
+    }
+   ],
+   "error_log": []
+  }
+ ]
+}

@@ -1,0 +1,42 @@
+{
+ "probe": "oep://e8f60ae84e28",
+ "firmware": "0.0.50+b9c8810.twai",
+ "rate_hz": 20000000,
+ "channels": {
+  "tx": "GPIO26",
+  "de": "GPIO27 (the UART's RTS)"
+ },
+ "interface": "io.github.open-embedded-probe.bench.rs485 rev 1 (ESP-IDF v5.5.5 UART driver, UART4)",
+ "driver": {
+  "mode": "UART_MODE_RS485_HALF_DUPLEX",
+  "baud_asked": 115200,
+  "baud_used": 115201,
+  "format": "8N1",
+  "uart_set_rx_timeout": 10,
+  "rx_pin": null,
+  "flow_ctrl": "UART_HW_FLOWCTRL_DISABLE",
+  "rts_polarity": "not set by the program (the driver's default); read the active level off the line",
+  "de_lead": "the driver sets RTS in uart_enable_tx_write_fifo, as it writes the bytes into the FIFO",
+  "de_tail": "no bit count from the driver: its TX_DONE interrupt handler (transmitter idle) puts RTS back, so the tail is that interrupt's latency (esp_driver_uart/src/uart.c, v5.5)"
+ },
+ "steps": [
+  {
+   "step": "write",
+   "bytes": "55",
+   "line_time_s": 8.7e-05,
+   "tx_done_after_wait": true
+  },
+  {
+   "step": "write",
+   "bytes": "3031323334353637",
+   "line_time_s": 0.000694,
+   "tx_done_after_wait": true
+  },
+  {
+   "step": "write",
+   "bytes": "0b30557a9fc4e90e33587da2c7ec11365b80a5caef14395e83a8cdf2173c6186abd0f51a3f6489aed3f81d42678cb1d6fb20456a8fb4d9fe23486d92b7dc0126",
+   "line_time_s": 0.005556,
+   "tx_done_after_wait": true
+  }
+ ]
+}
