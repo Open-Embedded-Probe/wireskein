@@ -173,6 +173,7 @@ WireSkein turns a capture into what a reader needs, so the samples themselves do
 | Want | Use | What comes out |
 | --- | --- | --- |
 | What happened on a line, briefly | `wireskein states FILE [--pin P]` | Each stretch (a level, or a wave: frequency, high time, duty, periods) and the odd pulses between them, one line each |
+| The same, segment by segment of a test run, without expectations | `wireskein states RUN --section 'PATH'` (Python: `wireskein.verify.sections(run)` gives each segment cut from its capture, for any analysis) | The stretches of each segment whose path matches |
 | What a bus carried | `wireskein analyze` / `decode` | The decoded transactions |
 | Whether the test passed, and where not | `wireskein verify` | One result per check, with the values measured |
 | Every edge in a stretch | `wireskein gui`, or the file read in Python (`wireskein.capture`) | Everything |
@@ -180,6 +181,7 @@ WireSkein turns a capture into what a reader needs, so the samples themselves do
 - Start from the summary and go to the details only where it shows something: `states` says at which time an odd pulse sits, and the viewer shows that place.
 - The checks take tolerances up front (`freq_rel`, `duty_abs`, `irregular_max`, ...) and say what was measured either way. A check meant only to measure, with no tolerance to judge, is written that way (`uart(baud=None)`), so nothing is lost by setting tolerances.
 - `states` takes its own tolerance (`--tol`, `--min-periods`): pulses alike within it are one wave. A tighter tolerance shows more stretches.
+- A rule no check has is the test's own: it reads a segment's analysis (`wireskein.verify.sections(run)`, then `states`, `decode`, ...), judges it, and records the verdict with `rec.result(path, name, status, measured=..., reason=..., notices=[{"kind", "tick"}])`. Verification reports and counts it with its own checks, so one run and one report keep every verdict.
 
 ### 3.4 Seconds or periods
 

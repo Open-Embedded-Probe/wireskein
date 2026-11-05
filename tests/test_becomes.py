@@ -141,3 +141,37 @@ def test_a_high_time_tolerance_relative_to_it(tmp_path):
     for name, kw, want in (("abs", {"high_abs_s": 20e-6}, "ng"), ("rel", {"high_rel": 0.02}, "ok")):
         sec = [("us", 20_000, 520_000, [becomes("P", period_s=0.02, high_s=2400e-6, min_periods=20, **kw)])]
         assert run(tmp_path / name, lv, sec)["us"]["status"] == want, name
+
+
+def test_sections_give_each_segment_cut_to_it_for_analysis(tmp_path):
+    from wireskein import states
+    run(tmp_path, wave(PWM), [("d25", 2_000, 18_000, []), ("d50", 22_000, 39_000, [])])
+    ss = {s["path"]: s for s in verify.sections(tmp_path)}
+    assert ss["d25"]["window"] == [2_000, 18_000] and ss["d50"]["capture"].n_samples == 17_000
+    doc = states.of_sections(tmp_path, "d5*")
+    (sec,) = doc["sections"]
+    (x,) = [x for x in sec["lines"]["P"] if "duty" in x]
+    assert sec["path"] == "d50" and x["duty"] == 0.5 and x["periods"] >= 15
+    assert states.text(doc)[0].startswith("== d50  (c0001.wireskein@22000:39000)")
+
+
+def test_a_verdict_of_the_test_is_reported_and_marked(tmp_path):
+    from wireskein import _fileformat as ff
+    rec = Recorder(tmp_path)
+    armed = rec.armed()
+    ticks = iter((2_000, 18_000))
+    with rec.section(1, "d25", clock=lambda: _Reading(next(ticks))):
+        pass
+    rec.capture(armed, RATE, interleaved=wave(PWM).tobytes(), names=["P"], start_ns=START_NS, boot_id=7)
+    rec.result("d25", "my_rule", "ng", measured={"pulses": 16}, reason="16 pulses, want 15",
+               notices=[{"kind": "extra_pulse", "tick": 17_000}], capture="c0001.wireskein")
+    rec.result("d2", "typo", "ok")
+    rec.close()
+    rep = verify.verify(tmp_path, mark=True)
+    mine, typo = rep["results"]
+    assert (mine["check"], mine["status"], mine["reason"], mine["measured"]) == ("my_rule", "ng", "16 pulses, want 15",
+                                                                                  {"pulses": 16})
+    assert typo["status"] == "ng" and "no segment" in typo["reason"]
+    assert verify.failed(rep) and rep["summary"]["notices"] == 1
+    assert [(m["t"], m["label"]) for m in ff.markers(tmp_path / "c0001.wireskein") if m["by"] == "verify"] == [
+        (17_000, "extra_pulse: d25")]

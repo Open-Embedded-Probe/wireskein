@@ -136,6 +136,37 @@ def _merge_levels(out: list[dict]) -> list[dict]:
     return merged
 
 
+__all__ = ["of_capture", "of_file", "of_line", "of_sections", "pulse_rows", "text"]
+
+
+def of_capture(cap, pins: list[str] | None = None, tol: float = 0.02, min_periods: int = 3) -> dict:
+    """{pin: [stretches]} of one Capture (a part, or a stretch of one such as verify.sections() gives)."""
+    return {ch.name: of_line(ch.edges, ch.initial, cap.n_samples, cap.rate, ch.step, tol, min_periods)
+            for ch in cap.channels if not pins or ch.name in pins}
+
+
+def of_sections(run_dir: str | Path, pattern: str = "*", pins: list[str] | None = None, tol: float = 0.02,
+                min_periods: int = 3) -> dict:
+    """The stretches of each segment of a run whose path matches pattern (a glob; "[" is literal, the repeat index),
+    on the capture that holds it, cut to it (verify.sections): {"tick_hz", "sections": [{"path", "label", "window",
+    "part", "lines"}]}. Ticks are of the stretch (0 at the segment's start); window says where it is in the part."""
+    import fnmatch
+    from . import verify
+    pat = pattern.replace("[", "[[]")
+    out, hz = [], None
+    for s in verify.sections(run_dir):
+        if not fnmatch.fnmatchcase(s["path"], pat):
+            continue
+        cap = s["capture"]
+        if cap is None:
+            out.append({"path": s["path"], "why": s["why"]})
+            continue
+        hz = cap.rate
+        out.append({"path": s["path"], "label": s["label"], "window": s["window"], "part": s["part"],
+                    "lines": of_capture(cap, pins, tol, min_periods)})
+    return {"run": str(run_dir), "tick_hz": hz, "sections": out}
+
+
 def of_file(path: str | Path, pins: list[str] | None = None, part: int | None = None, tol: float = 0.02,
             min_periods: int = 3) -> dict:
     """{"tick_hz", "parts": [{"part", "ticks", "lines": {pin: [stretches]}}]} of a capture's logic lines."""
@@ -145,21 +176,23 @@ def of_file(path: str | Path, pins: list[str] | None = None, part: int | None = 
     for k, cap in enumerate(caps):
         if part is not None and k != part:
             continue
-        lines = {}
-        for ch in cap.channels:
-            if pins and ch.name not in pins:
-                continue
-            lines[ch.name] = of_line(ch.edges, ch.initial, cap.n_samples, cap.rate, ch.step, tol, min_periods)
-        out["parts"].append({"part": k, "ticks": int(cap.n_samples), "lines": lines})
+        out["parts"].append({"part": k, "ticks": int(cap.n_samples), "lines": of_capture(cap, pins, tol, min_periods)})
     return out
 
 
 def text(doc: dict) -> list[str]:
-    """One line per stretch and odd pulse, times in ms from the part's start."""
+    """One line per stretch and odd pulse, times in ms from the part's start (of_file) or the segment's (of_sections)."""
     hz = doc["tick_hz"]
     out = []
-    for p in doc["parts"]:
-        if len(doc["parts"]) > 1:
+    groups = doc.get("parts")
+    if groups is None:
+        groups = doc["sections"]
+    for p in groups:
+        if "path" in p:
+            out.append(f"== {p['path']}" + (f"  ({p['label']})" if p.get("label") else f"  ({p['why']})"))
+            if "lines" not in p:
+                continue
+        elif len(groups) > 1:
             out.append(f"part {p['part']}: {p['ticks'] / hz:.6g} s")
         for pin, xs in p["lines"].items():
             out.append(f"{pin}:")

@@ -169,6 +169,22 @@ class Recorder:
             self._log("lost", why)
             self.doc["log"][-1].update({k: v for k, v in (("probe", probe), ("boot_id", boot_id)) if v is not None})
 
+    def result(self, path: str, name: str, status: str, *, measured: dict | None = None, reason: str = "",
+               notices: list[dict] | None = None, capture: str | None = None) -> None:
+        """A verdict the test made itself (on what verify.sections() and the analyses gave), recorded with the run so
+        that wireskein verify reports and counts it as its own: path the segment's, name the check's, status "ok",
+        "ng", "unchecked" or "measured", notices each {"kind", "tick", "part"?, ...} at its tick in the capture part
+        (written into the capture's markers with verify --mark), capture the file it is about."""
+        self._open()
+        if status not in ("ok", "ng", "unchecked", "measured"):
+            raise ValueError(f"status {status!r}: ok, ng, unchecked or measured")
+        for n in notices or []:
+            if not isinstance(n.get("kind"), str) or not isinstance(n.get("tick"), int):
+                raise ValueError(f"a notice needs a kind (text) and a tick (an int): {n!r}")
+        self.doc.setdefault("results", []).append(
+            {"path": path, "check": name, "status": status, "measured": dict(measured or {}), "reason": reason,
+             "notices": [{"part": 0, **n} for n in notices or []], "capture": capture})
+
     def expect(self, path: str, checks: list) -> None:
         """Expectations for a section by its path (docs/run-format.ja.md §2.1), e.g. one the probe's lines open."""
         self._open()
@@ -236,8 +252,8 @@ class Recorder:
 
     @property
     def is_empty(self) -> bool:
-        """Nothing to check: no expectations (by section or by path), no captures and nothing lost."""
-        return (not self._expect and not self._paths and not self.doc["captures"]
+        """Nothing to check: no expectations (by section or by path), no captures, no results and nothing lost."""
+        return (not self._expect and not self._paths and not self.doc["captures"] and not self.doc.get("results")
                 and not any(x["src"] == "lost" for x in self.doc["log"]))
 
     def close(self) -> Path:

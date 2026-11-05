@@ -23,6 +23,7 @@
 | `meta` | オブジェクト | 記録についての情報（`Recorder(out, **meta)` に渡したもの） |
 | `log` | 配列 | ログ: `{"host_ns": 整数, "src": "marker" / "host" / "dut" / "note" / "lost", "text": 文字列}`。`host_ns` はホストの時計 `time.monotonic_ns()`（キャプチャの `meta.probe.clock` がホストを読む時計と同じ）。行は `host_ns` の順。プローブの時計の行は、さらに `probe_ns` などを持つ（§2.4） |
 | `captures` | 配列 | キャプチャ: `{"file": 名前, "host_ns": 整数, "channels": [名前...], "path": 区間のパス}`。`host_ns` は arm した時刻 |
+| `results` | 配列（任意） | 試験が自分でした判定（`Recorder.result`）: `{"path", "check", "status", "measured", "reason", "notices", "capture"}`。照合は自分の結果と同じに報告する（§3）。区間でないパスは `ng` |
 | `expect` | オブジェクト | 区間のパスから `{"checks": [検査...]}` へ |
 
 ### 2.1 区間とパス
@@ -111,3 +112,4 @@
 - `wireskein verify -v` は、注意を 1 件ずつ結果の下に出します。`--mark`（`verify(run, mark=True)`）は、注意と `becomes` が見つけた変化を、キャプチャのファイルのマーカーにも書きます（`by: "verify"`、[ファイル形式](wireskein-format.ja.md) §5.2）。verify が前に書いたものは置き換えます。
 - 報告の JSON（`--json`）と JUnit XML（`--junit`）の形は、この表のとおりです。JUnit では、`ng` は failure、`unchecked` は既定で failure（許すときは skipped）、`measured` は passed（system-out に測った値）です。
 - テキストの行（`lines()`）は人が読むためのもので、形を約束しません。プログラムは JSON を読みます。
+- `wireskein.verify.sections(run)` は、何も判定せずに、すべての区間を、それを持つキャプチャから切り出して返します: それぞれの `path`、`file`、`label`、`window`（キャプチャの区間の中の tick。丸ごと割り当てたキャプチャでは無し）、`part`、その範囲の `capture`、持つキャプチャが無ければ `why`。どの分析にも使えます（`wireskein states RUN --section パス`）。

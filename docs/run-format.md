@@ -23,6 +23,7 @@ The run is a directory, with each capture in a separate file, so that if the tes
 | `meta` | object | Information about the run (what was passed to `Recorder(out, **meta)`) |
 | `log` | array | Log: `{"host_ns": integer, "src": "marker" / "host" / "dut" / "note" / "lost", "text": string}`. `host_ns` is the host clock, `time.monotonic_ns()` (the clock a capture's `meta.probe.clock` reads the host on). Lines are in `host_ns` order. Lines on the probe's clock also have `probe_ns` and more (§2.4) |
 | `captures` | array | Captures: `{"file": name, "host_ns": integer, "channels": [name...], "path": segment path}`; `host_ns` is when it was armed |
+| `results` | array (optional) | Verdicts the test made itself (`Recorder.result`): `{"path", "check", "status", "measured", "reason", "notices", "capture"}`, reported by verification as its own (§3); a path that is no segment is `ng` |
 | `expect` | object | Maps a segment path to `{"checks": [check...]}` |
 
 ### 2.1 Segments and paths
@@ -111,3 +112,4 @@ Statuses:
 - `wireskein verify -v` lists each notice under its result; `--mark` (`verify(run, mark=True)`) also writes the notices and the changes `becomes` found into the capture files' markers (`by: "verify"`, [file format](wireskein-format.md) §5.2), replacing verify's earlier ones.
 - The shapes of the report JSON (`--json`) and JUnit XML (`--junit`) follow this table. In JUnit, `ng` is failure, `unchecked` is failure by default (skipped when allowed), and `measured` is passed (with the measured value in system-out).
 - Text lines (`lines()`) are for people to read, and their shape is not guaranteed. Programs read the JSON.
+- `wireskein.verify.sections(run)` gives every segment with the captures that hold it, cut to it, without judging anything: each `path`, `file`, `label`, `window` (ticks of the capture part; none for a capture assigned whole), `part` and the `capture` of that stretch, or `why` none holds it. Any analysis runs on it (`wireskein states RUN --section PATH`).

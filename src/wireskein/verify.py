@@ -30,7 +30,8 @@ from .runlog import FORMAT
 REPORT_FORMAT = "wireskein-report/1"   # docs/run-format.ja.md §3
 MEASURED = "measured"             # a check function's verdict for "only measure" (uart(baud=None) with nothing else)
 
-__all__ = ["MARKS", "MEASURED", "REPORT_FORMAT", "dumps", "failed", "junit", "lines", "summary_line", "verify"]
+__all__ = ["MARKS", "MEASURED", "NOTICES", "REPORT_FORMAT", "dumps", "failed", "junit", "lines", "sections",
+           "summary_line", "verify"]
 STATUSES = ("ok", "ng", "unchecked", "measured")      # docs/run-format.ja.md §3
 
 
@@ -1487,6 +1488,60 @@ def _mark(run_dir: Path, rep: dict) -> None:
         fileformat.set_markers(p, keep + per.get(f, []))
 
 
+def _segment_captures(run_dir: Path, doc: dict, caps: list, path: str, seg) -> tuple[list, str]:
+    """[(capture entry, the Capture to judge, the inner window or None or EMPTY, clipped)] of a segment, or ([], why)."""
+    if _probe_section(seg):
+        # opened and closed on the probe's clock: the part of every capture that holds it, cut to the section
+        loaded, whys = [], set()
+        for c in doc["captures"]:
+            for cap in load_capture(run_dir, c):
+                w, why = _on_probe_clock(seg, cap)
+                if w is None:
+                    whys.add(why)
+                    continue
+                inner, outer, clipped = w
+                win = _window(cap, *outer)
+                win.meta["label"] = f"{cap.meta['label']}@{outer[0]}:{outer[1]}"
+                loaded.append((c, win, _window(cap, *inner) if inner else EMPTY, clipped))
+        return loaded, ("" if loaded else "no capture holds the section on the probe's clock ("
+                        + "; ".join(sorted(whys)) + ")")
+    # a capture belongs to the section it was taken in (recorded path), or else to the one its start falls in
+    inside = [c for c, t in caps if _in_segment(c, t, path, seg)]
+    if not inside:
+        return [], "no capture inside the segment"
+    return [(c, cap, None, []) for c in inside for cap in load_capture(run_dir, c)], ""
+
+
+def sections(run_dir: str | Path) -> list[dict]:
+    """Every segment of a run with the captures that hold it, cut to it, for analysis without expectations (states,
+    decode, a test's own judgement): [{"path", "file", "label", "window" (ticks of the capture part, or None for a
+    capture assigned whole), "part", "capture" (the Capture of that stretch), "why" (when no capture holds it)}]."""
+    run_dir = Path(run_dir)
+    doc = json.loads((run_dir / "run.json").read_text())
+    if doc.get("format") != FORMAT:
+        raise ValueError(f"{run_dir}: format {doc.get('format')!r}, expected {FORMAT!r}")
+    tree = segment_tree(doc)
+    caps = [(c, c["host_ns"] // 1000) for c in doc["captures"]]
+    out = []
+    try:
+        for seg in tree.walk():
+            if seg.kind == "root":
+                continue
+            path = seg.path()
+            loaded, why = _segment_captures(run_dir, doc, caps, path, seg)
+            if not loaded:
+                out.append({"path": path, "file": None, "label": None, "window": None, "part": None,
+                            "capture": None, "why": why})
+            for c, cap, _, clipped in loaded:
+                span = cap.meta.get("parts")
+                out.append({"path": path, "file": c["file"], "label": cap.meta.get("label", c["file"]),
+                            "window": cap.meta.get("window"), "part": span[0] if span else cap.meta.get("part", 0),
+                            "clipped": clipped, "capture": cap, "why": ""})
+    finally:
+        _LOADED.clear()
+    return out
+
+
 def _verify(run_dir: Path) -> dict:
     doc = json.loads((run_dir / "run.json").read_text())
     if doc.get("format") != FORMAT:
@@ -1500,30 +1555,10 @@ def _verify(run_dir: Path) -> dict:
         if seg is None:
             results.append(Result(path, None, "segment", False, reason="no segment with this path in the log"))
             continue
-        if _probe_section(seg):
-            # opened and closed on the probe's clock: the part of every capture that holds it, cut to the section
-            loaded, whys = [], set()
-            for c in doc["captures"]:
-                for cap in load_capture(run_dir, c):
-                    w, why = _on_probe_clock(seg, cap)
-                    if w is None:
-                        whys.add(why)
-                        continue
-                    inner, outer, clipped = w
-                    win = _window(cap, *outer)
-                    win.meta["label"] = f"{cap.meta['label']}@{outer[0]}:{outer[1]}"
-                    loaded.append((c, win, _window(cap, *inner) if inner else EMPTY, clipped))
-            if not loaded:
-                results.append(Result(path, None, "capture", False, reason="no capture holds the section on the "
-                                      "probe's clock (" + "; ".join(sorted(whys)) + ")"))
-                continue
-        else:
-            # a capture belongs to the section it was taken in (recorded path), or else to the one its start falls in
-            inside = [c for c, t in caps if _in_segment(c, t, path, seg)]
-            if not inside:
-                results.append(Result(path, None, "capture", False, reason="no capture inside the segment"))
-                continue
-            loaded = [(c, cap, None, []) for c in inside for cap in load_capture(run_dir, c)]
+        loaded, why = _segment_captures(run_dir, doc, caps, path, seg)
+        if not loaded:
+            results.append(Result(path, None, "capture", False, reason=why))
+            continue
         for c in dict.fromkeys(c["file"] for c, *_ in loaded):    # a loss fails the capture, whatever its parts say
             first = next(cap for cc, cap, *_ in loaded if cc["file"] == c)
             if not first.meta.get("complete", True):
@@ -1572,6 +1607,13 @@ def _verify(run_dir: Path) -> dict:
                     if ok is False:
                         why = (why + "; " if why else "") + "the probe reported a time base slip in this capture"
                 results.append(Result(path, label, x["kind"], ok, x, got, why, notices=found))
+    for t in doc.get("results", []):      # verdicts the test made itself (Recorder.result): reported as verify's
+        ok = {"ok": True, "ng": False, "unchecked": None, "measured": None}[t["status"]]
+        why = t.get("reason", "")
+        if t["path"] not in segs:
+            ok, why = False, "; ".join(filter(None, [why, "no segment with this path in the log"]))
+        results.append(Result(t["path"], t.get("capture"), t["check"], ok, {"by": "test"}, t.get("measured", {}), why,
+                              status="ng" if ok is False else t["status"], notices=list(t.get("notices", []))))
     for e in doc["log"]:                 # what the probe dropped of its own lines: the sections are not known
         if e["src"] == "lost":
             results.append(Result("", None, "probe_log", False, reason=e["text"]))

@@ -53,7 +53,10 @@ def load(path: Path):
 
 def states_cmd(args) -> None:
     from . import states
-    doc = states.of_file(args.file, args.pin, args.part, args.tol, args.min_periods)
+    if args.section is not None or (args.file / "run.json").exists():
+        doc = states.of_sections(args.file, args.section or "*", args.pin, args.tol, args.min_periods)
+    else:
+        doc = states.of_file(args.file, args.pin, args.part, args.tol, args.min_periods)
     print(json.dumps(doc, indent=1) if args.json else "\n".join(states.text(doc)))
 
 
@@ -590,7 +593,9 @@ def main() -> None:
     gp.add_argument("--port", type=int, default=0, help="default: any free port")
     gp.add_argument("--no-browser", action="store_true", help="only print the URL")
     st = sub.add_parser("states", help="each logic line as its stretches (levels, waves) and the odd pulses between them")
-    st.add_argument("file", type=Path)
+    st.add_argument("file", type=Path, help="a capture, or a run directory (with --section)")
+    st.add_argument("--section", default=None,
+                    help="a run's segments by path (a glob, e.g. 'pwm*/value=*'): each on the capture that holds it")
     st.add_argument("--pin", action="append", default=None, help="only this channel (repeatable)")
     st.add_argument("--part", type=int, default=None, help="only this part (from 0)")
     st.add_argument("--tol", type=float, default=0.02, help="pulses alike within this share of the period (default 0.02)")
