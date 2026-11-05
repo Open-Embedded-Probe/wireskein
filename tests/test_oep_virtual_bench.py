@@ -460,11 +460,10 @@ def test_sections_on_the_probes_clock_cut_one_stream(probe, tmp_path):
             rec.use_clock(lambda: hst.clock_best(2))
             for k in range(2):
                 wait(0.05)                                 # a quiet gap between sections
-                with rec.section(1, f"step{k}", expect=[square("A", 50_000, 0.5)]):    # GPIO10: sample i's bit 0
+                with rec.section(1, f"step{k}", expect=[square("A", 500_000, 0.5)]):   # GPIO10: sample i's bit 0
                     wait(0.1)
             rec.use_clock(None)
-        # 100 kS/s: the virtual probe makes its samples in Python and lags its clock on a busy host at 1 MS/s
-        res = acquire.capture(hst, acquire.Request([("A", "GPIO10")], 100_000, 0, mode="stream", during=steps,
+        res = acquire.capture(hst, acquire.Request([("A", "GPIO10")], 1_000_000, 0, mode="stream", during=steps,
                                                    spool_dir=str(tmp_path)))
         rec.add(armed, capture_of(res))
         rec.close()

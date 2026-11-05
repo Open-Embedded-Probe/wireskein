@@ -34,7 +34,7 @@ Homepage = "https://github.com/Open-Embedded-Probe/wireskein"
 Repository = "https://github.com/Open-Embedded-Probe/wireskein"
 
 [dependency-groups]
-dev = ["pytest>=8", "oep-client-python[usb-async]>=0.0.47"]   # 0.0.47: acquire.Request(during=...) (tests/test_oep_virtual_bench.py)
+dev = ["pytest>=8", "oep-client-python[usb-async]>=0.0.49"]   # 0.0.49: during=, format 1 streams, a virtual probe that keeps to its clock (tests/test_oep_virtual_bench.py)
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/wireskein"]
