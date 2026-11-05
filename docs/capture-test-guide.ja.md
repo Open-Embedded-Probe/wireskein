@@ -93,6 +93,43 @@ wireskein verify out/run1 --junit out/run1/report.xml --json out/run1/report.jso
 - `square` は、窓の全体が定常であることを前提にします。決まった数だけ動いて止まるもの（トグル、millis）は、`pulses` で数と周期を、`ends` で止まった後のレベルを確かめます。
 - `only_moving` は、そのキャプチャに入っているピンだけを見ます。**確かめたいピンはキャプチャに加えておきます**（チャンネルを増やすと、取れる長さやレートが下がるプローブもあります）。
 
+### 3.1 1 本のキャプチャで複数の条件を通す
+
+パラメーターが複数ある試験は、すべての条件を 1 つのファイルに残せます。試験が条件を順に進めるあいだ 1 本のキャプチャを取り続け、条件ごとにその区間にします。検査が失敗したら、区間のパスでどの条件かが分かり、ファイルではすべての条件を 1 本の時間の軸で見られます。
+
+```python
+from oep_client import acquire
+from wireskein.runlog import square
+from wireskein.sources.oep import capture_of
+
+def steps(wait):
+    rec.use_clock(lambda: hst.clock_best(2), probe=hst.address.place)
+    with rec.section(1, "servo PB6"):
+        for us in (544, 1000, 1500, 2000, 2400):
+            with rec.section(2, f"us={us}"):        # 変化: 期待を付けない
+                rec.command(f"servo 6 {us}")
+                send(f"servo 6 {us}")
+                wait(0.06)                          # 空白: この間、線はどこから動いてもよい
+                rec.reply(read_reply())
+                with rec.section(3, "steady", expect=[square("PB6", 50, us / 20000, duty_abs=0.001)]):
+                    wait(0.2)                       # その条件の定常
+    rec.use_clock(None)
+
+t = rec.armed()
+req = acquire.Request([("PB6", "x035@pb6")], 1_000_000, 0, mode="stream", during=steps)
+rec.add(t, capture_of(acquire.capture(hst, req)))
+```
+
+- **キャプチャ**は、試験が持つセッションでの stream です。`during=steps` を渡すと `steps(wait)` が戻るまで取り続け、`wait(秒)` は試験が待つあいだに stream を受け取ります（oep-client-python 0.0.47 以降）。steps の中でプローブに送るもの（コンソールの命令、治具の操作）は、同じセッションを通ります。
+- **`wait` をこまめに呼びます。** wait と wait のあいだは、プローブの stream のバッファだけがデータを持ちます。steps の中でほかに止まる処理（応答を待つなど）は短くするか、短い wait のあいだに応答を探します。
+- **見出しをプローブの時計に置きます。** `use_clock` は見出しごとにプローブの時計を読むので、区間ごとにキャプチャから切り出せます（[記録の形式](run-format.ja.md) §2.4）。`probe` は、キャプチャの `meta.probe.address` と同じプローブのアドレスです（oep-client-python では `hst.address.place`）。`use_clock` が無いと、キャプチャ全体が arm したときに開いていた区間のものになり、条件を分けられません。
+- **変化と定常を別の区間にします。** 条件の区間は変化（命令と、線がそれに従うまでの時間）を持ち、期待を付けません。その中の `steady` の区間に期待を付けます。空白のあいだ線はどこから動いてもよく、判定するのは steady の区間だけです。
+- **空白**は、命令が届いて効くまでの時間と、出力が切り替わるまでの時間を足したものより長くします。タイマーの出力はふつう周期の終わりで切り替わるので、前後の信号の遅いほうの 2 周期を見込みます。応答が来てから `steady` を開きます。境はプローブの時計の上で正確なので、時計の誤差の見込みは要りません。キャプチャの `start_uncertainty_ns` は照合が数えます。
+- **steady の区間**の長さは、検査に要る長さにします（§3 の表）。
+- **ファイル**は 1 本のキャプチャ `c0001.wireskein` で、見出しがそのマーカーになり、ビューアで波形の上に見えます。`wireskein verify` は、steady の区間ごとに、切り出した範囲（`c0001.wireskein@A:B`）を付けて報告します。
+- **欠損:** `on_loss="stop"`（既定）では、欠損があると `wait` から例外が出て、stream はそこで終わります。取れた分は残り、記録は失敗になります。
+- stream にはプローブからの通知が要ります。購読を断る中継（OEP core §10.3）を通すと stream は取れないので、条件ごとに単発のキャプチャ（§2.2）を取ります。
+
 ## 4. 検査
 
 | 検査 | 内容 |
@@ -253,4 +290,4 @@ I2C の tLOW と tHIGH は `i2c_timing`（§4.4）、WS2812 のビットの幅�
 
 ## 7. 時刻の精度
 
-PC の時計とキャプチャの開始時刻の対応は、ms の精度です（開始の要求がプローブに届くまでの遅れがある）。区間の割り当てには十分ですが、コマンドとキャプチャの中の変化点のずれを µs で測る用途には使えません。精度が要る場合は、DUT かプローブが目印のピンを動かし、それをキャプチャに入れます。
+PC の時計とキャプチャの開始時刻の対応は、ms の精度です（開始の要求がプローブに届くまでの遅れがある）。区間の割り当てには十分ですが、コマンドとキャプチャの中の変化点のずれを µs で測る用途には使えません。プローブの時計に置いた見出し（§3.1）はキャプチャの時計の上で正確ですが、命令から効くまでの時間には DUT の側の遅れも入ります。そのため試験は、変化の瞬間ではなく、空白の後の steady の区間で、変化の後の状態を確かめます。

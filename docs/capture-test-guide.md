@@ -93,6 +93,43 @@ For a single-shot capture, put "quiet segment before, activity, quiet segment af
 - `square` assumes the whole window is steady state. For things that move a fixed number of times and stop (toggles, millis), check the count and period with `pulses`, and the level after stopping with `ends`.
 - `only_moving` looks only at the pins in that capture. **Add the pins you want to check to the capture** (on some probes, more channels lowers the available length or rate).
 
+### 3.1 One capture through several conditions
+
+A test with several parameters can keep all its conditions in one file. One capture runs while the test goes through the conditions, and each condition is a segment of it. When a check fails, the segment's path says which condition it was, and the file shows every condition on one time axis.
+
+```python
+from oep_client import acquire
+from wireskein.runlog import square
+from wireskein.sources.oep import capture_of
+
+def steps(wait):
+    rec.use_clock(lambda: hst.clock_best(2), probe=hst.address.place)
+    with rec.section(1, "servo PB6"):
+        for us in (544, 1000, 1500, 2000, 2400):
+            with rec.section(2, f"us={us}"):        # the change: no expectation
+                rec.command(f"servo 6 {us}")
+                send(f"servo 6 {us}")
+                wait(0.06)                          # the gap: the line may move anywhere here
+                rec.reply(read_reply())
+                with rec.section(3, "steady", expect=[square("PB6", 50, us / 20000, duty_abs=0.001)]):
+                    wait(0.2)                       # the condition's steady state
+    rec.use_clock(None)
+
+t = rec.armed()
+req = acquire.Request([("PB6", "x035@pb6")], 1_000_000, 0, mode="stream", during=steps)
+rec.add(t, capture_of(acquire.capture(hst, req)))
+```
+
+- **The capture** is a stream on the session the test holds. With `during=steps` it runs until `steps(wait)` returns, and `wait(seconds)` reads the stream while the test waits (oep-client-python 0.0.47 or newer). What the steps send to the probe (console commands, fixture operations) goes over the same session.
+- **Call `wait` often.** Between waits, only the probe's stream buffer holds the data. Anything else that blocks inside the steps, such as waiting for a reply, is kept short, or the reply is looked for between short waits.
+- **The headings go on the probe's clock.** `use_clock` reads the probe's clock at every heading, so each segment is cut out of the capture ([Run format](run-format.md) §2.4). `probe` is the probe's address as the capture's `meta.probe.address` gives it (in oep-client-python, `hst.address.place`). Without `use_clock`, the whole capture belongs to the segment that was open when it was armed, and the conditions are not told apart.
+- **The change and the steady state are separate segments.** The condition's segment holds the change: the command and the time the line needs to follow it. It has no expectation. The `steady` segment inside it carries the expectation. The line may move anywhere in the gap; only the steady segment is judged.
+- **The gap** is longer than the command takes to arrive and take effect, plus the time the output needs to switch. A timer output usually switches at the end of a period, so allow 2 periods of the slower of the old and new signals. Open `steady` after the reply has come. The bounds are exact on the probe's clock, so no allowance for clock error is needed; the capture's `start_uncertainty_ns` is counted by verification.
+- **The steady segment** is as long as the check needs (§3's table).
+- **The file** is one capture, `c0001.wireskein`, with the headings as its markers, which the viewer shows on the waveform. `wireskein verify` reports each steady segment with the stretch it cut out (`c0001.wireskein@A:B`).
+- **Losses:** with `on_loss="stop"` (the default), a loss raises out of `wait` and the stream ends there. What was taken is kept, and the run fails.
+- A stream needs the probe's pushes. Through a relay that refuses subscriptions (OEP core §10.3), a stream cannot run; take one single-shot capture per condition (§2.2) instead.
+
 ## 4. Checks
 
 | Check | Description |
@@ -253,4 +290,4 @@ I2C tLOW and tHIGH are checked by `i2c_timing` (§4.4), WS2812 bit widths by `rg
 
 ## 7. Time accuracy
 
-The mapping between the PC clock and the capture start time is accurate to ms (there is a delay before the start request reaches the probe). This is enough for assigning captures to segments, but not for measuring, in µs, the offset between a command and a transition inside the capture. If you need that accuracy, have the DUT or the probe toggle a marker pin and include it in the capture.
+The mapping between the PC clock and the capture start time is accurate to ms (there is a delay before the start request reaches the probe). This is enough for assigning captures to segments, but not for measuring, in µs, the offset between a command and a transition inside the capture. Headings on the probe's clock (§3.1) are exact on the capture's clock, but the time from a command to its effect also holds the DUT's own delay. So a test checks what follows a change, in a steady segment after a gap, rather than the moment of the change.
