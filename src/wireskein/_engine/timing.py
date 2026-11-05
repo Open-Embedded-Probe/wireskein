@@ -209,6 +209,81 @@ def i2c_times(scl: Channel, sda: Channel, n: int) -> dict:
 
 # ---------------- SPI ----------------
 
+def sampling_margins(clk: Channel, data: list[Channel], edge: str, rate: float, cs: Channel | None = None,
+                     cs_active: int = 0) -> dict[str, dict]:
+    """Per data line, the shortest time (s) from its last change to a sampling edge of SCK (setup) and from that edge
+    to its next change (hold), over the edges inside CS windows (all edges without CS). No expectation needed."""
+    lv = clk.initial ^ ((np.arange(len(clk.edges)) + 1) & 1)
+    t = clk.edges[lv == (1 if edge == "rise" else 0)]
+    if cs is not None:
+        t = t[cs.level_at(t) == cs_active]
+    out = {}
+    for d in data:
+        de = d.edges
+        if not len(t) or not len(de):
+            out[d.name] = {"setup_s": None, "hold_s": None}
+            continue
+        j = np.searchsorted(de, t)                           # the changes at or after each edge
+        before = (t - de[j - 1])[j > 0]
+        after = de[j[j < len(de)]] - t[j < len(de)]
+        out[d.name] = {"setup_s": float(before.min()) / rate if len(before) else None,
+                       "hold_s": float(after.min()) / rate if len(after) else None}
+    return out
+
+
+def spi_read(clk: Channel, data: list[Channel], edge: str, n: int, cs: Channel | None = None, cs_active: int = 0,
+             lsb: bool = False) -> dict[str, str]:
+    """Each data line's bytes (hex), read just before each sampling edge of SCK, per window of CS active (all of
+    the capture as one without CS); the bits left over in a window are dropped."""
+    lv = clk.initial ^ ((np.arange(len(clk.edges)) + 1) & 1)
+    t = clk.edges[lv == (1 if edge == "rise" else 0)]
+    if cs is not None:
+        keep = cs.level_at(t) == cs_active
+        win = np.searchsorted(np.concatenate(([0], cs.edges, [n])), t, side="right")
+    else:
+        keep, win = np.ones(len(t), bool), np.zeros(len(t), np.int64)
+    out = {}
+    for d in data:
+        data_bytes = []
+        for w in np.unique(win[keep]):
+            ts = t[keep & (win == w)]
+            bits = d.level_at(np.maximum(ts - 1, 0)).astype(int)
+            for k in range(len(bits) // 8):
+                b = bits[8 * k:8 * k + 8]
+                data_bytes.append(int("".join(map(str, b[::-1] if lsb else b)), 2))
+        out[d.name] = bytes(data_bytes).hex()
+    return out
+
+
+def spi_modes(clk: Channel, data: list[Channel], cpol: int, rate: float, n: int, cs: Channel | None = None,
+              cs_active: int = 0, lsb: bool = False) -> list[dict]:
+    """The two modes of SCK's idle level, each with whether a receiver could read the lines in it (no data line
+    changing at its sampling edges) and the bytes it reads: [{"mode", "readable", "bytes"}]. One readable mode tells
+    the mode; readable ones reading the same bytes need not be told apart."""
+    out = []
+    for h in (0, 1):
+        mode, edge = cpol * 2 + h, "rise" if cpol == h else "fall"
+        mg = sampling_margins(clk, data, edge, rate, cs, cs_active)
+        ok = all(v[k] is None or v[k] >= 1 / rate for v in mg.values() for k in ("setup_s", "hold_s"))
+        out.append({"mode": mode, "readable": ok, "bytes": spi_read(clk, data, edge, n, cs, cs_active, lsb)})
+    return out
+
+
+def spi_modes_ok(clk: Channel, data: list[Channel], cpol: int, rate: float, cs: Channel | None = None,
+                 cs_active: int = 0) -> list[int]:
+    """The SPI modes a receiver could read the lines in, from the lines alone: CPOL as SCK's idle level, and at that
+    mode's sampling edges no data line changing (setup and hold of a sample or more)."""
+    out = []
+    for mode in (0, 1, 2, 3):
+        c, h = mode >> 1, mode & 1
+        if c != cpol:
+            continue
+        mg = sampling_margins(clk, data, "rise" if c == h else "fall", rate, cs, cs_active)
+        if all(v[k] is None or v[k] >= 1 / rate for v in mg.values() for k in ("setup_s", "hold_s")):
+            out.append(mode)
+    return out
+
+
 def spi_mode(clk: Channel, data: list[Channel], n: int, cs: Channel | None = None, cs_active: int = 0) -> dict:
     """CPOL: SCK's level when CS becomes active (without CS: its level over the longest pause). CPHA, per data line:
     the SCK edge each change of the line follows (the last one at or before it) inside a CS window: after a leading

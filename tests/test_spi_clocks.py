@@ -82,3 +82,17 @@ def test_the_modes_a_receiver_could_read_it_in(tmp_path):
     assert abs(m["setup_s"] - 0.45e-6) < 0.06e-6 and abs(m["other_hold_s"] - 0.05e-6) < 0.06e-6
     r = run(tmp_path / "strict", 0, setup_min_s=0.5e-6)       # MOSI is set up 0.45 us before the sampling edge
     assert r["status"] == "ng" and "MOSI setup" in r["reason"], r["reason"]
+
+
+def test_modes_ok_comes_from_the_lines_alone_in_the_analysis(tmp_path):
+    from wireskein._engine import export
+    clk, mosi, cs = gen.Wave(0), gen.Wave(0), gen.Wave(1)
+    end = gen.spi(clk, mosi, None, cs, 10e-6, [(OUT, b"")], 1e6, mode=1)
+    cap = gen.quantize({"CS": cs, "SCK": clk, "MOSI": mosi}, RATE, end + 20e-6, np.random.default_rng(0))
+    res = verify._decode(cap, {"protocols": ["spi"]})         # no pins, no bytes, no mode given
+    (c,) = [c for c in res.claims if c.protocol == "spi"]
+    L = export.layers_of(c.node)
+    # the generator shifts a sample after the leading edge: a receiver of mode 0 reads it too, one bit later
+    assert L["modes_ok"] == [0, 1] and [m["mode"] for m in L["modes"]] == [0, 1]
+    by = {m["mode"]: m["bytes"]["MOSI"] for m in L["modes"]}
+    assert by[1] == OUT.hex() and by[0] != by[1]             # the modes read different bytes: the analysis says both

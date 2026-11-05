@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) `spi` with `cs` measures each data line's setup and hold around the sampling edges and on the other edge (`margins`; `setup_min_s` / `hold_min_s` bound them), and lists the modes a receiver could read the lines in (`modes_ok`), from the lines alone: CPOL as SCK's idle level, no data line changing at that mode's sampling edges. Read just before the edges, the bytes often come out the same in the other CPHA, so they alone do not tell the mode. `wireskein analyze` / `decode` give, with an SPI's transfers, `modes`: the two modes of SCK's idle level, each readable or not and the bytes it reads (`spi`'s measured has them too), and `modes_ok`.
+- (JA) `cs` のある `spi` は、データ線ごとに、サンプルの辺の前後の余裕と、もう一方の辺での余裕を測り（`margins`。`setup_min_s` / `hold_min_s` で下限）、受け手が読めるモードを、線だけから並べる（`modes_ok`: CPOL は SCK の待機のレベル、そのモードのサンプルの辺でどのデータ線も変わらない）。辺の直前で読むと、もう一方の CPHA でも同じバイトになることが多く、バイトだけではモードは分からない。`wireskein analyze` / `decode` も、SPI の transfers と一緒に、`modes`（SCK の待機のレベルに合う 2 つのモードそれぞれの、読めるかどうかと読んだバイト。`spi` の測った値にもある）と `modes_ok` を出す。
 - (EN) `spi` with `cs` reads every given line at the sampling edges of the mode read from the lines, inside each CS window, as the roles say: a MISO that also moves outside CS was left out of the inferred bus and its bytes were missing (a SoftSPI on x035).
 - (JA) `cs` のある `spi` は、与えた線をすべて、線から読んだモードのサンプルの辺で、CS の窓ごとに、役割のとおりに読む: CS の外でも動く MISO が推定のバスから外れ、そのバイトが無かった（x035 の SoftSPI）。
 - (EN) `Recorder.result(path, name, status, measured=, reason=, notices=, capture=)`: a verdict the test made itself goes into the run (run.json's `results`), and verification reports and counts it with its own (a path that is no segment is `ng`; its notices are marked with `--mark`).

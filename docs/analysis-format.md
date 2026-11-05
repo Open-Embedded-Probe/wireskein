@@ -98,7 +98,7 @@ The layers of analyze's export (`--mode final`, at `depth`), with ticks from the
 | Protocol | Layers |
 | --- | --- |
 | `i2c` | `transactions`: `s`, `e`, `addr`, `rw`, `addr_ack`, `bytes` (hex), `acks`, `start_cond` (S / Sr), `end_cond` (P / Sr / null: open at the part's end), `scl_low_ticks`, `scl_waits` (`[{after_word, bit, ticks, s}]`); `complete: false` and `pending_bits` for one cut by the part's end |
-| `spi` | `transfers`: `s`, `e` (the first and last sampled bit), and each data pin's bytes in hex under its channel name. `sd` beside it when SD commands were read (capture-test-guide §4.8) |
+| `spi` | `transfers`: `s`, `e` (the first and last sampled bit), and each data pin's bytes in hex under its channel name. `sd` beside it when SD commands were read (capture-test-guide §4.8). With a CS, `modes`: the two modes of SCK's idle level, each with `readable` (no data line changes at its sampling edges) and the `bytes` it reads (MSB first); `modes_ok` the readable ones. One readable mode tells the mode; readable modes with the same bytes need not be told apart |
 | `uart` | `lines`, `nmea`, `modbus_rtu` (when read) and `bytes` (`{"s": [...], "hex"}`) |
 | others | as `analyze`'s export |
 

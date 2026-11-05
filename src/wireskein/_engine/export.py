@@ -82,6 +82,17 @@ def layers_of(n) -> dict:
                 rec[pin] = _hex(frames[i]) if i < len(frames) else ""
             tr.append(rec)
         out["transfers"] = tr
+        view = getattr(sb, "view", None)                  # the modes a receiver could read the lines in, from them
+        if view is not None and sb.select:
+            try:
+                from . import timing
+                clk, cs = view.channel(sb.clock), view.channel(sb.select)
+                data = [view.channel(d) for d in sb.data]
+                cpol = timing.spi_mode(clk, data, view.n_samples, cs)["cpol"]
+                out["modes"] = timing.spi_modes(clk, data, cpol, view.rate, view.n_samples, cs)
+                out["modes_ok"] = [m["mode"] for m in out["modes"] if m["readable"]]
+            except (KeyError, ValueError, TypeError):
+                pass
         sd = [ch for ch in n.children if ch.analyzer == "sd_spi"]
         if sd:
             out["sd"] = [{"s": c["t"], "cmd": ("ACMD" if c["acmd"] else "CMD") + str(c["cmd"]), "arg": c["arg"],

@@ -428,8 +428,8 @@ def spi(clk: str, mosi: str | None = None, miso: str | None = None, cs: str | No
     and a window with no clock are notices (sck_outside_cs, empty_cs_window): notices={"sck_outside_cs": "ng"} or a
     count limits them. With cs, each data line's setup and hold around the sampling edges are measured (margins;
     other_setup_s / other_hold_s on the other edge: wide on both, the line reads the same in either mode) and
-    setup_min_s / hold_min_s bound them; modes_ok lists the modes a receiver could read the transfer in (CPOL as
-    SCK's idle level, no data line changing at that mode's sampling edges, the bytes as given)."""
+    setup_min_s / hold_min_s bound them; modes_ok lists the modes a receiver could read the lines in, from the lines
+    alone (CPOL as SCK's idle level, no data line changing at that mode's sampling edges)."""
     return _t({"kind": "spi", "clk": clk, "mosi": mosi, "miso": miso, "cs": cs, "mode": mode, "mosi_bytes": mosi_bytes,
                "miso_bytes": miso_bytes, "freq_hz": freq_hz, "freq_rel": freq_rel, "bit_order": bit_order,
                "cs_active": cs_active, "bits": bits, "notices": notices, "setup_min_s": setup_min_s,
