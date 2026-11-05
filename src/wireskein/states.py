@@ -33,8 +33,9 @@ def pulse_rows(edges: np.ndarray, initial: int) -> np.ndarray:
 
 
 def of_line(edges: np.ndarray, initial: int, n: int, rate: float, step: int = 1, tol: float = 0.02,
-            min_periods: int = 3, max_odd: int = 3) -> list[dict]:
-    """The stretches of one line over ticks [0, n), in order: levels, waves, and the odd pulses between them."""
+            min_periods: int = 3, max_odd: int | None = 3) -> list[dict]:
+    """The stretches of one line over ticks [0, n), in order: levels, waves, and the odd pulses between them; more
+    than max_odd odd pulses in a row are one stretch of activity (None: each pulse kept)."""
     edges = np.asarray(edges, np.int64)
     if not len(edges):
         return [{"t0": 0, "t1": n, "level": int(initial)}]
@@ -97,7 +98,8 @@ def of_line(edges: np.ndarray, initial: int, n: int, rate: float, step: int = 1,
         t = prev["t1"]
     between(t, n, prev, t1_is_rise=False)
     out.sort(key=lambda x: x.get("t0", x.get("odd")))
-    return _collapse(_merge_levels(out), max_odd)
+    merged = _merge_levels(out)
+    return merged if max_odd is None else _collapse(merged, max_odd)
 
 
 def _collapse(out: list[dict], max_odd: int) -> list[dict]:
@@ -139,14 +141,15 @@ def _merge_levels(out: list[dict]) -> list[dict]:
 __all__ = ["of_capture", "of_file", "of_line", "of_sections", "pulse_rows", "text"]
 
 
-def of_capture(cap, pins: list[str] | None = None, tol: float = 0.02, min_periods: int = 3) -> dict:
+def of_capture(cap, pins: list[str] | None = None, tol: float = 0.02, min_periods: int = 3,
+               max_odd: int | None = 3) -> dict:
     """{pin: [stretches]} of one Capture (a part, or a stretch of one such as verify.sections() gives)."""
-    return {ch.name: of_line(ch.edges, ch.initial, cap.n_samples, cap.rate, ch.step, tol, min_periods)
+    return {ch.name: of_line(ch.edges, ch.initial, cap.n_samples, cap.rate, ch.step, tol, min_periods, max_odd)
             for ch in cap.channels if not pins or ch.name in pins}
 
 
 def of_sections(run_dir: str | Path, pattern: str = "*", pins: list[str] | None = None, tol: float = 0.02,
-                min_periods: int = 3) -> dict:
+                min_periods: int = 3, max_odd: int | None = 3) -> dict:
     """The stretches of each segment of a run whose path matches pattern (a glob; "[" is literal, the repeat index),
     on the capture that holds it, cut to it (verify.sections): {"tick_hz", "sections": [{"path", "label", "window",
     "part", "lines"}]}. Ticks are of the stretch (0 at the segment's start); window says where it is in the part."""
@@ -163,12 +166,12 @@ def of_sections(run_dir: str | Path, pattern: str = "*", pins: list[str] | None 
             continue
         hz = cap.rate
         out.append({"path": s["path"], "label": s["label"], "window": s["window"], "part": s["part"],
-                    "lines": of_capture(cap, pins, tol, min_periods)})
+                    "lines": of_capture(cap, pins, tol, min_periods, max_odd)})
     return {"run": str(run_dir), "tick_hz": hz, "sections": out}
 
 
 def of_file(path: str | Path, pins: list[str] | None = None, part: int | None = None, tol: float = 0.02,
-            min_periods: int = 3) -> dict:
+            min_periods: int = 3, max_odd: int | None = 3) -> dict:
     """{"tick_hz", "parts": [{"part", "ticks", "lines": {pin: [stretches]}}]} of a capture's logic lines."""
     from ._engine import fileio
     caps = fileio.load_runs(Path(path))                # parts that follow on without a gap, as one
@@ -176,7 +179,8 @@ def of_file(path: str | Path, pins: list[str] | None = None, part: int | None = 
     for k, cap in enumerate(caps):
         if part is not None and k != part:
             continue
-        out["parts"].append({"part": k, "ticks": int(cap.n_samples), "lines": of_capture(cap, pins, tol, min_periods)})
+        out["parts"].append({"part": k, "ticks": int(cap.n_samples),
+                             "lines": of_capture(cap, pins, tol, min_periods, max_odd)})
     return out
 
 

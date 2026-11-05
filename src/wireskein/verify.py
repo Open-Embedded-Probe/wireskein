@@ -1681,12 +1681,12 @@ def _segment_captures(run_dir: Path, doc: dict, caps: list, path: str, seg) -> t
     return [(c, cap, None, []) for c in inside for cap in load_capture(run_dir, c)], ""
 
 
-def sections(run_dir: str | Path) -> list[dict]:
+def sections(run_dir: str | Path, doc: dict | None = None) -> list[dict]:
     """Every segment of a run with the captures that hold it, cut to it, for analysis without expectations (states,
     decode, a test's own judgement): [{"path", "file", "label", "window" (ticks of the capture part, or None for a
     capture assigned whole), "part", "capture" (the Capture of that stretch), "why" (when no capture holds it)}]."""
     run_dir = Path(run_dir)
-    doc = json.loads((run_dir / "run.json").read_text())
+    doc = doc if doc is not None else json.loads((run_dir / "run.json").read_text())   # doc: a run not written yet
     if doc.get("format") != FORMAT:
         raise ValueError(f"{run_dir}: format {doc.get('format')!r}, expected {FORMAT!r}")
     tree = segment_tree(doc)

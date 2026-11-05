@@ -173,7 +173,7 @@ WireSkein は、キャプチャを読み手に要るものに変えます。サ�
 | 欲しいもの | 使うもの | 出てくるもの |
 | --- | --- | --- |
 | 線で何が起きたか、手短に | `wireskein states FILE [--pin P]` | 区切りごと（レベル、または波形: 周波数、high の時間、デューティー比、周期の数）と、そのあいだの半端なパルスを、1 行ずつ |
-| 同じものを、試験の記録の区間ごとに、期待なしで | `wireskein states RUN --section 'パス'`（Python では `wireskein.verify.sections(run)` が、区間ごとにキャプチャから切り出したものを返す。どの分析にも使える） | パスの合う区間ごとの区切り |
+| 同じものを、試験の記録の区間ごとに、期待なしで | `wireskein states RUN --section 'パス'`（Python では `wireskein.verify.sections(run)` が、区間ごとにキャプチャから切り出したものを返す。どの分析にも使える。試験の中では、記録を閉じる前に `rec.sections()` で同じものを取れる） | パスの合う区間ごとの区切り |
 | バスが何を運んだか | `wireskein analyze` / `decode` | 復号したやりとり |
 | 試験が通ったか、通らなかったのはどこか | `wireskein verify` | 検査ごとに 1 つの結果と、測った値 |
 | ある範囲のすべての変化 | `wireskein gui`、または Python でファイルを読む（`wireskein.capture`） | すべて |

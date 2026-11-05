@@ -250,6 +250,15 @@ class Recorder:
             parts.append(name + (f"[{k}]" if k else ""))
         return "/".join(parts)
 
+    def sections(self) -> list[dict]:
+        """verify.sections() of the run as recorded so far, before close(): each segment with the captures that hold
+        it, cut to it, for a test to analyse before it records its verdict (result()). An open segment ends at the
+        last line recorded."""
+        self._open()
+        from . import verify
+        doc = {**self.doc, "log": sorted(self.doc["log"], key=lambda e: e["host_ns"])}
+        return verify.sections(self.dir, doc)
+
     @property
     def is_empty(self) -> bool:
         """Nothing to check: no expectations (by section or by path), no captures, no results and nothing lost."""

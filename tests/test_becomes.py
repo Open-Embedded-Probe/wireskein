@@ -175,3 +175,25 @@ def test_a_verdict_of_the_test_is_reported_and_marked(tmp_path):
     assert verify.failed(rep) and rep["summary"]["notices"] == 1
     assert [(m["t"], m["label"]) for m in ff.markers(tmp_path / "c0001.wireskein") if m["by"] == "verify"] == [
         (17_000, "extra_pulse: d25")]
+
+
+def test_a_recorder_gives_its_sections_before_it_closes(tmp_path):
+    rec = Recorder(tmp_path)
+    armed = rec.armed()
+    ticks = iter((2_000, 18_000))
+    with rec.section(1, "d25", clock=lambda: _Reading(next(ticks))):
+        pass
+    rec.capture(armed, RATE, interleaved=wave(PWM).tobytes(), names=["P"], start_ns=START_NS, boot_id=7)
+    (s,) = [s for s in rec.sections() if s["path"] == "d25"]
+    assert s["window"] == [2_000, 18_000] and s["capture"].n_samples == 16_000
+    rec.result("d25", "mine", "ok")
+    rec.close()
+    assert verify.verify(tmp_path)["results"][0]["check"] == "mine"
+
+
+def test_states_keeps_each_odd_pulse_when_asked(tmp_path):
+    from wireskein import states
+    e = np.array([100, 110, 250, 270, 520, 525, 610, 640, 900, 915], np.int64)   # five pulses, no wave
+    assert any("activity" in x for x in states.of_line(e, 0, 2000, 1e6))
+    xs = states.of_line(e, 0, 2000, 1e6, max_odd=None)
+    assert [x["odd"] for x in xs if "odd" in x] == [100, 250, 520, 610, 900]

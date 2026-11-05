@@ -173,7 +173,7 @@ WireSkein turns a capture into what a reader needs, so the samples themselves do
 | Want | Use | What comes out |
 | --- | --- | --- |
 | What happened on a line, briefly | `wireskein states FILE [--pin P]` | Each stretch (a level, or a wave: frequency, high time, duty, periods) and the odd pulses between them, one line each |
-| The same, segment by segment of a test run, without expectations | `wireskein states RUN --section 'PATH'` (Python: `wireskein.verify.sections(run)` gives each segment cut from its capture, for any analysis) | The stretches of each segment whose path matches |
+| The same, segment by segment of a test run, without expectations | `wireskein states RUN --section 'PATH'` (Python: `wireskein.verify.sections(run)` gives each segment cut from its capture, for any analysis; `rec.sections()` the same inside a test, before the run is closed) | The stretches of each segment whose path matches |
 | What a bus carried | `wireskein analyze` / `decode` | The decoded transactions |
 | Whether the test passed, and where not | `wireskein verify` | One result per check, with the values measured |
 | Every edge in a stretch | `wireskein gui`, or the file read in Python (`wireskein.capture`) | Everything |

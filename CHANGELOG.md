@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) `Recorder.sections()`: the segments of a run cut from their captures before it is closed, for a test to analyse and then record its verdict with `result()`. `states` keeps every odd pulse with `max_odd=None` (`--max-odd 0`), instead of one stretch of activity past three in a row.
+- (JA) `Recorder.sections()`: 記録を閉じる前に、区間をキャプチャから切り出して返す。試験が分析してから `result()` で判定を書けるように。`states` は `max_odd=None`（`--max-odd 0`）で、半端なパルスを 3 つを超えても 1 つずつ残す（動きのある区間にまとめない）。
 - (EN) Lines kept as changes (format 1's events) join across parts too, when no quantum hides a change: a part whose last quantum runs past the next part's start by less than a quantum (a grid restart) follows on, each change at its quantum's end; a line that hides changes stays part by part.
 - (JA) 変化で持つ線（format 1 の events）も、隠れた変化が無ければ区間をまたいでつなぐ。最後の刻みが次の区間の始まりを刻みの長さ未満だけ越える区間（刻みの始め直し）は続くものとし、変化はそれぞれの刻みの終わりに置く。変化を隠す線は、区間ごとのまま。
 - (EN) `wireskein analyze`, `decode` and `annotate` read timeline parts that follow on without a gap as one stretch, as verify and states do (a part's entry names the run, `parts`); annotation rows and verify's markers are written back to the part each tick is in (verify `--mark` put a notice past the first part of a joined run at a tick of the first). verify's `change_tick` comes with its `change_part`.

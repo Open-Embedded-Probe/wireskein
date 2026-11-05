@@ -54,9 +54,10 @@ def load(path: Path):
 def states_cmd(args) -> None:
     from . import states
     if args.section is not None or (args.file / "run.json").exists():
-        doc = states.of_sections(args.file, args.section or "*", args.pin, args.tol, args.min_periods)
+        doc = states.of_sections(args.file, args.section or "*", args.pin, args.tol, args.min_periods,
+                                 args.max_odd or None)
     else:
-        doc = states.of_file(args.file, args.pin, args.part, args.tol, args.min_periods)
+        doc = states.of_file(args.file, args.pin, args.part, args.tol, args.min_periods, args.max_odd or None)
     print(json.dumps(doc, indent=1) if args.json else "\n".join(states.text(doc)))
 
 
@@ -600,6 +601,9 @@ def main() -> None:
     st.add_argument("--part", type=int, default=None, help="only this part (from 0)")
     st.add_argument("--tol", type=float, default=0.02, help="pulses alike within this share of the period (default 0.02)")
     st.add_argument("--min-periods", type=int, default=3, help="periods that make a wave (default 3)")
+    st.add_argument("--max-odd", type=int, default=3,
+                    help="odd pulses in a row kept one by one up to this many, more as one stretch of activity "
+                         "(0: always one by one; default 3)")
     st.add_argument("--json", action="store_true", help="the stretches as JSON")
     inf = sub.add_parser("info", help="what a WireSkein file holds: channels, rates, metadata, attachments, notes")
     inf.add_argument("file", type=Path)
