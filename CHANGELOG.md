@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) `uart` reads as a receiver does: a pulse not active at the middle of its start bit is a notice `glitch`, not a character, and the reading stays in step (a quarter-bit glitch at start-up lost the twelve characters after it, and pulled the bit time 7 % off); a line held active through a whole character is a notice `break`, not a framing error; after a framing error the reading gets in step at the next start after a bit of idle and a few good characters (it waited for a whole character of idle and lost 7 to 12 characters).
+- (JA) `uart` は受信器と同じに読む: 開始ビットの真ん中でアクティブでないパルスは、文字ではなく注意 `glitch` で、読みの同期は保つ（起動のときの 1/4 ビットのグリッチで、その後の 12 文字を読み落とし、ビットの長さを 7 % ずらしていた）。1 文字分ずっとアクティブな線は、フレーミングの誤りではなく注意 `break`。フレーミングの誤りの後は、1 ビット以上の待機の後の開始ビットで、その後の数文字が正しく読めれば読み直す（1 文字分の待機を待ち、7〜12 文字を読み落としていた）。
 - (EN) `Recorder.sections()`: the segments of a run cut from their captures before it is closed, for a test to analyse and then record its verdict with `result()`. `states` keeps every odd pulse with `max_odd=None` (`--max-odd 0`), instead of one stretch of activity past three in a row.
 - (JA) `Recorder.sections()`: 記録を閉じる前に、区間をキャプチャから切り出して返す。試験が分析してから `result()` で判定を書けるように。`states` は `max_odd=None`（`--max-odd 0`）で、半端なパルスを 3 つを超えても 1 つずつ残す（動きのある区間にまとめない）。
 - (EN) Lines kept as changes (format 1's events) join across parts too, when no quantum hides a change: a part whose last quantum runs past the next part's start by less than a quantum (a grid restart) follows on, each change at its quantum's end; a line that hides changes stays part by part.

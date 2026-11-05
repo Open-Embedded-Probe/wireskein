@@ -1095,16 +1095,50 @@ def _uart_rx(ch: Channel, n: int, u: float, idle: int, bits: int, parity: str, s
     gap_at = quiet >= gap
     gap_later = np.flip(np.logical_or.accumulate(np.flip(gap_at))) if len(act) else gap_at
 
-    out = {"frames": [], "lead_in": 0, "resync_skipped": 0, "cut_at_end": False}
+    def active_until(st: int) -> int:
+        """Where the line leaves the active level after st (n when it never does)."""
+        k = int(np.searchsorted(e, st, side="right"))
+        return int(e[k]) if k < len(e) else n
+
+    def short_in_step(i: int) -> bool:
+        """A few characters from start edge i on keep valid stop / parity bits (to get in step again)."""
+        good = 0
+        while i < len(act) and good < 3:
+            st = int(act[i])
+            if st + L * u > n:
+                return good >= 1
+            _, stop_ok, par_ok = frame(st)
+            if not (stop_ok and par_ok):
+                return False
+            good += 1
+            i = next_start(i, st)
+        return good >= 3 or (good >= 1 and i >= len(act))
+
+    out = {"frames": [], "lead_in": 0, "resync_skipped": 0, "cut_at_end": False, "glitches": [], "breaks": []}
     synced, lost, i = False, False, 0
     while i < len(act):
         st = int(act[i])
+        mid = int(st + 0.5 * u)
+        if mid < n and ch.level_at(np.array([mid]))[0] == idle:
+            # not low at the middle of its start bit: a receiver takes no character here (a glitch)
+            out["glitches"].append({"tick": st, "width_ticks": active_until(st) - st})
+            i += 1
+            continue
         if not synced:
-            synced = bool(gap_at[i]) or (not gap_later[i] and in_step(i))
+            # in step after an idle gap of a whole character, or (after an error) a bit of idle and a few good
+            # characters, or (at the window's start, no gap to come) a long run of good characters
+            synced = (bool(gap_at[i]) or (lost and quiet[i] >= u and short_in_step(i))
+                      or (not gap_later[i] and in_step(i)))
         if st + L * u > n:
             out["cut_at_end"] = True
             break
         value, stop_ok, par_ok = frame(st)
+        end = active_until(st)
+        if synced and value == 0 and not stop_ok and end - st >= L * u:
+            # the line held active through a whole character, stop bit included: a break, not a character
+            out["breaks"].append({"tick": st, "length_ticks": end - st})
+            i = int(np.searchsorted(act, end))
+            continue
         if synced:
             out["frames"].append((st, value, stop_ok, par_ok))
             if not stop_ok:
@@ -1219,7 +1253,9 @@ def check_uart(cap, x):
     got = {"baud": cap.rate / u if u else None, "baud_error": (ref / u - 1) if u and ref else None,
            "samples_per_bit": (u if u else u0) / ch.step,       # samples of this channel
            "chars": len(frames), "frame_errors": frame_err, "parity_errors": par_err,
-           "lead_in": rx["lead_in"], "resync_skipped": rx["resync_skipped"], "cut_at_end": rx["cut_at_end"], "data": data}
+           "lead_in": rx["lead_in"], "resync_skipped": rx["resync_skipped"], "cut_at_end": rx["cut_at_end"], "data": data,
+           "glitches": len(rx["glitches"]), "breaks": len(rx["breaks"])}
+    got["notices"] = ([{"kind": "glitch", **g} for g in rx["glitches"]] + [{"kind": "break", **b} for b in rx["breaks"]])
     got["idle"] = rest
     off = _uart_edge_offsets(ch, frames, u or u0, 1 + bits + (parity != "none") + 1)
     got["edge_offset_max"] = max(off)
@@ -1233,7 +1269,7 @@ def check_uart(cap, x):
         ok = False
         why.append("no edges to measure the bit time")
     elif abs(got["baud_error"]) > x.get("baud_rel", 0.03) / 2 and abs(got["baud_error"]) <= x.get("baud_rel", 0.03):
-        got["notices"] = [{"kind": "baud_near_limit", "tick": int(ch.edges[0]) if len(ch.edges) else 0,
+        got["notices"] += [{"kind": "baud_near_limit", "tick": int(ch.edges[0]) if len(ch.edges) else 0,
                            "value": round(got["baud_error"], 5),
                            "limit": x.get("baud_rel", 0.03)}]
     if x.get("baud") and got.get("baud_error") is not None and abs(got["baud_error"]) > x.get("baud_rel", 0.03):
@@ -1474,7 +1510,9 @@ NOTICES = {
     "spi": {"sck_outside_cs": "SCK moved while CS was inactive (count: its edges in that stretch)",
             "empty_cs_window": "a window of CS active with no clock",
             "mode_ambiguous": "the bytes read the same in more than one mode (candidates: those modes)"},
-    "uart": {"baud_near_limit": "the bit rate within its tolerance but more than half of it off (value: the error)"},
+    "uart": {"baud_near_limit": "the bit rate within its tolerance but more than half of it off (value: the error)",
+             "glitch": "a pulse off idle that is not low at the middle of a start bit: no character (width_ticks)",
+             "break": "the line held active through a whole character, stop bit included (length_ticks)"},
 }
 
 
