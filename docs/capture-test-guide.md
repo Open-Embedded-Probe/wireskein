@@ -216,6 +216,7 @@ WireSkein turns a capture into what a reader needs, so the samples themselves do
 | `rgb_led(pin, data, t0h_min_s, t0h_max_s, t1h_min_s, t1h_max_s, period_min_s, period_max_s, reset_min_s)` | A WS2812-like line (§4.6): the bytes of each frame between resets (hex, in the order sent), T0H, T1H, the bit period, the reset's length |
 | `onewire(pin, data, presence, speed)` | A 1-Wire line (§4.6): the bytes after each reset, presence pulses, the reset, presence, slot and low times |
 | `ir(pin, frames, carrier_hz, carrier_rel, timing_rel, protocol)` | An IR remote line (§4.6): NEC frames (address, command, repeat), the command with its inverse, the carrier's frequency, the marks' and spaces' lengths |
+| `can(pin, bitrate, frames, bitrate_rel, idle, ack, errors, sample_point)` | Classic CAN (§4.7), read as a receiving node does: the bit rate measured from the edges, the frames (identifier, data, remote), the ACK slot, stuff / form / CRC errors |
 | `lin(pin, baud, frames, baud_rel, break_min_bits, checksum)` | LIN frames (§4.7): identifier and data, sync, identifier parity, checksum, break and delimiter lengths, the baud measured from the sync field |
 | `i2s(bclk, ws, sd, format, bits, fs_hz, fs_rel, samples, slot_bits, left_ws)` | I2S-like audio (§4.7): format, sample rate, BCLKs a channel, a run of samples found in a row |
 | `quadrature(a, b, steps, cycles, direction, errors_max)` | A quadrature encoder (§4.7): the count (steps or cycles), the direction, changes of both lines at once |
@@ -305,14 +306,16 @@ onewire("PD2", ["cc44", "ccbe"])                                  # Skip ROM + C
 ir("PB1", [{"addr": 0x04, "cmd": 0x08}, {"repeat": True}], carrier_hz=38e3)
 ```
 
-### 4.7 LIN, I2S, quadrature encoders
+### 4.7 LIN, CAN, I2S, quadrature encoders
 
 - **`lin`**: the line idles high. A low of at least 11 bits at `baud` is a break, the high after it the delimiter. The characters (8N1) up to the next break or a pause longer than 2 characters are sync, protected identifier, data and checksum (the last). Each frame's bit time is measured from its sync field (0x55: its five falling edges span 8 bits), as a slave synchronizes, and its characters are read at that rate. A break must be at least `break_min_bits` (default 13, LIN 2.x's master minimum), a delimiter at least one bit. With `checksum="auto"` the diagnostic ids 0x3C / 0x3D take the classic checksum, the others the enhanced one.
+- **`can`**: one line at the bus level, recessive = `idle` (a controller's RX, or a transceiver's RXD; a controller's TX alone has no ACK, so `ack=False`). As a receiving node it starts a frame at a dominant edge after 11 recessive bits (3 after a frame's end), samples each bit at `sample_point` of it and resynchronizes at each recessive-to-dominant edge. A sixth equal bit from the start of frame to the end of the CRC is a stuff error, a dominant CRC delimiter, ACK delimiter or end of frame a form error, a CRC that does not match a CRC error. Any of them is NG; a test that makes errors on purpose names how many, exactly, per kind: `errors={"stuff": 1}`. After an error the reading waits for 11 recessive bits (the error frame's delimiter and the intermission), so the frame sent again reads. An error flag inside a frame reads as a stuff error (six dominant bits). `frames` compares the good frames in order (`ext` follows from an id above 0x7FF unless given; `rtr` for a remote frame). The bit rate is fitted from the intervals between recessive-to-dominant edges (a transceiver's loop delay cancels). Measured too: `error_flags` (dominant runs of six bits or more), `unacked`, `errors_at`.
 - **`i2s`**: SD and WS are read on BCLK's rising edges; the rising edges until WS changes are one channel (a slot). `format` `"i2s"` (Philips) puts the MSB one BCLK after WS changes, `"left"` at the change, `"right"` ends the word at the slot's last bit (`bits` needed). Words are two's complement, MSB first. The left channel is WS low in `"i2s"`, high otherwise (`left_ws` for others). `samples` is OK when found in a row among the frames read (the window starts mid-stream). The share of WS and SD changes made while BCLK is low is reported (not judged).
 - **`quadrature`**: +1 for each edge with A changing ahead of B (`steps`; `cycles` is that over 4). Both lines changing on one tick is counted as an error: a state skipped (sampled too slowly for the encoder, or a fault).
 
 ```python
 lin("PA2", 19200, [{"id": 0x10, "data": "01020304"}])
+can("PB8", 500_000, [{"id": 0x123, "data": "112233"}, {"id": 0x18DAF110, "data": ""}])
 i2s("PB13", "PB12", "PB15", "i2s", 16, fs_hz=48000, samples=[(0, 0), (1000, -1000)])
 quadrature("PA0", "PA1", cycles=24, direction="forward")
 ```
@@ -348,6 +351,8 @@ Some behaviour is allowed by the protocol but worth a look: a test may want to m
 | `uart` | `baud_near_limit` | The bit rate within `baud_rel` but more than half of it off (at the line's first edge; `value`: the error, `limit`) |
 | `uart` | `glitch` | A pulse off idle that is not active at the middle of a start bit: no character (`width_ticks`). Start-up rubbish shows here |
 | `uart` | `break` | The line held active longer than a whole character (`length_ticks`) |
+| `can` | `bitrate_near_limit` | The bit rate within `bitrate_rel` but more than half of it off (`value`: the error, `limit`) |
+| `can` | `overload` | An overload frame: dominant at the last bit of an end of frame or in the intermission |
 
 ### 4.10 Checks from elsewhere
 
@@ -374,6 +379,7 @@ A rule wireskein has no check for can be added as a check kind, judged and repor
 | PWM | Frequency, duty cycle, per-period variation, polarity | The first pulse is not missing, no pulse is dropped or stretched on update, level after stopping |
 | tone() | Frequency, duration | Level after it ends |
 | UART | Baud rate error, data bits, parity, stop bits, content | No garbage on initialization, idle level, pin state after `end()` |
+| CAN | Bit rate error, identifiers and data, ACK, no stuff / form / CRC errors | No error frames on initialization, bus recessive after the end |
 | I2C | SCL frequency, START, STOP, Repeated Start, ACK and NACK, content | SDA and SCL both High after the end, SDA not stuck Low |
 | SPI | Mode (CPOL/CPHA), bit order, clock frequency, content | CS High between transactions, no extra clocks |
 | Power / analog | Mean voltage, range, ripple (`voltage`) | Voltage before and after switching |

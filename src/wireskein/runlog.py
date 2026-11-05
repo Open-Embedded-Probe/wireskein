@@ -47,7 +47,7 @@ from . import _fileformat as fileformat
 
 FORMAT = "wireskein-run/1"          # docs/run-format.ja.md
 
-__all__ = ["FORMAT", "Recorder", "becomes", "dead_time", "ends", "i2c", "i2c_timing", "i2s", "ir", "level", "lin", "only_moving",
+__all__ = ["FORMAT", "Recorder", "becomes", "can", "dead_time", "ends", "i2c", "i2c_timing", "i2s", "ir", "level", "lin", "only_moving",
            "onewire", "phase", "protocol", "pulses", "quadrature", "rgb_led", "sd_spi", "skew", "spi", "square", "starts", "trim", "uart",
            "voltage"]
 
@@ -555,6 +555,21 @@ def lin(pin: str, baud: float, frames: list[dict] | None = None, baud_rel: float
     sync field within baud_rel (relative; None: not checked)."""
     return _t({"kind": "lin", "pin": pin, "baud": baud, "frames": frames, "baud_rel": baud_rel,
                "break_min_bits": break_min_bits, "checksum": checksum}, threshold)
+
+
+def can(pin: str, bitrate: float | None, frames: list[dict] | None = None, bitrate_rel: float = 0.01, idle: int = 1,
+        ack: bool | None = True, errors: dict | None = None, sample_point: float = 0.75, notices=None,
+        threshold=None) -> dict:
+    """Classic CAN on one line at the bus level (a controller's RX, or the bus through a transceiver's RXD;
+    recessive = idle), read as a receiving node does. The bit rate measured from the edges within bitrate_rel
+    (relative) of bitrate; frames [{"id": 0x123, "data": "112233"}] in order, the good ones ("ext": an extended
+    identifier, by default when the id is above 0x7FF; "rtr": a remote frame); ack True: every frame acknowledged
+    (a dominant ACK slot), False: none (a controller's TX alone), None: not judged. errors: the stuff, form and CRC
+    errors expected, exactly, as {"stuff": n, "form": n, "crc": n} (a kind not named is 0; None: none at all).
+    bitrate=None measures only, unless frames / errors are given."""
+    return _t({"kind": "can", "pin": pin, "bitrate": bitrate, "frames": frames, "bitrate_rel": bitrate_rel,
+               "idle": idle, "ack": ack, "errors": dict(errors) if errors is not None else None,
+               "sample_point": sample_point, "notices": notices}, threshold)
 
 
 def i2s(bclk: str, ws: str, sd: str, format: str = "i2s", bits: int | None = None, fs_hz: float | None = None,

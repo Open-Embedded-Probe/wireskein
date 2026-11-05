@@ -1312,6 +1312,78 @@ def check_uart(cap, x):
     return ok, got, "; ".join(why)
 
 
+CAN_ERRORS = ("stuff", "form", "crc")
+
+
+def check_can(cap, x):
+    from ._engine import canbus
+    ch = _ch(cap, x["pin"])
+    if ch is None:
+        return None, {}, "pin not captured"
+    idle = x.get("idle", 1)
+    want_rate = x.get("bitrate")
+    if want_rate:
+        u0 = cap.rate / want_rate
+    else:
+        from ._engine.features import estimate_units
+        cands = estimate_units(ch.runs(cap.n_samples)[1][1:-1])
+        if not cands:
+            return None, {"edges": int(len(ch.edges))}, "measure only: too few edges to find a bit time"
+        u0 = cands[0].samples
+    u = canbus.bit_time(ch, u0, idle)
+    rx = canbus.read(ch, cap.n_samples, u or u0, idle, x.get("sample_point", 0.75))
+    frames = rx["frames"]
+    count = {k: sum(e["kind"] == k for e in rx["errors"]) for k in CAN_ERRORS}
+    got = {"bitrate": cap.rate / u if u else None,
+           "bitrate_error": (u0 / u - 1) if u and want_rate else None,
+           "samples_per_bit": (u or u0) / ch.step,
+           "frames": [{k: f[k] for k in ("id", "ext", "rtr", "dlc", "data", "ack")} for f in frames],
+           "frame_count": len(frames), "unacked": sum(not f["ack"] for f in frames),
+           "stuff_errors": count["stuff"], "form_errors": count["form"], "crc_errors": count["crc"],
+           "errors_at": rx["errors"][:8], "error_flags": rx["error_flags"], "overloads": len(rx["overloads"]),
+           "lead_in": rx["lead_in"], "cut_at_end": rx["cut_at_end"]}
+    got["notices"] = [{"kind": "overload", **o} for o in rx["overloads"]]
+    if not len(ch.edges):
+        return False, got, f"no activity (constant {ch.initial})"
+    parts = []
+    rel = x.get("bitrate_rel", 0.01)
+    if want_rate:
+        if u is None:
+            parts.append((False, "no edges to measure the bit time"))
+        elif abs(got["bitrate_error"]) > rel:
+            parts.append((False, f"bitrate {got['bitrate']:.0f} is {got['bitrate_error'] * 100:+.2f}% off {want_rate:.0f}"))
+        elif abs(got["bitrate_error"]) > rel / 2:
+            got["notices"].append({"kind": "bitrate_near_limit", "tick": int(ch.edges[0]),
+                                   "value": round(got["bitrate_error"], 5), "limit": rel})
+    want = x.get("errors")
+    if want is None and want_rate:
+        want = {}                                   # an error breaks the protocol: none expected
+    unknown = sorted(set(want or {}) - set(CAN_ERRORS))
+    if unknown:
+        parts.append((False, f"errors: unknown kind {', '.join(unknown)} ({', '.join(CAN_ERRORS)})"))
+    elif want is not None and any(count[k] != want.get(k, 0) for k in CAN_ERRORS):
+        parts.append((False, ", ".join(f"{count[k]} {k}" for k in CAN_ERRORS) + " errors, not " +
+                      ", ".join(f"{want.get(k, 0)}" for k in CAN_ERRORS)))
+    if x.get("frames") is not None:
+        def norm(f):
+            return {"id": int(f["id"]), "ext": bool(f.get("ext", f["id"] > 0x7FF)), "rtr": bool(f.get("rtr", False)),
+                    "data": str(f.get("data", "")).lower()}
+        parts.append(_seq_diff("frames", [norm(f) for f in x["frames"]],
+                               [{k: f[k] for k in ("id", "ext", "rtr", "data")} for f in got["frames"]]))
+    ack = x.get("ack", True)
+    if ack is True and got["unacked"]:
+        parts.append((False, f"{got['unacked']} of {len(frames)} frames not acknowledged (a recessive ACK slot)"))
+    elif ack is False and len(frames) - got["unacked"]:
+        parts.append((False, f"{len(frames) - got['unacked']} of {len(frames)} frames acknowledged"))
+    if not frames and not rx["errors"]:
+        parts.append((False if want_rate else None, "no CAN frame (a start of frame after 11 recessive bits)"))
+    ok, why = _verdicts(parts)
+    if not want_rate and ok is not False and x.get("frames") is None and x.get("errors") is None:
+        return MEASURED, got, (f"measured {got['bitrate']:.0f} bit/s, " if got["bitrate"] else "") + \
+            f"{len(frames)} frames, " + ", ".join(f"{count[k]} {k}" for k in CAN_ERRORS) + " errors"
+    return ok, got, why
+
+
 def _analog(cap: Capture, pin: str) -> AnalogTrace | None:
     return next((a for a in cap.analog if a.name == pin), None)
 
@@ -1529,6 +1601,8 @@ NOTICES = {
     "uart": {"baud_near_limit": "the bit rate within its tolerance but more than half of it off (value: the error)",
              "glitch": "a pulse off idle that is not low at the middle of a start bit: no character (width_ticks)",
              "break": "the line held active longer than a whole character (length_ticks)"},
+    "can": {"bitrate_near_limit": "the bit rate within its tolerance but more than half of it off (value: the error)",
+            "overload": "an overload frame: dominant at the last bit of an end of frame or in the intermission"},
 }
 
 
@@ -1588,7 +1662,7 @@ CHECKS = {"protocol": check_protocol, "becomes": check_becomes, "square": check_
           "uart": check_uart, "voltage": check_voltage, "phase": check_phase, "skew": check_skew,
           "dead_time": check_dead_time, "i2c_timing": check_i2c_timing, "rgb_led": check_rgb_led,
           "onewire": check_onewire, "ir": check_ir, "lin": check_lin, "i2s": check_i2s,
-          "quadrature": check_quadrature, "sd_spi": check_sd_spi}
+          "quadrature": check_quadrature, "sd_spi": check_sd_spi, "can": check_can}
 
 
 def _pins_of(x: dict) -> set[str]:

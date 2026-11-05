@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- (EN) A check `can(pin, bitrate, frames, bitrate_rel, idle, ack, errors, sample_point)`: classic CAN read as a receiving node does (a start of frame after 11 recessive bits, resynchronizing at each recessive-to-dominant edge, stuff / form / CRC errors, reading again after an error frame); the bit rate fitted from the edges; the good frames compared in order; the ACK slot (`ack` True / False / None); errors NG unless expected exactly (`errors={"stuff": 1}`); notices `bitrate_near_limit` and `overload`. Checked on lines from an encoder of the test's own (tests/test_can.py).
+- (JA) 検査 `can(pin, bitrate, frames, bitrate_rel, idle, ack, errors, sample_point)` を足した: クラシック CAN を受信するノードと同じに読む（11 ビットのレセッシブの後のフレームの始め、レセッシブからドミナントへのエッジごとの同期し直し、スタッフ / 形式 / CRC の誤り、エラーフレームの後の読み直し）。ビットレートはエッジから求め、正しいフレームを順に比べ、ACK のスロットを見る（`ack` は True / False / None）。誤りは「ちょうどこの数」と書かなければ NG（`errors={"stuff": 1}`）。注意は `bitrate_near_limit` と `overload`。試験の中の独自の符号器が作った線で確かめた（tests/test_can.py）。
+
 ## 0.0.22
 - (EN) **Breaking:** `uart` judges framing and parity errors by default: one is NG, as it breaks the protocol. A test that sends errors on purpose names how many, exactly, per kind: `errors={"framing": 16}`, `errors={"parity": 1}` (a kind not named is 0, an unknown kind is NG). `errors_max` is gone. A glitch or a break stays a notice; `uart(baud=None)` with no `errors` still only measures.
 - (JA) **互換のない変更:** `uart` は、既定でフレーミングとパリティの誤りを判定する。1 つでもあれば NG（プロトコルの違反なので）。わざと誤りを送る試験は、種類ごとに「ちょうどこの数」を書く: `errors={"framing": 16}`、`errors={"parity": 1}`（書かない種類は 0、知らない種類は NG）。`errors_max` は無くした。グリッチと break は注意のまま。`errors` の無い `uart(baud=None)` は、測るだけのまま。
