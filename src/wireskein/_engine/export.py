@@ -149,6 +149,10 @@ def layers_of(n) -> dict:
     elif a == "ir_nec":
         out["frames"] = [{"s": f["t"], **{k: f[k] for k in ("repeat", "addr", "ext", "cmd", "cmd_ok") if k in f}}
                          for f in n.output.items]
+    for ch in getattr(n, "children", []):     # protocols of others (wireskein.protocols) whose checks held
+        if getattr(ch, "user", False) and ch.total >= 0.3:
+            out[ch.analyzer] = {"messages": list(ch.output.items), **{k: ch.metrics[k] for k in
+                                                                       ("checks_passed", "checks_failed")}}
     return out
 
 
@@ -158,6 +162,10 @@ FINAL = {"i2c": "transactions", "spi": ("sd", "transfers"), "uart": ("lines", "n
 
 
 def final_of(n, lay: dict) -> dict:
+    mine = [ch for ch in getattr(n, "children", []) if getattr(ch, "user", False) and ch.total >= 0.3]
+    if mine:                                   # a protocol of others whose checks held is the bus's final reading
+        best = max(mine, key=lambda ch: ch.total)
+        return {best.analyzer: lay[best.analyzer]}
     want = FINAL.get(n.analyzer, ())
     want = (want,) if isinstance(want, str) else want
     for k in want:

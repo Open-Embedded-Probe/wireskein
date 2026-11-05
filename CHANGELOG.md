@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Protocols of your own on UART, SPI or I2C (`wireskein.protocols`; the entry point group `wireskein.protocols` or `register()`): `decode(bus)` gets the bus as the analysis exports it and returns its messages and how many of its checks passed and failed; the checks support the bus as Modbus RTU's do, and the protocol is shown under the bus, as its final reading, when they held. The check `protocol(name, bus, roles, messages=...)` compares its messages. The example `examples/protocols/demo_link.py` (a framed command protocol with a CRC-8, on UART and SPI) and docs/protocols.md.
+- (JA) UART、SPI、I2C に乗る独自のプロトコル（`wireskein.protocols`。entry point の `wireskein.protocols` か `register()`）: `decode(bus)` は、分析が書き出す形のバスを受け取り、メッセージと、チェックが通った数・失敗した数を返す。チェックは Modbus RTU と同じにバスを支え、通ったときは、プロトコルがバスの下に最終の読みとして出る。検査 `protocol(name, bus, roles, messages=...)` はそのメッセージを比べる。見本 `examples/protocols/demo_link.py`（CRC-8 のある、フレームの命令のプロトコル。UART と SPI）と docs/protocols.md。
 
 ## 0.0.21
 - (EN) **Breaking:** `spi(mode=)` with `cs` passes when the transfer reads in that mode: readable there (no data line changing at its sampling edges) and reading the bytes given (`mode_candidates`), not when it equals the one mode the changes say (still measured as `mode`). More than one candidate is the notice `mode_ambiguous`. Data whose bits are all alike (no change to say the CPHA) is read too.

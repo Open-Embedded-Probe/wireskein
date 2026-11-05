@@ -510,6 +510,49 @@ def check_spi(cap, x):
     return ok, got, "; ".join(why)
 
 
+def check_protocol(cap, x):
+    """A protocol of one's own (wireskein.protocols) on a bus with the given pins: its messages in order, each
+    compared on the keys the expectation gives, and its checks."""
+    from . import protocols as P
+    from ._engine import export
+    proto = P.registered().get(x["name"])
+    if proto is None:
+        return False, {}, f"no protocol named {x['name']!r} (wireskein.protocols)"
+    if x["bus"] not in proto.over:
+        return False, {}, f"{x['name']} rides on {', '.join(proto.over)}, not {x['bus']}"
+    pins = {p: {"protocol": x["bus"], "role": r, **({"baud": x["baud"]} if x.get("baud") else {})}
+            for r, p in x["roles"].items()}
+    res = _decode(cap, {"protocols": [x["bus"]], "pins": pins})
+    n = _best(res, x["bus"], {r: p for r, p in x["roles"].items()})
+    if n is None:
+        return False, {}, f"nothing decoded as {x['bus']} on these pins"
+    child = next((c for c in n.children if c.analyzer == x["name"]), None)
+    msgs = list(child.output.items) if child is not None else []
+    m = child.metrics if child is not None else {"checks_passed": 0, "checks_failed": 0}
+    got = {"messages": msgs, "checks_passed": m.get("checks_passed", 0), "checks_failed": m.get("checks_failed", 0)}
+    if "error" in m:
+        return False, got, f"{x['name']} failed: {m['error']}"
+    ok, why = True, []
+    if got["checks_failed"] > x.get("checks_failed_max", 0):
+        ok = False
+        why.append(f"{got['checks_failed']} of its checks failed (at most {x.get('checks_failed_max', 0)})")
+    want = x.get("messages")
+    if want is not None:
+        for i, w in enumerate(want):
+            g = msgs[i] if i < len(msgs) else None
+            if g is None or any(g.get(k) != v for k, v in w.items()):
+                ok = False
+                why.append(f"message #{i}: want {w}, got " + (str({k: g.get(k) for k in w}) if g else "none"))
+                break
+        if ok and len(msgs) != len(want):
+            ok = False
+            why.append(f"{len(msgs)} messages, want {len(want)}")
+    elif not msgs:
+        ok = False
+        why.append(f"no {x['name']} message")
+    return ok, got, "; ".join(why)
+
+
 def _spi_clocks(sck, cs, n: int, active: int) -> tuple:
     """Per window of CS active: the clocks in it (SCK edges / 2); SCK edges while CS is inactive; the shortest SCK
     level inside the windows (from one SCK edge to the next) and the median of those levels (the half period); the
@@ -1433,7 +1476,7 @@ def _notices(ok, why: str, got: dict, x: dict, cap) -> tuple:
     return ok, why, out
 
 
-LOGIC = {"becomes", "square", "level", "ends", "starts", "pulses", "i2c", "spi", "uart", "phase", "skew", "dead_time",
+LOGIC = {"protocol", "becomes", "square", "level", "ends", "starts", "pulses", "i2c", "spi", "uart", "phase", "skew", "dead_time",
          "i2c_timing", "rgb_led", "onewire", "ir", "lin", "i2s", "quadrature", "sd_spi"}   # checks that read logic levels
 
 
@@ -1456,7 +1499,7 @@ def _as_logic(cap: Capture, x: dict) -> tuple[Capture | None, str]:
 
 
 EVENT_CHECKS = {"level", "ends", "starts", "pulses", "only_moving"}   # what a line whose quanta hide changes answers
-CHECKS = {"becomes": check_becomes, "square": check_square, "level": check_level, "ends": check_ends, "starts": check_starts,
+CHECKS = {"protocol": check_protocol, "becomes": check_becomes, "square": check_square, "level": check_level, "ends": check_ends, "starts": check_starts,
           "only_moving": check_only_moving, "pulses": check_pulses, "i2c": check_i2c, "spi": check_spi,
           "uart": check_uart, "voltage": check_voltage, "phase": check_phase, "skew": check_skew,
           "dead_time": check_dead_time, "i2c_timing": check_i2c_timing, "rgb_led": check_rgb_led,
@@ -1471,6 +1514,7 @@ def _pins_of(x: dict) -> set[str]:
             out.add(x[k])
     out |= set(x.get("levels", {}))
     out |= set(x.get("pins", []) if x["kind"] != "only_moving" else [])   # a check from elsewhere names its pins
+    out |= set((x.get("roles") or {}).values()) if x["kind"] == "protocol" else set()
     return out
 
 

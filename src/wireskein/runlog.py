@@ -48,7 +48,7 @@ from . import _fileformat as fileformat
 FORMAT = "wireskein-run/1"          # docs/run-format.ja.md
 
 __all__ = ["FORMAT", "Recorder", "becomes", "dead_time", "ends", "i2c", "i2c_timing", "i2s", "ir", "level", "lin", "only_moving",
-           "onewire", "phase", "pulses", "quadrature", "rgb_led", "sd_spi", "skew", "spi", "square", "starts", "trim", "uart",
+           "onewire", "phase", "protocol", "pulses", "quadrature", "rgb_led", "sd_spi", "skew", "spi", "square", "starts", "trim", "uart",
            "voltage"]
 
 
@@ -373,6 +373,16 @@ def becomes(pin: str, level: int | None = None, *, freq_hz: float | None = None,
                "high_s": high_s, "freq_rel": freq_rel, "duty_abs": duty_abs, "high_abs_s": high_abs_s, "high_rel": high_rel,
                "irregular_max": irregular_max, "irregular_min": irregular_min, "min_periods": min_periods,
                "within_s": within_s}, threshold)
+
+
+def protocol(name: str, bus: str, roles: dict[str, str], messages: list[dict] | None = None,
+             checks_failed_max: int = 0, baud: float | None = None, threshold=None) -> dict:
+    """A protocol of one's own (wireskein.protocols) on a bus: bus "uart" / "spi" / "i2c", roles its pins by role
+    ({"data": "TX"}; {"clk", "mosi", "miso", "cs"}; {"scl", "sda"}), baud for a UART. messages: compared in order,
+    each on the keys it gives (the others, such as "s", not); without them, at least one message. At most
+    checks_failed_max of its checks may fail."""
+    return _t({"kind": "protocol", "name": name, "bus": bus, "roles": dict(roles), "messages": messages,
+               "checks_failed_max": checks_failed_max, "baud": baud}, threshold)
 
 
 def trim(check: dict, head_s: float = 0.0, tail_s: float = 0.0, *, head_periods: float = 0.0,

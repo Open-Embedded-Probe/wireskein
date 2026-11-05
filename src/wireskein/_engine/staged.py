@@ -356,6 +356,40 @@ def i2c_device_node(parent: Node) -> Node | None:
                 parent, layer_score=score, total=score)
 
 
+def _protocols(roots: list[Node]) -> None:
+    """Protocols of others on the buses decoded (wireskein.protocols): each given the bus as the analysis exports
+    it; its checks, as Modbus RTU's, support the bus."""
+    from .. import protocols as P
+    from . import export
+    protos = P.registered()
+    if not protos:
+        return
+    for n in roots:
+        if n.output is None or n.analyzer not in P.BUSES:
+            continue
+        mine = [p for p in protos.values() if n.analyzer in p.over]
+        if not mine:
+            continue
+        bus = {"roles": dict(n.roles), "tick_hz": None, **export.layers_of(n)}
+        view = getattr(n.layers.get("bits") or n.layers.get("blocks"), "view", None) if getattr(n, "layers", None) \
+            else None
+        if view is not None:
+            bus["tick_hz"] = float(view.rate)
+        for p in mine:
+            try:
+                got = p.decode(bus) or {}
+            except Exception as e:  # noqa: BLE001 - another's protocol: its failure is shown, the analysis goes on
+                got = {"messages": [], "checks_passed": 0, "checks_failed": 0, "error": f"{type(e).__name__}: {e}"}
+            m = {"checks_passed": int(got.get("checks_passed", 0)), "checks_failed": int(got.get("checks_failed", 0)),
+                 **({"error": got["error"]} if "error" in got else {})}
+            s = P.score(m)
+            child = Node(p.name, {}, n.roles, Stream(p.name, list(got.get("messages", []))), m, n,
+                         layer_score=s, total=s)
+            child.user = True
+            n.children.append(child)
+            n.total = n.total + 0.5 * (1 - n.total) * s * n.total
+
+
 def sd_spi_node(parent: Node) -> Node | None:
     """Upper layer over SPI transfers: SD commands in SPI mode (periph.sd_spi), with the data pins tried both ways
     round as MOSI and MISO. The evidence is commands with their end bit answered by an R1 within NCR, the lines
@@ -619,6 +653,7 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
             if d is not None:
                 n.children.append(d)
                 n.total = n.layer_score + 0.5 * (1 - n.layer_score) * d.total * n.layer_score
+    _protocols(roots)
     t["upper"] = time.perf_counter() - t0
     t0 = time.perf_counter()
     # unknown-sync only explains what no known protocol explains better: a
