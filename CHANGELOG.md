@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Lines kept as changes (format 1's events) join across parts too, when no quantum hides a change: a part whose last quantum runs past the next part's start by less than a quantum (a grid restart) follows on, each change at its quantum's end; a line that hides changes stays part by part.
+- (JA) 変化で持つ線（format 1 の events）も、隠れた変化が無ければ区間をまたいでつなぐ。最後の刻みが次の区間の始まりを刻みの長さ未満だけ越える区間（刻みの始め直し）は続くものとし、変化はそれぞれの刻みの終わりに置く。変化を隠す線は、区間ごとのまま。
 - (EN) `wireskein analyze`, `decode` and `annotate` read timeline parts that follow on without a gap as one stretch, as verify and states do (a part's entry names the run, `parts`); annotation rows and verify's markers are written back to the part each tick is in (verify `--mark` put a notice past the first part of a joined run at a tick of the first). verify's `change_tick` comes with its `change_part`.
 - (JA) `wireskein analyze`、`decode`、`annotate` も、verify と states と同じに、隙間なく続く timeline の区間を 1 つの流れとして読む（区間の項目が並びを名指しする、`parts`）。注釈の行と verify のマーカーは、それぞれの tick のある区間に書き戻す（verify の `--mark` は、つないだ並びの最初の区間より後の注意を、最初の区間の tick として書いていた）。verify の `change_tick` には `change_part` が付く。
 - (EN) docs/extending.md: which way to add an analysis of your own (protocols, definitions, device packs, marker dialects, checks, a test's verdicts), what every addition follows (the documented shapes, evidence, truth from elsewhere than what is tested, names, failures, entry points), results in the viewer. `wireskein.capture.markers` and `add_markers(path, items, by=)` (your tool's markers in place of its earlier ones); `wireskein annotate` writes the messages of an installed protocol as a row.

@@ -78,3 +78,29 @@ def test_verify_marks_a_change_in_the_part_it_is_in(tmp_path):
     assert r["status"] == "ok" and (r["measured"]["change_part"], r["measured"]["change_tick"]) == (1, 3000 - 1777)
     ms = [m for m in ff.markers(tmp_path / "run" / "c0001.wireskein") if m["by"] == "verify"]
     assert [(m["part"], m["t"]) for m in ms] == [(1, 1223)]
+
+
+def _events_part(changes, n_ticks, step, t0, start):
+    q = sorted({e // step for e in changes})
+    levels, lv = [], start
+    for _ in q:
+        lv ^= 1
+        levels.append(lv)
+    return wc.Part(n_ticks, [ff.events("P", q, levels, [1] * len(q), -(-n_ticks // step), step, 0, start)], {}, t0)
+
+
+def test_lines_kept_as_changes_join_across_a_grid_restart(tmp_path):
+    # format 1 at a step of 4: the first part's last quantum runs 3 ticks past the second part's start
+    p = wc.write(tmp_path / "e.wireskein", wc.Capture(1_000_000, [_events_part([100, 300, 500], 1001, 4, 0, 0),
+                                                                  _events_part([99, 299], 999, 4, 1001, 1)]))
+    (run,) = fileio.load_runs(p)
+    assert run.meta["parts"] == [0, 1] and run.n_samples == 2001 and run.channels[0].step == 4
+    assert run.channels[0].edges.tolist() == [103, 303, 503, 1100, 1300]     # each change at its quantum's end
+    assert fileio.locate(run.meta, 1300) == (1, 299)
+
+
+def test_a_line_that_hides_changes_stays_part_by_part(tmp_path):
+    def hiding(t0):
+        return wc.Part(1000, [ff.events("P", [10, 20], [1, 1], [2, 2], 250, 4, 0, 1)], {}, t0)   # two changes a quantum
+    p = wc.write(tmp_path / "h.wireskein", wc.Capture(1_000_000, [hiding(0), hiding(1000)]))
+    assert len(fileio.load_runs(p)) == 2

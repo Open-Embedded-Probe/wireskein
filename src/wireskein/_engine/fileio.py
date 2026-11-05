@@ -74,8 +74,9 @@ def load_parts(path: str | Path) -> list[Capture]:
 def load_runs(path: str | Path) -> list[Capture]:
     """The parts of a file, each run of timeline parts that follow on from one another without a gap joined into one
     (a stream cut where its sample grid restarts, not where anything was lost: wireskein-format §3.4). A run is joined
-    when its parts hold only logic channels of step 1, the same ones; otherwise its parts stay apart. A joined run's
-    meta is its first part's, with `parts` [first, last]."""
+    when its parts hold the same logic lines at the same steps, none of them hiding changes in a quantum (events kept
+    at a step whose quanta each hold at most one change are their edges); otherwise its parts stay apart. A joined
+    run's meta is its first part's, with `parts` [first, last] and `part_starts`."""
     head = fileformat.read_header(path)
     caps = load_parts(path)
     if head.get("layout", "timeline") != "timeline" or len(caps) < 2:
@@ -83,7 +84,10 @@ def load_runs(path: str | Path) -> list[Capture]:
     t0 = [p.get("tick0", 0) for p in head["parts"]]
     out, run = [], [0]
     for k in range(1, len(caps)):
-        if t0[k] == t0[k - 1] + caps[k - 1].n_samples:
+        # follows on: no gap, or the previous part's last quantum running past this part's start by less than a
+        # quantum (a sample grid restarted there: format 1's events end on whole quanta)
+        over = t0[k - 1] + caps[k - 1].n_samples - t0[k]
+        if 0 <= over < max([c.step for c in caps[k - 1].channels] + [1]) and (over == 0 or caps[k - 1].events):
             run.append(k)
         else:
             out.extend(_join(caps, run, t0))
@@ -95,20 +99,24 @@ def load_runs(path: str | Path) -> list[Capture]:
 def _join(caps: list[Capture], run: list[int], t0: list[int]) -> list[Capture]:
     parts = [caps[k] for k in run]
     names = [c.name for c in parts[0].channels]
-    if len(run) == 1 or any(p.analog or p.events or [c.name for c in p.channels] != names
-                            or any(c.step != 1 for c in p.channels) for p in parts):
+    steps = [c.step for c in parts[0].channels]
+    # joined when every part holds the same logic lines at the same steps, and a line kept as changes hides none
+    # (it is then a line of its step's edges as well; one that hides some stays part by part)
+    if len(run) == 1 or any(p.analog or any(t.hidden for t in p.events) or [c.name for c in p.channels] != names
+                            or [c.step for c in p.channels] != steps for p in parts):
         return parts
     chans = []
     for j, name in enumerate(names):
         first = parts[0].channels[j]
-        pieces, level = [first.edges], first.initial ^ (len(first.edges) & 1)
+        edges = first.edges
         for k, p in zip(run[1:], parts[1:]):
             c, off = p.channels[j], t0[k] - t0[run[0]]
+            edges = edges[edges < off]                    # what the previous part's last quantum ran past this one
+            level = first.initial ^ (len(edges) & 1)
             if c.initial != level:
-                pieces.append(np.array([off], np.int64))     # the line changed at the parts' boundary
-            pieces.append(c.edges + off)
-            level = c.initial ^ (len(c.edges) & 1)
-        chans.append(Channel(name, first.initial, np.concatenate(pieces).astype(np.int64), 1, first.phase,
+                edges = np.append(edges, off)             # the line changed at the parts' boundary
+            edges = np.concatenate([edges, c.edges + off])
+        chans.append(Channel(name, first.initial, edges.astype(np.int64), first.step, first.phase,
                              dict(first.acquisition)))
     n = t0[run[-1]] - t0[run[0]] + parts[-1].n_samples
     starts = [[k, t0[k] - t0[run[0]]] for k in run]          # where each part begins in the joined ticks
