@@ -112,7 +112,9 @@ def _window(cap: Capture, s0: int, s1: int) -> Capture:
     meta = {**cap.meta, "window": [s0, s1]}
     if meta.get("trigger_tick") is not None:
         meta["trigger_tick"] -= s0
-    return Capture(cap.rate, s1 - s0, chans, meta, an, evs)
+    win = Capture(cap.rate, s1 - s0, chans, meta, an, evs)
+    win.parent = (cap, s0)            # what came before the window (becomes reads the state the line was in)
+    return win
 
 
 def _on_probe_clock(seg, cap: Capture) -> tuple[tuple | None, str]:
@@ -171,7 +173,19 @@ def check_square(cap, x):
     if x.get("jitter_max") is not None and p["period_spread"] > x["jitter_max"]:
         ok = False
         why.append(f"period spread {p['period_spread']:.4f} > {x['jitter_max']}")
-    return ok, {**p, "freq_error": ferr}, "; ".join(why)
+    # every whole period, not only the median: a runt, a missing pulse or a change inside the window shows here
+    rows = _pulse_rows(ch)
+    per = cap.rate / x["freq_hz"]
+    bad = np.abs(rows[:, 2] - per) > x["freq_rel"] * per + ch.step + 1
+    if x.get("duty") is not None:
+        bad |= np.abs(rows[:, 1] - x["duty"] * per) > x["duty_abs"] * per + ch.step + 1
+    out = {**p, "freq_error": ferr, "outliers": int(np.sum(bad))}
+    if np.sum(bad) > x.get("outliers_max", 0):
+        ok = False
+        r = rows[np.argmax(bad)]
+        why.append(f"{int(np.sum(bad))} of {len(rows)} periods out of tolerance (first at {r[0] / cap.rate * 1e3:.3f} ms:"
+                   f" high {r[1] / cap.rate * 1e6:.1f} us, period {r[2] / cap.rate * 1e6:.1f} us)")
+    return ok, out, "; ".join(why)
 
 
 def check_level(cap, x):
@@ -1120,7 +1134,140 @@ def check_voltage(cap, x):
     return True, got, ""
 
 
-LOGIC = {"square", "level", "ends", "starts", "pulses", "i2c", "spi", "uart", "phase", "skew", "dead_time",
+def _pulse_rows(ch) -> np.ndarray:
+    """Every whole pulse of a line: (rise, high, period to the next rise) in ticks; the last rise has no period."""
+    e = ch.edges
+    rises = e[0::2] if ch.initial == 0 else e[1::2]
+    falls = e[1::2] if ch.initial == 0 else e[0::2]
+    if len(rises) < 2:
+        return np.zeros((0, 3), np.int64)
+    j = np.searchsorted(falls, rises[:-1])
+    ok = j < len(falls)
+    r = rises[:-1][ok]
+    return np.stack([r, falls[j[ok]] - r, rises[1:][ok] - r], axis=1)
+
+
+def check_becomes(cap, x):
+    """The line ends the window in the state asked for (a level, or a periodic wave of a period and high time),
+    reached by at most one change from the state it was in when the window began (read from what came before the
+    window when the window was cut from a longer capture): at the change at most `irregular_max` pulses of neither
+    state (a timer cut mid-period), after it every whole period in tolerance, at least `min_periods` of them."""
+    if _ev(cap, x["pin"]) is not None:
+        return None, {}, f"{x['pin']} kept as changes: the states need every edge"
+    ch = _ch(cap, x["pin"])
+    if ch is None:
+        return None, {}, "pin not captured"
+    rate, q, n = cap.rate, ch.step + 1, cap.n_samples
+    parent, s0 = getattr(cap, "parent", (None, 0))
+    pch = _ch(parent, x["pin"]) if parent is not None else None
+    if pch is not None:
+        rows_all = _pulse_rows(pch)
+        rows_all = rows_all - np.array([s0, 0, 0]) if len(rows_all) else rows_all
+        ed_before = pch.edges[pch.edges <= s0] - s0
+    else:
+        rows_all, ed_before = _pulse_rows(ch), np.zeros(0, np.int64)
+    rows = rows_all[(rows_all[:, 0] >= 0) & (rows_all[:, 0] + rows_all[:, 2] <= n)] if len(rows_all) else rows_all
+    e = ch.edges
+    got: dict = {}
+
+    def similar(rs, ref) -> np.ndarray:                  # pulses like ref (2 % of its period, or 2 samples)
+        t = max(2 * q, 0.02 * ref[2])
+        return (np.abs(rs[:, 2] - ref[2]) <= t) & (np.abs(rs[:, 1] - ref[1]) <= t)
+
+    # the state the line was in as the window began: the last pulses before it, or the level it sat at
+    prior = None
+    if pch is not None:
+        pre = rows_all[rows_all[:, 0] < 0][-3:] if len(rows_all) else rows_all
+        running = len(pre) >= 2 and bool(np.all(similar(pre, pre[-1]))) and pre[-1, 0] + 2 * pre[-1, 2] > 0
+        prior = ({"period_s": float(pre[-1, 2]) / rate, "high_s": float(pre[-1, 1]) / rate, "row": pre[-1]}
+                 if running else {"level": _level_at(pch, s0)})
+    if x.get("level") is not None:
+        v = int(x["level"])
+        end = int(ch.initial ^ (len(e) & 1))
+        t = int(e[-1]) if len(e) else 0                  # the change: the last edge
+        got.update(level_after=end, hold_s=(n - t) / rate)
+        if end != v:
+            return False, got, f"ends at {end}, not {v}"
+        if prior is not None and "row" in prior and len(e) and n - t < 2 * prior["row"][2]:
+            return False, got, (f"at {v} for the last {(n - t) / rate * 1e6:.1f} us only: not told from the wave "
+                                f"(period {prior['row'][2] / rate * 1e6:.1f} us) going on")
+        before = rows[rows[:, 0] + rows[:, 2] <= t] if len(rows) else rows
+        changed = bool(len(e)) or (prior is not None and prior.get("level", v) != v)
+        got["change_s"] = t / rate if len(e) else None
+        last_high = int(e[-1] - e[-2]) if v == 0 and len(e) >= 2 and (not len(before) or e[-2] > before[-1, 0]) else None
+    else:
+        per = rate / x["freq_hz"] if x.get("freq_hz") else x["period_s"] * rate
+        high = (x["duty"] * per if x.get("duty") is not None else
+                x["high_s"] * rate if x.get("high_s") is not None else None)
+        ptol = x["freq_rel"] * per + q
+        htol = ((x["duty_abs"] * per if x.get("duty") is not None else (x.get("high_abs_s") or 0) * rate) + q)
+        if not len(rows):
+            return False, {"edges": int(len(e))}, "no whole period"
+        m = np.abs(rows[:, 2] - per) <= ptol
+        if high is not None:
+            m &= np.abs(rows[:, 1] - high) <= htol
+        k = len(m)
+        while k > 0 and m[k - 1]:
+            k -= 1                                       # rows[k:] all match: the state reached
+        tail = rows[k:]
+        got["periods"] = int(len(tail))
+        if len(tail):
+            got.update(freq_hz=rate / float(np.median(tail[:, 2])), high_s=float(np.median(tail[:, 1])) / rate,
+                       duty=float(np.median(tail[:, 1] / tail[:, 2])),
+                       worst_period_rel=float(np.max(np.abs(tail[:, 2] - per)) / per),
+                       worst_high_s=(float(np.max(np.abs(tail[:, 1] - high))) / rate if high is not None else None))
+        if len(tail) < x["min_periods"]:
+            bad = rows[k - 1] if k else None
+            return False, got, (f"{len(tail)} whole periods in the state at the end, want {x['min_periods']}"
+                                + (f" (last other pulse: high {bad[1] / rate * 1e6:.1f} us, period "
+                                   f"{bad[2] / rate * 1e6:.1f} us)" if bad is not None else ""))
+        t = int(tail[0, 0])
+        before = rows[:k]
+        last_high = None
+        if prior is not None:
+            was = "row" in prior and bool(similar(tail[:1], prior["row"])[0])
+            changed = bool(k) or not was
+        else:
+            changed = bool(k) or t > per + ptol             # no context: a long level first means it started here
+        got["change_s"] = t / rate if changed else None
+    # before the change: the prior state, then at most irregular_max pulses of neither
+    if prior is None and len(before):                    # no context: the window's own first run is the prior state
+        lead = int(np.argmin(similar(before, before[0]))) if not np.all(similar(before, before[0])) else len(before)
+        prior = {"period_s": float(before[0, 2]) / rate, "high_s": float(before[0, 1]) / rate, "row": before[0]} \
+            if lead >= 2 else None
+    if prior is not None and "row" in prior and len(before):
+        old = similar(before, prior["row"])
+        lead = len(old) if np.all(old) else int(np.argmin(old))
+        rest = before[lead:]
+    else:
+        rest = before
+    if len(rest) >= 2 and np.sum(similar(rest, rest[0])) >= 2 and len(rest) > x["irregular_max"]:
+        got["before"] = _state_text(prior, rate)
+        return False, got, "more than one change in the window"
+    odd = [{"high_s": float(r[1]) / rate, "period_s": float(r[2]) / rate} for r in rest]
+    if last_high is not None and prior is not None and "row" in prior and not len(rest) \
+            and abs(last_high - prior["row"][1]) > max(2 * q, 0.02 * prior["row"][2]):
+        odd.append({"high_s": last_high / rate, "period_s": None})          # the last pulse, cut by the stop
+    irregular = len(odd)
+    got.update(before=_state_text(prior, rate), irregular=irregular, irregular_pulses=odd)
+    if irregular > x["irregular_max"]:
+        return False, got, f"{irregular} pulses of neither state at the change (at most {x['irregular_max']})"
+    if irregular < x.get("irregular_min", 0):
+        return False, got, f"{irregular} pulses of neither state at the change (at least {x['irregular_min']})"
+    if x.get("within_s") is not None and got.get("change_s") is not None and got["change_s"] > x["within_s"]:
+        return False, got, f"changed {got['change_s'] * 1e3:.3f} ms into the window, want within {x['within_s'] * 1e3:g} ms"
+    return True, got, ""
+
+
+def _state_text(prior, rate) -> str | None:
+    if prior is None:
+        return None
+    if "level" in prior:
+        return f"level {prior['level']}"
+    return f"period {prior['period_s'] * 1e6:.1f} us, high {prior['high_s'] * 1e6:.1f} us"
+
+
+LOGIC = {"becomes", "square", "level", "ends", "starts", "pulses", "i2c", "spi", "uart", "phase", "skew", "dead_time",
          "i2c_timing", "rgb_led", "onewire", "ir", "lin", "i2s", "quadrature", "sd_spi"}   # checks that read logic levels
 
 
@@ -1143,7 +1290,7 @@ def _as_logic(cap: Capture, x: dict) -> tuple[Capture | None, str]:
 
 
 EVENT_CHECKS = {"level", "ends", "starts", "pulses", "only_moving"}   # what a line whose quanta hide changes answers
-CHECKS = {"square": check_square, "level": check_level, "ends": check_ends, "starts": check_starts,
+CHECKS = {"becomes": check_becomes, "square": check_square, "level": check_level, "ends": check_ends, "starts": check_starts,
           "only_moving": check_only_moving, "pulses": check_pulses, "i2c": check_i2c, "spi": check_spi,
           "uart": check_uart, "voltage": check_voltage, "phase": check_phase, "skew": check_skew,
           "dead_time": check_dead_time, "i2c_timing": check_i2c_timing, "rgb_led": check_rgb_led,
@@ -1179,6 +1326,19 @@ def _judge(cap: Capture, x: dict, pins: set[str]):
     hid = [t for t in cap.events if t.name in pins and t.hidden]
     if hid and x["kind"] not in EVENT_CHECKS:
         return None, {}, "; ".join(events.describe(t) for t in hid) + f": {x['kind']} needs every edge"
+    if x.get("trim_s") or x.get("trim_periods"):
+        head, tail = x.get("trim_s") or (0.0, 0.0)
+        if x.get("trim_periods"):
+            per = 1 / x["freq_hz"] if x.get("freq_hz") else x.get("period_s")
+            if not per:
+                return None, {}, f"trim by periods: {x['kind']} names no period (freq_hz / period_s)"
+            head, tail = head + x["trim_periods"][0] * per, tail + x["trim_periods"][1] * per
+        s0, s1 = round(head * cap.rate), cap.n_samples - round(tail * cap.rate)
+        if s1 <= s0:
+            return None, {}, (f"the window is {cap.n_samples / cap.rate * 1e3:.3f} ms: trimming {head * 1e3:g} ms and "
+                              f"{tail * 1e3:g} ms leaves nothing")
+        ok, got, why = CHECKS[x["kind"]](_window(cap, s0, s1), x)
+        return ok, {**got, "trimmed": [s0, s1]}, why          # ticks of the segment's window that were judged
     return CHECKS[x["kind"]](cap, x)
 
 

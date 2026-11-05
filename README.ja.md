@@ -100,7 +100,9 @@ OK  test_pwm/duty=0  level  c0003.wireskein
 
 | 関数 | 検査すること |
 | --- | --- |
-| `square(pin, freq_hz, duty, freq_rel, duty_abs, jitter_max)` | 安定した矩形波: 周波数（相対の許容）、デューティ（絶対）、周期のばらつき |
+| `square(pin, freq_hz, duty, freq_rel, duty_abs, jitter_max, outliers_max)` | 安定した矩形波を周期ごとに: 周波数（相対の許容）、デューティ（絶対）、周期のばらつき |
+| `becomes(pin, level=v)` / `becomes(pin, freq_hz=, duty=, ...)` | 区間の終わりにレベルか波形になっていて、区間の前の状態から 1 度の変化でそこへ移ったこと（変化のところの半端なパルスは `irregular_max` 個まで）。変化の時刻を測る |
+| `trim(検査, head_s, tail_s, head_periods=, tail_periods=)` | どの検査も、区間の両端を除いて判定する |
 | `level(pin, value)` | ピンが動かない |
 | `starts({pin: v})` / `ends({pin: v})` | 最初 / 最後のサンプルでのレベル |
 | `only_moving([pins])` | 取ったほかのピンが動かない |
@@ -265,6 +267,7 @@ wc.attachments("c.wireskein"), wc.notes("c.wireskein")
 
 ```sh
 wireskein info c.wireskein                                  # チャンネルとレート、メタ情報、添付、メモ
+wireskein states c.wireskein --pin PB6                      # 線ごとに、レベル、波形、そのあいだの半端なパルス
 wireskein note c.wireskein "リフローの後に取り直し"
 wireskein attach c.wireskein setup.txt --text "SDA/SCL に 10k のプルアップ"
 wireskein attach c.wireskein scope.png scope.png            # どんなファイルでも

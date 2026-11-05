@@ -51,6 +51,12 @@ def load(path: Path):
     return _load(path)
 
 
+def states_cmd(args) -> None:
+    from . import states
+    doc = states.of_file(args.file, args.pin, args.part, args.tol, args.min_periods)
+    print(json.dumps(doc, indent=1) if args.json else "\n".join(states.text(doc)))
+
+
 def info(args) -> None:
     from . import _fileformat as fileformat
     raw = fileformat.read_header(args.file)
@@ -580,6 +586,13 @@ def main() -> None:
     gp.add_argument("path", type=Path, nargs="?", default=Path("."), help="a WireSkein or .sr file, or a directory (default: .)")
     gp.add_argument("--port", type=int, default=0, help="default: any free port")
     gp.add_argument("--no-browser", action="store_true", help="only print the URL")
+    st = sub.add_parser("states", help="each logic line as its stretches (levels, waves) and the odd pulses between them")
+    st.add_argument("file", type=Path)
+    st.add_argument("--pin", action="append", default=None, help="only this channel (repeatable)")
+    st.add_argument("--part", type=int, default=None, help="only this part (from 0)")
+    st.add_argument("--tol", type=float, default=0.02, help="pulses alike within this share of the period (default 0.02)")
+    st.add_argument("--min-periods", type=int, default=3, help="periods that make a wave (default 3)")
+    st.add_argument("--json", action="store_true", help="the stretches as JSON")
     inf = sub.add_parser("info", help="what a WireSkein file holds: channels, rates, metadata, attachments, notes")
     inf.add_argument("file", type=Path)
     nt = sub.add_parser("note", help="append a note to a WireSkein file (its log is append-only)")
@@ -612,7 +625,7 @@ def main() -> None:
     al.add_argument("--save", action="store_true", help="store it in the file as attach/alignment.json")
     args = ap.parse_args()
     files = {"info": info, "note": note_cmd, "attach": attach_cmd, "convert": convert, "capture": capture_cmd,
-             "gui": gui_cmd, "align": align_cmd, "annotate": annotate_cmd}
+             "gui": gui_cmd, "align": align_cmd, "annotate": annotate_cmd, "states": states_cmd}
     if args.cmd in files:
         try:
             return files[args.cmd](args)

@@ -99,20 +99,22 @@ wireskein verify out/run1 --junit out/run1/report.xml --json out/run1/report.jso
 
 ```python
 from oep_client import acquire
-from wireskein.runlog import square
+from wireskein.runlog import becomes, level, only_moving
 from wireskein.sources.oep import capture_of
 
 def steps(wait):
     rec.use_clock(lambda: hst.clock_best(2), probe=hst.address.place)
-    with rec.section(1, "servo PB6"):
+    with rec.section(1, "servo PB6", expect=[only_moving(["PB6"])]):
+        with rec.section(2, "rest", expect=[level("PB6", 0)]):
+            wait(0.05)
         for us in (544, 1000, 1500, 2000, 2400):
-            with rec.section(2, f"us={us}"):        # 変化: 期待を付けない
+            with rec.section(2, f"us={us}", expect=[becomes("PB6", period_s=0.02, high_s=us * 1e-6, high_abs_s=20e-6)]):
                 rec.command(f"servo 6 {us}")
                 send(f"servo 6 {us}")
-                wait(0.06)                          # 空白: この間、線はどこから動いてもよい
-                rec.reply(read_reply())
-                with rec.section(3, "steady", expect=[square("PB6", 50, us / 20000, duty_abs=0.001)]):
-                    wait(0.2)                       # その条件の定常
+                wait(0.5)                          # 25 周期。応答は短い wait のあいだに探す
+        with rec.section(2, "detach", expect=[becomes("PB6", level=0)]):
+            send("servooff")
+            wait(0.05)
     rec.use_clock(None)
 
 t = rec.armed()
@@ -123,18 +125,65 @@ rec.add(t, capture_of(acquire.capture(hst, req)))
 - **キャプチャ**は、試験が持つセッションでの stream です。`during=steps` を渡すと `steps(wait)` が戻るまで取り続け、`wait(秒)` は試験が待つあいだに stream を受け取ります（oep-client-python 0.0.47 以降）。steps の中でプローブに送るもの（コンソールの命令、治具の操作）は、同じセッションを通ります。
 - **`wait` をこまめに呼びます。** wait と wait のあいだは、プローブの stream のバッファだけがデータを持ちます。steps の中でほかに止まる処理（応答を待つなど）は短くするか、短い wait のあいだに応答を探します。
 - **見出しをプローブの時計に置きます。** `use_clock` は見出しごとにプローブの時計を読むので、区間ごとにキャプチャから切り出せます（[記録の形式](run-format.ja.md) §2.4）。`probe` は、キャプチャの `meta.probe.address` と同じプローブのアドレスです（oep-client-python では `hst.address.place`）。`use_clock` が無いと、キャプチャ全体が arm したときに開いていた区間のものになり、条件を分けられません。
-- **変化と定常を別の区間にします。** 条件の区間は変化（命令と、線がそれに従うまでの時間）を持ち、期待を付けません。その中の `steady` の区間に期待を付けます。空白のあいだ線はどこから動いてもよく、判定するのは steady の区間だけです。
-- **空白**は、命令が届いて効くまでの時間と、出力が切り替わるまでの時間を足したものより長くします。タイマーの出力はふつう周期の終わりで切り替わるので、前後の信号の遅いほうの 2 周期を見込みます。応答が来てから `steady` を開きます。境はプローブの時計の上で正確なので、時計の誤差の見込みは要りません。キャプチャの `start_uncertainty_ns` は照合が数えます。
-- **steady の区間**の長さは、検査に要る長さにします（§3 の表）。
-- **ファイル**は 1 本のキャプチャ `c0001.wireskein` で、見出しがそのマーカーになり、ビューアで波形の上に見えます。`wireskein verify` は、steady の区間ごとに、切り出した範囲（`c0001.wireskein@A:B`）を付けて報告します。
+- **条件ごとに 1 つの区間にし、その命令から次の命令までとします。** 区間は変化とその後を持ち、期待はその両方を言います（§3.2）。変化と行き着く状態を見るなら `becomes`、変化を切り落として定常を見るなら定常の検査に `trim` を付けます。期待の無い区間は残しません。
+- **前後に静かな区間を置きます。** 最初の条件の前と、最後の条件の後（出力を止めた、ピンを離した）の区間が、試験の外での線の状態を持ちます。
+- **ファイル**は 1 本のキャプチャ `c0001.wireskein` で、見出しがそのマーカーになり、ビューアで波形の上に見えます。`wireskein verify` は、区間ごとに、判定した範囲（`c0001.wireskein@A:B`）を付けて報告します。線が何をしたかは `wireskein states` が並べます（§3.3）。
 - **欠損:** `on_loss="stop"`（既定）では、欠損があると `wait` から例外が出て、stream はそこで終わります。取れた分は残り、記録は失敗になります。
 - stream にはプローブからの通知が要ります。購読を断る中継（OEP core §10.3）を通すと stream は取れないので、条件ごとに単発のキャプチャ（§2.2）を取ります。
+
+### 3.2 信号ごとの検査の選び方
+
+条件の区間は、変化から始まります。試験がそこに問うことは、次の 2 つのどちらかです。
+
+- **どう変わったか**: 線が前の状態から求める状態へ 1 度だけ移ったこと、そして変化のところで何が起きたか。`becomes(pin, ...)` は、前の状態を区間の直前のキャプチャから読み、変化を見つけ、その後のすべての周期を判定します。変化のところでは、どちらの状態でもないパルスを `irregular_max` 個まで許します（既定 1: 周期の途中で切れたタイマーの出力。出力を始めるときと止めるときは、多くのマイコンで避けられません）。`irregular_min` で、あることを求めることもできます。区間の始めから変化までの時間（`change_s`。上限は `within_s`）と、その半端なパルスそのもの（`irregular_pulses`）を測ります。
+- **定常だけ**: 変化は問わず、落ち着いた後の値だけを見ます。どの検査も `trim(検査, head_s=..., tail_s=...)` または `trim(検査, head_periods=...)` で、区間の両端を除いて判定します。
+
+| 信号 | 問うこと | 検査 |
+| --- | --- | --- |
+| 設定の変わる連続した波形（PWM のデューティー比、tone の周波数、サーボのパルス幅、クロックの出力） | 新しい値、その全周期、きれいな変化 | 周波数か周期と、デューティー比か high の時間を渡した `becomes`。周期の終わりで切り替わるハードウェア（プリロード付きのタイマー）では `irregular_max=0` |
+| 同じもので、値だけが問題のとき | 落ち着いた後の値 | `trim(square(...), head_periods=...)` |
+| 始まる、止まる出力（PWM の on / off、`tone` / `noTone`、`attach` / `detach`） | 最初と最後のパルス、止めた後のレベル | 止めるときは `becomes(pin, level=...)`、始めるときは静かな区間から `becomes(...)` |
+| レベル（GPIO の書き込み、0 % や 100 % の PWM） | そのレベルが続くこと | 区間の中で変わるなら `becomes(pin, level=v)`、変わらないなら `level(pin, v)` |
+| 決まった数のパルス（トグル、バースト） | 数と周期、その後のレベル | `pulses` と `ends` |
+| やりとりのバス（I2C、SPI、UART、1-Wire、LIN） | 中身と順番、タイミング、バスが静かに戻ること | バスの検査（`i2c`、`spi`、`uart` など）を区間に。区間の境の静かな状態は `starts` / `ends`。切り落とさない（やりとりはひとまとまり） |
+| 2 本の線の関係（ハーフブリッジ、位相、並列の出力） | 関係 | `dead_time`、`phase`、`skew` |
+| アナログのレベル | 平均、範囲、リプル | `voltage`。区間が段差で始まるなら `trim` を付ける |
+| ほかの動いてはいけないもの | 静かなこと | 外側の区間に `only_moving` |
+
+連続した波形とやりとりのバスでは、問いのありかが違います。波形は周期ごとに判定するので、変化は 2 つの状態のあいだの点で、その近くが見どころです。やりとりは始めからバスが静かに戻るまでのひとまとまりで判定するので、区間はそのやりとりとその後の時間（ドライバの最長のタイムアウト）で、切り落としません。
+
+### 3.3 要約、詳細、判定
+
+WireSkein は、キャプチャを読み手に要るものに変えます。サンプルそのものを読まずに済ませるためです。どれだけ出すかは、問いで決めます。
+
+| 欲しいもの | 使うもの | 出てくるもの |
+| --- | --- | --- |
+| 線で何が起きたか、手短に | `wireskein states FILE [--pin P]` | 区切りごと（レベル、または波形: 周波数、high の時間、デューティー比、周期の数）と、そのあいだの半端なパルスを、1 行ずつ |
+| バスが何を運んだか | `wireskein analyze` / `decode` | 復号したやりとり |
+| 試験が通ったか、通らなかったのはどこか | `wireskein verify` | 検査ごとに 1 つの結果と、測った値 |
+| ある範囲のすべての変化 | `wireskein gui`、または Python でファイルを読む（`wireskein.capture`） | すべて |
+
+- まず要約から始め、何かが見えたところだけ詳細へ進みます。`states` が半端なパルスの時刻を言い、ビューアでそこを見ます。
+- 検査は許容を先に受け取り（`freq_rel`、`duty_abs`、`irregular_max` など）、判定にかかわらず測った値を出します。測るだけで判定しない検査は、そう書けます（`uart(baud=None)`）。許容を決めても、失う情報はありません。
+- `states` には自分の許容があります（`--tol`、`--min-periods`）。その中でそろったパルスを 1 つの波形とします。許容を狭くすると、区切りが増えます。
+
+### 3.4 秒か、周期の数か
+
+| 量 | 単位 | 理由 |
+| --- | --- | --- |
+| 区間が波形を持つ長さ | 周期の数（周波数とデューティー比なら 20 以上。`becomes` の `min_periods` 以上） | 検査は周期を判定する。同じ数なら、どの周波数でも同じ確かさになる |
+| 波形の区間から切り落とす長さ | 周期の数（`head_periods`） | 変化は、周波数によらず、信号の 1〜2 周期続く |
+| 応答やバスが静かになるのを待つ長さ | 秒 | ファームウェアとドライバ（タイムアウト）で決まり、信号では決まらない |
+| 変化がいつまでに起きるべきか | 秒（`within_s`） | DUT が命令に応じるまでの時間 |
+| 試験の前後の静かな区間 | 秒。まわりの波形のいちばん遅い周期より長く | 1 周期より長く続いたときだけ、波形の Low の半分とレベルを見分けられる |
 
 ## 4. 検査
 
 | 検査 | 内容 |
 | --- | --- |
-| `square(pin, freq_hz, duty, freq_rel, duty_abs, jitter_max)` | 規則的な方形波。周波数は相対、デューティー比は絶対の許容誤差。`jitter_max` は周期のばらつきの上限（相対）。サンプルレートによる分解能は自動で足す |
+| `square(pin, freq_hz, duty, freq_rel, duty_abs, jitter_max, outliers_max)` | 窓全体で規則的な方形波。すべての周期が `freq_rel`（相対）に、その high の時間が `duty_abs`（周期に対する絶対）に入ること。外れてよい周期は `outliers_max` 個まで（既定 0）。`jitter_max` は周期のばらつきの上限（相対）。サンプルレートによる分解能は自動で足す |
+| `becomes(pin, level=v)` / `becomes(pin, freq_hz= か period_s=, duty= か high_s=, irregular_max, irregular_min, min_periods, within_s)` | 線が窓の終わりにある状態（レベル、または波形）にあり、窓の前の状態から 1 度だけの変化でそこへ移ったこと（§3.2）。`change_s`、`irregular_pulses` を測る |
+| `trim(検査, head_s, tail_s, head_periods=, tail_periods=)` | どの検査も、窓の両端を除いて判定する（§3.2） |
 | `level(pin, value)` | 窓の間ずっと一定 |
 | `starts({pin: v})` / `ends({pin: v})` | 窓の最初・最後のレベル |
 | `only_moving([pins])` | ほかのキャプチャ対象のピンが動かない。ロジックのチャンネルだけを見る |

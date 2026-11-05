@@ -99,20 +99,22 @@ A test with several parameters can keep all its conditions in one file. One capt
 
 ```python
 from oep_client import acquire
-from wireskein.runlog import square
+from wireskein.runlog import becomes, level, only_moving
 from wireskein.sources.oep import capture_of
 
 def steps(wait):
     rec.use_clock(lambda: hst.clock_best(2), probe=hst.address.place)
-    with rec.section(1, "servo PB6"):
+    with rec.section(1, "servo PB6", expect=[only_moving(["PB6"])]):
+        with rec.section(2, "rest", expect=[level("PB6", 0)]):
+            wait(0.05)
         for us in (544, 1000, 1500, 2000, 2400):
-            with rec.section(2, f"us={us}"):        # the change: no expectation
+            with rec.section(2, f"us={us}", expect=[becomes("PB6", period_s=0.02, high_s=us * 1e-6, high_abs_s=20e-6)]):
                 rec.command(f"servo 6 {us}")
                 send(f"servo 6 {us}")
-                wait(0.06)                          # the gap: the line may move anywhere here
-                rec.reply(read_reply())
-                with rec.section(3, "steady", expect=[square("PB6", 50, us / 20000, duty_abs=0.001)]):
-                    wait(0.2)                       # the condition's steady state
+                wait(0.5)                          # 25 periods; replies are looked for between short waits
+        with rec.section(2, "detach", expect=[becomes("PB6", level=0)]):
+            send("servooff")
+            wait(0.05)
     rec.use_clock(None)
 
 t = rec.armed()
@@ -123,18 +125,65 @@ rec.add(t, capture_of(acquire.capture(hst, req)))
 - **The capture** is a stream on the session the test holds. With `during=steps` it runs until `steps(wait)` returns, and `wait(seconds)` reads the stream while the test waits (oep-client-python 0.0.47 or newer). What the steps send to the probe (console commands, fixture operations) goes over the same session.
 - **Call `wait` often.** Between waits, only the probe's stream buffer holds the data. Anything else that blocks inside the steps, such as waiting for a reply, is kept short, or the reply is looked for between short waits.
 - **The headings go on the probe's clock.** `use_clock` reads the probe's clock at every heading, so each segment is cut out of the capture ([Run format](run-format.md) §2.4). `probe` is the probe's address as the capture's `meta.probe.address` gives it (in oep-client-python, `hst.address.place`). Without `use_clock`, the whole capture belongs to the segment that was open when it was armed, and the conditions are not told apart.
-- **The change and the steady state are separate segments.** The condition's segment holds the change: the command and the time the line needs to follow it. It has no expectation. The `steady` segment inside it carries the expectation. The line may move anywhere in the gap; only the steady segment is judged.
-- **The gap** is longer than the command takes to arrive and take effect, plus the time the output needs to switch. A timer output usually switches at the end of a period, so allow 2 periods of the slower of the old and new signals. Open `steady` after the reply has come. The bounds are exact on the probe's clock, so no allowance for clock error is needed; the capture's `start_uncertainty_ns` is counted by verification.
-- **The steady segment** is as long as the check needs (§3's table).
-- **The file** is one capture, `c0001.wireskein`, with the headings as its markers, which the viewer shows on the waveform. `wireskein verify` reports each steady segment with the stretch it cut out (`c0001.wireskein@A:B`).
+- **One segment per condition, from its command to the next.** The segment holds the change and what follows it, and its expectation says both (§3.2): `becomes` for the change and the state it reaches, or a steady check with the change trimmed off. No segment is left without an expectation.
+- **Rest before and after.** A segment before the first condition and one after the last (the output stopped, the pin released) hold the line's state outside the test.
+- **The file** is one capture, `c0001.wireskein`, with the headings as its markers, which the viewer shows on the waveform. `wireskein verify` reports each segment with the stretch it judged (`c0001.wireskein@A:B`), and `wireskein states` lists what the line did (§3.3).
 - **Losses:** with `on_loss="stop"` (the default), a loss raises out of `wait` and the stream ends there. What was taken is kept, and the run fails.
 - A stream needs the probe's pushes. Through a relay that refuses subscriptions (OEP core §10.3), a stream cannot run; take one single-shot capture per condition (§2.2) instead.
+
+### 3.2 Which check for which signal
+
+A condition's segment starts with a change. A test asks one of two things of it:
+
+- **How it changed**: the line went from the state before to the state asked for once, and what happened at the change. `becomes(pin, ...)` reads the state before from the capture just before the segment, finds the change, and judges every whole period after it. At the change it allows `irregular_max` pulses of neither state (default 1: a timer cut mid-period, which most microcontrollers cannot avoid when an output starts or stops) and can ask for some with `irregular_min`. It measures the change's time from the segment's start (`change_s`, limited with `within_s`) and the odd pulses themselves (`irregular_pulses`).
+- **The steady state only**: the change is not the question, only the value once settled. Any check takes `trim(check, head_s=..., tail_s=...)` or `trim(check, head_periods=...)` and judges the segment without its ends.
+
+| Signal | What to ask | Checks |
+| --- | --- | --- |
+| A continuous wave whose setting changes (PWM duty, tone frequency, servo pulse width, clock output) | The new value, every period of it, and a clean change | `becomes` with the frequency or period and the duty or high time. `irregular_max=0` where the hardware changes at a period's end (a timer with preload) |
+| The same, when only the value matters | The value once settled | `trim(square(...), head_periods=...)` |
+| An output that starts or stops (PWM on / off, `tone` / `noTone`, `attach` / `detach`) | The first and last pulses, the level after | `becomes(pin, level=...)` for the stop; `becomes(...)` from a rest for the start |
+| A level (GPIO write, PWM at 0 or 100 %) | The level, held | `becomes(pin, level=v)` when it changes in the segment, `level(pin, v)` when it does not |
+| A fixed number of pulses (toggles, a burst) | The count and the period, the level after | `pulses` and `ends` |
+| A transaction bus (I2C, SPI, UART, 1-Wire, LIN) | The content in order, the timing, the bus left idle | The bus's check (`i2c`, `spi`, `uart`, ...) over the segment, with `starts` / `ends` for the idle state at its bounds; no trimming (a transaction is a whole) |
+| Two lines together (half bridge, phase, parallel outputs) | Their relation | `dead_time`, `phase`, `skew` |
+| An analog level | Mean, range, ripple | `voltage`, with `trim` when the segment starts with a step |
+| Anything else that must not move | Silence | `only_moving` on the outer segment |
+
+A continuous wave and a transaction bus differ in where the question lies. A wave is judged period by period, so a change is a point between two states and its neighbourhood is the interesting part. A transaction is judged as a whole, from its start to the bus going idle, so its segment is the transaction and the time after it (the longest driver timeout), not trimmed.
+
+### 3.3 A summary, the details, or a verdict
+
+WireSkein turns a capture into what a reader needs, so the samples themselves do not have to be read. How much comes out depends on the question.
+
+| Want | Use | What comes out |
+| --- | --- | --- |
+| What happened on a line, briefly | `wireskein states FILE [--pin P]` | Each stretch (a level, or a wave: frequency, high time, duty, periods) and the odd pulses between them, one line each |
+| What a bus carried | `wireskein analyze` / `decode` | The decoded transactions |
+| Whether the test passed, and where not | `wireskein verify` | One result per check, with the values measured |
+| Every edge in a stretch | `wireskein gui`, or the file read in Python (`wireskein.capture`) | Everything |
+
+- Start from the summary and go to the details only where it shows something: `states` says at which time an odd pulse sits, and the viewer shows that place.
+- The checks take tolerances up front (`freq_rel`, `duty_abs`, `irregular_max`, ...) and say what was measured either way. A check meant only to measure, with no tolerance to judge, is written that way (`uart(baud=None)`), so nothing is lost by setting tolerances.
+- `states` takes its own tolerance (`--tol`, `--min-periods`): pulses alike within it are one wave. A tighter tolerance shows more stretches.
+
+### 3.4 Seconds or periods
+
+| Quantity | Unit | Why |
+| --- | --- | --- |
+| How long a segment holds a wave | Periods (20 or more for a frequency and a duty; `min_periods` of `becomes` at least) | The check judges periods; the same count gives the same confidence at any frequency |
+| What to trim off a wave's segment | Periods (`head_periods`) | The change lasts a period or two of the signal, whatever its frequency |
+| How long to wait for a reply or a bus to go idle | Seconds | Set by the firmware and the driver (a timeout), not by the signal |
+| When a change must have happened | Seconds (`within_s`) | It is the time the DUT takes to act on a command |
+| Rest before and after a test | Seconds, longer than the slowest period of the waves around it | A level is told from a wave's low half only when it lasts longer than a period |
 
 ## 4. Checks
 
 | Check | Description |
 | --- | --- |
-| `square(pin, freq_hz, duty, freq_rel, duty_abs, jitter_max)` | A regular square wave. Tolerance is relative for frequency and absolute for duty cycle. `jitter_max` is the upper limit of period variation (relative). The resolution from the sample rate is added automatically |
+| `square(pin, freq_hz, duty, freq_rel, duty_abs, jitter_max, outliers_max)` | A regular square wave through the whole window: every whole period within `freq_rel` (relative) and its high time within `duty_abs` (absolute, of the period), at most `outliers_max` periods off (default 0). `jitter_max` is the upper limit of period variation (relative). The resolution from the sample rate is added automatically |
+| `becomes(pin, level=v)` / `becomes(pin, freq_hz=or period_s=, duty=or high_s=, irregular_max, irregular_min, min_periods, within_s)` | The line ends the window in a state (a level, or a wave), reached by at most one change from the state before the window (§3.2). Measures `change_s`, `irregular_pulses` |
+| `trim(check, head_s, tail_s, head_periods=, tail_periods=)` | Any check, judged without the ends of its window (§3.2) |
 | `level(pin, value)` | Constant throughout the window |
 | `starts({pin: v})` / `ends({pin: v})` | Level at the first / last sample of the window |
 | `only_moving([pins])` | No other captured pin moves. Looks only at logic channels |

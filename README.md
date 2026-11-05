@@ -100,7 +100,9 @@ Headings split the run into a tree of segments. `#` is a test, `##` is a step, a
 
 | Helper | Checks |
 | --- | --- |
-| `square(pin, freq_hz, duty, freq_rel, duty_abs, jitter_max)` | A steady square wave: frequency (relative tolerance), duty (absolute), period spread |
+| `square(pin, freq_hz, duty, freq_rel, duty_abs, jitter_max, outliers_max)` | A steady square wave, every period: frequency (relative tolerance), duty (absolute), period spread |
+| `becomes(pin, level=v)` / `becomes(pin, freq_hz=, duty=, ...)` | The pin ends the segment in a level or a wave, reached by one change from the state before it (at most `irregular_max` odd pulses at the change); the change's time is measured |
+| `trim(check, head_s, tail_s, head_periods=, tail_periods=)` | Any check without the ends of its segment |
 | `level(pin, value)` | The pin does not move |
 | `starts({pin: v})` / `ends({pin: v})` | The level at the first / last sample |
 | `only_moving([pins])` | No other captured pin moves |
@@ -236,6 +238,7 @@ wc.attachments("c.wireskein"), wc.notes("c.wireskein")
 
 ```sh
 wireskein info c.wireskein                                  # channels and rates, metadata, attachments, notes
+wireskein states c.wireskein --pin PB6                      # each line as levels, waves and the odd pulses between
 wireskein note c.wireskein "re-captured after reflow"
 wireskein attach c.wireskein setup.txt --text "10k pull-ups on SDA/SCL"
 wireskein attach c.wireskein scope.png scope.png            # any file

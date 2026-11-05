@@ -47,8 +47,8 @@ from . import _fileformat as fileformat
 
 FORMAT = "wireskein-run/1"          # docs/run-format.ja.md
 
-__all__ = ["FORMAT", "Recorder", "dead_time", "ends", "i2c", "i2c_timing", "i2s", "ir", "level", "lin", "only_moving",
-           "onewire", "phase", "pulses", "quadrature", "rgb_led", "sd_spi", "skew", "spi", "square", "starts", "uart",
+__all__ = ["FORMAT", "Recorder", "becomes", "dead_time", "ends", "i2c", "i2c_timing", "i2s", "ir", "level", "lin", "only_moving",
+           "onewire", "phase", "pulses", "quadrature", "rgb_led", "sd_spi", "skew", "spi", "square", "starts", "trim", "uart",
            "voltage"]
 
 
@@ -332,11 +332,40 @@ def _t(x: dict, threshold) -> dict:
 
 
 def square(pin: str, freq_hz: float, duty: float | None = None, freq_rel: float = 0.02, duty_abs: float = 0.01,
-           jitter_max: float | None = None, threshold=None) -> dict:
-    """A steady square wave (PWM, tone): frequency within freq_rel (relative) of freq_hz, duty within duty_abs
-    (absolute), the standard deviation of the periods at most jitter_max of their median (a ratio)."""
+           jitter_max: float | None = None, outliers_max: int = 0, threshold=None) -> dict:
+    """A steady square wave (PWM, tone) through the whole window: every whole period within freq_rel (relative) of
+    1 / freq_hz and its high time within duty_abs (absolute, of the period) of duty, at most outliers_max periods
+    off; the standard deviation of the periods at most jitter_max of their median (a ratio)."""
     return _t({"kind": "square", "pin": pin, "freq_hz": freq_hz, "duty": duty, "freq_rel": freq_rel,
-               "duty_abs": duty_abs, "jitter_max": jitter_max}, threshold)
+               "duty_abs": duty_abs, "jitter_max": jitter_max, "outliers_max": outliers_max}, threshold)
+
+
+def becomes(pin: str, level: int | None = None, *, freq_hz: float | None = None, period_s: float | None = None,
+            duty: float | None = None, high_s: float | None = None, freq_rel: float = 0.02, duty_abs: float = 0.01,
+            high_abs_s: float | None = None, irregular_max: int = 1, irregular_min: int = 0, min_periods: int = 3,
+            within_s: float | None = None, threshold=None) -> dict:
+    """The line ends the segment in a state - a level, or a periodic wave (freq_hz or period_s, with duty or high_s)
+    - reached by at most one change: before it the state the segment began with, at it at most irregular_max pulses
+    of neither (a timer cut mid-period), after it every whole period within freq_rel and duty_abs / high_abs_s, at
+    least min_periods of them. The pulses of neither are measured (irregular_pulses: each one's high and period);
+    irregular_min asks for some (a change that must cut a period). The change's time from the segment's start is
+    measured (change_s); within_s bounds it. The state before is read from the capture just before the segment."""
+    if (level is None) == (freq_hz is None and period_s is None):
+        raise ValueError("becomes: a level, or freq_hz / period_s")
+    return _t({"kind": "becomes", "pin": pin, "level": level, "freq_hz": freq_hz, "period_s": period_s, "duty": duty,
+               "high_s": high_s, "freq_rel": freq_rel, "duty_abs": duty_abs, "high_abs_s": high_abs_s,
+               "irregular_max": irregular_max, "irregular_min": irregular_min, "min_periods": min_periods,
+               "within_s": within_s}, threshold)
+
+
+def trim(check: dict, head_s: float = 0.0, tail_s: float = 0.0, *, head_periods: float = 0.0,
+         tail_periods: float = 0.0) -> dict:
+    """Any check judged on its segment without its first and last stretch (the change at the start of a segment, a
+    stop at its end): in seconds, or in periods of the check's own freq_hz / period_s (both add up)."""
+    out = {**check, "trim_s": [float(head_s), float(tail_s)]}
+    if head_periods or tail_periods:
+        out["trim_periods"] = [float(head_periods), float(tail_periods)]
+    return out
 
 
 def level(pin: str, value: int, threshold=None) -> dict:

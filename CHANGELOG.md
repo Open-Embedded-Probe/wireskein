@@ -1,6 +1,12 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) `becomes(pin, ...)`: the pin ends the segment in a level or a periodic wave, reached by at most one change from the state it was in just before the segment (read from the capture before it). At the change at most `irregular_max` pulses of neither state (default 1; `irregular_min` asks for some); after it every whole period in tolerance. Measured: `change_s` (from the segment's start; `within_s` limits it), `irregular_pulses`, the state before. `trim(check, head_s, tail_s, head_periods=, tail_periods=)` judges any check without the ends of its segment.
+- (JA) `becomes(pin, ...)`: 区間の終わりにレベルか周期的な波形になっていて、区間の直前の状態（その前のキャプチャから読む）から 1 度だけの変化でそこへ移ったこと。変化のところで、どちらの状態でもないパルスは `irregular_max` 個まで（既定 1。`irregular_min` で、あることを求められる）。変化の後は、すべての周期が許容に入ること。測るもの: `change_s`（区間の始めから。`within_s` で上限）、`irregular_pulses`、前の状態。`trim(検査, head_s, tail_s, head_periods=, tail_periods=)` は、どの検査も区間の両端を除いて判定する。
+- (EN) **Breaking:** `square` judges every whole period, not only their median: a runt, a missing pulse or a change inside the window fails it (`outliers_max` allows some; measured `outliers`).
+- (JA) **互換のない変更:** `square` は、中央値だけでなく、すべての周期を判定する。短いパルス、抜けたパルス、窓の中の変化は失敗になる（`outliers_max` で許せる。測った `outliers` を出す）。
+- (EN) `wireskein states FILE [--pin P] [--part K] [--tol] [--min-periods] [--json]` (and `wireskein.states`): each logic line as its stretches - levels, and waves with their frequency, high time, duty and number of periods - and the odd pulses between them; a run of pulses that is no wave is one stretch of activity.
+- (JA) `wireskein states FILE [--pin P] [--part K] [--tol] [--min-periods] [--json]`（と `wireskein.states`）: ロジックの線ごとに、区切り（レベル、または周波数、high の時間、デューティー比、周期の数を持つ波形）と、そのあいだの半端なパルスを並べる。波形にならないパルスの続きは、動きのある区間 1 つにまとめる。
 
 ## 0.0.18
 - (EN) `Recorder.use_clock(clock, probe=...)` (and `clock=` / `probe=` of `section()` / `heading()`) puts the host's headings on the probe's clock (OEP core §7.7), so a section the host opens and closes is cut out of one long capture like the probe's own lines (run-format §2.4). A clock that cannot be read fails the run (`probe_log`).
