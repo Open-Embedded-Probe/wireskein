@@ -50,7 +50,7 @@ What it shows in `wireskein analyze`, under the bus's `result`:
               "checks_passed": 4, "checks_failed": 0}
 ```
 
-Its tests (`tests/test_protocols.py`) make the signals with WireSkein's own generator, so the truth does not come from a device under test. On hardware, the truth is a signal a probe sends with an established library, not the output of the firmware being tested: `examples/protocols/demo_link_p4.wireskein` is an OEP probe (an ESP32-P4) sending the frames with its UART driver (115200 8N1) and its SPI controller (mode 0, 250 kHz, a frame a CS window) and capturing those pins, with what it sent in `demo_link_p4.truth.json`. Without demo_link the analysis reads that UART as `likely`; with it, `confirmed`, its three frames and their CRCs.
+Its tests (`tests/test_protocols.py`) make the signals with WireSkein's own generator, so the truth does not come from a device under test. On hardware, the truth is a signal a probe sends with an established library, not the output of the firmware being tested: `examples/protocols/demo_link_p4.wireskein` is an OEP probe (an ESP32-P4) sending the frames with ESP-IDF's UART driver (115200 8N1) and capturing that pin, with what it sent in `demo_link_p4.truth.json`. Without demo_link the analysis reads that UART as `likely`; with it, `confirmed`, its three frames and their CRCs. The capture also holds the frames on SPI, from the probe's own pin-driving SPI controller; that is not an established library, so it is no truth.
 
 ## 4. Checking it in a test
 

@@ -212,19 +212,16 @@ def test_device_packs_and_marker_dialects_from_a_definitions_directory(tmp_path)
 
 
 def test_the_example_on_hardware_sent_by_a_probe(demo_link):
-    # an OEP probe (ESP32-P4) sent the frames with its own UART driver and SPI controller, and captured its pins:
-    # the truth is what it sent (demo_link_p4.truth.json), not a device under test
+    # an OEP probe (ESP32-P4) sent the frames with ESP-IDF's UART driver and captured its own pin: the truth is
+    # what it sent (demo_link_p4.truth.json), not a device under test. The same capture's SPI comes from the probe's
+    # own pin-driving controller, not an established library, so it is no truth and is not checked here
     d = Path(__file__).parents[1] / "examples/protocols"
     truth = json.loads((d / "demo_link_p4.truth.json").read_text())
+    assert truth["uart"]["interface"].startswith("oep.fixture.uart (ESP-IDF UART driver)")
     doc = analyze_file(d / "demo_link_p4.wireskein")
-    by = {c["protocol"]: c for c in claims(doc)}
-    sent = bytes.fromhex(truth["uart"]["bytes"])
-    want, _, _ = demo.frames_in(sent)
-    for bus in ("uart", "spi"):
-        got = by[bus]["result"]["demo_link"]
-        assert by[bus]["verdict"] == "confirmed" and got["checks_failed"] == 0, (bus, got)
-        assert [(m["seq"], m["cmd"], m["payload"]) for m in got["messages"]] == [
-            (m["seq"], m["cmd"], m["payload"]) for m in want], (bus, got)
-    assert [bytes.fromhex(w) for w in truth["spi"]["cs_windows"]] == [demo.frame(1, 0x10, b"\x01\x02"),
-                                                                      demo.frame(2, 0x11),
-                                                                      demo.frame(3, 0x12, bytes(range(8)))]
+    (c,) = [c for c in claims(doc) if c["protocol"] == "uart"]
+    want, _, _ = demo.frames_in(bytes.fromhex(truth["uart"]["bytes"]))
+    got = c["result"]["demo_link"]
+    assert c["verdict"] == "confirmed" and got["checks_failed"] == 0, got
+    assert [(m["seq"], m["cmd"], m["payload"]) for m in got["messages"]] == [
+        (m["seq"], m["cmd"], m["payload"]) for m in want]

@@ -50,7 +50,7 @@ demo_link = "demo_link:PROTOCOL"
               "checks_passed": 4, "checks_failed": 0}
 ```
 
-その試験（`tests/test_protocols.py`）は、WireSkein の生成器で信号を作ります。正解を、試験される機器から取らないためです。実機では、プローブが既存のライブラリで出した信号を正解にします。試験されるファームウェアの出力ではありません: `examples/protocols/demo_link_p4.wireskein` は、OEP のプローブ（ESP32-P4）が UART のドライバ（115200 8N1）と SPI の controller（モード 0、250 kHz、CS の窓ごとに 1 フレーム）でフレームを出し、そのピンを取り込んだもので、送ったものは `demo_link_p4.truth.json` にあります。demo_link が無いと、分析はその UART を `likely` と読み、あると `confirmed` で、3 つのフレームとその CRC を読みます。
+その試験（`tests/test_protocols.py`）は、WireSkein の生成器で信号を作ります。正解を、試験される機器から取らないためです。実機では、プローブが既存のライブラリで出した信号を正解にします。試験されるファームウェアの出力ではありません: `examples/protocols/demo_link_p4.wireskein` は、OEP のプローブ（ESP32-P4）が ESP-IDF の UART のドライバ（115200 8N1）でフレームを出し、そのピンを取り込んだもので、送ったものは `demo_link_p4.truth.json` にあります。demo_link が無いと、分析はその UART を `likely` と読み、あると `confirmed` で、3 つのフレームとその CRC を読みます。同じキャプチャには SPI のフレームもありますが、プローブ自身がピンを動かす SPI の controller で出したもので、既存のライブラリではないので、正解にはしません。
 
 ## 4. 試験で確かめる
 
