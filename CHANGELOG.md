@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 0.0.19
 - (EN) `becomes(pin, ...)`: the pin ends the segment in a level or a periodic wave, reached by at most one change from the state it was in just before the segment (read from the capture before it). At the change at most `irregular_max` pulses of neither state (default 1; `irregular_min` asks for some); after it every whole period in tolerance. Measured: `change_s` (from the segment's start; `within_s` limits it) and `change_tick` (in the capture part), `irregular_pulses` (each one's high and period), `before` (the level, or the period and high time) and after it `period_s`, `high_s`, `periods`; a wave that stopped between its pulses changes where its next pulse did not come (`missed`). `trim(check, head_s, tail_s, head_periods=, tail_periods=)` judges any check without the ends of its segment.
 - (JA) `becomes(pin, ...)`: 区間の終わりにレベルか周期的な波形になっていて、区間の直前の状態（その前のキャプチャから読む）から 1 度だけの変化でそこへ移ったこと。変化のところで、どちらの状態でもないパルスは `irregular_max` 個まで（既定 1。`irregular_min` で、あることを求められる）。変化の後は、すべての周期が許容に入ること。測るもの: `change_s`（区間の始めから。`within_s` で上限）と `change_tick`（キャプチャの区間の中の tick）、`irregular_pulses`（それぞれの high と周期）、`before`（レベル、または周期と high の時間）、変化の後の `period_s`、`high_s`、`periods`。パルスのあいだで止まった波形は、次のパルスが来なかった所を変化とする（`missed`）。`trim(検査, head_s, tail_s, head_periods=, tail_periods=)` は、どの検査も区間の両端を除いて判定する。
 - (EN) **Breaking:** `square` judges every whole period, not only their median: a runt, a missing pulse or a change inside the window fails it (`outliers_max` allows some; measured `outliers`).
