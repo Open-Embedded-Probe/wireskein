@@ -111,7 +111,20 @@ def _join(caps: list[Capture], run: list[int], t0: list[int]) -> list[Capture]:
         chans.append(Channel(name, first.initial, np.concatenate(pieces).astype(np.int64), 1, first.phase,
                              dict(first.acquisition)))
     n = t0[run[-1]] - t0[run[0]] + parts[-1].n_samples
-    return [Capture(parts[0].rate, n, chans, {**parts[0].meta, "parts": [run[0], run[-1]]})]
+    starts = [[k, t0[k] - t0[run[0]]] for k in run]          # where each part begins in the joined ticks
+    return [Capture(parts[0].rate, n, chans, {**parts[0].meta, "parts": [run[0], run[-1]], "part_starts": starts})]
+
+
+def locate(meta: dict, tick: int) -> tuple[int, int]:
+    """A tick of a capture that load_runs may have joined, as (the file's part, the tick in that part)."""
+    starts = meta.get("part_starts")
+    if not starts:
+        return int(meta.get("part", 0)), int(tick)
+    k, off = starts[0]
+    for kk, o in starts:
+        if tick >= o:
+            k, off = kk, o
+    return int(k), int(tick - off)
 
 
 def to_channel(ch: Channel, n_ticks: int) -> fileformat.Channel:

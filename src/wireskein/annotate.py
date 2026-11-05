@@ -125,15 +125,36 @@ def build_file(path: str | Path, hints: dict | None = None, prepare=None, part: 
     from . import _fileformat as fileformat
     from .decode import load
     prepare = prepare or (lambda cap: cap)
+    from ._engine import fileio
     n = len(fileformat.read_header(path)["parts"]) if fileformat.sniff(path) == "wireskein" else 1
     if n == 1:
         return build(prepare(load(path)), hints)
+    if part is not None and not 0 <= part < n:
+        raise ValueError(f"part {part}: the file has {n} (0 .. {n - 1})")
     rows = []
-    for k in ([part] if part is not None else range(n)):
-        if not 0 <= k < n:
-            raise ValueError(f"part {k}: the file has {n} (0 .. {n - 1})")
-        rows += [{**r, "part": k} for r in build(prepare(load(path, k)), hints)["rows"]]
+    for cap in fileio.load_runs(path):        # parts that follow on without a gap decoded as one stretch
+        span = cap.meta.get("parts") or [cap.meta.get("part", 0)] * 2
+        if part is not None and not span[0] <= part <= span[1]:
+            continue
+        for r in build(prepare(cap), hints)["rows"]:
+            rows += _per_part(r, cap.meta, part)
     return {"format": FORMAT, "source": f"wireskein {__version__} analyze", "rows": rows}
+
+
+def _per_part(row: dict, meta: dict, only: int | None) -> list[dict]:
+    """A row of a joined stretch as rows of the file's parts (§5.3: a row's ticks are its part's), each item in the
+    part its start is in."""
+    from ._engine.fileio import locate
+    by: dict[int, list] = {}
+    for it in row["items"]:
+        k, s = locate(meta, it["s"])
+        x = {**it, "s": s}
+        if "e" in it:
+            x["e"] = s + (it["e"] - it["s"])
+        by.setdefault(k, []).append(x)
+    if not by:
+        by = {locate(meta, 0)[0]: []}
+    return [{**row, "items": items, "part": k} for k, items in sorted(by.items()) if only is None or k == only]
 
 
 def save(path: str | Path, doc: dict) -> None:

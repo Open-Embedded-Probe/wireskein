@@ -1481,10 +1481,15 @@ NOTICES = {
 def _notices(ok, why: str, got: dict, x: dict, cap) -> tuple:
     """The notices a check found (window ticks in got["notices"]) at their ticks in the capture part, and the
     verdict with the expectation's limits on them: (ok, why, notices)."""
+    from ._engine.fileio import locate
     found = got.pop("notices", [])
     base = (cap.meta.get("window") or [0])[0]
-    part = (cap.meta.get("parts") or [cap.meta.get("part", 0)])[0]
-    out = [{**n, "tick": int(n["tick"]) + base, "part": part} for n in found]
+    out = []
+    for n in found:
+        part, tick = locate(cap.meta, int(n["tick"]) + base)     # the file's part, joined parts told apart
+        out.append({**n, "tick": tick, "part": part})
+    if got.get("change_tick") is not None:
+        got["change_part"], got["change_tick"] = locate(cap.meta, got["change_tick"])
     limits = x.get("notices") or {}
     known = NOTICES.get(x["kind"], {})
     bad = sorted(set(limits) - set(known))
@@ -1643,7 +1648,7 @@ def _mark(run_dir: Path, rep: dict) -> None:
                                           "by": "verify"})
         got = r["measured"].get("outer", r["measured"])
         if r["check"] == "becomes" and got.get("change_tick") is not None:
-            part = int(r["capture"].split("#part")[1].split("-")[0].split("@")[0]) if "#part" in r["capture"] else 0
+            part = got.get("change_part", 0)
             per.setdefault(f, []).append({"t": got["change_tick"], "part": part, "label": f"change: {r['path']}",
                                           "by": "verify"})
     for f in {c["file"] for c in json.loads((run_dir / "run.json").read_text())["captures"]}:

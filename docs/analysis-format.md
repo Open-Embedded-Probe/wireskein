@@ -51,13 +51,14 @@ the lines fit, whether analyze would have claimed it, and what was not read or n
 | `capture.tick_hz` | Ticks a second, as numerator and denominator |
 | `capture.complete`, `lost` | As in the capture (wireskein-format §3.4). A capture that lost data is a failure: the results of the parts taken are kept for reference |
 | `capture.layout`, `parts` | How the parts are laid out, and how many |
-| `parts[]` | One entry a part. Analysis never crosses parts |
+| `parts[]` | One entry a part, or a run of parts that follow on without a gap read as one (wireskein-format §3.4). Analysis never crosses a gap |
 
 ### 2.1 A part
 
 | Key | Meaning |
 | --- | --- |
-| `part` | Its number, from 0 |
+| `part` | Its number, from 0 (of a run: its first part's) |
+| `parts` | For a run of parts joined: its first and last part's numbers. Its ticks then run on from the first part's tick 0 across the others |
 | `ticks` | Its length in ticks. Every tick below counts from this part's tick 0 |
 | `tick0` | Where it starts after the first part's tick 0 (in a timeline) |
 | `start_ns` | Its tick 0 on the probe's clock, when the capture gives it. A tick `s` is at `start_ns + s / tick_hz` seconds × 1e9 |

@@ -263,10 +263,21 @@ def _capture_of(path: Path, raw: dict) -> dict:
             **({"lost": raw["lost"]} if raw.get("lost") else {}), "layout": raw["layout"], "parts": len(raw["parts"])}
 
 
-def _part_head(head: dict, k: int, ticks: int) -> dict:
+def _part_head(head: dict, k: int, ticks: int, span: list | None = None) -> dict:
     meta = head.get("meta", {})
-    return {"part": k, "ticks": ticks, **({"tick0": head["tick0"]} if "tick0" in head else {}),
+    return {"part": k, "ticks": ticks, **({"parts": span} if span else {}),
+            **({"tick0": head["tick0"]} if "tick0" in head else {}),
             **{x: meta[x] for x in ("start_ns", "start_uncertainty_ns", "boot_id") if x in meta}}
+
+
+def _runs(path: Path, raw: dict) -> list:
+    """(the first part's index, [first, last] when parts were joined, the Capture) of each run of parts that follow
+    on without a gap (fileio.load_runs): the analysis reads such parts as one stretch of time."""
+    out = []
+    for cap in fileio.load_runs(path):
+        span = cap.meta.get("parts")
+        out.append((span[0] if span else int(cap.meta.get("part", 0)), span, cap))
+    return out
 
 
 def decode_file(path: str | Path, spec: dict) -> dict:
@@ -275,10 +286,12 @@ def decode_file(path: str | Path, spec: dict) -> dict:
     spec = _spec(spec)
     raw = fileformat.read_header(path)
     doc = {"format": FORMAT, "wireskein": __version__, "spec": spec, "capture": _capture_of(path, raw), "parts": []}
-    for k in range(len(raw["parts"])):
+    for k, span, cap in _runs(path, raw):
         head = fileformat.part_view(raw, k)
-        cap = fileio.load(path, k)
-        doc["parts"].append(_part(cap, spec, head))
+        out = _part(cap, spec, head)
+        if span:
+            out["parts"] = span
+        doc["parts"].append(out)
     return doc
 
 
@@ -295,8 +308,11 @@ def analyze_file(path: str | Path, hints: dict | None = None, mode: str = "final
     path = Path(path)
     if path.is_file() and fileformat.sniff(path) == "wireskein":
         raw = fileformat.read_header(path)
-        heads = [fileformat.part_view(raw, k) for k in range(len(raw["parts"]))]
-        views = None
+        runs = _runs(path, raw)                  # parts that follow on without a gap are one stretch
+        heads = [fileformat.part_view(raw, k) for k, _, _ in runs]
+        views = [cap for _, _, cap in runs]
+        firsts = [k for k, _, _ in runs]
+        spans = [span for _, span, _ in runs]
     else:
         v = load(path)
         tick = Fraction(v.meta.get("tick_hz") or Fraction(v.rate).limit_denominator(10**9))
@@ -304,15 +320,20 @@ def analyze_file(path: str | Path, hints: dict | None = None, mode: str = "final
                "complete": v.meta.get("complete", True), "lost": v.meta.get("lost", []),
                "layout": v.meta.get("layout", "timeline"), "parts": [{}]}
         heads, views = [{"meta": v.meta, "tick0": 0}], [v]
+        firsts, spans = [0], [None]
     if (window_s or segment) and part is None and len(heads) > 1:
         raise ValueError(f"{path}: {len(heads)} parts: give the part a window or segment is inside (--part)")
-    ks = [part] if part is not None else range(len(heads))
+    if part is not None:                       # the stretch holding that part
+        hit = [i for i, (f, s) in enumerate(zip(firsts, spans)) if (s and s[0] <= part <= s[1]) or f == part]
+        if not hit:
+            raise ValueError(f"{path}: part {part} of {len(raw['parts'])}")
+        ks = hit
+    else:
+        ks = range(len(heads))
     doc = {"format": FORMAT, "wireskein": __version__, "hints": hints, "capture": _capture_of(path, raw), "parts": []}
     t0 = time.perf_counter()
     for k in ks:
-        if not 0 <= k < len(heads):
-            raise ValueError(f"{path}: part {k} of {len(heads)}")
-        cap = views[k] if views is not None else fileio.load(path, k)
+        cap = views[k]
         if thresholds:
             cap = as_logic(cap, thresholds)
         res = staged.analyze(cap, hints)
@@ -328,7 +349,7 @@ def analyze_file(path: str | Path, hints: dict | None = None, mode: str = "final
             window = (hit[0].begin, hit[0].end)
             seg_events = markers.events_in(res, cap, found, window)
         ex = export(res, cap, "select" if select else mode, select, alternatives, window, depth)
-        out = {**_part_head(heads[k], k, cap.n_samples), "claims": ex["claims"],
+        out = {**_part_head(heads[k], firsts[k], cap.n_samples, spans[k]), "claims": ex["claims"],
                **{x: ex[x] for x in ("window", "relations") if x in ex}}
         if hit:
             out["segment"] = {"path": hit[0].path(), "raw": hit[0].raw, "issues": hit[0].issues}
