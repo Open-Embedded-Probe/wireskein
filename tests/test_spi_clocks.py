@@ -70,3 +70,15 @@ def test_verify_marks_the_notices_in_the_capture(tmp_path):
     assert any("notice sck_outside_cs at tick 40: count 2" in x for x in verify.lines(rep, notices=True))
     verify.verify(tmp_path, mark=True)                   # again: its own markers replaced, not doubled
     assert len(ff.markers(tmp_path / "c0001.wireskein")) == 1
+
+
+def test_the_modes_a_receiver_could_read_it_in(tmp_path):
+    # the generator puts MOSI out a tenth of a half period after the trailing edge: in mode 0 it is stable around
+    # both edges, so a receiver of mode 0 or mode 1 reads the same bytes; the mode the changes say is still 0
+    r = run(tmp_path, 0)
+    assert r["measured"]["mode"] == 0 and r["measured"]["modes_ok"] == [0, 1], r["measured"]
+    m = r["measured"]["margins"]["MOSI"]
+    assert m["setup_s"] > 0 and m["hold_s"] > 0 and m["other_setup_s"] > 0 and m["other_hold_s"] > 0
+    assert abs(m["setup_s"] - 0.45e-6) < 0.06e-6 and abs(m["other_hold_s"] - 0.05e-6) < 0.06e-6
+    r = run(tmp_path / "strict", 0, setup_min_s=0.5e-6)       # MOSI is set up 0.45 us before the sampling edge
+    assert r["status"] == "ng" and "MOSI setup" in r["reason"], r["reason"]

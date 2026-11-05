@@ -408,10 +408,12 @@ def check_spi(cap, x):
         edge = "rise" if m["cpol"] == line["cpha"] else "fall"
         n = _best(res, "spi", need, lambda c: c.params.get("sample_edge") == edge) or n
     rev = (lambda b: int(f"{b:08b}"[::-1], 2)) if x.get("bit_order", "msb") == "lsb" else (lambda b: b)
+    margins = {}
     if x.get("cs") and edge is not None:
         # the roles and the mode are known: every line read at the sampling edges inside each CS window, as given,
         # not as the inference grouped them (a line that also moves outside CS stays a data line here)
         hexes = _spi_read(cap, x, edge, rev)
+        margins = _spi_margins(cap, x, edge)
     elif n is None:
         return False, {}, "nothing decoded as SPI on these pins"
     else:
@@ -419,6 +421,9 @@ def check_spi(cap, x):
                  for pin, frs in n.output.items["lines"].items()}
     got = {"mode": n.metrics.get("mode") if n is not None else None, "bytes": hexes,
            "sck_hz": _burst_hz(cap.channel(x["clk"]), cap.rate)}
+    if margins:
+        got["margins"] = margins                          # per data line: setup / hold around the sampling edges
+        got["modes_ok"] = _spi_modes_ok(cap, x, m["cpol"], rev)
     ok, why = True, []
     if line is not None:
         got.update(decoded_mode=got["mode"], mode=m["cpol"] * 2 + line["cpha"], cpol=m["cpol"],
@@ -434,6 +439,12 @@ def check_spi(cap, x):
         if want is not None and hexes.get(x.get(role)) != want.lower():
             ok = False
             why.append(f"{role} {hexes.get(x.get(role))} vs {want}")
+    for pin, mg in margins.items():
+        for k in ("setup", "hold"):
+            lim = x.get(f"{k}_min_s")
+            if lim is not None and mg[f"{k}_s"] is not None and mg[f"{k}_s"] < lim:
+                ok = False
+                why.append(f"{pin} {k} {mg[f'{k}_s'] * 1e9:.0f} ns at the sampling edges, want {lim * 1e9:.0f} ns")
     if x.get("mode") is not None and got["mode"] != x["mode"]:
         ok = False
         why.append(f"mode {got['mode']} vs {x['mode']}")
@@ -484,6 +495,55 @@ def _spi_read(cap, x: dict, edge: str, rev) -> dict[str, str]:
             for k in range(len(bits) // 8):
                 data.append(rev(int("".join(map(str, bits[8 * k:8 * k + 8])), 2)))
         out[x[role]] = bytes(data).hex()
+    return out
+
+
+def _spi_modes_ok(cap, x: dict, cpol: int, rev) -> list[int]:
+    """The modes a receiver could read this transfer in: CPOL as SCK's level when CS became active, and at that
+    mode's sampling edges no data line changing (setup and hold of a sample or more) and the bytes, when given,
+    as expected."""
+    out = []
+    want = {x[r]: x.get(f"{r}_bytes") for r in ("mosi", "miso") if x.get(r)}
+    for mode in (0, 1, 2, 3):
+        c, h = mode >> 1, mode & 1
+        if c != cpol:
+            continue
+        edge = "rise" if c == h else "fall"
+        mg = _spi_margins(cap, x, edge)
+        q = 1 / cap.rate
+        if any(v[k] is not None and v[k] < q for v in mg.values() for k in ("setup_s", "hold_s")):
+            continue
+        read = _spi_read(cap, x, edge, rev)
+        if any(w is not None and read.get(pin) != w.lower() for pin, w in want.items()):
+            continue
+        out.append(mode)
+    return out
+
+
+def _spi_margins(cap, x: dict, edge: str) -> dict:
+    """Per data line, the shortest time from its last change to a sampling edge (setup) and from a sampling edge to
+    its next change (hold), over the sampling edges inside CS windows, and the same on the other edge: a line whose
+    margins are wide on both edges reads the same in either mode (only the change's side tells the mode)."""
+    sck, cs = cap.channel(x["clk"]), cap.channel(x["cs"])
+    lv = sck.initial ^ ((np.arange(len(sck.edges)) + 1) & 1)
+    out = {}
+    for role in ("mosi", "miso"):
+        if not x.get(role):
+            continue
+        de = cap.channel(x[role]).edges
+        row = {}
+        for name, e in (("", edge), ("other_", "fall" if edge == "rise" else "rise")):
+            t = sck.edges[lv == (1 if e == "rise" else 0)]
+            t = t[cs.level_at(t) == x.get("cs_active", 0)]
+            if not len(t) or not len(de):
+                row.update({f"{name}setup_s": None, f"{name}hold_s": None})
+                continue
+            j = np.searchsorted(de, t)                       # changes at or after each edge
+            before = (t - de[j - 1])[j > 0]
+            after = (de[j[j < len(de)]] - t[j < len(de)])
+            row[f"{name}setup_s"] = float(before.min()) / cap.rate if len(before) else None
+            row[f"{name}hold_s"] = float(after.min()) / cap.rate if len(after) else None
+        out[x[role]] = row
     return out
 
 
