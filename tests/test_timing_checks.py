@@ -137,5 +137,12 @@ def test_the_spi_mode_from_the_lines(mode):
     cap = _cap({"SCK": clk, "MOSI": mosi, "MISO": miso, "CS": cs}, end + 5e-6, 20e6)
     ok, got, why = _judge(cap, spi("SCK", "MOSI", "MISO", "CS", mode=mode, mosi_bytes="9f005a" * 3))
     assert ok is True and (got["cpol"], got["cpha"]) == (mode >> 1, mode & 1), (why, got)
-    ok, got, why = _judge(cap, spi("SCK", "MOSI", "MISO", "CS", mode=mode ^ 1))
-    assert ok is False and "mode" in why
+    # the other CPHA passes only when it reads the bytes too (the generator leaves a sample around both edges)
+    other = mode ^ 1
+    ok, got, why = _judge(cap, spi("SCK", "MOSI", "MISO", "CS", mode=other, mosi_bytes="9f005a" * 3))
+    assert ok is (other in got["mode_candidates"]), (why, got["mode_candidates"])
+    if ok is False:
+        assert f"mode {other} does not read it" in why
+    # a mode of the other CPOL never reads it
+    ok, got, why = _judge(cap, spi("SCK", "MOSI", "MISO", "CS", mode=mode ^ 2))
+    assert ok is False and "does not read it" in why

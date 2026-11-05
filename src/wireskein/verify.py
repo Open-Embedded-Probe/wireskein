@@ -409,6 +409,16 @@ def check_spi(cap, x):
         n = _best(res, "spi", need, lambda c: c.params.get("sample_edge") == edge) or n
     rev = (lambda b: int(f"{b:08b}"[::-1], 2)) if x.get("bit_order", "msb") == "lsb" else (lambda b: b)
     margins = {}
+    if x.get("cs") and edge is None and m.get("cpol") is not None:
+        # no data line changes to say the CPHA (all its bits alike): read at the edge of the mode asked for, else at
+        # the first mode that reads; the candidate modes below say what else it reads in
+        lines0 = [cap.channel(x[r]) for r in ("mosi", "miso") if x.get(r)]
+        opts = timing.spi_modes(cap.channel(x["clk"]), lines0, m["cpol"], cap.rate, cap.n_samples,
+                                cap.channel(x["cs"]), x.get("cs_active", 0))
+        pick = x.get("mode") if x.get("mode") in [o["mode"] for o in opts] else \
+            next((o["mode"] for o in opts if o["readable"]), None)
+        if pick is not None:
+            edge = "rise" if (pick >> 1) == (pick & 1) else "fall"
     if x.get("cs") and edge is not None:
         # the roles and the mode are known: every line read at the sampling edges inside each CS window, as given,
         # not as the inference grouped them (a line that also moves outside CS stays a data line here)
@@ -455,7 +465,22 @@ def check_spi(cap, x):
             if lim is not None and mg[f"{k}_s"] is not None and mg[f"{k}_s"] < lim:
                 ok = False
                 why.append(f"{pin} {k} {mg[f'{k}_s'] * 1e9:.0f} ns at the sampling edges, want {lim * 1e9:.0f} ns")
-    if x.get("mode") is not None and got["mode"] != x["mode"]:
+    if "modes" in got:
+        # the modes a receiver reads the given bytes in (all the readable ones when no bytes are given): the mode
+        # asked for must be one of them; more than one is a notice, not a failure
+        want = {x[r]: x.get(f"{r}_bytes") for r in ("mosi", "miso") if x.get(r)}
+        cands = [mm["mode"] for mm in got["modes"] if mm["readable"]
+                 and all(w is None or mm["bytes"].get(pin) == w.lower() for pin, w in want.items())]
+        got["mode_candidates"] = cands
+        if len(cands) > 1:
+            first = cap.channel(x["cs"]).edges
+            got.setdefault("notices", []).append({"kind": "mode_ambiguous", "tick": int(first[0]) if len(first) else 0,
+                                                  "candidates": cands})
+        if x.get("mode") is not None and x["mode"] not in cands:
+            ok = False
+            why.append(f"mode {x['mode']} does not read it (it reads in {cands or 'no mode'}; its changes say mode "
+                       f"{got['mode']})")
+    elif x.get("mode") is not None and got["mode"] != x["mode"]:
         ok = False
         why.append(f"mode {got['mode']} vs {x['mode']}")
     if x.get("freq_hz") is not None and (got["sck_hz"] is None or abs(got["sck_hz"] / x["freq_hz"] - 1) > x["freq_rel"]):
@@ -469,7 +494,7 @@ def check_spi(cap, x):
             why.append("CS not high at the end")
         frames, outside, shortest, half, found = _spi_clocks(cap.channel(x["clk"]), cap.channel(x["cs"]),
                                                              cap.n_samples, x.get("cs_active", 0))
-        got["notices"] = found
+        got.setdefault("notices", []).extend(found)
         got.update(frame_bits=frames, sck_edges_outside_cs=outside, sck_shortest_s=shortest and shortest / cap.rate,
                    sck_half_period_s=half and half / cap.rate)
         want = x.get("bits")
@@ -1379,7 +1404,8 @@ def _state_text(prior, rate) -> dict | None:
 # it finds (docs/capture-test-guide.md §4.9).
 NOTICES = {
     "spi": {"sck_outside_cs": "SCK moved while CS was inactive (count: its edges in that stretch)",
-            "empty_cs_window": "a window of CS active with no clock"},
+            "empty_cs_window": "a window of CS active with no clock",
+            "mode_ambiguous": "the bytes read the same in more than one mode (candidates: those modes)"},
     "uart": {"baud_near_limit": "the bit rate within its tolerance but more than half of it off (value: the error)"},
 }
 

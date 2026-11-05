@@ -47,7 +47,8 @@ def test_sck_moving_while_cs_is_inactive(tmp_path):
     before = (int(2e-6 * RATE), int(3e-6 * RATE))       # a pulse on SCK before CS falls at 10 us
     r = run(tmp_path / "found", 0, extra=before)
     assert r["status"] == "ok" and r["measured"]["sck_edges_outside_cs"] == 2
-    assert r["notices"] == [{"kind": "sck_outside_cs", "tick": 40, "count": 2, "part": 0}], r["notices"]
+    assert [n for n in r["notices"] if n["kind"] == "sck_outside_cs"] == [
+        {"kind": "sck_outside_cs", "tick": 40, "count": 2, "part": 0}], r["notices"]
     assert run(tmp_path / "one", 0, extra=before, notices={"sck_outside_cs": 2})["status"] == "ok"
     r = run(tmp_path / "ng", 0, extra=before, notices={"sck_outside_cs": "ng"})
     assert r["status"] == "ng" and "2 sck_outside_cs, first at tick 40" in r["reason"], r
@@ -64,12 +65,12 @@ def test_verify_marks_the_notices_in_the_capture(tmp_path):
     from wireskein import _fileformat as ff
     run(tmp_path, 0, extra=(int(2e-6 * RATE), int(3e-6 * RATE)))
     rep = verify.verify(tmp_path, mark=True)
-    assert rep["summary"]["notices"] == 1 and "1 notice (" in verify.summary_line(rep)
-    assert [(m["t"], m["label"], m["by"]) for m in ff.markers(tmp_path / "c0001.wireskein")] == [
-        (40, "sck_outside_cs: t", "verify")]
+    assert rep["summary"]["notices"] == 2 and "2 notices (" in verify.summary_line(rep)   # and mode_ambiguous
+    assert [(m["t"], m["label"], m["by"]) for m in ff.markers(tmp_path / "c0001.wireskein")
+            if m["label"].startswith("sck")] == [(40, "sck_outside_cs: t", "verify")]
     assert any("notice sck_outside_cs at tick 40: count 2" in x for x in verify.lines(rep, notices=True))
     verify.verify(tmp_path, mark=True)                   # again: its own markers replaced, not doubled
-    assert len(ff.markers(tmp_path / "c0001.wireskein")) == 1
+    assert len(ff.markers(tmp_path / "c0001.wireskein")) == 2
 
 
 def test_the_modes_a_receiver_could_read_it_in(tmp_path):
@@ -96,3 +97,28 @@ def test_modes_ok_comes_from_the_lines_alone_in_the_analysis(tmp_path):
     assert L["modes_ok"] == [0, 1] and [m["mode"] for m in L["modes"]] == [0, 1]
     by = {m["mode"]: m["bytes"]["MOSI"] for m in L["modes"]}
     assert by[1] == OUT.hex() and by[0] != by[1]             # the modes read different bytes: the analysis says both
+
+
+def test_mode_is_one_the_bytes_read_in(tmp_path):
+    # the generator's mode 1 reads other bytes in mode 0: with the bytes given, mode 1 is the one candidate
+    r = run(tmp_path / "given", 1)
+    assert r["status"] == "ok" and r["measured"]["mode_candidates"] == [1] and not r["notices"], r
+    # its mode 0 reads the same bytes in mode 1 too: both candidates, a notice, and mode=0 still passes
+    r = run(tmp_path / "both", 0)
+    assert r["status"] == "ok" and r["measured"]["mode_candidates"] == [0, 1]
+    assert [n["kind"] for n in r["notices"]] == ["mode_ambiguous"]
+    # all zero bytes read the same in both: mode 1 is a candidate too, a notice says so, and mode=1 passes
+    clk, mosi, cs = gen.Wave(0), gen.Wave(0), gen.Wave(1)
+    end = gen.spi(clk, mosi, None, cs, 10e-6, [(bytes(5), b"")], 1e6, mode=0)
+    cap = gen.quantize({"CS": cs, "SCK": clk, "MOSI": mosi}, RATE, end + 20e-6, np.random.default_rng(0))
+    lv = np.zeros(cap.n_samples, np.uint8)
+    for k, ch in enumerate(cap.channels):
+        lv |= ch.level_at(np.arange(cap.n_samples)).astype(np.uint8) << k
+    for want, status in ((1, "ok"), (2, "ng")):
+        rec = Recorder(tmp_path / f"zeros{want}")
+        with rec.section(1, "t", expect=[spi("SCK", mosi="MOSI", cs="CS", mode=want, mosi_bytes="00" * 5)]):
+            rec.capture(rec.armed(), RATE, interleaved=lv.tobytes(), names=[c.name for c in cap.channels])
+        rec.close()
+        (r,) = verify.verify(tmp_path / f"zeros{want}")["results"]
+        assert r["status"] == status and r["measured"]["mode_candidates"] == [0, 1], r
+        assert [n["kind"] for n in r["notices"]] == ["mode_ambiguous"] and r["notices"][0]["candidates"] == [0, 1]
