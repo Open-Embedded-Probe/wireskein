@@ -225,3 +225,16 @@ def test_the_example_on_hardware_sent_by_a_probe(demo_link):
     assert c["verdict"] == "confirmed" and got["checks_failed"] == 0, got
     assert [(m["seq"], m["cmd"], m["payload"]) for m in got["messages"]] == [
         (m["seq"], m["cmd"], m["payload"]) for m in want]
+
+
+def test_its_messages_are_annotations_and_markers_for_the_viewer(tmp_path, demo_link):
+    from wireskein import annotate, capture as wc2
+    tx = gen.Wave(1)
+    t = gen.uart(tx, 50e-6, b"".join(REQS[:2]), 115200)
+    p = write(tmp_path, {"TX": tx}, t + 200e-6)
+    rows = annotate.build_file(p)["rows"]
+    (row,) = [r for r in rows if r["name"] == "uart demo_link"]
+    assert [it["detail"]["seq"] for it in row["items"]] == [1, 2] and row["near"] == "TX"
+    wc2.add_markers(p, [{"t": it["s"], "label": f"seq {it['detail']['seq']}"} for it in row["items"]], by="my_tool")
+    wc2.add_markers(p, [{"t": row["items"][0]["s"], "label": "again"}], by="my_tool")      # replaces its own
+    assert [(m["label"], m["by"]) for m in wc2.markers(p)] == [("again", "my_tool")]

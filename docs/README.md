@@ -11,6 +11,7 @@ The repository's [README](../README.md) gives an overview of using WireSkein. Th
 | [The WireSkein file format](wireskein-format.md) | The `.wireskein` specification: container, `capture.json`, channel `encoding`s, attachments, notes, markers, annotations, relation to `.sr` and VCD |
 | [The run format](run-format.md) | Recorded test runs (`run.json`) and check results |
 | [The analysis format](analysis-format.md) | `wireskein-analysis/1`: what `decode` and `analyze` write |
+| [Analyses of your own](extending.md) | Which way to add what WireSkein does not have (protocols, definitions, device packs, marker dialects, checks, a test's own verdicts), what every addition follows, results in the viewer |
 | [Protocols of your own](protocols.md) | Adding a protocol to the analysis and the checks: one that rides on UART, SPI or I2C (Python), or one on the wire itself (a TOML definition), each with an example |
 | [Markers](markers.md) | Heading markers and the segment rules |
 | [Checking captures in tests](capture-test-guide.md) | How to record a test run, capture windows, the list of checks, how to choose tolerances |

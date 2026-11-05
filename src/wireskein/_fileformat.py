@@ -625,6 +625,14 @@ def markers(path: str | Path) -> list[dict]:
     return out
 
 
+def add_markers(path: str | Path, items: list[dict], by: str) -> None:
+    """Put markers of one's own ("by": a tool's name) in place of that one's earlier ones; others' markers stay."""
+    if not by or by in ("viewer",):
+        raise ValueError(f"by names the tool that places them (not {by!r})")
+    keep = [m for m in markers(path) if m.get("by") != by]
+    set_markers(path, keep + [{**m, "by": by} for m in items])
+
+
 def set_markers(path: str | Path, items: list[dict]) -> None:
     """Replace the markers. Each needs "t" (ticks) and "label"; "end" makes it a span; "part" the part its ticks are
     of (wireskein-format §5.2: in a file of several parts always written, 0 when not given)."""

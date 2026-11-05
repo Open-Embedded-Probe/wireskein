@@ -31,10 +31,11 @@ from . import _fileformat as fileformat
 from ._fileformat import AnalogChannel as Analog
 from ._fileformat import Channel
 from ._fileformat import EventsChannel as Events
-from ._fileformat import analog_raw, analog_volts, attach, attachments, events, from_interleaved, note, notes, pack
+from ._fileformat import (add_markers, analog_raw, analog_volts, attach, attachments, events, from_interleaved, markers,
+                          note, notes, pack)
 
-__all__ = ["Analog", "Capture", "Channel", "Events", "Part", "analog_raw", "analog_volts", "attach", "attachments",
-           "events", "from_interleaved", "logic", "note", "notes", "pack", "read", "write"]
+__all__ = ["Analog", "Capture", "Channel", "Events", "Part", "add_markers", "analog_raw", "analog_volts", "attach",
+           "attachments", "events", "from_interleaved", "logic", "markers", "note", "notes", "pack", "read", "write"]
 
 
 def logic(name: str, initial: int, edges, n: int, step: int = 1, phase: int = 0, **acquisition) -> Channel | Events:

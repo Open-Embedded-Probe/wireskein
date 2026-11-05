@@ -171,7 +171,7 @@ wireskein capture --source sigrok:fx2lafw --channels SDA=D0,SCL=D1 --rate 12M --
 - USB のあるプローブ（ESP32-P4 など）は、USB で開くのがよいです（`oep:oep://<unit_id>` か `?via=usb`）。vendor bulk のインターフェースで、毎秒数 MB を落とさずに読み出せます。USB シリアル（CDC）の口は遅く、負荷が高いと応答を落とすことがあります。
   - `capture` は、リンクがどうなったか（速度、試した結果、読み出しの時間）を表示し、`meta.probe.link` に残します。
 - Python からは `wireskein.sources.capture(取得元, Request(...), 出力先)` です。
-- 別の package から、entry point の `wireskein.sources` で取得元を、`wireskein.checks` で検査を、`wireskein.protocols` で UART、SPI、I2C に乗るプロトコルを足せます（[docs/capture-test-guide.ja.md](docs/capture-test-guide.ja.md) §4.10、[docs/protocols.ja.md](docs/protocols.ja.md)）。
+- 別の package から、entry point の `wireskein.sources` で取得元を、`wireskein.checks` で検査を、`wireskein.protocols` で UART、SPI、I2C に乗るプロトコルを足せます（[docs/capture-test-guide.ja.md](docs/capture-test-guide.ja.md) §4.10、[docs/protocols.ja.md](docs/protocols.ja.md)）。何にどの方法が合うかは [docs/extending.ja.md](docs/extending.ja.md) にあります。
 
 ## ブラウザでキャプチャを見る
 
