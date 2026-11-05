@@ -218,6 +218,7 @@ WireSkein turns a capture into what a reader needs, so the samples themselves do
 | `onewire(pin, data, presence, speed)` | A 1-Wire line (§4.6): the bytes after each reset, presence pulses, the reset, presence, slot and low times |
 | `ir(pin, frames, carrier_hz, carrier_rel, timing_rel, protocol)` | An IR remote line (§4.6): NEC frames (address, command, repeat), the command with its inverse, the carrier's frequency, the marks' and spaces' lengths |
 | `can(pin, bitrate, frames, bitrate_rel, idle, ack, errors, sample_point)` | Classic CAN (§4.7), read as a receiving node does: the bit rate measured from the edges, the frames (identifier, data, remote), the ACK slot, stuff / form / CRC errors |
+| `qspi(clk, cs, io, transfers, mode, cs_active, freq_hz, freq_rel)` | SPI on several data lines (dual, quad, octal; §4.5), per window of CS active, phase by phase: command, address, dummy clocks, data, each on its own lines |
 | `lin(pin, baud, frames, baud_rel, break_min_bits, checksum)` | LIN frames (§4.7): identifier and data, sync, identifier parity, checksum, break and delimiter lengths, the baud measured from the sync field |
 | `i2s(bclk, ws, sd, format, bits, fs_hz, fs_rel, samples, slot_bits, left_ws)` | I2S-like audio (§4.7): format, sample rate, BCLKs a channel, a run of samples found in a row |
 | `quadrature(a, b, steps, cycles, direction, errors_max)` | A quadrature encoder (§4.7): the count (steps or cycles), the direction, changes of both lines at once |
@@ -297,9 +298,16 @@ i2c_timing("PC2", "PC1", "fast")
 i2c_timing("PC2", "PC1", "standard", limits={"t_su_dat_min_s": 300e-9})
 ```
 
-### 4.5 SPI mode
+### 4.5 SPI mode, multi-line SPI
 
 `spi` reads the mode from the lines themselves. CPOL is SCK's level when CS becomes active (without CS, its level over the longest pause). CPHA comes from the SCK edge before each change of MOSI (else MISO): after a leading edge (leaving the idle level) the bit was put out there and is sampled on the trailing one, CPHA 1; after a trailing edge, CPHA 0. Changes between CS becoming active and the first edge count only when there are no others (in either mode a device may put its first bit out on CS). The decoder's choice stays as `decoded_mode`. For an active-high CS give `cs_active=1`. With `cs`, the bytes are read at that mode's sampling edges, just before each, line by line as the roles say. Reading just before an edge, the bytes often come out the same on the other edge too (a line that changes at the edge it is not sampled on still holds its bit just before it), so the bytes alone do not tell the mode: `modes_ok` lists, from the lines alone, the modes in which no data line changes at the sampling edges (the same list comes out of `wireskein analyze` and `decode`, with no expectation), and `margins` the setup and hold on both edges. A line that changes midway between the edges (a software SPI), or data whose bits are all alike, can be read in two modes. With `cs`, `mode=` passes when the mode is one the transfer reads in: readable, and reading the bytes given (`mode_candidates`); the mode its changes say stays as measured `mode`. More than one candidate is the notice `mode_ambiguous`, not a failure.
+
+`qspi(clk, cs, io, transfers)` reads SPI on several data lines (`io` = [IO0, IO1, ...]) per window of CS active, just before each sampling edge (modes 0 / 3: rising, 1 / 2: falling; SCK must be at CPOL as CS becomes active). `transfers` has one list of phases per window, in order. A phase `{"width": 4, "hex": "..."}` (or `"bits": n`) reads its clocks on IO[width-1] .. IO[0], the MSB first; `{"hex": "eb"}` is one line, IO0; `"lines": [1]` picks the lines (a single-line read on IO1); `{"dummy": 8}` skips clocks; a last phase with neither `hex` nor `bits` reads the rest. Every window's clocks must be exactly its phases'. Measured: `clocks` per window, `freq_hz`, `phases` (each phase's hex); without `transfers`, `data`: each window on all the lines.
+
+```python
+qspi("SCK", "CS", ["IO0", "IO1", "IO2", "IO3"],                       # 0xEB Fast Read Quad I/O, 1-4-4
+     [[{"hex": "eb"}, {"width": 4, "hex": "001000"}, {"width": 4, "bits": 8}, {"dummy": 4}, {"width": 4, "hex": "0123"}]])
+```
 
 ### 4.6 One-line protocols
 

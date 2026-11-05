@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- (EN) A check `qspi(clk, cs, io, transfers, mode, cs_active, freq_hz, freq_rel)`: SPI on several data lines (dual, quad, octal) per window of CS active, phase by phase - command, address, dummy clocks and data, each on its own lines (`width`, `lines`) - every window's clocks exactly its phases'. Tested on a flash's 0xEB (1-4-4), 0x6B (1-1-4) and 0x03 made by an encoder of the test's own (tests/test_qspi.py).
+- (JA) 検査 `qspi(clk, cs, io, transfers, mode, cs_active, freq_hz, freq_rel)` を足した: 複数のデータ線（デュアル、クアッド、オクタル）の SPI を、CS がアクティブな窓ごとに、相ごとに読む。命令、アドレス、ダミーのクロック、データを、相ごとの線（`width`、`lines`）で読み、どの窓のクロックもちょうどその相の分。試験の中の独自の符号器が作ったフラッシュの 0xEB（1-4-4）、0x6B（1-1-4）、0x03 で確かめた（tests/test_qspi.py）。
+
 - (EN) A check `rs485(tx, de, baud, ..., de_active, lead_min_s, lead_max_s, tail_min_s, tail_max_s)`: TX read as `uart` (the same arguments and errors) with the driver enable around it: every character starting inside DE active, each window's lead and tail bounded (the tail at least 0 by default), a window with no character a notice `empty_de_window`. Tested on lines from an encoder of the test's own (tests/test_rs485.py).
 - (JA) 検査 `rs485(tx, de, baud, ..., de_active, lead_min_s, lead_max_s, tail_min_s, tail_max_s)` を足した: TX を `uart` と同じに読み（引数も誤りも同じ）、周りのドライバの許可を見る。どの文字も DE がアクティブな中で始まり、窓ごとの前と後の余裕を限る（後の余裕は既定で 0 以上）。文字の無い窓は注意 `empty_de_window`。試験の中の独自の符号器が作った線で確かめた（tests/test_rs485.py）。
 

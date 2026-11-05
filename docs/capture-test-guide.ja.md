@@ -218,6 +218,7 @@ WireSkein は、キャプチャを読み手に要るものに変えます。サ�
 | `onewire(pin, data, presence, speed)` | 1-Wire の線（§4.6）。リセットごとの後のバイト、presence の有無、リセット、presence、スロット、low の時間 |
 | `ir(pin, frames, carrier_hz, carrier_rel, timing_rel, protocol)` | IR のリモコンの線（§4.6）。NEC のフレーム（アドレス、コマンド、リピート）、コマンドとその反転、搬送波の周波数、マークとスペースの長さ |
 | `can(pin, bitrate, frames, bitrate_rel, idle, ack, errors, sample_point)` | クラシック CAN（§4.7）。受信するノードと同じに読む。エッジから測ったビットレート、フレーム（識別子、データ、リモート）、ACK のスロット、スタッフ / 形式 / CRC の誤り |
+| `qspi(clk, cs, io, transfers, mode, cs_active, freq_hz, freq_rel)` | 複数のデータ線の SPI（デュアル、クアッド、オクタル。§4.5）。CS がアクティブな窓ごとに、相ごとに読む: 命令、アドレス、ダミーのクロック、データ。相ごとに線が違ってよい |
 | `lin(pin, baud, frames, baud_rel, break_min_bits, checksum)` | LIN のフレーム（§4.7）。識別子とデータ、sync、識別子のパリティ、チェックサム、break と区切りの長さ、同期の欄から測ったボーレート |
 | `i2s(bclk, ws, sd, format, bits, fs_hz, fs_rel, samples, slot_bits, left_ws)` | I2S の類の音声（§4.7）。形式、サンプルの速さ、1 チャンネルの BCLK の数、続いて現れるサンプルの列 |
 | `quadrature(a, b, steps, cycles, direction, errors_max)` | 2 相のエンコーダ（§4.7）。数（ステップか周期）、向き、両方の線が同時に変わった回数 |
@@ -297,9 +298,16 @@ i2c_timing("PC2", "PC1", "fast")
 i2c_timing("PC2", "PC1", "standard", limits={"t_su_dat_min_s": 300e-9})
 ```
 
-### 4.5 SPI のモード
+### 4.5 SPI のモード、複数の線の SPI
 
 `spi` のモードは、線そのものから読みます。CPOL は CS が有効になったときの SCK の level です（CS が無ければ、いちばん長い休みの level）。CPHA は、MOSI（無ければ MISO）の変化の前の SCK のエッジで決めます。前が先のエッジ（休みの level から離れるエッジ）なら、そこで出して後のエッジで取る CPHA 1、後のエッジなら CPHA 0 です。CS が有効になってから最初のエッジまでの変化は、ほかに変化が無いときだけ使います（どちらのモードでも、CS で最初のビットを出す相手がある）。復号器が選んだモードは `decoded_mode` に残ります。CS が active high なら `cs_active=1` です。`cs` があれば、そのモードのサンプルの辺それぞれの直前で、役割のとおりに線ごとにバイトを読みます。辺の直前で読むので、もう一方の辺で読んでも同じバイトになることがよくあります（サンプルしない辺で変わる線も、その辺の直前までは自分のビットを保つ）。そのためバイトだけではモードは分かりません: `modes_ok` は、線だけから、サンプルの辺でどのデータ線も変わらないモードを並べます（期待の無い `wireskein analyze` と `decode` からも同じ一覧が出ます）。`margins` は両方の辺での前後の余裕です。辺のあいだの中ほどで変わる線（ソフトウェアの SPI）や、ビットがすべて同じデータは、2 つのモードで読めます。`cs` があれば、`mode=` は、そのモードでこの転送が読めるとき（読めて、与えたバイトとして読める。`mode_candidates`）に通ります。変化の向きが言うモードは、測った値の `mode` に残ります。候補が 2 つ以上なら、失敗ではなく注意 `mode_ambiguous` です。
+
+`qspi(clk, cs, io, transfers)` は、複数のデータ線（`io` = [IO0, IO1, ...]）の SPI を、CS がアクティブな窓ごとに、サンプリングのエッジの直前で読みます（モード 0 / 3 は立ち上がり、1 / 2 は立ち下がり。CS がアクティブになるとき SCK は CPOL のレベル）。`transfers` は、窓ごとの相のリストを、順に並べたものです。相 `{"width": 4, "hex": "..."}`（か `"bits": n`）は、そのクロックを IO[width-1] .. IO[0] で、MSB から読みます。`{"hex": "eb"}` は 1 本の線、IO0 です。`"lines": [1]` で線を選べます（IO1 での 1 本の読み）。`{"dummy": 8}` はクロックを飛ばし、`hex` も `bits` も無い最後の相は残りを読みます。どの窓のクロックも、ちょうどその相の分でなければなりません。測る値は、窓ごとの `clocks`、`freq_hz`、`phases`（相ごとの hex）です。`transfers` が無ければ `data`（窓ごとに全部の線で読んだもの）です。
+
+```python
+qspi("SCK", "CS", ["IO0", "IO1", "IO2", "IO3"],                       # 0xEB Fast Read Quad I/O、1-4-4
+     [[{"hex": "eb"}, {"width": 4, "hex": "001000"}, {"width": 4, "bits": 8}, {"dummy": 4}, {"width": 4, "hex": "0123"}]])
+```
 
 ### 4.6 1 本の線の方式
 

@@ -47,7 +47,7 @@ from . import _fileformat as fileformat
 
 FORMAT = "wireskein-run/1"          # docs/run-format.ja.md
 
-__all__ = ["FORMAT", "Recorder", "becomes", "can", "rs485", "dead_time", "ends", "i2c", "i2c_timing", "i2s", "ir", "level", "lin", "only_moving",
+__all__ = ["FORMAT", "Recorder", "becomes", "can", "qspi", "rs485", "dead_time", "ends", "i2c", "i2c_timing", "i2s", "ir", "level", "lin", "only_moving",
            "onewire", "phase", "protocol", "pulses", "quadrature", "rgb_led", "sd_spi", "skew", "spi", "square", "starts", "trim", "uart",
            "voltage"]
 
@@ -586,6 +586,18 @@ def rs485(tx: str, de: str, baud: float | None, data: str | None = None, baud_re
                "bits": bits, "parity": parity, "stop": stop, "errors": dict(errors) if errors is not None else None,
                "de_active": de_active, "lead_min_s": lead_min_s, "lead_max_s": lead_max_s, "tail_min_s": tail_min_s,
                "tail_max_s": tail_max_s, "notices": notices}, threshold)
+
+
+def qspi(clk: str, cs: str, io: list[str], transfers: list[list[dict]] | None = None, mode: int = 0,
+         cs_active: int = 0, freq_hz: float | None = None, freq_rel: float = 0.1, threshold=None) -> dict:
+    """SPI on several data lines (dual, quad, octal: io = [IO0, IO1, ...]) read per window of CS active, each
+    window phase by phase: transfers = one list of phases per window, in order; a phase {"width": 4, "hex": "..."}
+    (or "bits": n) reads its clocks on io[width-1] .. io[0], the MSB first ("lines": [1] picks them, as a
+    single-line read on IO1), {"dummy": 8} skips clocks, and a last phase with neither reads the rest. Every
+    window's clocks must be its phases'. mode 0..3 as SPI's (the sampling edge and SCK's idle level). Without
+    transfers, each window is read on all the lines."""
+    return _t({"kind": "qspi", "clk": clk, "cs": cs, "io": list(io), "transfers": transfers, "mode": mode,
+               "cs_active": cs_active, "freq_hz": freq_hz, "freq_rel": freq_rel}, threshold)
 
 
 def i2s(bclk: str, ws: str, sd: str, format: str = "i2s", bits: int | None = None, fs_hz: float | None = None,

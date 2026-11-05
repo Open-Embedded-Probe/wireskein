@@ -1442,6 +1442,96 @@ def check_rs485(cap, x):
     return v, got, w
 
 
+def _qspi_phases(clocks: np.ndarray, phases: list[dict]) -> tuple[list, int]:
+    """A window's clocks (rows: one sampling edge, columns: the io lines) read phase by phase: (each phase's hex,
+    or None for a dummy one; the clocks left over, negative when the window ended early)."""
+    out, pos = [], 0
+    for k, ph in enumerate(phases):
+        if ph.get("dummy") is not None:
+            out.append(None)
+            pos += int(ph["dummy"])
+            continue
+        w = int(ph.get("width", 1))
+        lines = list(ph.get("lines", range(w - 1, -1, -1)))          # MSB first: io[w-1] .. io[0]
+        if ph.get("bits") is not None:
+            n = int(ph["bits"]) // len(lines)
+        elif ph.get("hex") is not None:
+            n = len(str(ph["hex"])) * 4 // len(lines)
+        elif k == len(phases) - 1:
+            n = max(len(clocks) - pos, 0)                            # the last phase reads the rest
+        else:
+            raise ValueError("a qspi phase needs hex or bits unless it is the last one")
+        got = clocks[pos:pos + n][:, lines].reshape(-1) if n else np.zeros(0, np.int64)
+        pos += n
+        bits = "".join(map(str, got.tolist()))
+        bits += "0" * (-len(bits) % 4)
+        out.append(f"{int(bits, 2):0{len(bits) // 4}x}" if bits else "")
+    return out, len(clocks) - pos
+
+
+def check_qspi(cap, x):
+    """Multi-line SPI (dual / quad / octal) per window of CS active, phase by phase (command, address, dummy clocks,
+    data), each phase on its own lines."""
+    clk, cs = _ch(cap, x["clk"]), _ch(cap, x["cs"])
+    io = [_ch(cap, p) for p in x["io"]]
+    if clk is None or cs is None or any(c is None for c in io):
+        return None, {}, "pin not captured"
+    mode, active = int(x.get("mode", 0)), x.get("cs_active", 0)
+    cpol = mode >> 1
+    edge = "rise" if mode in (0, 3) else "fall"
+    lv = clk.initial ^ ((np.arange(len(clk.edges)) + 1) & 1)
+    t = clk.edges[lv == (1 if edge == "rise" else 0)]
+    marks = np.concatenate(([0], cs.edges, [cap.n_samples]))
+    windows, lv_cs = [], cs.initial
+    for a, b in zip(marks[:-1], marks[1:]):
+        if lv_cs == active and a > 0 and b < cap.n_samples:          # whole windows only
+            ts = t[(t > a) & (t < b)]
+            windows.append((int(a), int(b), ts))
+        lv_cs ^= 1
+    got = {"windows": len(windows)}
+    if not windows:
+        return False, got, "no whole window of CS active"
+    allt = np.concatenate([w[2] for w in windows])
+    gaps = np.concatenate([np.diff(w[2]) for w in windows if len(w[2]) > 1] or [np.zeros(0)])
+    got["freq_hz"] = float(cap.rate / np.median(gaps)) if len(gaps) else None
+    got["clocks"] = [int(len(w[2])) for w in windows]
+    idle_bad = [w[0] for w in windows if int(clk.level_at(np.array([w[0]]))[0]) != cpol]
+    parts = []
+    if idle_bad:
+        parts.append((False, f"SCK not at CPOL {cpol} as CS becomes active ({len(idle_bad)} windows; mode {mode})"))
+    rows = []
+    for a, b, ts in windows:
+        m = np.stack([c.level_at(np.maximum(ts - 1, 0)).astype(np.int64) for c in io], axis=1) if len(ts) else \
+            np.zeros((0, len(io)), np.int64)
+        rows.append(m)
+    want = x.get("transfers")
+    if want is None:
+        w = len(io)
+        got["data"] = [_qspi_phases(m, [{"width": w, "lines": list(range(w - 1, -1, -1))}])[0][0] for m in rows]
+    else:
+        reads = []
+        for i, m in enumerate(rows[:len(want)]):
+            phases = want[i]
+            hexes, left = _qspi_phases(m, phases)
+            reads.append(hexes)
+            for k, (ph, h) in enumerate(zip(phases, hexes)):
+                if ph.get("hex") is not None and h != str(ph["hex"]).lower():
+                    parts.append((False, f"window #{i} phase #{k}: {h}, not {str(ph['hex']).lower()}"))
+            if left > 0:
+                parts.append((False, f"window #{i}: {left} clocks after its phases"))
+            elif left < 0:
+                parts.append((False, f"window #{i}: {-left} clocks short of its phases"))
+        got["phases"] = reads
+        if len(rows) != len(want):
+            parts.append((False, f"{len(rows)} windows of CS active, {len(want)} expected"))
+    if x.get("freq_hz") is not None and got["freq_hz"] is not None:
+        err = got["freq_hz"] / x["freq_hz"] - 1
+        if abs(err) > x.get("freq_rel", 0.1):
+            parts.append((False, f"SCK {got['freq_hz']:.0f} Hz is {err * 100:+.1f}% off {x['freq_hz']:.0f}"))
+    ok, why = _verdicts(parts)
+    return ok, got, why
+
+
 def _analog(cap: Capture, pin: str) -> AnalogTrace | None:
     return next((a for a in cap.analog if a.name == pin), None)
 
@@ -1724,7 +1814,7 @@ CHECKS = {"protocol": check_protocol, "becomes": check_becomes, "square": check_
           "uart": check_uart, "voltage": check_voltage, "phase": check_phase, "skew": check_skew,
           "dead_time": check_dead_time, "i2c_timing": check_i2c_timing, "rgb_led": check_rgb_led,
           "onewire": check_onewire, "ir": check_ir, "lin": check_lin, "i2s": check_i2s,
-          "quadrature": check_quadrature, "sd_spi": check_sd_spi, "can": check_can, "rs485": check_rs485}
+          "quadrature": check_quadrature, "sd_spi": check_sd_spi, "can": check_can, "rs485": check_rs485, "qspi": check_qspi}
 
 
 def _pins_of(x: dict) -> set[str]:
@@ -1735,6 +1825,7 @@ def _pins_of(x: dict) -> set[str]:
     out |= set(x.get("levels", {}))
     out |= set(x.get("pins", []) if x["kind"] != "only_moving" else [])   # a check from elsewhere names its pins
     out |= set((x.get("roles") or {}).values()) if x["kind"] == "protocol" else set()
+    out |= set(x.get("io") or []) if x["kind"] == "qspi" else set()
     return out
 
 
