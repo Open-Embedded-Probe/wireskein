@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 0.0.18
 - (EN) `Recorder.use_clock(clock, probe=...)` (and `clock=` / `probe=` of `section()` / `heading()`) puts the host's headings on the probe's clock (OEP core §7.7), so a section the host opens and closes is cut out of one long capture like the probe's own lines (run-format §2.4). A clock that cannot be read fails the run (`probe_log`).
 - (JA) `Recorder.use_clock(clock, probe=...)`（と `section()`、`heading()` の `clock=`、`probe=`）は、ホストの見出しをプローブの時計に置く（OEP core §7.7）。ホストが開け閉めする区間を、プローブの行と同じに 1 本の長いキャプチャから切り出せる（run-format §2.4）。時計が読めなければ、記録は失敗する（`probe_log`）。
 - (EN) `wireskein.capture` gives `attach`, `note`, `attachments` and `notes` (adding to a file without rewriting its channels), as the README shows them.
