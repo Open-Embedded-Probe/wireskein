@@ -356,6 +356,21 @@ def i2c_device_node(parent: Node) -> Node | None:
                 parent, layer_score=score, total=score)
 
 
+def _external_plugins() -> list:
+    """Declarative protocols from definition directories added from outside (wireskein.protocols.add_definitions,
+    the entry point group wireskein.definitions); a name of WireSkein's own is refused."""
+    from .. import protocols as P
+    from .declarative import load_dir
+    out = []
+    own = {p.name for p in PLUGINS}
+    for d in P.definitions():
+        for p in load_dir(d):
+            if p.name in own:
+                raise ValueError(f"{d / (p.name + '.toml')}: {p.name!r} is a protocol of WireSkein's own")
+            out.append(p)
+    return out
+
+
 def _protocols(roots: list[Node]) -> None:
     """Protocols of others on the buses decoded (wireskein.protocols): each given the bus as the analysis exports
     it; its checks, as Modbus RTU's, support the bus."""
@@ -487,11 +502,20 @@ def _hinted_groups(pin_hint: dict, sv, have: list) -> list:
     return out
 
 
-@lru_cache(maxsize=8)
 def _device_packs(select: tuple[str, ...]):
-    """hints["devices"]: pack path patterns under decl/devices ("i2c/**", "!i2c/qst/**")."""
+    """hints["devices"]: pack path patterns under decl/devices ("i2c/**", "!i2c/qst/**"), and under devices/ of
+    each definitions directory added from outside."""
+    from .. import protocols as P
+    extra = tuple(str(d / "devices") for d in P.definitions() if (d / "devices").is_dir())
+    return _device_packs_at(select, extra)
+
+
+@lru_cache(maxsize=8)
+def _device_packs_at(select: tuple[str, ...], extra: tuple[str, ...]):
     from . import devices as dev
-    return dev.load_packs(list(select)), dev.address_table()
+    from pathlib import Path
+    sets = [dev.load_packs(list(select))] + [dev.load_packs(list(select), Path(r)) for r in extra]
+    return (sets[0] if len(sets) == 1 else dev.PackSets(sets)), dev.address_table()
 
 
 def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
@@ -507,13 +531,17 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
     t["classify"] = time.perf_counter() - t0
     c = Ctx(cap, tx, tx.survey)
     by_type: dict[str, list] = {}
-    for p in PLUGINS:
+    ext = _external_plugins()
+    # a protocol added from outside runs where its input is made: on clock and data, or on one NRZ line
+    SYNC = SYNC_PROTOCOLS | {p.name for p in ext if any(k.startswith("frames") for k in p.consumes)}
+    ASYNC = ASYNC_PROTOCOLS | {p.name for p in ext if set(p.consumes) & {"nrzbits", "chars"}}
+    for p in PLUGINS + ext:
         if allowed and p.name not in allowed:
             continue
         for k in p.consumes:
             by_type.setdefault(k, []).append(p)
-    async_pins = {pn for pn, i in pin_hint.items() if i.get("protocol") in ASYNC_PROTOCOLS | PULSE_PROTOCOLS}
-    sync_pins = {pn for pn, i in pin_hint.items() if i.get("protocol") in SYNC_PROTOCOLS}
+    async_pins = {pn for pn, i in pin_hint.items() if i.get("protocol") in ASYNC | PULSE_PROTOCOLS}
+    sync_pins = {pn for pn, i in pin_hint.items() if i.get("protocol") in SYNC}
 
     def group_ok(g) -> bool:
         pins = {g.clock, *g.data, *([g.select] if g.select else [])}
@@ -532,7 +560,7 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
     runs = 0
     t0 = time.perf_counter()
     seen = set()
-    run_sync = not allowed or bool(allowed & SYNC_PROTOCOLS)
+    run_sync = not allowed or bool(allowed & SYNC)
     for g in [*tx.groups, *_hinted_groups(pin_hint, c.sv, tx.groups)]:
         if g.kind != "sync" or not run_sync or not group_ok(g):
             continue
@@ -567,23 +595,23 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
                             roots.append(n)
     t["sync"] = time.perf_counter() - t0
     t0 = time.perf_counter()
-    run_async = not allowed or bool(allowed & ASYNC_PROTOCOLS)
+    run_async = not allowed or bool(allowed & ASYNC)
     run_pulse = not allowed or bool(allowed & PULSE_PROTOCOLS)
     for g in tx.groups:
         if g.kind != "single" or g.pin in sync_pins:
             continue
         pc = tx.pins[g.pin]
         # the pulse-width protocols read any lone line (an LED chain or a carrier looks like a clock to the survey)
-        if run_pulse and pin_hint.get(g.pin, {}).get("protocol") not in ASYNC_PROTOCOLS:
+        if run_pulse and pin_hint.get(g.pin, {}).get("protocol") not in ASYNC:
             for p in by_type.get("line", []):
                 runs += 1
                 roots += p.run(c, cap.channel(g.pin), g)
         if not ({"data", "sparse"} & set(pc.candidates)) and g.pin not in async_pins:
             continue
         hinted = pin_hint.get(g.pin, {})
-        if hinted.get("protocol") in ASYNC_PROTOCOLS and not run_pulse:
+        if hinted.get("protocol") in ASYNC and not run_pulse:
             pass
-        want_pulse = run_pulse and hinted.get("protocol") not in ASYNC_PROTOCOLS
+        want_pulse = run_pulse and hinted.get("protocol") not in ASYNC
         ps = typed.pulse_symbols(cap, c.sv, g.pin) if want_pulse and ("pulse" in pc.candidates or "data" in pc.candidates) else None
         if ps is not None:
             for p in by_type.get("pulses", []):

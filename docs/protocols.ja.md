@@ -2,7 +2,7 @@
 
 [English](protocols.md)
 
-WireSkein は UART、SPI、I2C を自分で復号します。その上に乗るプロトコル（機器の命令のフレーム、センサーの報告、ブートローダーのパケットなど）は、WireSkein に手を入れずに分析に足せます。足すと、`wireskein analyze` がそのメッセージをバスの下に出し、試験はほかの検査と同じに確かめられます。
+WireSkein は UART、SPI、I2C を自分で復号します。その上に乗るプロトコル（機器の命令のフレーム、センサーの報告、ブートローダーのパケットなど）は、WireSkein に手を入れずに分析に足せます。足すと、`wireskein analyze` がそのメッセージをバスの下に出し、試験はほかの検査と同じに確かめられます（§1〜§4）。クロックとデータ、または 1 本の線の上で、それ自体がバスであるプロトコルは、宣言の定義として足します（§5）。
 
 ## 1. プロトコル
 
@@ -66,3 +66,53 @@ with rec.section(2, "ping", expect=[protocol("demo_link", "uart", {"data": "PA2"
 - `messages` は順に比べ、それぞれ書いたキーだけを比べます（`"s"` など書かないキーは比べません）。`messages` が無ければ、メッセージが 1 つ以上あること。
 - チェックの失敗は `checks_failed_max`（既定 0）まで。
 - これで言えないきまりは、自分の検査（[ガイド](capture-test-guide.ja.md) §4.10）か、試験の判定（`rec.result`、ガイド §3.3）にします。
+
+## 5. 線そのものの上のプロトコル: 定義
+
+自分がバスであるプロトコル（クロックとデータの上、または 1 本の NRZ の線の上の、独自のフレーム）は、WireSkein の I²C、SPI、SWD、CAN と同じく TOML で宣言的に書き（[設計](design.ja.md) §3.2）、定義のディレクトリとして外から足します。
+
+- **定義のディレクトリ**は、WireSkein の `decl/` と同じ形です: 直下の `*.toml` がプロトコル、`devices/<バス>/...` がデバイスの定義、`markers/*.toml` がマーカーの方言。どれも無くてかまいません。
+- **足し方:** スクリプトや試験では `wireskein.protocols.add_definitions(パス)`、パッケージからは entry point の `wireskein.definitions`（`NAME = "module"`: その module のディレクトリに定義がある。またはパスを返す callable）。
+- **ビットの層**は WireSkein が持つものを、定義の `input` で名前で選びます: `"nrzbits"`（1 本の線。ビットの時間を線から読み、10 ビット以上の待機の後をフレームとする）、または `"frames.select"`、`"frames.gap"`、`"frames.startstop"`（クロックとデータ。選択の線、隙間、START / STOP で区切る）。独自の線の符号（マンチェスターなど）は、WireSkein の中にビットの層が要るので、定義では書けません。
+- **分析**は、それを独自のプロトコルとして出します。フレームは `result.frames` の下（`format = "hex"` の欄はバイトの 16 進）で、チェック（決まった値、CRC）がその証拠です。
+- **試験**は、`protocol(NAME, None, {役割: ピン}, messages=[...])` でフレームを確かめます（`bus` が None: そのプロトコル自身がバス）。
+- WireSkein のプロトコルの名前は断ります。
+
+### 5.1 見本: demo_wire
+
+`examples/definitions/demo_wire.toml` は、このガイドのために作った 1 本線のプロトコルです。
+
+```
+待機 1 | 開始 0 | addr 7 | cmd 4 | len 4 | data 8 x len | crc8 | 終わり 1      （最上位ビットから）
+```
+
+- CRC-8（多項式 0x07、初期値 0）は、アドレスからデータまでに取ります。
+- 送り手は、同じ値が 5 ビット続いたら反対の値を 1 ビット入れます（ビットスタッフィング）。開始ビットから CRC の終わりまでで、CAN と同じく、どのデータでも受け手がビットの時間を保てるようにするためです。
+- フレームとフレームのあいだは、10 ビット分以上の待機です。
+
+```toml
+[plugin]
+name = "demo_wire"
+input = "nrzbits"
+
+[roles]
+data = "data"
+
+[[sequence]]
+order = "msb"
+stuffing = { after = 5, from = "sof", to = "crc" }
+fields = [
+  { name = "sof",  width = 1, expect = 0, hide = true },
+  { name = "addr", width = 7 },
+  { name = "cmd",  width = 4 },
+  { name = "len",  width = 4 },
+  { name = "data", width = "8 * len", format = "hex" },
+  { name = "crc",  width = 8, hide = true },
+  { name = "eof",  width = 1, expect = 1, hide = true },
+]
+checks = [
+  { kind = "crc", field = "crc", from = "addr", to = "data", poly = 0x07, width = 8 },
+]
+```
+
+その試験は、読む定義とは別に、自分の符号器で線を 1 ビットずつ書きます（`tests/test_protocols.py`）。

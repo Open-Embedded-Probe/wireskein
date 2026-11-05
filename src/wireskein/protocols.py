@@ -27,10 +27,11 @@ from __future__ import annotations
 
 import re
 
-__all__ = ["register", "registered", "load"]
+__all__ = ["add_definitions", "definitions", "register", "registered", "load"]
 
 _REGISTERED: dict[str, object] = {}
 _LOADED = False
+_DIRS: list = []                       # definition directories added (add_definitions, wireskein.definitions)
 BUSES = ("uart", "spi", "i2c")
 _RESERVED = {"lines", "nmea", "modbus_rtu", "markers", "bytes", "chars", "breaks", "transfers", "transactions",
              "words", "bits", "frames", "packets", "sd", "devices", "modes", "modes_ok"}
@@ -62,6 +63,11 @@ def load() -> None:
         return
     _LOADED = True
     from importlib.metadata import entry_points
+    from pathlib import Path
+    for ep in entry_points(group="wireskein.definitions"):
+        obj = ep.load()
+        path = obj() if callable(obj) else (Path(obj.__file__).parent if hasattr(obj, "__file__") else obj)
+        add_definitions(path)
     for ep in entry_points(group="wireskein.protocols"):
         obj = ep.load()
         if not getattr(obj, "name", None):
@@ -70,6 +76,32 @@ def load() -> None:
             except AttributeError:
                 pass
         register(obj)
+
+
+def add_definitions(path) -> None:
+    """Add a directory of declarative definitions, laid out as WireSkein's own decl/ (docs/protocols.md §5):
+    *.toml at its top are protocols on a bit layer WireSkein has (a clock and data, or one NRZ line), devices/ holds
+    device packs (devices/<bus>/...), markers/ marker dialects. The analyses and checks that run after it read them."""
+    from pathlib import Path
+    p = Path(path).resolve()
+    if not p.is_dir():
+        raise ValueError(f"{path}: not a directory")
+    if p not in _DIRS:
+        _DIRS.append(p)
+
+
+def remove_definitions(path) -> None:
+    from pathlib import Path
+    p = Path(path).resolve()
+    if p in _DIRS:
+        _DIRS.remove(p)
+
+
+def definitions() -> list:
+    """The definition directories: those added, and those installed packages give (entry point group
+    "wireskein.definitions": NAME = a module whose directory holds them, or a callable returning a path)."""
+    load()
+    return list(_DIRS)
 
 
 def registered() -> dict[str, object]:

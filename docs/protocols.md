@@ -2,7 +2,7 @@
 
 [日本語](protocols.ja.md)
 
-WireSkein decodes UART, SPI and I2C itself. A protocol that rides on one of them - a device's command frames, a sensor's reports, a bootloader's packets - can be added to the analysis without touching WireSkein: `wireskein analyze` then shows its messages under the bus, and a test checks them like any other check.
+WireSkein decodes UART, SPI and I2C itself. A protocol that rides on one of them - a device's command frames, a sensor's reports, a bootloader's packets - can be added to the analysis without touching WireSkein: `wireskein analyze` then shows its messages under the bus, and a test checks them like any other check (§1 to §4). A protocol that is a bus of its own, on a clock and data or on one line, is added as a declarative definition (§5).
 
 ## 1. A protocol
 
@@ -66,3 +66,53 @@ with rec.section(2, "ping", expect=[protocol("demo_link", "uart", {"data": "PA2"
 - `messages` are compared in order, each on the keys it gives (`"s"` and others it leaves out are not). Without `messages`, at least one message.
 - At most `checks_failed_max` (default 0) of its checks may fail.
 - A rule this cannot say is a check of its own ([guide](capture-test-guide.md) §4.10) or a verdict of the test (`rec.result`, guide §3.3).
+
+## 5. A protocol on the wire itself: a definition
+
+A protocol that is its own bus - its own framing on a clock and data, or on one NRZ line - is written declaratively in TOML, as WireSkein's own I²C, SPI, SWD and CAN are ([design](design.md) §3.2), and added from outside as a directory of definitions.
+
+- **A definitions directory** is laid out as WireSkein's `decl/`: the `*.toml` at its top are protocols, `devices/<bus>/...` device packs, `markers/*.toml` marker dialects. Each part is optional.
+- **Adding it:** `wireskein.protocols.add_definitions(path)` in a script or a test, or the entry point group `wireskein.definitions` from a package (`NAME = "module"`: the module's directory holds the definitions; or a callable returning the path).
+- **The bit layer** is one WireSkein has, named by the definition's `input`: `"nrzbits"` (one line, its bit time read from the line, a frame after ten idle bit times or more), or `"frames.select"`, `"frames.gap"`, `"frames.startstop"` (a clock and data, framed by a select line, by gaps, or by START / STOP). A line coding of its own (Manchester and the like) needs a bit layer in WireSkein itself and is not a definition.
+- **The analysis** shows it as a protocol of its own, its frames under `result.frames` (a field with `format = "hex"` as hex bytes), and its checks (expected values, CRCs) as the evidence for it.
+- **A test** checks its frames with `protocol(NAME, None, {role: pin}, messages=[...])` (`bus` None: the protocol is the bus).
+- A name of WireSkein's own protocols is refused.
+
+### 5.1 The example: demo_wire
+
+`examples/definitions/demo_wire.toml` is a single-wire protocol made up for this guide:
+
+```
+idle 1 | start 0 | addr 7 | cmd 4 | len 4 | data 8 x len | crc8 | stop 1      (most significant bit first)
+```
+
+- The CRC-8 (polynomial 0x07, initial 0) covers the address to the data.
+- After five equal bits the sender puts in one of the other value (bit stuffing), from the start bit to the end of the CRC, as CAN does, so a receiver keeps its bit timing on any data.
+- Frames are apart by ten idle bit times or more.
+
+```toml
+[plugin]
+name = "demo_wire"
+input = "nrzbits"
+
+[roles]
+data = "data"
+
+[[sequence]]
+order = "msb"
+stuffing = { after = 5, from = "sof", to = "crc" }
+fields = [
+  { name = "sof",  width = 1, expect = 0, hide = true },
+  { name = "addr", width = 7 },
+  { name = "cmd",  width = 4 },
+  { name = "len",  width = 4 },
+  { name = "data", width = "8 * len", format = "hex" },
+  { name = "crc",  width = 8, hide = true },
+  { name = "eof",  width = 1, expect = 1, hide = true },
+]
+checks = [
+  { kind = "crc", field = "crc", from = "addr", to = "data", poly = 0x07, width = 8 },
+]
+```
+
+Its tests write the line bit by bit with an encoder of their own (`tests/test_protocols.py`), apart from the definition that reads it.

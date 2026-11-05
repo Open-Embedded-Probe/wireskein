@@ -227,7 +227,10 @@ def parse_sequence(seq: dict, bits: np.ndarray, pos: int, end: int):
                 passed += v in f["valid"]
                 info += (w - math.log2(len(f["valid"]))) if v in f["valid"] else 0
             if not f.get("hide"):
-                rec[f["name"]] = f["enum"].get(str(v), v) if "enum" in f else v
+                if f.get("format") == "hex":               # bytes, most significant first, as hex
+                    rec[f["name"]] = v.to_bytes((w + 7) // 8, "big").hex() if w else ""
+                else:
+                    rec[f["name"]] = f["enum"].get(str(v), v) if "enum" in f else v
     except (IndexError, _Stuffed):
         return None
     for d in seq.get("derive", []):
@@ -280,6 +283,10 @@ def _refined_bitrate(nb, spans) -> float:
 
 
 class DeclarativePlugin:
+    @property
+    def _ext(self) -> dict:
+        return {"external": True} if self.external else {}
+
     def __init__(self, spec: dict, path: str = ""):
         self.spec = spec
         self.path = path
@@ -290,6 +297,7 @@ class DeclarativePlugin:
         self.data_pins = p.get("data_pins")
         # open_tail: also take the frame a capture ended inside (no STOP); it is reported, never counted as evidence
         self.open_tail = bool(p.get("open_tail", False))
+        self.external = False
 
     @classmethod
     def load(cls, path: Path) -> "DeclarativePlugin":
@@ -395,7 +403,7 @@ class DeclarativePlugin:
         for i, d in enumerate(sb.data):
             roles[names[i] if isinstance(names, list) and i < len(names) else f"{names}{i}"] = d
         m = {"length_fit": fit, "check_rate": check_rate, "words": n_words, "frames": int(keep.sum()), "clk": clk, "pair": pair}
-        return [Node(self.name, {"sample_edge": sb.sample_edge, "declared": self.path}, roles,
+        return [Node(self.name, {"sample_edge": sb.sample_edge, "declared": self.path, **self._ext}, roles,
                      Stream("records", records), m, layer_score=score, total=score)]
 
     # ---------------- layout-based ----------------
@@ -470,7 +478,7 @@ class DeclarativePlugin:
         roles = {sp["roles"]["clock"]: sb.clock, sp["roles"]["data"]: sb.data[0]}
         m = {"frames": total, "matched": matched, "checked_frames": checked_frames, "parity_ok": parity,
              "bit_coverage": cover}
-        return [Node(self.name, {"sample_edge": sb.sample_edge, "declared": self.path}, roles,
+        return [Node(self.name, {"sample_edge": sb.sample_edge, "declared": self.path, **self._ext}, roles,
                      Stream("records", recs), m, layer_score=score, total=score)]
 
     # ---------------- sequence ----------------
@@ -553,10 +561,10 @@ class DeclarativePlugin:
             score *= 1.0 if top <= 0.5 else max(0.05, 1 - (top - 0.5) / 0.5)
         if hasattr(src, "source"):
             roles = {sp["roles"]["clock"]: sb.clock, sp["roles"]["data"]: sb.data[0]}
-            params = {"sample_edge": sb.sample_edge, "declared": self.path}
+            params = {"sample_edge": sb.sample_edge, "declared": self.path, **self._ext}
         else:
             roles = {sp["roles"]["data"]: src.pin}
-            params = {"declared": self.path, "idle": src.idle, "bitrate": _refined_bitrate(src, spans)}
+            params = {"declared": self.path, "idle": src.idle, "bitrate": _refined_bitrate(src, spans), **self._ext}
         return [Node(self.name, params, roles, Stream("records", recs), m, layer_score=score, total=score)]
 
     def run(self, c, fr, g):
@@ -575,6 +583,17 @@ class DeclarativePlugin:
             nodes = self._run_layout(c, fr, g) if "layout" in self.spec else self._run_words(c, fr, g)
         adapt = ADAPTERS.get(self.name)
         return [adapt(c, fr, n) for n in nodes] if adapt else nodes
+
+
+def load_dir(root: Path) -> list[DeclarativePlugin]:
+    """The protocol definitions at the top of a definitions directory added from outside (wireskein.protocols);
+    each marked external, its provenance the directory's name and the file's."""
+    out = []
+    for p in sorted(Path(root).glob("*.toml")):
+        plug = DeclarativePlugin(tomllib.loads(p.read_text()), f"{Path(root).name}/{p.name}")
+        plug.external = True
+        out.append(plug)
+    return out
 
 
 def load_all(names: list[str] | None = None) -> list[DeclarativePlugin]:

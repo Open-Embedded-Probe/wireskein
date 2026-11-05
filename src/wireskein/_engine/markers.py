@@ -77,8 +77,11 @@ class _Depth(dict):
 
 
 def load_dialects() -> dict[str, dict]:
+    """WireSkein's dialects (decl/markers) and those under markers/ of definition directories added from outside."""
+    from .. import protocols as P
     out = {}
-    for p in sorted(HERE.glob("*.toml")):
+    paths = sorted(HERE.glob("*.toml")) + [p for d in P.definitions() for p in sorted((d / "markers").glob("*.toml"))]
+    for p in paths:
         d = tomllib.loads(p.read_text())
         for m in d["marker"]:
             m["_re"] = re.compile(m["pattern"])

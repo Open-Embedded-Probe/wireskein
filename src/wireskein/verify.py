@@ -515,6 +515,8 @@ def check_protocol(cap, x):
     compared on the keys the expectation gives, and its checks."""
     from . import protocols as P
     from ._engine import export
+    if x.get("bus") is None:
+        return _declared_protocol(cap, x)
     proto = P.registered().get(x["name"])
     if proto is None:
         return False, {}, f"no protocol named {x['name']!r} (wireskein.protocols)"
@@ -532,6 +534,12 @@ def check_protocol(cap, x):
     got = {"messages": msgs, "checks_passed": m.get("checks_passed", 0), "checks_failed": m.get("checks_failed", 0)}
     if "error" in m:
         return False, got, f"{x['name']} failed: {m['error']}"
+    return _compare_messages(x, got)
+
+
+def _compare_messages(x, got):
+    """check_protocol's verdict on the messages and checks a protocol gave."""
+    msgs = got["messages"]
     ok, why = True, []
     if got["checks_failed"] > x.get("checks_failed_max", 0):
         ok = False
@@ -551,6 +559,23 @@ def check_protocol(cap, x):
         ok = False
         why.append(f"no {x['name']} message")
     return ok, got, "; ".join(why)
+
+
+def _declared_protocol(cap, x):
+    """A protocol of its own on the wire, declared (wireskein's decl/, or a definitions directory added): the pins
+    decoded as it, its frames (each frame's own checks counted) compared as check_protocol's messages."""
+    from ._engine import export
+    pins = {p: {"protocol": x["name"], "role": r, **({"baud": x["baud"]} if x.get("baud") else {})}
+            for r, p in x["roles"].items()}
+    res = _decode(cap, {"protocols": [x["name"]], "pins": pins})
+    n = _best(res, x["name"], dict(x["roles"]))
+    if n is None:
+        return False, {}, f"nothing decoded as {x['name']} on these pins (is its definition added?)"
+    recs = [r for r in (n.output.items or []) if isinstance(r, dict)]
+    frames = [f for f in export.layers_of(n).get("frames", export.layers_of(n).get("packets", []))]
+    got = {"messages": frames, "checks_passed": sum(bool(r.get("ok")) for r in recs),
+           "checks_failed": sum(not r.get("ok", True) for r in recs)}
+    return _compare_messages(x, got)
 
 
 def _spi_clocks(sck, cs, n: int, active: int) -> tuple:

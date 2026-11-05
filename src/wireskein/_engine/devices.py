@@ -140,6 +140,22 @@ def _headers(root: Path, rels: list[Path]) -> dict[str, dict]:
     return out
 
 
+class PackSets:
+    """Several PackSets (WireSkein's and those of definition directories added from outside) read as one."""
+
+    def __init__(self, sets: list[PackSet]):
+        self.sets = sets
+
+    def i2c(self, addresses) -> list[dict]:
+        return [p for s in self.sets for p in s.i2c(addresses)]
+
+    def bus(self, bus: str) -> list[dict]:
+        return [p for s in self.sets for p in s.bus(bus)]
+
+    def __len__(self):
+        return sum(len(s) for s in self.sets)
+
+
 def load_packs(select: list[str] | None = None, root: Path = HERE) -> PackSet:
     return PackSet(select, root)
 

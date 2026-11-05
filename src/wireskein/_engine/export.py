@@ -137,7 +137,7 @@ def layers_of(n) -> dict:
             out["frames"] = n.output.items
         else:
             out["packets"] = n.output.items
-    elif a in ("swd", "can"):
+    elif a in ("swd", "can") or getattr(getattr(n, "plugin", None), "external", False) or n.params.get("external"):
         rows = [{("s" if k == "start" else k): (int(v) if isinstance(v, np.integer) else v) for k, v in x.items()}
                 for x in (n.output.items or [])]
         out["packets" if a == "swd" else "frames"] = rows
@@ -166,7 +166,7 @@ def final_of(n, lay: dict) -> dict:
     if mine:                                   # a protocol of others whose checks held is the bus's final reading
         best = max(mine, key=lambda ch: ch.total)
         return {best.analyzer: lay[best.analyzer]}
-    want = FINAL.get(n.analyzer, ())
+    want = FINAL.get(n.analyzer, ("frames",) if n.params.get("external") else ())
     want = (want,) if isinstance(want, str) else want
     for k in want:
         if lay.get(k):

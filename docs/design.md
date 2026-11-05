@@ -46,7 +46,7 @@ Decisions and reasons:
 
 ### 3.2 How protocols are written
 
-- **Protocols that are closed within one frame are written declaratively in TOML** (`src/wireskein/decl/*.toml`: I²C, SPI, RVSWD, SWD, CAN). Word width, bit order, field extraction, fixed values, length rules, repeated words, parity, CRC, bit stuffing and conditional fields can all be written. The same protocol is not also written in Python and kept twice.
+- **Protocols that are closed within one frame are written declaratively in TOML** (`src/wireskein/decl/*.toml`: I²C, SPI, RVSWD, SWD, CAN; others' from a definitions directory added from outside, [protocols](protocols.md) §5). Word width, bit order, field extraction, fixed values, length rules, repeated words, parity, CRC, bit stuffing and conditional fields can all be written. The same protocol is not also written in Python and kept twice.
   - Reason: definitions cover most common patterns without code, validation is mechanical, and other implementations can use the same definitions.
   - Expressions are limited to integer arithmetic, comparison, logic, the ternary operator and min/max. Loops and variables spanning frames are not included.
   - Searches that a definition cannot express (such as re-framing RVSWD at stop intervals) are core processing called by name (`frame.reframe = "rvswd_stop"`). Exceptions are confined to the core and are not brought into definitions.

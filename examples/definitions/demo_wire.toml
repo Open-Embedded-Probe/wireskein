@@ -1,0 +1,33 @@
+# demo_wire: a single-wire protocol of one's own, as an example of a protocol defined declaratively (TOML) and added
+# from outside WireSkein (wireskein.protocols.add_definitions, or the entry point group wireskein.definitions).
+#
+# The line idles high (recessive 1). A frame: a start bit 0, a 7-bit address, a 4-bit command, a 4-bit length, that
+# many data bytes, a CRC-8 (polynomial 0x07, initial 0) of the address to the data, and a stop bit 1; most
+# significant bit first. After five equal bits the sender puts in one of the other value (bit stuffing), from the
+# start bit to the end of the CRC, so a receiver keeps its bit timing on any data. Frames are apart by ten bit times
+# of idle or more.
+[plugin]
+name = "demo_wire"
+input = "nrzbits"
+
+[roles]
+data = "data"
+
+[[sequence]]
+order = "msb"
+stuffing = { after = 5, from = "sof", to = "crc" }
+fields = [
+  { name = "sof",  width = 1, expect = 0, hide = true },
+  { name = "addr", width = 7 },
+  { name = "cmd",  width = 4 },
+  { name = "len",  width = 4 },
+  { name = "data", width = "8 * len", format = "hex" },
+  { name = "crc",  width = 8, hide = true },
+  { name = "eof",  width = 1, expect = 1, hide = true },
+]
+checks = [
+  { kind = "crc", field = "crc", from = "addr", to = "data", poly = 0x07, width = 8 },
+]
+
+[score]
+terms = ["degenerate"]
