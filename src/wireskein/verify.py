@@ -1384,6 +1384,64 @@ def check_can(cap, x):
     return ok, got, why
 
 
+def check_rs485(cap, x):
+    """UART on TX (as uart) and the driver enable around its characters: every character inside a window of DE
+    active, each window's lead (DE active to the first start bit) and tail (the last stop bit's end to DE inactive)."""
+    tx, de = _ch(cap, x["tx"]), _ch(cap, x["de"])
+    if tx is None or de is None:
+        return None, {}, "pin not captured"
+    ux = {**x, "kind": "uart", "pin": x["tx"]}
+    ok, got, why = check_uart(cap, ux)
+    if not got.get("baud") and not x.get("baud"):
+        return ok, got, why
+    idle, bits, parity, stop = x.get("idle", 1), x.get("bits", 8), x.get("parity", "none"), x.get("stop", 1)
+    u = cap.rate / (got.get("baud") or x["baud"])
+    rx = _uart_rx(tx, cap.n_samples, u, idle, bits, parity, stop)
+    span = (1 + bits + (parity != "none") + stop) * u
+    active = x.get("de_active", 1)
+    start, length, level = de.runs(cap.n_samples)
+    win = [(int(a), int(a + n)) for a, n, lv in zip(start, length, level) if lv == active]
+    chars = [(float(f[0]), float(f[0]) + span) for f in rx["frames"]]
+    a_of = np.array([w[0] for w in win], np.int64)
+    inside = {}
+    outside = []
+    for c0, c1 in chars:
+        k = int(np.searchsorted(a_of, c0, side="right")) - 1
+        if k >= 0 and win[k][0] <= c0 < win[k][1]:          # its start bit sent (a cut stop bit is the tail's)
+            inside.setdefault(k, []).append((c0, c1))
+        else:
+            outside.append(c0)
+    rows, notices = [], got.setdefault("notices", [])
+    for k, (a, b) in enumerate(win):
+        cs = inside.get(k)
+        if not cs:
+            if a > 0 and b < cap.n_samples:
+                notices.append({"kind": "empty_de_window", "tick": a, "length_ticks": b - a})
+            continue
+        rows.append({"tick": a, "chars": len(cs),
+                     "lead": (a, cs[0][0] - a) if a > 0 else None,            # DE active before the window opened
+                     "tail": (int(cs[-1][1]), b - cs[-1][1]) if b < cap.n_samples else None})
+    leads = [(r["tick"], r["lead"][1]) for r in rows if r["lead"]]
+    tails = [r["tail"] for r in rows if r["tail"]]
+    got["de_windows"] = [{"tick": r["tick"], "chars": r["chars"],
+                          "lead_s": r["lead"][1] / cap.rate if r["lead"] else None,
+                          "tail_s": r["tail"][1] / cap.rate if r["tail"] else None} for r in rows[:16]]
+    got["de_lead"], got["de_tail"] = _times(leads, cap.rate), _times(tails, cap.rate)
+    got["chars_outside_de"] = len(outside)
+    parts = [(ok, why)] if ok is not MEASURED else []
+    if outside:
+        parts.append((False, f"{len(outside)} characters with DE inactive (the first at {_si(outside[0] / cap.rate)})"))
+    res = max(tx.step, de.step)
+    if leads:
+        parts += _limit_of("DE lead", leads, res, x.get("lead_min_s", 0.0), x.get("lead_max_s"), cap.rate)
+    if tails:
+        parts += _limit_of("DE tail", tails, res, x.get("tail_min_s", 0.0), x.get("tail_max_s"), cap.rate)
+    if ok is MEASURED and all(v is not False for v, _ in parts):
+        return MEASURED, got, why
+    v, w = _verdicts(parts)
+    return v, got, w
+
+
 def _analog(cap: Capture, pin: str) -> AnalogTrace | None:
     return next((a for a in cap.analog if a.name == pin), None)
 
@@ -1601,6 +1659,10 @@ NOTICES = {
     "uart": {"baud_near_limit": "the bit rate within its tolerance but more than half of it off (value: the error)",
              "glitch": "a pulse off idle that is not low at the middle of a start bit: no character (width_ticks)",
              "break": "the line held active longer than a whole character (length_ticks)"},
+    "rs485": {"baud_near_limit": "the bit rate within its tolerance but more than half of it off (value: the error)",
+              "glitch": "a pulse off idle that is not low at the middle of a start bit: no character (width_ticks)",
+              "break": "the line held active longer than a whole character (length_ticks)",
+              "empty_de_window": "DE active with no character inside (length_ticks)"},
     "can": {"bitrate_near_limit": "the bit rate within its tolerance but more than half of it off (value: the error)",
             "overload": "an overload frame: dominant at the last bit of an end of frame or in the intermission"},
 }
@@ -1662,12 +1724,12 @@ CHECKS = {"protocol": check_protocol, "becomes": check_becomes, "square": check_
           "uart": check_uart, "voltage": check_voltage, "phase": check_phase, "skew": check_skew,
           "dead_time": check_dead_time, "i2c_timing": check_i2c_timing, "rgb_led": check_rgb_led,
           "onewire": check_onewire, "ir": check_ir, "lin": check_lin, "i2s": check_i2s,
-          "quadrature": check_quadrature, "sd_spi": check_sd_spi, "can": check_can}
+          "quadrature": check_quadrature, "sd_spi": check_sd_spi, "can": check_can, "rs485": check_rs485}
 
 
 def _pins_of(x: dict) -> set[str]:
     out = set()
-    for k in ("pin", "scl", "sda", "clk", "mosi", "miso", "cs", "a", "b", "hi", "lo", "bclk", "ws", "sd"):
+    for k in ("pin", "scl", "sda", "clk", "mosi", "miso", "cs", "a", "b", "hi", "lo", "bclk", "ws", "sd", "tx", "de"):
         if x.get(k):
             out.add(x[k])
     out |= set(x.get("levels", {}))

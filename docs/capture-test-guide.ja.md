@@ -208,6 +208,7 @@ WireSkein は、キャプチャを読み手に要るものに変えます。サ�
 | `i2c(scl, sda, transactions, freq_hz, freq_rel, released)` | トランザクションの列（アドレス、読み書き、バイト、ACK）、SCL の周波数、終了時に両方 High。トランザクションごとに `start`（`S`、`Sr`）と `end`（`P`、`Sr`）を書けば、それも比べる |
 | `spi(clk, mosi, miso, cs, mode, mosi_bytes, miso_bytes, freq_hz, freq_rel, bit_order, cs_active, bits, notices, setup_min_s, hold_min_s)` | モード、両方向のバイト、SCK の周波数、最後に CS が High。モードは線から読む（§4.5）。`cs` があれば、CS の窓ごとのクロックの数（`frame_bits`。`bits` で比べる）、窓の中で SCK のレベルが中央値の半分より短くないこと（グリッチ）、データ線ごとのサンプルの辺の前後の余裕（`margins`。`setup_min_s` / `hold_min_s` で下限）、受け手が読めるモードの一覧 `modes_ok`（§4.5）。CS が非アクティブのあいだの SCK の動きと、クロックの無い窓は注意（§4.9） |
 | `uart(pin, baud, data, baud_rel, idle, bits, parity, stop, errors)` | ボーレート、バイト列、アイドルレベル、フレームとパリティのエラー（下記） |
+| `rs485(tx, de, baud, data, ..., de_active, lead_min_s, lead_max_s, tail_min_s, tail_max_s)` | TX の UART を `uart` と同じに読み、その周りの半二重のドライバの許可（DE）を見る（§4.2）。どの文字も DE がアクティブな中か、窓ごとの前と後の余裕 |
 | `voltage(pin, level_v, level_abs_v, level_min_v, level_max_v, ripple_max_v)` | アナログのチャンネルの電圧。平均が `level_v` ± `level_abs_v`、全サンプルが `level_min_v`〜`level_max_v`、ピークからピークが `ripple_max_v` 以下。与えたものだけを見る |
 | `phase(a, b, phase_deg, phase_abs_deg, freq_hz, freq_rel, edge)` | 2 本の周期的な線の位相。a のエッジから、同じ向きの b の次のエッジまでを、a の周期に対する角度（0〜360 度）にする。どの組も `phase_deg` ± `phase_abs_deg`（度。0 の近くは回り込む）、両方の周波数が `freq_hz` の `freq_rel`（相対）の内 |
 | `skew(a, b, delay_abs_s, delay_s, edge)` | 一緒に変わる 2 本の線（パターン、並列の出力）のずれ。a のどのエッジにも、同じ向きの b のエッジが `delay_s` ± `delay_abs_s` にある。相手の無いエッジは NG。`edge` が `"rise"` / `"fall"` ならその向きだけ（1 つのタイマの、デューティの違う 2 本の出力） |
@@ -249,6 +250,12 @@ uart("PA2", 8_000_000 / 9, baud_rel=0.015)                               # 8N1
 uart("PA2", 8_000_000 / 9, baud_rel=0.015, parity="even")                # 8E1
 uart("PA2", 8_000_000 / 9, parity="even", errors={"parity": 16})          # わざと送った 16 のパリティの誤り
 uart("PB0", None)                                                         # 測るだけ
+```
+
+`rs485(tx, de, baud, ...)` は、TX を `uart` と同じに読み（引数も誤りも同じ）、その周りのドライバの許可 `de`（`de_active` でアクティブ）を見ます。どの文字も、DE がアクティブな窓の中で始まらなければなりません。窓ごとの前の余裕（DE がアクティブになってから最初の開始ビットまで）は `lead_min_s` / `lead_max_s`、後の余裕（最後のストップビットの終わりから DE が戻るまで）は `tail_min_s`（既定 0。ストップビットの途中で DE を戻すと、バスの上でそれが切れる）/ `tail_max_s`（返事のためにバスがどれだけ早く空くか）で限ります。文字の無い窓は、注意 `empty_de_window` です。測る値は `de_windows`（窓ごとの文字の数、前と後の余裕）、`de_lead`、`de_tail`、`chars_outside_de` です。
+
+```python
+rs485("PA2", "PA1", 115200, lead_min_s=1e-6, tail_max_s=1 / 115200)
 ```
 
 ### 4.3 アナログの線にロジックの検査をかける（`threshold=`）
@@ -351,6 +358,7 @@ sd_spi("PA5", "PA7", "PA6", "PA4", [{"cmd": 0, "r1": 0x01}, {"cmd": 8, "arg": 0x
 | `uart` | `baud_near_limit` | ボーレートが `baud_rel` の中だが、その半分より大きくずれている（線の最初の変化の所。`value`: ずれ、`limit`） |
 | `uart` | `glitch` | 待機から離れたパルスで、開始ビットの真ん中でアクティブでないもの: 文字ではない（`width_ticks`）。起動のときのごみはここに出る |
 | `uart` | `break` | 1 文字の時間より長くアクティブな線（`length_ticks`） |
+| `rs485` | `empty_de_window` | DE がアクティブなのに文字が無い（`length_ticks`）。`rs485` は `uart` の注意も見つける |
 | `can` | `bitrate_near_limit` | ビットレートが `bitrate_rel` の中だが、その半分より外れている（`value`: 誤差、`limit`） |
 | `can` | `overload` | オーバーロードフレーム。フレームの終わりの最後のビットか、インターミッションでドミナント |
 
@@ -379,6 +387,7 @@ wireskein に検査の無いきまりは、検査の種類として足せます�
 | PWM | 周波数、デューティー比、周期ごとの揺らぎ、極性 | 最初のパルスが欠けないこと、更新で欠けたり伸びたりしないこと、停止後のレベル |
 | tone() | 周波数、持続時間 | 終了後のレベル |
 | UART | ボーレートの誤差、データビット・パリティ・ストップビット、内容 | 初期化でゴミが出ないこと、アイドルレベル、`end()` の後のピンの状態 |
+| RS485 | UART と同じもの、どの文字の周りにも DE（前と後の余裕） | ブロックの間は DE が戻っていること、返事に間に合うほど早く戻ること |
 | CAN | ビットレートの誤差、識別子とデータ、ACK、スタッフ / 形式 / CRC の誤りが無いこと | 初期化でエラーフレームが出ないこと、終わった後にバスがレセッシブ |
 | I2C | SCL の周波数、START・STOP・Repeated Start、ACK と NACK、内容 | 終了後に SDA と SCL が両方 High、SDA が Low に張り付かないこと |
 | SPI | モード（CPOL/CPHA）、ビット順、クロック周波数、内容 | 取引の間に CS が High、余計なクロックがないこと |

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- (EN) A check `rs485(tx, de, baud, ..., de_active, lead_min_s, lead_max_s, tail_min_s, tail_max_s)`: TX read as `uart` (the same arguments and errors) with the driver enable around it: every character starting inside DE active, each window's lead and tail bounded (the tail at least 0 by default), a window with no character a notice `empty_de_window`. Tested on lines from an encoder of the test's own (tests/test_rs485.py).
+- (JA) 検査 `rs485(tx, de, baud, ..., de_active, lead_min_s, lead_max_s, tail_min_s, tail_max_s)` を足した: TX を `uart` と同じに読み（引数も誤りも同じ）、周りのドライバの許可を見る。どの文字も DE がアクティブな中で始まり、窓ごとの前と後の余裕を限る（後の余裕は既定で 0 以上）。文字の無い窓は注意 `empty_de_window`。試験の中の独自の符号器が作った線で確かめた（tests/test_rs485.py）。
+
 - (EN) A check `can(pin, bitrate, frames, bitrate_rel, idle, ack, errors, sample_point)`: classic CAN read as a receiving node does (a start of frame after 11 recessive bits, resynchronizing at each recessive-to-dominant edge, stuff / form / CRC errors, reading again after an error frame); the bit rate fitted from the edges; the good frames compared in order; the ACK slot (`ack` True / False / None); errors NG unless expected exactly (`errors={"stuff": 1}`); notices `bitrate_near_limit` and `overload`. Checked on lines from an encoder of the test's own (tests/test_can.py).
 - (JA) 検査 `can(pin, bitrate, frames, bitrate_rel, idle, ack, errors, sample_point)` を足した: クラシック CAN を受信するノードと同じに読む（11 ビットのレセッシブの後のフレームの始め、レセッシブからドミナントへのエッジごとの同期し直し、スタッフ / 形式 / CRC の誤り、エラーフレームの後の読み直し）。ビットレートはエッジから求め、正しいフレームを順に比べ、ACK のスロットを見る（`ack` は True / False / None）。誤りは「ちょうどこの数」と書かなければ NG（`errors={"stuff": 1}`）。注意は `bitrate_near_limit` と `overload`。試験の中の独自の符号器が作った線で確かめた（tests/test_can.py）。
 

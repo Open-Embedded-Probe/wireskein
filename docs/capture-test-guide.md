@@ -208,6 +208,7 @@ WireSkein turns a capture into what a reader needs, so the samples themselves do
 | `i2c(scl, sda, transactions, freq_hz, freq_rel, released)` | Sequence of transactions (address, read/write, bytes, ACK), SCL frequency, both High at the end. Each transaction may name `start` (`S`, `Sr`) and `end` (`P`, `Sr`), compared when given |
 | `spi(clk, mosi, miso, cs, mode, mosi_bytes, miso_bytes, freq_hz, freq_rel, bit_order, cs_active, bits, notices, setup_min_s, hold_min_s)` | Mode, bytes in both directions, SCK frequency, CS High at the end. The mode is read from the lines (§4.5). With `cs`: the clocks in each CS window (`frame_bits`; `bits` compares them), no SCK level inside a window shorter than half the median one (a glitch), each data line's setup and hold around the sampling edges (`margins`; `setup_min_s` / `hold_min_s` bound them), and `modes_ok`, the modes a receiver could read the lines in (§4.5); SCK moving while CS is inactive and a window with no clock are notices (§4.9) |
 | `uart(pin, baud, data, baud_rel, idle, bits, parity, stop, errors)` | Baud rate, byte sequence, idle level, framing and parity errors (below) |
+| `rs485(tx, de, baud, data, ..., de_active, lead_min_s, lead_max_s, tail_min_s, tail_max_s)` | UART on TX as `uart`, with a half-duplex driver enable around it (§4.2): every character inside DE active, each window's lead and tail |
 | `voltage(pin, level_v, level_abs_v, level_min_v, level_max_v, ripple_max_v)` | Voltage of an analog channel. Mean is `level_v` ± `level_abs_v`, all samples within `level_min_v` to `level_max_v`, peak-to-peak at most `ripple_max_v`. Only the given ones are checked |
 | `phase(a, b, phase_deg, phase_abs_deg, freq_hz, freq_rel, edge)` | Phase of two periodic lines: from an edge of a to b's next edge of the same direction, as an angle of a's period (0–360 degrees). Every pair within `phase_deg` ± `phase_abs_deg` (degrees, wrapping near 0), both frequencies within `freq_rel` (relative) of `freq_hz` |
 | `skew(a, b, delay_abs_s, delay_s, edge)` | Skew of two lines that change together (patterns, parallel outputs): every edge of a has b's edge of the same direction at `delay_s` ± `delay_abs_s`. An edge without a partner is NG. With `edge` `"rise"` / `"fall"` only those (two outputs of one timer at different duties) |
@@ -249,6 +250,12 @@ uart("PA2", 8_000_000 / 9, baud_rel=0.015)                               # 8N1
 uart("PA2", 8_000_000 / 9, baud_rel=0.015, parity="even")                # 8E1
 uart("PA2", 8_000_000 / 9, parity="even", errors={"parity": 16})          # 16 parity errors sent on purpose
 uart("PB0", None)                                                         # measure only
+```
+
+`rs485(tx, de, baud, ...)` reads TX as `uart` does (the same arguments and errors) and the driver enable `de` (active at `de_active`) around it. Every character must start inside a window of DE active. Each window's lead (DE active to its first start bit) is bounded by `lead_min_s` / `lead_max_s`, its tail (the last stop bit's end to DE inactive) by `tail_min_s` (by default 0: DE released inside the stop bit cuts it on the bus) / `tail_max_s` (how soon the bus is free for the answer). A window with no character is a notice `empty_de_window`. Measured: `de_windows` (each window's characters, lead and tail), `de_lead`, `de_tail`, `chars_outside_de`.
+
+```python
+rs485("PA2", "PA1", 115200, lead_min_s=1e-6, tail_max_s=1 / 115200)
 ```
 
 ### 4.3 Applying logic checks to analog lines (`threshold=`)
@@ -351,6 +358,7 @@ Some behaviour is allowed by the protocol but worth a look: a test may want to m
 | `uart` | `baud_near_limit` | The bit rate within `baud_rel` but more than half of it off (at the line's first edge; `value`: the error, `limit`) |
 | `uart` | `glitch` | A pulse off idle that is not active at the middle of a start bit: no character (`width_ticks`). Start-up rubbish shows here |
 | `uart` | `break` | The line held active longer than a whole character (`length_ticks`) |
+| `rs485` | `empty_de_window` | DE active with no character inside (`length_ticks`); `rs485` also finds `uart`'s notices |
 | `can` | `bitrate_near_limit` | The bit rate within `bitrate_rel` but more than half of it off (`value`: the error, `limit`) |
 | `can` | `overload` | An overload frame: dominant at the last bit of an end of frame or in the intermission |
 
@@ -379,6 +387,7 @@ A rule wireskein has no check for can be added as a check kind, judged and repor
 | PWM | Frequency, duty cycle, per-period variation, polarity | The first pulse is not missing, no pulse is dropped or stretched on update, level after stopping |
 | tone() | Frequency, duration | Level after it ends |
 | UART | Baud rate error, data bits, parity, stop bits, content | No garbage on initialization, idle level, pin state after `end()` |
+| RS485 | As UART, and DE around every character (lead, tail) | DE inactive between blocks, released soon enough for the answer |
 | CAN | Bit rate error, identifiers and data, ACK, no stuff / form / CRC errors | No error frames on initialization, bus recessive after the end |
 | I2C | SCL frequency, START, STOP, Repeated Start, ACK and NACK, content | SDA and SCL both High after the end, SDA not stuck Low |
 | SPI | Mode (CPOL/CPHA), bit order, clock frequency, content | CS High between transactions, no extra clocks |

@@ -47,7 +47,7 @@ from . import _fileformat as fileformat
 
 FORMAT = "wireskein-run/1"          # docs/run-format.ja.md
 
-__all__ = ["FORMAT", "Recorder", "becomes", "can", "dead_time", "ends", "i2c", "i2c_timing", "i2s", "ir", "level", "lin", "only_moving",
+__all__ = ["FORMAT", "Recorder", "becomes", "can", "rs485", "dead_time", "ends", "i2c", "i2c_timing", "i2s", "ir", "level", "lin", "only_moving",
            "onewire", "phase", "protocol", "pulses", "quadrature", "rgb_led", "sd_spi", "skew", "spi", "square", "starts", "trim", "uart",
            "voltage"]
 
@@ -570,6 +570,22 @@ def can(pin: str, bitrate: float | None, frames: list[dict] | None = None, bitra
     return _t({"kind": "can", "pin": pin, "bitrate": bitrate, "frames": frames, "bitrate_rel": bitrate_rel,
                "idle": idle, "ack": ack, "errors": dict(errors) if errors is not None else None,
                "sample_point": sample_point, "notices": notices}, threshold)
+
+
+def rs485(tx: str, de: str, baud: float | None, data: str | None = None, baud_rel: float = 0.03, idle: int = 1,
+          bits: int = 8, parity: str = "none", stop: float = 1, errors: dict | None = None, de_active: int = 1,
+          lead_min_s: float | None = 0.0, lead_max_s: float | None = None, tail_min_s: float | None = 0.0,
+          tail_max_s: float | None = None, notices=None, threshold=None) -> dict:
+    """UART on tx, read as uart() does (baud, data, the format, errors), with a half-duplex driver enable de
+    (active at de_active) around it: every character inside a window of DE active, each window's lead (DE active
+    to its first start bit) within lead_min_s..lead_max_s and tail (its last stop bit's end to DE inactive) within
+    tail_min_s..tail_max_s (by default at least 0: DE released before the stop bit ends cuts it on the bus; a
+    tail_max_s bounds how soon the bus is free for the answer). A window of DE active with no character is a
+    notice (empty_de_window)."""
+    return _t({"kind": "rs485", "tx": tx, "de": de, "baud": baud, "data": data, "baud_rel": baud_rel, "idle": idle,
+               "bits": bits, "parity": parity, "stop": stop, "errors": dict(errors) if errors is not None else None,
+               "de_active": de_active, "lead_min_s": lead_min_s, "lead_max_s": lead_max_s, "tail_min_s": tail_min_s,
+               "tail_max_s": tail_max_s, "notices": notices}, threshold)
 
 
 def i2s(bclk: str, ws: str, sd: str, format: str = "i2s", bits: int | None = None, fs_hz: float | None = None,
