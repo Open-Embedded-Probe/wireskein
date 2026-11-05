@@ -1,0 +1,87 @@
+{
+ "probe": "oep://e8f60ae84e28",
+ "firmware": "0.0.49+1006b22",
+ "rate_hz": 10000000,
+ "pins": {
+  "uart_tx": "GPIO26",
+  "uart_rx": "GPIO27",
+  "sck": "GPIO20",
+  "mosi": "GPIO21",
+  "miso": "GPIO22",
+  "cs": "GPIO23"
+ },
+ "channels_in_capture": {
+  "uart_tx": "uart_tx",
+  "sck": "sck",
+  "mosi": "mosi",
+  "miso": "miso",
+  "cs": "cs"
+ },
+ "uart": {
+  "interface": "oep.fixture.uart (ESP-IDF UART driver)",
+  "baud_asked": 115200,
+  "baud_used": 115211,
+  "format": "8N1",
+  "bytes": "0013a502011001026ba50002115da50803120001020304050607ef",
+  "written": "one write"
+ },
+ "spi": {
+  "interface": "oep.fixture.spi-controller",
+  "mode": 0,
+  "bit_order": "msb",
+  "clock_asked_hz": 250000,
+  "clock_used_hz": 250000,
+  "cs_windows": [
+   "a502011001026b",
+   "a50002115d",
+   "a50803120001020304050607ef"
+  ],
+  "miso": "not driven by anything (floating input, read as the probe saw it)",
+  "times_used": [
+   {
+    "gap_ns": 0,
+    "setup_ns": 20000,
+    "hold_ns": 20000,
+    "rx": "00000000000000"
+   },
+   {
+    "gap_ns": 200000,
+    "setup_ns": 20000,
+    "hold_ns": 20000,
+    "rx": "0000000000"
+   },
+   {
+    "gap_ns": 200000,
+    "setup_ns": 20000,
+    "hold_ns": 20000,
+    "rx": "00000000000000000000000000"
+   }
+  ]
+ },
+ "pull_check": {
+  "uart_tx": [
+   1,
+   0
+  ],
+  "uart_rx": [
+   1,
+   0
+  ],
+  "sck": [
+   1,
+   0
+  ],
+  "mosi": [
+   1,
+   0
+  ],
+  "miso": [
+   1,
+   0
+  ],
+  "cs": [
+   1,
+   0
+  ]
+ }
+}
