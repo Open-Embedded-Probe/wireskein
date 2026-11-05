@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 0.0.20
 - (EN) `i2c(..., transactions=[{..., "start": "S" / "Sr", "end": "P" / "Sr"}])`: how each transaction began and ended is compared when given (Arduino's `endTransmission(false)` and `requestFrom(..., stop)` keep the bus with repeated STARTs); the decoded transactions carry them, and a difference names them.
 - (JA) `i2c(..., transactions=[{..., "start": "S" / "Sr", "end": "P" / "Sr"}])`: 書けば、それぞれのトランザクションの始まりと終わりも比べる（Arduino の `endTransmission(false)` と `requestFrom(..., stop)` は repeated START でバスを持ち続ける）。復号したトランザクションもそれを持ち、違いの説明にも出る。
 - (EN) `spi` with `cs`: the clocks in each CS window are measured (`frame_bits`) and compared with `bits=`; an SCK level inside a window shorter than half the median one fails as a glitch; `sck_idle_outside_cs=True` fails SCK edges while CS is inactive (measured as `sck_edges_outside_cs` either way).
