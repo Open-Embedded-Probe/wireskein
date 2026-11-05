@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) `spi` with `cs` reads every given line at the sampling edges of the mode read from the lines, inside each CS window, as the roles say: a MISO that also moves outside CS was left out of the inferred bus and its bytes were missing (a SoftSPI on x035).
+- (JA) `cs` のある `spi` は、与えた線をすべて、線から読んだモードのサンプルの辺で、CS の窓ごとに、役割のとおりに読む: CS の外でも動く MISO が推定のバスから外れ、そのバイトが無かった（x035 の SoftSPI）。
 - (EN) `Recorder.result(path, name, status, measured=, reason=, notices=, capture=)`: a verdict the test made itself goes into the run (run.json's `results`), and verification reports and counts it with its own (a path that is no segment is `ng`; its notices are marked with `--mark`).
 - (JA) `Recorder.result(path, name, status, measured=, reason=, notices=, capture=)`: 試験が自分でした判定を記録に入れる（run.json の `results`）。照合は自分の結果と一緒に報告して数える（区間でないパスは `ng`。注意は `--mark` で印にする）。
 - (EN) Analysis by segment, without expectations: `wireskein.verify.sections(run)` gives every segment of a run with the captures that hold it, cut to it (its window in the part); `wireskein states RUN --section 'PATH'` (`wireskein.states.of_sections`) lists the stretches of each matching segment.

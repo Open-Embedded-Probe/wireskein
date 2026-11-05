@@ -403,15 +403,22 @@ def check_spi(cap, x):
     line = next((m["lines"][x[r]] for r in ("mosi", "miso") if x.get(r) and m.get("lines", {}).get(x[r], {}).get(
         "cpha") is not None), None)
     n = _best(res, "spi", need)
+    edge = None
     if line is not None:
         edge = "rise" if m["cpol"] == line["cpha"] else "fall"
         n = _best(res, "spi", need, lambda c: c.params.get("sample_edge") == edge) or n
-    if n is None:
-        return False, {}, "nothing decoded as SPI on these pins"
-    lines = n.output.items["lines"]
     rev = (lambda b: int(f"{b:08b}"[::-1], 2)) if x.get("bit_order", "msb") == "lsb" else (lambda b: b)
-    hexes = {pin: bytes(rev(int(v) & 0xFF) for fr in frs for v in fr).hex() for pin, frs in lines.items()}
-    got = {"mode": n.metrics.get("mode"), "bytes": hexes, "sck_hz": _burst_hz(cap.channel(x["clk"]), cap.rate)}
+    if x.get("cs") and edge is not None:
+        # the roles and the mode are known: every line read at the sampling edges inside each CS window, as given,
+        # not as the inference grouped them (a line that also moves outside CS stays a data line here)
+        hexes = _spi_read(cap, x, edge, rev)
+    elif n is None:
+        return False, {}, "nothing decoded as SPI on these pins"
+    else:
+        hexes = {pin: bytes(rev(int(v) & 0xFF) for fr in frs for v in fr).hex()
+                 for pin, frs in n.output.items["lines"].items()}
+    got = {"mode": n.metrics.get("mode") if n is not None else None, "bytes": hexes,
+           "sck_hz": _burst_hz(cap.channel(x["clk"]), cap.rate)}
     ok, why = True, []
     if line is not None:
         got.update(decoded_mode=got["mode"], mode=m["cpol"] * 2 + line["cpha"], cpol=m["cpol"],
@@ -455,6 +462,29 @@ def check_spi(cap, x):
             why.append(f"SCK held a level {shortest / cap.rate * 1e9:.0f} ns while CS was active, its half period "
                        f"{half / cap.rate * 1e9:.0f} ns: a glitch")
     return ok, got, "; ".join(why)
+
+
+def _spi_read(cap, x: dict, edge: str, rev) -> dict[str, str]:
+    """Each data line's bytes (hex), read just before each sampling edge of SCK inside the windows of CS active."""
+    sck, cs = cap.channel(x["clk"]), cap.channel(x["cs"])
+    lv = sck.initial ^ ((np.arange(len(sck.edges)) + 1) & 1)       # SCK's level after each edge
+    t = sck.edges[lv == (1 if edge == "rise" else 0)]
+    active = cs.level_at(t) == x.get("cs_active", 0)
+    marks = np.concatenate(([0], cs.edges, [cap.n_samples]))
+    win = np.searchsorted(marks, t, side="right")                   # which stretch of CS each edge is in
+    out = {}
+    for role in ("mosi", "miso"):
+        if not x.get(role):
+            continue
+        ch = cap.channel(x[role])
+        data = []
+        for w in np.unique(win[active]):
+            ts = t[active & (win == w)]
+            bits = ch.level_at(np.maximum(ts - 1, 0)).astype(int)      # the level the edge samples (set up before it)
+            for k in range(len(bits) // 8):
+                data.append(rev(int("".join(map(str, bits[8 * k:8 * k + 8])), 2)))
+        out[x[role]] = bytes(data).hex()
+    return out
 
 
 def _spi_clocks(sck, cs, n: int, active: int) -> tuple:
