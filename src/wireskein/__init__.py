@@ -8,4 +8,4 @@ The rest (wireskein._engine, cli, gui and the modules they use) may change betwe
 
 __all__ = ["__version__"]
 
-__version__ = "0.0.21"
+__version__ = "0.0.22"
