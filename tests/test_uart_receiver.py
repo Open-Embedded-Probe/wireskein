@@ -34,19 +34,19 @@ def line(segs, lead=200e-6, tail=200e-6):
 
 def read(segs, **x):
     return check_uart(line(segs), {"kind": "uart", "pin": "TX", "baud": BAUD, "baud_rel": 0.03, "idle": 1, "bits": 8,
-                                   "parity": "none", "stop": 1, "errors_max": None, **x})
+                                   "parity": "none", "stop": 1, "errors": None, **x})
 
 
 def test_a_glitch_shorter_than_half_a_bit_is_no_character():
     for segs in ([(0, BT / 4), (1, 3 * BT)] + chars(DATA),                           # at start-up
                  chars(DATA[:5]) + [(0, 1 / RATE), (1, 5 * BT)] + chars(DATA[5:])):  # a one-sample spike
-        ok, got, _ = read(segs, data=DATA.hex(), errors_max=0)
+        ok, got, _ = read(segs, data=DATA.hex())
         assert ok and got["frame_errors"] == 0 and got["glitches"] == 1, got
         assert [n["kind"] for n in got["notices"]] == ["glitch"]
 
 
 def test_a_break_is_not_a_framing_error():
-    ok, got, _ = read([(0, 20 * BT), (1, 2 * BT)] + chars(DATA), data=DATA.hex(), errors_max=0)
+    ok, got, _ = read([(0, 20 * BT), (1, 2 * BT)] + chars(DATA), data=DATA.hex())
     assert ok and got["breaks"] == 1 and got["frame_errors"] == 0, got
     (n,) = got["notices"]
     assert n["kind"] == "break" and abs(n["length_ticks"] - 20 * BT * RATE) <= 2
@@ -86,6 +86,25 @@ def test_each_character_in_error_counts_when_errors_follow_one_another():
     assert (got["frame_errors"], got["breaks"]) == (4, 0), got
 
 
+def test_errors_are_ng_unless_expected_exactly():
+    sent = frames_8x1(EVEN_ONES, "even")                      # sixteen framing errors read as 8N1
+    ok, _, why = read(sent)
+    assert ok is False and "16 framing and 0 parity errors, not 0 and 0" in why
+    assert read(sent, errors={"framing": 16})[0] is True
+    assert read(sent, errors={"framing": 15})[0] is False
+    assert read(sent, errors={"framing": 16, "parity": 1})[0] is False
+    ok, _, why = read(sent, errors={"overrun": 1})
+    assert ok is False and "unknown kind overrun" in why
+    sent = frames_8x1(DATA + b"abc", "odd")                   # sixteen parity errors read as 8E1
+    assert read(sent, parity="even", errors={"parity": 16})[0] is True
+    assert read(sent, parity="even")[0] is False
+    # a break and a glitch are notices, no errors
+    assert read([(0, 20 * BT), (1, 2 * BT)] + chars(DATA))[0] is True
+    # measuring only judges no errors unless they are expected
+    assert read(frames_8x1(EVEN_ONES, "even"), baud=None)[0] == "measured"
+    assert read(frames_8x1(EVEN_ONES, "even"), baud=None, errors={"framing": 16})[0] is True
+
+
 # ---- the truth from hardware: an OEP probe's ESP-IDF UART driver, its TX captured (tests/data/uart_truth) ----
 
 TRUTH = __import__("pathlib").Path(__file__).parent / "data" / "uart_truth"
@@ -97,20 +116,25 @@ def _truth(name, **x):
     (cap,) = fileio.load_runs(TRUTH / f"{name}.wireskein")
     t = json.loads((TRUTH / f"{name}.truth.json").read_text())
     assert t["interface"] == "oep.fixture.uart (ESP-IDF UART driver)"
-    return check_uart(cap, {"kind": "uart", "pin": "tx", "baud": 115211, "baud_rel": 0.03, "idle": 1, "bits": 8,
-                            "parity": "none", "stop": 1, "errors_max": None, **x})[1]
+    ok, got, why = check_uart(cap, {"kind": "uart", "pin": "tx", "baud": 115211, "baud_rel": 0.03, "idle": 1, "bits": 8,
+                                    "parity": "none", "stop": 1, "errors": None, **x})
+    got["ok"] = ok
+    return got
 
 
 def test_hardware_framing_errors_and_a_characters_worth_of_low():
     # 41 42 in 8N1, then 03 00 in 8E1 (read as 8N1: stop bits 0; 00 a character's worth of low), then 43 44
     got = _truth("uart_A_framing_break")
     assert (got["chars"], got["frame_errors"], got["breaks"], got["data"]) == (6, 2, 0, "41424344"), got
+    assert got["ok"] is False
+    assert _truth("uart_A_framing_break", errors={"framing": 2}, data="41424344")["ok"] is True
 
 
 def test_hardware_parity_errors():
     # 61 62 in 8E1, 78 in 8O1, 79 7a in 8E1
     got = _truth("uart_B_parity", parity="even")
     assert (got["parity_errors"], got["frame_errors"], got["data"]) == (1, 0, "6162797a"), got
+    assert _truth("uart_B_parity", parity="even", errors={"parity": 1})["ok"] is True
     got = _truth("uart_B_parity", parity="odd")
     assert (got["parity_errors"], got["data"]) == (4, "78"), got
 
@@ -128,5 +152,5 @@ def test_hardware_bit_rates_off_by_up_to_three_percent():
     for (a, b), baud in zip(zip(np.concatenate(([0], cut)), np.concatenate((cut, [len(e)]))), used):
         w = _window(cap, int(e[a]) - 2000, int(e[b - 1]) + 2000)
         ok, got, _ = check_uart(w, {"kind": "uart", "pin": "tx", "baud": baud, "baud_rel": 0.001, "idle": 1, "bits": 8,
-                                    "parity": "none", "stop": 1, "data": "552048656c6c6f0d0a", "errors_max": 0})
+                                    "parity": "none", "stop": 1, "data": "552048656c6c6f0d0a"})
         assert ok, (baud, got)                                     # its rate within 0.1 % of what the driver made

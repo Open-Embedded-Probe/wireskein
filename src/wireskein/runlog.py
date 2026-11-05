@@ -495,17 +495,19 @@ def i2c_timing(scl: str, sda: str, mode: str | None = "standard", limits: dict |
 
 
 def uart(pin: str, baud: float | None, data: str | None = None, baud_rel: float = 0.03, idle: int = 1, bits: int = 8,
-         parity: str = "none", stop: float = 1, errors_max: int | None = None, threshold=None) -> dict:
+         parity: str = "none", stop: float = 1, errors: dict | None = None, threshold=None) -> dict:
     """The bit time measured from the edges must be within baud_rel (relative)
     of baud; pass the rate the transmitter should really produce (e.g. F_CPU /
     BRR), not the nominal one. data: expected bytes as hex (the characters after
     the first idle gap; a window opening or ending inside a character is not an
-    error). parity: "none" / "even" / "odd"; stop: 1, 1.5 or 2. errors_max:
-    framing + parity errors allowed (None: not checked, only reported).
+    error). parity: "none" / "even" / "odd"; stop: 1, 1.5 or 2. errors: the
+    framing and parity errors expected, exactly, as {"framing": n, "parity": n}
+    (a kind not named is 0; None: none at all, as a framing or parity error
+    breaks the protocol). A glitch or a break is no error but a notice.
     baud=None measures only: the bit time is found from the edges and the result
-    is "measured" (not a failure) with the measured values, unless data / errors_max / idle fail."""
+    is "measured" (not a failure) with the measured values, unless data / errors / idle fail."""
     return _t({"kind": "uart", "pin": pin, "baud": baud, "data": data, "baud_rel": baud_rel, "idle": idle, "bits": bits,
-               "parity": parity, "stop": stop, "errors_max": errors_max}, threshold)
+               "parity": parity, "stop": stop, "errors": dict(errors) if errors is not None else None}, threshold)
 
 
 def pulses(pin: str, count: int | None = None, period_s: float | None = None, period_rel: float = 0.05,

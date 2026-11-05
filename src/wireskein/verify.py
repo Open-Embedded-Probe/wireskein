@@ -1283,9 +1283,17 @@ def check_uart(cap, x):
     if x.get("baud") and got.get("baud_error") is not None and abs(got["baud_error"]) > x.get("baud_rel", 0.03):
         ok = False
         why.append(f"baud {got['baud']:.0f} is {got['baud_error'] * 100:+.2f}% off {x['baud']:.0f}")
-    if x.get("errors_max") is not None and frame_err + par_err > x["errors_max"]:
+    want = x.get("errors")
+    if want is None and x.get("baud"):
+        want = {}                                   # a framing or parity error breaks the protocol: none expected
+    unknown = sorted(set(want or {}) - {"framing", "parity"})
+    if unknown:
         ok = False
-        msg = f"{frame_err} framing and {par_err} parity errors"
+        why.append(f"errors: unknown kind {', '.join(unknown)} (framing, parity)")
+    elif want is not None and (frame_err, par_err) != (want.get("framing", 0), want.get("parity", 0)):
+        ok = False
+        msg = (f"{frame_err} framing and {par_err} parity errors, not "
+               f"{want.get('framing', 0)} and {want.get('parity', 0)}")
         skewed = [o for _, o in bad if o > max(0.2, 2 * got["edge_offset_p99"])]
         if bad and len(skewed) == len(bad):
             msg += (f" (each in a character whose edges are up to {max(skewed):.2f} bit off the bit grid,"
@@ -1297,7 +1305,7 @@ def check_uart(cap, x):
     if got["idle"] != idle:
         ok = False
         why.append(f"idle level {got['idle']}")
-    if not x.get("baud") and ok and x.get("data") is None and x.get("errors_max") is None:
+    if not x.get("baud") and ok and x.get("data") is None and x.get("errors") is None:
         # nothing was expected: a measurement (status "measured", not a failure)
         return MEASURED, got, (f"measured {got['baud']:.0f} baud, " if got["baud"] else "") + \
             f"{got['chars']} chars, {frame_err} framing / {par_err} parity errors"

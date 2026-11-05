@@ -207,7 +207,7 @@ WireSkein turns a capture into what a reader needs, so the samples themselves do
 | `pulses(pin, count, period_s, period_rel)` | Number of rising edges and the period. `period_rel` is relative |
 | `i2c(scl, sda, transactions, freq_hz, freq_rel, released)` | Sequence of transactions (address, read/write, bytes, ACK), SCL frequency, both High at the end. Each transaction may name `start` (`S`, `Sr`) and `end` (`P`, `Sr`), compared when given |
 | `spi(clk, mosi, miso, cs, mode, mosi_bytes, miso_bytes, freq_hz, freq_rel, bit_order, cs_active, bits, notices, setup_min_s, hold_min_s)` | Mode, bytes in both directions, SCK frequency, CS High at the end. The mode is read from the lines (§4.5). With `cs`: the clocks in each CS window (`frame_bits`; `bits` compares them), no SCK level inside a window shorter than half the median one (a glitch), each data line's setup and hold around the sampling edges (`margins`; `setup_min_s` / `hold_min_s` bound them), and `modes_ok`, the modes a receiver could read the lines in (§4.5); SCK moving while CS is inactive and a window with no clock are notices (§4.9) |
-| `uart(pin, baud, data, baud_rel, idle, bits, parity, stop, errors_max)` | Baud rate, byte sequence, idle level, framing and parity errors (below) |
+| `uart(pin, baud, data, baud_rel, idle, bits, parity, stop, errors)` | Baud rate, byte sequence, idle level, framing and parity errors (below) |
 | `voltage(pin, level_v, level_abs_v, level_min_v, level_max_v, ripple_max_v)` | Voltage of an analog channel. Mean is `level_v` ± `level_abs_v`, all samples within `level_min_v` to `level_max_v`, peak-to-peak at most `ripple_max_v`. Only the given ones are checked |
 | `phase(a, b, phase_deg, phase_abs_deg, freq_hz, freq_rel, edge)` | Phase of two periodic lines: from an edge of a to b's next edge of the same direction, as an angle of a's period (0–360 degrees). Every pair within `phase_deg` ± `phase_abs_deg` (degrees, wrapping near 0), both frequencies within `freq_rel` (relative) of `freq_hz` |
 | `skew(a, b, delay_abs_s, delay_s, edge)` | Skew of two lines that change together (patterns, parallel outputs): every edge of a has b's edge of the same direction at `delay_s` ± `delay_abs_s`. An edge without a partner is NG. With `edge` `"rise"` / `"fall"` only those (two outputs of one timer at different duties) |
@@ -237,15 +237,16 @@ i2c("PC16", "PC17", [{"addr": 0x42, "rw": "read", "bytes": [0x00], "complete": F
 - Pass to `baud` not the nominal value but the value the transmitter should actually produce (for CH32, F_CPU / BRR).
 - The format is `bits` (number of data bits), `parity` (`"none"` / `"even"` / `"odd"`), `stop` (1, 1.5, 2).
 - A window that starts or ends in the middle of a character is not an error (reading starts after at least one character's worth of idle; what comes before is counted as `lead_in`, and a character cut at the end as `cut_at_end`).
-- If `errors_max` is given, the result is NG when the total of framing and parity errors exceeds it (if not given, they are only counted and reported).
+- A framing or parity error is NG: it breaks the protocol. A test that sends errors on purpose names how many it expects, exactly, per kind: `errors={"framing": 16}`, `errors={"parity": 1}` (a kind not named is 0). A glitch or a break is no error but a notice (§4.9).
 - It reads as a receiver does. A pulse off idle that is not active at the middle of a start bit is no character: a notice `glitch` (its width), and the reading stays in step. A line held active longer than a whole character is a break: a notice `break` (its length), not a framing error; a character's worth of active exactly (its stop bit too) is a framing error with data 0, as a 16550 reads it. After a framing error the reading gets in step at once at the stream's next character (a character later, after a bit of idle), so characters in error one after another each count; elsewhere it waits for a few good characters (`resync_skipped` counts what it skipped). `error_runs` counts characters in error one after another as one disturbance.
 - The baud rate is found by a least-squares fit of the bit width from the intervals between same-direction edges within one character. This method cancels the difference between rising and falling delays. The expected value is used only to choose among the candidates derived from the edges. It is reported when there are 8 or more samples per bit.
-- To **measure only**, pass `None` to `baud`. If there are no other expectations (`data`, `errors_max`), the result is `measured`, with the measured baud rate, character count and error count. Use this to record what the DUT outputs for out-of-range settings.
+- To **measure only**, pass `None` to `baud`. If there are no other expectations (`data`, `errors`), the result is `measured`, with the measured baud rate, character count and error count. Use this to record what the DUT outputs for out-of-range settings.
 - If every error character has edges clearly more shifted than the other characters, the NG reason says "suspect the capture's time base" (for example when a software-paced sampler stalled). For captures where the probe itself reported a delay (`time_base_slipped`), the NG reason also says so.
 
 ```python
-uart("PA2", 8_000_000 / 9, baud_rel=0.015, errors_max=0)                  # 8N1
-uart("PA2", 8_000_000 / 9, baud_rel=0.015, parity="even", errors_max=0)   # 8E1
+uart("PA2", 8_000_000 / 9, baud_rel=0.015)                               # 8N1
+uart("PA2", 8_000_000 / 9, baud_rel=0.015, parity="even")                # 8E1
+uart("PA2", 8_000_000 / 9, parity="even", errors={"parity": 16})          # 16 parity errors sent on purpose
 uart("PB0", None)                                                         # measure only
 ```
 

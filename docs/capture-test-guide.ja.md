@@ -207,7 +207,7 @@ WireSkein は、キャプチャを読み手に要るものに変えます。サ�
 | `pulses(pin, count, period_s, period_rel)` | 立ち上がりの数と周期。`period_rel` は相対 |
 | `i2c(scl, sda, transactions, freq_hz, freq_rel, released)` | トランザクションの列（アドレス、読み書き、バイト、ACK）、SCL の周波数、終了時に両方 High。トランザクションごとに `start`（`S`、`Sr`）と `end`（`P`、`Sr`）を書けば、それも比べる |
 | `spi(clk, mosi, miso, cs, mode, mosi_bytes, miso_bytes, freq_hz, freq_rel, bit_order, cs_active, bits, notices, setup_min_s, hold_min_s)` | モード、両方向のバイト、SCK の周波数、最後に CS が High。モードは線から読む（§4.5）。`cs` があれば、CS の窓ごとのクロックの数（`frame_bits`。`bits` で比べる）、窓の中で SCK のレベルが中央値の半分より短くないこと（グリッチ）、データ線ごとのサンプルの辺の前後の余裕（`margins`。`setup_min_s` / `hold_min_s` で下限）、受け手が読めるモードの一覧 `modes_ok`（§4.5）。CS が非アクティブのあいだの SCK の動きと、クロックの無い窓は注意（§4.9） |
-| `uart(pin, baud, data, baud_rel, idle, bits, parity, stop, errors_max)` | ボーレート、バイト列、アイドルレベル、フレームとパリティのエラー（下記） |
+| `uart(pin, baud, data, baud_rel, idle, bits, parity, stop, errors)` | ボーレート、バイト列、アイドルレベル、フレームとパリティのエラー（下記） |
 | `voltage(pin, level_v, level_abs_v, level_min_v, level_max_v, ripple_max_v)` | アナログのチャンネルの電圧。平均が `level_v` ± `level_abs_v`、全サンプルが `level_min_v`〜`level_max_v`、ピークからピークが `ripple_max_v` 以下。与えたものだけを見る |
 | `phase(a, b, phase_deg, phase_abs_deg, freq_hz, freq_rel, edge)` | 2 本の周期的な線の位相。a のエッジから、同じ向きの b の次のエッジまでを、a の周期に対する角度（0〜360 度）にする。どの組も `phase_deg` ± `phase_abs_deg`（度。0 の近くは回り込む）、両方の周波数が `freq_hz` の `freq_rel`（相対）の内 |
 | `skew(a, b, delay_abs_s, delay_s, edge)` | 一緒に変わる 2 本の線（パターン、並列の出力）のずれ。a のどのエッジにも、同じ向きの b のエッジが `delay_s` ± `delay_abs_s` にある。相手の無いエッジは NG。`edge` が `"rise"` / `"fall"` ならその向きだけ（1 つのタイマの、デューティの違う 2 本の出力） |
@@ -237,15 +237,16 @@ i2c("PC16", "PC17", [{"addr": 0x42, "rw": "read", "bytes": [0x00], "complete": F
 - `baud` には呼び値ではなく、送信側が実際に出すはずの値（CH32 なら F_CPU / BRR）を渡します。
 - フォーマットは `bits`（データのビット数）、`parity`（`"none"` / `"even"` / `"odd"`）、`stop`（1、1.5、2）。
 - 窓が文字の途中で始まる・終わるのはエラーにしません（1 文字分以上の idle の後から読み、それより前は `lead_in`、最後に切れた文字は `cut_at_end` として数える）。
-- `errors_max` を与えると、フレームとパリティのエラーの合計がそれを超えたら NG です（与えなければ数えて出すだけ）。
+- フレーミングやパリティの誤りは NG です。プロトコルの違反だからです。わざと誤りを送る試験は、種類ごとに「ちょうどこの数」を書きます: `errors={"framing": 16}`、`errors={"parity": 1}`（書かない種類は 0）。グリッチと break は誤りではなく、注意です（§4.9）。
 - 受信器と同じに読みます。待機から離れたパルスのうち、開始ビットの真ん中でアクティブでないものは文字ではなく、注意 `glitch`（その幅）で、読みの同期は保ちます。1 文字の時間より長くアクティブな線は break で、フレーミングの誤りではなく注意 `break`（その長さ）です。ちょうど 1 文字分（ストップビットも）アクティブなものは、16550 と同じく、フレーミングの誤りとデータ 0 です。フレーミングの誤りの後は、流れの次の文字（1 文字分の後、1 ビット以上の待機の後）ならすぐ読み直すので、続けて誤る文字は 1 つずつ数えます。それ以外では、その後の数文字が正しく読める所まで待ちます（飛ばした分は `resync_skipped`）。`error_runs` は、続けて誤る文字を 1 つの乱れとして数えます。
 - ボーレートは、1 文字の中の同じ向きのエッジどうしの間隔からビットの幅を最小二乗で求めます。立ち上がりと立ち下がりの遅れの差は、この測り方で打ち消されます。期待の値は、エッジから求めた候補を選ぶのにだけ使います。1 ビットに 8 サンプル以上あるときに付けます。
-- **測るだけ**なら `baud` に `None` を渡します。ほかに期待（`data`、`errors_max`）がなければ、結果は `measured` で、測ったボーレート、文字数、エラー数が出ます。範囲外の設定で DUT が何を出すかを残すのに使います。
+- **測るだけ**なら `baud` に `None` を渡します。ほかに期待（`data`、`errors`）がなければ、結果は `measured` で、測ったボーレート、文字数、エラー数が出ます。範囲外の設定で DUT が何を出すかを残すのに使います。
 - エラーの文字がどれも、ほかの文字よりはっきりエッジがずれていれば、NG の理由に「キャプチャの時間軸を疑う」と出ます（ソフトで歩調を取るサンプラーが止まった場合など）。プローブ自身が遅れを報告したキャプチャ（`time_base_slipped`）も、NG の理由にそう添えます。
 
 ```python
-uart("PA2", 8_000_000 / 9, baud_rel=0.015, errors_max=0)                  # 8N1
-uart("PA2", 8_000_000 / 9, baud_rel=0.015, parity="even", errors_max=0)   # 8E1
+uart("PA2", 8_000_000 / 9, baud_rel=0.015)                               # 8N1
+uart("PA2", 8_000_000 / 9, baud_rel=0.015, parity="even")                # 8E1
+uart("PA2", 8_000_000 / 9, parity="even", errors={"parity": 16})          # わざと送った 16 のパリティの誤り
 uart("PB0", None)                                                         # 測るだけ
 ```
 

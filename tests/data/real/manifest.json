@@ -111,7 +111,7 @@
         "bits": 8,
         "parity": "none",
         "stop": 1,
-        "errors_max": 0
+        "errors": null
       }
     ]
   },
@@ -137,7 +137,7 @@
         "bits": 8,
         "parity": "none",
         "stop": 1,
-        "errors_max": null
+        "errors": null
       }
     ]
   }

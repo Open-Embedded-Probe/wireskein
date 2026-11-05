@@ -77,7 +77,7 @@ def test_uart_on_a_slow_channel(tmp_path):
     fast, _ = signals()
     line = uart_samples(N // STEP, 27)                      # 115.7 kbaud at 3.125 Msps
     cap = write(tmp_path / "u.wireskein", fast, line)
-    ok, got, why = check_uart(cap, uart("SLOW", TICK / STEP / 27, baud_rel=0.005, errors_max=0))
+    ok, got, why = check_uart(cap, uart("SLOW", TICK / STEP / 27, baud_rel=0.005))
     assert ok, why
     assert got["samples_per_bit"] == pytest.approx(27, rel=1e-3)
     assert got["data"].startswith(b"hello".hex())
