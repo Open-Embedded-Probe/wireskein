@@ -44,7 +44,6 @@ def read_sr(path: Path) -> Capture:
             (n for n in z.namelist() if n == prefix or n.startswith(prefix + "-")),
             key=lambda n: int(n.rsplit("-", 1)[1]) if n != prefix else 0,
         )
-        raw = b"".join(z.read(n) for n in chunks)
         avals = {}
         for idx in anames:
             parts = sorted((n for n in z.namelist() if n.startswith(f"analog-1-{idx}-")), key=lambda n: int(n.rsplit("-", 1)[1]))
@@ -55,9 +54,17 @@ def read_sr(path: Path) -> Capture:
         rawfiles = {a["file"]: z.read(a["file"]) for a in extra.get("analog", {}).values() if a.get("file") in z.namelist()}
         listed = set(extra.get("extras", []))
         carried = {n: z.read(n) for n in z.namelist() if n.startswith(("attach/", "notes/")) or n in listed}
-    dtype = {1: np.uint8, 2: np.uint16, 4: np.uint32}[unitsize]
-    data = np.frombuffer(raw, dtype=dtype)
-    n_ticks = len(data) if len(data) else max((len(v) for v in avals.values()), default=0)
+        dtype = {1: np.uint8, 2: np.uint16, 4: np.uint32}[unitsize]
+        want = [b for b in (sorted(b - 1 for b in names) if names else range(min(total, unitsize * 8)))
+                if b < unitsize * 8]
+        stepped = any(int(c.get("step", 1)) != 1 for c in extra.get("channels", {}).values())
+        if stepped:          # channels of their own step: their samples picked from the whole
+            data = np.frombuffer(b"".join(z.read(n) for n in chunks), dtype=dtype)
+            n_logic = len(data)
+        else:                # a block at a time, the changes kept: a capture of any length
+            data = None
+            initial0, edges0, n_logic = _changes(z, chunks, unitsize, dtype, want)
+    n_ticks = n_logic if n_logic else max((len(v) for v in avals.values()), default=0)
     steps = extra.get("channels", {})
     meta = {"sr_file": str(path), "unitsize": unitsize}
     sr_rate = Fraction(round(rate))
@@ -80,10 +87,13 @@ def read_sr(path: Path) -> Capture:
         name = names.get(bit + 1, f"bit{bit}")
         st = steps.get(name, {})
         step, phase = int(st.get("step", 1)), int(st.get("phase", 0))
-        lv = ((data[phase::step] >> bit) & 1).astype(np.uint8)      # the samples the channel really has
-        initial, edges = edges_from_dense(lv, step, phase)
-        if phase:
-            initial = int((data[0] >> bit) & 1)
+        if data is None:
+            initial, edges = initial0.get(bit, 0), edges0[bit]
+        else:
+            lv = ((data[phase::step] >> bit) & 1).astype(np.uint8)      # the samples the channel really has
+            initial, edges = edges_from_dense(lv, step, phase)
+            if phase:
+                initial = int((data[0] >> bit) & 1)
         channels.append(Channel(name, initial, edges, step, phase, st.get("acquisition", {})))
     analog = []
     for idx, name in sorted(anames.items()):
@@ -242,26 +252,31 @@ def read_sr_changes(path: Path, start: int = 0, end: int | None = None) -> Captu
         dtype = {1: np.uint8, 2: np.uint16, 4: np.uint32}[unitsize]
         bits = [b for b in (sorted(b - 1 for b in names) if names else range(min(total, unitsize * 8)))
                 if b < unitsize * 8]
-        edges: dict[int, list[np.ndarray]] = {b: [] for b in bits}
-        initial: dict[int, int] = {}
-        last: dict[int, int] = {}
-        n_ticks = 0
-        for first, data in _blocks(z, chunks, unitsize, dtype, start, end):
-            n_ticks = first + len(data)
-            for b in bits:
-                lv = ((data >> b) & 1).astype(np.int8)
-                if b not in initial:
-                    initial[b] = last[b] = int(lv[0])
-                ch = np.flatnonzero(np.diff(lv)) + 1
-                if lv[0] != last[b]:                 # a change across the blocks' seam
-                    ch = np.concatenate(([0], ch))
-                if len(ch):
-                    edges[b].append(ch.astype(np.int64) + first)
-                last[b] = int(lv[-1])
-    channels = [Channel(names.get(b + 1, f"bit{b}"), initial.get(b, 0),
-                        np.concatenate(edges[b]) if edges[b] else np.zeros(0, np.int64)) for b in bits]
+        initial, edges, n_ticks = _changes(z, chunks, unitsize, dtype, bits, start, end)
+    channels = [Channel(names.get(b + 1, f"bit{b}"), initial.get(b, 0), edges[b]) for b in bits]
     meta = {"sr_file": str(path), "unitsize": unitsize}
     return Capture(rate, max(0, n_ticks), channels, meta=meta)
+
+
+def _changes(z, chunks, unitsize, dtype, bits, start=0, end=None):
+    """Each bit's (initial level, changes) and the ticks, read a block at a time: the samples are never all held."""
+    edges: dict[int, list[np.ndarray]] = {b: [] for b in bits}
+    initial: dict[int, int] = {}
+    last: dict[int, int] = {}
+    n_ticks = 0
+    for first, data in _blocks(z, chunks, unitsize, dtype, start, end):
+        n_ticks = first + len(data)
+        for b in bits:
+            lv = ((data >> b) & 1).astype(np.int8)
+            if b not in initial:
+                initial[b] = last[b] = int(lv[0])
+            ch = np.flatnonzero(np.diff(lv)) + 1
+            if lv[0] != last[b]:                     # a change across the blocks' seam
+                ch = np.concatenate(([0], ch))
+            if len(ch):
+                edges[b].append(ch.astype(np.int64) + first)
+            last[b] = int(lv[-1])
+    return initial, {b: (np.concatenate(e) if e else np.zeros(0, np.int64)) for b, e in edges.items()}, n_ticks
 
 
 def convert_sr(path: Path, out: Path, start: int = 0, end: int | None = None, excerpt: bool = False, **meta) -> tuple[Path, int, list[str], float] | None:
@@ -279,11 +294,14 @@ def convert_sr(path: Path, out: Path, start: int = 0, end: int | None = None, ex
         dev = cfg["device 1"]
         if any(re.fullmatch(r"analog\d+", k) for k in dev):
             return None
-        if EXTRA in z.namelist() or any(n.startswith(("attach/", "notes/")) for n in z.namelist()):
+        prefix = dev.get("capturefile", "logic-1")
+        # only what this writes: anything else in the file (wireskein's own data, attachments, markers, parts it
+        # does not know) is carried by the whole read
+        if any(n not in ("version", "metadata") and n != prefix and not n.startswith(prefix + "-")
+               for n in z.namelist()):
             return None
         rate = _parse_rate(dev["samplerate"])
         unitsize = int(dev.get("unitsize", "1"))
-        prefix = dev.get("capturefile", "logic-1")
         names = {int(k[5:]): v for k, v in dev.items() if re.fullmatch(r"probe\d+", k)}
         total = int(dev.get("total probes", unitsize * 8))
         chunks = sorted((n for n in z.namelist() if n == prefix or n.startswith(prefix + "-")),

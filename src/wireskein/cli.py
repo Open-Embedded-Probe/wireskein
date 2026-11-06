@@ -458,9 +458,6 @@ def convert(args) -> None:
                 out, n, names, r = got
                 print(f"{args.input} -> {out}: {len(names)} logic channels, {n} ticks at {r:g} Hz")
                 return
-        cap = srio.read_sr_changes(args.input, s0, s1)       # read a chunk at a time, keeping the changes
-        if cap is not None and (t0 is not None or t1 is not None):
-            cap.meta["excerpt"] = {"from_tick": s0, "to_tick": s0 + cap.n_samples}
     if cap is None:
         cap = load_file(args.input, part) if part is not None else load(args.input)
         if t0 is not None or t1 is not None:
