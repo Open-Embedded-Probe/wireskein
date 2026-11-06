@@ -84,6 +84,14 @@ def test_each_character_in_error_counts_when_errors_follow_one_another():
     # 0x00 sent 8E1, read 8N1: the line low a character's worth exactly - a framing error with data 0, no break
     _, got, _ = read(frames_8x1(bytes(4), "even"))
     assert (got["frame_errors"], got["breaks"]) == (4, 0), got
+    # the same at 5 MS/s with long rests around (the runs as an OEP probe's ESP-IDF UART made them, 115211 baud):
+    # read the other way round, the bits between them are good characters, yet the line rests high
+    runs = [(1, 591533), (0, 434), (1, 44), (0, 434), (1, 43), (0, 434), (1, 43), (0, 434), (1, 2288166)]
+    edges = np.cumsum([n for _, n in runs])[:-1]
+    cap = Capture(5e6, int(sum(n for _, n in runs)), [Channel("TX", 1, edges.astype(np.int64))])
+    ok, got, why = check_uart(cap, {"kind": "uart", "pin": "TX", "baud": 115211, "baud_rel": 0.03, "idle": 1,
+                                    "bits": 8, "parity": "none", "stop": 1, "errors": {"framing": 4}})
+    assert ok is True and got["idle"] == 1, (why, got)
 
 
 def test_errors_are_ng_unless_expected_exactly():

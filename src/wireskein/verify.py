@@ -1160,7 +1160,16 @@ LOOKAHEAD = 16          # characters in a row with valid stop bits that put the 
 def _uart_idle(ch: Channel, n: int, u: float, idle: int, bits: int, parity: str, stop: float, rx: dict) -> int | None:
     """The level the line rests at, judged by reading: the idle level whose
     reading gives clearly more good characters. The longest run decides only
-    when neither reads (a burst of zeros can outlast a short idle)."""
+    when neither reads (a burst of zeros can outlast a short idle). Before
+    either, the line resting: the time in runs of two characters or more, when
+    nearly all of it is at one level (characters in error one after another
+    read better the other way round, from the bits between them)."""
+    _, length, level = ch.runs(n)
+    L = 1 + bits + (parity != "none") + stop
+    rest = length >= 2 * L * u
+    t1, t0 = int(length[rest & (level == 1)].sum()), int(length[rest & (level == 0)].sum())
+    if max(t0, t1) and min(t0, t1) * 4 <= max(t0, t1):
+        return 1 if t1 > t0 else 0
     good = sum(f[2] and f[3] for f in rx["frames"])
     other = _uart_rx(ch, n, u, 1 - idle, bits, parity, stop)
     good_other = sum(f[2] and f[3] for f in other["frames"])
@@ -1168,7 +1177,6 @@ def _uart_idle(ch: Channel, n: int, u: float, idle: int, bits: int, parity: str,
         return 1 - idle
     if good:
         return idle
-    _, length, level = ch.runs(n)
     return int(level[np.argmax(length)]) if len(length) else None
 
 

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- (EN) `uart`'s idle level: a line resting at one level (runs of two characters or more, nearly all at it) is idle there, before the readings are compared. Characters in error one after another (0x00 sent 8E1, read 8N1) read better the other way round from the bits between them, and a line idling high was reported idle 0 (NG).
+- (JA) `uart` のアイドルのレベル: 1 つのレベルで休む線（2 文字分以上の長さの区間が、ほとんどそのレベル）は、読みを比べる前に、そのレベルがアイドル。続けて誤る文字（0x00 を 8E1 で送り 8N1 で読む）は、その間のビットから逆向きの方がよく読め、High で休む線をアイドル 0（NG）としていた。
+
 - (EN) A check `qspi(clk, cs, io, transfers, mode, cs_active, freq_hz, freq_rel)`: SPI on several data lines (dual, quad, octal) per window of CS active, phase by phase - command, address, dummy clocks and data, each on its own lines (`width`, `lines`) - every window's clocks exactly its phases'. Tested on a flash's 0xEB (1-4-4), 0x6B (1-1-4) and 0x03 made by an encoder of the test's own (tests/test_qspi.py).
 - (JA) 検査 `qspi(clk, cs, io, transfers, mode, cs_active, freq_hz, freq_rel)` を足した: 複数のデータ線（デュアル、クアッド、オクタル）の SPI を、CS がアクティブな窓ごとに、相ごとに読む。命令、アドレス、ダミーのクロック、データを、相ごとの線（`width`、`lines`）で読み、どの窓のクロックもちょうどその相の分。試験の中の独自の符号器が作ったフラッシュの 0xEB（1-4-4）、0x6B（1-1-4）、0x03 で確かめた（tests/test_qspi.py）。
 
