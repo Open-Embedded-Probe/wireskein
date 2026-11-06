@@ -285,3 +285,17 @@ def test_a_file_of_several_parts_is_read_part_by_part_from_the_file(tmp_path, la
     assert [x["part"] for x in a["parts"]] == [0, 1, 2] and all("split" in x for x in a["parts"])
     rows = [json.loads(x) for x in (tmp_path / "i.ndjson").read_text().splitlines()]
     assert {r["part"] for r in rows} == {0, 1, 2}
+
+
+def test_analyze_reads_several_parts_from_the_file(tmp_path):
+    from fractions import Fraction
+    from wireskein import capture
+    clk, dat, _ = bursts()
+    n = int(clk[-1]) + 1000
+    small = capture.Part(5000, [capture.logic("C", 0, [100, 200, 300], 5000), capture.logic("D", 0, [], 5000)])
+    big = capture.Part(n, [capture.logic("C", 0, clk, n), capture.logic("D", 0, dat, n)])
+    p = tmp_path / "parts.wireskein"
+    capture.write(p, capture.Capture(Fraction(10**6), [big, small, big], layout="segments"))
+    doc = analyze_file(p, split="max_edges=3000,min_edges=500,overlap_edges=100")
+    assert [x["part"] for x in doc["parts"]] == [0, 1, 2]
+    assert "split" in doc["parts"][0] and "split" not in doc["parts"][1]        # the short one read as always

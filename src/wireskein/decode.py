@@ -308,8 +308,6 @@ def _analyze_split(source, hints, opts, depth: str, head: dict, items=None) -> d
                              "params": {x: c["params"][x] for x in ("baud", "mode") if x in c.get("params", {})}}
                             for c in keep], "depth": depth})
     work = functools.partial(_piece, spec=spec, head=head, reanalyze=bool((opts or {}).get("reanalyze", 1)))
-    if items is not None and head.get("part", 0) == 0:
-        Path(items).write_text("")
     sink = _Items(items, spec, head.get("part", 0)) if items is not None else None
     outs = []
     try:
@@ -732,17 +730,28 @@ def analyze_file(path: str | Path, hints: dict | None = None, mode: str = "final
     path = Path(path)
     from . import split as _split
     opts = _split.options(split)
-    if opts and not (window_s or segment or thresholds) and part in (None, 0):
-        src = _file_source(path, pins)              # a WireSkein file of one part: read from the file as it goes
-        if src is not None:
+    if opts and not (window_s or segment or thresholds) and part is None:
+        # a .sr, or each part of a WireSkein file, read from the file as it goes (a short part: loaded, as always)
+        kind = fileformat.sniff(path) if path.is_file() else None
+        srcs = _file_sources(path, pins) if kind == "wireskein" else (
+            [s] if (s := _file_source(path, pins)) is not None else None)
+        if srcs:
             t0 = time.perf_counter()
-            got = _analyze_split(src, hints, opts, depth, src.head, items)
-            if got is not None:
-                doc = {"format": FORMAT, "wireskein": __version__, "hints": hints,
-                       "capture": _capture_of(path, src.raw),
-                       "parts": [{**_part_head(src.head, 0, src.n, None), **got}]}
-                doc["analysis_seconds"] = round(time.perf_counter() - t0, 3)
-                return doc
+            if items is not None:
+                Path(items).write_text("")
+            parts = []
+            for k, src in enumerate(srcs):
+                got = _analyze_split(src, hints, opts, depth, src.head, items)
+                if got is None:                     # short: as always
+                    cap = only(fileio.load(path, k) if kind == "wireskein" else load(path), pins)
+                    res = staged.analyze(cap, hints)
+                    ex = export(res, cap, mode if not select else "select", select, alternatives, None, depth)
+                    got = {"claims": ex["claims"], **{x: ex[x] for x in ("relations",) if x in ex}}
+                parts.append({**_part_head(src.head, k, src.n, None), **got})
+            doc = {"format": FORMAT, "wireskein": __version__, "hints": hints,
+                   "capture": _capture_of(path, srcs[0].raw), "parts": parts}
+            doc["analysis_seconds"] = round(time.perf_counter() - t0, 3)
+            return doc
     raw, heads, views, firsts, spans = _open(path, part)
     if (window_s or segment) and part is None and len(heads) > 1:
         raise ValueError(f"{path}: {len(heads)} parts: give the part a window or segment is inside (--part)")
@@ -755,6 +764,8 @@ def analyze_file(path: str | Path, hints: dict | None = None, mode: str = "final
         ks = range(len(heads))
     doc = {"format": FORMAT, "wireskein": __version__, "hints": hints, "capture": _capture_of(path, raw), "parts": []}
     t0 = time.perf_counter()
+    if items is not None:
+        Path(items).write_text("")                    # written part after part
     for k in ks:
         cap = views[k]
         if thresholds:
