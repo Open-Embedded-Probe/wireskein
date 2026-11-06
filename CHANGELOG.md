@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- (EN) RVSWD: a START / STOP frame of a length no form has, with as many clocks too many as it has rising edges whose high lasted a sample (a reflection's glitch on SWCLK), is read with those left out (`repaired`); frames give their `fields` by name with each parity's check. SWIO frames give `rw_gap_ns`. The Debug Module's accesses have their ticks (`s`, `e`). decode's `buses[].layers` gives lower layers by name (every sampling edge, every SWIO pulse).
+- (JA) RVSWD: どの形にも無い長さの START / STOP のフレームで、余るクロックの数だけ high が 1 サンプルの立ち上がり（SWCLK に乗った反射のひげ）があるときは、それを抜いて読む（`repaired`）。フレームに名前付きの `fields` と、パリティごとの検査を出す。SWIO のフレームに `rw_gap_ns`。Debug Module のアクセスに tick（`s`、`e`）。decode の `buses[].layers` で、下の層を名前で出す（サンプルの縁のすべて、SWIO のパルスのすべて）。
+
 - (EN) A clocked bus's data line ringing at the sampling edge (a reflection's pulses of a sample or two) is read as it settles, when the clock is slow enough that no bit is that short: a LinkE's first query read the same in every run (it changed run to run), as wch-protocols' rvswd.py reads it.
 - (JA) クロックのあるバスで、サンプルの縁でデータの線が揺れる（反射の 1〜2 サンプルのパルス）ときは、揺れが収まった値を読む（どのビットもそれほど短くならない遅いクロックのとき）: LinkE の最初の問い合わせが、どの回も同じに読める（回ごとに変わっていた）。wch-protocols の rvswd.py と同じ。
 

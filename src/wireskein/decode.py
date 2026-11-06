@@ -128,7 +128,8 @@ def _spec(spec: dict) -> dict:
         if not b.get("protocol") or not b.get("pins"):
             raise ValueError(f"a bus needs protocol and pins: {b}")
         out["buses"].append({"protocol": b["protocol"], "pins": dict(b["pins"]), "params": dict(b.get("params") or {}),
-                             **({"idle_s": b["idle_s"]} if "idle_s" in b else {})})
+                             **({"idle_s": b["idle_s"]} if "idle_s" in b else {}),
+                             **({"layers": list(b["layers"])} if b.get("layers") else {})})
     if out["depth"] not in _exp.DEPTHS:
         raise ValueError(f"depth: one of {', '.join(_exp.DEPTHS)}")
     return out
@@ -237,6 +238,9 @@ def _bus(res, cap: Capture, b: dict, depth: str, claimed: list) -> dict:
                 ds = _exp.devices_of(n, with_candidates=True)
                 if ds:
                     out["devices"] = ds
+        for k in (lay if "*" in b.get("layers", ()) else b.get("layers", ())):
+            if k in lay:                               # lower layers asked for by name (a pulse, a sampling edge)
+                out["result"][k] = lay[k]
     idle = _idle(cap, b, n)
     # a clocked bus's bits and frames, SWIO's pulses, are where it was cut, not what was read: a frame no layout
     # read is unread

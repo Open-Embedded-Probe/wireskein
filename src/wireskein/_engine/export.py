@@ -109,16 +109,17 @@ def layers_of(n) -> dict:
                              "split": ps.split}
         out["dmi"] = [{"s": x["t"], **({"e": x["e"]} if "e" in x else {}), "op": x["op"], "addr": x["addr"], "reg": DM_NAMES.get(x["addr"]) if x["addr"] is not None else None,
                        "data": x["data"], "ok": x.get("ok", True),
-                       **({k: x[k] for k in ("form", "status", "answered", "late", "answer_delay", "answer_delay_ns", "period_ns", "bits")
+                       **({k: x[k] for k in ("form", "status", "answered", "late", "answer_delay", "answer_delay_ns", "period_ns", "bits", "repaired", "fields")
                            if k in x} if a == "rvswd" else {}),
-                       **({k: x[k] for k in ("fast", "rw_low_ns", "short_max_ns", "long_min_ns", "short_median_ns",
+                       **({k: x[k] for k in ("fast", "rw_low_ns", "rw_gap_ns", "short_max_ns", "long_min_ns", "short_median_ns",
                                     "long_median_ns", "space_ns", "pitch_1_ns", "pitch_0_ns") if k in x}
                           if a == "swio" else {})}
                       for x in n.output.items]
         dm = [ch for ch in n.children if ch.analyzer == "riscv_dm"]
         if dm:
-            out["dm"] = [{"op": k, "addr": ad, "value": v, **({"size": sz} if sz else {})}
-                         for k, ad, v, sz in dm[0].output.items]
+            out["dm"] = [{**({"s": int(t0)} if t0 is not None else {}), **({"e": int(t1)} if t1 is not None else {}),
+                          "op": k, "addr": ad, "value": v, **({"size": sz} if sz else {})}
+                         for k, ad, v, sz, t0, t1 in dm[0].output.items]
     elif a in ("uart", "lin", "dmx512"):
         lay = getattr(n, "layers", None) or {}
         if "blocks" in lay:

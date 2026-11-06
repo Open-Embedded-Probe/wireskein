@@ -113,7 +113,7 @@ def _rvswd_stop(fr, cap):
     ss = Delimited(reframe_startstop(fr, cap))
     # the START / STOP frames hold nearly every clock: the cuts at stop intervals (for captures that hide START and
     # STOP) are not tried
-    inside = sum(b - a for a, b in ss)
+    inside = sum(f_[1] - f_[0] for f_ in ss)
     if inside >= 0.95 * max(1, int(np.diff(fr.bounds, axis=1).sum())):
         return [ss]
     return [ss, reframe(fr), reframe_rolling(fr)]
@@ -524,16 +524,22 @@ class DeclarativePlugin:
         bits = sb.bits[0]
         for frames in views:
             recs, checked, passed, matched, checked_frames, explained = [], 0, 0, 0, 0, 0
-            for a, b in frames:
-                L = layout(b - a)
+            for fr_ in frames:
+                a, b = fr_[0], fr_[1]
+                skip = fr_[2] if len(fr_) > 2 else ()      # glitch clocks dropped (a reframer's repair)
+                L = layout(b - a - len(skip))
                 if L is None:
                     continue
                 matched += 1
                 explained += b - a
                 f = bits[a:b].astype(np.int64)
+                if skip:
+                    f = np.delete(f, [i - a for i in skip])
                 rec = {"start": int(sb.t[a]), **L.get("const", {})}
                 if L.get("keep_span"):                   # the frame's sampling edges, for an adapter that reads more
-                    rec["_span"] = (int(a), int(b))
+                    rec["_span"] = (int(a), int(b), tuple(skip))
+                if skip:
+                    rec["repaired"] = len(skip)
                 if self.spec.get("frame", {}).get("ends"):
                     rec["end"] = int(sb.t[b - 1])
                 for fld in L["fields"]:
@@ -575,7 +581,7 @@ class DeclarativePlugin:
                 recs.append(rec)
             key = passed
             if best is None or key > best[0]:
-                inside = sum(b - a for a, b in frames) if isinstance(frames, Delimited) else None
+                inside = sum(f_[1] - f_[0] for f_ in frames) if isinstance(frames, Delimited) else None
                 best = (key, recs, checked, passed, matched, len(frames), checked_frames, explained, inside)
         _, recs, checked, passed, matched, total, checked_frames, explained, inside = best
         if matched < 2:
@@ -759,13 +765,20 @@ def _adapt_rvswd(c, fr, n):
              "status": r.get("status", 0), "ok": r["ok"], "form": r.get("form", "short"),
              **({"answered": False} if r.get("answered") is False else {})}
         if "_span" in r:
-            a, b = r["_span"]
+            a, b, skip = r["_span"]
             sb = fr.source
+            keep = np.setdiff1d(np.arange(a, b), np.asarray(skip, np.int64)) if skip else np.arange(a, b)
             # every bit as sampled, the don't-care ones too (to compare frames bit for bit), and the clock's period
-            x["bits"] = "".join("1" if v else "0" for v in sb.bits[0][a:b].tolist())
-            if b - a > 1:
-                x["period_ns"] = round(float(np.median(np.diff(sb.t[a:b]))) / c.cap.rate * 1e9, 1)
-            if x["form"] == "long" and r.get("answered") is not False:
+            x["bits"] = "".join("1" if v else "0" for v in sb.bits[0][keep].tolist())
+            if len(keep) > 1:
+                x["period_ns"] = round(float(np.median(np.diff(sb.t[keep]))) / c.cap.rate * 1e9, 1)
+            if skip:
+                x["repaired"] = [round(float(sb.t[i]) / c.cap.rate * 1e9) for i in skip]
+            from .rvswd import frame_fields
+            fields = frame_fields(x["bits"], x["form"], x["op"])
+            if fields:
+                x["fields"] = fields
+            if x["form"] == "long" and r.get("answered") is not False and not skip:
                 x.update(long_answer(c.cap, sb, a, b))
         tx.append(x)
     n.output = Stream("dmi", tx)

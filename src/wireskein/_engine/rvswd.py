@@ -91,10 +91,61 @@ def reframe_startstop(fr, cap, hold: float = 1.5, w: int = 16, hold_min_s: float
     keep = has & (st < stop)
     a = np.searchsorted(sb.t, st[keep], side="right")
     b = np.searchsorted(sb.t, stop[keep], side="right")
-    return [(int(x), int(y)) for x, y in zip(a.tolist(), b.tolist()) if y > x]
+    out = [(int(x), int(y)) for x, y in zip(a.tolist(), b.tolist()) if y > x]
+    if sb.sample_edge == "rise" and len(rises) == len(sb.t) and np.array_equal(rises, sb.t):
+        out = [_repaired(x, y, highs) for x, y in out]
+    return out
+
+
+def known_length(n: int) -> bool:
+    """A length a START / STOP frame of RVSWD has: short 53, long 85, the LinkE's query 80, a burst 38n+15."""
+    return n in (53, 85, 80) or (n >= 91 and (n - 15) % 38 == 0)
+
+
+def _repaired(a: int, b: int, highs: np.ndarray, glitch: int = 1, most: int = 3):
+    """A frame of a length no form has, with as many clocks too many as it has rising edges whose high lasted
+    `glitch` samples or less (a reflection's glitch on the clock, read as a clock): those edges dropped, (a, b,
+    dropped indices); else (a, b). The checks of the layout then tell whether the frame reads."""
+    n = b - a
+    if known_length(n):
+        return (a, b)
+    short = np.flatnonzero(highs[a:b] <= glitch) + a
+    for m in range(1, most + 1):
+        if known_length(n - m) and len(short) >= m:
+            drop = short[np.argsort(highs[short], kind="stable")[:m]]
+            return (a, b, tuple(sorted(int(i) for i in drop)))
+    return (a, b)
 
 
 LONG_TARGET = 42               # the first clock of the target's phase in the long form
+
+
+def _parity(bits: str) -> int:
+    return bits.count("1") & 1
+
+
+def frame_fields(bits: str, form: str, op: str | None = None) -> dict:
+    """The fields of a frame by name, as bit strings (MSB first), its checks one by one.
+
+    short (53): addr7 rw1 header_parity1 park1 ctl4 data32 data_parity1 park1 status2 pad2 stop1;
+    a burst (15 + 38n): header14 (addr7 ...), then words of data32 aux6, the last word's aux6 and a stop the trailer7;
+    long (85): host addr7 data32 op2 bit41, target addr7 data32 status2, bit83, a last clock."""
+    if form == "short" and len(bits) == 53:
+        f = {"addr": bits[0:7], "rw": bits[7], "header_parity": bits[8], "park": bits[9], "ctl": bits[10:14],
+             "data": bits[14:46], "data_parity": bits[46], "park2": bits[47], "status": bits[48:50],
+             "pad": bits[50:52], "stop": bits[52]}
+        f["header_parity_ok"] = _parity(bits[0:8]) == int(bits[8])
+        f["data_parity_ok"] = _parity(bits[14:46]) == int(bits[46])
+        return f
+    if op == "BURST" and len(bits) >= 91 and (len(bits) - 15) % 38 == 0:
+        n = (len(bits) - 15) // 38
+        return {"header": bits[0:14], "aux": [bits[46 + 38 * i:52 + 38 * i] for i in range(n - 1)],
+                "trailer": bits[14 + 38 * n - 6:]}
+    if form == "long" and len(bits) == 85:
+        return {"host_addr": bits[0:7], "host_data": bits[7:39], "op": bits[39:41], "bit41": bits[41],
+                "target_addr": bits[42:49], "target_data": bits[49:81], "status": bits[81:83], "bit83": bits[83],
+                "last": bits[84]}
+    return {}
 
 
 def long_answer(cap, sb, a: int, b: int) -> dict:
@@ -201,6 +252,8 @@ class SwioPlugin:
                    **_pitches(a, b)}
             if rw is not None:
                 out["rw_low_ns"] = round(float(ps.width[rw]) * ns, 1)
+                if rw + 1 < b:                 # from the R/W bit's end to the first data pulse (the turnaround)
+                    out["rw_gap_ns"] = round(float(ps.start[rw + 1] - ps.start[rw] - ps.width[rw]) * ns, 1)
             return out
 
         for a, b in ps.bounds.tolist():

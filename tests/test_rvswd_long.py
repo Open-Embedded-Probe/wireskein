@@ -81,8 +81,8 @@ def test_access_memory_with_postincrement():
     tx = [W(0x05, 0x20000000), W(0x17, (2 << 24) | (2 << 20) | (1 << 19)), R(0x04, 0x11223344),
           W(0x17, (2 << 24) | (2 << 20) | (1 << 19)), R(0x04, 0x55667788),
           W(0x05, 0x20000100), W(0x04, 0xCAFE), W(0x17, (2 << 24) | (1 << 20) | (1 << 16))]
-    assert accesses(tx) == [["MEMR", 0x20000000, 0x11223344, 4], ["MEMR", 0x20000004, 0x55667788, 4],
-                            ["MEMW", 0x20000100, 0xCAFE, 2]]
+    assert [e[:4] for e in accesses(tx)] == [["MEMR", 0x20000000, 0x11223344, 4], ["MEMR", 0x20000004, 0x55667788, 4],
+                                             ["MEMW", 0x20000100, 0xCAFE, 2]]
 
 
 def test_a_program_buffer_load_is_read_when_its_data_register_is():
@@ -92,7 +92,7 @@ def test_a_program_buffer_load_is_read_when_its_data_register_is():
     tx = [W(0x04, 0xE0000380), W(0x17, 0x0023100D), W(0x20, lw), W(0x21, sw), W(0x22, 0x00100073),
           W(0x04, 0x08000000), W(0x17, 0x0027100B), R(0x05, 0xDEADBEEF)]
     mem = [e for e in accesses(tx) if e[0] == "MEMR"]
-    assert mem == [["MEMR", 0x08000000, 0xDEADBEEF, 4]]
+    assert [e[:4] for e in mem] == [["MEMR", 0x08000000, 0xDEADBEEF, 4]]
 
 
 def test_hartinfo_gives_the_data_registers_address_and_compressed_code_runs():
@@ -103,7 +103,7 @@ def test_hartinfo_gives_the_data_registers_address_and_compressed_code_runs():
     tx = [R(0x12, 0x00002380 & ~(1 << 16)), W(0x04, 0x380), W(0x17, 0x0023100D),
           W(0x20, c_lw | (c_sw << 16)), W(0x21, 0x9002),
           W(0x04, 0x1FFFF7E0), W(0x17, 0x0027100B), R(0x05, 0x00400040)]
-    assert [e for e in accesses(tx) if e[0] == "MEMR"] == [["MEMR", 0x1FFFF7E0, 0x00400040, 4]]
+    assert [e[:4] for e in accesses(tx) if e[0] == "MEMR"] == [["MEMR", 0x1FFFF7E0, 0x00400040, 4]]
 
 
 def test_autoexec_reruns_the_command_and_a_dm_without_it_reads_back_zero():
@@ -249,3 +249,62 @@ def test_data_ringing_at_the_clock_edge_is_read_as_it_settles():
     dmi = doc["parts"][0]["buses"][0]["result"]["dmi"]
     first = next(x for x in dmi if x["form"] == "long")["bits"]
     assert (int(first[0:7], 2), int(first[7:39], 2), first[39:41]) == (0x11, 0x19, "00")
+
+
+def test_ringing_data_does_not_let_a_view_without_a_short_clock_win():
+    # wch-protocols e163 preff (LinkE speed setting 0xff): SWDIO rings for 1-3 samples while SWCLK is high and one
+    # clock's low is only 6 samples; read raw the bits rang, and a view with short pulses filtered out (that clock
+    # gone) won with 52-bit frames that passed by chance (dmstatus 0x704). Read as the data settles: 53 bits, 0x382
+    from wireskein.decode import decode_file
+    doc = decode_file(D / "linke_l103_e163_preff.sr",
+                      {"buses": [{"protocol": "rvswd", "pins": {"clk": "SWCLK", "dio": "SWDIO"}}]})
+    dmi = doc["parts"][0]["buses"][0]["result"]["dmi"]
+    short = [x for x in dmi if x["form"] == "short"]
+    assert len(short) == 52 and all(len(x["bits"]) == 53 and x["ok"] for x in short)
+    assert {x["data"] for x in short if x["reg"] == "dmstatus"} <= {0x382, 0xc82, 0x30c82}
+
+
+def test_a_glitch_clock_is_dropped_when_that_gives_a_known_length():
+    import numpy as np
+    from wireskein._engine.rvswd import _repaired, known_length
+    highs = np.full(200, 25.0)
+    highs[30] = 1                                     # a reflection's glitch read as a clock, inside a 54-clock frame
+    assert _repaired(10, 64, highs) == (10, 64, (30,))
+    assert _repaired(10, 63, highs) == (10, 63)       # 53: a known length, nothing dropped
+    highs[30] = 25
+    assert _repaired(10, 64, highs) == (10, 64)       # no glitch clock to drop: left as it is (not read)
+    assert known_length(585) and not known_length(586)
+
+
+def test_named_fields_layers_and_times():
+    from wireskein.decode import decode_file
+    doc = decode_file(D / "linke_v203_read_flash_4k.sr",
+                      {"buses": [{"protocol": "rvswd", "pins": {"clk": "SWCLK", "dio": "SWDIO"}, "layers": ["bits"]}]})
+    r = doc["parts"][0]["buses"][0]["result"]
+    # every sampling edge, to time the clock inside a frame
+    t = r["bits"]["t"]
+    assert len(t) >= sum(len(x["bits"]) for x in r["dmi"])
+    short = [x for x in r["dmi"] if x["form"] == "short" and x["op"] != "BURST"]
+    f = short[0]["fields"]
+    assert set(f) >= {"addr", "rw", "header_parity", "park", "ctl", "data", "data_parity", "status", "pad", "stop"}
+    assert all(x["fields"]["header_parity_ok"] and x["fields"]["data_parity_ok"] for x in short if x["ok"])
+    burst = [x for x in r["dmi"] if x["op"] == "BURST"][0]["fields"]
+    assert len(burst["header"]) == 14 and len(burst["aux"]) == 14 and len(burst["trailer"]) == 7
+    # the Debug Module's accesses with the ticks of the command (s) and of the read that showed the value (e)
+    mem = [e for e in r["dm"] if e["op"] == "MEMR"]
+    assert all(e["s"] <= e["e"] for e in mem)
+
+
+def test_swio_pulses_and_turnaround():
+    import collections
+    from wireskein.decode import decode_file
+    doc = decode_file(D / "linke_v003_read_ram_256.sr",
+                      {"buses": [{"protocol": "swio", "pins": {"dio": "SWIO"}, "layers": ["pulses"]}]})
+    r = doc["parts"][0]["buses"][0]["result"]
+    assert len(r["pulses"]["s"]) == len(r["pulses"]["width"]) > 41 * 60
+    gaps = collections.defaultdict(list)
+    for x in r["dmi"]:
+        if "rw_gap_ns" in x:
+            gaps[x["op"]].append(x["rw_gap_ns"])
+    # from the R/W bit's end to the first data pulse: a read waits for the target (740-780 ns), a write does not
+    assert 700 < min(gaps["R"]) and max(gaps["R"]) < 820 and 340 < min(gaps["W"]) and max(gaps["W"]) < 400

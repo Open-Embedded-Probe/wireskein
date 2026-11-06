@@ -7,7 +7,9 @@ so when the Debug Module has no Access Memory, as on a CH32V103). The program bu
 registers the debugger wrote, data registers it wrote or read. A load from memory gives a value known only once the
 debugger reads the data register it was stored to; that read is the memory read.
 
-Each access read is (op, addr, value, size): op MEMR / MEMW / REGR / REGW, size in bytes (memory) or None.
+Each access read is [op, addr, value, size, s, e]: op MEMR / MEMW / REGR / REGW, size in bytes (memory) or None; s the
+tick of the DMI access that made it (an abstract command, a program run), e that of the one that showed its value
+(the read of a data register; s when it was known then).
 """
 
 from __future__ import annotations
@@ -35,10 +37,12 @@ class Load:
     def __init__(self, *entries: list):
         self.entries = [e for e in entries if e[2] is None]
 
-    def resolve(self, value: int) -> None:
+    def resolve(self, value: int, at=None) -> None:
         for e in self.entries:
             size = e[3] or 4
             e[2] = value if size >= 4 else value & ((1 << (8 * size)) - 1)
+            if at is not None:
+                e[5] = at                      # seen when the debugger read it
         self.entries = []
 
 
@@ -168,6 +172,7 @@ class DebugModule:
         self.command: int | None = None
         self.autoexec = 0
         self.out: list[list] = []
+        self.now = (None, None)
 
     # ---- the hart, running the program buffer ----
     def _data_index(self, addr: int):
@@ -201,8 +206,7 @@ class DebugModule:
                         if name in ("lb", "lh"):
                             v = _sx(v, 8 * size) & MASK
                 else:
-                    entry = ["MEMR", a, None, size]
-                    self.out.append(entry)
+                    entry = self._put(["MEMR", a, None, size])
                     v = Load(entry)
                 if f["rd"]:
                     g[f["rd"]] = v
@@ -219,7 +223,7 @@ class DebugModule:
                     val = v if isinstance(v, int) else None
                     if val is not None and size < 4:
                         val &= (1 << (8 * size)) - 1
-                    self.out.append(["MEMW", a, val, size])
+                    self._put(["MEMW", a, val, size])
             elif name in _ALU:
                 a = g.get(f["rs1"])
                 b = g.get(f["rs2"]) if "rs2" in f else f["imm"]
@@ -253,13 +257,12 @@ class DebugModule:
             if transfer:
                 if write:
                     v = self.data.get(0)
-                    self.out.append(["REGW", regno, v if isinstance(v, int) else None, None])
+                    self._put(["REGW", regno, v if isinstance(v, int) else None, None])
                     if 0x1000 <= regno < 0x1020 and regno != 0x1000:
                         self.gpr[regno - 0x1000] = v
                 else:                        # the value is the one the debugger then reads from data0
                     v = self.gpr.get(regno - 0x1000) if 0x1000 <= regno < 0x1020 else None
-                    entry = ["REGR", regno, None, None]
-                    self.out.append(entry)
+                    entry = self._put(["REGR", regno, None, None])
                     self.data[0] = Load(entry, *(v.entries if isinstance(v, Load) else ()))
             if postexec:
                 self._run()
@@ -268,22 +271,28 @@ class DebugModule:
             size = 1 << ((cmd >> 20) & 7)
             if write:
                 v = self.data.get(0)
-                self.out.append(["MEMW", a if isinstance(a, int) else None, v if isinstance(v, int) else None, size])
+                self._put(["MEMW", a if isinstance(a, int) else None, v if isinstance(v, int) else None, size])
             else:
-                entry = ["MEMR", a if isinstance(a, int) else None, None, size]
-                self.out.append(entry)
+                entry = self._put(["MEMR", a if isinstance(a, int) else None, None, size])
                 self.data[0] = Load(entry)
             if (cmd >> 19) & 1 and isinstance(a, int):        # aampostincrement
                 self.data[1] = (a + size) & MASK
 
     # ---- DMI accesses ----
-    def feed(self, op: str, addr: int, data) -> None:
+    def _put(self, entry: list) -> list:
+        """An access read, with the times of the DMI access that made it (s) and that showed its value (e)."""
+        entry += [self.now[0], self.now[1]]
+        self.out.append(entry)
+        return entry
+
+    def feed(self, op: str, addr: int, data, s=None, e=None) -> None:
+        self.now = (s, e if e is not None else s)
         if op == "BURST":
             if addr is not None and 0x04 <= addr <= 0x0F:
                 for v in data:                    # reads of one data register one after another (autoexec)
-                    self.feed("R", addr, v)
+                    self.feed("R", addr, v, s, e)
             else:
-                self.out.append(["BURST", self.data.get(1) if isinstance(self.data.get(1), int) else None, data, None])
+                self._put(["BURST", self.data.get(1) if isinstance(self.data.get(1), int) else None, data, None])
             return
         if addr is None:
             return
@@ -294,7 +303,7 @@ class DebugModule:
             else:
                 v = self.data.get(k)
                 if isinstance(v, Load):
-                    v.resolve(data)
+                    v.resolve(data, self.now[1])
                 self.data[k] = data
             if self.command is not None and (self.autoexec >> k) & 1:
                 self._execute(self.command)
@@ -324,7 +333,7 @@ def accesses(tx: list[dict], dataaddr: int | None = None) -> list[list]:
     for x in tx:
         if _skip(x):
             continue
-        dm.feed(x["op"], x["addr"], x["data"])
+        dm.feed(x["op"], x["addr"], x["data"], x.get("t"), x.get("e"))
     return dm.out
 
 
@@ -361,7 +370,7 @@ def _learn_dataaddr(tx: list[dict]) -> int | None:
         if not _skip(x):
             dry.feed(x["op"], x["addr"], x["data"])
     seen: dict[int, int] = {}
-    for op, a, _, _ in dry.out:
+    for op, a, *_ in dry.out:
         if op in ("MEMR", "MEMW") and isinstance(a, int):
             for k in range(4):
                 c = (a - 4 * k) & MASK
@@ -378,7 +387,7 @@ def _learn_dataaddr(tx: list[dict]) -> int | None:
         for x in tx:
             if _skip(x):
                 continue
-            dm.feed(x["op"], x["addr"], x["data"])
+            dm.feed(x["op"], x["addr"], x["data"], x.get("t"), x.get("e"))
         n = sum(1 for e in dm.out if e[0] == "MEMR" and e[2] is not None)
         if n > best_n:
             best, best_n = a, n
