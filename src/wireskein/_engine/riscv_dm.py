@@ -279,7 +279,11 @@ class DebugModule:
     # ---- DMI accesses ----
     def feed(self, op: str, addr: int, data) -> None:
         if op == "BURST":
-            self.out.append(["BURST", self.data.get(1) if isinstance(self.data.get(1), int) else None, data, None])
+            if addr is not None and 0x04 <= addr <= 0x0F:
+                for v in data:                    # reads of one data register one after another (autoexec)
+                    self.feed("R", addr, v)
+            else:
+                self.out.append(["BURST", self.data.get(1) if isinstance(self.data.get(1), int) else None, data, None])
             return
         if addr is None:
             return

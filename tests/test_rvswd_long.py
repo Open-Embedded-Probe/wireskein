@@ -222,3 +222,18 @@ def test_rvswd_frames_carry_their_bits_and_clock_period():
     dmi = doc["parts"][0]["buses"][0]["result"]["dmi"]
     assert all(len(x["bits"]) == (53 if x["form"] == "short" else 85) for x in dmi)
     assert all(x["period_ns"] > 0 for x in dmi)
+
+
+def test_burst_reads_are_the_flash_ch32rv_read():
+    # a CH32V203's 4 KiB read by a LinkE: 64 bursts of 15 reads of data0 (autoexec, Access Memory with
+    # postincrement) after one Access Memory each; a burst's high now and then held twice its usual (1.1 us) is no
+    # STOP. The truth: the bytes ch32rv wrote (read --range 0x08000000+4096)
+    import struct
+    from wireskein.decode import decode_file
+    doc = decode_file(D / "linke_v203_read_flash_4k.sr",
+                      {"buses": [{"protocol": "rvswd", "pins": {"clk": "SWCLK", "dio": "SWDIO"}}]})
+    r = doc["parts"][0]["buses"][0]["result"]
+    assert sum(1 for x in r["dmi"] if x["op"] == "BURST") == 64
+    words = struct.unpack("<1024I", (D / "linke_v203_read_flash_4k.bin").read_bytes())
+    mem = {e["addr"]: e["value"] for e in r["dm"] if e["op"] == "MEMR"}
+    assert [mem.get(0x08000000 + 4 * i) for i in range(1024)] == list(words)

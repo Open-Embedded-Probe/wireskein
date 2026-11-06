@@ -39,12 +39,13 @@ fields = [
 checks = [ { kind = "parity", bit = 47, over = [15, 46] } ]
 keep_span = true
 
-# Burst: 14 header bits, then words of 38 bits (32 data + 6), one stop bit; at least 2 words.
+# Burst: 14 header bits (the register's address first: data0, read again and again with autoexec), then words of 38
+# bits (32 data + 6), one stop bit; at least 2 words.
 [[layout]]
 bits = "38n+15"
 min_bits = 91
 const = { op = "BURST" }
-fields = []
+fields = [ { name = "addr", at = 0, width = 7, role = "address" } ]
 repeat = { name = "data", at = 14, every = 38, width = 32, tail = 1 }
 keep_span = true
 
