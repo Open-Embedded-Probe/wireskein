@@ -2,21 +2,17 @@
 
 ## Unreleased
 
+## 0.0.23
 - (EN) `rgb_led` notice `latch_short`: a low between frames long enough for `reset_min_s` but shorter than `latch_safe_s` (280 us, what WS2812B-V5 and the like need to latch); `latch_safe_s=None` does not look for it.
 - (JA) `rgb_led` の注意 `latch_short` を足した: フレームの間の low が、`reset_min_s` には足りるが `latch_safe_s`（280 us。WS2812B-V5 などが確定に要る長さ）より短い。`latch_safe_s=None` なら探さない。
-
 - (EN) `i2c` notices: `scl_stretch` (SCL held low more than `stretch_min` times its usual low: a target stretching the clock, or the controller pausing) and `bus_glitch` (a pulse on either line shorter than `spike_max_s`, 50 ns); counted in `stretches` and `spikes`; `notices={"scl_stretch": "ng"}` limits them. Tested on lines from an encoder of the test's own.
 - (JA) `i2c` の注意を足した: `scl_stretch`（SCL がいつもの low の `stretch_min` 倍より長く low。ターゲットのクロックの引き延ばしか、コントローラが止まったもの）と `bus_glitch`（どちらかの線の、`spike_max_s` = 50 ns より短いパルス）。数は `stretches` と `spikes`。`notices={"scl_stretch": "ng"}` で限る。試験の中の独自の符号器が作った線で確かめた。
-
 - (EN) `uart`'s idle level: a line resting at one level (runs of two characters or more, nearly all at it) is idle there, before the readings are compared. Characters in error one after another (0x00 sent 8E1, read 8N1) read better the other way round from the bits between them, and a line idling high was reported idle 0 (NG).
 - (JA) `uart` のアイドルのレベル: 1 つのレベルで休む線（2 文字分以上の長さの区間が、ほとんどそのレベル）は、読みを比べる前に、そのレベルがアイドル。続けて誤る文字（0x00 を 8E1 で送り 8N1 で読む）は、その間のビットから逆向きの方がよく読め、High で休む線をアイドル 0（NG）としていた。
-
 - (EN) A check `qspi(clk, cs, io, transfers, mode, cs_active, freq_hz, freq_rel)`: SPI on several data lines (dual, quad, octal) per window of CS active, phase by phase - command, address, dummy clocks and data, each on its own lines (`width`, `lines`) - every window's clocks exactly its phases'. Tested on a flash's 0xEB (1-4-4), 0x6B (1-1-4) and 0x03 made by an encoder of the test's own (tests/test_qspi.py).
 - (JA) 検査 `qspi(clk, cs, io, transfers, mode, cs_active, freq_hz, freq_rel)` を足した: 複数のデータ線（デュアル、クアッド、オクタル）の SPI を、CS がアクティブな窓ごとに、相ごとに読む。命令、アドレス、ダミーのクロック、データを、相ごとの線（`width`、`lines`）で読み、どの窓のクロックもちょうどその相の分。試験の中の独自の符号器が作ったフラッシュの 0xEB（1-4-4）、0x6B（1-1-4）、0x03 で確かめた（tests/test_qspi.py）。
-
 - (EN) A check `rs485(tx, de, baud, ..., de_active, lead_min_s, lead_max_s, tail_min_s, tail_max_s)`: TX read as `uart` (the same arguments and errors) with the driver enable around it: every character starting inside DE active, each window's lead and tail bounded (the tail at least 0 by default), a window with no character a notice `empty_de_window`. Tested on lines from an encoder of the test's own and on an OEP probe's ESP-IDF UART in RS485 half-duplex mode (tests/data/rs485_truth).
 - (JA) 検査 `rs485(tx, de, baud, ..., de_active, lead_min_s, lead_max_s, tail_min_s, tail_max_s)` を足した: TX を `uart` と同じに読み（引数も誤りも同じ）、周りのドライバの許可を見る。どの文字も DE がアクティブな中で始まり、窓ごとの前と後の余裕を限る（後の余裕は既定で 0 以上）。文字の無い窓は注意 `empty_de_window`。試験の中の独自の符号器が作った線と、OEP のプローブの ESP-IDF の UART の RS485 半二重のモードで確かめた（tests/data/rs485_truth）。
-
 - (EN) A check `can(pin, bitrate, frames, bitrate_rel, idle, ack, errors, sample_point)`: classic CAN read as a receiving node does (a start of frame after 11 recessive bits, resynchronizing at each recessive-to-dominant edge, stuff / form / CRC errors, reading again after an error frame); the bit rate fitted from the edges; the good frames compared in order; the ACK slot (`ack` True / False / None); errors NG unless expected exactly (`errors={"stuff": 1}`); notices `bitrate_near_limit` and `overload`. Checked on lines from an encoder of the test's own and on an OEP probe's ESP-IDF TWAI driver (self-test at 125k to 1M, and retrying without ACK: 16 active error flags at the ACK delimiter, then error passive; tests/data/can_truth).
 - (JA) 検査 `can(pin, bitrate, frames, bitrate_rel, idle, ack, errors, sample_point)` を足した: クラシック CAN を受信するノードと同じに読む（11 ビットのレセッシブの後のフレームの始め、レセッシブからドミナントへのエッジごとの同期し直し、スタッフ / 形式 / CRC の誤り、エラーフレームの後の読み直し）。ビットレートはエッジから求め、正しいフレームを順に比べ、ACK のスロットを見る（`ack` は True / False / None）。誤りは「ちょうどこの数」と書かなければ NG（`errors={"stuff": 1}`）。注意は `bitrate_near_limit` と `overload`。試験の中の独自の符号器が作った線と、OEP のプローブの ESP-IDF の TWAI ドライバ（125k〜1M の self-test、ACK なしの再送: ACK の区切りでの 16 回のアクティブなエラーフラグの後、エラーパッシブ）で確かめた（tests/data/can_truth）。
 
