@@ -59,7 +59,8 @@ window; inside it the cut goes where the lines are quiet:
 The remainder after the last cut starts the next window. A decode spec's buses and lines are the ones looked at for
 quiet; `analyze` looks at every line.
 
-`analyze` takes the roles from the first piece (its claims confirmed or likely), then decodes every piece with them.
+`analyze` takes the roles from the first piece that holds any (its claims confirmed or likely; up to `roles_from`
+pieces), then decodes every piece with them; with none, `split.no_roles` says so.
 State across frames (the RISC-V Debug Module) is read over the pieces as one.
 
 ### 3.1 Options
@@ -81,6 +82,7 @@ read whole however long:
 | `ignore=A;B` | Not on these | |
 | `cuts=T1;T2` | Cut here (ticks), instead of looking | |
 | `workers` | Pieces decoded in this many processes at once (at most twice as many in flight) | 1 |
+| `roles_from` | `analyze`: pieces tried, from the start, for the roles (the start may be before the bus) | 3 |
 
 The defaults come from 2 s of a WCH-LinkE's SDI monitor (8.5M changes): pieces of 500k to 1M changes were the
 quickest and lightest; 250k needed forced cuts.

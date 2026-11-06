@@ -60,7 +60,8 @@ wireskein survey long.sr --json --plan         # 文書（wireskein-survey/1）�
 最後の切れ目より後ろは、次の窓に持ち越します。decode では、spec のバスの線と `lines` で静かな所を探します。
 `analyze` は、すべての線で探します。
 
-`analyze` は、最初の区切りで役割を決め（confirmed か likely の主張）、すべての区切りをその役割で decode します。
+`analyze` は、役割（confirmed か likely の主張）のある最初の区切りで役割を決め（先頭から `roles_from` 個まで試す）、
+すべての区切りをその役割で decode します。見つからなければ、`split.no_roles` がそう言います。
 フレームをまたぐ状態（RISC-V Debug Module）は、区切りをまたいで 1 つとして読みます。
 
 ### 3.1 オプション
@@ -82,6 +83,7 @@ wireskein survey long.sr --json --plan         # 文書（wireskein-survey/1）�
 | `ignore=A;B` | この線では見ない | |
 | `cuts=T1;T2` | 探さずに、ここ（tick）で切る | |
 | `workers` | 区切りを、このプロセス数で同時に decode する（同時に抱えるのは 2 倍まで） | 1 |
+| `roles_from` | `analyze`: 役割を探すのに、先頭から試す区切りの数（先頭はバスより前のことがある） | 3 |
 
 既定値は、WCH-LinkE の SDI の見張りの 2 秒（850 万変化）で測って決めました。区切りが 50 万〜100 万変化のときに
 いちばん速く軽く、25 万では強制で切る所が出ました。

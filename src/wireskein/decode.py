@@ -290,9 +290,20 @@ def _analyze_split(source, hints, opts, depth: str, head: dict, items=None) -> d
     p0, c0 = next(gen)
     if p0.cut == "end" and p0.a == 0:
         return None
-    res0 = staged.analyze(c0, hints)
-    ex = export(res0, c0, "final", None, False, None, depth)
-    keep = [c for c in ex["claims"] if c.get("verdict") in ("confirmed", "likely") and c["protocol"] != "sync_unknown"]
+    # the roles from the first piece that holds any (up to roles_from pieces: the start may be before the bus)
+    tried = [(p0, c0)]
+    while True:
+        p_, c_ = tried[-1]
+        ex = export(staged.analyze(c_, hints), c_, "final", None, False, None, depth)
+        keep = [c for c in ex["claims"] if c.get("verdict") in ("confirmed", "likely")
+                and c["protocol"] != "sync_unknown"]
+        if keep or len(tried) >= int(opts.get("roles_from", 3)):
+            break
+        nxt = next(gen, None)
+        if nxt is None:
+            break
+        tried.append(nxt)
+    p0 = tried[-1][0]
     spec = _spec({"buses": [{"protocol": c["protocol"], "pins": c["roles"],
                              "params": {x: c["params"][x] for x in ("baud", "mode") if x in c.get("params", {})}}
                             for c in keep], "depth": depth})
@@ -300,7 +311,7 @@ def _analyze_split(source, hints, opts, depth: str, head: dict, items=None) -> d
     sink = _Items(items, spec) if items is not None else None
     outs = []
     try:
-        for p, o in [(p0, _part(c0, spec, head, strict=True))] + [
+        for p, o in [(p, _part(c, spec, head, strict=True)) for p, c in tried] + [
                 (p, o) for (p, _), o in _split.mapped(work, gen, int(opts.get("workers", 1)))]:
             if sink is not None:
                 sink.take(p, o)
@@ -320,6 +331,9 @@ def _analyze_split(source, hints, opts, depth: str, head: dict, items=None) -> d
                **({"uninterpreted": b["uninterpreted"]} if b.get("uninterpreted") else {}),
                "uninterpreted_summary": b.get("uninterpreted_summary")} for c, b in zip(keep, joined["buses"])]
     return {"claims": claims, "split": {**joined["split"], "roles_from": [p0.s, p0.e],
+                                        **({} if keep else {"no_roles": f"no bus claimed in the first {len(tried)} pieces "
+                                                                         "(roles_from): analyse a stretch with --from / "
+                                                                         "--to, or decode with a spec"}),
                                         "not_carried": [{"protocol": c["protocol"], "roles": c["roles"],
                                                          "verdict": c.get("verdict")} for c in ex["claims"]
                                                         if c not in keep]}}

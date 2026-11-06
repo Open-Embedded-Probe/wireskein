@@ -160,7 +160,7 @@ def sync_bits(cap, sv: Survey, clock: str, data: tuple[str, ...], select: str | 
     # a data line ringing at the sampling edge (a reflection: pulses of a sample or two) is read as it settles, its
     # pulses shorter than RING samples dropped, when the clock is slow enough that no bit is that short
     period = float(np.median(np.diff(t))) if len(t) > 1 else 0.0
-    ring = RING if period >= 4 * RING else 0
+    ring = RING if period >= 3 * RING else 0
     rows = []
     for d in data:
         ch = cap.channel(d)

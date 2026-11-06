@@ -197,3 +197,18 @@ def test_a_piece_the_roles_read_badly_is_told():
     (d,) = sp["doubtful"]
     assert (d["s"], d["e"]) in {(p["s"], p["e"]) for p in sp["pieces"]} and "bus 0 (rvswd)" in d["why"]
     assert 0.08 < d["seconds"][0] < 0.11
+
+
+def test_a_data_line_ringing_at_a_slow_enough_clock_still_pairs_with_it(tmp_path):
+    # 0.1 s of a LinkE's SDI monitor (25 MHz: SWCLK's period 10 samples, SWDIO ringing 1-2 samples at its edges):
+    # the ringing scattered SWDIO's changes over the period and the two never formed a bus; read as they settle,
+    # analyze finds RVSWD. (An excerpt of wch-protocols' more/l103/monitor_sdi.sr, made here from a piece of it.)
+    import argparse
+    from wireskein import cli
+    src = Path("/home/mt/dev_wch/wch-protocols/captures/fixtures/wire-linke-p4-2026-09-25/more/l103/monitor_sdi.sr")
+    if not src.exists():
+        pytest.skip("wch-protocols' monitor_sdi.sr is not here")
+    out = tmp_path / "m.wireskein"
+    cli.convert(argparse.Namespace(input=src, output=out, part=None, from_s=5.0, to_s=5.05, pins=None))
+    (c,) = [c for c in analyze_file(out)["parts"][0]["claims"] if c["protocol"] == "rvswd"]
+    assert c["roles"] == {"clk": "SWCLK", "dio": "SWDIO"} and c["verdict"] == "confirmed"
