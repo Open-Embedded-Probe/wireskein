@@ -107,6 +107,13 @@ def layers_of(n) -> dict:
             ps = n.layers["pulses"]
             out["pulses"] = {"s": ps.start.tolist(), "width": ps.width.tolist(), "short": ps.short.tolist(),
                              "split": ps.split}
+        sb = (getattr(n, "layers", None) or {}).get("bits")
+        view = getattr(sb, "view", None) if sb is not None else None
+        if a == "rvswd" and sb is not None and view is not None:
+            from .rvswd import frame_details
+            details = [frame_details(x, sb, view) if "_span" in x else {} for x in n.output.items]
+        else:
+            details = [{} for _ in n.output.items]
         out["dmi"] = [{"s": x["t"], **({"e": x["e"]} if "e" in x else {}), "op": x["op"], "addr": x["addr"], "reg": DM_NAMES.get(x["addr"]) if x["addr"] is not None else None,
                        "data": x["data"], "ok": x.get("ok", True),
                        **({k: x[k] for k in ("form", "status", "answered", "late", "answer_delay", "answer_delay_ns", "period_ns", "bits", "repaired", "fields")
@@ -114,7 +121,9 @@ def layers_of(n) -> dict:
                        **({k: x[k] for k in ("fast", "rw_low_ns", "rw_gap_ns", "short_max_ns", "long_min_ns", "short_median_ns",
                                     "long_median_ns", "space_ns", "pitch_1_ns", "pitch_0_ns") if k in x}
                           if a == "swio" else {})}
-                      for x in n.output.items]
+                      for x, dx in zip(n.output.items, details)]
+        for row, dx in zip(out["dmi"], details):
+            row.update(dx)
         dm = [ch for ch in n.children if ch.analyzer == "riscv_dm"]
         if dm:
             out["dm"] = [{**({"s": int(t0)} if t0 is not None else {}), **({"e": int(t1)} if t1 is not None else {}),

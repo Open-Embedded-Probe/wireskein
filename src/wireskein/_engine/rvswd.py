@@ -284,3 +284,22 @@ class SwioPlugin:
              "dm_addr": known, "split_ns": ps.split / c.cap.rate * 1e9}
         score = known * (0.5 + 0.5 * pulses) * (1 - 0.5 ** (len(tx) / 4))
         return [Node("swio", {"idle": ps.idle, "split_ns": round(float(ps.split) * ns, 1)}, {"dio": ps.pin}, Stream("dmi", tx), m, layer_score=score, total=score)]
+
+
+def frame_details(x: dict, sb, cap) -> dict:
+    """A frame's details from its sampling edges (x["_span"]): its bits as sampled (the don't-care ones too), the
+    clock's period, the glitch clocks left out, its fields by name and, for a long frame answered, the answer's
+    timing. Made for the frames exported only (every hypothesis would make them otherwise)."""
+    a, b, skip = x["_span"]
+    keep = np.setdiff1d(np.arange(a, b), np.asarray(skip, np.int64)) if skip else np.arange(a, b)
+    out = {"bits": "".join("1" if v else "0" for v in sb.bits[0][keep].tolist())}
+    if len(keep) > 1:
+        out["period_ns"] = round(float(np.median(np.diff(sb.t[keep]))) / cap.rate * 1e9, 1)
+    if skip:
+        out["repaired"] = [round(float(sb.t[i]) / cap.rate * 1e9) for i in skip]
+    fields = frame_fields(out["bits"], x.get("form", "short"), x.get("op"))
+    if fields:
+        out["fields"] = fields
+    if x.get("form") == "long" and x.get("answered") is not False and not skip:
+        out.update(long_answer(cap, sb, a, b))
+    return out

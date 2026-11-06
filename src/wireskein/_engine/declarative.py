@@ -522,62 +522,104 @@ class DeclarativePlugin:
         views = REFRAMERS[reframe](fr, c.cap) if reframe else [fr.bounds.tolist()]
         best = None
         bits = sb.bits[0]
+        ends = bool(self.spec.get("frame", {}).get("ends"))
         for frames in views:
             recs, checked, passed, matched, checked_frames, explained = [], 0, 0, 0, 0, 0
-            for fr_ in frames:
+            # frames of one length and layout read together (a matrix of their bits), the others one by one
+            rows: list = [None] * len(frames)
+            groups: dict = {}
+            for i, fr_ in enumerate(frames):
                 a, b = fr_[0], fr_[1]
                 skip = fr_[2] if len(fr_) > 2 else ()      # glitch clocks dropped (a reframer's repair)
                 L = layout(b - a - len(skip))
                 if L is None:
                     continue
+                if skip or "repeat" in L:
+                    rows[i] = (L, None)
+                else:
+                    groups.setdefault(b - a, (L, []))[1].append(i)
+            for n, (L, idx) in groups.items():
+                starts = np.asarray([frames[i][0] for i in idx], np.int64)
+                M = bits[starts[:, None] + np.arange(n)[None, :]].astype(np.int64)
+                vals = {}
+                for fld in L["fields"]:
+                    w = fld["width"]
+                    vals[fld["name"]] = M[:, fld["at"]:fld["at"] + w] @ (1 << np.arange(w - 1, -1, -1, dtype=np.int64))
+                q = L.get("unanswered_if_ones")
+                unans = M[:, q[0]:q[1] + 1].all(axis=1) if q else np.zeros(len(idx), bool)
+                goods = []
+                for chk in L.get("checks", []):
+                    if chk["kind"] == "parity":
+                        lo, hi = chk["over"]
+                        goods.append(M[:, chk["bit"]] == ((M[:, lo:hi + 1].sum(axis=1) & 1) ^ int(chk.get("odd", 0))))
+                    elif chk["kind"] == "equal":     # one run of bits repeats another (an echo)
+                        (a0, a1), (b0, b1) = chk["a"], chk["b"]
+                        goods.append((M[:, a0:a1 + 1] == M[:, b0:b1 + 1]).all(axis=1))
+                    else:
+                        raise ValueError(f"unknown layout check kind {chk['kind']!r} (parity, equal)")
+                for k, i in enumerate(idx):
+                    rows[i] = (L, (vals, k, bool(unans[k]), [bool(g[k]) for g in goods]))
+            for i, row in enumerate(rows):
+                if row is None:
+                    continue
+                L, got = row
+                fr_ = frames[i]
+                a, b = fr_[0], fr_[1]
+                skip = fr_[2] if len(fr_) > 2 else ()
                 matched += 1
                 explained += b - a
-                f = bits[a:b].astype(np.int64)
-                if skip:
-                    f = np.delete(f, [i - a for i in skip])
                 rec = {"start": int(sb.t[a]), **L.get("const", {})}
                 if L.get("keep_span"):                   # the frame's sampling edges, for an adapter that reads more
                     rec["_span"] = (int(a), int(b), tuple(skip))
                 if skip:
                     rec["repaired"] = len(skip)
-                if self.spec.get("frame", {}).get("ends"):
+                if ends:
                     rec["end"] = int(sb.t[b - 1])
+                if got is None:                          # one by one
+                    f = bits[a:b].astype(np.int64)
+                    if skip:
+                        f = np.delete(f, [x - a for x in skip])
+                    fv = {fld["name"]: _int_bits(f[fld["at"]:fld["at"] + fld["width"]]) for fld in L["fields"]}
+                    q = L.get("unanswered_if_ones")
+                    unanswered = bool(q and f[q[0]:q[1] + 1].all())
+                    goods = []
+                    for chk in L.get("checks", []):
+                        if chk["kind"] == "parity":
+                            lo, hi = chk["over"]
+                            goods.append(int(f[chk["bit"]]) == (_parity(f[lo:hi + 1]) ^ int(chk.get("odd", 0))))
+                        elif chk["kind"] == "equal":
+                            (a0, a1), (b0, b1) = chk["a"], chk["b"]
+                            goods.append(bool(np.array_equal(f[a0:a1 + 1], f[b0:b1 + 1])))
+                        else:
+                            raise ValueError(f"unknown layout check kind {chk['kind']!r} (parity, equal)")
+                    if "repeat" in L:            # words of one width at a fixed pitch (a burst)
+                        r = L["repeat"]
+                        k = (b - a - len(skip) - int(r["at"]) - int(r.get("tail", 0))) // int(r["every"])
+                        rep_vals = [_int_bits(f[r["at"] + r["every"] * j:r["at"] + r["every"] * j + r["width"]])
+                                    for j in range(k)]
+                else:
+                    vals, k, unanswered, goods = got
+                    fv = {name: int(v[k]) for name, v in vals.items()}
                 for fld in L["fields"]:
-                    v = _int_bits(f[fld["at"]:fld["at"] + fld["width"]])
+                    v = fv[fld["name"]]
                     if "enum" in fld:
                         v = fld["enum"].get(str(v), v)
                     rec[fld["name"]] = v
-                if "repeat" in L:            # words of one width at a fixed pitch (a burst)
-                    r = L["repeat"]
-                    k = (b - a - int(r["at"]) - int(r.get("tail", 0))) // int(r["every"])
-                    rec[r["name"]] = [_int_bits(f[r["at"] + r["every"] * i:r["at"] + r["every"] * i + r["width"]])
-                                      for i in range(k)]
-                quiet = L.get("unanswered_if_ones")        # the answer's bits all 1: the line left released
-                if quiet and bool(f[quiet[0]:quiet[1] + 1].all()):
+                if got is None and "repeat" in L:
+                    rec[L["repeat"]["name"]] = rep_vals
+                if unanswered:                           # the answer's bits all 1: the line left released
                     rec["answered"] = False          # what the answer carries is not there
                     rec["ok"] = False
                     for fld in L["fields"]:
-                        if fld["at"] + fld["width"] - 1 >= quiet[0]:
+                        if fld["at"] + fld["width"] - 1 >= L["unanswered_if_ones"][0]:
                             rec[fld["name"]] = None
                     recs.append(rec)
                     continue
-                ok = True
                 if L.get("checks"):
                     checked_frames += 1
-                for chk in L.get("checks", []):
-                    if chk["kind"] == "parity":
-                        lo, hi = chk["over"]
-                        checked += 1
-                        good = int(f[chk["bit"]]) == (_parity(f[lo:hi + 1]) ^ int(chk.get("odd", 0)))
-                    elif chk["kind"] == "equal":     # one run of bits repeats another (an echo)
-                        (a0, a1), (b0, b1) = chk["a"], chk["b"]
-                        checked += 1
-                        good = bool(np.array_equal(f[a0:a1 + 1], f[b0:b1 + 1]))
-                    else:
-                        raise ValueError(f"unknown layout check kind {chk['kind']!r} (parity, equal)")
-                    passed += good
-                    ok &= good
-                rec["ok"] = bool(ok)
+                checked += len(goods)
+                passed += sum(goods)
+                rec["ok"] = bool(all(goods))
                 recs.append(rec)
             key = passed
             if best is None or key > best[0]:
@@ -756,7 +798,6 @@ def _adapt_spi(c, fr, n):
 
 
 def _adapt_rvswd(c, fr, n):
-    from .rvswd import long_answer
     tx = []
     for r in n.output.items:
         if "data" not in r:                  # structure-only layouts carry no fields
@@ -765,21 +806,7 @@ def _adapt_rvswd(c, fr, n):
              "status": r.get("status", 0), "ok": r["ok"], "form": r.get("form", "short"),
              **({"answered": False} if r.get("answered") is False else {})}
         if "_span" in r:
-            a, b, skip = r["_span"]
-            sb = fr.source
-            keep = np.setdiff1d(np.arange(a, b), np.asarray(skip, np.int64)) if skip else np.arange(a, b)
-            # every bit as sampled, the don't-care ones too (to compare frames bit for bit), and the clock's period
-            x["bits"] = "".join("1" if v else "0" for v in sb.bits[0][keep].tolist())
-            if len(keep) > 1:
-                x["period_ns"] = round(float(np.median(np.diff(sb.t[keep]))) / c.cap.rate * 1e9, 1)
-            if skip:
-                x["repaired"] = [round(float(sb.t[i]) / c.cap.rate * 1e9) for i in skip]
-            from .rvswd import frame_fields
-            fields = frame_fields(x["bits"], x["form"], x["op"])
-            if fields:
-                x["fields"] = fields
-            if x["form"] == "long" and r.get("answered") is not False and not skip:
-                x.update(long_answer(c.cap, sb, a, b))
+            x["_span"] = r["_span"]                  # the frame's details are read when it is exported
         tx.append(x)
     n.output = Stream("dmi", tx)
     return n

@@ -22,6 +22,7 @@ spec: {"buses": [{"protocol": "i2c", "pins": {"scl": "SCL", "sda": "SDA"}, "para
 
 from __future__ import annotations
 
+import functools
 import hashlib
 from fractions import Fraction
 from pathlib import Path
@@ -135,12 +136,18 @@ def _spec(spec: dict) -> dict:
     return out
 
 
-def _hints(spec: dict) -> dict:
+def _hints(spec: dict, strict: bool = False, names=()) -> dict:
+    """The analysis' hints for a spec. strict: only the spec's protocols tried, on the spec's pins only (a piece of a
+    long capture: no claims on other pins, and no other protocol tried on these)."""
     pins = {}
     for b in spec["buses"]:
         for role, pin in b["pins"].items():
             pins[pin] = {"protocol": b["protocol"], "role": role, **b["params"]}
-    return {"pins": pins, **({"devices": spec["devices"]} if spec.get("devices") else {})}
+    out = {"pins": pins, **({"devices": spec["devices"]} if spec.get("devices") else {})}
+    if strict and spec["buses"]:
+        out["protocols"] = sorted({b["protocol"] for b in spec["buses"]})
+        out["exclude_pins"] = sorted(set(names) - set(pins))
+    return out
 
 
 def _sample_edge(cap: Capture, b: dict) -> str | None:
@@ -289,7 +296,9 @@ def _analyze_split(source, hints, opts, depth: str, head: dict) -> dict | None:
     spec = _spec({"buses": [{"protocol": c["protocol"], "pins": c["roles"],
                              "params": {x: c["params"][x] for x in ("baud", "mode") if x in c.get("params", {})}}
                             for c in keep], "depth": depth})
-    outs = [(p0, _part(c0, spec, head))] + [(p, _part(w, spec, head)) for p, w in gen]
+    work = functools.partial(_piece, spec=spec, head=head)
+    outs = [(p0, _part(c0, spec, head, strict=True))] + [
+        (p, o) for (p, _), o in _split.mapped(work, gen, int(opts.get("workers", 1)))]
     joined = _join_part(outs, spec, source, opts, noisy)
     claims = [{**c, "result": b.get("result", {}), "fit_pieces": b.get("fit", {}).get("pieces"),
                "uninterpreted": b.get("uninterpreted", [])} for c, b in zip(keep, joined["buses"])]
@@ -299,7 +308,7 @@ def _analyze_split(source, hints, opts, depth: str, head: dict) -> dict | None:
                                                         if c not in keep]}}
 
 
-def _part(cap: Capture, spec: dict, head: dict) -> dict:
+def _part(cap: Capture, spec: dict, head: dict, strict: bool = False) -> dict:
     names = {c.name for c in cap.channels}
     for b in spec["buses"]:
         miss = [p for p in b["pins"].values() if p not in names]
@@ -308,7 +317,7 @@ def _part(cap: Capture, spec: dict, head: dict) -> dict:
     miss = [p for p in spec["lines"] if p not in names]
     if miss:
         raise ValueError(f"lines not in the capture: {', '.join(miss)}")
-    res = staged.analyze(cap, _hints(spec))
+    res = staged.analyze(cap, _hints(spec, strict, [c.name for c in cap.channels]))
     out = {"part": head.get("part", 0), "ticks": cap.n_samples,
            **({"tick0": head["tick0"]} if "tick0" in head else {}),
            **{k: head["meta"][k] for k in ("start_ns", "start_uncertainty_ns", "boot_id") if k in head.get("meta", {})},
@@ -450,8 +459,9 @@ def _part_split(source, spec: dict, head: dict, opts, items=None) -> dict:
     sink = _Items(items, spec) if items is not None else None
     outs = []
     try:
-        for p, wcap in _split.run(source, opts, watch=watch or None, noisy=noisy):
-            o = _part(wcap, spec, head)
+        work = functools.partial(_piece, spec=spec, head=head)
+        for (p, _), o in _split.mapped(work, _split.run(source, opts, watch=watch or None, noisy=noisy),
+                                       int((opts or {}).get("workers", 1))):
             if sink is not None:
                 sink.take(p, o)
             outs.append((p, o))
@@ -510,6 +520,12 @@ class _Items:
     def close(self) -> None:
         for j, st in self.dm.items():
             self._dm(j, st.ready(final=True))
+
+
+def _piece(pw, spec: dict, head: dict) -> dict:
+    """One piece decoded (in a worker process, when there are several): (Piece, its capture) -> its part document."""
+    p, wcap = pw
+    return _part(wcap, spec, head, strict=not (p.cut == "end" and p.a == 0))   # one piece: read as always
 
 
 def _join_part(outs: list, spec: dict, source, opts, noisy: dict) -> dict:

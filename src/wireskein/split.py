@@ -29,7 +29,7 @@ from dataclasses import dataclass
 import numpy as np
 
 DEFAULTS = {"max_edges": 2_000_000, "search_from": 0.5, "gap_min": 4.0, "similar": 0.5, "min_edges": 100_000,
-            "overlap_edges": 10_000, "noise_max": 1, "noise_share": 0.3}
+            "overlap_edges": 10_000, "noise_max": 1, "noise_share": 0.3, "workers": 1}
 LISTS = ("cuts", "watch", "ignore")
 
 
@@ -491,3 +491,24 @@ def _tick_before_buf(buf: dict, start: int, e: int, k: int) -> int:
         else:
             hi = mid - 1
     return lo
+
+
+def mapped(fn, items, workers: int = 1):
+    """fn over items (an iterator: the pieces as they are cut), in order, in `workers` processes: at most twice as
+    many in flight, so memory stays a few pieces' (not the capture's)."""
+    if workers <= 1:
+        for x in items:
+            yield x, fn(x)
+        return
+    import collections
+    from concurrent.futures import ProcessPoolExecutor
+    with ProcessPoolExecutor(workers) as ex:
+        pending = collections.deque()
+        for x in items:
+            pending.append((x, ex.submit(fn, x)))
+            if len(pending) >= 2 * workers:
+                y, f = pending.popleft()
+                yield y, f.result()
+        while pending:
+            y, f = pending.popleft()
+            yield y, f.result()

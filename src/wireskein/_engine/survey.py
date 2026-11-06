@@ -185,7 +185,8 @@ def pair_relation(cap: Capture, clk: ClockInfo, other: str) -> PairRelation:
                         float(inside.sum() / max(1, len(clk.bursts))), int(len(clk.bursts)))
 
 
-def survey(cap: Capture, fs: dict[str, ChannelFeatures] | None = None) -> Survey:
+def survey(cap: Capture, fs: dict[str, ChannelFeatures] | None = None, asyncs: bool = True) -> Survey:
+    """asyncs: False leaves the asynchronous reading out (character lengths, bit times): no protocol tried needs it."""
     fs = fs or features(cap)
     active = [n for n, f in fs.items() if not f.static]
     clocks = {}
@@ -193,7 +194,7 @@ def survey(cap: Capture, fs: dict[str, ChannelFeatures] | None = None) -> Survey
         ci = clock_info(cap, fs[n])
         if ci is not None:
             clocks[n] = ci
-    asyncs = {n: async_info(cap, fs[n]) for n in active}
+    asyncs = {n: async_info(cap, fs[n]) for n in active} if asyncs else {}
     s = Survey(fs, active, clocks, asyncs)
     for c in clocks.values():
         for o in active:

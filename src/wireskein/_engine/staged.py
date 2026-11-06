@@ -527,15 +527,16 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
     allowed, pin_hint, excluded = _hinted(hints)
     if excluded:
         cap = Capture(cap.rate, cap.n_samples, [x for x in cap.channels if x.name not in excluded])
-    t0 = time.perf_counter()
-    tx = classify(cap)
-    t["classify"] = time.perf_counter() - t0
-    c = Ctx(cap, tx, tx.survey)
-    by_type: dict[str, list] = {}
     ext = _external_plugins()
     # a protocol added from outside runs where its input is made: on clock and data, or on one NRZ line
     SYNC = SYNC_PROTOCOLS | {p.name for p in ext if any(k.startswith("frames") for k in p.consumes)}
     ASYNC = ASYNC_PROTOCOLS | {p.name for p in ext if set(p.consumes) & {"nrzbits", "chars"}}
+    t0 = time.perf_counter()
+    from .survey import survey as _survey
+    tx = classify(cap, _survey(cap, asyncs=not allowed or bool(allowed & ASYNC)))
+    t["classify"] = time.perf_counter() - t0
+    c = Ctx(cap, tx, tx.survey)
+    by_type: dict[str, list] = {}
     for p in PLUGINS + ext:
         if allowed and p.name not in allowed:
             continue
