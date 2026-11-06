@@ -1,0 +1,16 @@
+{
+ "source": "wch-protocols captures/fixtures/wire-linke-p4-2026-09-25/l103/target_info.sr: ch32rv 0.9.1 target info on a WCH-LinkE (fw 2.22) and a CH32L103C8T6, taken at 50 MHz by an OEP probe; the uid is ch32rv's (that fixture's README)",
+ "roles": {
+  "clk": "SWCLK",
+  "dio": "SWDIO"
+ },
+ "memory": {
+  "0x1ffff7e8": "0x3a6dabcd",
+  "0x1ffff7ec": "0xa282bc48"
+ },
+ "frames": {
+  "short": 132,
+  "long": 202
+ },
+ "note": "the long frames are the LinkE's queries the L103 does not answer; the short-frame count is also what wch-protocols' captures/tools/rvswd.py reads"
+}

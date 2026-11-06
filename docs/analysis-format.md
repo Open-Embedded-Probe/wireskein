@@ -1,6 +1,6 @@
 # wireskein-analysis/1: a capture decoded with known roles
 
-`wireskein decode CAPTURE --spec SPEC [--out FILE]` (Python: `wireskein.decode.decode_file(path, spec)`) writes
+`wireskein decode CAPTURE --spec SPEC [--out FILE]` (CAPTURE: a WireSkein file, a `.sr`, a VCD or a format added) (Python: `wireskein.decode.decode_file(path, spec)`) writes
 this document. It is made to be kept: beside the capture and its run in a data repository, read later by tools
 that know nothing of wireskein's internals.
 
@@ -105,7 +105,7 @@ The layers of analyze's export (`--mode final`, at `depth`), with ticks from the
 | `can` | `frames`: `s`, `id`, `ide` (1: an extended identifier), `dlc`, `data` (hex, the bytes the DLC carries), `ack`, `ok` |
 | `lin` | `frames`: `s` (the break), `id`, `data` (hex), `ok` (sync, identifier parity and checksum held) |
 | `dmx512` | `packets`: `s` (the break), `start_code`, `data` (hex, the slots) |
-| `rvswd`, `swio` | WCH's debug transports (two wires, one wire); the layers above them are RISC-V's, the same for both. `dmi`: the RISC-V DMI accesses they carry, `s`, `op` (`R` / `W`), `addr`, `reg` (the register's name in the RISC-V Debug Specification 0.13; `wch_7c`..`wch_7f` for WCH's registers outside it; null for an address of neither), `data`, `ok` (the frame's checks held); for RVSWD also `form` (`short`: WCH's 52-bit frame; `long`: the 85-clock frame a CH32V103 takes) and `status` (the DMI result in the long form: 0 done, 2 failed, 3 busy), and `answered: false` for a long frame no target answered (its `data` and `status` null: what was asked, not done). `dm`: what the debugger did to the hart, read from the RISC-V Debug Module (abstract commands, and programs run in the program buffer): `op` (`MEMR` / `MEMW` / `REGR` / `REGW` / `BURST`), `addr` (memory, or the register number of Access Register), `value` (null: not seen on the wire), `size` (bytes) |
+| `rvswd`, `swio` | WCH's debug transports (two wires, one wire); the layers above them are RISC-V's, the same for both. `dmi`: the RISC-V DMI accesses they carry, `s`, `e` (RVSWD: the frame's last sampling edge), `op` (`R` / `W`), `addr`, `reg` (the register's name in the RISC-V Debug Specification 0.13; `wch_7c`..`wch_7f` for WCH's registers outside it; null for an address of neither), `data`, `ok` (the frame's checks held); for RVSWD also `form` (`short`: WCH's 52-bit frame; `long`: the 85-clock frame a CH32V103 takes) and `status` (the DMI result in the long form: 0 done, 2 failed, 3 busy), and `answered: false` for a long frame no target answered (its `data` and `status` null: what was asked, not done). For a long frame answered, `answer_delay` (`median`, `max`): when the target moved SWDIO to the bit it echoes, in clock periods after the rising edge before that bit (0 to 1: in time; over 1: after the edge it is sampled at), timed where the echo (the host's address, and after a write its data) changes, `answer_delay_ns` the same in ns, and `late: 1` when the median is over 1 (the answer slid a clock: the bits read are not the target's, a CH32V103 does it at times while it is reset). `dm`: what the debugger did to the hart, read from the RISC-V Debug Module (abstract commands, and programs run in the program buffer): `op` (`MEMR` / `MEMW` / `REGR` / `REGW` / `BURST`), `addr` (memory, or the register number of Access Register), `value` (null: not seen on the wire), `size` (bytes) |
 | others | as `analyze`'s export |
 
 A higher reading keeps its lower one beside it (`sd` and `transfers`). With `depth: "device"`, `devices` lists the
@@ -116,7 +116,10 @@ devices matched on the bus (as `analyze --depth device`).
 `[{"s", "e", "edges"}]`: activity on the bus's pins that no decoded item covers. The changes on all the bus's pins
 are cut into bursts where none comes for `idle_ticks`; a burst with no item starting in it (or within `idle_ticks`
 before it) and inside none is uninterpreted: SCL clocked without a START, a transfer the decoder could not read,
-noise.
+noise. Where the items have an end (`e`), as a clocked bus's frames do, a burst holding some is looked into too:
+its changes outside every item (a clock or two around it) are uninterpreted, cut where none comes for `idle_ticks`
+(a frame no layout read, between two that were). A clocked bus's `bits` and `frames` are where it was cut, not what
+was read, and cover nothing here.
 
 With the parts and `capture.lost`, three cases are told apart:
 

@@ -44,12 +44,13 @@ def reframe_rolling(fr, mult: float = 3.0, w: int = 33) -> list[tuple[int, int]]
     return out
 
 
-def reframe_startstop(fr, cap, hold: float = 1.5, w: int = 16) -> list[tuple[int, int]]:
+def reframe_startstop(fr, cap, hold: float = 1.5, w: int = 16, hold_min_s: float = 1e-6) -> list[tuple[int, int]]:
     """Frames from START to STOP, as WCH's RVSWD delimits them: START is DIO falling while CLK is high outside a
-    frame; STOP is DIO rising while CLK is high, CLK then staying high longer than `hold` times its usual high
-    (the median of the `w` highs before it). Inside a frame the target may move DIO while CLK is high (a read's
-    turnaround): that is no STOP, since CLK goes low again within its usual time. The hold is measured against the
-    clock itself, not a fixed time: a fast LinkE holds CLK high under 2 us after a STOP."""
+    frame; STOP is DIO rising while CLK is high, CLK then staying high longer than `hold` times its usual high (the
+    median of the `w` highs before it) and at least `hold_min_s`. Inside a frame the target may move DIO while CLK is
+    high (a read's turnaround), and a fast LinkE holds CLK high about 3 to 4 times its usual high at a short frame's
+    turnaround (0.5 us at 3 MHz): neither is a STOP. A STOP holds CLK high 1.8 us or more (a fast LinkE, under the 2
+    us link-to-target names), 4 to 5 us at slower speeds."""
     sb = fr.source
     c, d = cap.channel(sb.clock), cap.channel(sb.data[0])
     ce, de = np.asarray(c.edges), np.asarray(d.edges)
@@ -75,7 +76,8 @@ def reframe_startstop(fr, cap, hold: float = 1.5, w: int = 16) -> list[tuple[int
     prev = np.where(idx >= 0, highs[np.clip(idx, 0, None)], np.nan)
     with np.errstate(all="ignore"):
         usual = np.nanmedian(np.where(np.isfinite(prev), prev, np.nan), axis=1)
-    stop = up[~np.isfinite(highs[k]) | (highs[k] > hold * np.nan_to_num(usual, nan=np.inf))]
+    long_ = (highs[k] > hold * np.nan_to_num(usual, nan=np.inf)) & (highs[k] >= hold_min_s * cap.rate)
+    stop = up[~np.isfinite(highs[k]) | long_]
     # each STOP closes the frame opened by the first START after the STOP before it
     after_prev = np.concatenate(([-1], stop[:-1]))
     j = np.searchsorted(falls_hi, after_prev, side="right")
@@ -85,6 +87,53 @@ def reframe_startstop(fr, cap, hold: float = 1.5, w: int = 16) -> list[tuple[int
     a = np.searchsorted(sb.t, st[keep], side="right")
     b = np.searchsorted(sb.t, stop[keep], side="right")
     return [(int(x), int(y)) for x, y in zip(a.tolist(), b.tolist()) if y > x]
+
+
+LONG_TARGET = 42               # the first clock of the target's phase in the long form
+
+
+def long_answer(cap, sb, a: int, b: int) -> dict:
+    """When the target answered a long frame (rising edges [a, b) of sb), from what it should send: the host's address
+    echoed (and, after a write, the host's data). At each bit where that changes, the change of DIO is found after
+    the rising edge before that bit; its delay, in that clock period (0 to 1: in time for the bit's rising edge; over
+    1: after it, the bit sampled late). answer_delay: the median and max over those changes, in periods;
+    answer_delay_ns the same in ns; late: 1 when the median is over 1 (the answer slid a clock, as a CH32V103 does at
+    times while it is reset: its echoed address then reads as another)."""
+    bits = sb.bits[0][a:b].astype(np.int64)
+    if len(bits) < 83:
+        return {}
+    host_addr, host_data, op = bits[0:7], bits[7:39], int(bits[39]) * 2 + int(bits[40])
+    want = np.concatenate((host_addr, host_data)) if op == 2 else host_addr
+    c, d = cap.channel(sb.clock), cap.channel(sb.data[0])
+    ce = np.asarray(c.edges)
+    rises = ce[K.edge_levels(ce, c.initial) == 1]
+    k0 = int(np.searchsorted(rises, sb.t[a]))
+    R = rises[k0:k0 + (b - a) + 1]
+    if len(R) < LONG_TARGET + len(want) + 1:
+        return {}
+    de = np.asarray(d.edges)
+    dlv = K.edge_levels(de, d.initial)
+    delays, ns = [], []
+    for i in range(1, len(want)):
+        if want[i] == want[i - 1]:
+            continue
+        p = LONG_TARGET + i                    # the bit that changes; its rising edge R[p], the one before R[p - 1]
+        r0, r1 = R[p - 1], R[p]
+        j = int(np.searchsorted(de, r0, side="right"))
+        while j < len(de) and dlv[j] != want[i]:
+            j += 1
+        if j >= len(de) or de[j] > R[min(p + 1, len(R) - 1)]:
+            continue                           # not changed within two clocks: no answer to time
+        delays.append((de[j] - r0) / (r1 - r0))
+        ns.append((de[j] - r0) / cap.rate * 1e9)
+    if not delays:
+        return {}
+    med = float(np.median(delays))
+    out = {"answer_delay": {"median": round(med, 3), "max": round(float(max(delays)), 3)},
+           "answer_delay_ns": {"median": round(float(np.median(ns)), 1), "max": round(float(max(ns)), 1)}}
+    if med > 1:
+        out["late"] = 1
+    return out
 
 
 def reframe(fr) -> list[tuple[int, int]]:

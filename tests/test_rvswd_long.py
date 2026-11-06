@@ -116,3 +116,50 @@ def test_autoexec_reruns_the_command_and_a_dm_without_it_reads_back_zero():
     assert [e[1:3] for e in with_auto if e[0] == "MEMR"][:2] == [[0x1FFFF800, 0xA], [0x1FFFF804, 0xB]]
     without = accesses(base + [run, W(0x18, 1), R(0x18, 0), W(0x18, 0), R(0x04, 0xA), R(0x04, 0xB)])
     assert [e[1:3] for e in without if e[0] == "MEMR"] == [[0x1FFFF800, 0xA], [0x1FFFF804, None]]
+
+
+# ---- a short-form session on a CH32L103 (from wch-protocols), read by decode from its .sr ----
+
+def test_a_short_frame_s_turnaround_is_no_stop_and_decode_reads_a_sr():
+    # a fast LinkE holds SWCLK high 3 to 4 times its usual high at a short frame's turnaround (0.5 us at 3 MHz):
+    # taken for a STOP, the frame splits and is lost (the L103's DetachChip and its ESIG reads were)
+    from wireskein.decode import decode_file
+    truth = json.loads((D / "linke_l103_target_info.truth.json").read_text())
+    doc = decode_file(D / "linke_l103_target_info.sr", {"buses": [{"protocol": "rvswd", "pins": truth["roles"]}]})
+    (bus,) = doc["parts"][0]["buses"]
+    dmi = bus["result"]["dmi"]
+    forms = {f: sum(1 for x in dmi if x["form"] == f) for f in ("short", "long")}
+    assert forms == truth["frames"]
+    mem = {e["addr"]: e["value"] for e in bus["result"]["dm"] if e["op"] == "MEMR"}
+    for a, v in truth["memory"].items():
+        assert mem.get(int(a, 16)) == int(v, 16)
+    assert all("e" in x and x["e"] > x["s"] for x in dmi)
+
+
+def test_a_frame_no_layout_reads_is_uninterpreted():
+    # with START and STOP read badly, the frames that fall apart are said, not left out
+    import functools
+    from wireskein._engine import rvswd
+    from wireskein.decode import decode_file
+    truth = json.loads((D / "linke_l103_target_info.truth.json").read_text())
+    orig = rvswd.reframe_startstop
+    try:
+        rvswd.reframe_startstop = functools.partial(orig, hold_min_s=0.0)
+        doc = decode_file(D / "linke_l103_target_info.sr", {"buses": [{"protocol": "rvswd", "pins": truth["roles"]}]})
+    finally:
+        rvswd.reframe_startstop = orig
+    (bus,) = doc["parts"][0]["buses"]
+    rate = doc["capture"]["tick_hz"][0]
+    lost = [u for u in bus["uninterpreted"] if 126.1e-3 <= u["s"] / rate <= 128.6e-3 and u["edges"] > 50]
+    assert lost, bus["uninterpreted"]
+
+
+def test_an_answer_a_clock_late_is_marked(docs):
+    # as ch32rv lets the V103 go, its answers come 1.05 to 1.1 clocks after the bit's rising edge (0x10 echoed as
+    # 0x08); in time they come 0.5 to 0.8 after it
+    dmi = _claim(docs, "linke_v103_14_option_get")["layers"]["dmi"]
+    late = [i for i, x in enumerate(dmi) if x.get("late")]
+    assert late == [len(dmi) - 3, len(dmi) - 2]
+    for i, x in enumerate(dmi):
+        d = x["answer_delay"]["median"]
+        assert (1.0 < d < 1.3) if i in late else (0.4 < d < 0.9), (i, x)

@@ -527,6 +527,10 @@ class DeclarativePlugin:
                 explained += b - a
                 f = bits[a:b].astype(np.int64)
                 rec = {"start": int(sb.t[a]), **L.get("const", {})}
+                if L.get("keep_span"):                   # the frame's sampling edges, for an adapter that reads more
+                    rec["_span"] = (int(a), int(b))
+                if self.spec.get("frame", {}).get("ends"):
+                    rec["end"] = int(sb.t[b - 1])
                 for fld in L["fields"]:
                     v = _int_bits(f[fld["at"]:fld["at"] + fld["width"]])
                     if "enum" in fld:
@@ -740,9 +744,17 @@ def _adapt_spi(c, fr, n):
 
 
 def _adapt_rvswd(c, fr, n):
-    tx = [{"t": r["start"], "op": r.get("op", "R"), "addr": r.get("addr"), "data": r["data"], "status": r.get("status", 0),
-           "ok": r["ok"], "form": r.get("form", "short"),
-           **({"answered": False} if r.get("answered") is False else {})} for r in n.output.items if "data" in r]  # structure-only layouts carry no fields
+    from .rvswd import long_answer
+    tx = []
+    for r in n.output.items:
+        if "data" not in r:                  # structure-only layouts carry no fields
+            continue
+        x = {"t": r["start"], **({"e": r["end"]} if "end" in r else {}), "op": r.get("op", "R"), "addr": r.get("addr"), "data": r["data"],
+             "status": r.get("status", 0), "ok": r["ok"], "form": r.get("form", "short"),
+             **({"answered": False} if r.get("answered") is False else {})}
+        if "_span" in r and r.get("answered") is not False:
+            x.update(long_answer(c.cap, fr.source, *r["_span"]))
+        tx.append(x)
     n.output = Stream("dmi", tx)
     return n
 

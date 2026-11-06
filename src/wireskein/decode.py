@@ -159,10 +159,12 @@ def _node(res, cap: Capture, b: dict):
     return max(cands, key=lambda n: n.total, default=None)
 
 
-def _items(lay: dict) -> list[tuple[int, int]]:
-    """(s, e) of every item with a time in the bus's layers (e = s when an item has no end)."""
+def _items(lay: dict, skip: tuple = ()) -> list[tuple[int, int]]:
+    """(s, e) of every item with a time in the bus's layers but `skip` (e = s when an item has no end)."""
     out = []
-    for v in lay.values():
+    for key, v in lay.items():
+        if key in skip:
+            continue
         if isinstance(v, list):
             out += [(int(x["s"]), int(x.get("e") if x.get("e") is not None else x["s"]))
                     for x in v if isinstance(x, dict) and x.get("s") is not None]
@@ -171,13 +173,22 @@ def _items(lay: dict) -> list[tuple[int, int]]:
     return out
 
 
-def _bursts(cap: Capture, pins: list[str], idle: int) -> list[tuple[int, int, int]]:
-    """(first change, last change, changes) of the activity on `pins`, apart by more than `idle` ticks."""
+def _bursts(cap: Capture, pins: list[str], idle: int) -> list[np.ndarray]:
+    """The changes on `pins`, cut where none comes for more than `idle` ticks."""
     e = np.sort(np.concatenate([np.asarray(cap.channel(p).edges, np.int64) for p in pins] or [np.zeros(0, np.int64)]))
     if not len(e):
         return []
-    cut = np.flatnonzero(np.diff(e) > idle) + 1
-    return [(int(x[0]), int(x[-1]), len(x)) for x in np.split(e, cut)]
+    return np.split(e, np.flatnonzero(np.diff(e) > idle) + 1)
+
+
+def _uncovered(e: np.ndarray, spans: np.ndarray, margin: int) -> np.ndarray:
+    """The changes `e` outside every span [s - margin, e + margin] (spans sorted by start)."""
+    if not len(spans):
+        return e
+    lo, hi = spans[:, 0] - margin, np.maximum.accumulate(spans[:, 1]) + margin
+    k = np.searchsorted(lo, e, side="right") - 1
+    inside = (k >= 0) & (e <= hi[np.maximum(k, 0)])
+    return e[~inside]
 
 
 def _idle(cap: Capture, b: dict, n) -> int:
@@ -216,16 +227,27 @@ def _bus(res, cap: Capture, b: dict, depth: str, claimed: list) -> dict:
                 if ds:
                     out["devices"] = ds
     idle = _idle(cap, b, n)
-    items = _items(lay)
+    # a clocked bus's bits and frames are where it was cut, not what was read: a frame no layout read is unread
+    sync = n is not None and n.analyzer in staged.SYNC_PROTOCOLS
+    items = _items(lay, ("bits", "frames") if sync else ())
     starts = np.sort(np.array([s for s, _ in items], np.int64))
+    # items with an end (frames): what they cover is known, and activity between them inside a burst is not read
+    spans = np.array(sorted((s, e) for s, e in items if e > s), np.int64).reshape(-1, 2)
+    margin = max(1, idle // IDLE_BITS * 2)                 # a START or STOP a clock or two outside the sampled bits
     un = []
-    for s, e, k in _bursts(cap, list(b["pins"].values()), idle):
+    for x in _bursts(cap, list(b["pins"].values()), idle):
+        s, e = int(x[0]), int(x[-1])
+        if len(spans) and ((spans[:, 0] <= e) & (spans[:, 1] >= s)).any():
+            left = _uncovered(x, spans, margin)
+            for y in (np.split(left, np.flatnonzero(np.diff(left) > idle) + 1) if len(left) else []):
+                un.append({"s": int(y[0]), "e": int(y[-1]), "edges": len(y)})
+            continue
         j = np.searchsorted(starts, s - idle)
         if j < len(starts) and starts[j] <= e:
             continue
         if any(a <= s and e <= z for a, z in items):
             continue
-        un.append({"s": s, "e": e, "edges": k})
+        un.append({"s": s, "e": e, "edges": len(x)})
     out["uninterpreted"] = un
     out["idle_ticks"] = idle
     return out
@@ -253,7 +275,8 @@ def _part(cap: Capture, spec: dict, head: dict) -> dict:
         if c.name in named or not len(c.edges):
             continue
         bs = _bursts(cap, [c.name], int(round(IDLE_S * cap.rate)))
-        rest.append({"pin": c.name, "edges": int(len(c.edges)), "s": bs[0][0], "e": bs[-1][1], "bursts": len(bs)})
+        rest.append({"pin": c.name, "edges": int(len(c.edges)), "s": int(bs[0][0]), "e": int(bs[-1][-1]),
+                     "bursts": len(bs)})
     out["undeclared"] = rest
     others = [c for c in res.claims if not set(c.roles.values()) & named]
     if others:
@@ -293,14 +316,30 @@ def _runs(path: Path, raw: dict) -> list:
     return out
 
 
+def _open(path: Path, part: int | None = None):
+    """(raw header, heads, views, first parts, spans) of a capture: a WireSkein file's runs of parts (parts that follow
+    on without a gap are one stretch), or a .sr, a VCD or a format added as one part."""
+    if path.is_file() and fileformat.sniff(path) == "wireskein":
+        raw = fileformat.read_header(path)
+        runs = _runs(path, raw)
+        return (raw, [fileformat.part_view(raw, k) for k, _, _ in runs], [cap for _, _, cap in runs],
+                [k for k, _, _ in runs], [span for _, span, _ in runs])
+    v = load(path, part)
+    tick = Fraction(v.meta.get("tick_hz") or Fraction(v.rate).limit_denominator(10**9))
+    raw = {"id": v.meta.get("capture_id"), "tick_hz": [tick.numerator, tick.denominator],
+           "complete": v.meta.get("complete", True), "lost": v.meta.get("lost", []),
+           "layout": v.meta.get("layout", "timeline"), "parts": [{}]}
+    return raw, [{"meta": v.meta, "tick0": 0}], [v], [0], [None]
+
+
 def decode_file(path: str | Path, spec: dict) -> dict:
-    """The document for a WireSkein file: every part decoded with the spec's roles."""
+    """The document for a capture (a WireSkein file, a .sr, a VCD or a format added): every part decoded with the
+    spec's roles."""
     path = Path(path)
     spec = _spec(spec)
-    raw = fileformat.read_header(path)
+    raw, heads, views, _, spans = _open(path)
     doc = {"format": FORMAT, "wireskein": __version__, "spec": spec, "capture": _capture_of(path, raw), "parts": []}
-    for k, span, cap in _runs(path, raw):
-        head = fileformat.part_view(raw, k)
+    for head, cap, span in zip(heads, views, spans):
         out = _part(cap, spec, head)
         if span:
             out["parts"] = span
@@ -319,21 +358,7 @@ def analyze_file(path: str | Path, hints: dict | None = None, mode: str = "final
     import time
     from ._engine import markers
     path = Path(path)
-    if path.is_file() and fileformat.sniff(path) == "wireskein":
-        raw = fileformat.read_header(path)
-        runs = _runs(path, raw)                  # parts that follow on without a gap are one stretch
-        heads = [fileformat.part_view(raw, k) for k, _, _ in runs]
-        views = [cap for _, _, cap in runs]
-        firsts = [k for k, _, _ in runs]
-        spans = [span for _, span, _ in runs]
-    else:
-        v = load(path, part)
-        tick = Fraction(v.meta.get("tick_hz") or Fraction(v.rate).limit_denominator(10**9))
-        raw = {"id": v.meta.get("capture_id"), "tick_hz": [tick.numerator, tick.denominator],
-               "complete": v.meta.get("complete", True), "lost": v.meta.get("lost", []),
-               "layout": v.meta.get("layout", "timeline"), "parts": [{}]}
-        heads, views = [{"meta": v.meta, "tick0": 0}], [v]
-        firsts, spans = [0], [None]
+    raw, heads, views, firsts, spans = _open(path, part)
     if (window_s or segment) and part is None and len(heads) > 1:
         raise ValueError(f"{path}: {len(heads)} parts: give the part a window or segment is inside (--part)")
     if part is not None:                       # the stretch holding that part

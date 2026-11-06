@@ -1,6 +1,6 @@
 # wireskein-analysis/1: 役割の分かったキャプチャの復号
 
-`wireskein decode CAPTURE --spec SPEC [--out FILE]`（Python では `wireskein.decode.decode_file(path, spec)`）が
+`wireskein decode CAPTURE --spec SPEC [--out FILE]`（CAPTURE は WireSkein のファイル、`.sr`、VCD、足した形式。Python では `wireskein.decode.decode_file(path, spec)`）が
 この文書を書きます。残しておくための形です。データのリポジトリに、キャプチャとその記録と並べて置き、
 wireskein の中を知らない道具が後で読みます。
 
@@ -104,7 +104,7 @@ analyze の書き出し（`--mode final`、`depth` まで）の層。刻みは�
 | `can` | `frames`: `s`、`id`、`ide`（1: 拡張の識別子）、`dlc`、`data`（16 進。DLC が運ぶバイト）、`ack`、`ok` |
 | `lin` | `frames`: `s`（break）、`id`、`data`（16 進）、`ok`（sync、識別子のパリティ、チェックサムが合う） |
 | `dmx512` | `packets`: `s`（break）、`start_code`、`data`（16 進。スロット） |
-| `rvswd`、`swio` | WCH のデバッグの伝送路（2 線と 1 線）。その上の層は RISC-V のもので、どちらでも同じ。`dmi`: 運ぶ RISC-V の DMI のアクセスで、`s`、`op`（`R` / `W`）、`addr`、`reg`（RISC-V Debug Specification 0.13 のレジスタの名前。仕様の外の WCH のレジスタは `wch_7c`〜`wch_7f`、どちらでもないアドレスは null）、`data`、`ok`（フレームの検査が合った）。RVSWD ではさらに `form`（`short`: WCH の 52 ビットのフレーム、`long`: CH32V103 が受ける 85 クロックのフレーム）と `status`（long 形式の DMI の結果。0 は完了、2 は失敗、3 は busy）、どの target も答えなかった long のフレームには `answered: false`（その `data` と `status` は null。頼んだだけで、行われていない）。`dm`: デバッガが hart に何をしたかを、RISC-V の Debug Module（抽象コマンドと、プログラムバッファで動かしたプログラム）から読んだもの。`op`（`MEMR` / `MEMW` / `REGR` / `REGW` / `BURST`）、`addr`（メモリのアドレスか、Access Register のレジスタ番号）、`value`（null は線の上に見えなかった）、`size`（バイト数） |
+| `rvswd`、`swio` | WCH のデバッグの伝送路（2 線と 1 線）。その上の層は RISC-V のもので、どちらでも同じ。`dmi`: 運ぶ RISC-V の DMI のアクセスで、`s`、`e`（RVSWD: フレームの最後のサンプルの縁）、`op`（`R` / `W`）、`addr`、`reg`（RISC-V Debug Specification 0.13 のレジスタの名前。仕様の外の WCH のレジスタは `wch_7c`〜`wch_7f`、どちらでもないアドレスは null）、`data`、`ok`（フレームの検査が合った）。RVSWD ではさらに `form`（`short`: WCH の 52 ビットのフレーム、`long`: CH32V103 が受ける 85 クロックのフレーム）と `status`（long 形式の DMI の結果。0 は完了、2 は失敗、3 は busy）、どの target も答えなかった long のフレームには `answered: false`（その `data` と `status` は null。頼んだだけで、行われていない）。答えのあった long のフレームには `answer_delay`（`median`、`max`）: target が、こだまするビットへ SWDIO を変えた時点を、そのビットの前の立ち上がりからのクロックの周期の数で表したもの（0〜1 は間に合った、1 を超えると読まれる縁より後）。こだま（host の番地と、書き込みなら host のデータ）が変わるビットで測る。`answer_delay_ns` は同じものを ns で、中央値が 1 を超えたら `late: 1`（答えが 1 クロックずれた。読んだビットは target のものではない。CH32V103 がリセットの間にときどきそうする）。`dm`: デバッガが hart に何をしたかを、RISC-V の Debug Module（抽象コマンドと、プログラムバッファで動かしたプログラム）から読んだもの。`op`（`MEMR` / `MEMW` / `REGR` / `REGW` / `BURST`）、`addr`（メモリのアドレスか、Access Register のレジスタ番号）、`value`（null は線の上に見えなかった）、`size`（バイト数） |
 | ほか | `analyze` の書き出しと同じ |
 
 上の層を読めても、下の層は横に残す（`sd` と `transfers`）。`depth: "device"` では、`devices` にバスの上で
@@ -115,6 +115,10 @@ analyze の書き出し（`--mode final`、`depth` まで）の層。刻みは�
 `[{"s", "e", "edges"}]`: バスのピンの活動のうち、復号したどの項目にも入らないもの。バスのすべてのピンの変化を、
 `idle_ticks` のあいだ変化が無い所で切ってかたまりにする。項目がその中で（またはその `idle_ticks` 前から）
 始まらず、どの項目の中にも無いかたまりが、未解釈: START の無い SCL のクロック、復号器が読めなかった転送、雑音など。
+クロックのあるバスのフレームのように項目に終わり（`e`）があるときは、項目を含むかたまりの中も見る: どの項目（の前後
+1、2 クロック）にも入らない変化を、`idle_ticks` のあいだ変化が無い所で切って未解釈とする（読めたフレームの間の、
+どのレイアウトでも読めなかったフレーム）。クロックのあるバスの `bits` と `frames` は、切った所であって読んだものではなく、
+ここでは何も覆わない。
 
 区間と `capture.lost` と合わせて、3 つを区別する:
 

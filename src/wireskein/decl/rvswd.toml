@@ -11,6 +11,7 @@ data = "dio"
 
 [frame]
 reframe = "rvswd_stop"
+ends = true      # each record its last sampling edge too
 
 # 52: the same frame with its stop bit cut by the re-framing
 [[layout]]
@@ -57,6 +58,7 @@ fields = [
   { name = "status", at = 81, width = 2 },
 ]
 const = { form = "long" }
+keep_span = true
 # a target that does not take the long form leaves the line released: its data and status read all 1, no answer
 unanswered_if_ones = [49, 82]
 # the address echoed, and bit 83 (1 after a read) the op's low bit
