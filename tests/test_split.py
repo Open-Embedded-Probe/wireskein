@@ -220,3 +220,33 @@ def test_doubtful_is_the_same_with_items_written_out(tmp_path):
     b = decode_file(D / "linke_v203_read_flash_4k.sr", RVSWD, split=opts,
                     items=tmp_path / "i.ndjson")["parts"][0]["split"].get("doubtful")
     assert a == b and a
+
+
+def test_a_capture_changing_on_the_way_is_told_with_what_the_doubtful_piece_holds():
+    # UART on TX for the first half, then I2C on two other lines: the roles from the start (uart on TX) read nothing
+    # later, those pieces are doubtful, and analysed on their own they hold I2C (lines made here, numbers known)
+    from wireskein._engine import gen
+    rng = np.random.default_rng(5)
+    tx, scl, sda = gen.Wave(1), gen.Wave(1), gen.Wave(1)
+    t = 1e-3
+    for _ in range(300):
+        t = gen.uart(tx, t, bytes(rng.integers(0, 256, 8).tolist()), 115200) + 200e-6
+    t2 = t + 5e-3
+    for k in range(400):
+        t2 = gen.i2c(scl, sda, t2, [{"addr": 0x50, "rw": "write", "bytes": bytes([k & 0xFF, 1, 2])}], 400e3) + 300e-6
+    c = gen.quantize({"TX": tx, "SCL": scl, "SDA": sda}, 4e6, t2 + 1e-3, rng)
+    from wireskein import capture
+    import tempfile
+    from fractions import Fraction
+    with tempfile.TemporaryDirectory() as d:
+        p = Path(d) / "c.wireskein"
+        capture.write(p, capture.Capture(Fraction(4_000_000), [capture.Part(
+            c.n_samples, [capture.logic(ch.name, ch.initial, ch.edges, c.n_samples) for ch in c.channels])]))
+        doc = analyze_file(p, split="max_edges=8000,min_edges=1000,overlap_edges=200")
+    part = doc["parts"][0]
+    assert {c["protocol"] for c in part["claims"]} == {"uart"}               # the roles from the start
+    doubtful = part["split"]["doubtful"]
+    assert doubtful and all(d["seconds"][1] > t for d in doubtful)             # none in the UART half
+    late = [d for d in doubtful if d["seconds"][0] > t + 1e-3]
+    assert late and all(any(h["protocol"] == "i2c" and set(h["roles"].values()) == {"SCL", "SDA"}
+                            for h in d["holds"]) for d in late)

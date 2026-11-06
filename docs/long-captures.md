@@ -85,6 +85,7 @@ read whole however long:
 | `cuts=T1;T2` | Cut here (ticks), instead of looking | |
 | `workers` | Pieces decoded in this many processes at once (at most twice as many in flight) | 1 |
 | `roles_from` | `analyze`: pieces tried, from the start, for the roles (the start may be before the bus) | 3 |
+| `reanalyze` | A doubtful piece is analysed on its own too, what it holds given in `doubtful[].holds` (0: not) | 1 |
 
 The defaults come from 2 s of a WCH-LinkE's SDI monitor (8.5M changes): pieces of 500k to 1M changes were the
 quickest and lightest; 250k needed forced cuts.
@@ -98,7 +99,7 @@ The part has `split`:
 | `options` | The options used |
 | `pieces` | `[{"s", "e", "edges", "cut", "ratio"?, "read"?}]`: each piece's own ticks, its changes, how it ends (`quiet`, `data_quiet`, `forced`, `given`, `end`), the quiet's length over the usual interval, and the ticks read when past its own |
 | `trembling` | Lines with many intervals of a tick or two: name → share (told, not left out) |
-| `doubtful` | Pieces the roles read badly (a bus not decoded there, a fit under 0.3, or nothing read well in the piece's own ticks), with where they are: the capture may change on the way (another bus, another speed); analyse them on their own |
+| `doubtful` | Pieces the roles read badly (a bus not decoded there, a fit under 0.3, or nothing read well in the piece's own ticks), with where they are, and what each holds analysed on its own (`holds`: the claims confirmed or likely): the capture may change on the way (another bus, another speed) |
 
 Each bus gives `uninterpreted_summary`: `count`, `edges`, `sizes` (in bins of powers of two), `largest`. A long
 capture has many small unread stretches (a line moving between frames) and a few that matter. `fit` is the worst

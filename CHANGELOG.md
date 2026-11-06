@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- (EN) A doubtful piece is analysed on its own too (split `reanalyze`, default on): `doubtful[].holds` gives what it holds (a capture changing from UART to I2C on the way: the later pieces hold I2C). A piece reads well when it reads its items in its own ticks, columns keyed by time (UART's bytes) counted too.
+- (JA) 疑わしい区切りは、それだけでも analyze する（split の `reanalyze`、既定で入）: `doubtful[].holds` に、その区切りにあるものを出す（途中で UART から I2C に変わる記録: 後の区切りに I2C）。区切りがよく読めたかは、自分の tick の中の項目で見る。時刻の列の形（UART の bytes）も数える。
+
 - (EN) A clocked bus's data line ringing at its clock's edges (a reflection's pulses of a sample or two) no longer keeps the pair from being read as a bus, at a clock of 9 samples a period or more: its changes are read as they settle there too (a LinkE's SDI monitor at 25 MHz was not found to be RVSWD by analyze). `analyze` in pieces looks for the roles in up to `roles_from` pieces.
 - (JA) クロックのあるバスで、データの線がクロックの縁で揺れても（反射の 1〜2 サンプルのパルス）、1 周期が 9 サンプル以上のクロックなら、その組をバスとして読めるようにした。組の判定でも揺れが収まった値を見る（25 MHz の LinkE の SDI の見張りを、analyze が RVSWD と見つけていなかった）。区切って読む `analyze` は、`roles_from` 個までの区切りで役割を探す。
 

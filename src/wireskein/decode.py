@@ -307,11 +307,11 @@ def _analyze_split(source, hints, opts, depth: str, head: dict, items=None) -> d
     spec = _spec({"buses": [{"protocol": c["protocol"], "pins": c["roles"],
                              "params": {x: c["params"][x] for x in ("baud", "mode") if x in c.get("params", {})}}
                             for c in keep], "depth": depth})
-    work = functools.partial(_piece, spec=spec, head=head)
+    work = functools.partial(_piece, spec=spec, head=head, reanalyze=bool((opts or {}).get("reanalyze", 1)))
     sink = _Items(items, spec) if items is not None else None
     outs = []
     try:
-        for p, o in [(p, _part(c, spec, head, strict=True)) for p, c in tried] + [
+        for p, o in [(p, work((p, c))) for p, c in tried] + [
                 (p, o) for (p, _), o in _split.mapped(work, gen, int(opts.get("workers", 1)))]:
             if sink is not None:
                 sink.take(p, o)
@@ -501,7 +501,7 @@ def _part_split(source, spec: dict, head: dict, opts, items=None) -> dict:
     sink = _Items(items, spec) if items is not None else None
     outs = []
     try:
-        work = functools.partial(_piece, spec=spec, head=head)
+        work = functools.partial(_piece, spec=spec, head=head, reanalyze=bool((opts or {}).get("reanalyze", 1)))
         for (p, _), o in _split.mapped(work, _split.run(source, opts, watch=watch or None, noisy=noisy),
                                        int((opts or {}).get("workers", 1))):
             if sink is not None:
@@ -569,20 +569,51 @@ class _Items:
             self._dm(j, st.ready(final=True))
 
 
-def _piece(pw, spec: dict, head: dict) -> dict:
-    """One piece decoded (in a worker process, when there are several): (Piece, its capture) -> its part document."""
+def _piece(pw, spec: dict, head: dict, reanalyze: bool = False) -> dict:
+    """One piece decoded (in a worker process, when there are several): (Piece, its capture) -> its part document.
+    reanalyze: a piece the roles read badly is analysed on its own too, what it holds given as "_reanalysis" (the
+    capture may change on the way: another bus, another speed)."""
     p, wcap = pw
-    return _part(wcap, spec, head, strict=not (p.cut == "end" and p.a == 0))   # one piece: read as always
+    whole = p.cut == "end" and p.a == 0
+    o = _part(wcap, spec, head, strict=not whole)                # one piece: read as always
+    if reanalyze and not whole and p.edges and _doubt_why(p, o):
+        ex = export(staged.analyze(wcap, None), wcap, "final", None, False, None, "protocol")
+        o["_reanalysis"] = [{"protocol": c["protocol"], "roles": c["roles"], "verdict": c["verdict"],
+                             "score": c["score"], **({"params": c["params"]} if c.get("params") else {})}
+                            for c in ex["claims"] if c.get("verdict") in ("confirmed", "likely")]
+    return o
+
+
+def _doubt_why(p, o: dict) -> list[str]:
+    """Why the roles read a piece badly: a bus not decoded there, a poor fit, or nothing read well in its own ticks
+    (the window reaches past them, so its fit counts the neighbours' too)."""
+    why = []
+    for j, b in enumerate(o["buses"]):
+        owned = b["_owned"] if "_owned" in b else _owned(p, b)
+        if not b.get("decoded"):
+            why.append(f"bus {j} ({b['protocol']}) not decoded")
+        elif b.get("fit", {}).get("score", 1.0) < DOUBT:
+            why.append(f"bus {j} ({b['protocol']}) fits {b['fit']['score']}")
+        elif not owned:
+            why.append(f"bus {j} ({b['protocol']}) read nothing well in this piece's own ticks")
+    return why
 
 
 DOUBT = 0.3       # a piece whose bus fits worse than this is told as doubtful
 
 
 def _owned(p, b: dict) -> int:
-    """The items of a piece's bus that start in its own ticks and read well (not ok: false)."""
-    return sum(1 for v in b.get("result", {}).values() if isinstance(v, list)
-               for x in v if isinstance(x, dict) and isinstance(x.get("s"), int)
-               and p.s <= x["s"] + p.a < p.e and x.get("ok", True) is not False)
+    """The items of a piece's bus that start in its own ticks and read well (not ok: false): items as dicts, or a
+    layer of columns keyed by "s" (UART's bytes)."""
+    n = 0
+    for v in b.get("result", {}).values():
+        if isinstance(v, list):
+            n += sum(1 for x in v if isinstance(x, dict) and isinstance(x.get("s"), int)
+                     and p.s <= x["s"] + p.a < p.e and x.get("ok", True) is not False)
+        elif isinstance(v, dict) and isinstance(v.get("s"), list):
+            s = np.asarray(v["s"], np.int64) + p.a
+            n += int(np.sum((s >= p.s) & (s < p.e)))
+    return n
 
 
 def _join_part(outs: list, spec: dict, source, opts, noisy: dict) -> dict:
@@ -591,7 +622,7 @@ def _join_part(outs: list, spec: dict, source, opts, noisy: dict) -> dict:
         return outs[0][1]
     pieces = [p for p, _ in outs]
     o0 = outs[0][1]
-    out = {k: v for k, v in o0.items() if k not in ("buses", "lines", "undeclared", "claims")}
+    out = {k: v for k, v in o0.items() if k not in ("buses", "lines", "undeclared", "claims", "_reanalysis")}
     out["ticks"] = source.n
     out["buses"] = [_join_bus([(p, o["buses"][j]) for p, o in outs]) for j in range(len(spec["buses"]))]
     lines = []
@@ -615,19 +646,11 @@ def _join_part(outs: list, spec: dict, source, opts, noisy: dict) -> dict:
     # (another bus, another speed); worth analysing on their own (--from / --to)
     doubtful = []
     for p, o in outs:
-        why = []
-        for j, b in enumerate(o["buses"]):
-            # what it read well in its own ticks (the window reaches past them: its fit counts the neighbours' too)
-            owned = b["_owned"] if "_owned" in b else _owned(p, b)
-            if not b.get("decoded"):
-                why.append(f"bus {j} ({b['protocol']}) not decoded")
-            elif b.get("fit", {}).get("score", 1.0) < DOUBT:
-                why.append(f"bus {j} ({b['protocol']}) fits {b['fit']['score']}")
-            elif not owned:
-                why.append(f"bus {j} ({b['protocol']}) read nothing well in this piece's own ticks")
+        why = _doubt_why(p, o)
         if why and p.edges:
             doubtful.append({"s": p.s, "e": p.e, "seconds": [p.s / source.rate, p.e / source.rate],
-                             "why": "; ".join(why)})
+                             "why": "; ".join(why),
+                             **({"holds": o["_reanalysis"]} if "_reanalysis" in o else {})})
     out["split"] = {"options": opts, "pieces": [p.doc() for p in pieces], **({"trembling": noisy} if noisy else {}),
                     **({"doubtful": doubtful} if doubtful else {})}
     return out

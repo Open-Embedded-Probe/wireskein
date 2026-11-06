@@ -85,6 +85,7 @@ wireskein survey long.sr --json --plan         # 文書（wireskein-survey/1）�
 | `cuts=T1;T2` | 探さずに、ここ（tick）で切る | |
 | `workers` | 区切りを、このプロセス数で同時に decode する（同時に抱えるのは 2 倍まで） | 1 |
 | `roles_from` | `analyze`: 役割を探すのに、先頭から試す区切りの数（先頭はバスより前のことがある） | 3 |
+| `reanalyze` | 疑わしい区切りを、それだけでも analyze し、見つけたものを `doubtful[].holds` に出す（0: しない） | 1 |
 
 既定値は、WCH-LinkE の SDI の見張りの 2 秒（850 万変化）で測って決めました。区切りが 50 万〜100 万変化のときに
 いちばん速く軽く、25 万では強制で切る所が出ました。
@@ -98,7 +99,7 @@ wireskein survey long.sr --json --plan         # 文書（wireskein-survey/1）�
 | `options` | 使ったオプション |
 | `pieces` | `[{"s", "e", "edges", "cut", "ratio"?, "read"?}]`: 区切りの自分の tick、変化の数、どう終わったか（`quiet`、`data_quiet`、`forced`、`given`、`end`）、静かさがいつもの間隔の何倍だったか、自分の範囲を越えて読んだときの読んだ tick |
 | `trembling` | 1〜2 tick の間隔が多い線: 名前 → 割合（知らせるだけで、外さない） |
-| `doubtful` | 役割での読みが悪い区切り（バスが読めない、当てはまりが 0.3 未満、または自分の tick の中でよく読めたものが無い）と、その場所。途中で様子が変わったのかもしれない（別のバス、別の速さ）。その区切りを、別に分析する |
+| `doubtful` | 役割での読みが悪い区切り（バスが読めない、当てはまりが 0.3 未満、または自分の tick の中でよく読めたものが無い）と、その場所、それだけで analyze して見つかったもの（`holds`: confirmed か likely の主張）。途中で様子が変わったのかもしれない（別のバス、別の速さ） |
 
 バスごとに `uninterpreted_summary`: `count`、`edges`、`sizes`（2 のべきのビン）、`largest`。長いキャプチャには、
 小さな読めない区間（フレームの間で動く線）がたくさんあり、意味のあるものは少しです。`fit` は、いちばん悪い区切りの
