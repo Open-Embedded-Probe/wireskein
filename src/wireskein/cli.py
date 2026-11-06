@@ -440,7 +440,38 @@ def convert(args) -> None:
         if len(head["parts"]) > 1:
             raise ValueError(f"{args.input} has {len(head['parts'])} parts ({head['layout']}): --part K writes one of "
                              f"them (from 0); a .sr or a VCD holds one gapless run")
-    cap = load_file(args.input, part) if part is not None else load(args.input)
+    t0, t1 = getattr(args, "from_s", None), getattr(args, "to_s", None)
+    cap = None
+    if fileformat.sniff(args.input) == "sr":
+        from ._engine import srio
+        import zipfile, configparser
+        with zipfile.ZipFile(args.input) as z:
+            cfg = configparser.ConfigParser()
+            cfg.read_string(z.read("metadata").decode())
+            rate = srio._parse_rate(cfg["device 1"]["samplerate"])
+        s0 = int(round((t0 or 0) * rate))
+        s1 = int(round(t1 * rate)) if t1 is not None else None
+        if Path(args.output).suffix.lower() not in (".sr", ".vcd"):
+            # straight through, a chunk at a time: any length, in a chunk's memory
+            got = srio.convert_sr(args.input, args.output, s0, s1, excerpt=t0 is not None or t1 is not None)
+            if got is not None:
+                out, n, names, r = got
+                print(f"{args.input} -> {out}: {len(names)} logic channels, {n} ticks at {r:g} Hz")
+                return
+        cap = srio.read_sr_changes(args.input, s0, s1)       # read a chunk at a time, keeping the changes
+        if cap is not None and (t0 is not None or t1 is not None):
+            cap.meta["excerpt"] = {"from_tick": s0, "to_tick": s0 + cap.n_samples}
+    if cap is None:
+        cap = load_file(args.input, part) if part is not None else load(args.input)
+        if t0 is not None or t1 is not None:
+            from .verify import _window
+            s0 = int(round((t0 or 0) * cap.rate))
+            s1 = min(cap.n_samples, int(round(t1 * cap.rate))) if t1 is not None else cap.n_samples
+            if not 0 <= s0 < s1:
+                raise ValueError(f"--from / --to: no ticks between them in {cap.n_samples} ticks")
+            meta0 = dict(cap.meta)
+            cap = _window(cap, s0, s1)
+            cap.meta = {**meta0, "excerpt": {"from_tick": s0, "to_tick": s1}}
     meta = {k: v for k, v in cap.meta.items()
             if k not in ("file", "sr_file", "vcd_file", "tick_hz", "unitsize", "extras", "skipped_channels",
                          "vcd_not_read")}
@@ -553,6 +584,9 @@ def main() -> None:
     cv = sub.add_parser("convert", help="convert a capture between formats (read by content; written as .sr or VCD when OUT ends in .sr / .vcd, else WireSkein)")
     cv.add_argument("input", type=Path)
     cv.add_argument("output", type=Path)
+    cv.add_argument("--from", dest="from_s", type=float, default=None,
+                    help="seconds from the capture's start: write from there (an excerpt; meta.excerpt says where)")
+    cv.add_argument("--to", dest="to_s", type=float, default=None, help="seconds from the capture's start: write up to there")
     cv.add_argument("--part", type=int, default=None,
                     help="of a capture in parts (wireskein-format §3.4): write this one (from 0) on its own; .sr and "
                          "VCD hold one gapless run")

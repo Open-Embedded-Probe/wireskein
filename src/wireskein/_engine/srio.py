@@ -185,3 +185,136 @@ def _levels(ch: Channel, s0: int, s1: int) -> np.ndarray:
     toggles = np.zeros(s1 - s0, np.uint8)
     np.add.at(toggles, ch.edges[lo:hi] - s0, 1)
     return (int(ch.initial ^ (lo & 1)) ^ (np.cumsum(toggles, dtype=np.uint8) & 1)).astype(np.uint8)
+
+
+BLOCK = 1 << 24          # samples read at a time: a chunk of a .sr may be the whole capture
+
+
+def _blocks(z, chunks: list[str], unitsize: int, dtype, start: int, end: int | None):
+    """The samples of ticks [start, end) of the chunks, BLOCK at a time, decompressed as they are read:
+    (the block's first tick from start, its samples)."""
+    pos = 0
+    for name in chunks:
+        n = z.getinfo(name).file_size // unitsize
+        if end is not None and pos >= end:
+            return
+        if pos + n <= start:
+            pos += n
+            continue
+        with z.open(name) as f:
+            k = pos
+            while True:
+                if end is not None and k >= end:
+                    break
+                raw = f.read(BLOCK * unitsize)
+                if not raw:
+                    break
+                data = np.frombuffer(raw, dtype=dtype)
+                lo, hi = max(0, start - k), len(data) if end is None else min(len(data), end - k)
+                if hi > lo:
+                    yield k + lo - start, data[lo:hi]
+                k += len(data)
+        pos += n
+
+
+def read_sr_changes(path: Path, start: int = 0, end: int | None = None) -> Capture | None:
+    """A logic-only .sr read a chunk at a time, keeping each channel's changes only: a capture far larger than memory
+    as samples (a long stream at a high rate) is read in the memory its changes take. Ticks [start, end) only, tick 0
+    at start (an excerpt). None when the file is not one this reads (analog channels, channels of their own step:
+    read_sr reads those)."""
+    with zipfile.ZipFile(path) as z:
+        cfg = configparser.ConfigParser()
+        cfg.read_string(z.read("metadata").decode())
+        dev = cfg["device 1"]
+        if any(re.fullmatch(r"analog\d+", k) for k in dev):
+            return None
+        if EXTRA in z.namelist():
+            extra = json.loads(z.read(EXTRA))
+            if extra.get("analog") or any(int(c.get("step", 1)) != 1 for c in extra.get("channels", {}).values()):
+                return None
+        rate = _parse_rate(dev["samplerate"])
+        unitsize = int(dev.get("unitsize", "1"))
+        prefix = dev.get("capturefile", "logic-1")
+        names = {int(k[5:]): v for k, v in dev.items() if re.fullmatch(r"probe\d+", k)}
+        total = int(dev.get("total probes", unitsize * 8))
+        chunks = sorted((n for n in z.namelist() if n == prefix or n.startswith(prefix + "-")),
+                        key=lambda n: int(n.rsplit("-", 1)[1]) if n != prefix else 0)
+        dtype = {1: np.uint8, 2: np.uint16, 4: np.uint32}[unitsize]
+        bits = [b for b in (sorted(b - 1 for b in names) if names else range(min(total, unitsize * 8)))
+                if b < unitsize * 8]
+        edges: dict[int, list[np.ndarray]] = {b: [] for b in bits}
+        initial: dict[int, int] = {}
+        last: dict[int, int] = {}
+        n_ticks = 0
+        for first, data in _blocks(z, chunks, unitsize, dtype, start, end):
+            n_ticks = first + len(data)
+            for b in bits:
+                lv = ((data >> b) & 1).astype(np.int8)
+                if b not in initial:
+                    initial[b] = last[b] = int(lv[0])
+                ch = np.flatnonzero(np.diff(lv)) + 1
+                if lv[0] != last[b]:                 # a change across the blocks' seam
+                    ch = np.concatenate(([0], ch))
+                if len(ch):
+                    edges[b].append(ch.astype(np.int64) + first)
+                last[b] = int(lv[-1])
+    channels = [Channel(names.get(b + 1, f"bit{b}"), initial.get(b, 0),
+                        np.concatenate(edges[b]) if edges[b] else np.zeros(0, np.int64)) for b in bits]
+    meta = {"sr_file": str(path), "unitsize": unitsize}
+    return Capture(rate, max(0, n_ticks), channels, meta=meta)
+
+
+def convert_sr(path: Path, out: Path, start: int = 0, end: int | None = None, excerpt: bool = False, **meta) -> tuple[Path, int, list[str], float] | None:
+    """A logic-only .sr written as a WireSkein file without holding it: a chunk of the .sr at a time, each line's bits
+    packed and appended to a file of its own, then copied into the capture (fileformat.OnDisk). Memory stays a chunk's,
+    whatever the length (a long stream at a high rate). Ticks [start, end) only, tick 0 at start (an excerpt).
+    (path written, ticks, channel names, rate), or None when the file is not one this writes (analog channels,
+    channels of their own step, attachments: the whole read does those)."""
+    import shutil
+    import tempfile
+    from .. import _fileformat as fileformat
+    with zipfile.ZipFile(path) as z:
+        cfg = configparser.ConfigParser()
+        cfg.read_string(z.read("metadata").decode())
+        dev = cfg["device 1"]
+        if any(re.fullmatch(r"analog\d+", k) for k in dev):
+            return None
+        if EXTRA in z.namelist() or any(n.startswith(("attach/", "notes/")) for n in z.namelist()):
+            return None
+        rate = _parse_rate(dev["samplerate"])
+        unitsize = int(dev.get("unitsize", "1"))
+        prefix = dev.get("capturefile", "logic-1")
+        names = {int(k[5:]): v for k, v in dev.items() if re.fullmatch(r"probe\d+", k)}
+        total = int(dev.get("total probes", unitsize * 8))
+        chunks = sorted((n for n in z.namelist() if n == prefix or n.startswith(prefix + "-")),
+                        key=lambda n: int(n.rsplit("-", 1)[1]) if n != prefix else 0)
+        dtype = {1: np.uint8, 2: np.uint16, 4: np.uint32}[unitsize]
+        bits = [b for b in (sorted(b - 1 for b in names) if names else range(min(total, unitsize * 8)))
+                if b < unitsize * 8]
+        if excerpt:                          # where the excerpt was in the source, from the chunks' sizes
+            whole = sum(z.getinfo(n).file_size for n in chunks) // unitsize
+            meta["excerpt"] = {"from_tick": start, "to_tick": whole if end is None else min(end, whole)}
+        tmp = Path(tempfile.mkdtemp(prefix=".wireskein-", dir=Path(out).parent))
+        try:
+            files = {b: open(tmp / f"bit{b}", "wb") for b in bits}
+            carry = {b: np.zeros(0, np.uint8) for b in bits}   # bits not yet a whole byte
+            n_ticks = 0
+            for first, data in _blocks(z, chunks, unitsize, dtype, start, end):
+                n_ticks = first + len(data)
+                for b in bits:
+                    lv = np.concatenate((carry[b], ((data >> b) & 1).astype(np.uint8)))
+                    whole = len(lv) // 8 * 8
+                    files[b].write(np.packbits(lv[:whole], bitorder="little").tobytes())
+                    carry[b] = lv[whole:]
+            for b in bits:
+                if len(carry[b]):
+                    files[b].write(np.packbits(carry[b], bitorder="little").tobytes())
+                files[b].close()
+            chans = [fileformat.Channel(names.get(b + 1, f"bit{b}"), fileformat.OnDisk(tmp / f"bit{b}"), n_ticks)
+                     for b in bits]
+            written = fileformat.write(out, Fraction(round(rate)), chans, **meta)
+        finally:
+            for f in locals().get("files", {}).values():
+                f.close()
+            shutil.rmtree(tmp, ignore_errors=True)
+    return written, n_ticks, [c.name for c in chans], rate

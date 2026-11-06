@@ -282,9 +282,12 @@ wireskein convert c0001.wireskein c0001.sr     # PulseView 用: 1 つのレー�
 wireskein convert c0001.sr c0001.wireskein     # 戻す: チャンネルは本当のレートに戻る
 wireskein convert c0001.wireskein c0001.vcd    # GTKWave など: 変化点だけ。各チャンネルは自分のレートのまま
 wireskein convert saleae.vcd s.wireskein       # ほかの道具の VCD: 刻みは変化の時刻の最大公約数
+wireskein convert long.sr part.wireskein --from 0.1 --to 0.5   # 一部を切り出す。初めからの秒（meta.excerpt）
 ```
 
 `.sr` は全チャンネルで 1 つのレートなので、遅いチャンネルは最も速いレートに水増しします。各チャンネルの本当のレートは、`.sr` の中の `wireskein.json` に残します。sigrok はこのファイルを無視し、WireSkein は読み戻します。PulseView では、水増しした値も取った値と同じに見えます。
+
+ロジックの `.sr` は、サンプルのブロックごとに、そのまま WireSkein のファイルへ変換します。どんな長さの記録（高いレートの長いストリーム、数 GB）も、ブロックの分のメモリで済みます。`--from` / `--to` で、その一部だけを書きます。
 
 ## キャプチャを復号する
 

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- (EN) `convert` writes a logic `.sr` as a WireSkein file straight through, a block of samples at a time (each line's bits packed into a file of its own, then copied in): any length in a block's memory (950 MB of a 25 MHz stream: 13 s, 180 MB). `--from` / `--to` (seconds) write an excerpt, `meta.excerpt` saying where it was in the source. A `.sr` read whole is read a block at a time keeping the changes, and a long line is packed into bits a block at a time.
+- (JA) `convert` は、ロジックの `.sr` を、サンプルのブロックごとに WireSkein のファイルへそのまま書く（線ごとにビットを詰めて別のファイルに足し、最後に写す）: どんな長さでもブロックの分のメモリで済む（25 MHz のストリームの 950 MB: 13 秒、180 MB）。`--from` / `--to`（秒）で一部を書き、`meta.excerpt` に元のどこだったかを残す。`.sr` を丸ごと読むときもブロックごとに読んで変化点を残し、長い線はブロックごとにビットに詰める。
+
 ## 0.0.24
 - (EN) RVSWD: a SWCLK high 4 times its usual or more and 1 us or more is a STOP too: at its fastest (high 30 ns) a LinkE's STOP may hold only 1.4 us, and two frames were read as one (a V203's write of data0).
 - (JA) RVSWD: SWCLK の high がいつもの 4 倍以上で 1 us 以上のものも STOP とした: いちばん速い LinkE（high 30 ns）の STOP は 1.4 us しかないことがあり、2 つのフレームを 1 つに読んでいた（V203 の data0 への書き込み）。

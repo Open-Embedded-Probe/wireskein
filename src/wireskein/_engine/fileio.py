@@ -138,10 +138,11 @@ def locate(meta: dict, tick: int) -> tuple[int, int]:
 def to_channel(ch: Channel, n_ticks: int) -> fileformat.Channel:
     """The samples a channel really has (at phase + k * step) back into a fileformat.Channel."""
     n = max(0, (n_ticks - ch.phase + ch.step - 1) // ch.step)
-    ticks = ch.phase + np.arange(n, dtype=np.int64) * ch.step
-    levels = ch.level_at(ticks).astype(np.uint8)
-    return fileformat.Channel(ch.name, np.packbits(levels, bitorder="little").tobytes(), n, ch.step, ch.phase,
-                       dict(ch.acquisition))
+    out, chunk = [], 1 << 23                       # packed a chunk of samples at a time: a long line fits in memory
+    for k0 in range(0, n, chunk):
+        ticks = ch.phase + np.arange(k0, min(n, k0 + chunk), dtype=np.int64) * ch.step
+        out.append(np.packbits(ch.level_at(ticks).astype(np.uint8), bitorder="little").tobytes())
+    return fileformat.Channel(ch.name, b"".join(out), n, ch.step, ch.phase, dict(ch.acquisition))
 
 
 def to_analog(a: AnalogTrace) -> fileformat.AnalogChannel:

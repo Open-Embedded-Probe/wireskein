@@ -253,9 +253,12 @@ wireskein convert c0001.wireskein c0001.sr     # for PulseView: one rate, slow c
 wireskein convert c0001.sr c0001.wireskein     # back: channels get their real rate again
 wireskein convert c0001.wireskein c0001.vcd    # GTKWave etc.: only the changes, each channel at its own rate
 wireskein convert saleae.vcd s.wireskein       # a VCD from elsewhere: the tick is the common divisor of its times
+wireskein convert long.sr part.wireskein --from 0.1 --to 0.5   # an excerpt, seconds from the start (meta.excerpt)
 ```
 
 A `.sr` has one sample rate for all channels, so slow channels are repeated to the fastest rate there. The real rate of each channel is kept in `wireskein.json` inside the `.sr`. sigrok ignores this file, and WireSkein reads it back. In PulseView, the repeated samples look like real ones.
+
+A logic `.sr` is converted a block of samples at a time, straight into the WireSkein file: a capture of any length (a long stream at a high rate, gigabytes) in a block's memory. `--from` / `--to` write only a stretch of it.
 
 ## Decoding a capture
 
