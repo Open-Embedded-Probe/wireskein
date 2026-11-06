@@ -105,7 +105,13 @@ def reframer(name):
 @reframer("rvswd_stop")
 def _rvswd_stop(fr, cap):
     from .rvswd import reframe, reframe_rolling, reframe_startstop
-    return [reframe_startstop(fr, cap), reframe(fr), reframe_rolling(fr)]
+    ss = reframe_startstop(fr, cap)
+    # the START / STOP frames hold nearly every clock: the cuts at stop intervals (for captures that hide START and
+    # STOP) are not tried
+    inside = sum(b - a for a, b in ss)
+    if inside >= 0.95 * max(1, int(np.diff(fr.bounds, axis=1).sum())):
+        return [ss]
+    return [ss, reframe(fr), reframe_rolling(fr)]
 
 
 # ---------------- expressions (sequence shape) ----------------
@@ -197,9 +203,61 @@ def crc_bits(bits, poly: int, width: int, init: int = 0) -> int:
     return crc
 
 
-def parse_sequence(seq: dict, bits: np.ndarray, pos: int, end: int):
+def fixed_prefix(seq: dict) -> list[tuple[int, list[list[int]]]]:
+    """What a frame must start with: (offset, the bit patterns allowed there) of the leading fields of a fixed width
+    and position whose value is expected or one of valid values, up to the first field that is conditional, of a
+    computed width, or stuffed."""
+    if seq.get("stuffing"):
+        return []
+    out, off = [], 0
+    for f in seq["fields"]:
+        w = f.get("width", 1)
+        if "when" in f or not isinstance(w, int):
+            break
+        vals = [int(f["expect"])] if "expect" in f else [int(v) for v in f["valid"]] if "valid" in f else None
+        if vals is not None:
+            msb = f.get("order", seq.get("order", "msb")) == "msb"
+            pats = []
+            for v in vals:
+                p = [(v >> (w - 1 - i)) & 1 for i in range(w)]
+                pats.append(p if msb else p[::-1])
+            out.append((off, pats))
+        off += w
+    return out
+
+
+def _shifted_eq(bits: np.ndarray, off: int, b: int) -> np.ndarray:
+    n = len(bits)
+    sh = np.zeros(n, bool)
+    if off < n:
+        sh[:n - off] = bits[off:] == b
+    return sh
+
+
+def prefix_positions(seqs: list[dict], bits: np.ndarray) -> np.ndarray | None:
+    """Where a frame of any of the sequences can start, by their fixed leading fields (None: any position)."""
+    n = len(bits)
+    any_ok = np.zeros(n, bool)
+    for seq in seqs:
+        pre = fixed_prefix(seq)
+        if not pre:
+            return None
+        ok = np.ones(n, bool)
+        for off, pats in pre:
+            one = np.zeros(n, bool)
+            for pat in pats:
+                m = np.ones(n, bool)
+                for i, b in enumerate(pat):
+                    m &= _shifted_eq(bits, off + i, b)
+                one |= m
+            ok &= one
+        any_ok |= ok
+    return np.flatnonzero(any_ok)
+
+
+def parse_sequence(seq: dict, bits: np.ndarray, pos: int, end: int, fail_fast: bool = False):
     """One frame from `pos`. Returns (record, consumed_bits, passed, checked) or None
-    when the bits run out or stuffing is violated."""
+    when the bits run out or stuffing is violated (or, fail_fast, a field is not its expected or a valid value)."""
     order0 = seq.get("order", "msb")
     st = seq.get("stuffing")
     rd = BitReader(bits, pos, end, st)
@@ -218,6 +276,8 @@ def parse_sequence(seq: dict, bits: np.ndarray, pos: int, end: int):
                 rd.active = False
             v = _value(b, f.get("order", order0))
             env[f["name"]], raw[f["name"]] = v, b
+            if fail_fast and (("expect" in f and v != int(f["expect"])) or ("valid" in f and v not in f["valid"])):
+                return None
             if "expect" in f:
                 checked += 1
                 passed += v == int(f["expect"])
@@ -264,6 +324,21 @@ def _active_bits(bits: np.ndarray, a: int, b: int, run: int = 16) -> int:
     chg = np.flatnonzero(np.diff(x)) + 1
     edges = np.concatenate(([0], chg, [len(x)]))
     lens = np.diff(edges)
+    return int(lens[lens < run].sum())
+
+
+def _active_bits_in(bits: np.ndarray, bounds, run: int = 16) -> int:
+    """_active_bits summed over frames [a, b) (sorted, apart), at once."""
+    if not len(bounds):
+        return 0
+    bd = np.asarray(bounds, np.int64).reshape(-1, 2)
+    a, b = bd[:, 0], bd[:, 1]
+    chg = np.flatnonzero(np.diff(bits)) + 1
+    cuts = np.unique(np.concatenate((chg, a, b)))
+    seg_s, seg_e = cuts[:-1], cuts[1:]
+    k = np.searchsorted(a, seg_s, side="right") - 1
+    inside = (k >= 0) & (seg_s < b[np.maximum(k, 0)])
+    lens = (seg_e - seg_s)[inside]
     return int(lens[lens < run].sum())
 
 
@@ -345,8 +420,18 @@ class DeclarativePlugin:
         rest = sp["frame"].get("rest")
         byte_field = {f["name"]: f["bits"] for f in sp["word"].get("fields", [])}
         vals0, fof0 = per_pin[sb.data[0]]
+        nfr = len(fr.bounds)
+
+        def by_frame(vals, fof):
+            """Each frame's words: slices when the words are in frame order (as words() gives them)."""
+            if len(fof) and np.all(np.diff(fof) >= 0):
+                cut = np.searchsorted(fof, np.arange(nfr + 1))
+                return lambda i: vals[cut[i]:cut[i + 1]]
+            return lambda i: vals[fof == i]
+        of0 = by_frame(vals0, fof0)
+        of_pin = {pin: by_frame(vals, fof) for pin, (vals, fof) in per_pin.items()}
         for i, (a, b) in enumerate(fr.bounds.tolist()):
-            ws = vals0[fof0 == i]
+            ws = of0(i)
             if len(ws) == 0:
                 continue
             rec = {"start": int(sb.t[a]), "end": int(sb.t[max(a, b - 1)])}
@@ -359,8 +444,8 @@ class DeclarativePlugin:
             if rest:
                 start = 1 if first_fields else 0
                 if sp["frame"].get("per_data_pin"):
-                    for pin, (vals, fof) in per_pin.items():
-                        rec[pin] = bytes(src(v, rest["from"]) & 0xFF for v in vals[fof == i]).hex()
+                    for pin in per_pin:
+                        rec[pin] = bytes(src(v, rest["from"]) & 0xFF for v in of_pin[pin](i)).hex()
                 else:
                     rec[rest["name"]] = [src(v, rest["from"]) for v in ws[start:]]
             for f in checks:
@@ -511,13 +596,19 @@ class DeclarativePlugin:
         recs, n_ok, n_tried, used, active = [], 0, 0, 0, 0
         spans = []
         info = 0.0
+        starts = prefix_positions(seqs, bits) if scan else None
+        active = _active_bits_in(bits, [(a, b) for a, b in bounds if b > a])
         for a, b in bounds:
-            active += _active_bits(bits, a, b)
             p = a
             while p < b:
+                if starts is not None:           # skip to the next position the fixed leading bits allow
+                    i = int(np.searchsorted(starts, p))
+                    if i >= len(starts) or starts[i] >= b:
+                        break
+                    p = int(starts[i])
                 got = None
                 for seq in seqs:
-                    r = parse_sequence(seq, bits, p, b)
+                    r = parse_sequence(seq, bits, p, b, fail_fast=scan)
                     if r is not None and (r[0]["ok"] or not scan):
                         got = r
                         break

@@ -296,7 +296,8 @@ def _scl_waits(scl, t: np.ndarray, a: int, b: int, factor: float = SCL_WAIT) -> 
     target held SCL (a stretch) or the controller paused is not told by the lines, so it is not named."""
     if b - a < 2:
         return None, []
-    falls = scl.edges[(scl.edges > t[a]) & (scl.edges < t[b - 1])]
+    e = scl.edges                                         # sorted: the frame's edges as a slice, not a mask
+    falls = e[np.searchsorted(e, t[a], side="right"):np.searchsorted(e, t[b - 1], side="left")]
     falls = falls[scl.level_at(falls) == 0]
     if not len(falls):
         return None, []
@@ -318,8 +319,10 @@ def i2c_from_words(fr: Frames, w: Words, scl=None) -> list[dict]:
     None: still open at the window's end). With the SCL channel, scl_low_ticks (the median SCL low) and scl_waits
     (_scl_waits)."""
     out = []
+    fof = w.frame_of
+    cut = np.searchsorted(fof, np.arange(len(fr.bounds) + 1)) if np.all(np.diff(fof) >= 0) else None
     for i in range(len(fr.bounds)):
-        v = w.values[w.frame_of == i]
+        v = w.values[cut[i]:cut[i + 1]] if cut is not None else w.values[fof == i]
         a, b = fr.bounds[i]
         t = fr.source.t
         last_open = fr.open_tail and i == len(fr.bounds) - 1

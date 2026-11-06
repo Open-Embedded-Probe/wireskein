@@ -99,8 +99,7 @@ def match(bus: dict, claim: dict) -> dict:
         r["roles"] = nr.get("data") == tr["data"]
         r["params"] = abs(pm["bitrate"] / bus["params"]["bitrate"] - 1) <= 0.03
         want = [(i, bool(e), d) for i, e, d in bus["expect"]["frames"]]
-        got = [(f["id"], bool(f["ide"]), bytes.fromhex(f"{f['data']:0{2 * f['dlc']}x}").hex() if f["dlc"] else "")
-               for f in lay["frames"] if f["ok"]]
+        got = [(f["id"], bool(f["ide"]), f["data"]) for f in lay["frames"] if f["ok"]]   # data: hex, the DLC's bytes
         r["decode"] = _ratio(want, got)
     elif bus["protocol"] == "spi":
         lines_true = {tr["mosi"], *([tr["miso"]] if "miso" in tr else [])}

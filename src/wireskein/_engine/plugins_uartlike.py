@@ -15,8 +15,13 @@ def _split_on_breaks(ch):
     """Characters between consecutive breaks: [(break_time, values, ok)]."""
     out = []
     b = np.concatenate((ch.breaks, [np.iinfo(np.int64).max]))
+    order = np.argsort(ch.start, kind="stable")
+    start, values, ok = ch.start[order], ch.values[order], ch.ok[order]
+    lo = np.searchsorted(start, b[:-1], side="right")
+    hi = np.searchsorted(start, b[1:], side="left")
     for i in range(len(b) - 1):
-        sel = (ch.start > b[i]) & (ch.start < b[i + 1])
+        sel = order[lo[i]:hi[i]]
+        sel = np.sort(sel)                                 # in the characters' own order
         out.append((int(b[i]), ch.values[sel] & 0xFF, ch.ok[sel]))
     return out
 
