@@ -88,7 +88,7 @@ acme = "acme_wireskein.definitions"
 | `examples/protocols/demo_cmd_p4.wireskein` | OEP のプローブが 2 つの ESP-IDF の UART ドライバで出して取り込んだ demo_cmd と、正解としてのそれぞれが送ったもの |
 | `examples/protocols/demo_telemetry.py` | CAN と LIN のフレームに乗るプロトコル: 両方に 1 つの decode、証拠としてのチェックのバイト、飛んだカウンタを見せる |
 | `examples/protocols/demo_telemetry_p4_can.wireskein`、`_lin.wireskein` | OEP のプローブが ESP-IDF の TWAI と UART のドライバで送った demo_telemetry と、正解としての送ったもの |
-| `examples/formats/saleae_csv.py` | ファイルの形式: Saleae Logic 2 のデジタルの CSV をキャプチャとして読む（1 tick は 1 ns、線は見出しの名前） |
+| `examples/formats/saleae_csv.py` | ファイルの形式: Saleae Logic 2 の CSV をキャプチャとして読む。デジタル（1 tick は変化の時刻の刻み）とアナログ（行の速さの電圧）。線は見出しの名前 |
 | `examples/checks/demo_settle.py` | 検査の種類: 落ち着かなければならない線、注意としてのチャタリング、期待のレベルが無ければ測るだけ |
 | `tests/test_demo_cmd.py` | 分析と、試験のプロトコルの検査での demo_cmd |
 | `tests/test_check_plugins.py` | 外から足した検査の種類と、その注意。チャタリングする接点での demo_settle |
