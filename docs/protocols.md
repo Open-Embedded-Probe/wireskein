@@ -102,7 +102,7 @@ identifier, the data being `seq | reading... | check`, the check `(identifier + 
 `0x5A`. One `decode` reads CAN and LIN alike (`over = ("can", "lin")`): a frame whose check holds is a check passed,
 a seq that does not follow its node's last one is shown (`level: "warn"`). Its messages are under the CAN or LIN
 bus's `result`, as demo_link's are under a UART's; its tests (`tests/test_demo_telemetry.py`) put the frames on the
-lines with encoders of their own.
+lines with encoders of their own. On hardware, `examples/protocols/demo_telemetry_p4_can.wireskein` and `_lin.wireskein` are an OEP probe sending them with ESP-IDF's TWAI driver (self-test, 500 kbit/s) and UART driver (19200 baud, the break sent as a 0x00 at 9/13 of the rate), with what it sent in their `.truth.json`.
 
 ## 4. Checking it in a test
 

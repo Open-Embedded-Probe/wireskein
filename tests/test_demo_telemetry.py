@@ -116,3 +116,19 @@ def test_a_test_checks_it_on_can(tmp_path, telemetry):
                            {"id": 0x18FF0042, "seq": 1}, {"id": 0x321, "seq": 2, "readings": "1221"}])
     ok, got, why = check_protocol(cap, x)
     assert ok is True, (why, got)
+
+
+@pytest.mark.parametrize("bus", ["can", "lin"])
+def test_hardware_probe_frames(bus, telemetry):
+    # an OEP probe sending the frames (examples/protocols/demo_telemetry_p4_*.truth.json): CAN with its ESP-IDF TWAI
+    # driver in self-test, LIN with its ESP-IDF UART driver (the break at 9/13 of the rate): the truth is what it sent
+    import json
+    d = Path(__file__).parents[1] / "examples/protocols"
+    t = json.loads((d / f"demo_telemetry_p4_{bus}.truth.json").read_text())
+    sent = [(f["id"], f["data"]) for f in t["frames"]]
+    mine = [(i, dt) for i, dt in sent if len(dt) >= 4 and bytes.fromhex(dt)[-1] == demo.check_of(i, bytes.fromhex(dt)[:-1])]
+    doc = analyze_file(d / f"demo_telemetry_p4_{bus}.wireskein")
+    (c,) = [c for c in doc["parts"][0]["claims"] if c["protocol"] == bus]
+    got = c["result"]["demo_telemetry"]
+    assert got["checks_passed"] == len(mine) and got["checks_failed"] == len(sent) - len(mine), got
+    assert [(m["id"], m["seq"]) for m in got["messages"]] == [(i, bytes.fromhex(dt)[0]) for i, dt in mine]

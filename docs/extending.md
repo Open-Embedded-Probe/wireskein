@@ -89,6 +89,7 @@ in a test (`wireskein.verify.sections`, the analysis's `lines`) and judge them t
 | `examples/protocols/demo_cmd.py` | Text commands and answers on a UART pair: the pairing as the evidence, events, levels for the viewer |
 | `examples/protocols/demo_cmd_p4.wireskein` | demo_cmd sent by an OEP probe's two ESP-IDF UART drivers and captured, with what each sent as the truth |
 | `examples/protocols/demo_telemetry.py` | A protocol on CAN and LIN frames: one decode for both, a check byte as evidence, a skipped counter shown |
+| `examples/protocols/demo_telemetry_p4_can.wireskein`, `_lin.wireskein` | demo_telemetry sent by an OEP probe's ESP-IDF TWAI and UART drivers, with what it sent as the truth |
 | `examples/formats/saleae_csv.py` | A file format: a Saleae Logic 2 digital CSV read as a capture (a tick of 1 ns, the lines by their headers) |
 | `examples/checks/demo_settle.py` | A check kind: a line that must settle, its bounces as notices, measuring only without an expected level |
 | `tests/test_demo_cmd.py` | demo_cmd in the analysis and in a test's protocol check |

@@ -1,0 +1,37 @@
+{
+ "probe": "oep://e8f60ae84e28",
+ "firmware": "0.0.51+f8afe00.bench",
+ "rate_hz": 20000000,
+ "channels": {
+  "lin": "GPIO27"
+ },
+ "interface": "io.github.open-embedded-probe.bench.lin rev 1 (ESP-IDF UART driver, UART4): the break is 0x00 sent at 9/13 of the baud (13 bit times low, its stop bit the delimiter), then the baud set back and the bytes written",
+ "baud_asked": 19200,
+ "baud_used": 19200,
+ "frames": [
+  {
+   "id": 33,
+   "pid": 97,
+   "data": "0000403b",
+   "checksum": "enhanced",
+   "check_byte": 35,
+   "bytes_after_break": "55610000403b23"
+  },
+  {
+   "id": 33,
+   "pid": 97,
+   "data": "01014039",
+   "checksum": "enhanced",
+   "check_byte": 35,
+   "bytes_after_break": "55610101403923"
+  },
+  {
+   "id": 33,
+   "pid": 97,
+   "data": "0202403f",
+   "checksum": "enhanced",
+   "check_byte": 27,
+   "bytes_after_break": "55610202403f1b"
+  }
+ ]
+}

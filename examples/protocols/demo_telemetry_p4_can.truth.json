@@ -1,0 +1,48 @@
+{
+ "probe": "oep://e8f60ae84e28",
+ "firmware": "0.0.51+f8afe00.bench",
+ "rate_hz": 20000000,
+ "channels": {
+  "bus": "GPIO26"
+ },
+ "interface": "io.github.open-embedded-probe.bench.twai rev 1 (ESP-IDF esp_twai_onchip, self-test: no ACK), push-pull pad + pull-up",
+ "bitrate": 500000,
+ "frames": [
+  {
+   "id": 801,
+   "ext": false,
+   "data": "0010200b",
+   "tx_done_ok_after": 1
+  },
+  {
+   "id": 419364930,
+   "ext": true,
+   "data": "000000010019",
+   "tx_done_ok_after": 2
+  },
+  {
+   "id": 801,
+   "ext": false,
+   "data": "01112009",
+   "tx_done_ok_after": 3
+  },
+  {
+   "id": 419364930,
+   "ext": true,
+   "data": "01000001011f",
+   "tx_done_ok_after": 4
+  },
+  {
+   "id": 801,
+   "ext": false,
+   "data": "0212210c",
+   "tx_done_ok_after": 5
+  },
+  {
+   "id": 2047,
+   "ext": false,
+   "data": "010203",
+   "tx_done_ok_after": 6
+  }
+ ]
+}

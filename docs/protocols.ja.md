@@ -87,7 +87,7 @@ demo_link = "demo_link:PROTOCOL"
 
 プロトコルは、分析がもう読んでいるフレームの上にも乗れます: `"can"`、`"lin"`、`"dmx512"`、または自分の定義のプロトコル（§5）の名前。そのとき `bus` は、そのプロトコルの `frames`（DMX512 は `packets`）を、分析の形式 §3.2 のとおりに持ちます: CAN は `{"s", "id", "ide", "dlc", "data": 16 進, "ack", "ok"}`、LIN は `{"s", "id", "data": 16 進, "ok"}`、定義はその欄。CANopen、J1939、OBD-II / UDS、LIN のノードの信号などは、ここに乗せます。
 
-`examples/protocols/demo_telemetry.py` は、このガイドのために作ったものです: どのノードも、自分の識別子のフレームで測った値を送り、データは `seq | 値... | check`、check は `(識別子 + その前のバイト) & 0xFF` と `0x5A` の排他的論理和です。1 つの `decode` が CAN も LIN も読みます（`over = ("can", "lin")`）。check が合うフレームはチェックが通ったもので、ノードの前の seq から続かない seq は見せます（`level: "warn"`）。メッセージは、demo_link が UART の下に出るのと同じく、CAN や LIN のバスの `result` の下に出ます。その試験（`tests/test_demo_telemetry.py`）は、自分の符号器でフレームを線に乗せます。
+`examples/protocols/demo_telemetry.py` は、このガイドのために作ったものです: どのノードも、自分の識別子のフレームで測った値を送り、データは `seq | 値... | check`、check は `(識別子 + その前のバイト) & 0xFF` と `0x5A` の排他的論理和です。1 つの `decode` が CAN も LIN も読みます（`over = ("can", "lin")`）。check が合うフレームはチェックが通ったもので、ノードの前の seq から続かない seq は見せます（`level: "warn"`）。メッセージは、demo_link が UART の下に出るのと同じく、CAN や LIN のバスの `result` の下に出ます。その試験（`tests/test_demo_telemetry.py`）は、自分の符号器でフレームを線に乗せます。実機では、`examples/protocols/demo_telemetry_p4_can.wireskein` と `_lin.wireskein` が、OEP のプローブが ESP-IDF の TWAI ドライバ（self-test、500 kbit/s）と UART ドライバ（19200 baud。break は 9/13 の速さの 0x00）で送ったもので、送ったものはそれぞれの `.truth.json` にあります。
 
 ## 4. 試験で確かめる
 
