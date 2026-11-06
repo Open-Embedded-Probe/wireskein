@@ -50,11 +50,13 @@ window; inside it the cut goes where the lines are quiet:
   A clock that pauses between frames (SWCLK, SPI's SCK, I2C's SCL) is not left out: its pauses are where cuts go.
 - Where every other line is quiet at once, after `search_from` of the window, is a candidate. The longest is cut at
   its middle, and others at least `similar` times as long too, each piece keeping `min_edges` changes or more.
-- With a free-running line in the window, quiet may still be inside a frame (data the same for a while): the cut is
-  `data_quiet` and the pieces on both sides are read `overlap_edges` changes past it. An item read twice is kept by
-  the piece whose own ticks it starts in.
+- With a free-running line in the window, quiet may well be inside a frame (data the same for a while): the cut is
+  `data_quiet`.
 - With no candidate at all (only free-running lines, or a stream that never pauses), the window is cut at its end,
-  `forced`, read with the same overlap.
+  `forced`.
+- Every cut is read past by `overlap_edges` changes on both sides: even a quiet stretch may be inside a frame (a
+  protocol's turnaround, with frames back to back and gaps between them no longer than it, as a LinkE polling SDI). An
+  item read twice is kept by the piece whose own ticks it starts in.
 
 The remainder after the last cut starts the next window. A decode spec's buses and lines are the ones looked at for
 quiet; `analyze` looks at every line.
@@ -75,7 +77,7 @@ read whole however long:
 | `gap_min` | Quiet: still this many times the line's usual interval | 4 |
 | `similar` | Others at least this share of the longest quiet are cut too | 0.5 |
 | `min_edges` | A piece's fewest changes | 50 000 |
-| `overlap_edges` | Changes read past a `data_quiet` or `forced` cut | 10 000 |
+| `overlap_edges` | Changes read past every cut, both ways | 10 000 |
 | `noise_max` | Pulses this short (ticks) do not make a line busy | 1 |
 | `noise_share` | A line with more of its intervals that short is told as trembling | 0.3 |
 | `watch=A;B` | Look for quiet on these lines only | the spec's, or all |
@@ -96,7 +98,7 @@ The part has `split`:
 | `options` | The options used |
 | `pieces` | `[{"s", "e", "edges", "cut", "ratio"?, "read"?}]`: each piece's own ticks, its changes, how it ends (`quiet`, `data_quiet`, `forced`, `given`, `end`), the quiet's length over the usual interval, and the ticks read when past its own |
 | `trembling` | Lines with many intervals of a tick or two: name → share (told, not left out) |
-| `doubtful` | Pieces the roles read badly (a bus not decoded, or a fit under 0.3), with where they are: the capture may change on the way (another bus, another speed); analyse them on their own |
+| `doubtful` | Pieces the roles read badly (a bus not decoded there, a fit under 0.3, or nothing read well in the piece's own ticks), with where they are: the capture may change on the way (another bus, another speed); analyse them on their own |
 
 Each bus gives `uninterpreted_summary`: `count`, `edges`, `sizes` (in bins of powers of two), `largest`. A long
 capture has many small unread stretches (a line moving between frames) and a few that matter. `fit` is the worst

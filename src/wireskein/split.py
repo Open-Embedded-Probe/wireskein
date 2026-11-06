@@ -10,13 +10,15 @@ changes up to `max_edges` are a window; inside it the cut goes where every line 
 - a quiet stretch after `search_from` of the window is a candidate, its length against the fastest line's usual
   interval its ratio. The longest is cut at its middle; others at least `similar` times as long too, each piece
   keeping `min_edges` changes or more.
-- with a periodic line in the window, a quiet stretch of the other lines may still be inside a frame (data the
-  same for a while): the cut is "data_quiet" and the pieces on both sides are read `overlap_edges` changes past it;
+- with a periodic line in the window, a quiet stretch of the other lines may well be inside a frame (data the
+  same for a while): the cut is "data_quiet";
 - with no candidate at all (every line periodic, or a stream that never pauses), the window is cut at its end
   ("forced"), read with the same overlap.
 
-The remainder after the last cut starts the next window. A piece owns the ticks between its cuts: an item read
-twice in an overlap is kept by the piece whose own ticks it starts in.
+Every cut is read past by `overlap_edges` changes on both sides: even a quiet stretch may be inside a frame (a
+protocol's turnaround, frames back to back with gaps no longer than it). The remainder after the last cut starts the
+next window. A piece owns the ticks between its cuts: an item read twice in an overlap is kept by the piece whose own
+ticks it starts in.
 
 The values come from experiments and are all given from outside: `options("max_edges=4000000,gap_min=8")`,
 `{"split": {...}}` in a decode spec, `--split` on the command line; `off` reads the capture whole however long.
@@ -220,7 +222,7 @@ def plan(cap, opts: dict | None, watch: list[str] | None = None, noisy: dict | N
     # read past a cut that may be inside a frame
     ov = int(opts["overlap_edges"])
     for i, p in enumerate(pieces):
-        if p.cut in ("data_quiet", "forced"):
+        if p.cut != "end":
             p.b = _tick_after(es, p.e, ov, n)
             if i + 1 < len(pieces):
                 pieces[i + 1].a = _tick_before(es, p.e, ov)
@@ -439,7 +441,7 @@ def run(source: Source, opts: dict | None, watch: list[str] | None = None, noisy
             more()
         if mx is None or (eof and count(s, source.n) <= mx):
             p = Piece(s, source.n, s, source.n, count(s, source.n), "end")
-            if prev_cut in ("data_quiet", "forced"):
+            if prev_cut is not None:
                 p.a = _tick_before_buf(buf, start, s, ov)
             yield p, cap_of(p.a, p.b)
             return
@@ -469,13 +471,12 @@ def run(source: Source, opts: dict | None, watch: list[str] | None = None, noisy
             cuts = [(t, None, "forced")]
         for c, r, k in cuts:
             p = Piece(s, c, s, c, count(s, c), k, r)
-            if prev_cut in ("data_quiet", "forced"):
+            if prev_cut is not None:                 # every cut read past both ways: a quiet may be in a frame
                 p.a = _tick_before_buf(buf, start, s, ov)
-            if k in ("data_quiet", "forced"):
-                p.b = min(_tick_after(es, c, ov, upto), upto)
+            p.b = min(_tick_after(es, c, ov, upto), upto)
             yield p, cap_of(p.a, p.b)
             s, prev_cut = c, k
-        drop_before(_tick_before_buf(buf, start, s, ov) if prev_cut in ("data_quiet", "forced") else s)
+        drop_before(_tick_before_buf(buf, start, s, ov))
 
 
 def _tick_before_buf(buf: dict, start: int, e: int, k: int) -> int:

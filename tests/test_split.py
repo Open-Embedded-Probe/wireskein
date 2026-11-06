@@ -212,3 +212,11 @@ def test_a_data_line_ringing_at_a_slow_enough_clock_still_pairs_with_it(tmp_path
     cli.convert(argparse.Namespace(input=src, output=out, part=None, from_s=5.0, to_s=5.05, pins=None))
     (c,) = [c for c in analyze_file(out)["parts"][0]["claims"] if c["protocol"] == "rvswd"]
     assert c["roles"] == {"clk": "SWCLK", "dio": "SWDIO"} and c["verdict"] == "confirmed"
+
+
+def test_doubtful_is_the_same_with_items_written_out(tmp_path):
+    opts = "max_edges=20000,min_edges=2000,overlap_edges=500"
+    a = decode_file(D / "linke_v203_read_flash_4k.sr", RVSWD, split=opts)["parts"][0]["split"].get("doubtful")
+    b = decode_file(D / "linke_v203_read_flash_4k.sr", RVSWD, split=opts,
+                    items=tmp_path / "i.ndjson")["parts"][0]["split"].get("doubtful")
+    assert a == b and a

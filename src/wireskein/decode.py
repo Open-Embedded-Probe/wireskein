@@ -546,6 +546,7 @@ class _Items:
     def take(self, p, o: dict) -> None:
         from . import split as _split
         for j, b in enumerate(o["buses"]):
+            b["_owned"] = _owned(p, b)               # counted before the items are written and dropped
             res = b.get("result", {})
             for k, v in list(res.items()):
                 if isinstance(v, list) and not (k == "dm" and j in self.dm):
@@ -575,6 +576,13 @@ def _piece(pw, spec: dict, head: dict) -> dict:
 
 
 DOUBT = 0.3       # a piece whose bus fits worse than this is told as doubtful
+
+
+def _owned(p, b: dict) -> int:
+    """The items of a piece's bus that start in its own ticks and read well (not ok: false)."""
+    return sum(1 for v in b.get("result", {}).values() if isinstance(v, list)
+               for x in v if isinstance(x, dict) and isinstance(x.get("s"), int)
+               and p.s <= x["s"] + p.a < p.e and x.get("ok", True) is not False)
 
 
 def _join_part(outs: list, spec: dict, source, opts, noisy: dict) -> dict:
@@ -609,10 +617,14 @@ def _join_part(outs: list, spec: dict, source, opts, noisy: dict) -> dict:
     for p, o in outs:
         why = []
         for j, b in enumerate(o["buses"]):
+            # what it read well in its own ticks (the window reaches past them: its fit counts the neighbours' too)
+            owned = b["_owned"] if "_owned" in b else _owned(p, b)
             if not b.get("decoded"):
                 why.append(f"bus {j} ({b['protocol']}) not decoded")
             elif b.get("fit", {}).get("score", 1.0) < DOUBT:
                 why.append(f"bus {j} ({b['protocol']}) fits {b['fit']['score']}")
+            elif not owned:
+                why.append(f"bus {j} ({b['protocol']}) read nothing well in this piece's own ticks")
         if why and p.edges:
             doubtful.append({"s": p.s, "e": p.e, "seconds": [p.s / source.rate, p.e / source.rate],
                              "why": "; ".join(why)})
@@ -625,7 +637,7 @@ def _join_bus(per: list) -> dict:
     """A bus's results from the pieces, as one: items in the capture's ticks, each from the piece it starts in."""
     from . import split as _split
     first = next((b for _, b in per if b.get("decoded")), per[0][1])
-    out = {k: v for k, v in first.items() if k not in ("result", "uninterpreted", "fit")}
+    out = {k: v for k, v in first.items() if k not in ("result", "uninterpreted", "fit", "_owned")}
     out["decoded"] = any(b.get("decoded") for _, b in per)
     fits = [b.get("fit") for _, b in per if b.get("fit")]
     if fits:
