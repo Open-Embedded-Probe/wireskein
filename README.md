@@ -286,6 +286,15 @@ res = analyze(cap, {"protocols": ["spi"]})
 doc = export(res, cap)
 ```
 
+A long capture (gigabytes) is read a block at a time and analysed in pieces, memory bounded whatever its length
+([docs/long-captures.md](docs/long-captures.md)):
+
+```sh
+wireskein survey long.sr                                   # how each line moves over the whole, read once
+wireskein decode long.sr --spec spec.json --split workers=4 --items items.ndjson --out analysis.json
+wireskein analyze long.sr --pins SWCLK,SWDIO --split max_edges=500000
+```
+
 ## Stability
 
 Until version 1, breaking changes are allowed and backward compatibility is not kept.

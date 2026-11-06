@@ -25,6 +25,7 @@ wireskein の中を知らない道具が後で読みます。
 | `buses[].protocol` | 解析器の名前（`i2c`、`spi`、`uart` など） |
 | `buses[].pins` | 役割 → チャンネルの名前。どのピンもキャプチャに無ければならない（無ければエラー）。ちょうどこのピンの上の復号を使う |
 | `buses[].params` | 任意。指示として渡す（`uart` の `baud` など）。`spi` の `mode`（0〜3）は標本のエッジを決める。無ければ線からモードを読む（capture-test-guide §4.5）。active high の CS には `cs_active` |
+| `split` | 任意。長い区間を区切って読む方法（[長いキャプチャ](long-captures.ja.md) §3）: 辞書、`"key=value,..."`、`"off"` |
 | `buses[].layers` | 任意。最後の読みのほかに `result` に出す下の層の名前（`bits`: サンプルの縁 `t` とその値のすべて、`frames`、SWIO の `pulses`: パルスごとの始まり・幅・短い / 長い、`*`: すべて） |
 | `buses[].idle_s` | 任意。これより離れた活動は別のかたまり（§3.3）。既定はそのバスの 16 ビット分、ビットの無いバスは 1 ms |
 | `lines` | 変化をそのまま残す線（DRDY、INT など） |
@@ -52,7 +53,7 @@ wireskein の中を知らない道具が後で読みます。
 | `capture.tick_hz` | 1 秒の刻みの数（分子と分母） |
 | `capture.complete`、`lost` | キャプチャのもの（wireskein-format §3.4）。データが落ちたキャプチャは失敗。取れた区間の結果は参考に残す |
 | `capture.layout`、`parts` | 区間の並べ方と、その数 |
-| `parts[]` | 区間ごとに 1 つ。隙間なく続く区間の並びは、1 つとして読んで 1 つ（wireskein-format §3.4）。解析は隙間をまたがない |
+| `parts[]` | 区間ごとに 1 つ。隙間なく続く区間の並びは、1 つとして読んで 1 つ（wireskein-format §3.4）。解析は隙間をまたがない。変化が `max_edges` より多い区間は区切って読み、`split` が付く（[長いキャプチャ](long-captures.ja.md) §3.2） |
 
 ### 2.1 区間
 

@@ -25,6 +25,7 @@ the lines fit, whether analyze would have claimed it, and what was not read or n
 | `buses[].protocol` | An analyzer's name (`i2c`, `spi`, `uart`, ...) |
 | `buses[].pins` | Role → channel name. Every pin must be in the capture (else an error). The decode used is the one on exactly these pins |
 | `buses[].params` | Optional. Passed as hints (`baud` for `uart`, ...). For `spi`, `mode` (0–3) picks the sampling edge; without it the mode is read from the lines (capture-test-guide §4.5), `cs_active` for an active-high CS |
+| `split` | Optional. How a long part is read in pieces ([long captures](long-captures.md) §3): a dict, `"key=value,..."` or `"off"` |
 | `buses[].layers` | Optional. Lower layers to give in `result` beside the final one, by name (`bits`: every sampling edge `t` and its value; `frames`; SWIO's `pulses`: each pulse's start, width and short/long; `*`: all) |
 | `buses[].idle_s` | Optional. Activity apart by more than this is two bursts (§3.3). Default: 16 bit times of the bus, or 1 ms when it has none |
 | `lines` | Lines kept as their changes (DRDY, INT, ...) |
@@ -52,7 +53,7 @@ the lines fit, whether analyze would have claimed it, and what was not read or n
 | `capture.tick_hz` | Ticks a second, as numerator and denominator |
 | `capture.complete`, `lost` | As in the capture (wireskein-format §3.4). A capture that lost data is a failure: the results of the parts taken are kept for reference |
 | `capture.layout`, `parts` | How the parts are laid out, and how many |
-| `parts[]` | One entry a part, or a run of parts that follow on without a gap read as one (wireskein-format §3.4). Analysis never crosses a gap |
+| `parts[]` | One entry a part, or a run of parts that follow on without a gap read as one (wireskein-format §3.4). Analysis never crosses a gap. A part of more changes than the split's `max_edges` is read in pieces and has `split` ([long captures](long-captures.md) §3.2) |
 
 ### 2.1 A part
 

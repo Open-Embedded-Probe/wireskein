@@ -311,6 +311,15 @@ cap = load("capture.wireskein")                                     # .sr や .v
 doc = export(analyze(cap, {"protocols": ["spi"]}), cap)
 ```
 
+長いキャプチャ（数 GB）は、ブロックごとに読み、区切って分析します。長さによらず、メモリは決まった量で済みます
+（[docs/long-captures.ja.md](docs/long-captures.ja.md)）:
+
+```sh
+wireskein survey long.sr                                   # それぞれの線が全体でどう動くか。1 回読む
+wireskein decode long.sr --spec spec.json --split workers=4 --items items.ndjson --out analysis.json
+wireskein analyze long.sr --pins SWCLK,SWDIO --split max_edges=500000
+```
+
 ## 安定性
 
 版 1 までは、互換のない変更をしてよいものとし、後方互換は保ちません。
