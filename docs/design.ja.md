@@ -31,7 +31,7 @@
        ├ 非同期: RateBlocks（ビット時間ごとのブロック）→ Chars（ブレーク付き）→ UART、LIN、DMX512
        │    └ 時刻付きバイト列 → 行、NMEA、Modbus RTU、マーカー / TX・RX の組 → SCPI
        ├ パルス: PulseSymbols → SWIO
-       └ 単独の線そのもの（パルスの幅）: RGB LED（WS2812 など）、1-Wire、IR（NEC）
+       └ 単独の線そのもの（パルスの幅）: RGB LED（WS2812 など）、1-Wire、IR（NEC、実験的）
                     RVSWD・SWIO → DMI → RISC-V Debug Module
 ```
 

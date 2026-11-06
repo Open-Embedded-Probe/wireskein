@@ -31,7 +31,7 @@ Edges
        ├ Asynchronous: RateBlocks (blocks per bit time) → Chars (with breaks) → UART, LIN, DMX512
        │    └ Timestamped bytes → lines, NMEA, Modbus RTU, markers / TX・RX pairs → SCPI
        ├ Pulse: PulseSymbols → SWIO
-       └ The lone line itself (pulse widths): RGB LED (WS2812 and its kind), 1-Wire, IR (NEC)
+       └ The lone line itself (pulse widths): RGB LED (WS2812 and its kind), 1-Wire, IR (NEC, experimental)
                     RVSWD・SWIO → DMI → RISC-V Debug Module
 ```
 

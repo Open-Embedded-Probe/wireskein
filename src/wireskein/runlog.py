@@ -548,7 +548,7 @@ def onewire(pin: str, data=None, presence: bool | None = True, speed: str = "sta
 
 def ir(pin: str, frames: list[dict] | None = None, carrier_hz: float | None = None, carrier_rel: float = 0.05,
        timing_rel: float | None = 0.1, protocol: str = "nec", threshold=None) -> dict:
-    """An IR remote line, as the LED is driven (a carrier) or as a receiver gives it (idle high): frames
+    """Experimental (NEC only; other formats belong to a library made for them). An IR remote line, as the LED is driven (a carrier) or as a receiver gives it (idle high): frames
     [{"addr", "cmd"} or {"repeat": True}] in order (addr above 0xFF: NEC's extended address); every frame's
     command with its inverse; the carrier within carrier_rel (relative) of carrier_hz; every mark and space within
     timing_rel (relative) of NEC's lengths (None: not checked)."""

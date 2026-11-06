@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- (EN) IR (NEC) is marked experimental: IR remotes are not among WireSkein's main targets, NEC is the only format read; other formats belong to a library made for them (ESP32IRPulseKit and the like).
+- (JA) IR（NEC）を実験的とした: IR のリモコンは WireSkein の主な対象ではなく、読むのは NEC だけ。ほかの形式は、専用のライブラリ（ESP32IRPulseKit など）に任せる。
+
 - (EN) `qspi` checked on an OEP probe's ESP-IDF spi_master (0xEB 1-4-4, 0x6B 1-1-4, 0x3B 1-1-2 at 1 MHz; tests/data/qspi_truth).
 - (JA) `qspi` を、OEP のプローブの ESP-IDF の spi_master で確かめた（1 MHz の 0xEB 1-4-4、0x6B 1-1-4、0x3B 1-1-2。tests/data/qspi_truth）。
 
