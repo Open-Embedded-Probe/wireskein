@@ -104,3 +104,11 @@ def test_hardware_two_esp_idf_uarts(demo_cmd):
     assert (r["checks_passed"], r["checks_failed"]) == (4, 0), r
     assert [m["text"] for m in r["messages"]] == ["#1e PING -> OK", "#1f LED 1 -> OK", "!BUTTON 1",
                                                   "#20 READ TEMP -> OK 23.5", "#21 MOTOR 9 -> ERR 3"]
+
+
+def test_annotations_have_the_exchanges(demo_cmd):
+    from wireskein.annotate import build_file
+    doc = build_file(Path(__file__).parents[1] / "examples/protocols/demo_cmd_p4.wireskein")
+    (row,) = [r for r in doc["rows"] if r["name"] == "demo_cmd messages"]
+    assert [(i["text"], i["level"]) for i in row["items"]][-1] == ("#21 MOTOR 9 -> ERR 3", "warn")
+    assert all("e" in i for i in row["items"])

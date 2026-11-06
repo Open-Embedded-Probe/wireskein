@@ -56,6 +56,8 @@ def _text(protocol: str, it: dict) -> str:
 
 
 def _level(it: dict) -> str:
+    if it.get("level") in ("ok", "warn", "error"):              # a protocol of one's own says it
+        return it["level"]
     if it.get("ok") is False or it.get("error"):
         return "error"
     acks = it.get("acks")
@@ -103,6 +105,26 @@ def rows_of(doc: dict) -> list[dict]:
             row["score"] = claim["score"]
         if near:
             row["near"] = near
+        if len(items) > MAX_ITEMS:
+            row["truncated"] = len(items)
+        rows.append(row)
+    # pairs read together (a command line and its answers): scpi's exchanges have no times; a protocol of one's
+    # own on a UART pair has messages with them
+    for rel in doc.get("relations", []):
+        items = rel.get("messages")
+        if not (isinstance(items, list) and items and isinstance(items[0], dict) and "s" in items[0]):
+            continue
+        out = []
+        for it in items[:MAX_ITEMS]:
+            a = {"s": int(it["s"]), "text": _text(rel["protocol"], it), "level": _level(it),
+                 "detail": {k: v for k, v in it.items() if k not in ("s", "e")}}
+            if "e" in it:
+                a["e"] = int(it["e"])
+            out.append(a)
+        roles = rel.get("roles", {})
+        row = {"name": f"{rel['protocol']} messages", "items": out, "near": next(iter(roles.values()), None)}
+        if isinstance(rel.get("score"), (int, float)):
+            row["score"] = rel["score"]
         if len(items) > MAX_ITEMS:
             row["truncated"] = len(items)
         rows.append(row)

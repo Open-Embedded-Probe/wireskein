@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- (EN) Annotations: a protocol's messages on a UART pair (`relations`) are a row too, and a message's `level` (`ok`, `warn`, `error`) is its colour, as extending §3 says (it was not read).
+- (JA) 注釈: UART の組の上のプロトコルのメッセージ（`relations`）も行にした。メッセージの `level`（`ok`、`warn`、`error`）を、独自の分析 §3 のとおり色にした（読んでいなかった）。
+
 - (EN) Protocols of others can ride on `"uart_pair"`: two UART lines the analysis pairs as a command line and its answers, both lines' messages given in time order; shown under the part's `relations`, checked by `protocol(NAME, "uart_pair", {"a": TX, "b": RX})`. Examples: `examples/protocols/demo_cmd.py` (text commands and answers, the pairing as the evidence; `demo_cmd_p4.wireskein`: sent by an OEP probe's two ESP-IDF UART drivers) and `examples/checks/demo_settle.py` (a check kind: a line that must settle, its bounces as notices); the guides (protocols §3.1, extending §4.1) say which shape fits what.
 - (JA) ほかの人のプロトコルが `"uart_pair"` に乗れるようにした: 分析が命令の線とその応答として組にした 2 本の UART で、両方の線のメッセージを時刻の順に渡す。パートの `relations` の下に出て、`protocol(NAME, "uart_pair", {"a": TX, "b": RX})` で確かめる。見本: `examples/protocols/demo_cmd.py`（テキストの命令と応答。組であることが証拠。`demo_cmd_p4.wireskein` は OEP のプローブの 2 つの ESP-IDF の UART ドライバで送ったもの）と `examples/checks/demo_settle.py`（検査の種類: 落ち着かなければならない線、注意としてのチャタリング）。ガイド（独自のプロトコル §3.1、独自の分析 §4.1）に、どの形に何が合うかを書いた。
 
