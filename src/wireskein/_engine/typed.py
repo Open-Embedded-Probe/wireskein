@@ -149,12 +149,27 @@ def sample_edge_for(cap, clock: str, data: tuple[str, ...]) -> list[str]:
     return ["rise" if a >= b else "fall"]
 
 
+RING = 3              # samples: a data line's pulse shorter than this at a slow clock is a reflection's ringing
+
+
 def sync_bits(cap, sv: Survey, clock: str, data: tuple[str, ...], select: str | None, edge: str | None = None) -> SyncBits:
     c = cap.channel(clock)
     edge = edge or sample_edge_for(cap, clock, data)[0]
     lv = K.edge_levels(c.edges, c.initial)
     t = c.edges[lv == (1 if edge == "rise" else 0)]
-    bits = np.stack([cap.channel(d).level_at(t) for d in data]).astype(np.uint8)
+    # a data line ringing at the sampling edge (a reflection: pulses of a sample or two) is read as it settles, its
+    # pulses shorter than RING samples dropped, when the clock is slow enough that no bit is that short
+    period = float(np.median(np.diff(t))) if len(t) > 1 else 0.0
+    ring = RING if period >= 4 * RING else 0
+    rows = []
+    for d in data:
+        ch = cap.channel(d)
+        if ring and ch.step == 1:
+            e = K.deglitch(np.asarray(ch.edges), ring)
+            rows.append(((ch.initial + np.searchsorted(e, t, side="right")) & 1).astype(np.uint8))
+        else:
+            rows.append(ch.level_at(t))
+    bits = np.stack(rows).astype(np.uint8)
     return SyncBits(clock, data, select, edge, t, bits, K.burst_split(t))
 
 

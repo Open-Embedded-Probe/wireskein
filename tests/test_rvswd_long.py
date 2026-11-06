@@ -237,3 +237,15 @@ def test_burst_reads_are_the_flash_ch32rv_read():
     words = struct.unpack("<1024I", (D / "linke_v203_read_flash_4k.bin").read_bytes())
     mem = {e["addr"]: e["value"] for e in r["dm"] if e["op"] == "MEMR"}
     assert [mem.get(0x08000000 + 4 * i) for i in range(1024)] == list(words)
+
+
+def test_data_ringing_at_the_clock_edge_is_read_as_it_settles():
+    # a tap's reflection rings SWDIO for a few samples right at SWCLK's rising edge (a change launched by that edge):
+    # read at the edge itself, the first query's host data changed run to run (0x11, 0x10, 0x01, 0x18); read as it
+    # settles it is 0x19 in every run, as wch-protocols' rvswd.py (with its hold filter) reads it
+    from wireskein.decode import decode_file
+    doc = decode_file(D / "linke_l103_repeat1_target_info.sr",
+                      {"buses": [{"protocol": "rvswd", "pins": {"clk": "SWCLK", "dio": "SWDIO"}}]})
+    dmi = doc["parts"][0]["buses"][0]["result"]["dmi"]
+    first = next(x for x in dmi if x["form"] == "long")["bits"]
+    assert (int(first[0:7], 2), int(first[7:39], 2), first[39:41]) == (0x11, 0x19, "00")

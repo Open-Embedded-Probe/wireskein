@@ -112,7 +112,7 @@ def layers_of(n) -> dict:
                        **({k: x[k] for k in ("form", "status", "answered", "late", "answer_delay", "answer_delay_ns", "period_ns", "bits")
                            if k in x} if a == "rvswd" else {}),
                        **({k: x[k] for k in ("fast", "rw_low_ns", "short_max_ns", "long_min_ns", "short_median_ns",
-                                    "long_median_ns", "pitch_ns") if k in x}
+                                    "long_median_ns", "space_ns", "pitch_1_ns", "pitch_0_ns") if k in x}
                           if a == "swio" else {})}
                       for x in n.output.items]
         dm = [ch for ch in n.children if ch.analyzer == "riscv_dm"]

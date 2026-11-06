@@ -177,6 +177,19 @@ class SwioPlugin:
         ns = 1e9 / c.cap.rate
         tx, lens = [], []
 
+        def _pitches(a, b):
+            """The space between pulses (idle level, the same whatever the bit), and the period from a pulse's start
+            to the next one's after a 1 (short) and after a 0 (long): a pulse's period is its low and that space, so
+            a 0's is longer."""
+            if b - a < 2:
+                return {}
+            st, w, s = ps.start[a:b], ps.width[a:b], ps.short[a:b]
+            d = np.diff(st)
+            out = {"space_ns": round(float(np.median(d - w[:-1])) * ns, 1)}
+            for key, m in (("pitch_1_ns", s[:-1]), ("pitch_0_ns", ~s[:-1])):
+                out[key] = round(float(np.median(d[m])) * ns, 1) if m.any() else None
+            return out
+
         def widths(a, b, rw=None):
             """How the frame's pulses sat against the split: the longest short one and the shortest long one (a
             margin), and the R/W bit's own (the bit a target misreads when its long low shrinks), in ns."""
@@ -185,7 +198,7 @@ class SwioPlugin:
                    "long_min_ns": round(float(w[~s].min()) * ns, 1) if (~s).any() else None,
                    "short_median_ns": round(float(np.median(w[s])) * ns, 1) if s.any() else None,
                    "long_median_ns": round(float(np.median(w[~s])) * ns, 1) if (~s).any() else None,
-                   "pitch_ns": round(float(np.median(np.diff(ps.start[a:b]))) * ns, 1) if b - a > 1 else None}
+                   **_pitches(a, b)}
             if rw is not None:
                 out["rw_low_ns"] = round(float(ps.width[rw]) * ns, 1)
             return out
