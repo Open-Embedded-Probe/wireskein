@@ -380,7 +380,7 @@ def _protocols(roots: list[Node]) -> None:
     if not protos:
         return
     for n in roots:
-        if n.output is None or n.analyzer not in P.BUSES:
+        if n.output is None or n.analyzer == "uart_pair":
             continue
         mine = [p for p in protos.values() if n.analyzer in p.over]
         if not mine:

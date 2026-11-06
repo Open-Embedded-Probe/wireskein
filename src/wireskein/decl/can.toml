@@ -21,7 +21,7 @@ fields = [
   { name = "r1",    width = 1, when = "ide", hide = true },
   { name = "r0",    width = 1, hide = true },
   { name = "dlc",   width = 4 },
-  { name = "data",  width = "0 if (rtr if ide else rtr_srr) else 8 * min(dlc, 8)" },
+  { name = "data",  width = "0 if (rtr if ide else rtr_srr) else 8 * min(dlc, 8)", format = "hex" },
   { name = "crc",   width = 15, hide = true },
   { name = "crc_delim", width = 1, expect = 1, hide = true },
   { name = "ack",   width = 1, enum = { "0" = true, "1" = false } },

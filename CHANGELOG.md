@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- (EN) Protocols of others ride on CAN, LIN and DMX512 frames and on a protocol of one's own definition (`over = ("can", "lin")`, or the definition's name), as on UART, SPI and I2C; example `examples/protocols/demo_telemetry.py`. **Breaking (analysis format):** CAN's `data` is hex (the bytes the DLC carries; it was one integer, losing leading zeros), LIN's `frames` are `{"s", "id", "data", "ok"}` and DMX512's `packets` `{"s", "start_code", "data"}` (they were bare pairs and strings without times).
+- (EN) File formats of others are read when a package adds them (entry point group `wireskein.formats`, or `wireskein.formats.register`): a file that is no WireSkein file, `.sr` or VCD goes to them, and analyze, decode, states, convert and the viewer read it. Example `examples/formats/saleae_csv.py` (a Saleae Logic 2 digital CSV).
+- (JA) ほかの人のプロトコルが、UART、SPI、I2C と同じく、CAN、LIN、DMX512 のフレームと、自分の定義のプロトコルの上に乗れるようにした（`over = ("can", "lin")`、または定義の名前）。見本 `examples/protocols/demo_telemetry.py`。**互換のない変更（分析の形式）:** CAN の `data` は 16 進（DLC が運ぶバイト。前は 1 つの整数で、先頭の 0 が消えていた）、LIN の `frames` は `{"s", "id", "data", "ok"}`、DMX512 の `packets` は `{"s", "start_code", "data"}`（前は時刻の無い組と文字列）。
+- (JA) パッケージが足したほかのファイルの形式を読むようにした（entry point の `wireskein.formats`、または `wireskein.formats.register`）。WireSkein のファイル、`.sr`、VCD のどれでもないファイルはそこに回り、analyze、decode、states、convert、ビューアが読む。見本 `examples/formats/saleae_csv.py`（Saleae Logic 2 のデジタルの CSV）。
+
 - (EN) Annotations: a protocol's messages on a UART pair (`relations`) are a row too, and a message's `level` (`ok`, `warn`, `error`) is its colour, as extending §3 says (it was not read).
 - (JA) 注釈: UART の組の上のプロトコルのメッセージ（`relations`）も行にした。メッセージの `level`（`ok`、`warn`、`error`）を、独自の分析 §3 のとおり色にした（読んでいなかった）。
 

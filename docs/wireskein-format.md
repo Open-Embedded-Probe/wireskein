@@ -393,6 +393,7 @@ Row:
     - 1-bit variables become logic; vectors become one channel per bit (`NAME[k]`). x and z are read as 0, and their count goes into `meta.vcd_x_or_z`.
     - `real` is read as analog only when the change interval is constant (a sampled signal). Others are not read; their names are shown (so as not to create samples that do not exist).
   - sigrok reads `$timescale` as the sample rate (100 MHz in the 20 MHz example above; the change positions are the same).
+- **Other formats**: a package adds a reader for one (entry point group `wireskein.formats`, [extending](extending.md) §2): a file none of the above is goes to it, and everything that reads a capture reads it; `wireskein convert` keeps it as a WireSkein file. Example: `examples/formats/saleae_csv.py` (a Saleae Logic 2 digital CSV).
 - **Run (record)**: a test run saves each capture as `cNNNN.wireskein` (run format `wireskein-run/1`, [run format](run-format.md)). If a run kept appending to one zip, a crash midway would leave the zip's central directory unwritten and make the whole thing unreadable. So a run stays a directory, with a separate file for each capture.
 
 ## 7. Versioning

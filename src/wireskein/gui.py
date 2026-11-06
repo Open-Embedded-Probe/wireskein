@@ -28,7 +28,7 @@ from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import __version__, _fileformat as fileformat
+from . import __version__, _fileformat as fileformat, formats
 
 API = 1
 COOKIE = "wireskein_token"
@@ -243,7 +243,7 @@ class _Handler(BaseHTTPRequestHandler):
 
     def _capture_path(self, rel: str) -> Path:
         p = self._inside(self.server_gui.root, rel)
-        if not p.is_file() or fileformat.sniff(p) is None:
+        if not p.is_file() or formats.kind(p) is None:
             raise FileNotFoundError(rel)
         return p
 
@@ -278,7 +278,7 @@ class _Handler(BaseHTTPRequestHandler):
 
     def _capture(self, rel: str) -> None:
         p = self._inside(self.server_gui.root, rel)
-        kind = fileformat.sniff(p) if p.is_file() else None
+        kind = formats.kind(p) if p.is_file() else None
         if kind is None:
             raise FileNotFoundError(rel)
         if kind == "wireskein":
@@ -303,7 +303,7 @@ class _Handler(BaseHTTPRequestHandler):
             if len(p.relative_to(base).parts) > 4:
                 continue
             r = p.relative_to(root).as_posix()
-            if p.is_file() and p.name != "run.json" and fileformat.sniff(p):
+            if p.is_file() and p.name != "run.json" and formats.kind(p):
                 link = "/?file=/files/" + urllib.parse.quote(r)
                 rows.append(f'<li><input type="checkbox" value="/files/{html.escape(urllib.parse.quote(r))}"> '
                             f'<a href="{html.escape(link)}">{html.escape(r)}</a> '

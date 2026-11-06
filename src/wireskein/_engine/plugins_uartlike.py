@@ -24,27 +24,28 @@ def _split_on_breaks(ch):
 def lin(ch) -> dict:
     """LIN: break, sync 0x55, PID with parity, data, enhanced checksum."""
     frames, checks = [], {"sync": 0, "pid_parity": 0, "checksum": 0, "frames": 0}
-    for _, v, ok in _split_on_breaks(ch):
+    for t, v, ok in _split_on_breaks(ch):
         if len(v) < 3:
             continue
         checks["frames"] += 1
         sync, pid, data, cs = int(v[0]), int(v[1]), bytes(int(x) for x in v[2:-1]), int(v[-1])
-        checks["sync"] += sync == 0x55
-        checks["pid_parity"] += lin_pid(pid & 0x3F) == pid
-        checks["checksum"] += lin_checksum(data, pid) == cs
-        frames.append([pid & 0x3F, data.hex()])
+        good = (sync == 0x55, lin_pid(pid & 0x3F) == pid, lin_checksum(data, pid) == cs)
+        checks["sync"] += good[0]
+        checks["pid_parity"] += good[1]
+        checks["checksum"] += good[2]
+        frames.append({"s": t, "id": pid & 0x3F, "data": data.hex(), "ok": all(good)})
     return {"frames": frames, "checks": checks}
 
 
 def dmx512(ch) -> dict:
     """DMX512: break, start code, up to 512 slots."""
     packets, checks = [], {"packets": 0, "start_code_0": 0, "framing_ok": 0, "chars": 0}
-    for _, v, ok in _split_on_breaks(ch):
+    for t, v, ok in _split_on_breaks(ch):
         if len(v) < 2:
             continue
         checks["packets"] += 1
         checks["start_code_0"] += int(v[0]) == 0
         checks["framing_ok"] += int(ok.sum())
         checks["chars"] += len(ok)
-        packets.append(bytes(int(x) for x in v[1:]).hex())
+        packets.append({"s": t, "start_code": int(v[0]), "data": bytes(int(x) for x in v[1:]).hex()})
     return {"packets": packets, "checks": checks}

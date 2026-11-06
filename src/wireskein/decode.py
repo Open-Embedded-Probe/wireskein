@@ -54,7 +54,20 @@ def load(path: str | Path, part: int | None = None) -> Capture:
     if kind == "vcd":
         from ._engine.vcdio import read_vcd
         return read_vcd(path)
-    raise ValueError(f"{path}: not a WireSkein file, a sigrok session (.sr) or a VCD")
+    from . import formats
+    name = formats.kind(path)
+    if name is None:
+        raise ValueError(f"{path}: not a WireSkein file, a sigrok session (.sr), a VCD, or a format added "
+                         f"(wireskein.formats: {', '.join(formats.registered()) or 'none'})")
+    cap = formats.read(path, name)
+    if len(cap.parts) > 1 and part is None:
+        raise ValueError(f"{path} ({name}) has {len(cap.parts)} parts: name one (part, from 0)")
+    k = part or 0
+    v = cap.parts[k].view()
+    v.meta.update(file=str(path), format=name, complete=cap.complete, lost=list(cap.lost), part=k,
+                  n_parts=len(cap.parts), capture_id=cap.id, **{key: val for key, val in cap.meta.items()
+                                                                if key not in v.meta})
+    return v
 
 
 def save(path: str | Path, cap: Capture, **meta) -> Path:
@@ -314,7 +327,7 @@ def analyze_file(path: str | Path, hints: dict | None = None, mode: str = "final
         firsts = [k for k, _, _ in runs]
         spans = [span for _, span, _ in runs]
     else:
-        v = load(path)
+        v = load(path, part)
         tick = Fraction(v.meta.get("tick_hz") or Fraction(v.rate).limit_denominator(10**9))
         raw = {"id": v.meta.get("capture_id"), "tick_hz": [tick.numerator, tick.denominator],
                "complete": v.meta.get("complete", True), "lost": v.meta.get("lost", []),

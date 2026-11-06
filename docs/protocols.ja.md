@@ -11,10 +11,10 @@ WireSkein は UART、SPI、I2C を自分で復号します。その上に乗る�
 | 属性 | 意味 |
 | --- | --- |
 | `name` | 出すときの名前。英数字と `_`。WireSkein の層の名前とは別のもの |
-| `over` | 乗るバス。`"uart"`、`"spi"`、`"i2c"`、`"uart_pair"`（2 本の UART、§3.1）のタプル |
+| `over` | 乗るバス。`"uart"`、`"spi"`、`"i2c"`、`"uart_pair"`（2 本の UART、§3.1）、`"can"`、`"lin"`、`"dmx512"`、または自分の定義のプロトコルの名前（§3.2）のタプル |
 | `decode(bus)` | 復号したバス 1 本を読み、`{"messages": [...], "checks_passed": n, "checks_failed": m}` を返す |
 
-`bus` は、分析が書き出す形のバスです（[分析の形式](analysis-format.ja.md) §4）: `roles`（役割ごとのピン）、`tick_hz`、その層。UART なら `bytes`（`{"s": [tick...], "hex": "..."}`）、`chars`（それぞれ `{"s", "value", "ok"}`）、`breaks`。SPI なら `transfers`（それぞれ `{"s", "e", <ピン>: 16 進}`）。I2C なら `transactions`。UART の組なら、両方の線の `messages`（§3.1）。プロトコルは WireSkein の内部の型を見ないので、分析の形式が変わらない限り動き続けます。
+`bus` は、分析が書き出す形のバスです（[分析の形式](analysis-format.ja.md) §4）: `roles`（役割ごとのピン）、`tick_hz`、その層。UART なら `bytes`（`{"s": [tick...], "hex": "..."}`）、`chars`（それぞれ `{"s", "value", "ok"}`）、`breaks`。SPI なら `transfers`（それぞれ `{"s", "e", <ピン>: 16 進}`）。I2C なら `transactions`。UART の組なら、両方の線の `messages`（§3.1）。CAN、LIN、定義なら、その `frames`（§3.2）。プロトコルは WireSkein の内部の型を見ないので、分析の形式が変わらない限り動き続けます。
 
 - **メッセージ**は、ただの JSON の値です。それぞれの最初の tick を `"s"` に入れると、読み手とビューアがそこを見つけられます。
 - **チェック**が証拠です: チェックサム、合う長さ、数えていく順番の番号。でたらめのバイトでは偶然にしか通らないチェックが、そのバスがこのプロトコルを運んでいることを言います。分析は、通った数が多く失敗が少ないほど、バスの確かさを上げ（Modbus RTU と同じ）、チェックが通ったときだけ、そのプロトコルをバスの最終の読みとして出します。チェックの無いプロトコルは何も出しません: 証拠が無ければ、どのバイトも何にでも読めるからです。
@@ -83,6 +83,12 @@ demo_link = "demo_link:PROTOCOL"
 
 その試験（`tests/test_demo_cmd.py`）は、読み手とは別の符号器で、やり取りを 2 本の線に乗せます。実機では、`examples/protocols/demo_cmd_p4.wireskein` が、OEP のプローブが 2 つの ESP-IDF の UART ドライバ（115200 8N1。ホストと機器がそれぞれ自分の線）で送ったもので、それぞれが送ったものは `demo_cmd_p4.truth.json` にあります。demo_cmd が無いと、分析は 2 本の UART を読むだけで、その上には何も出しません。あると、5 つのやり取りと、命令に当たる 4 つの応答を読みます。
 
+## 3.2 CAN、LIN、自分の定義のフレームの上: demo_telemetry
+
+プロトコルは、分析がもう読んでいるフレームの上にも乗れます: `"can"`、`"lin"`、`"dmx512"`、または自分の定義のプロトコル（§5）の名前。そのとき `bus` は、そのプロトコルの `frames`（DMX512 は `packets`）を、分析の形式 §3.2 のとおりに持ちます: CAN は `{"s", "id", "ide", "dlc", "data": 16 進, "ack", "ok"}`、LIN は `{"s", "id", "data": 16 進, "ok"}`、定義はその欄。CANopen、J1939、OBD-II / UDS、LIN のノードの信号などは、ここに乗せます。
+
+`examples/protocols/demo_telemetry.py` は、このガイドのために作ったものです: どのノードも、自分の識別子のフレームで測った値を送り、データは `seq | 値... | check`、check は `(識別子 + その前のバイト) & 0xFF` と `0x5A` の排他的論理和です。1 つの `decode` が CAN も LIN も読みます（`over = ("can", "lin")`）。check が合うフレームはチェックが通ったもので、ノードの前の seq から続かない seq は見せます（`level: "warn"`）。メッセージは、demo_link が UART の下に出るのと同じく、CAN や LIN のバスの `result` の下に出ます。その試験（`tests/test_demo_telemetry.py`）は、自分の符号器でフレームを線に乗せます。
+
 ## 4. 試験で確かめる
 
 ```python
@@ -93,7 +99,7 @@ with rec.section(2, "ping", expect=[protocol("demo_link", "uart", {"data": "PA2"
     ...
 ```
 
-- `bus` は `"uart"`、`"spi"`、`"i2c"`、`"uart_pair"`、`roles` は役割ごとのピン（`{"data": ...}`、`{"clk", "mosi", "miso", "cs"}`、`{"scl", "sda"}`、`{"a": TX, "b": RX}`）です。組では、組の点数にかかわらず 2 本を一緒に読みます: `protocol("demo_cmd", "uart_pair", {"a": "PA2", "b": "PA3"}, baud=115200, messages=[{"verb": "PING", "status": "OK"}])`。
+- `bus` は `"uart"`、`"spi"`、`"i2c"`、`"uart_pair"`、`"can"`、`"lin"`、定義の名前、`roles` は役割ごとのピン（UART、CAN、LIN は `{"data": ...}`、`{"clk", "mosi", "miso", "cs"}`、`{"scl", "sda"}`、`{"a": TX, "b": RX}`）です。組では、組の点数にかかわらず 2 本を一緒に読みます: `protocol("demo_cmd", "uart_pair", {"a": "PA2", "b": "PA3"}, baud=115200, messages=[{"verb": "PING", "status": "OK"}])`。
 - `messages` は順に比べ、それぞれ書いたキーだけを比べます（`"s"` など書かないキーは比べません）。`messages` が無ければ、メッセージが 1 つ以上あること。
 - チェックの失敗は `checks_failed_max`（既定 0）まで。
 - これで言えないきまりは、自分の検査（[ガイド](capture-test-guide.ja.md) §4.10）か、試験の判定（`rec.result`、ガイド §3.3）にします。

@@ -3,13 +3,16 @@
 A protocol is an object with
 
     name     the name it is shown under ("acme_link"): letters, digits and "_", not one of WireSkein's own
-    over     the buses it rides on: a tuple of "uart", "spi", "i2c", "uart_pair"
+    over     the buses it rides on: a tuple of "uart", "spi", "i2c", "uart_pair", "can", "lin", "dmx512", or the
+             name of a protocol defined in a definitions directory (add_definitions): it gets that one's frames
     decode(bus) -> {"messages": [...], "checks_passed": int, "checks_failed": int}
 
 `bus` is the bus as the analysis exports it (docs/analysis-format.md §4): its `roles` (pin of each role), `tick_hz`,
 and its layers - for UART `bytes` ({"s": [tick...], "hex": "..."}) and `chars` (each {"s", "value", "ok"}) and
 `breaks`; for SPI `transfers` (each {"s", "e", <pin>: hex}); for I2C `transactions` (each {"s", "e", "addr", "rw",
-"bytes", "acks", "start_cond", "end_cond", ...}); for "uart_pair" (two UART lines the analysis pairs as a command
+"bytes", "acks", "start_cond", "end_cond", ...}); for CAN `frames` (each {"s", "id", "ide", "dlc", "data": hex,
+"ack", "ok"}); for LIN `frames` (each {"s", "id", "data": hex, "ok"}); for DMX512 `packets` (each {"s",
+"start_code", "data": hex}); for a protocol defined in a definitions directory its `frames` (its fields); for "uart_pair" (two UART lines the analysis pairs as a command
 line and its answers, at one rate) `roles` {"a": pin, "b": pin} and `messages`, both lines' in time order, each
 {"pin", "s", "e", "hex", "text"} (a line's characters up to a pause of more than 3 characters). It never sees WireSkein's internal types, so a protocol keeps
 working as long as the analysis format does.
@@ -34,7 +37,7 @@ __all__ = ["add_definitions", "definitions", "register", "registered", "load"]
 _REGISTERED: dict[str, object] = {}
 _LOADED = False
 _DIRS: list = []                       # definition directories added (add_definitions, wireskein.definitions)
-BUSES = ("uart", "spi", "i2c", "uart_pair")
+BUSES = ("uart", "spi", "i2c", "uart_pair", "can", "lin", "dmx512")   # and any protocol a definition adds
 _RESERVED = {"lines", "nmea", "modbus_rtu", "markers", "bytes", "chars", "breaks", "transfers", "transactions",
              "words", "bits", "frames", "packets", "sd", "devices", "modes", "modes_ok"}
 
@@ -47,8 +50,9 @@ def register(protocol) -> None:
     if name in _RESERVED:
         raise ValueError(f"{name!r} is a layer of WireSkein's own")
     over = tuple(getattr(protocol, "over", ()))
-    if not over or any(b not in BUSES for b in over):
-        raise ValueError(f"{name}: over must name buses among {', '.join(BUSES)}, not {over!r}")
+    if not over or not all(isinstance(b, str) and re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", b) for b in over):
+        raise ValueError(f"{name}: over must name buses ({', '.join(BUSES)}, or a protocol defined in a definitions "
+                         f"directory), not {over!r}")
     if not callable(getattr(protocol, "decode", None)):
         raise ValueError(f"{name}: decode(bus) is missing")
     _REGISTERED[name] = protocol

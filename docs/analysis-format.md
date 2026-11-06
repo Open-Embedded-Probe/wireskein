@@ -102,6 +102,9 @@ The layers of analyze's export (`--mode final`, at `depth`), with ticks from the
 | A protocol of your own ([protocols](protocols.md)) | Under its bus, by its name: `{"messages", "checks_passed", "checks_failed"}`, shown when its checks held, and then the bus's final reading |
 | `spi` | `transfers`: `s`, `e` (the first and last sampled bit), and each data pin's bytes in hex under its channel name. `sd` beside it when SD commands were read (capture-test-guide §4.8). With a CS, `modes`: the two modes of SCK's idle level, each with `readable` (no data line changes at its sampling edges) and the `bytes` it reads (MSB first); `modes_ok` the readable ones. One readable mode tells the mode; readable modes with the same bytes need not be told apart |
 | `uart` | `lines`, `nmea`, `modbus_rtu` (when read) and `bytes` (`{"s": [...], "hex"}`) |
+| `can` | `frames`: `s`, `id`, `ide` (1: an extended identifier), `dlc`, `data` (hex, the bytes the DLC carries), `ack`, `ok` |
+| `lin` | `frames`: `s` (the break), `id`, `data` (hex), `ok` (sync, identifier parity and checksum held) |
+| `dmx512` | `packets`: `s` (the break), `start_code`, `data` (hex, the slots) |
 | others | as `analyze`'s export |
 
 A higher reading keeps its lower one beside it (`sd` and `transfers`). With `depth: "device"`, `devices` lists the

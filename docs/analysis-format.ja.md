@@ -101,6 +101,9 @@ analyze の書き出し（`--mode final`、`depth` まで）の層。刻みは�
 | 独自のプロトコル（[独自のプロトコル](protocols.ja.md)） | バスの下に、その名前で: `{"messages", "checks_passed", "checks_failed"}`。チェックが通ったときに出て、そのときはバスの最終の読み |
 | `spi` | `transfers`: `s`、`e`（最初と最後の標本のビット）と、データのピンごとのバイト（16 進、チャンネルの名前の下）。SD のコマンドを読めたら、横に `sd`（capture-test-guide §4.8）。CS があれば `modes`: SCK の待機のレベルに合う 2 つのモードそれぞれの `readable`（そのサンプルの辺でどのデータ線も変わらない）と、そのモードで読んだ `bytes`（MSB から）。`modes_ok` は読めるもの。読めるモードが 1 つならモードが決まる。読めるモードのバイトが同じなら、見分けなくてよい |
 | `uart` | `lines`、`nmea`、`modbus_rtu`（読めたもの）と `bytes`（`{"s": [...], "hex"}`） |
+| `can` | `frames`: `s`、`id`、`ide`（1: 拡張の識別子）、`dlc`、`data`（16 進。DLC が運ぶバイト）、`ack`、`ok` |
+| `lin` | `frames`: `s`（break）、`id`、`data`（16 進）、`ok`（sync、識別子のパリティ、チェックサムが合う） |
+| `dmx512` | `packets`: `s`（break）、`start_code`、`data`（16 進。スロット） |
 | ほか | `analyze` の書き出しと同じ |
 
 上の層を読めても、下の層は横に残す（`sd` と `transfers`）。`depth: "device"` では、`devices` にバスの上で

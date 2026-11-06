@@ -10,6 +10,8 @@ WireSkein は、キャプチャを読み手に要るもの（載っているバ�
 | --- | --- | --- |
 | UART、SPI、I2C に乗るプロトコル（命令のフレーム、報告、パケット）を分析で読む | Python のプロトコルのオブジェクト（`wireskein.protocols`） | [独自のプロトコル](protocols.ja.md) §1〜§4 |
 | UART の 1 本のテキストの命令と、もう 1 本の応答（AT コマンド、シェル） | `"uart_pair"` に乗るプロトコルのオブジェクト | [独自のプロトコル](protocols.ja.md) §3.1 |
+| CAN や LIN のフレームの上の層（CANopen、J1939、OBD-II / UDS、ノードの信号）、または自分の定義のプロトコルの上 | `"can"`、`"lin"`、定義の名前に乗るプロトコルのオブジェクト | [独自のプロトコル](protocols.ja.md) §3.2 |
+| WireSkein が読まないファイルの形式のキャプチャ（ほかのアナライザの書き出し、研究室の独自のログ） | ファイルの形式（`wireskein.formats`） | §2、`examples/formats/saleae_csv.py` |
 | それ自体がバスのプロトコル（クロックとデータ、または 1 本の NRZ の線の上の独自のフレーム） | 定義のディレクトリの TOML の定義 | [独自のプロトコル](protocols.ja.md) §5 |
 | I2C や SPI の機器のレジスタや命令に名前を付ける | 定義のディレクトリの `devices/` のデバイスの定義 | [デバイスの定義](../src/wireskein/decl/devices/README.ja.md) |
 | 自分の試験のログのマーカーの行を区間として読む | 定義のディレクトリの `markers/` のマーカーの方言 | [マーカー](markers.ja.md) §4 |
@@ -35,6 +37,7 @@ WireSkein は、キャプチャを読み手に要るもの（載っているバ�
 | `wireskein.definitions` | 定義のディレクトリ（プロトコル、デバイスの定義、マーカーの方言） | それを持つディレクトリの module、またはそのパスを返す callable |
 | `wireskein.checks` | 検査の種類 | 検査の関数、または `.check`（と `.notices`）を持つオブジェクト |
 | `wireskein.sources` | `wireskein capture` の取得元 | `capture(target, request)` を持つ module |
+| `wireskein.formats` | キャプチャを読むところ（analyze、decode、states、convert、ビューア）すべてで読むファイルの形式 | `name`、`sniff(head, path)`、`wireskein.capture.Capture` を返す `read(path)` を持つオブジェクト |
 
 ```toml
 [project.entry-points."wireskein.protocols"]
@@ -66,6 +69,7 @@ acme = "acme_wireskein.definitions"
 | UART 1 本の上のバイナリのフレーム（始まりのバイト、長さ、CRC） | `"uart"` に乗るプロトコル。`bytes` を読む | CRC、長さ | `demo_link` |
 | 同じフレームを SPI の窓で。要求は MOSI、応答は MISO | 同じプロトコルで `over = ("uart", "spi")`。`transfers` を読む | CRC、応答の seq | `demo_link` |
 | 1 本の線のテキストの命令と、もう 1 本の応答（AT コマンド、シェル） | `"uart_pair"` に乗るプロトコル。両方の線の `messages` を読む | 命令に当たる応答 | `demo_cmd` |
+| CAN や LIN のフレームの中の信号 | `"can"` / `"lin"` に乗るプロトコル。`frames` を読む | チェックのバイト、カウンタ | `demo_telemetry` |
 | I2C や SPI のチップのレジスタ | デバイスの定義 | 正しく読める識別のレジスタ | [デバイスの定義](../src/wireskein/decl/devices/README.ja.md) |
 | 1 本の線、またはクロックとデータの上の独自のフレーム | TOML の定義 | 決まった値の欄、CRC | `demo_wire` |
 | 試験が使う、どの線にもあてはまるきまり（落ち着く線、出来事の順番） | 検査の種類 | 測った値、その tick の注意 | `demo_settle` |
@@ -82,6 +86,8 @@ acme = "acme_wireskein.definitions"
 | `tests/test_protocols.py` | 両方の見本を、別に作った信号で確かめる試験。プロトコルの検査、注釈、印 |
 | `examples/protocols/demo_cmd.py` | UART の組の上のテキストの命令と応答: 証拠としての組、出来事、ビューアのための level |
 | `examples/protocols/demo_cmd_p4.wireskein` | OEP のプローブが 2 つの ESP-IDF の UART ドライバで出して取り込んだ demo_cmd と、正解としてのそれぞれが送ったもの |
+| `examples/protocols/demo_telemetry.py` | CAN と LIN のフレームに乗るプロトコル: 両方に 1 つの decode、証拠としてのチェックのバイト、飛んだカウンタを見せる |
+| `examples/formats/saleae_csv.py` | ファイルの形式: Saleae Logic 2 のデジタルの CSV をキャプチャとして読む（1 tick は 1 ns、線は見出しの名前） |
 | `examples/checks/demo_settle.py` | 検査の種類: 落ち着かなければならない線、注意としてのチャタリング、期待のレベルが無ければ測るだけ |
 | `tests/test_demo_cmd.py` | 分析と、試験のプロトコルの検査での demo_cmd |
 | `tests/test_check_plugins.py` | 外から足した検査の種類と、その注意。チャタリングする接点での demo_settle |

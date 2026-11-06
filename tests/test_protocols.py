@@ -84,7 +84,7 @@ def test_a_protocol_needs_a_name_buses_and_decode():
         def decode(self, bus): return {}
     with pytest.raises(ValueError):
         protocols.register(Bad())                            # a layer of WireSkein's own
-    Bad.name, Bad.over = "x", ("can",)
+    Bad.name, Bad.over = "x", ("not a bus",)
     with pytest.raises(ValueError):
         protocols.register(Bad())
 
@@ -238,3 +238,31 @@ def test_its_messages_are_annotations_and_markers_for_the_viewer(tmp_path, demo_
     wc2.add_markers(p, [{"t": it["s"], "label": f"seq {it['detail']['seq']}"} for it in row["items"]], by="my_tool")
     wc2.add_markers(p, [{"t": row["items"][0]["s"], "label": "again"}], by="my_tool")      # replaces its own
     assert [(m["label"], m["by"]) for m in wc2.markers(p)] == [("again", "my_tool")]
+
+
+def test_a_protocol_rides_on_a_declared_protocol(tmp_path, demo_wire):
+    # a protocol of one's own on demo_wire's frames: cmd 3 carries a counter that must count
+    class Counter:
+        name, over = "wire_counter", ("demo_wire",)
+
+        def decode(self, bus):
+            fr = [f for f in bus.get("frames", []) if f.get("cmd") == 3]
+            vals = [int(f["data"], 16) for f in fr if f.get("data")]
+            ok = sum(1 for a, b in zip(vals, vals[1:]) if b == a + 1)
+            return {"messages": [{"s": f["s"], "value": v} for f, v in zip(fr, vals)], "checks_passed": ok,
+                    "checks_failed": len(vals) - 1 - ok}
+    protocols.register(Counter())
+    try:
+        w, bt = gen.Wave(1), 1 / 50e3
+        t = 20 * bt
+        for k in range(4):
+            for b in wire_bits(0x21, 0x3, bytes([0x10 + k])):
+                w.set(t, b)
+                t += bt
+            t += 14 * bt
+        doc = analyze_file(write(tmp_path, {"W": w}, t + 20 * bt))
+        (c,) = [c for c in claims(doc) if c["protocol"] == "demo_wire"]
+        got = c["result"]["wire_counter"]
+        assert got["checks_passed"] == 3 and [m["value"] for m in got["messages"]] == [0x10, 0x11, 0x12, 0x13], got
+    finally:
+        protocols.unregister("wire_counter")

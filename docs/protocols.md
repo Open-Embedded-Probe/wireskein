@@ -11,10 +11,10 @@ A protocol is a Python object with
 | Attribute | Meaning |
 | --- | --- |
 | `name` | The name it is shown under: letters, digits and `_`, not one of WireSkein's own layers |
-| `over` | The buses it rides on: a tuple of `"uart"`, `"spi"`, `"i2c"`, `"uart_pair"` (two UART lines, §3.1) |
+| `over` | The buses it rides on: a tuple of `"uart"`, `"spi"`, `"i2c"`, `"uart_pair"` (two UART lines, §3.1), `"can"`, `"lin"`, `"dmx512"`, or a protocol of your own definition by its name (§3.2) |
 | `decode(bus)` | Reads one decoded bus and returns `{"messages": [...], "checks_passed": n, "checks_failed": m}` |
 
-`bus` is the bus as the analysis exports it ([analysis format](analysis-format.md) §4): `roles` (the pin of each role), `tick_hz`, and its layers - for UART `bytes` (`{"s": [tick...], "hex": "..."}`), `chars` (each `{"s", "value", "ok"}`) and `breaks`; for SPI `transfers` (each `{"s", "e", <pin>: hex}`); for I2C `transactions`; for a UART pair both lines' `messages` (§3.1). A protocol never sees WireSkein's internal types, so it keeps working as long as the analysis format does.
+`bus` is the bus as the analysis exports it ([analysis format](analysis-format.md) §4): `roles` (the pin of each role), `tick_hz`, and its layers - for UART `bytes` (`{"s": [tick...], "hex": "..."}`), `chars` (each `{"s", "value", "ok"}`) and `breaks`; for SPI `transfers` (each `{"s", "e", <pin>: hex}`); for I2C `transactions`; for a UART pair both lines' `messages` (§3.1); for CAN, LIN and a definition their `frames` (§3.2). A protocol never sees WireSkein's internal types, so it keeps working as long as the analysis format does.
 
 - **Messages** are plain JSON values. Give each its first tick as `"s"`, so a reader and the viewer find it.
 - **Checks** are the evidence: a checksum, a length that matches, a sequence number that counts. A check that passes on random bytes only by chance tells the bus carries this protocol. The analysis gives the bus more confidence by it, the more passed and the fewer failed (as for Modbus RTU), and shows the protocol, as the bus's final reading, only when its checks held. A protocol with no check shows nothing: without evidence, any bytes parse as anything.
@@ -90,6 +90,20 @@ device   #<seq> OK[ <value>...]  |  #<seq> ERR <code>  |  !<EVENT>[ <value>...] 
 
 Its tests (`tests/test_demo_cmd.py`) put the exchange on two lines with an encoder apart from the reader. On hardware, `examples/protocols/demo_cmd_p4.wireskein` is an OEP probe sending it with two ESP-IDF UART drivers (115200 8N1, host and device on lines of their own), with what each sent in `demo_cmd_p4.truth.json`: without demo_cmd the analysis reads two UARTs and nothing above them; with it, the five exchanges and four answers that belong to their commands.
 
+## 3.2 On frames of CAN, LIN or your own: demo_telemetry
+
+A protocol may ride on the frames the analysis already reads: `"can"`, `"lin"`, `"dmx512"`, or a protocol of your
+own definition (§5) by its name. `bus` then carries that one's `frames` (`packets` for DMX512), as the analysis
+format §3.2 lists them: for CAN `{"s", "id", "ide", "dlc", "data": hex, "ack", "ok"}`, for LIN `{"s", "id", "data":
+hex, "ok"}`, for a definition its fields. That is where CANopen, J1939, OBD-II / UDS or a LIN node's own signals go.
+
+`examples/protocols/demo_telemetry.py` is made up for this guide: each node sends its readings in frames of its own
+identifier, the data being `seq | reading... | check`, the check `(identifier + the bytes before it) & 0xFF` xor
+`0x5A`. One `decode` reads CAN and LIN alike (`over = ("can", "lin")`): a frame whose check holds is a check passed,
+a seq that does not follow its node's last one is shown (`level: "warn"`). Its messages are under the CAN or LIN
+bus's `result`, as demo_link's are under a UART's; its tests (`tests/test_demo_telemetry.py`) put the frames on the
+lines with encoders of their own.
+
 ## 4. Checking it in a test
 
 ```python
@@ -100,7 +114,7 @@ with rec.section(2, "ping", expect=[protocol("demo_link", "uart", {"data": "PA2"
     ...
 ```
 
-- `bus` is `"uart"`, `"spi"`, `"i2c"` or `"uart_pair"`, `roles` its pins by role (`{"data": ...}`; `{"clk", "mosi", "miso", "cs"}`; `{"scl", "sda"}`; `{"a": TX, "b": RX}`). On a pair the two lines are read together whatever the pairing's own score: `protocol("demo_cmd", "uart_pair", {"a": "PA2", "b": "PA3"}, baud=115200, messages=[{"verb": "PING", "status": "OK"}])`.
+- `bus` is `"uart"`, `"spi"`, `"i2c"`, `"uart_pair"`, `"can"`, `"lin"` or a definition's name, `roles` its pins by role (`{"data": ...}` for a UART, CAN or LIN; `{"clk", "mosi", "miso", "cs"}`; `{"scl", "sda"}`; `{"a": TX, "b": RX}`). On a pair the two lines are read together whatever the pairing's own score: `protocol("demo_cmd", "uart_pair", {"a": "PA2", "b": "PA3"}, baud=115200, messages=[{"verb": "PING", "status": "OK"}])`.
 - `messages` are compared in order, each on the keys it gives (`"s"` and others it leaves out are not). Without `messages`, at least one message.
 - At most `checks_failed_max` (default 0) of its checks may fail.
 - A rule this cannot say is a check of its own ([guide](capture-test-guide.md) §4.10) or a verdict of the test (`rec.result`, guide §3.3).
