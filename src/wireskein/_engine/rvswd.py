@@ -174,16 +174,28 @@ class SwioPlugin:
 
     def run(self, c, ps, g):
         bits_all = ps.short.astype(np.int8)
+        ns = 1e9 / c.cap.rate
         tx, lens = [], []
+
+        def widths(a, b, rw=None):
+            """How the frame's pulses sat against the split: the longest short one and the shortest long one (a
+            margin), and the R/W bit's own (the bit a target misreads when its long low shrinks), in ns."""
+            w, s = ps.width[a:b], ps.short[a:b]
+            out = {"short_max_ns": round(float(w[s].max()) * ns, 1) if s.any() else None,
+                   "long_min_ns": round(float(w[~s].min()) * ns, 1) if (~s).any() else None}
+            if rw is not None:
+                out["rw_low_ns"] = round(float(ps.width[rw]) * ns, 1)
+            return out
+
         for a, b in ps.bounds.tolist():
             f = bits_all[a:b]
             lens.append(b - a)
             if b - a == 41 and f[0] == 1:
-                tx.append({"t": int(ps.start[a]), "op": "W" if f[8] else "R", "addr": _int(f[1:8]), "data": _int(f[9:]),
-                           "status": 0, "ok": True})
+                tx.append({"t": int(ps.start[a]), "e": int(ps.start[b - 1] + ps.width[b - 1]), "op": "W" if f[8] else "R",
+                           "addr": _int(f[1:8]), "data": _int(f[9:]), "status": 0, "ok": True, **widths(a, b, a + 8)})
             elif b - a == 33 and f[0] == 0:
-                tx.append({"t": int(ps.start[a]), "op": "R", "addr": 0x04, "data": _int(f[1:]), "status": 0, "ok": True,
-                           "fast": True})
+                tx.append({"t": int(ps.start[a]), "e": int(ps.start[b - 1] + ps.width[b - 1]), "op": "R", "addr": 0x04,
+                           "data": _int(f[1:]), "status": 0, "ok": True, "fast": True, **widths(a, b)})
         if len(tx) < 2:
             return []
         lens = np.asarray(lens)
@@ -195,4 +207,4 @@ class SwioPlugin:
         m = {"frames": int(len(lens)), "structured": structured, "pulse_share": pulses, "dmi": len(tx),
              "dm_addr": known, "split_ns": ps.split / c.cap.rate * 1e9}
         score = known * (0.5 + 0.5 * pulses) * (1 - 0.5 ** (len(tx) / 4))
-        return [Node("swio", {"idle": ps.idle}, {"dio": ps.pin}, Stream("dmi", tx), m, layer_score=score, total=score)]
+        return [Node("swio", {"idle": ps.idle, "split_ns": round(float(ps.split) * ns, 1)}, {"dio": ps.pin}, Stream("dmi", tx), m, layer_score=score, total=score)]

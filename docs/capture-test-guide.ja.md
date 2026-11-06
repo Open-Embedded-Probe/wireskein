@@ -197,14 +197,14 @@ WireSkein は、キャプチャを読み手に要るものに変えます。サ�
 
 | 検査 | 内容 |
 | --- | --- |
-| `square(pin, freq_hz, duty, freq_rel, duty_abs, jitter_max, outliers_max)` | 窓全体で規則的な方形波。すべての周期が `freq_rel`（相対）に、その high の時間が `duty_abs`（周期に対する絶対）に入ること。外れてよい周期は `outliers_max` 個まで（既定 0）。`jitter_max` は周期のばらつきの上限（相対）。サンプルレートによる分解能は自動で足す |
+| `square(pin, freq_hz, duty, freq_rel, duty_abs, jitter_max, outliers_max, grid_abs_s)` | 窓全体で規則的な方形波。すべての周期が `freq_rel`（相対）に、その high の時間が `duty_abs`（周期に対する絶対）に入ること。外れてよい周期は `outliers_max` 個まで（既定 0）。`jitter_max` は周期のばらつきの上限（相対）。サンプルレートによる分解能は自動で足す。`grid_abs_s`: すべての立ち上がりが、最初の立ち上がりからちょうど `1 / freq_hz` の周期の理想の格子から、これ以内にあること（波とキャプチャが同じクロック源のとき。1 サンプルは `1 / rate`）。測るもの: `grid_max_s`、いちばん合う周期に対する `grid_fit_max_s` / `grid_fit_period_s` |
 | `becomes(pin, level=v)` / `becomes(pin, freq_hz= か period_s=, duty= か high_s=, high_abs_s か high_rel, irregular_max, irregular_min, min_periods, within_s)` | 線が窓の終わりにある状態（レベル、または波形）にあり、窓の前の状態から 1 度だけの変化でそこへ移ったこと（§3.2）。`change_s`、`irregular_pulses` を測る |
 | `trim(検査, head_s, tail_s, head_periods=, tail_periods=)` | どの検査も、窓の両端を除いて判定する（§3.2） |
 | `protocol(name, bus, roles, messages, checks_failed_max, baud)` | バスに乗る独自のプロトコル（[独自のプロトコル](protocols.ja.md)）: メッセージを順に、書いたキーで比べ、そのチェックも見る |
 | `level(pin, value)` | 窓の間ずっと一定 |
 | `starts({pin: v})` / `ends({pin: v})` | 窓の最初・最後のレベル |
 | `only_moving([pins])` | ほかのキャプチャ対象のピンが動かない。ロジックのチャンネルだけを見る |
-| `pulses(pin, count, period_s, period_rel)` | 立ち上がりの数と周期。`period_rel` は相対 |
+| `pulses(pin, count, period_s, period_rel, width_min_s, width_max_s, level)` | 立ち上がりの数と周期。`period_rel` は相対。`width_min_s` / `width_max_s` を付けると、窓の中で始まって終わる `level`（既定 1）のパルスが、どれもその幅で、`count` はその数（ウォッチドッグのリセット: `count=1`）。窓の端で切れたパルスは、1 本のパルスに数えない。測るもの: `widths_s`、`starts_s` |
 | `i2c(scl, sda, transactions, freq_hz, freq_rel, released, notices, spike_max_s, stretch_min)` | トランザクションの列（アドレス、読み書き、バイト、ACK）、SCL の周波数、終了時に両方 High。トランザクションごとに `start`（`S`、`Sr`）と `end`（`P`、`Sr`）を書けば、それも比べる。クロックの引き延ばしとスパイクは注意（§4.9） |
 | `spi(clk, mosi, miso, cs, mode, mosi_bytes, miso_bytes, freq_hz, freq_rel, bit_order, cs_active, bits, notices, setup_min_s, hold_min_s)` | モード、両方向のバイト、SCK の周波数、最後に CS が High。モードは線から読む（§4.5）。`cs` があれば、CS の窓ごとのクロックの数（`frame_bits`。`bits` で比べる）、窓の中で SCK のレベルが中央値の半分より短くないこと（グリッチ）、データ線ごとのサンプルの辺の前後の余裕（`margins`。`setup_min_s` / `hold_min_s` で下限）、受け手が読めるモードの一覧 `modes_ok`（§4.5）。CS が非アクティブのあいだの SCK の動きと、クロックの無い窓は注意（§4.9） |
 | `uart(pin, baud, data, baud_rel, idle, bits, parity, stop, errors)` | ボーレート、バイト列、アイドルレベル、フレームとパリティのエラー（下記） |

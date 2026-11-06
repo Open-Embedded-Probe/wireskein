@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- (EN) `pulses(..., width_min_s, width_max_s, level)`: the whole pulses at a level inside the window, each of a width, `count` of them (a watchdog's reset pulse); `square(..., grid_abs_s)`: every rising edge within that of the ideal grid of the nominal period (a wave and a capture on one clock source), `grid_max_s` and `grid_fit_max_s` measured. SWIO's `dmi` gives each frame's pulses against the short/long split (`short_max_ns`, `long_min_ns`, `rw_low_ns`, `params.split_ns`): a read the target took for a write, its R/W low shrunk, shows.
+- (JA) `pulses(..., width_min_s, width_max_s, level)`: 窓の中のあるレベルの丸ごとのパルスが、どれもある幅で、`count` 本（ウォッチドッグのリセットのパルス）。`square(..., grid_abs_s)`: すべての立ち上がりが、公称の周期の理想の格子からそれ以内（波とキャプチャが同じクロック源）。`grid_max_s` と `grid_fit_max_s` を測る。SWIO の `dmi` に、フレームのパルスを短い / 長いの境と比べたもの（`short_max_ns`、`long_min_ns`、`rw_low_ns`、`params.split_ns`）を出す: R/W の low が縮んで、target が読みを書き込みと取った所が分かる。
+
 - (EN) RVSWD cut at START and STOP measures what its frames explain against the clocks inside them: clocks outside (an idle clock's reflection glitches) no longer let a view with short pulses filtered out win, which at 100 MHz (SWCLK high 2-3 samples) loses bits and frames (a CH32V203's ESIG reads: 126 short frames read, as wch-protocols' rvswd.py). A line with no START no longer stops the analysis (an error since the long form came in).
 - (JA) START と STOP で切った RVSWD は、フレームが説明するビットの割合を、フレームの内側のクロックに対して測るようにした。外のクロック（idle のクロックに乗る反射のひげ）のせいで、短いパルスを捨てた見方が勝つことがなくなった。その見方は 100 MHz（SWCLK の high が 2〜3 サンプル）でビットとフレームを失う（CH32V203 の ESIG の読み。wch-protocols の rvswd.py と同じ 126 の short フレームを読む）。START の無い線で分析が止まらないようにした（long 形式を入れてからのエラー）。
 

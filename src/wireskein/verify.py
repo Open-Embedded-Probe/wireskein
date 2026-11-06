@@ -195,6 +195,22 @@ def check_square(cap, x):
     if x.get("duty") is not None:
         bad |= np.abs(rows[:, 1] - x["duty"] * per) > x["duty_abs"] * per + ch.step + 1
     out = {**p, "freq_error": ferr, "outliers": int(np.sum(bad))}
+    # against an ideal grid: the nominal period from the first rising edge, and the period that fits best
+    e = np.asarray(ch.edges)
+    rises = (e[0::2] if ch.initial == 0 else e[1::2]).astype(np.float64)
+    if len(rises) >= 2:
+        n = np.round((rises - rises[0]) / per)
+        dev = rises - rises[0] - n * per
+        out["grid_max_s"] = float(np.abs(dev).max() / cap.rate)
+        A = np.stack([n, np.ones_like(n)], axis=1)
+        fit, *_ = np.linalg.lstsq(A, rises, rcond=None)
+        out["grid_fit_max_s"] = float(np.abs(rises - A @ fit).max() / cap.rate)
+        out["grid_fit_period_s"] = float(fit[0] / cap.rate)
+        if x.get("grid_abs_s") is not None and out["grid_max_s"] > x["grid_abs_s"] + 1e-12:
+            ok = False
+            k = int(np.argmax(np.abs(dev)))
+            why.append(f"rising edge at {rises[k] / cap.rate * 1e3:.4f} ms is {dev[k] / cap.rate * 1e9:+.1f} ns off the grid "
+                       f"(over {x['grid_abs_s'] * 1e9:.1f} ns)")
     if np.sum(bad) > x.get("outliers_max", 0):
         ok = False
         r = rows[np.argmax(bad)]
@@ -264,9 +280,38 @@ def check_only_moving(cap, x):
     return True, {"unexpected": moved}, ""
 
 
+def _whole_pulses(ch, level: int) -> tuple[np.ndarray, np.ndarray]:
+    """(start, width) in ticks of the pulses at `level` that start and end inside the window."""
+    e = np.asarray(ch.edges)
+    lv = (ch.initial ^ ((np.arange(len(e)) + 1) & 1)).astype(int)   # the level after each change
+    starts = np.flatnonzero(lv == level)
+    starts = starts[starts + 1 < len(e)]
+    return e[starts], e[starts + 1] - e[starts]
+
+
 def check_pulses(cap, x):
     ch = _ch(cap, x["pin"])
     t = _ev(cap, x["pin"])
+    widths = x.get("width_min_s") is not None or x.get("width_max_s") is not None
+    if t is not None and widths:
+        return None, {}, f"{events.describe(t)}: a pulse's width needs every edge"
+    if widths:
+        if ch is None:
+            return None, {}, "pin not captured"
+        s, w = _whole_pulses(ch, int(x.get("level", 1)))
+        ws = (w / cap.rate).tolist()
+        got = {"pulses": len(ws), "widths_s": ws, "starts_s": (s / cap.rate).tolist()}
+        why = []
+        if x.get("count") is not None and len(ws) != x["count"]:
+            why.append(f"{len(ws)} whole pulses at {x.get('level', 1)}, want {x['count']}")
+        res = ch.step / cap.rate
+        lo, hi = x.get("width_min_s"), x.get("width_max_s")
+        bad = [v for v in ws if (lo is not None and v < lo - res) or (hi is not None and v > hi + res)]
+        if bad:
+            why.append(f"{len(bad)} of {len(ws)} pulses outside {lo}..{hi} s (first {bad[0]:.6g} s)")
+        if not ws and x.get("count") is None:
+            why.append(f"no whole pulse at {x.get('level', 1)}")
+        return not why, got, "; ".join(why)
     if t is not None and (ch is None or x.get("period_s") is None):   # the count from the quanta, exact
         n, exact = events.rises(t)
         got = {"rises": n} if exact else {"rises_at_least": n}

@@ -357,12 +357,18 @@ def _t(x: dict, threshold) -> dict:
 
 
 def square(pin: str, freq_hz: float, duty: float | None = None, freq_rel: float = 0.02, duty_abs: float = 0.01,
-           jitter_max: float | None = None, outliers_max: int = 0, threshold=None) -> dict:
+           jitter_max: float | None = None, outliers_max: int = 0, grid_abs_s: float | None = None,
+           threshold=None) -> dict:
     """A steady square wave (PWM, tone) through the whole window: every whole period within freq_rel (relative) of
     1 / freq_hz and its high time within duty_abs (absolute, of the period) of duty, at most outliers_max periods
-    off; the standard deviation of the periods at most jitter_max of their median (a ratio)."""
+    off; the standard deviation of the periods at most jitter_max of their median (a ratio).
+
+    grid_abs_s: every rising edge within this of an ideal grid of period exactly 1 / freq_hz from the first rising
+    edge (a wave and a capture on one clock source: errors do not add up; 1 / the capture's rate is one sample).
+    Measured either way: grid_max_s, and grid_fit_max_s against the grid of the period that fits best (sources apart)."""
     return _t({"kind": "square", "pin": pin, "freq_hz": freq_hz, "duty": duty, "freq_rel": freq_rel,
-               "duty_abs": duty_abs, "jitter_max": jitter_max, "outliers_max": outliers_max}, threshold)
+               "duty_abs": duty_abs, "jitter_max": jitter_max, "outliers_max": outliers_max, "grid_abs_s": grid_abs_s},
+              threshold)
 
 
 def becomes(pin: str, level: int | None = None, *, freq_hz: float | None = None, period_s: float | None = None,
@@ -517,10 +523,15 @@ def uart(pin: str, baud: float | None, data: str | None = None, baud_rel: float 
 
 
 def pulses(pin: str, count: int | None = None, period_s: float | None = None, period_rel: float = 0.05,
+           width_min_s: float | None = None, width_max_s: float | None = None, level: int = 1,
            threshold=None) -> dict:
-    """Rising edges counted, optional period (TOGGLE / MILLIS style tests); period_rel is relative."""
-    return _t({"kind": "pulses", "pin": pin, "count": count, "period_s": period_s, "period_rel": period_rel},
-              threshold)
+    """Rising edges counted, optional period (TOGGLE / MILLIS style tests); period_rel is relative.
+
+    With width_min_s / width_max_s, the pulses at `level` that start and end inside the window: each as wide as
+    that, and count (when given) is how many of them (a watchdog's reset pulse: count=1). A pulse cut by the window's
+    edge is no whole pulse and fails. Measured: widths_s."""
+    return _t({"kind": "pulses", "pin": pin, "count": count, "period_s": period_s, "period_rel": period_rel,
+               "width_min_s": width_min_s, "width_max_s": width_max_s, "level": level}, threshold)
 
 
 def rgb_led(pin: str, data=None, t0h_min_s: float | None = 0.25e-6, t0h_max_s: float | None = 0.55e-6,
