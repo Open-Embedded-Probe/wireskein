@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- (EN) RVSWD: a SWCLK high 4 times its usual or more and 1 us or more is a STOP too: at its fastest (high 30 ns) a LinkE's STOP may hold only 1.4 us, and two frames were read as one (a V203's write of data0).
+- (JA) RVSWD: SWCLK の high がいつもの 4 倍以上で 1 us 以上のものも STOP とした: いちばん速い LinkE（high 30 ns）の STOP は 1.4 us しかないことがあり、2 つのフレームを 1 つに読んでいた（V203 の data0 への書き込み）。
+
 - (EN) RVSWD: a START / STOP frame of a length no form has, with as many clocks too many as it has rising edges whose high lasted a sample (a reflection's glitch on SWCLK), is read with those left out (`repaired`); frames give their `fields` by name with each parity's check. SWIO frames give `rw_gap_ns`. The Debug Module's accesses have their ticks (`s`, `e`). decode's `buses[].layers` gives lower layers by name (every sampling edge, every SWIO pulse).
 - (JA) RVSWD: どの形にも無い長さの START / STOP のフレームで、余るクロックの数だけ high が 1 サンプルの立ち上がり（SWCLK に乗った反射のひげ）があるときは、それを抜いて読む（`repaired`）。フレームに名前付きの `fields` と、パリティごとの検査を出す。SWIO のフレームに `rw_gap_ns`。Debug Module のアクセスに tick（`s`、`e`）。decode の `buses[].layers` で、下の層を名前で出す（サンプルの縁のすべて、SWIO のパルスのすべて）。
 

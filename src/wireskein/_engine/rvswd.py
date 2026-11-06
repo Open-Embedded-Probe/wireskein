@@ -46,13 +46,16 @@ def reframe_rolling(fr, mult: float = 3.0, w: int = 33) -> list[tuple[int, int]]
     return out
 
 
-def reframe_startstop(fr, cap, hold: float = 1.5, w: int = 16, hold_min_s: float = 1.5e-6) -> list[tuple[int, int]]:
+def reframe_startstop(fr, cap, hold: float = 1.5, w: int = 16, hold_min_s: float = 1.5e-6,
+                      far: float = 4.0, far_min_s: float = 1e-6) -> list[tuple[int, int]]:
     """Frames from START to STOP, as WCH's RVSWD delimits them: START is DIO falling while CLK is high outside a
     frame; STOP is DIO rising while CLK is high, CLK then staying high longer than `hold` times its usual high (the
     median of the `w` highs before it) and at least `hold_min_s`. Inside a frame the target may move DIO while CLK is
     high (a read's turnaround), a fast LinkE holds CLK high about 3 to 4 times its usual high at a short frame's
     turnaround (0.5 us at 3 MHz) and now and then about twice inside a burst read (1.1 us): none is a STOP. A STOP
-    holds CLK high 1.8 us or more (a fast LinkE, under the 2 us link-to-target names), 4 to 7 us at slower speeds."""
+    holds CLK high 1.8 us or more (a fast LinkE, under the 2 us link-to-target names), 4 to 7 us at slower speeds;
+    at its fastest (CLK high 30 ns) a LinkE's STOP may hold only 1.4 us, far over its usual high: so a high `far`
+    times the usual and at least `far_min_s` is a STOP too."""
     sb = fr.source
     c, d = cap.channel(sb.clock), cap.channel(sb.data[0])
     ce, de = np.asarray(c.edges), np.asarray(d.edges)
@@ -81,7 +84,9 @@ def reframe_startstop(fr, cap, hold: float = 1.5, w: int = 16, hold_min_s: float
     with warnings.catch_warnings(), np.errstate(all="ignore"):
         warnings.simplefilter("ignore", RuntimeWarning)       # a STOP with no high before it: no usual high
         usual = np.nanmedian(np.where(np.isfinite(prev), prev, np.nan), axis=1)
-    long_ = (highs[k] > hold * np.nan_to_num(usual, nan=np.inf)) & (highs[k] >= hold_min_s * cap.rate)
+    u = np.nan_to_num(usual, nan=np.inf)
+    long_ = ((highs[k] > hold * u) & (highs[k] >= hold_min_s * cap.rate)) | \
+            ((highs[k] >= far * u) & (highs[k] >= far_min_s * cap.rate))
     stop = up[~np.isfinite(highs[k]) | long_]
     # each STOP closes the frame opened by the first START after the STOP before it
     after_prev = np.concatenate(([-1], stop[:-1]))

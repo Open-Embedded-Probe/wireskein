@@ -308,3 +308,30 @@ def test_swio_pulses_and_turnaround():
             gaps[x["op"]].append(x["rw_gap_ns"])
     # from the R/W bit's end to the first data pulse: a read waits for the target (740-780 ns), a write does not
     assert 700 < min(gaps["R"]) and max(gaps["R"]) < 820 and 340 < min(gaps["W"]) and max(gaps["W"]) < 400
+
+
+def test_a_stop_far_over_the_usual_high_though_short():
+    # at its fastest a LinkE holds SWCLK high only 30 ns, and a STOP may hold it only 1.4 us: under the 1.5 us that
+    # tells a STOP from a burst's twice-usual high (1.1 us), but over 4 times the usual: still a STOP
+    import numpy as np
+    from wireskein._engine import typed
+    from wireskein._engine.model import Capture, Channel
+    from wireskein._engine.rvswd import reframe_startstop
+    rate, per, hi = 100e6, 10, 3                      # 10 MHz clock, highs of 3 samples
+    clk, dio, t = [], [], 1000
+
+    def frame(t):
+        dio.append(t - 2)                             # START: DIO falls while CLK is high (an idle high before)
+        clk.append(t)                                 # CLK falls: the frame's clocks
+        for _ in range(53):
+            clk.extend([t + per - hi, t + per])
+            t += per
+        clk.append(t + per - hi)                      # CLK rises and stays high
+        dio.append(t + per - hi + 2)                  # STOP: DIO rises while CLK is high
+        return t + per - hi + 140                     # held 1.4 us, then the next frame
+    t = frame(t)
+    t = frame(t)
+    cap = Capture(rate, t + 1000, [Channel("C", 1, np.asarray(clk, np.int64)), Channel("D", 1, np.asarray(sorted(dio), np.int64))])
+    sb = typed.sync_bits(cap, None, "C", ("D",), None, "rise")
+    got = reframe_startstop(typed.frames_gap(sb), cap)
+    assert [f[1] - f[0] for f in got] == [54, 54]
