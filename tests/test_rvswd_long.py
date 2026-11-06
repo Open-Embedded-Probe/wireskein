@@ -120,12 +120,15 @@ def test_autoexec_reruns_the_command_and_a_dm_without_it_reads_back_zero():
 
 # ---- a short-form session on a CH32L103 (from wch-protocols), read by decode from its .sr ----
 
-def test_a_short_frame_s_turnaround_is_no_stop_and_decode_reads_a_sr():
-    # a fast LinkE holds SWCLK high 3 to 4 times its usual high at a short frame's turnaround (0.5 us at 3 MHz):
-    # taken for a STOP, the frame splits and is lost (the L103's DetachChip and its ESIG reads were)
+@pytest.mark.parametrize("name", ["linke_l103_target_info", "linke_v203_100mhz_target_info"])
+def test_short_frames_read_by_decode_from_a_sr(name):
+    # linke_l103: a fast LinkE holds SWCLK high 3 to 4 times its usual high at a short frame's turnaround (0.5 us at
+    # 3 MHz): taken for a STOP, the frame splits and is lost (the L103's DetachChip and its ESIG reads were).
+    # linke_v203_100mhz: SWCLK's high is 2-3 samples: the views with short pulses filtered out lose bits, and must not
+    # win over the lines as they are for the clocks outside START and STOP (an idle clock's glitches)
     from wireskein.decode import decode_file
-    truth = json.loads((D / "linke_l103_target_info.truth.json").read_text())
-    doc = decode_file(D / "linke_l103_target_info.sr", {"buses": [{"protocol": "rvswd", "pins": truth["roles"]}]})
+    truth = json.loads((D / f"{name}.truth.json").read_text())
+    doc = decode_file(D / f"{name}.sr", {"buses": [{"protocol": "rvswd", "pins": truth["roles"]}]})
     (bus,) = doc["parts"][0]["buses"]
     dmi = bus["result"]["dmi"]
     forms = {f: sum(1 for x in dmi if x["form"] == f) for f in ("short", "long")}
@@ -133,6 +136,8 @@ def test_a_short_frame_s_turnaround_is_no_stop_and_decode_reads_a_sr():
     mem = {e["addr"]: e["value"] for e in bus["result"]["dm"] if e["op"] == "MEMR"}
     for a, v in truth["memory"].items():
         assert mem.get(int(a, 16)) == int(v, 16)
+    for a, v in truth.get("memory_low16", {}).items():
+        assert mem.get(int(a, 16), 0) & 0xFFFF == int(v, 16)
     assert all("e" in x and x["e"] > x["s"] for x in dmi)
 
 
@@ -163,3 +168,15 @@ def test_an_answer_a_clock_late_is_marked(docs):
     for i, x in enumerate(dmi):
         d = x["answer_delay"]["median"]
         assert (1.0 < d < 1.3) if i in late else (0.4 < d < 0.9), (i, x)
+
+
+def test_a_line_with_no_start_has_no_frames():
+    import numpy as np
+    from wireskein._engine import typed
+    from wireskein._engine.model import Capture, Channel
+    from wireskein._engine.rvswd import reframe_startstop
+    clk = Channel("C", 0, np.arange(10, 2000, 10, dtype=np.int64))
+    dio = Channel("D", 0, np.array([15, 1015], np.int64))      # rises and falls only while the clock is low
+    cap = Capture(1e6, 3000, [clk, dio])
+    sb = typed.sync_bits(cap, None, "C", ("D",), None, "rise")
+    assert reframe_startstop(typed.frames_gap(sb), cap) == []

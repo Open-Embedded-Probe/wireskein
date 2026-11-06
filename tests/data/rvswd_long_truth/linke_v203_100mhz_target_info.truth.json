@@ -1,0 +1,19 @@
+{
+ "source": "wch-protocols captures/fixtures/wire-linke-p4-2026-09-25/v203-100mhz/target_info.sr: ch32rv target info on a WCH-LinkE (fw 2.22) and a CH32V203C8T6, taken at 100 MHz by an OEP probe; uid and flash from ch32rv's stdout (that fixture's target_info.json)",
+ "roles": {
+  "clk": "SWCLK",
+  "dio": "SWDIO"
+ },
+ "memory": {
+  "0x1ffff7e8": "0xb661abcd",
+  "0x1ffff7ec": "0x1e91bc63"
+ },
+ "memory_low16": {
+  "0x1ffff7e0": "0x0040"
+ },
+ "frames": {
+  "short": 126,
+  "long": 202
+ },
+ "note": "SWCLK's high is 2-3 samples and reflections put glitches on it: the bits are read from the lines as they are; the short-frame count is also what wch-protocols' rvswd.py reads (--k 1 --k-frame 3)"
+}

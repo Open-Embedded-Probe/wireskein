@@ -11,6 +11,8 @@ clock (data at bits 15..46). The long form (85 clocks) is in decl/rvswd.toml.
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 
 from . import kernels as K
@@ -68,13 +70,16 @@ def reframe_startstop(fr, cap, hold: float = 1.5, w: int = 16, hold_min_s: float
     dlv = K.edge_levels(de, d.initial)
     falls_hi = de[hi_at & (dlv == 0)]                       # START candidates
     up = de[hi_at & (dlv == 1)]
+    if not len(falls_hi):
+        return []                                           # no START: no frame
     k = np.searchsorted(rises, up, side="right") - 1        # the high DIO rose in
     up, k = up[k >= 0], k[k >= 0]
     if not len(up):
         return []
     idx = k[:, None] - np.arange(w, 0, -1)[None, :]         # the w highs before it
     prev = np.where(idx >= 0, highs[np.clip(idx, 0, None)], np.nan)
-    with np.errstate(all="ignore"):
+    with warnings.catch_warnings(), np.errstate(all="ignore"):
+        warnings.simplefilter("ignore", RuntimeWarning)       # a STOP with no high before it: no usual high
         usual = np.nanmedian(np.where(np.isfinite(prev), prev, np.nan), axis=1)
     long_ = (highs[k] > hold * np.nan_to_num(usual, nan=np.inf)) & (highs[k] >= hold_min_s * cap.rate)
     stop = up[~np.isfinite(highs[k]) | long_]

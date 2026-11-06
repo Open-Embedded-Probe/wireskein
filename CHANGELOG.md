@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- (EN) RVSWD cut at START and STOP measures what its frames explain against the clocks inside them: clocks outside (an idle clock's reflection glitches) no longer let a view with short pulses filtered out win, which at 100 MHz (SWCLK high 2-3 samples) loses bits and frames (a CH32V203's ESIG reads: 126 short frames read, as wch-protocols' rvswd.py). A line with no START no longer stops the analysis (an error since the long form came in).
+- (JA) START と STOP で切った RVSWD は、フレームが説明するビットの割合を、フレームの内側のクロックに対して測るようにした。外のクロック（idle のクロックに乗る反射のひげ）のせいで、短いパルスを捨てた見方が勝つことがなくなった。その見方は 100 MHz（SWCLK の high が 2〜3 サンプル）でビットとフレームを失う（CH32V203 の ESIG の読み。wch-protocols の rvswd.py と同じ 126 の short フレームを読む）。START の無い線で分析が止まらないようにした（long 形式を入れてからのエラー）。
+
 - (EN) RVSWD: a STOP needs SWCLK held high 1 us or more besides longer than usual: a fast LinkE holds it 3 to 4 times its usual high at a short frame's turnaround, which split frames and lost them (a CH32L103's DetachChip and ESIG reads; 334 frames read, as wch-protocols' rvswd.py). A long frame answered gives `answer_delay` / `answer_delay_ns` (when the target moved SWDIO, against the rising edge before the bit) and `late: 1` for an answer a clock late; `dmi` items have their end `e`. `decode` reads a `.sr`, a VCD or a format added as `analyze` does. Uninterpreted activity: inside a burst holding frames, what no frame covers is said (a clocked bus's `bits` and `frames` layers covered it).
 - (JA) RVSWD: STOP には、SWCLK の high がいつもより長いことに加え、1 us 以上を要るようにした。速い LinkE は short のフレームの折り返しで high をいつもの 3〜4 倍にし、フレームが割れて失われていた（CH32L103 の DetachChip と ESIG の読み。wch-protocols の rvswd.py と同じ 334 フレームを読む）。答えのあった long のフレームに `answer_delay` / `answer_delay_ns`（target が SWDIO を変えた時点。そのビットの前の立ち上がりから）、1 クロック遅れた答えに `late: 1`、`dmi` の項目に終わり `e` を足した。`decode` は `analyze` と同じく `.sr`、VCD、足した形式を読む。未解釈の活動: フレームを含むかたまりの中も、どのフレームにも入らないものを示す（クロックのあるバスの `bits` と `frames` の層が覆っていた）。
 

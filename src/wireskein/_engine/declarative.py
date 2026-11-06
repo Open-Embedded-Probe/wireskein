@@ -95,6 +95,11 @@ def _int_bits(bits) -> int:
 REFRAMERS = {}
 
 
+class Delimited(list):
+    """Frames a protocol's own START and STOP delimit: clocks outside them belong to no frame (an idle clock, a
+    reflection's glitches), so what the frames explain is measured against the clocks inside them."""
+
+
 def reframer(name):
     def deco(f):
         REFRAMERS[name] = f
@@ -105,7 +110,7 @@ def reframer(name):
 @reframer("rvswd_stop")
 def _rvswd_stop(fr, cap):
     from .rvswd import reframe, reframe_rolling, reframe_startstop
-    ss = reframe_startstop(fr, cap)
+    ss = Delimited(reframe_startstop(fr, cap))
     # the START / STOP frames hold nearly every clock: the cuts at stop intervals (for captures that hide START and
     # STOP) are not tried
     inside = sum(b - a for a, b in ss)
@@ -570,12 +575,13 @@ class DeclarativePlugin:
                 recs.append(rec)
             key = passed
             if best is None or key > best[0]:
-                best = (key, recs, checked, passed, matched, len(frames), checked_frames, explained)
-        _, recs, checked, passed, matched, total, checked_frames, explained = best
+                inside = sum(b - a for a, b in frames) if isinstance(frames, Delimited) else None
+                best = (key, recs, checked, passed, matched, len(frames), checked_frames, explained, inside)
+        _, recs, checked, passed, matched, total, checked_frames, explained, inside = best
         if matched < 2:
             return []
         parity = passed / checked if checked else 0.0
-        total_bits = int(np.diff(fr.bounds, axis=1).sum()) or 1
+        total_bits = inside or int(np.diff(fr.bounds, axis=1).sum()) or 1
         cover = min(1.0, explained / total_bits)
         # the checked frames are the evidence; frames of a known structure only add coverage
         score = parity ** 2 * (0.5 + 0.5 * cover) * (1 - 0.5 ** (checked_frames / 2))
