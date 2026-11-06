@@ -211,6 +211,20 @@ def _load_for_decoding(path, args):
     return cap
 
 
+def survey_cmd(args) -> None:
+    from . import survey
+    try:
+        doc = survey.survey_file(args.capture, _pins(args.pins), args.bins, args.top,
+                                 (args.split or True) if args.plan else None)
+    except (ValueError, FileNotFoundError, zipfile.BadZipFile) as e:
+        sys.exit(f"wireskein survey: {e}")
+    text = export.dumps(doc)
+    if args.out:
+        args.out.write_text(text)
+        print(f"{len(text)} bytes -> {args.out}", file=sys.stderr)
+    print(text if args.json else "\n".join(survey.text(doc)))
+
+
 def _pins(text) -> list[str] | None:
     return [x.strip() for x in text.split(",") if x.strip()] if text else None
 
@@ -599,6 +613,16 @@ def main() -> None:
     vf.add_argument("-v", "--verbose", action="store_true", help="list each notice under its result")
     vf.add_argument("--mark", action="store_true",
                     help="write the notices and the changes found into the capture files' markers (for the viewer)")
+    sv = sub.add_parser("survey", help="an overview of a capture read once (any length): how each line moves, "
+                                       "its stills, free-running lines, trembling ones (wireskein-survey/1)")
+    sv.add_argument("capture", type=Path)
+    sv.add_argument("--pins", default=None, help=PINS_HELP)
+    sv.add_argument("--bins", type=int, default=1000, help="activity bins over the time")
+    sv.add_argument("--top", type=int, default=10, help="longest stills kept")
+    sv.add_argument("--plan", action="store_true", help="also the pieces a long capture is cut into")
+    sv.add_argument("--split", default=None, help="with --plan: " + SPLIT_HELP)
+    sv.add_argument("--json", action="store_true", help="the document (default: lines to read)")
+    sv.add_argument("--out", type=Path, default=None, help="write the document here")
     cv = sub.add_parser("convert", help="convert a capture between formats (read by content; written as .sr or VCD when OUT ends in .sr / .vcd, else WireSkein)")
     cv.add_argument("input", type=Path)
     cv.add_argument("output", type=Path)
@@ -689,7 +713,7 @@ def main() -> None:
     al.add_argument("--apply-to", default=None, help="analog channels that get the result (default: all)")
     al.add_argument("--save", action="store_true", help="store it in the file as attach/alignment.json")
     args = ap.parse_args()
-    files = {"info": info, "note": note_cmd, "attach": attach_cmd, "convert": convert, "capture": capture_cmd,
+    files = {"survey": survey_cmd, "info": info, "note": note_cmd, "attach": attach_cmd, "convert": convert, "capture": capture_cmd,
              "gui": gui_cmd, "align": align_cmd, "annotate": annotate_cmd, "states": states_cmd}
     if args.cmd in files:
         try:
