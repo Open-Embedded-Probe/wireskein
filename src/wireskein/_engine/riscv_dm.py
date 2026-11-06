@@ -351,7 +351,23 @@ def _learn_dataaddr(tx: list[dict]) -> int | None:
                 cands.append(data0)
                 if len(cands) >= 8:
                     break
-    best, best_n = None, 0
+    # and the addresses the programs touch (a program may build data0's address itself: lui / addi), each as data0..3
+    dry = DebugModule()
+    for x in tx:
+        if not _skip(x):
+            dry.feed(x["op"], x["addr"], x["data"])
+    seen: dict[int, int] = {}
+    for op, a, _, _ in dry.out:
+        if op in ("MEMR", "MEMW") and isinstance(a, int):
+            for k in range(4):
+                c = (a - 4 * k) & MASK
+                if c % 4 == 0:
+                    seen[c] = seen.get(c, 0) + 1
+    for c, _ in sorted(seen.items(), key=lambda kv: -kv[1])[:16]:
+        if c not in cands:
+            cands.append(c)
+    # a candidate must read more of memory than none does (else any address the program touched would tie)
+    best, best_n = None, sum(1 for e in dry.out if e[0] == "MEMR" and e[2] is not None)
     for a in cands:
         dm = DebugModule()
         dm.dataaddr = a

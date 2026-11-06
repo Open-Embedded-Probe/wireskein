@@ -180,3 +180,45 @@ def test_a_line_with_no_start_has_no_frames():
     cap = Capture(1e6, 3000, [clk, dio])
     sb = typed.sync_bits(cap, None, "C", ("D",), None, "rise")
     assert reframe_startstop(typed.frames_gap(sb), cap) == []
+
+
+# ---- SWIO: a CH32V003's ram read by a LinkE (wch-protocols' fixture), the bytes ch32rv wrote as the truth ----
+
+def test_swio_bulk_read_with_continuations_is_the_bytes_ch32rv_read():
+    # the LinkE reads 16 words a time: one read of data0, 14 continuations (33 pulses) with autoexec on, the last
+    # after turning autoexec off; the
+    # program in the program buffer builds data0's address (0xe00000f4) itself, which the Debug Module learns
+    import struct
+    from wireskein.decode import decode_file
+    doc = decode_file(D / "linke_v003_read_ram_256.sr", {"buses": [{"protocol": "swio", "pins": {"dio": "SWIO"}}]})
+    (bus,) = doc["parts"][0]["buses"]
+    r = bus["result"]
+    assert sum(1 for x in r["dmi"] if x.get("fast")) == 4 * 14
+    words = struct.unpack("<64I", (D / "linke_v003_read_ram_256.bin").read_bytes())
+    mem = {e["addr"]: e["value"] for e in r["dm"] if e["op"] == "MEMR"}
+    assert [mem.get(0x20000000 + 4 * i) for i in range(64)] == list(words)
+    # the frame's pulses against the split: every short low under it, every long one over it
+    split = bus["params"]["split_ns"]
+    assert all(x["short_max_ns"] < split < x["long_min_ns"] for x in r["dmi"] if x["short_max_ns"] and x["long_min_ns"])
+
+
+def test_swio_activity_that_is_no_frame_is_uninterpreted():
+    # before it connects, a LinkE sends 32 pulses (and one more: 33, the shape of a continuation, but after no read
+    # of data0) and the two-wire long form's queries on the one wire: neither is SWIO, both are said as unread
+    from wireskein.decode import decode_file
+    doc = decode_file(D / "linke_v003_read_ram_256.sr", {"buses": [{"protocol": "swio", "pins": {"dio": "SWIO"}}]})
+    (bus,) = doc["parts"][0]["buses"]
+    first = bus["result"]["dmi"][0]
+    assert not first.get("fast")
+    un = bus["uninterpreted"]
+    assert un and un[0]["edges"] == 66 and un[0]["s"] < first["s"]
+    assert any(u["edges"] > 1000 for u in un)          # the long form's queries, one after another
+
+
+def test_rvswd_frames_carry_their_bits_and_clock_period():
+    from wireskein.decode import decode_file
+    doc = decode_file(D / "linke_l103_target_info.sr",
+                      {"buses": [{"protocol": "rvswd", "pins": {"clk": "SWCLK", "dio": "SWDIO"}}]})
+    dmi = doc["parts"][0]["buses"][0]["result"]["dmi"]
+    assert all(len(x["bits"]) == (53 if x["form"] == "short" else 85) for x in dmi)
+    assert all(x["period_ns"] > 0 for x in dmi)

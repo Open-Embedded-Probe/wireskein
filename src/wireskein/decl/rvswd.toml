@@ -12,6 +12,7 @@ data = "dio"
 [frame]
 reframe = "rvswd_stop"
 ends = true      # each record its last sampling edge too
+# keep_span (each layout): the frame's bits as read and its clock period go with the record
 
 # 52: the same frame with its stop bit cut by the re-framing
 [[layout]]
@@ -26,6 +27,7 @@ checks = [
   { kind = "parity", bit = 8, over = [0, 7] },
   { kind = "parity", bit = 46, over = [14, 45] },
 ]
+keep_span = true
 
 [[layout]]
 bits = 54
@@ -35,6 +37,7 @@ fields = [
   { name = "status", at = 49, width = 2 },
 ]
 checks = [ { kind = "parity", bit = 47, over = [15, 46] } ]
+keep_span = true
 
 # Burst: 14 header bits, then words of 38 bits (32 data + 6), one stop bit; at least 2 words.
 [[layout]]
@@ -43,6 +46,7 @@ min_bits = 91
 const = { op = "BURST" }
 fields = []
 repeat = { name = "data", at = 14, every = 38, width = 32, tail = 1 }
+keep_span = true
 
 # Long form (wch-protocols link-to-target#long-frame, read on a WCH-LinkE and a CH32V103): 85 clocks from START
 # to STOP. The host sends addr7 data32 op2 (a RISC-V DMI request: op 1 read, 2 write) and a 0; the target answers

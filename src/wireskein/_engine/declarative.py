@@ -758,8 +758,15 @@ def _adapt_rvswd(c, fr, n):
         x = {"t": r["start"], **({"e": r["end"]} if "end" in r else {}), "op": r.get("op", "R"), "addr": r.get("addr"), "data": r["data"],
              "status": r.get("status", 0), "ok": r["ok"], "form": r.get("form", "short"),
              **({"answered": False} if r.get("answered") is False else {})}
-        if "_span" in r and r.get("answered") is not False:
-            x.update(long_answer(c.cap, fr.source, *r["_span"]))
+        if "_span" in r:
+            a, b = r["_span"]
+            sb = fr.source
+            # every bit as sampled, the don't-care ones too (to compare frames bit for bit), and the clock's period
+            x["bits"] = "".join("1" if v else "0" for v in sb.bits[0][a:b].tolist())
+            if b - a > 1:
+                x["period_ns"] = round(float(np.median(np.diff(sb.t[a:b]))) / c.cap.rate * 1e9, 1)
+            if x["form"] == "long" and r.get("answered") is not False:
+                x.update(long_answer(c.cap, sb, a, b))
         tx.append(x)
     n.output = Stream("dmi", tx)
     return n

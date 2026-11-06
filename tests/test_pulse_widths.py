@@ -64,3 +64,12 @@ def test_square_from_another_source_fits_its_own_grid():
     ok, got, _ = check_square(cap(e), square("P", 1000, 0.5))
     assert got["grid_max_s"] > 15e-6 and got["grid_fit_max_s"] <= 1e-6
     assert abs(got["grid_fit_period_s"] - 999.9e-6) < 1e-9
+
+
+def test_a_capture_in_memory_is_checked_as_a_file_is():
+    from fractions import Fraction
+    from wireskein import capture
+    from wireskein.decode import load
+    c = capture.Capture(Fraction(10**6), [capture.Part(1_000_000, [capture.logic("P", 0, [100_000, 350_000], 1_000_000)])])
+    ok, got, _ = check_pulses(load(c), pulses("P", count=1, width_min_s=0.2, width_max_s=0.3))
+    assert ok and got["widths_s"] == [0.25]

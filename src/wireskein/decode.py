@@ -43,8 +43,19 @@ IDLE_S = 1e-3          # a bus with no bit times of its own: activity apart by m
 IDLE_BITS = 16         # else: more than this many bit times without a change
 
 
-def load(path: str | Path, part: int | None = None) -> Capture:
-    """A WireSkein file (a capture of several parts needs `part`), a sigrok .sr or a VCD, told apart by content."""
+def load(path, part: int | None = None) -> Capture:
+    """A WireSkein file (a capture of several parts needs `part`), a sigrok .sr or a VCD, told apart by content; or a
+    wireskein.capture.Capture in memory (one just taken, before or without saving it), its part as the checks read
+    it."""
+    from .capture import Capture as Whole
+    if isinstance(path, Whole):
+        if len(path.parts) > 1 and part is None:
+            raise ValueError(f"a capture of {len(path.parts)} parts: name one (part, from 0)")
+        k = part or 0
+        v = path.parts[k].view()
+        v.meta.update(complete=path.complete, lost=list(path.lost), part=k, n_parts=len(path.parts),
+                      capture_id=path.id, **{key: val for key, val in path.meta.items() if key not in v.meta})
+        return v
     path = Path(path)
     kind = fileformat.sniff(path)
     if kind == "wireskein":
@@ -227,9 +238,14 @@ def _bus(res, cap: Capture, b: dict, depth: str, claimed: list) -> dict:
                 if ds:
                     out["devices"] = ds
     idle = _idle(cap, b, n)
-    # a clocked bus's bits and frames are where it was cut, not what was read: a frame no layout read is unread
-    sync = n is not None and n.analyzer in staged.SYNC_PROTOCOLS
-    items = _items(lay, ("bits", "frames") if sync else ())
+    # a clocked bus's bits and frames, SWIO's pulses, are where it was cut, not what was read: a frame no layout
+    # read is unread
+    skip = ()
+    if n is not None and n.analyzer in staged.SYNC_PROTOCOLS:
+        skip = ("bits", "frames")
+    elif n is not None and n.analyzer == "swio":
+        skip = ("pulses",)
+    items = _items(lay, skip)
     starts = np.sort(np.array([s for s, _ in items], np.int64))
     # items with an end (frames): what they cover is known, and activity between them inside a burst is not read
     spans = np.array(sorted((s, e) for s, e in items if e > s), np.int64).reshape(-1, 2)

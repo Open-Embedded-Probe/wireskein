@@ -182,7 +182,10 @@ class SwioPlugin:
             margin), and the R/W bit's own (the bit a target misreads when its long low shrinks), in ns."""
             w, s = ps.width[a:b], ps.short[a:b]
             out = {"short_max_ns": round(float(w[s].max()) * ns, 1) if s.any() else None,
-                   "long_min_ns": round(float(w[~s].min()) * ns, 1) if (~s).any() else None}
+                   "long_min_ns": round(float(w[~s].min()) * ns, 1) if (~s).any() else None,
+                   "short_median_ns": round(float(np.median(w[s])) * ns, 1) if s.any() else None,
+                   "long_median_ns": round(float(np.median(w[~s])) * ns, 1) if (~s).any() else None,
+                   "pitch_ns": round(float(np.median(np.diff(ps.start[a:b]))) * ns, 1) if b - a > 1 else None}
             if rw is not None:
                 out["rw_low_ns"] = round(float(ps.width[rw]) * ns, 1)
             return out
@@ -193,7 +196,9 @@ class SwioPlugin:
             if b - a == 41 and f[0] == 1:
                 tx.append({"t": int(ps.start[a]), "e": int(ps.start[b - 1] + ps.width[b - 1]), "op": "W" if f[8] else "R",
                            "addr": _int(f[1:8]), "data": _int(f[9:]), "status": 0, "ok": True, **widths(a, b, a + 8)})
-            elif b - a == 33 and f[0] == 0:
+            elif b - a == 33 and f[0] == 0 and tx and tx[-1]["op"] == "R" and tx[-1]["addr"] == 0x04:
+                # a continuation of reading data0 (autoexec): only after a read of it, so a lone 33-pulse burst
+                # (a LinkE's 32 pulses and one more before it connects) is no read
                 tx.append({"t": int(ps.start[a]), "e": int(ps.start[b - 1] + ps.width[b - 1]), "op": "R", "addr": 0x04,
                            "data": _int(f[1:]), "status": 0, "ok": True, "fast": True, **widths(a, b)})
         if len(tx) < 2:
