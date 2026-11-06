@@ -71,7 +71,8 @@ def match(bus: dict, claim: dict) -> dict:
     elif bus["protocol"] in ("swio", "rvswd"):
         r["roles"] = nr == tr
         r["params"] = r["roles"]
-        got = [(x["op"], x["addr"], x["data"]) for x in lay["dmi"]]
+        # a frame no target answered is a request, no access
+        got = [(x["op"], x["addr"], x["data"]) for x in lay["dmi"] if x.get("answered", True)]
         if bus["protocol"] == "swio" and "expect" in bus and "dmi_addr" in bus["expect"]:
             r["decode"] = _ratio([tuple(x) for x in bus["expect"]["dmi_addr"]], got)
         elif bus["protocol"] == "rvswd" and "expect" in bus and "dmi" in bus["expect"]:

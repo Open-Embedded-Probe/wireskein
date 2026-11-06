@@ -17,7 +17,7 @@ import json
 import numpy as np
 
 from . import typed
-from .rvswd import DM_NAMES
+from .riscv_dm import NAMES as DM_NAMES
 
 
 def _hex(vals) -> str:
@@ -108,10 +108,13 @@ def layers_of(n) -> dict:
             out["pulses"] = {"s": ps.start.tolist(), "width": ps.width.tolist(), "short": ps.short.tolist(),
                              "split": ps.split}
         out["dmi"] = [{"s": x["t"], "op": x["op"], "addr": x["addr"], "reg": DM_NAMES.get(x["addr"]) if x["addr"] is not None else None,
-                       "data": x["data"], "ok": x.get("ok", True)} for x in n.output.items]
+                       "data": x["data"], "ok": x.get("ok", True),
+                       **({k: x[k] for k in ("form", "status", "answered") if k in x} if a == "rvswd" else {})}
+                      for x in n.output.items]
         dm = [ch for ch in n.children if ch.analyzer == "riscv_dm"]
         if dm:
-            out["dm"] = [{"op": k, "addr": ad, "value": v} for k, ad, v in dm[0].output.items]
+            out["dm"] = [{"op": k, "addr": ad, "value": v, **({"size": sz} if sz else {})}
+                         for k, ad, v, sz in dm[0].output.items]
     elif a in ("uart", "lin", "dmx512"):
         lay = getattr(n, "layers", None) or {}
         if "blocks" in lay:

@@ -103,9 +103,9 @@ def reframer(name):
 
 
 @reframer("rvswd_stop")
-def _rvswd_stop(fr):
-    from .rvswd import reframe, reframe_rolling
-    return [reframe(fr), reframe_rolling(fr)]
+def _rvswd_stop(fr, cap):
+    from .rvswd import reframe, reframe_rolling, reframe_startstop
+    return [reframe_startstop(fr, cap), reframe(fr), reframe_rolling(fr)]
 
 
 # ---------------- expressions (sequence shape) ----------------
@@ -429,7 +429,7 @@ class DeclarativePlugin:
                                         None)
 
         reframe = sp.get("frame", {}).get("reframe")
-        views = REFRAMERS[reframe](fr) if reframe else [fr.bounds.tolist()]
+        views = REFRAMERS[reframe](fr, c.cap) if reframe else [fr.bounds.tolist()]
         best = None
         bits = sb.bits[0]
         for frames in views:
@@ -452,6 +452,15 @@ class DeclarativePlugin:
                     k = (b - a - int(r["at"]) - int(r.get("tail", 0))) // int(r["every"])
                     rec[r["name"]] = [_int_bits(f[r["at"] + r["every"] * i:r["at"] + r["every"] * i + r["width"]])
                                       for i in range(k)]
+                quiet = L.get("unanswered_if_ones")        # the answer's bits all 1: the line left released
+                if quiet and bool(f[quiet[0]:quiet[1] + 1].all()):
+                    rec["answered"] = False          # what the answer carries is not there
+                    rec["ok"] = False
+                    for fld in L["fields"]:
+                        if fld["at"] + fld["width"] - 1 >= quiet[0]:
+                            rec[fld["name"]] = None
+                    recs.append(rec)
+                    continue
                 ok = True
                 if L.get("checks"):
                     checked_frames += 1
@@ -460,8 +469,14 @@ class DeclarativePlugin:
                         lo, hi = chk["over"]
                         checked += 1
                         good = int(f[chk["bit"]]) == (_parity(f[lo:hi + 1]) ^ int(chk.get("odd", 0)))
-                        passed += good
-                        ok &= good
+                    elif chk["kind"] == "equal":     # one run of bits repeats another (an echo)
+                        (a0, a1), (b0, b1) = chk["a"], chk["b"]
+                        checked += 1
+                        good = bool(np.array_equal(f[a0:a1 + 1], f[b0:b1 + 1]))
+                    else:
+                        raise ValueError(f"unknown layout check kind {chk['kind']!r} (parity, equal)")
+                    passed += good
+                    ok &= good
                 rec["ok"] = bool(ok)
                 recs.append(rec)
             key = passed
@@ -635,7 +650,8 @@ def _adapt_spi(c, fr, n):
 
 def _adapt_rvswd(c, fr, n):
     tx = [{"t": r["start"], "op": r.get("op", "R"), "addr": r.get("addr"), "data": r["data"], "status": r.get("status", 0),
-           "ok": r["ok"]} for r in n.output.items if "data" in r]  # structure-only layouts carry no fields
+           "ok": r["ok"], "form": r.get("form", "short"),
+           **({"answered": False} if r.get("answered") is False else {})} for r in n.output.items if "data" in r]  # structure-only layouts carry no fields
     n.output = Stream("dmi", tx)
     return n
 

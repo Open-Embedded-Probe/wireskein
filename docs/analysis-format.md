@@ -105,6 +105,7 @@ The layers of analyze's export (`--mode final`, at `depth`), with ticks from the
 | `can` | `frames`: `s`, `id`, `ide` (1: an extended identifier), `dlc`, `data` (hex, the bytes the DLC carries), `ack`, `ok` |
 | `lin` | `frames`: `s` (the break), `id`, `data` (hex), `ok` (sync, identifier parity and checksum held) |
 | `dmx512` | `packets`: `s` (the break), `start_code`, `data` (hex, the slots) |
+| `rvswd`, `swio` | WCH's debug transports (two wires, one wire); the layers above them are RISC-V's, the same for both. `dmi`: the RISC-V DMI accesses they carry, `s`, `op` (`R` / `W`), `addr`, `reg` (the register's name in the RISC-V Debug Specification 0.13; `wch_7c`..`wch_7f` for WCH's registers outside it; null for an address of neither), `data`, `ok` (the frame's checks held); for RVSWD also `form` (`short`: WCH's 52-bit frame; `long`: the 85-clock frame a CH32V103 takes) and `status` (the DMI result in the long form: 0 done, 2 failed, 3 busy), and `answered: false` for a long frame no target answered (its `data` and `status` null: what was asked, not done). `dm`: what the debugger did to the hart, read from the RISC-V Debug Module (abstract commands, and programs run in the program buffer): `op` (`MEMR` / `MEMW` / `REGR` / `REGW` / `BURST`), `addr` (memory, or the register number of Access Register), `value` (null: not seen on the wire), `size` (bytes) |
 | others | as `analyze`'s export |
 
 A higher reading keeps its lower one beside it (`sd` and `transfers`). With `depth: "device"`, `devices` lists the

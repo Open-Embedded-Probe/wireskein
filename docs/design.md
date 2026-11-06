@@ -49,9 +49,10 @@ Decisions and reasons:
 - **Protocols that are closed within one frame are written declaratively in TOML** (`src/wireskein/decl/*.toml`: I²C, SPI, RVSWD, SWD, CAN; others' from a definitions directory added from outside, [protocols](protocols.md) §5). Word width, bit order, field extraction, fixed values, length rules, repeated words, parity, CRC, bit stuffing and conditional fields can all be written. The same protocol is not also written in Python and kept twice.
   - Reason: definitions cover most common patterns without code, validation is mechanical, and other implementations can use the same definitions.
   - Expressions are limited to integer arithmetic, comparison, logic, the ternary operator and min/max. Loops and variables spanning frames are not included.
-  - Searches that a definition cannot express (such as re-framing RVSWD at stop intervals) are core processing called by name (`frame.reframe = "rvswd_stop"`). Exceptions are confined to the core and are not brought into definitions.
+  - Searches that a definition cannot express (such as cutting RVSWD at its START and STOP, a STOP told by the clock held high longer than usual) are core processing called by name (`frame.reframe = "rvswd_stop"`). Exceptions are confined to the core and are not brought into definitions.
   - Scoring is shared in the interpreter; a definition selects evidence items with `[score]`. For example, SPI uses `count_frames`: each frame that matches the rules counts as one piece of evidence, and the probability that all k match by chance (for `8n`, (1/8)^k) is subtracted. This prevents a hypothesis in which a whole other bus fits into one CS window from tying with the true delimiting. I²C does not use this, because its START/STOP conditions are evidence of delimiting.
-- **Anything with state or syntax spanning frames is written in Python.** For example, the RISC-V Debug Module (abstract commands on top of DMI) and SCPI.
+- **Anything with state or syntax spanning frames is written in Python.** For example, the RISC-V Debug Module (abstract commands on top of DMI, and the program buffer run on what the wire shows) and SCPI.
+- **A vendor's transport and the standard above it are kept apart.** RVSWD and SWIO are WCH's; the DMI accesses they carry and the Debug Module above are RISC-V's (`_engine/riscv_dm.py`), read the same whatever carries them.
 - Embedded scripting languages (JS, Lua, WASM, etc.) are not adopted. TOML and Python are enough, and this avoids the cost of learning a third language.
 
 ### 3.3 Verdicts

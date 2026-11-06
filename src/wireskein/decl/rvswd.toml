@@ -43,7 +43,26 @@ const = { op = "BURST" }
 fields = []
 repeat = { name = "data", at = 14, every = 38, width = 32, tail = 1 }
 
-# Long (attach) form: structure only, not decoded here (fields unknown in detail).
+# Long form (wch-protocols link-to-target#long-frame, read on a WCH-LinkE and a CH32V103): 85 clocks from START
+# to STOP. The host sends addr7 data32 op2 (a RISC-V DMI request: op 1 read, 2 write) and a 0; the target answers
+# addr7 (the request's) data32 (a write's data echoed, a read's value) status2 (the DMI op result: 0 done, 2 failed,
+# 3 busy); the host then sends bit 83 (0 after a write, 1 after a read) and one clock more. No parity: the evidence
+# is the address echoed. A frame no target answered is kept, as unanswered.
 [[layout]]
-bits = [84, 85, 86]
+bits = 85
+fields = [
+  { name = "addr", at = 0, width = 7, role = "address" },
+  { name = "op",   at = 39, width = 2, enum = { "0" = "NOP", "1" = "R", "2" = "W" } },
+  { name = "data", at = 49, width = 32, role = "data" },
+  { name = "status", at = 81, width = 2 },
+]
+const = { form = "long" }
+# a target that does not take the long form leaves the line released: its data and status read all 1, no answer
+unanswered_if_ones = [49, 82]
+# the address echoed, and bit 83 (1 after a read) the op's low bit
+checks = [ { kind = "equal", a = [0, 6], b = [42, 48] }, { kind = "equal", a = [40, 40], b = [83, 83] } ]
+
+# The long form's query a WCH-LinkE sends first on connecting: structure only.
+[[layout]]
+bits = 80
 fields = []

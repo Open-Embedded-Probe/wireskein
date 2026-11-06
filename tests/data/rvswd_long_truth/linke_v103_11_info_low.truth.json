@@ -1,0 +1,17 @@
+{
+ "source": "ch32rv 0.29.1 on a WCH-LinkE (fw 2.22) and a CH32V103C8T6 (wch-protocols experiments/e173): its output, in <name>.json",
+ "roles": {
+  "clk": "swclk",
+  "dio": "swdio"
+ },
+ "form": "long",
+ "memory": {
+  "0x1ffff884": "0x2500410f",
+  "0x1ffff7e8": "0x1035abcd",
+  "0x1ffff7ec": "0x7869bc67"
+ },
+ "memory_low16": {
+  "0x1ffff7e0": "0x0040"
+ },
+ "note": "chip id 0x2500410f, uid 1035abcd7869bc67, flash 64 KiB (the low half of 0x1ffff7e0 in KiB)"
+}

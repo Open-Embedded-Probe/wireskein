@@ -1,0 +1,15 @@
+{
+ "source": "ch32rv 0.29.1 on a WCH-LinkE (fw 2.22) and a CH32V103C8T6 (wch-protocols experiments/e173): its output, in <name>.json",
+ "roles": {
+  "clk": "swclk",
+  "dio": "swdio"
+ },
+ "form": "long",
+ "memory": {
+  "0x1ffff800": "0x00ff5aa5",
+  "0x1ffff804": "0xffffffff",
+  "0x1ffff808": "0xffffffff",
+  "0x1ffff80c": "0xffffffff"
+ },
+ "note": "option bytes raw a55aff00ffffffffffffffffffffffff, as little-endian words"
+}

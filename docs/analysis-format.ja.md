@@ -104,6 +104,7 @@ analyze の書き出し（`--mode final`、`depth` まで）の層。刻みは�
 | `can` | `frames`: `s`、`id`、`ide`（1: 拡張の識別子）、`dlc`、`data`（16 進。DLC が運ぶバイト）、`ack`、`ok` |
 | `lin` | `frames`: `s`（break）、`id`、`data`（16 進）、`ok`（sync、識別子のパリティ、チェックサムが合う） |
 | `dmx512` | `packets`: `s`（break）、`start_code`、`data`（16 進。スロット） |
+| `rvswd`、`swio` | WCH のデバッグの伝送路（2 線と 1 線）。その上の層は RISC-V のもので、どちらでも同じ。`dmi`: 運ぶ RISC-V の DMI のアクセスで、`s`、`op`（`R` / `W`）、`addr`、`reg`（RISC-V Debug Specification 0.13 のレジスタの名前。仕様の外の WCH のレジスタは `wch_7c`〜`wch_7f`、どちらでもないアドレスは null）、`data`、`ok`（フレームの検査が合った）。RVSWD ではさらに `form`（`short`: WCH の 52 ビットのフレーム、`long`: CH32V103 が受ける 85 クロックのフレーム）と `status`（long 形式の DMI の結果。0 は完了、2 は失敗、3 は busy）、どの target も答えなかった long のフレームには `answered: false`（その `data` と `status` は null。頼んだだけで、行われていない）。`dm`: デバッガが hart に何をしたかを、RISC-V の Debug Module（抽象コマンドと、プログラムバッファで動かしたプログラム）から読んだもの。`op`（`MEMR` / `MEMW` / `REGR` / `REGW` / `BURST`）、`addr`（メモリのアドレスか、Access Register のレジスタ番号）、`value`（null は線の上に見えなかった）、`size`（バイト数） |
 | ほか | `analyze` の書き出しと同じ |
 
 上の層を読めても、下の層は横に残す（`sd` と `transfers`）。`depth: "device"` では、`devices` にバスの上で

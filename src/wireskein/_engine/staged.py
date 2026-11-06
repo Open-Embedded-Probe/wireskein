@@ -35,7 +35,8 @@ from .scoring import DefaultScorer
 from .stack import Node, Stream, explanations
 from .taxonomy import classify
 from .declarative import load_all
-from .rvswd import SwioPlugin, dm_node
+from .riscv_dm import dm_node
+from .rvswd import SwioPlugin
 
 
 CLAIM_COST = 0.3  # a hypothesis must beat this per channel to be worth claiming
