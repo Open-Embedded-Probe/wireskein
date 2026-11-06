@@ -280,7 +280,7 @@ def _bus(res, cap: Capture, b: dict, depth: str, claimed: list) -> dict:
     return out
 
 
-def _analyze_split(source, hints, opts, depth: str, head: dict) -> dict | None:
+def _analyze_split(source, hints, opts, depth: str, head: dict, items=None) -> dict | None:
     """A long part analysed in pieces: what the first piece holds (analyze's claims, confirmed or likely) is taken as
     the buses' roles, and every piece decoded with them (decode's reading, joined); each claim's result is the
     joined one. None when the part is one piece (analyzed as usual)."""
@@ -297,11 +297,28 @@ def _analyze_split(source, hints, opts, depth: str, head: dict) -> dict | None:
                              "params": {x: c["params"][x] for x in ("baud", "mode") if x in c.get("params", {})}}
                             for c in keep], "depth": depth})
     work = functools.partial(_piece, spec=spec, head=head)
-    outs = [(p0, _part(c0, spec, head, strict=True))] + [
-        (p, o) for (p, _), o in _split.mapped(work, gen, int(opts.get("workers", 1)))]
+    sink = _Items(items, spec) if items is not None else None
+    outs = []
+    try:
+        for p, o in [(p0, _part(c0, spec, head, strict=True))] + [
+                (p, o) for (p, _), o in _split.mapped(work, gen, int(opts.get("workers", 1)))]:
+            if sink is not None:
+                sink.take(p, o)
+            outs.append((p, o))
+        if sink is not None:
+            sink.close()
+    finally:
+        if sink is not None:
+            sink.f.close()
     joined = _join_part(outs, spec, source, opts, noisy)
+    if sink is not None:
+        for j, b in enumerate(joined["buses"]):
+            b["result"] = {"items": {"file": str(items), "counts": sink.counts[j]}}
+            b["uninterpreted"] = []
+            b["uninterpreted_summary"] = sink.unread[j].doc()
     claims = [{**c, "result": b.get("result", {}), "fit_pieces": b.get("fit", {}).get("pieces"),
-               "uninterpreted": b.get("uninterpreted", [])} for c, b in zip(keep, joined["buses"])]
+               **({"uninterpreted": b["uninterpreted"]} if b.get("uninterpreted") else {}),
+               "uninterpreted_summary": b.get("uninterpreted_summary")} for c, b in zip(keep, joined["buses"])]
     return {"claims": claims, "split": {**joined["split"], "roles_from": [p0.s, p0.e],
                                         "not_carried": [{"protocol": c["protocol"], "roles": c["roles"],
                                                          "verdict": c.get("verdict")} for c in ex["claims"]
@@ -616,7 +633,7 @@ def analyze_file(path: str | Path, hints: dict | None = None, mode: str = "final
                  alternatives: bool = False, depth: str = "protocol", window_s: tuple[float, float] | None = None,
                  segment: str | None = None, markers_hint: dict | None = None, events: bool = False,
                  thresholds: dict | None = None, part: int | None = None, split=None,
-                 pins: list[str] | None = None) -> dict:
+                 pins: list[str] | None = None, items=None) -> dict:
     """What analyze finds in a capture, as the same family of document as decode_file (wireskein-analysis): the
     capture, then each part with its claims (the export of `mode`, ticks from the part's tick 0). A WireSkein file
     is analysed part by part (analysis never crosses a gap); a .sr or a VCD is one part.
@@ -630,7 +647,7 @@ def analyze_file(path: str | Path, hints: dict | None = None, mode: str = "final
         src = _file_source(path, pins)              # a WireSkein file of one part: read from the file as it goes
         if src is not None:
             t0 = time.perf_counter()
-            got = _analyze_split(src, hints, opts, depth, src.head)
+            got = _analyze_split(src, hints, opts, depth, src.head, items)
             if got is not None:
                 doc = {"format": FORMAT, "wireskein": __version__, "hints": hints,
                        "capture": _capture_of(path, src.raw),
@@ -655,7 +672,7 @@ def analyze_file(path: str | Path, hints: dict | None = None, mode: str = "final
             cap = as_logic(cap, thresholds)
         cap = only(cap, pins)
         if not (window_s or segment) and opts:
-            got = _analyze_split(_split.CaptureSource(cap), hints, opts, depth, heads[k])
+            got = _analyze_split(_split.CaptureSource(cap), hints, opts, depth, heads[k], items)
             if got is not None:                    # long: roles from the first piece, then every piece read with them
                 doc["parts"].append({**_part_head(heads[k], firsts[k], cap.n_samples, spans[k]), **got})
                 continue

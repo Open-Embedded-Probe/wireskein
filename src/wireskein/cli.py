@@ -579,6 +579,8 @@ def main() -> None:
     a.add_argument("--markers", default=None, metavar="JSON",
                    help='marker source: {"pin": "D6", "dialect": "heading"} (default: found automatically)')
     a.add_argument("--split", default=None, help=SPLIT_HELP)
+    a.add_argument("--items", type=Path, default=None,
+                   help="a capture read in pieces: write the decoded items here as they are read (ndjson)")
     a.add_argument("--pins", default=None, help=PINS_HELP)
     a.add_argument("--part", type=int, default=None, help="only this part (from 0) of a capture in parts; needed for "
                    "--window / --segment when there are several")
@@ -742,7 +744,8 @@ def main() -> None:
     try:
         doc = analyze_file(args.capture, hints, args.mode, args.select, args.alternatives, args.depth, args.window,
                            args.segment, json.loads(args.markers) if args.markers else None, args.events,
-                           _thresholds(getattr(args, "threshold", None)), args.part, args.split, _pins(args.pins))
+                           _thresholds(getattr(args, "threshold", None)), args.part, args.split, _pins(args.pins),
+                           args.items)
     except (ValueError, FileNotFoundError, zipfile.BadZipFile) as e:
         sys.exit(f"wireskein analyze: {e}")
     text = export.dumps(doc)

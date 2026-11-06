@@ -28,7 +28,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-DEFAULTS = {"max_edges": 2_000_000, "search_from": 0.5, "gap_min": 4.0, "similar": 0.5, "min_edges": 100_000,
+DEFAULTS = {"max_edges": 1_000_000, "search_from": 0.5, "gap_min": 4.0, "similar": 0.5, "min_edges": 50_000,
             "overlap_edges": 10_000, "noise_max": 1, "noise_share": 0.3, "workers": 1}
 LISTS = ("cuts", "watch", "ignore")
 
