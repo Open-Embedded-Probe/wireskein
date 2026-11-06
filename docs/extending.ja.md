@@ -9,6 +9,7 @@ WireSkein は、キャプチャを読み手に要るもの（載っているバ�
 | したいこと | 使うもの | 詳しく |
 | --- | --- | --- |
 | UART、SPI、I2C に乗るプロトコル（命令のフレーム、報告、パケット）を分析で読む | Python のプロトコルのオブジェクト（`wireskein.protocols`） | [独自のプロトコル](protocols.ja.md) §1〜§4 |
+| UART の 1 本のテキストの命令と、もう 1 本の応答（AT コマンド、シェル） | `"uart_pair"` に乗るプロトコルのオブジェクト | [独自のプロトコル](protocols.ja.md) §3.1 |
 | それ自体がバスのプロトコル（クロックとデータ、または 1 本の NRZ の線の上の独自のフレーム） | 定義のディレクトリの TOML の定義 | [独自のプロトコル](protocols.ja.md) §5 |
 | I2C や SPI の機器のレジスタや命令に名前を付ける | 定義のディレクトリの `devices/` のデバイスの定義 | [デバイスの定義](../src/wireskein/decl/devices/README.ja.md) |
 | 自分の試験のログのマーカーの行を区間として読む | 定義のディレクトリの `markers/` のマーカーの方言 | [マーカー](markers.ja.md) §4 |
@@ -58,6 +59,19 @@ acme = "acme_wireskein.definitions"
 5. `register` する（または入れる）と、`wireskein analyze` はその UART を `confirmed` と読み、フレームを `result` の下に出します。
 6. 試験では、`protocol(NAME, "uart", {"data": PIN}, messages=[...])` で区間のフレームを確かめます。
 
+## 4.1 どの形か
+
+| 線の上にあるもの | 書くもの | その証拠 | 見本 |
+| --- | --- | --- | --- |
+| UART 1 本の上のバイナリのフレーム（始まりのバイト、長さ、CRC） | `"uart"` に乗るプロトコル。`bytes` を読む | CRC、長さ | `demo_link` |
+| 同じフレームを SPI の窓で。要求は MOSI、応答は MISO | 同じプロトコルで `over = ("uart", "spi")`。`transfers` を読む | CRC、応答の seq | `demo_link` |
+| 1 本の線のテキストの命令と、もう 1 本の応答（AT コマンド、シェル） | `"uart_pair"` に乗るプロトコル。両方の線の `messages` を読む | 命令に当たる応答 | `demo_cmd` |
+| I2C や SPI のチップのレジスタ | デバイスの定義 | 正しく読める識別のレジスタ | [デバイスの定義](../src/wireskein/decl/devices/README.ja.md) |
+| 1 本の線、またはクロックとデータの上の独自のフレーム | TOML の定義 | 決まった値の欄、CRC | `demo_wire` |
+| 試験が使う、どの線にもあてはまるきまり（落ち着く線、出来事の順番） | 検査の種類 | 測った値、その tick の注意 | `demo_settle` |
+
+自分のチェックを持たないプロトコル（1 本の線のただのテキストなど）は、分析には何も出ません。チェックを持たせるか（合う応答、数えていく欄、偶然には起きないほど厳しい形）、試験の中で行を読んで（`wireskein.verify.sections`、分析の `lines`）そこで判定します。
+
 ## 5. リポジトリの中の見本
 
 | 見本 | 見せるもの |
@@ -66,4 +80,7 @@ acme = "acme_wireskein.definitions"
 | `examples/protocols/demo_link_p4.wireskein` | OEP のプローブが ESP-IDF の UART ドライバで出して取り込んだ demo_link と、正解としての送ったもの |
 | `examples/definitions/demo_wire.toml` | 1 本の NRZ の線の上のプロトコル: ビットスタッフィング、変わる長さ、CRC-8 |
 | `tests/test_protocols.py` | 両方の見本を、別に作った信号で確かめる試験。プロトコルの検査、注釈、印 |
-| `tests/test_check_plugins.py` | 外から足した検査の種類と、その注意 |
+| `examples/protocols/demo_cmd.py` | UART の組の上のテキストの命令と応答: 証拠としての組、出来事、ビューアのための level |
+| `examples/checks/demo_settle.py` | 検査の種類: 落ち着かなければならない線、注意としてのチャタリング、期待のレベルが無ければ測るだけ |
+| `tests/test_demo_cmd.py` | 分析と、試験のプロトコルの検査での demo_cmd |
+| `tests/test_check_plugins.py` | 外から足した検査の種類と、その注意。チャタリングする接点での demo_settle |

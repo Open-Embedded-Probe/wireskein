@@ -9,6 +9,7 @@ WireSkein turns a capture into what a reader needs - the buses on it, their mess
 | You want | Use | Details |
 | --- | --- | --- |
 | A protocol that rides on UART, SPI or I2C (command frames, reports, packets) read in the analysis | A protocol object in Python (`wireskein.protocols`) | [Protocols](protocols.md) §1-§4 |
+| Text commands on one UART line and their answers on another (AT commands, a shell) | A protocol object on `"uart_pair"` | [Protocols](protocols.md) §3.1 |
 | A protocol that is its own bus: its own framing on a clock and data, or on one NRZ line | A TOML definition in a definitions directory | [Protocols](protocols.md) §5 |
 | The registers and commands of a device on I2C or SPI named | A device pack under `devices/` of a definitions directory | [Device packs](../src/wireskein/decl/devices/README.md) |
 | The marker lines of your own test logs read as segments | A marker dialect under `markers/` of a definitions directory | [Markers](markers.md) §4 |
@@ -58,6 +59,21 @@ acme = "acme_wireskein.definitions"
 5. `register` it (or install it): `wireskein analyze` now reads the UART `confirmed` with its frames under `result`.
 6. In a test, `protocol(NAME, "uart", {"data": PIN}, messages=[...])` checks the frames of a segment.
 
+## 4.1 Which shape is yours
+
+| What is on the wire | Write | Its evidence | Example |
+| --- | --- | --- | --- |
+| Binary frames on one UART (a start byte, a length, a CRC) | A protocol on `"uart"`, reading `bytes` | The CRC, the length | `demo_link` |
+| The same frames in SPI windows, request on MOSI and reply on MISO | The same protocol, `over = ("uart", "spi")`, reading `transfers` | The CRC, the reply's seq | `demo_link` |
+| Text commands on one line and answers on the other (AT commands, a shell) | A protocol on `"uart_pair"`, reading both lines' `messages` | An answer that belongs to its command | `demo_cmd` |
+| Registers of a chip on I2C or SPI | A device pack | An identity register that reads right | [Device packs](../src/wireskein/decl/devices/README.md) |
+| Its own framing on one line or a clock and data | A TOML definition | Expected fields, a CRC | `demo_wire` |
+| A rule on any line a test applies (a line that settles, an order of events) | A check kind | Measured values, notices at their ticks | `demo_settle` |
+
+A protocol with no check of its own (plain text on one line, say) shows nothing in the analysis: give it one (an
+answer that matches, a field that counts, a fixed shape strict enough not to happen by chance), or read the lines
+in a test (`wireskein.verify.sections`, the analysis's `lines`) and judge them there.
+
 ## 5. Examples in the repository
 
 | Example | Shows |
@@ -66,4 +82,7 @@ acme = "acme_wireskein.definitions"
 | `examples/protocols/demo_link_p4.wireskein` | demo_link sent by an OEP probe's ESP-IDF UART driver and captured, with what it sent as the truth |
 | `examples/definitions/demo_wire.toml` | A protocol on one NRZ line: bit stuffing, a variable length, a CRC-8 |
 | `tests/test_protocols.py` | Both examples tested on signals made apart from them, the protocol check, annotations and markers |
-| `tests/test_check_plugins.py` | A check kind added from outside, with its notices |
+| `examples/protocols/demo_cmd.py` | Text commands and answers on a UART pair: the pairing as the evidence, events, levels for the viewer |
+| `examples/checks/demo_settle.py` | A check kind: a line that must settle, its bounces as notices, measuring only without an expected level |
+| `tests/test_demo_cmd.py` | demo_cmd in the analysis and in a test's protocol check |
+| `tests/test_check_plugins.py` | A check kind added from outside, with its notices; demo_settle on a bouncing contact |

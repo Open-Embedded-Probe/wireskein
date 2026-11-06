@@ -128,7 +128,7 @@ analyze の書き出し（`--mode final`、`depth` まで）の層。刻みは�
 | --- | --- |
 | `part`、`ticks`、`tick0`、`start_ns` など | §2.1 と同じ |
 | `claims[]` | 証拠が支えるもの: `protocol`、`roles`（役割 → チャンネル）、`verdict`（`confirmed` / `likely` / `ambiguous` / `unknown-sync`）、`score`、`margin`、`params`。さらに `result`（`--mode final`、`--depth` まで）、`layers` と `evidence`（`--mode all`）、または `--select` で選んだ層、`devices`（`--depth device`）、`runner_up`（`--alternatives`）。刻みは区間の刻み 0 から |
-| `relations[]` | 一緒に読む主張の組（コマンドの行とその応答: `scpi`） |
+| `relations[]` | 一緒に読む主張の組（コマンドの行とその応答）。`scpi` とその `exchanges`、UART の組の上のほかの人のプロトコル（`uart_pair`、[独自のプロトコル](protocols.ja.md) §3.1）とその `messages`、`checks_passed`、`checks_failed` |
 | `analysis_seconds` | 文書の一番上: 解析にかかった秒（実行ごとに変わる） |
 | `window`、`segment`、`events` | `--window` / `--segment` のとき（1 つの区間の中の範囲。区間が 2 つ以上なら `--part` で選ぶ） |
 

@@ -3,13 +3,15 @@
 A protocol is an object with
 
     name     the name it is shown under ("acme_link"): letters, digits and "_", not one of WireSkein's own
-    over     the buses it rides on: a tuple of "uart", "spi", "i2c"
+    over     the buses it rides on: a tuple of "uart", "spi", "i2c", "uart_pair"
     decode(bus) -> {"messages": [...], "checks_passed": int, "checks_failed": int}
 
 `bus` is the bus as the analysis exports it (docs/analysis-format.md §4): its `roles` (pin of each role), `tick_hz`,
 and its layers - for UART `bytes` ({"s": [tick...], "hex": "..."}) and `chars` (each {"s", "value", "ok"}) and
 `breaks`; for SPI `transfers` (each {"s", "e", <pin>: hex}); for I2C `transactions` (each {"s", "e", "addr", "rw",
-"bytes", "acks", "start_cond", "end_cond", ...}). It never sees WireSkein's internal types, so a protocol keeps
+"bytes", "acks", "start_cond", "end_cond", ...}); for "uart_pair" (two UART lines the analysis pairs as a command
+line and its answers, at one rate) `roles` {"a": pin, "b": pin} and `messages`, both lines' in time order, each
+{"pin", "s", "e", "hex", "text"} (a line's characters up to a pause of more than 3 characters). It never sees WireSkein's internal types, so a protocol keeps
 working as long as the analysis format does.
 
 `decode` returns the messages it read (plain JSON values; a message's "s" is its first tick, so the viewer and the
@@ -32,7 +34,7 @@ __all__ = ["add_definitions", "definitions", "register", "registered", "load"]
 _REGISTERED: dict[str, object] = {}
 _LOADED = False
 _DIRS: list = []                       # definition directories added (add_definitions, wireskein.definitions)
-BUSES = ("uart", "spi", "i2c")
+BUSES = ("uart", "spi", "i2c", "uart_pair")
 _RESERVED = {"lines", "nmea", "modbus_rtu", "markers", "bytes", "chars", "breaks", "transfers", "transactions",
              "words", "bits", "frames", "packets", "sd", "devices", "modes", "modes_ok"}
 

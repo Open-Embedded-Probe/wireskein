@@ -386,8 +386,9 @@ def becomes(pin: str, level: int | None = None, *, freq_hz: float | None = None,
 
 def protocol(name: str, bus: str | None, roles: dict[str, str], messages: list[dict] | None = None,
              checks_failed_max: int = 0, baud: float | None = None, threshold=None) -> dict:
-    """A protocol of one's own (wireskein.protocols) on a bus: bus "uart" / "spi" / "i2c", roles its pins by role
-    ({"data": "TX"}; {"clk", "mosi", "miso", "cs"}; {"scl", "sda"}), baud for a UART. bus None: a protocol declared
+    """A protocol of one's own (wireskein.protocols) on a bus: bus "uart" / "spi" / "i2c" / "uart_pair", roles its
+    pins by role ({"data": "TX"}; {"clk", "mosi", "miso", "cs"}; {"scl", "sda"}; two UART lines {"a": "TX", "b":
+    "RX"}), baud for a UART. bus None: a protocol declared
     on the wire (a definition, its roles as it names them), its frames the messages. messages: compared in order,
     each on the keys it gives (the others, such as "s", not); without them, at least one message. At most
     checks_failed_max of its checks may fail."""

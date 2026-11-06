@@ -130,7 +130,7 @@ tried, `--hint` / `--devices`) in place of `spec`, and in each part, in place of
 | --- | --- |
 | `part`, `ticks`, `tick0`, `start_ns`, ... | As in §2.1 |
 | `claims[]` | What the evidence carries: `protocol`, `roles` (role → channel), `verdict` (`confirmed` / `likely` / `ambiguous` / `unknown-sync`), `score`, `margin`, `params`, and `result` (`--mode final`, at `--depth`), `layers` and `evidence` (`--mode all`) or the layers `--select` names, `devices` (`--depth device`), `runner_up` (`--alternatives`). Ticks from the part's tick 0 |
-| `relations[]` | Pairs of claims read together (a command line and its answers: `scpi`) |
+| `relations[]` | Pairs of claims read together (a command line and its answers): `scpi` with its `exchanges`, and protocols of others on a UART pair (`uart_pair`, [protocols](protocols.md) §3.1) with their `messages`, `checks_passed`, `checks_failed` |
 | `analysis_seconds` | At the top: how long the analysis took (differs every run) |
 | `window`, `segment`, `events` | With `--window` / `--segment` (a range inside one part: `--part` names it when there are several) |
 

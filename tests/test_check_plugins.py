@@ -72,3 +72,31 @@ def test_an_installed_package_adds_a_check(tmp_path, monkeypatch):
         for d in (verify.CHECKS, verify.NOTICES):
             d.pop("y_pulses", None)
         verify._ADDED.discard("y_pulses")
+
+
+# ---- the example examples/checks/demo_settle.py, on a contact bouncing then settling (made here) ----
+
+def test_the_example_check_demo_settle(tmp_path):
+    import importlib.util
+    from pathlib import Path
+    spec = importlib.util.spec_from_file_location("demo_settle", Path(__file__).parents[1] / "examples/checks/demo_settle.py")
+    demo = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(demo)
+    verify.register_check("demo_settle", demo.CHECK.check, notices=demo.CHECK.notices)
+    try:
+        lv = np.zeros(100_000, np.uint8)                     # 1 MS/s: bounces at 10 ms, settled high from 10.5 ms
+        for a, b in ((10_000, 10_050), (10_120, 10_200), (10_300, 10_310), (10_500, 100_000)):
+            lv[a:b] = 1
+        rec = Recorder(tmp_path)
+        x = {"kind": "demo_settle", "pins": ["K"], "level": 1, "quiet_s": 0.05}
+        with rec.section(1, "press", expect=[x, {**x, "changes_max": 3}, {**x, "notices": {"bounce": "ng"}}]):
+            rec.capture(rec.armed(), 1_000_000, interleaved=lv.tobytes(), names=["K"])
+        rec.close()
+        ok, few, none = verify.verify(tmp_path)["results"]
+        assert ok["status"] == "ok" and ok["measured"]["changes"] == 7 and len(ok["notices"]) == 6, ok
+        assert few["status"] == "ng" and "7 changes, more than 3" in few["reason"], few
+        assert none["status"] == "ng" and "bounce" in none["reason"], none
+    finally:
+        for d in (verify.CHECKS, verify.NOTICES):
+            d.pop("demo_settle", None)
+        verify._ADDED.discard("demo_settle")

@@ -135,8 +135,39 @@ def scpi_node(d: Duplex, pm: dict) -> Node | None:
                 {k: v for k, v in r.items() if k != "exchanges"}, layer_score=score, total=score)
 
 
+def pair_bus(d: Duplex, tick_hz: float | None = None) -> dict:
+    """The pair as protocols of others get it (wireskein.protocols, bus "uart_pair"): both lines' messages in time
+    order, a message being one line's characters up to a pause of more than 3 characters."""
+    return {"roles": {"a": d.a, "b": d.b}, "tick_hz": tick_hz,
+            "messages": [{"pin": m.pin, "s": m.t0, "e": m.t1, "hex": m.data.hex(), "text": m.data.decode("latin-1")}
+                         for m in d.messages]}
+
+
+def user_protocols(d: Duplex, node: Node, tick_hz: float | None = None, only: str | None = None) -> list[Node]:
+    """The protocols of others riding on a UART pair, each as a child of `node`, scored by its checks."""
+    from .. import protocols as P
+    out = []
+    mine = [p for p in P.registered().values() if "uart_pair" in p.over and (only is None or p.name == only)]
+    if not mine:
+        return out
+    bus = pair_bus(d, tick_hz)
+    for p in mine:
+        try:
+            got = p.decode(bus) or {}
+        except Exception as e:  # noqa: BLE001 - another's protocol: its failure is shown, the analysis goes on
+            got = {"messages": [], "checks_passed": 0, "checks_failed": 0, "error": f"{type(e).__name__}: {e}"}
+        m = {"checks_passed": int(got.get("checks_passed", 0)), "checks_failed": int(got.get("checks_failed", 0)),
+             **({"error": got["error"]} if "error" in got else {})}
+        sc = P.score(m)
+        child = Node(p.name, {}, {"a": d.a, "b": d.b}, Stream(p.name, list(got.get("messages", []))), m, node,
+                     layer_score=sc, total=sc)
+        child.user = True
+        out.append(child)
+    return out
+
+
 def relations(roots: list[Node]) -> list[Node]:
-    """Pair every two UART results; attach SCPI on top; feed support back."""
+    """Pair every two UART results; attach SCPI and the protocols of others on top; feed support back."""
     uarts = [n for n in roots if n.analyzer == "uart" and n.output is not None and n.total > 0.3]
     rel = []
     for i in range(len(uarts)):
@@ -152,6 +183,11 @@ def relations(roots: list[Node]) -> list[Node]:
                 continue
             node = Node("uart_duplex", {"baud": a.params["baud"]}, {"a": d.a, "b": d.b}, Stream("duplex", d), m,
                         layer_score=m["score"], total=m["score"] * min(a.total, b.total))
+            for u in user_protocols(d, node):
+                node.children.append(u)
+                node.total = node.total + 0.5 * (1 - node.total) * u.total
+                for ln in (a, b):
+                    ln.total = ln.total + 0.5 * (1 - ln.total) * u.total * node.layer_score
             s = scpi_node(d, a.params)
             if s is not None:
                 node.children.append(s)

@@ -547,6 +547,8 @@ def check_protocol(cap, x):
         return False, {}, f"no protocol named {x['name']!r} (wireskein.protocols)"
     if x["bus"] not in proto.over:
         return False, {}, f"{x['name']} rides on {', '.join(proto.over)}, not {x['bus']}"
+    if x["bus"] == "uart_pair":
+        return _pair_protocol(cap, x, proto)
     pins = {p: {"protocol": x["bus"], "role": r, **({"baud": x["baud"]} if x.get("baud") else {})}
             for r, p in x["roles"].items()}
     res = _decode(cap, {"protocols": [x["bus"]], "pins": pins})
@@ -554,6 +556,31 @@ def check_protocol(cap, x):
     if n is None:
         return False, {}, f"nothing decoded as {x['bus']} on these pins"
     child = next((c for c in n.children if c.analyzer == x["name"]), None)
+    msgs = list(child.output.items) if child is not None else []
+    m = child.metrics if child is not None else {"checks_passed": 0, "checks_failed": 0}
+    got = {"messages": msgs, "checks_passed": m.get("checks_passed", 0), "checks_failed": m.get("checks_failed", 0)}
+    if "error" in m:
+        return False, got, f"{x['name']} failed: {m['error']}"
+    return _compare_messages(x, got)
+
+
+def _pair_protocol(cap, x, proto):
+    """A protocol on two UART lines read as a pair (bus "uart_pair", roles {"a": pin, "b": pin}): each line decoded
+    as UART, the two paired whatever the pairing's own score (the pins are given), the protocol read on them."""
+    from ._engine import duplex
+    roles = x["roles"]
+    if set(roles) != {"a", "b"}:
+        return False, {}, f"uart_pair takes roles a and b, not {sorted(roles)}"
+    pins = {p: {"protocol": "uart", "role": "data", **({"baud": x["baud"]} if x.get("baud") else {})}
+            for p in roles.values()}
+    res = _decode(cap, {"protocols": ["uart"], "pins": pins})
+    na, nb = (_best(res, "uart", {"data": roles[k]}) for k in ("a", "b"))
+    if na is None or nb is None:
+        return False, {}, "nothing decoded as uart on " + ", ".join(roles[k] for k, n in (("a", na), ("b", nb)) if n is None)
+    ma, mb = duplex.messages(na), duplex.messages(nb)
+    d = duplex.Duplex(roles["a"], roles["b"], sorted(ma + mb, key=lambda m: m.t0))
+    host = duplex.Node("uart_duplex", {}, dict(roles), None, {})
+    (child,) = duplex.user_protocols(d, host, float(cap.rate), only=x["name"]) or (None,)
     msgs = list(child.output.items) if child is not None else []
     m = child.metrics if child is not None else {"checks_passed": 0, "checks_failed": 0}
     got = {"messages": msgs, "checks_passed": m.get("checks_passed", 0), "checks_failed": m.get("checks_failed", 0)}

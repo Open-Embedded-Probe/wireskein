@@ -272,6 +272,13 @@ def export(res, cap, mode: str = "final", select: list[str] | None = None, alter
             if sc and (mode != "select" or any(fnmatch.fnmatch("scpi", p.partition(".")[0]) for p in select or [])):
                 rel.append({"protocol": "scpi", "roles": sc[0].roles, "score": round(float(sc[0].total), 4),
                             "exchanges": sc[0].output.items})
+            for u in r.children:          # protocols of others on the pair (bus "uart_pair") whose checks held
+                if not getattr(u, "user", False) or u.total < 0.3:
+                    continue
+                if mode == "select" and not any(fnmatch.fnmatch(u.analyzer, p.partition(".")[0]) for p in select or []):
+                    continue
+                rel.append({"protocol": u.analyzer, "roles": u.roles, "score": round(float(u.total), 4),
+                            "messages": u.output.items, **{k: u.metrics[k] for k in ("checks_passed", "checks_failed")}})
         if rel:
             doc["relations"] = rel
     return doc
