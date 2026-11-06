@@ -142,3 +142,22 @@ def test_a_wireskein_file_is_read_from_the_file_as_the_pieces_go(tmp_path):
     a = analyze_file(out, split=opts)["parts"][0]
     (c,) = [c for c in a["claims"] if c["protocol"] == "rvswd"]
     assert c["result"]["dmi"] == whole["dmi"]
+
+
+def test_items_written_out_as_the_pieces_go(tmp_path):
+    import json
+    whole = decode_file(D / "linke_v203_read_flash_4k.sr", RVSWD, split="off")["parts"][0]["buses"][0]
+    out = tmp_path / "items.ndjson"
+    doc = decode_file(D / "linke_v203_read_flash_4k.sr", RVSWD,
+                      split="max_edges=20000,min_edges=2000,overlap_edges=500", items=out)
+    b = doc["parts"][0]["buses"][0]
+    rows = [json.loads(x) for x in out.read_text().splitlines()]
+    by = {}
+    for r in rows:
+        by.setdefault(r.pop("layer"), []).append({k: v for k, v in r.items() if k != "bus"})
+    assert b["result"]["items"]["counts"]["dmi"] == len(by["dmi"])
+    whole_s = {x["s"] for x in whole["result"]["dmi"]}
+    assert whole_s <= {x["s"] for x in by["dmi"]}            # every frame the whole reads (pieces may read more)
+    mem = {e["addr"]: e["value"] for e in by["dm"] if e["op"] == "MEMR"}
+    want = {e["addr"]: e["value"] for e in whole["result"]["dm"] if e["op"] == "MEMR"}
+    assert {a: mem.get(a) for a in want} == want              # the Debug Module across the pieces: the same reads

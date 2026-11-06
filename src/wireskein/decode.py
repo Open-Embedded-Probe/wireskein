@@ -378,11 +378,13 @@ def _open(path: Path, part: int | None = None):
     return raw, [{"meta": v.meta, "tick0": 0}], [v], [0], [None]
 
 
-def decode_file(path: str | Path, spec: dict, split=None, pins: list[str] | None = None) -> dict:
+def decode_file(path: str | Path, spec: dict, split=None, pins: list[str] | None = None, items=None) -> dict:
     """The document for a capture (a WireSkein file, a .sr, a VCD or a format added): every part decoded with the
     spec's roles. A part of more changes than the split's max_edges is read in pieces (wireskein.split; `split`
     overrides spec["split"]: a dict, "key=value,...", or "off"); a WireSkein file of one part is then read from the
-    file a block at a time, only the piece being read held. pins: only these channels are read."""
+    file a block at a time, only the piece being read held. pins: only these channels are read. items: a file the
+    decoded items are written to as they are read (ndjson; the document gives their counts), for a capture whose
+    items are more than memory holds."""
     from . import split as _split
     path = Path(path)
     spec = _spec(spec)
@@ -391,13 +393,14 @@ def decode_file(path: str | Path, spec: dict, split=None, pins: list[str] | None
     if src is not None:
         raw, head = src.raw, src.head
         doc = {"format": FORMAT, "wireskein": __version__, "spec": spec, "capture": _capture_of(path, raw),
-               "parts": [_part_split(src, spec, head, opts)]}
+               "parts": [_part_split(src, spec, head, opts, items)]}
         return doc
     raw, heads, views, _, spans = _open(path)
     doc = {"format": FORMAT, "wireskein": __version__, "spec": spec, "capture": _capture_of(path, raw), "parts": []}
     for head, cap, span in zip(heads, views, spans):
         cap = only(cap, pins)
-        out = _part_split(_split.CaptureSource(cap), spec, head, opts) if opts else _part(cap, spec, head)
+        out = (_part_split(_split.CaptureSource(cap), spec, head, opts, items) if opts or items
+               else _part(cap, spec, head))
         if span:
             out["parts"] = span
         doc["parts"].append(out)
@@ -437,16 +440,76 @@ def only(cap: Capture, pins: list[str] | None) -> Capture:
                    [a for a in cap.analog if a.name in keep], [t for t in cap.events if t.name in keep])
 
 
-def _part_split(source, spec: dict, head: dict, opts) -> dict:
+def _part_split(source, spec: dict, head: dict, opts, items=None) -> dict:
     """_part, in pieces when the part is long (wireskein.split), their results joined; only the piece being read is
-    held, and of each piece only what it decoded."""
+    held, and of each piece only what it decoded. items: a file the items are written to as the pieces are read
+    (one JSON object a line: {"bus", "layer", ...the item}), the document then giving their counts only."""
     from . import split as _split
     watch = [p for b in spec["buses"] for p in b["pins"].values()] + list(spec["lines"])
     noisy: dict = {}
+    sink = _Items(items, spec) if items is not None else None
     outs = []
-    for p, wcap in _split.run(source, opts, watch=watch or None, noisy=noisy):
-        outs.append((p, _part(wcap, spec, head)))
-    return _join_part(outs, spec, source, opts, noisy)
+    try:
+        for p, wcap in _split.run(source, opts, watch=watch or None, noisy=noisy):
+            o = _part(wcap, spec, head)
+            if sink is not None:
+                sink.take(p, o)
+            outs.append((p, o))
+        if sink is not None:
+            sink.close()
+    finally:
+        if sink is not None:
+            sink.f.close()
+    out = _join_part(outs, spec, source, opts, noisy)
+    if sink is not None:
+        for j, b in enumerate(out["buses"]):
+            b["result"] = {"items": {"file": str(items), "counts": sink.counts[j]}}
+            b.pop("uninterpreted", None)
+            b["uninterpreted_count"] = sink.counts[j].get("uninterpreted", 0)
+    return out
+
+
+class _Items:
+    """Items written out as the pieces are read: each piece's list layers, in the capture's ticks, kept by the piece
+    they start in; the Debug Module read across the pieces as one."""
+
+    def __init__(self, path, spec: dict):
+        from ._engine.riscv_dm import Across
+        self.f = open(path, "w")
+        self.counts = [{} for _ in spec["buses"]]
+        self.dm = {j: Across() for j, b in enumerate(spec["buses"]) if b["protocol"] in ("rvswd", "swio")}
+
+    def _write(self, j: int, layer: str, rows) -> None:
+        for r in rows:
+            self.f.write(dumps({"bus": j, "layer": layer, **r}) + "\n")
+        self.counts[j][layer] = self.counts[j].get(layer, 0) + len(rows)
+
+    def _dm(self, j: int, entries) -> None:
+        self._write(j, "dm", [{**({"s": int(t0)} if t0 is not None else {}), **({"e": int(t1)} if t1 is not None else {}),
+                               "op": op, "addr": ad, "value": v, **({"size": sz} if sz else {})}
+                              for op, ad, v, sz, t0, t1 in entries])
+
+    def take(self, p, o: dict) -> None:
+        from . import split as _split
+        for j, b in enumerate(o["buses"]):
+            res = b.get("result", {})
+            for k, v in list(res.items()):
+                if isinstance(v, list) and not (k == "dm" and j in self.dm):
+                    rows = _split.join_items([(p, v)])
+                    self._write(j, k, rows)
+                    if k == "dmi" and j in self.dm:
+                        self.dm[j].feed([{"t": x["s"], "e": x.get("e"), "op": x["op"], "addr": x["addr"],
+                                          "data": x["data"], **{q: x[q] for q in ("ok", "form", "status") if q in x}}
+                                         for x in rows])
+                        self._dm(j, self.dm[j].ready())
+                    res[k] = []                       # written: not held
+            self._write(j, "uninterpreted", _split.join_items([(p, b.get("uninterpreted", []))]))
+            b["uninterpreted"] = []
+            res.pop("dm", None)
+
+    def close(self) -> None:
+        for j, st in self.dm.items():
+            self._dm(j, st.ready(final=True))
 
 
 def _join_part(outs: list, spec: dict, source, opts, noisy: dict) -> dict:

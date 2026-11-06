@@ -190,7 +190,7 @@ def decode_cmd(args) -> None:
     src = args.spec[1:] if args.spec.startswith("@") else args.spec
     try:
         spec = json.loads(Path(src).read_text() if not src.lstrip().startswith("{") else src)
-        doc = decode_file(args.capture, spec, args.split, _pins(args.pins))
+        doc = decode_file(args.capture, spec, args.split, _pins(args.pins), args.items)
     except (ValueError, FileNotFoundError, zipfile.BadZipFile) as e:
         sys.exit(f"wireskein decode: {e}")
     text = export.dumps(doc)
@@ -576,6 +576,9 @@ def main() -> None:
                     help='{"buses": [{"protocol", "pins": {role: pin}, "params"}], "lines": [...]}; @FILE or a file path')
     dc.add_argument("--out", type=Path, default=None)
     dc.add_argument("--split", default=None, help=SPLIT_HELP)
+    dc.add_argument("--items", type=Path, default=None,
+                    help="write the decoded items to this file as they are read (one JSON object a line: bus, layer, "
+                         "the item), the document giving their counts: a capture whose items are more than memory")
     dc.add_argument("--pins", default=None, help=PINS_HELP)
     sg = sub.add_parser("segments", help="the marker segment tree with per-segment activity and decoded items")
     sg.add_argument("capture", type=Path)

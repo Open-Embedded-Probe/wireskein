@@ -322,6 +322,36 @@ class DebugModule:
                 self.dataaddr = _sx(data & 0xFFF, 12) & MASK
 
 
+class Across:
+    """The Debug Module read access by access over pieces of a long capture, in order: feed() a piece's DMI accesses,
+    ready() the accesses read whose values are known (or never will be), held back only those a later read may
+    still fill."""
+
+    def __init__(self):
+        self.dm = DebugModule()
+        self.learnt = False
+
+    def feed(self, tx: list[dict]) -> None:
+        if not self.learnt:                  # where the data registers sit, from the first piece's programs
+            self.dm.dataaddr = _learn_dataaddr(tx)
+            self.learnt = True
+        for x in tx:
+            if not _skip(x):
+                self.dm.feed(x["op"], x["addr"], x["data"], x.get("t"), x.get("e"))
+
+    def ready(self, final: bool = False) -> list[list]:
+        if final:
+            out, self.dm.out = self.dm.out, []
+            return out
+        held = set()
+        for v in [*self.dm.data.values(), *self.dm.gpr.values()]:
+            if isinstance(v, Load):
+                held |= {id(e) for e in v.entries}
+        out = [e for e in self.dm.out if id(e) not in held]
+        self.dm.out = [e for e in self.dm.out if id(e) in held]
+        return out
+
+
 def accesses(tx: list[dict], dataaddr: int | None = None) -> list[list]:
     """The register and memory accesses the DMI accesses `tx` carry ((op, addr, value, size), in order).
     dataaddr: where the data registers are in the hart's memory, when the capture never reads hartinfo; else it is
