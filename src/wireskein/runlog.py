@@ -452,7 +452,7 @@ def spi(clk: str, mosi: str | None = None, miso: str | None = None, cs: str | No
         mosi_bytes: str | None = None, miso_bytes: str | None = None, freq_hz: float | None = None,
         freq_rel: float = 0.1, bit_order: str = "msb", cs_active: int = 0, bits: int | list[int] | None = None,
         notices: dict | None = None, setup_min_s: float | None = None, hold_min_s: float | None = None,
-        threshold=None) -> dict:
+        edge_sample: str | None = None, threshold=None) -> dict:
     """mode is read from the lines: CPOL from SCK's level as CS becomes active, CPHA from the SCK edge MOSI (else
     MISO) changes after (a leading edge: 1). With cs: the clocks in each window of CS active are measured
     (frame_bits) and bits (one count for every window, or a list) compared; an SCK level inside a window shorter
@@ -461,11 +461,18 @@ def spi(clk: str, mosi: str | None = None, miso: str | None = None, cs: str | No
     count limits them. With cs, each data line's setup and hold around the sampling edges are measured (margins;
     other_setup_s / other_hold_s on the other edge: wide on both, the line reads the same in either mode) and
     setup_min_s / hold_min_s bound them; modes_ok lists the modes a receiver could read the lines in, from the lines
-    alone (CPOL as SCK's idle level, no data line changing at that mode's sampling edges)."""
+    alone (CPOL as SCK's idle level, no data line changing at that mode's sampling edges).
+
+    edge_sample="before": a data line changing in the same sample as a sampling edge is taken as changing after it
+    (the edge reads the value before). For a part whose output hold is known (its datasheet) to be shorter than a
+    sample of the capture: such a change then still reads, and margins tell its hold as hold_under_sample with the
+    sample's length (sample_s). The bytes are read just before each sampling edge either way."""
+    if edge_sample not in (None, "before"):
+        raise ValueError(f"edge_sample: None or \"before\", not {edge_sample!r}")
     return _t({"kind": "spi", "clk": clk, "mosi": mosi, "miso": miso, "cs": cs, "mode": mode, "mosi_bytes": mosi_bytes,
                "miso_bytes": miso_bytes, "freq_hz": freq_hz, "freq_rel": freq_rel, "bit_order": bit_order,
                "cs_active": cs_active, "bits": bits, "notices": notices, "setup_min_s": setup_min_s,
-               "hold_min_s": hold_min_s}, threshold)
+               "hold_min_s": hold_min_s, **({"edge_sample": edge_sample} if edge_sample else {})}, threshold)
 
 
 def phase(a: str, b: str, phase_deg: float | None = None, phase_abs_deg: float = 2.0, freq_hz: float | None = None,

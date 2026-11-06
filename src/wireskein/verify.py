@@ -484,7 +484,7 @@ def check_spi(cap, x):
         # the first mode that reads; the candidate modes below say what else it reads in
         lines0 = [cap.channel(x[r]) for r in ("mosi", "miso") if x.get(r)]
         opts = timing.spi_modes(cap.channel(x["clk"]), lines0, m["cpol"], cap.rate, cap.n_samples,
-                                cap.channel(x["cs"]), x.get("cs_active", 0))
+                                cap.channel(x["cs"]), x.get("cs_active", 0), edge_sample=x.get("edge_sample"))
         pick = x.get("mode") if x.get("mode") in [o["mode"] for o in opts] else \
             next((o["mode"] for o in opts if o["readable"]), None)
         if pick is not None:
@@ -512,7 +512,11 @@ def check_spi(cap, x):
     if margins:
         got["margins"] = margins                          # per data line: setup / hold around the sampling edges
         got["modes"] = timing.spi_modes(cap.channel(x["clk"]), lines_, m["cpol"], cap.rate, cap.n_samples, cs_ch, act,
-                                        lsb=x.get("bit_order", "msb") == "lsb")
+                                        lsb=x.get("bit_order", "msb") == "lsb", edge_sample=x.get("edge_sample"))
+        for mg in margins.values():                   # a hold under a sample: told as such, with the sample's length
+            if mg["hold_s"] is not None and mg["hold_s"] < 1 / cap.rate:
+                mg["hold_under_sample"] = True
+                mg["sample_s"] = 1 / cap.rate
         got["modes_ok"] = [mm["mode"] for mm in got["modes"] if mm["readable"]]
     ok, why = True, []
     if line is not None:

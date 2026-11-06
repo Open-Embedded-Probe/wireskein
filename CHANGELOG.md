@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- (EN) `spi(..., edge_sample="before")`: a data line changing in the same sample as a sampling edge is taken as changing after it (the edge reads the value before), for a part whose output hold is known to be under a sample (CH32V103's SPI slave at 40 MS/s); such a hold is then told in `margins` as `hold_under_sample` with `sample_s`.
+- (JA) `spi(..., edge_sample="before")`: データの線がサンプルの縁と同じサンプルで変わったとき、縁のあとの変化として扱う（縁は前の値を読む）。部品の出力のホールドが 1 サンプルより短いと分かっているときに使う（40 MS/s での CH32V103 の SPI スレーブ）。そのホールドは `margins` に `hold_under_sample` と `sample_s` で出る。
+
 - (EN) A doubtful piece is analysed on its own too (split `reanalyze`, default on): `doubtful[].holds` gives what it holds (a capture changing from UART to I2C on the way: the later pieces hold I2C). A piece reads well when it reads its items in its own ticks, columns keyed by time (UART's bytes) counted too.
 - (JA) 疑わしい区切りは、それだけでも analyze する（split の `reanalyze`、既定で入）: `doubtful[].holds` に、その区切りにあるものを出す（途中で UART から I2C に変わる記録: 後の区切りに I2C）。区切りがよく読めたかは、自分の tick の中の項目で見る。時刻の列の形（UART の bytes）も数える。
 

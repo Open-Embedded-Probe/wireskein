@@ -256,15 +256,19 @@ def spi_read(clk: Channel, data: list[Channel], edge: str, n: int, cs: Channel |
 
 
 def spi_modes(clk: Channel, data: list[Channel], cpol: int, rate: float, n: int, cs: Channel | None = None,
-              cs_active: int = 0, lsb: bool = False) -> list[dict]:
+              cs_active: int = 0, lsb: bool = False, edge_sample: str | None = None) -> list[dict]:
     """The two modes of SCK's idle level, each with whether a receiver could read the lines in it (no data line
     changing at its sampling edges) and the bytes it reads: [{"mode", "readable", "bytes"}]. One readable mode tells
-    the mode; readable ones reading the same bytes need not be told apart."""
+    the mode; readable ones reading the same bytes need not be told apart. edge_sample "before": a change in the same
+    sample as a sampling edge is after it (a part whose output hold is shorter than a sample: the edge reads the
+    value before), so a hold under a sample still reads."""
+    hold_min = 0.0 if edge_sample == "before" else 1 / rate
     out = []
     for h in (0, 1):
         mode, edge = cpol * 2 + h, "rise" if cpol == h else "fall"
         mg = sampling_margins(clk, data, edge, rate, cs, cs_active)
-        ok = all(v[k] is None or v[k] >= 1 / rate for v in mg.values() for k in ("setup_s", "hold_s"))
+        ok = all((v["setup_s"] is None or v["setup_s"] >= 1 / rate) and (v["hold_s"] is None or v["hold_s"] >= hold_min)
+                 for v in mg.values())
         out.append({"mode": mode, "readable": ok, "bytes": spi_read(clk, data, edge, n, cs, cs_active, lsb)})
     return out
 
