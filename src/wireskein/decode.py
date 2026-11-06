@@ -273,6 +273,30 @@ def _bus(res, cap: Capture, b: dict, depth: str, claimed: list) -> dict:
     return out
 
 
+def _analyze_split(cap: Capture, hints, opts, pieces, depth: str, head: dict) -> dict:
+    """A long part analysed in pieces: what the first piece holds (analyze's claims, confirmed or likely) is taken as
+    the buses' roles, and every piece decoded with them (decode's reading, joined); each claim's result is the
+    joined one."""
+    from . import split as _split
+    p0 = pieces[0]
+    first = _split.window(cap, p0.a, p0.b)
+    res0 = staged.analyze(first, hints)
+    ex = export(res0, first, "final", None, False, None, depth)
+    keep = [c for c in ex["claims"] if c.get("verdict") in ("confirmed", "likely") and c["protocol"] != "sync_unknown"]
+    spec = _spec({"buses": [{"protocol": c["protocol"], "pins": c["roles"],
+                             "params": {x: c["params"][x] for x in ("baud", "mode") if x in c.get("params", {})}}
+                            for c in keep], "depth": depth, "split": opts})
+    joined = _part_split(cap, spec, head, opts) if keep else {"buses": [], "split": {"pieces": [p.doc() for p in pieces]}}
+    claims = []
+    for c, b in zip(keep, joined["buses"]):
+        claims.append({**c, "result": b.get("result", {}), "fit_pieces": b.get("fit", {}).get("pieces"),
+                       "uninterpreted": b.get("uninterpreted", [])})
+    return {"claims": claims, "split": {**joined.get("split", {}), "roles_from": [p0.s, p0.e],
+                                        "not_carried": [{"protocol": c["protocol"], "roles": c["roles"],
+                                                         "verdict": c.get("verdict")} for c in ex["claims"]
+                                                        if c not in keep]}}
+
+
 def _part(cap: Capture, spec: dict, head: dict) -> dict:
     names = {c.name for c in cap.channels}
     for b in spec["buses"]:
@@ -352,25 +376,108 @@ def _open(path: Path, part: int | None = None):
     return raw, [{"meta": v.meta, "tick0": 0}], [v], [0], [None]
 
 
-def decode_file(path: str | Path, spec: dict) -> dict:
+def decode_file(path: str | Path, spec: dict, split=None, pins: list[str] | None = None) -> dict:
     """The document for a capture (a WireSkein file, a .sr, a VCD or a format added): every part decoded with the
-    spec's roles."""
+    spec's roles. A part of more changes than the split's max_edges is read in pieces (wireskein.split; `split`
+    overrides spec["split"]: a dict, "key=value,...", or "off"). pins: only these channels are read."""
+    from . import split as _split
     path = Path(path)
     spec = _spec(spec)
+    opts = _split.options(spec.get("split") if split is None else split)
     raw, heads, views, _, spans = _open(path)
     doc = {"format": FORMAT, "wireskein": __version__, "spec": spec, "capture": _capture_of(path, raw), "parts": []}
     for head, cap, span in zip(heads, views, spans):
-        out = _part(cap, spec, head)
+        cap = only(cap, pins)
+        out = _part_split(cap, spec, head, opts)
         if span:
             out["parts"] = span
         doc["parts"].append(out)
     return doc
 
 
+def only(cap: Capture, pins: list[str] | None) -> Capture:
+    """The capture with only these channels (the others dropped before anything reads them)."""
+    if not pins:
+        return cap
+    names = {c.name for c in cap.channels} | {a.name for a in cap.analog} | {t.name for t in cap.events}
+    miss = [p for p in pins if p not in names]
+    if miss:
+        raise ValueError(f"pins not in the capture: {', '.join(miss)}")
+    keep = set(pins)
+    return Capture(cap.rate, cap.n_samples, [c for c in cap.channels if c.name in keep], cap.meta,
+                   [a for a in cap.analog if a.name in keep], [t for t in cap.events if t.name in keep])
+
+
+def _part_split(cap: Capture, spec: dict, head: dict, opts) -> dict:
+    """_part, in pieces when the part is long (wireskein.split), their results joined."""
+    from . import split as _split
+    watch = [p for b in spec["buses"] for p in b["pins"].values()] + list(spec["lines"])
+    noisy: dict = {}
+    pieces = _split.plan(cap, opts, watch=watch or None, noisy=noisy)
+    if len(pieces) == 1:
+        return _part(cap, spec, head)
+    outs = [(p, _part(_split.window(cap, p.a, p.b), spec, head)) for p in pieces]
+    out = {"part": head.get("part", 0), "ticks": cap.n_samples,
+           **({"tick0": head["tick0"]} if "tick0" in head else {}),
+           **{k: head["meta"][k] for k in ("start_ns", "start_uncertainty_ns", "boot_id") if k in head.get("meta", {})}}
+    out["buses"] = [_join_bus([(p, o["buses"][j]) for p, o in outs]) for j in range(len(spec["buses"]))]
+    out["lines"] = [{"pin": p, "initial": int(cap.channel(p).initial), "edges": np.asarray(cap.channel(p).edges).tolist()}
+                    for p in spec["lines"]]
+    named = set(watch)
+    rest = []
+    for c in cap.channels:
+        if c.name in named or not len(c.edges):
+            continue
+        bs = _bursts(cap, [c.name], int(round(IDLE_S * cap.rate)))
+        rest.append({"pin": c.name, "edges": int(len(c.edges)), "s": int(bs[0][0]), "e": int(bs[-1][-1]),
+                     "bursts": len(bs)})
+    out["undeclared"] = rest
+    out["split"] = {"options": opts, "pieces": [p.doc() for p in pieces],
+                    **({"trembling": noisy} if noisy else {})}
+    return out
+
+
+def _join_bus(per: list) -> dict:
+    """A bus's results from the pieces, as one: items in the capture's ticks, each from the piece it starts in."""
+    from . import split as _split
+    first = next((b for _, b in per if b.get("decoded")), per[0][1])
+    out = {k: v for k, v in first.items() if k not in ("result", "uninterpreted", "fit")}
+    out["decoded"] = any(b.get("decoded") for _, b in per)
+    fits = [b.get("fit") for _, b in per if b.get("fit")]
+    if fits:
+        worst = min(fits, key=lambda f: f["score"])
+        out["fit"] = {**worst, "pieces": [f["score"] for f in fits]}
+    res: dict = {}
+    keys = []
+    for _, b in per:
+        keys += [k for k in b.get("result", {}) if k not in keys]
+    for k in keys:
+        vals = [(p, b["result"][k]) for p, b in per if k in b.get("result", {})]
+        v0 = vals[0][1]
+        if isinstance(v0, list):
+            res[k] = _split.join_items(vals)
+        elif isinstance(v0, dict) and any(isinstance(x, list) for x in v0.values()) and ("t" in v0 or "s" in v0):
+            res[k] = _split.join_columns(vals)
+        else:
+            res[k] = v0
+    if out.get("protocol") in ("rvswd", "swio") and "dmi" in res:
+        # the Debug Module keeps state across frames: read again over the pieces' accesses joined
+        from ._engine.riscv_dm import accesses
+        tx = [{"t": x["s"], "e": x.get("e"), "op": x["op"], "addr": x["addr"], "data": x["data"],
+               **{k: x[k] for k in ("ok", "form", "status") if k in x}} for x in res["dmi"]]
+        res["dm"] = [{**({"s": int(t0)} if t0 is not None else {}), **({"e": int(t1)} if t1 is not None else {}),
+                      "op": op, "addr": ad, "value": v, **({"size": sz} if sz else {})}
+                     for op, ad, v, sz, t0, t1 in accesses(tx)]
+    out["result"] = res
+    out["uninterpreted"] = _split.join_items([(p, b.get("uninterpreted", [])) for p, b in per])
+    return out
+
+
 def analyze_file(path: str | Path, hints: dict | None = None, mode: str = "final", select: list[str] | None = None,
                  alternatives: bool = False, depth: str = "protocol", window_s: tuple[float, float] | None = None,
                  segment: str | None = None, markers_hint: dict | None = None, events: bool = False,
-                 thresholds: dict | None = None, part: int | None = None) -> dict:
+                 thresholds: dict | None = None, part: int | None = None, split=None,
+                 pins: list[str] | None = None) -> dict:
     """What analyze finds in a capture, as the same family of document as decode_file (wireskein-analysis): the
     capture, then each part with its claims (the export of `mode`, ticks from the part's tick 0). A WireSkein file
     is analysed part by part (analysis never crosses a gap); a .sr or a VCD is one part.
@@ -390,10 +497,19 @@ def analyze_file(path: str | Path, hints: dict | None = None, mode: str = "final
         ks = range(len(heads))
     doc = {"format": FORMAT, "wireskein": __version__, "hints": hints, "capture": _capture_of(path, raw), "parts": []}
     t0 = time.perf_counter()
+    from . import split as _split
+    opts = _split.options(split)
     for k in ks:
         cap = views[k]
         if thresholds:
             cap = as_logic(cap, thresholds)
+        cap = only(cap, pins)
+        if not (window_s or segment):
+            pieces = _split.plan(cap, opts)
+            if len(pieces) > 1:                    # long: roles from the first piece, then every piece read with them
+                doc["parts"].append({**_part_head(heads[k], firsts[k], cap.n_samples, spans[k]),
+                                     **_analyze_split(cap, hints, opts, pieces, depth, heads[k])})
+                continue
         res = staged.analyze(cap, hints)
         window = (int(window_s[0] * cap.rate), int(window_s[1] * cap.rate)) if window_s else None
         seg_events = hit = None

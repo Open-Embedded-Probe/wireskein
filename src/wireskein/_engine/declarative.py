@@ -111,10 +111,10 @@ def reframer(name):
 def _rvswd_stop(fr, cap):
     from .rvswd import reframe, reframe_rolling, reframe_startstop
     ss = Delimited(reframe_startstop(fr, cap))
-    # the START / STOP frames hold nearly every clock: the cuts at stop intervals (for captures that hide START and
-    # STOP) are not tried
-    inside = sum(f_[1] - f_[0] for f_ in ss)
-    if inside >= 0.95 * max(1, int(np.diff(fr.bounds, axis=1).sum())):
+    # START and STOP seen: the frames are theirs. The cuts at stop intervals are for captures that hide them (where
+    # they would read a stretch of other activity as frames that pass a parity or two by chance, and a piece of a
+    # long capture would read otherwise than the whole)
+    if ss:
         return [ss]
     return [ss, reframe(fr), reframe_rolling(fr)]
 

@@ -190,7 +190,7 @@ def decode_cmd(args) -> None:
     src = args.spec[1:] if args.spec.startswith("@") else args.spec
     try:
         spec = json.loads(Path(src).read_text() if not src.lstrip().startswith("{") else src)
-        doc = decode_file(args.capture, spec)
+        doc = decode_file(args.capture, spec, args.split, _pins(args.pins))
     except (ValueError, FileNotFoundError, zipfile.BadZipFile) as e:
         sys.exit(f"wireskein decode: {e}")
     text = export.dumps(doc)
@@ -209,6 +209,16 @@ def _load_for_decoding(path, args):
         from .decode import as_logic
         cap = as_logic(cap, th)
     return cap
+
+
+def _pins(text) -> list[str] | None:
+    return [x.strip() for x in text.split(",") if x.strip()] if text else None
+
+
+SPLIT_HELP = ("a capture of more changes than max_edges is read in pieces cut where the lines are quiet: "
+              '"off" (read whole), or KEY=VALUE,... of max_edges, search_from, gap_min, similar, min_edges, '
+              "overlap_edges, noise_max, noise_share, watch=A;B, ignore=A;B, cuts=T1;T2 (wireskein.split)")
+PINS_HELP = "only these channels, comma-separated (the others are dropped before anything reads them)"
 
 
 def _seconds(text: str) -> float:
@@ -453,13 +463,17 @@ def convert(args) -> None:
         s1 = int(round(t1 * rate)) if t1 is not None else None
         if Path(args.output).suffix.lower() not in (".sr", ".vcd"):
             # straight through, a chunk at a time: any length, in a chunk's memory
-            got = srio.convert_sr(args.input, args.output, s0, s1, excerpt=t0 is not None or t1 is not None)
+            got = srio.convert_sr(args.input, args.output, s0, s1, excerpt=t0 is not None or t1 is not None,
+                                  pins=_pins(getattr(args, "pins", None)))
             if got is not None:
                 out, n, names, r = got
                 print(f"{args.input} -> {out}: {len(names)} logic channels, {n} ticks at {r:g} Hz")
                 return
     if cap is None:
         cap = load_file(args.input, part) if part is not None else load(args.input)
+        if getattr(args, "pins", None):
+            from .decode import only
+            cap = only(cap, _pins(args.pins))
         if t0 is not None or t1 is not None:
             from .verify import _window
             s0 = int(round((t0 or 0) * cap.rate))
@@ -550,6 +564,8 @@ def main() -> None:
                    help='only items inside a marker segment, e.g. "session/pwm/1kHz-25[1]" (glob; first match)')
     a.add_argument("--markers", default=None, metavar="JSON",
                    help='marker source: {"pin": "D6", "dialect": "heading"} (default: found automatically)')
+    a.add_argument("--split", default=None, help=SPLIT_HELP)
+    a.add_argument("--pins", default=None, help=PINS_HELP)
     a.add_argument("--part", type=int, default=None, help="only this part (from 0) of a capture in parts; needed for "
                    "--window / --segment when there are several")
     a.add_argument("--events", action="store_true",
@@ -559,6 +575,8 @@ def main() -> None:
     dc.add_argument("--spec", required=True, metavar="JSON",
                     help='{"buses": [{"protocol", "pins": {role: pin}, "params"}], "lines": [...]}; @FILE or a file path')
     dc.add_argument("--out", type=Path, default=None)
+    dc.add_argument("--split", default=None, help=SPLIT_HELP)
+    dc.add_argument("--pins", default=None, help=PINS_HELP)
     sg = sub.add_parser("segments", help="the marker segment tree with per-segment activity and decoded items")
     sg.add_argument("capture", type=Path)
     sg.add_argument("--hint", default=None)
@@ -584,6 +602,7 @@ def main() -> None:
     cv.add_argument("--from", dest="from_s", type=float, default=None,
                     help="seconds from the capture's start: write from there (an excerpt; meta.excerpt says where)")
     cv.add_argument("--to", dest="to_s", type=float, default=None, help="seconds from the capture's start: write up to there")
+    cv.add_argument("--pins", default=None, help=PINS_HELP + "; written without the others")
     cv.add_argument("--part", type=int, default=None,
                     help="of a capture in parts (wireskein-format §3.4): write this one (from 0) on its own; .sr and "
                          "VCD hold one gapless run")
@@ -696,7 +715,7 @@ def main() -> None:
     try:
         doc = analyze_file(args.capture, hints, args.mode, args.select, args.alternatives, args.depth, args.window,
                            args.segment, json.loads(args.markers) if args.markers else None, args.events,
-                           _thresholds(getattr(args, "threshold", None)), args.part)
+                           _thresholds(getattr(args, "threshold", None)), args.part, args.split, _pins(args.pins))
     except (ValueError, FileNotFoundError, zipfile.BadZipFile) as e:
         sys.exit(f"wireskein analyze: {e}")
     text = export.dumps(doc)

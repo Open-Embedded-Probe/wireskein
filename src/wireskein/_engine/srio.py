@@ -279,7 +279,8 @@ def _changes(z, chunks, unitsize, dtype, bits, start=0, end=None):
     return initial, {b: (np.concatenate(e) if e else np.zeros(0, np.int64)) for b, e in edges.items()}, n_ticks
 
 
-def convert_sr(path: Path, out: Path, start: int = 0, end: int | None = None, excerpt: bool = False, **meta) -> tuple[Path, int, list[str], float] | None:
+def convert_sr(path: Path, out: Path, start: int = 0, end: int | None = None, excerpt: bool = False,
+               pins: list[str] | None = None, **meta) -> tuple[Path, int, list[str], float] | None:
     """A logic-only .sr written as a WireSkein file without holding it: a chunk of the .sr at a time, each line's bits
     packed and appended to a file of its own, then copied into the capture (fileformat.OnDisk). Memory stays a chunk's,
     whatever the length (a long stream at a high rate). Ticks [start, end) only, tick 0 at start (an excerpt).
@@ -309,6 +310,12 @@ def convert_sr(path: Path, out: Path, start: int = 0, end: int | None = None, ex
         dtype = {1: np.uint8, 2: np.uint16, 4: np.uint32}[unitsize]
         bits = [b for b in (sorted(b - 1 for b in names) if names else range(min(total, unitsize * 8)))
                 if b < unitsize * 8]
+        if pins:                             # only these channels written
+            have = {names.get(b + 1, f"bit{b}"): b for b in bits}
+            miss = [p for p in pins if p not in have]
+            if miss:
+                raise ValueError(f"pins not in the capture: {', '.join(miss)}")
+            bits = [have[p] for p in pins]
         if excerpt:                          # where the excerpt was in the source, from the chunks' sizes
             whole = sum(z.getinfo(n).file_size for n in chunks) // unitsize
             meta["excerpt"] = {"from_tick": start, "to_tick": whole if end is None else min(end, whole)}
