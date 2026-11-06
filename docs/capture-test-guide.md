@@ -205,7 +205,7 @@ WireSkein turns a capture into what a reader needs, so the samples themselves do
 | `starts({pin: v})` / `ends({pin: v})` | Level at the first / last sample of the window |
 | `only_moving([pins])` | No other captured pin moves. Looks only at logic channels |
 | `pulses(pin, count, period_s, period_rel)` | Number of rising edges and the period. `period_rel` is relative |
-| `i2c(scl, sda, transactions, freq_hz, freq_rel, released)` | Sequence of transactions (address, read/write, bytes, ACK), SCL frequency, both High at the end. Each transaction may name `start` (`S`, `Sr`) and `end` (`P`, `Sr`), compared when given |
+| `i2c(scl, sda, transactions, freq_hz, freq_rel, released, notices, spike_max_s, stretch_min)` | Sequence of transactions (address, read/write, bytes, ACK), SCL frequency, both High at the end. Each transaction may name `start` (`S`, `Sr`) and `end` (`P`, `Sr`), compared when given. Clock stretches and spikes are notices (§4.9) |
 | `spi(clk, mosi, miso, cs, mode, mosi_bytes, miso_bytes, freq_hz, freq_rel, bit_order, cs_active, bits, notices, setup_min_s, hold_min_s)` | Mode, bytes in both directions, SCK frequency, CS High at the end. The mode is read from the lines (§4.5). With `cs`: the clocks in each CS window (`frame_bits`; `bits` compares them), no SCK level inside a window shorter than half the median one (a glitch), each data line's setup and hold around the sampling edges (`margins`; `setup_min_s` / `hold_min_s` bound them), and `modes_ok`, the modes a receiver could read the lines in (§4.5); SCK moving while CS is inactive and a window with no clock are notices (§4.9) |
 | `uart(pin, baud, data, baud_rel, idle, bits, parity, stop, errors)` | Baud rate, byte sequence, idle level, framing and parity errors (below) |
 | `rs485(tx, de, baud, data, ..., de_active, lead_min_s, lead_max_s, tail_min_s, tail_max_s)` | UART on TX as `uart`, with a half-duplex driver enable around it (§4.2): every character inside DE active, each window's lead and tail |
@@ -360,6 +360,8 @@ Some behaviour is allowed by the protocol but worth a look: a test may want to m
 
 | Check | Notice | What it is |
 | --- | --- | --- |
+| `i2c` | `scl_stretch` | SCL held low more than `stretch_min` (2) times its usual low (at its fall; `length_ticks`, `usual_ticks`): a target stretching the clock, or the controller pausing between bytes. Counted in `stretches` |
+| `i2c` | `bus_glitch` | A pulse on SCL or SDA shorter than `spike_max_s` (50 ns, the spikes I2C inputs suppress; `line`, `level`, `width_ticks`). Seen only when the capture resolves it. Counted in `spikes` |
 | `spi` (with `cs`) | `sck_outside_cs` | SCK moved while CS was inactive (at the first edge of that stretch; `count`: its edges). Allowed on a bus shared with other devices; a reconfiguration's stray edges show here too |
 | `spi` (with `cs`) | `empty_cs_window` | A window of CS active with no clock (at CS becoming active; `length_ticks`) |
 | `spi` (with `cs`) | `mode_ambiguous` | The transfer reads as given in more than one mode (at the first CS edge; `candidates`) |

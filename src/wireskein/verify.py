@@ -377,6 +377,9 @@ def check_i2c(cap, x):
             why.append("transactions differ: " + diff)
     hz = _burst_hz(scl, cap.rate)
     got["scl_hz"] = hz
+    got["notices"] = _i2c_notices(cap, scl, sda, x.get("spike_max_s", 50e-9), x.get("stretch_min", 2.0))
+    got["stretches"] = sum(1 for k in got["notices"] if k["kind"] == "scl_stretch")
+    got["spikes"] = sum(1 for k in got["notices"] if k["kind"] == "bus_glitch")
     if x.get("freq_hz") is not None and (hz is None or abs(hz / x["freq_hz"] - 1) > x["freq_rel"]):
         ok = False
         why.append(f"SCL {hz and round(hz)} Hz vs {x['freq_hz']}")
@@ -387,6 +390,28 @@ def check_i2c(cap, x):
             ok = False
             why.append(f"bus not released at the end (SCL={end['scl']}, SDA={end['sda']})")
     return ok, got, "; ".join(why)
+
+
+def _i2c_notices(cap, scl, sda, spike_s: float, stretch: float) -> list[dict]:
+    """SCL held low more than `stretch` times its usual low (a target stretching the clock, or the controller
+    pausing), and pulses on either line shorter than spike_s (I2C's spikes, which inputs suppress: 50 ns)."""
+    out = []
+    start, length, level = scl.runs(cap.n_samples)
+    inner = slice(1, len(length) - 1)                  # the first and last runs are cut by the window
+    lows = length[inner][level[inner] == 0]
+    if len(lows) >= 4:
+        usual = float(np.median(lows))
+        for a, n, lv in zip(start[inner], length[inner], level[inner]):
+            if lv == 0 and n > stretch * usual:
+                out.append({"kind": "scl_stretch", "tick": int(a), "length_ticks": int(n),
+                            "usual_ticks": int(round(usual))})
+    lim = spike_s * cap.rate
+    for name, ch in (("scl", scl), ("sda", sda)):
+        st, ln, lv = ch.runs(cap.n_samples)
+        for a, n, v in zip(st[1:-1], ln[1:-1], lv[1:-1]):
+            if n < lim:
+                out.append({"kind": "bus_glitch", "tick": int(a), "line": name, "level": int(v), "width_ticks": int(n)})
+    return sorted(out, key=lambda k: k["tick"])
 
 
 def check_spi(cap, x):
@@ -1751,6 +1776,9 @@ def _state_text(prior, rate) -> dict | None:
 # a check by themselves; an expectation's notices={kind: n or "ng"} limits them in its segment. Per check, the kinds
 # it finds (docs/capture-test-guide.md §4.9).
 NOTICES = {
+    "i2c": {"scl_stretch": "SCL held low longer than its usual low (a target stretching the clock, or the controller "
+                           "pausing; length_ticks, usual_ticks)",
+            "bus_glitch": "a pulse on SCL or SDA shorter than spike_max_s, which inputs suppress (line, width_ticks)"},
     "spi": {"sck_outside_cs": "SCK moved while CS was inactive (count: its edges in that stretch)",
             "empty_cs_window": "a window of CS active with no clock",
             "mode_ambiguous": "the bytes read the same in more than one mode (candidates: those modes)"},

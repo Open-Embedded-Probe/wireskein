@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- (EN) `i2c` notices: `scl_stretch` (SCL held low more than `stretch_min` times its usual low: a target stretching the clock, or the controller pausing) and `bus_glitch` (a pulse on either line shorter than `spike_max_s`, 50 ns); counted in `stretches` and `spikes`; `notices={"scl_stretch": "ng"}` limits them. Tested on lines from an encoder of the test's own.
+- (JA) `i2c` の注意を足した: `scl_stretch`（SCL がいつもの low の `stretch_min` 倍より長く low。ターゲットのクロックの引き延ばしか、コントローラが止まったもの）と `bus_glitch`（どちらかの線の、`spike_max_s` = 50 ns より短いパルス）。数は `stretches` と `spikes`。`notices={"scl_stretch": "ng"}` で限る。試験の中の独自の符号器が作った線で確かめた。
+
 - (EN) `uart`'s idle level: a line resting at one level (runs of two characters or more, nearly all at it) is idle there, before the readings are compared. Characters in error one after another (0x00 sent 8E1, read 8N1) read better the other way round from the bits between them, and a line idling high was reported idle 0 (NG).
 - (JA) `uart` のアイドルのレベル: 1 つのレベルで休む線（2 文字分以上の長さの区間が、ほとんどそのレベル）は、読みを比べる前に、そのレベルがアイドル。続けて誤る文字（0x00 を 8E1 で送り 8N1 で読む）は、その間のビットから逆向きの方がよく読め、High で休む線をアイドル 0（NG）としていた。
 
