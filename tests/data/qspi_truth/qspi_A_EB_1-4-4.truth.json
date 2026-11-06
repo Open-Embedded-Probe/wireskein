@@ -1,0 +1,65 @@
+{
+ "probe": "oep://e8f60ae84e28 (its USB-Serial/JTAG port)",
+ "capture": {
+  "mode": "oneshot",
+  "trigger": "cs fall",
+  "pretrigger_samples": 400,
+  "samples": 8000
+ },
+ "firmware": "0.0.50+3fa25d7.qspi",
+ "rate_hz": 20000000,
+ "channels": {
+  "sck": "GPIO20",
+  "cs": "GPIO21",
+  "io0": "GPIO22",
+  "io1": "GPIO23",
+  "io2": "GPIO26",
+  "io3": "GPIO27"
+ },
+ "interface": "io.github.open-embedded-probe.bench.qspi rev 1 (ESP-IDF v5.5.5 spi_master, SPI3_HOST, SPI_DEVICE_HALFDUPLEX, no DMA)",
+ "spi": {
+  "clock_hz_asked": 1000000,
+  "clock_khz_actual": 1000,
+  "mode": 0,
+  "cs_active": 0,
+  "lsb_first": false
+ },
+ "transaction": {
+  "note": "0xEB fast read quad I/O: command on IO0, address 0x123456 and mode byte 0xA0 on IO0-3, 4 dummy clocks, 16 data bytes on IO0-3",
+  "flags": [
+   "SPI_TRANS_MODE_QIO",
+   "SPI_TRANS_MULTILINE_ADDR"
+  ],
+  "phases": [
+   {
+    "phase": "command",
+    "value": "0xeb",
+    "bits": 8,
+    "lines": 1,
+    "clocks": 8
+   },
+   {
+    "phase": "address",
+    "value": "0x123456a0",
+    "bits": 32,
+    "lines": 4,
+    "clocks": 8
+   },
+   {
+    "phase": "dummy",
+    "dummy_bits": 4,
+    "note": "ESP-IDF's dummy_bits gave that many SCK clocks (the total read off SCK matches)",
+    "clocks": 4
+   },
+   {
+    "phase": "data",
+    "bytes": "101112131415161718191a1b1c1d1e1f",
+    "bits": 128,
+    "lines": 4,
+    "clocks": 32,
+    "direction": "probe out"
+   }
+  ],
+  "sck_clocks_seen": 52
+ }
+}

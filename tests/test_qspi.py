@@ -3,6 +3,7 @@ an encoder written here, apart from the reader: a flash's Fast Read Quad I/O (0x
 (0x6B, 1-1-4)."""
 
 import numpy as np
+import pytest
 
 from wireskein._engine.model import Capture, Channel
 from wireskein.runlog import qspi
@@ -116,3 +117,27 @@ def test_mode_mismatch():
     cap = bus([eb("001000", DATA)])
     ok, _, why = check_qspi(cap, qspi("SCK", "CS", IO, mode=3))
     assert ok is False and "CPOL 1" in why
+
+
+# ---- the truth from hardware: an OEP probe's ESP-IDF spi_master (SPI3_HOST, half duplex, no DMA) at 1 MHz,
+# mode 0, its SCK, CS and IO0-3 captured at 20 MS/s (tests/data/qspi_truth; the phases in each .truth.json) ----
+
+@pytest.mark.parametrize("name", ["qspi_A_EB_1-4-4", "qspi_B_6B_1-1-4", "qspi_C_3B_1-1-2"])
+def test_hardware_esp_idf_spi_master(name):
+    import json
+    from pathlib import Path
+    from wireskein._engine import fileio
+    d = Path(__file__).parent / "data" / "qspi_truth"
+    (cap,) = fileio.load_runs(d / f"{name}.wireskein")
+    t = json.loads((d / f"{name}.truth.json").read_text())
+    assert t["interface"].startswith("io.github.open-embedded-probe.bench.qspi")
+    phases = []
+    for p in t["transaction"]["phases"]:
+        if p["phase"] == "dummy":
+            phases.append({"dummy": p["clocks"]})
+        else:
+            h = p.get("bytes") or p["value"][2:]
+            phases.append({"width": p["lines"], "hex": h})
+    ok, got, why = check_qspi(cap, qspi("sck", "cs", ["io0", "io1", "io2", "io3"], [phases], freq_hz=1e6, freq_rel=0.01))
+    assert ok is True, (why, got)
+    assert got["clocks"] == [t["transaction"]["sck_clocks_seen"]]

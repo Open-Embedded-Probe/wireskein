@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- (EN) `qspi` checked on an OEP probe's ESP-IDF spi_master (0xEB 1-4-4, 0x6B 1-1-4, 0x3B 1-1-2 at 1 MHz; tests/data/qspi_truth).
+- (JA) `qspi` を、OEP のプローブの ESP-IDF の spi_master で確かめた（1 MHz の 0xEB 1-4-4、0x6B 1-1-4、0x3B 1-1-2。tests/data/qspi_truth）。
+
 ## 0.0.23
 - (EN) `rgb_led` notice `latch_short`: a low between frames long enough for `reset_min_s` but shorter than `latch_safe_s` (280 us, what WS2812B-V5 and the like need to latch); `latch_safe_s=None` does not look for it.
 - (JA) `rgb_led` の注意 `latch_short` を足した: フレームの間の low が、`reset_min_s` には足りるが `latch_safe_s`（280 us。WS2812B-V5 などが確定に要る長さ）より短い。`latch_safe_s=None` なら探さない。
