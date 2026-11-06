@@ -81,7 +81,7 @@ demo_link = "demo_link:PROTOCOL"
  "checks_passed": 4, "checks_failed": 0}
 ```
 
-その試験（`tests/test_demo_cmd.py`）は、読み手とは別の符号器で、やり取りを 2 本の線に乗せます。
+その試験（`tests/test_demo_cmd.py`）は、読み手とは別の符号器で、やり取りを 2 本の線に乗せます。実機では、`examples/protocols/demo_cmd_p4.wireskein` が、OEP のプローブが 2 つの ESP-IDF の UART ドライバ（115200 8N1。ホストと機器がそれぞれ自分の線）で送ったもので、それぞれが送ったものは `demo_cmd_p4.truth.json` にあります。demo_cmd が無いと、分析は 2 本の UART を読むだけで、その上には何も出しません。あると、5 つのやり取りと、命令に当たる 4 つの応答を読みます。
 
 ## 4. 試験で確かめる
 

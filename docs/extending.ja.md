@@ -81,6 +81,7 @@ acme = "acme_wireskein.definitions"
 | `examples/definitions/demo_wire.toml` | 1 本の NRZ の線の上のプロトコル: ビットスタッフィング、変わる長さ、CRC-8 |
 | `tests/test_protocols.py` | 両方の見本を、別に作った信号で確かめる試験。プロトコルの検査、注釈、印 |
 | `examples/protocols/demo_cmd.py` | UART の組の上のテキストの命令と応答: 証拠としての組、出来事、ビューアのための level |
+| `examples/protocols/demo_cmd_p4.wireskein` | OEP のプローブが 2 つの ESP-IDF の UART ドライバで出して取り込んだ demo_cmd と、正解としてのそれぞれが送ったもの |
 | `examples/checks/demo_settle.py` | 検査の種類: 落ち着かなければならない線、注意としてのチャタリング、期待のレベルが無ければ測るだけ |
 | `tests/test_demo_cmd.py` | 分析と、試験のプロトコルの検査での demo_cmd |
 | `tests/test_check_plugins.py` | 外から足した検査の種類と、その注意。チャタリングする接点での demo_settle |

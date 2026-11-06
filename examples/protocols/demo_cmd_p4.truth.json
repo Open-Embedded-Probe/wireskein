@@ -1,0 +1,121 @@
+{
+ "probe": "oep://e8f60ae84e28",
+ "firmware": "0.0.50+7339c3a",
+ "rate_hz": 20000000,
+ "channels": {
+  "host": "GPIO26",
+  "device": "GPIO27"
+ },
+ "uart": {
+  "host": {
+   "tx": "GPIO26",
+   "rx": "GPIO20",
+   "fn": 5,
+   "baud_asked": 115200,
+   "baud_used": 115211,
+   "format": "8N1"
+  },
+  "device": {
+   "tx": "GPIO27",
+   "rx": "GPIO21",
+   "fn": 6,
+   "baud_asked": 115200,
+   "baud_used": 115211,
+   "format": "8N1"
+  }
+ },
+ "interface": "oep.fixture.uart x2 (ESP-IDF UART driver)",
+ "pull_check": {
+  "26": [
+   1,
+   0
+  ],
+  "20": [
+   1,
+   0
+  ],
+  "27": [
+   1,
+   0
+  ],
+  "21": [
+   1,
+   0
+  ]
+ },
+ "note": "the wait after a write is the line time computed from baud_used plus 0.2 ms, then 0.3 ms idle; the host's USB round trips add to the gaps",
+ "steps": [
+  {
+   "line": "host",
+   "uart_fn": 5,
+   "text": "#1e PING",
+   "bytes": "2331652050494e470a",
+   "line_time_s": 0.000781,
+   "then_idle_s": 0.0003
+  },
+  {
+   "line": "device",
+   "uart_fn": 6,
+   "text": "#1e OK",
+   "bytes": "233165204f4b0a",
+   "line_time_s": 0.000608,
+   "then_idle_s": 0.0003
+  },
+  {
+   "line": "host",
+   "uart_fn": 5,
+   "text": "#1f LED 1",
+   "bytes": "233166204c454420310a",
+   "line_time_s": 0.000868,
+   "then_idle_s": 0.0003
+  },
+  {
+   "line": "device",
+   "uart_fn": 6,
+   "text": "#1f OK",
+   "bytes": "233166204f4b0a",
+   "line_time_s": 0.000608,
+   "then_idle_s": 0.0003
+  },
+  {
+   "line": "device",
+   "uart_fn": 6,
+   "text": "!BUTTON 1",
+   "bytes": "21425554544f4e20310a",
+   "line_time_s": 0.000868,
+   "then_idle_s": 0.0003
+  },
+  {
+   "line": "host",
+   "uart_fn": 5,
+   "text": "#20 READ TEMP",
+   "bytes": "23323020524541442054454d500a",
+   "line_time_s": 0.001215,
+   "then_idle_s": 0.0003
+  },
+  {
+   "line": "device",
+   "uart_fn": 6,
+   "text": "#20 OK 23.5",
+   "bytes": "233230204f4b2032332e350a",
+   "line_time_s": 0.001042,
+   "then_idle_s": 0.0003
+  },
+  {
+   "line": "host",
+   "uart_fn": 5,
+   "text": "#21 MOTOR 9",
+   "bytes": "233231204d4f544f5220390a",
+   "line_time_s": 0.001042,
+   "then_idle_s": 0.0003
+  },
+  {
+   "line": "device",
+   "uart_fn": 6,
+   "text": "#21 ERR 3",
+   "bytes": "2332312045525220330a",
+   "line_time_s": 0.000868,
+   "then_idle_s": 0.0003
+  }
+ ]
+}

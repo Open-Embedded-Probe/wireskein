@@ -89,3 +89,18 @@ def test_a_test_checks_the_exchange(tmp_path, demo_cmd):
     want[3] = {"verb": "READ", "values": ["24.0"]}
     ok, _, why = check_protocol(cap, protocol("demo_cmd", "uart_pair", {"a": "TX", "b": "RX"}, messages=want, baud=BAUD))
     assert ok is False and "message #3" in why
+
+
+def test_hardware_two_esp_idf_uarts(demo_cmd):
+    # an OEP probe's two ESP-IDF UART drivers, host on one line and device on the other, sending the exchange in
+    # turn (examples/protocols/demo_cmd_p4.truth.json): the truth is what they sent
+    import json
+    d = Path(__file__).parents[1] / "examples/protocols"
+    t = json.loads((d / "demo_cmd_p4.truth.json").read_text())
+    sent = [(s["line"], s["text"]) for s in t["steps"]]
+    assert sent == [("host" if side == "host" else "device", text.strip()) for side, text in TALK]
+    doc = analyze_file(d / "demo_cmd_p4.wireskein")
+    (r,) = [r for r in doc["parts"][0].get("relations", []) if r["protocol"] == "demo_cmd"]
+    assert (r["checks_passed"], r["checks_failed"]) == (4, 0), r
+    assert [m["text"] for m in r["messages"]] == ["#1e PING -> OK", "#1f LED 1 -> OK", "!BUTTON 1",
+                                                  "#20 READ TEMP -> OK 23.5", "#21 MOTOR 9 -> ERR 3"]

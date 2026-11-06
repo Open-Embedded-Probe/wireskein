@@ -88,7 +88,7 @@ device   #<seq> OK[ <value>...]  |  #<seq> ERR <code>  |  !<EVENT>[ <value>...] 
  "checks_passed": 4, "checks_failed": 0}
 ```
 
-Its tests (`tests/test_demo_cmd.py`) put the exchange on two lines with an encoder apart from the reader.
+Its tests (`tests/test_demo_cmd.py`) put the exchange on two lines with an encoder apart from the reader. On hardware, `examples/protocols/demo_cmd_p4.wireskein` is an OEP probe sending it with two ESP-IDF UART drivers (115200 8N1, host and device on lines of their own), with what each sent in `demo_cmd_p4.truth.json`: without demo_cmd the analysis reads two UARTs and nothing above them; with it, the five exchanges and four answers that belong to their commands.
 
 ## 4. Checking it in a test
 

@@ -83,6 +83,7 @@ in a test (`wireskein.verify.sections`, the analysis's `lines`) and judge them t
 | `examples/definitions/demo_wire.toml` | A protocol on one NRZ line: bit stuffing, a variable length, a CRC-8 |
 | `tests/test_protocols.py` | Both examples tested on signals made apart from them, the protocol check, annotations and markers |
 | `examples/protocols/demo_cmd.py` | Text commands and answers on a UART pair: the pairing as the evidence, events, levels for the viewer |
+| `examples/protocols/demo_cmd_p4.wireskein` | demo_cmd sent by an OEP probe's two ESP-IDF UART drivers and captured, with what each sent as the truth |
 | `examples/checks/demo_settle.py` | A check kind: a line that must settle, its bounces as notices, measuring only without an expected level |
 | `tests/test_demo_cmd.py` | demo_cmd in the analysis and in a test's protocol check |
 | `tests/test_check_plugins.py` | A check kind added from outside, with its notices; demo_settle on a bouncing contact |
