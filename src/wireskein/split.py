@@ -284,3 +284,210 @@ def join_columns(per_piece: list[tuple[Piece, dict]]) -> dict:
                 acc[k] = v
     out.update(acc)
     return out
+
+
+# ---- reading as the pieces go: a source of changes a block at a time ----
+
+class Source:
+    """The logic lines of one part, read a block at a time: names, ticks, rate, meta, the level of each before tick 0,
+    and blocks() -> (the tick read up to, {name: its changes in the block}). Only the piece being read is held."""
+    names: list[str]
+    n: int
+    rate: float
+    meta: dict
+    initial: dict
+
+    def blocks(self):
+        raise NotImplementedError
+
+
+class CaptureSource(Source):
+    """An engine capture already in memory, in blocks of ticks."""
+
+    def __init__(self, cap, block: int = 1 << 24):
+        self.cap, self.block = cap, block
+        self.names = [c.name for c in cap.channels]
+        self.n, self.rate, self.meta = int(cap.n_samples), cap.rate, cap.meta
+        self.initial = {c.name: int(c.initial) for c in cap.channels}
+
+    def blocks(self):
+        es = {c.name: np.asarray(c.edges) for c in self.cap.channels}
+        for t0 in range(0, self.n, self.block):
+            t1 = min(self.n, t0 + self.block)
+            yield t1, {k: e[np.searchsorted(e, t0):np.searchsorted(e, t1)] for k, e in es.items()}
+
+
+class FileSource(Source):
+    """One part of a WireSkein file: a line kept as bits decompressed and turned into changes a block at a time, a
+    line kept as its changes (step 1) read as they are. None of it held but the block (and the changes lines)."""
+
+    def __init__(self, path, part: int = 0, pins: list[str] | None = None, block: int = 1 << 24):
+        from . import _fileformat as ff
+        from ._engine import fileio
+        raw = ff.read_header(path)
+        head = ff.part_view(raw, part)
+        self.path, self.block = path, block
+        self.chans = [c for c in head["channels"] if c.get("encoding") in ("bits", "events")
+                      and (not pins or c["name"] in pins)]
+        if any(c["step"] != 1 or c.get("phase", 0) != 0 for c in self.chans):
+            raise ValueError("a line of its own step: read whole")
+        self.names = [c["name"] for c in self.chans]
+        self.n = int(head["ticks"])
+        self.rate = float(ff.tick_hz(head))
+        self.meta = fileio.view(head, [], path).meta
+        self.initial, self.events = {}, {}
+        with zipfile.ZipFile(path) as z:
+            for c in self.chans:
+                if c["encoding"] == "events":       # changes already: small
+                    ch = fileio.decode(ff.EventsChannel(c["name"], z.read(c["file"]), c["n"], 1, 0, c["start_level"],
+                                                        c["events"], c.get("acquisition", {})))
+                    self.initial[c["name"]], self.events[c["name"]] = int(ch.initial), np.asarray(ch.edges)
+                else:
+                    with z.open(c["file"]) as f:
+                        b = f.read(1)
+                    self.initial[c["name"]] = int(b[0] & 1) if b else 0
+
+    def blocks(self):
+        with zipfile.ZipFile(self.path) as z:
+            files = {c["name"]: z.open(c["file"]) for c in self.chans if c["encoding"] == "bits"}
+            last = dict(self.initial)
+            try:
+                for t0 in range(0, self.n, self.block):
+                    t1 = min(self.n, t0 + self.block)
+                    out = {}
+                    for name in self.names:
+                        if name in self.events:
+                            e = self.events[name]
+                            out[name] = e[np.searchsorted(e, t0):np.searchsorted(e, t1)]
+                            continue
+                        raw = files[name].read((t1 - t0) // 8 if t1 < self.n else -1)
+                        lv = np.unpackbits(np.frombuffer(raw, np.uint8), bitorder="little")[: t1 - t0].astype(np.int8)
+                        ch = np.flatnonzero(np.diff(lv)) + 1
+                        if len(lv) and lv[0] != last[name]:
+                            ch = np.concatenate(([0], ch))
+                        if len(lv):
+                            last[name] = int(lv[-1])
+                        out[name] = ch.astype(np.int64) + t0
+                    yield t1, out
+            finally:
+                for f in files.values():
+                    f.close()
+
+
+import zipfile  # noqa: E402  (FileSource)
+
+
+def run(source: Source, opts: dict | None, watch: list[str] | None = None, noisy: dict | None = None):
+    """The pieces of a source, each with the engine capture of the ticks it reads, as they are cut: (Piece, Capture).
+    Changes are held from the current piece on only. With opts None, or a source of max_edges changes or fewer,
+    one piece: the whole."""
+    from ._engine.model import Capture, Channel
+    names = source.names
+    mx = int(opts["max_edges"]) if opts else None
+    mn = int(opts["min_edges"]) if opts else 0
+    ov = int(opts["overlap_edges"]) if opts else 0
+    given = [*((opts or {}).get("watch") or ()), *((opts or {}).get("ignore") or ())]
+    unknown = [x for x in given if x not in names]
+    if unknown:
+        raise ValueError(f"split: no such channel: {', '.join(unknown)}")
+    want = (opts or {}).get("watch") or [x for x in (watch or ()) if x in names] or names
+    ignore = set((opts or {}).get("ignore") or ())
+    wnames = [x for x in names if x in want and x not in ignore]
+    buf = {k: np.zeros(0, np.int64) for k in names}
+    lv0 = dict(source.initial)                       # the level before the buffer's first tick
+    start = 0                                        # the buffer's first tick
+    upto, eof = 0, False
+    it = source.blocks()
+
+    def count(s, t):
+        return _count(list(buf.values()), s, t)
+
+    def more():
+        nonlocal upto, eof
+        try:
+            upto, got = next(it)
+        except StopIteration:
+            eof = True
+            upto = source.n
+            return
+        for k in names:
+            buf[k] = np.concatenate((buf[k], got[k]))
+
+    def level_at(k, a):                              # as Channel.level_at: a change at a is in force at a
+        return int(lv0[k] ^ (int(np.searchsorted(buf[k], a, side="right")) & 1))
+
+    def cap_of(a, b):
+        chans = []
+        for k in names:
+            e = buf[k]
+            w = e[np.searchsorted(e, a, side="right"):np.searchsorted(e, b)] - a
+            chans.append(Channel(k, level_at(k, a), w))
+        return Capture(source.rate, b - a, chans, meta=dict(source.meta))
+
+    def drop_before(t):                              # keep from tick t on
+        nonlocal start
+        for k in names:
+            e = buf[k]
+            i = int(np.searchsorted(e, t, side="right"))
+            lv0[k] ^= (i & 1)
+            buf[k] = e[i:]
+        start = t
+
+    s, prev_cut = 0, None
+    while True:
+        while not eof and (mx is None or count(s, upto) < mx + ov):
+            more()
+        if mx is None or (eof and count(s, source.n) <= mx):
+            p = Piece(s, source.n, s, source.n, count(s, source.n), "end")
+            if prev_cut in ("data_quiet", "forced"):
+                p.a = _tick_before_buf(buf, start, s, ov)
+            yield p, cap_of(p.a, p.b)
+            return
+        es = [buf[k] for k in names]
+        wes = [buf[k] for k in wnames]
+        t = _tick_after(es, s, mx, upto)
+        t0 = _tick_after(es, s, max(1, int(mx * opts["search_from"])), upto)
+        qs, qe, usual, periodic = quiet(wes, s, t, opts["gap_min"], int(opts["noise_max"]), opts["noise_share"],
+                                        wnames, noisy)
+        keep = (qe > t0) & (qs >= s)
+        qs, qe = np.maximum(qs[keep], t0), qe[keep]
+        kind = "data_quiet" if periodic else "quiet"
+        cuts = []
+        if len(qs) and usual:
+            ratio = (qe - qs) / usual
+            best = float(ratio.max())
+            last = s
+            for i in np.flatnonzero(ratio >= opts["similar"] * best).tolist():
+                c = int((qs[i] + qe[i]) // 2)
+                if count(last, c) >= mn:
+                    cuts.append((c, float(ratio[i]), kind))
+                    last = c
+            if not cuts:
+                i = int(np.argmax(ratio))
+                cuts = [(int((qs[i] + qe[i]) // 2), float(ratio[i]), kind)]
+        else:
+            cuts = [(t, None, "forced")]
+        for c, r, k in cuts:
+            p = Piece(s, c, s, c, count(s, c), k, r)
+            if prev_cut in ("data_quiet", "forced"):
+                p.a = _tick_before_buf(buf, start, s, ov)
+            if k in ("data_quiet", "forced"):
+                p.b = min(_tick_after(es, c, ov, upto), upto)
+            yield p, cap_of(p.a, p.b)
+            s, prev_cut = c, k
+        drop_before(_tick_before_buf(buf, start, s, ov) if prev_cut in ("data_quiet", "forced") else s)
+
+
+def _tick_before_buf(buf: dict, start: int, e: int, k: int) -> int:
+    """The last tick t >= start with k changes in [t, e) of the buffer (start when there are not so many)."""
+    es = list(buf.values())
+    if _count(es, start, e) < k:
+        return start
+    lo, hi = start, e
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if _count(es, mid, e) >= k:
+            lo = mid
+        else:
+            hi = mid - 1
+    return lo

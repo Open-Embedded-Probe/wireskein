@@ -122,3 +122,23 @@ def test_analyze_in_pieces_takes_the_roles_from_the_first():
     (c,) = [c for c in part["claims"] if c["protocol"] == "rvswd"]
     assert c["roles"] == {"clk": "SWCLK", "dio": "SWDIO"} and len(c["result"]["dmi"]) == 334
     assert part["split"]["roles_from"][0] == 0
+
+
+def test_a_wireskein_file_is_read_from_the_file_as_the_pieces_go(tmp_path):
+    # the .sr written as a WireSkein file, then decoded in pieces straight from it (split.FileSource): the same
+    import argparse
+    from wireskein import cli
+    out = tmp_path / "l103.wireskein"
+    cli.convert(argparse.Namespace(input=D / "linke_l103_target_info.sr", output=out, part=None, from_s=None,
+                                   to_s=None, pins=None))
+    whole = decode_file(D / "linke_l103_target_info.sr", RVSWD, split="off")["parts"][0]["buses"][0]["result"]
+    opts = "max_edges=20000,min_edges=2000,overlap_edges=500"
+    src = split.FileSource(out, block=1 << 16)
+    pieces = [p for p, _ in split.run(src, split.options(opts))]
+    assert len(pieces) > 2
+    doc = decode_file(out, RVSWD, split=opts)
+    got = doc["parts"][0]["buses"][0]["result"]
+    assert got["dmi"] == whole["dmi"] and got.get("dm") == whole.get("dm")
+    a = analyze_file(out, split=opts)["parts"][0]
+    (c,) = [c for c in a["claims"] if c["protocol"] == "rvswd"]
+    assert c["result"]["dmi"] == whole["dmi"]
