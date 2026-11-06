@@ -250,3 +250,38 @@ def test_a_capture_changing_on_the_way_is_told_with_what_the_doubtful_piece_hold
     late = [d for d in doubtful if d["seconds"][0] > t + 1e-3]
     assert late and all(any(h["protocol"] == "i2c" and set(h["roles"].values()) == {"SCL", "SDA"}
                             for h in d["holds"]) for d in late)
+
+
+def test_a_piece_of_a_capture_in_memory_keeps_its_analog_lines():
+    from wireskein._engine.model import AnalogTrace
+    clk, dat, _ = bursts()
+    c = cap_of(C=clk, D=dat)
+    v = np.linspace(0, 3.3, 1000).astype(np.float32)
+    c.analog.append(AnalogTrace("V", v, 1000.0, 0, "analog-f32", 32, None, None, None, "V", {}))
+    pieces = list(split.run(split.CaptureSource(c), split.options("max_edges=3000,min_edges=500")))
+    assert len(pieces) > 2
+    for p, w in pieces:
+        (a,) = w.analog
+        assert a.name == "V" and len(a.values) > 0
+
+
+@pytest.mark.parametrize("layout", ["segments", "timeline"])
+def test_a_file_of_several_parts_is_read_part_by_part_from_the_file(tmp_path, layout):
+    import json
+    from fractions import Fraction
+    from wireskein import capture
+    clk, dat, _ = bursts()
+    n = int(clk[-1]) + 1000
+    parts = [capture.Part(n, [capture.logic("C", 0, clk, n), capture.logic("D", 0, dat, n)],
+                          tick0=(0 if layout == "segments" else k * (n + 5000)) if layout == "timeline" else None)
+             for k in range(3)]
+    p = tmp_path / "parts.wireskein"
+    capture.write(p, capture.Capture(Fraction(10**6), parts, layout=layout))
+    srcs = __import__("wireskein.decode", fromlist=["_file_sources"])._file_sources(p, None)
+    assert srcs is not None and len(srcs) == 3                 # each part from the file
+    spec = {"buses": [{"protocol": "spi", "pins": {"clk": "C", "mosi": "D"}}]}
+    opts = "max_edges=3000,min_edges=500,overlap_edges=100"
+    a = decode_file(p, spec, split=opts, items=tmp_path / "i.ndjson")
+    assert [x["part"] for x in a["parts"]] == [0, 1, 2] and all("split" in x for x in a["parts"])
+    rows = [json.loads(x) for x in (tmp_path / "i.ndjson").read_text().splitlines()]
+    assert {r["part"] for r in rows} == {0, 1, 2}

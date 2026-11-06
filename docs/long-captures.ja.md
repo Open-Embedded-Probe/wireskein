@@ -15,7 +15,10 @@ SuperSpeed のアナライザなら、その 10 倍の速さで溜まります�
 3. **区切って復号・分析する**: `decode` と `analyze` は、変化が `max_edges` より多い区間を区切り（§3）、1 つずつ
    読みます。`--items FILE` で、復号したものを読みながらファイルに書き出します（§4）。
 
-変化が `max_edges` 以下のキャプチャは、今までどおり全体を一度に読みます。
+変化が `max_edges` 以下のキャプチャは、今までどおり全体を一度に読みます。ファイルからブロックごとに直接読むのは、
+ロジックの `.sr` と、WireSkein のファイルの区間です（区間ごとに。隙間なく続く区間は、分析がいつもするように
+つないで読み、先に読み込みます）。線が 1 tick 1 サンプルのロジックのときに限ります。ほか（VCD、足した形式、
+アナログの線）は先に読み込んでから区切ります。その区切りはアナログの線も持ちます。
 
 ## 2. survey
 
@@ -112,10 +115,10 @@ wireskein survey long.sr --json --plan         # 文書（wireskein-survey/1）�
 （Python では `items=`）で、読みながら書き出します。1 行に 1 つの JSON です。
 
 ```json
-{"bus": 0, "layer": "dmi", "s": 5512646, "e": 5524342, "op": "R", "addr": 4, ...}
+{"part": 0, "bus": 0, "layer": "dmi", "s": 5512646, "e": 5524342, "op": "R", "addr": 4, ...}
 ```
 
-`bus` は spec のバス（または主張）、`layer` は結果の層（`dmi`、`dm`、`transactions`、`uninterpreted` など）、
+`part` は区間、`bus` は spec のバス（または主張）、`layer` は結果の層（`dmi`、`dm`、`transactions`、`uninterpreted` など）、
 残りは [analysis-format](analysis-format.ja.md) §3.2 のとおりの項目で、tick は区間のものです。文書では、バスごとに
 `result.items`: `{"file", "counts"}` になります。
 

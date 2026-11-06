@@ -308,7 +308,9 @@ def _analyze_split(source, hints, opts, depth: str, head: dict, items=None) -> d
                              "params": {x: c["params"][x] for x in ("baud", "mode") if x in c.get("params", {})}}
                             for c in keep], "depth": depth})
     work = functools.partial(_piece, spec=spec, head=head, reanalyze=bool((opts or {}).get("reanalyze", 1)))
-    sink = _Items(items, spec) if items is not None else None
+    if items is not None and head.get("part", 0) == 0:
+        Path(items).write_text("")
+    sink = _Items(items, spec, head.get("part", 0)) if items is not None else None
     outs = []
     try:
         for p, o in [(p, work((p, c))) for p, c in tried] + [
@@ -429,14 +431,21 @@ def decode_file(path: str | Path, spec: dict, split=None, pins: list[str] | None
     path = Path(path)
     spec = _spec(spec)
     opts = _split.options(spec.get("split") if split is None else split)
-    src = _file_source(path, pins) if opts else None
-    if src is not None:
-        raw, head = src.raw, src.head
-        doc = {"format": FORMAT, "wireskein": __version__, "spec": spec, "capture": _capture_of(path, raw),
-               "parts": [_part_split(src, spec, head, opts, items)]}
+    srcs = None
+    if opts:
+        kind = fileformat.sniff(path) if path.is_file() else None
+        srcs = _file_sources(path, pins) if kind == "wireskein" else (
+            [s] if (s := _file_source(path, pins)) is not None else None)
+    if srcs:
+        if items is not None:
+            Path(items).write_text("")                # written part after part
+        doc = {"format": FORMAT, "wireskein": __version__, "spec": spec, "capture": _capture_of(path, srcs[0].raw),
+               "parts": [_part_split(src, spec, src.head, opts, items) for src in srcs]}
         return doc
     raw, heads, views, _, spans = _open(path)
     doc = {"format": FORMAT, "wireskein": __version__, "spec": spec, "capture": _capture_of(path, raw), "parts": []}
+    if items is not None:
+        Path(items).write_text("")                    # written part after part
     for head, cap, span in zip(heads, views, spans):
         cap = only(cap, pins)
         out = (_part_split(_split.CaptureSource(cap), spec, head, opts, items) if opts or items
@@ -462,20 +471,33 @@ def _file_source(path: Path, pins):
                    "layout": "timeline", "parts": [{}]}
         src.head = {"meta": src.meta, "tick0": 0}
         return src
-    if kind != "wireskein":
-        return None
+    srcs = _file_sources(path, pins) if kind == "wireskein" else None
+    return srcs[0] if srcs and len(srcs) == 1 else None
+
+
+def _file_sources(path: Path, pins):
+    """Each part of a WireSkein file read a block at a time, or None: parts that follow on without a gap (read
+    joined, whole), analog lines, lines of their own step."""
+    from . import split as _split
     raw = fileformat.read_header(path)
-    if len(raw["parts"]) != 1:
-        return None
-    head = fileformat.part_view(raw, 0)
-    if any(c.get("encoding") not in ("bits", "events") for c in head["channels"] if not pins or c["name"] in pins):
-        return None
-    try:
-        src = _split.FileSource(path, 0, pins)
-    except ValueError:
-        return None
-    src.raw, src.head = raw, head
-    return src
+    parts = raw["parts"]
+    if raw.get("layout", "timeline") == "timeline":
+        for k in range(1, len(parts)):              # parts that follow on are one stretch: read joined, whole
+            if parts[k - 1].get("tick0", 0) + parts[k - 1].get("ticks", 0) >= parts[k].get("tick0", 0):
+                return None
+    out = []
+    for k in range(len(parts)):
+        head = fileformat.part_view(raw, k)
+        if any(c.get("encoding") not in ("bits", "events") for c in head["channels"]
+               if not pins or c["name"] in pins):
+            return None
+        try:
+            src = _split.FileSource(path, k, pins)
+        except ValueError:
+            return None
+        src.raw, src.head = raw, head
+        out.append(src)
+    return out
 
 
 def only(cap: Capture, pins: list[str] | None) -> Capture:
@@ -498,7 +520,7 @@ def _part_split(source, spec: dict, head: dict, opts, items=None) -> dict:
     from . import split as _split
     watch = [p for b in spec["buses"] for p in b["pins"].values()] + list(spec["lines"])
     noisy: dict = {}
-    sink = _Items(items, spec) if items is not None else None
+    sink = _Items(items, spec, head.get("part", 0)) if items is not None else None
     outs = []
     try:
         work = functools.partial(_piece, spec=spec, head=head, reanalyze=bool((opts or {}).get("reanalyze", 1)))
@@ -525,9 +547,10 @@ class _Items:
     """Items written out as the pieces are read: each piece's list layers, in the capture's ticks, kept by the piece
     they start in; the Debug Module read across the pieces as one."""
 
-    def __init__(self, path, spec: dict):
+    def __init__(self, path, spec: dict, part: int = 0):
         from ._engine.riscv_dm import Across
-        self.f = open(path, "w")
+        self.part = part
+        self.f = open(path, "a")                     # the caller empties it first; parts are appended
         self.counts = [{} for _ in spec["buses"]]
         from . import split as _split
         self.unread = [_split.Unread() for _ in spec["buses"]]
@@ -535,7 +558,7 @@ class _Items:
 
     def _write(self, j: int, layer: str, rows) -> None:
         for r in rows:
-            self.f.write(dumps({"bus": j, "layer": layer, **r}) + "\n")
+            self.f.write(dumps({"part": self.part, "bus": j, "layer": layer, **r}) + "\n")
         self.counts[j][layer] = self.counts[j].get(layer, 0) + len(rows)
 
     def _dm(self, j: int, entries) -> None:

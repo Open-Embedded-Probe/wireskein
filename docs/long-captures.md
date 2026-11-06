@@ -14,7 +14,10 @@ memory stays bounded whatever its length. What a piece decoded is kept (or writt
 3. **Decode or analyse it in pieces**: `decode` and `analyze` cut a part of more changes than `max_edges` into pieces
    (§3) and read them one at a time; `--items FILE` writes what they decode to a file as they go (§4).
 
-A capture of `max_edges` changes or fewer is read whole, as always.
+A capture of `max_edges` changes or fewer is read whole, as always. Read straight from the file a block at a time:
+a logic `.sr`, and a WireSkein file's parts (each on its own; parts that follow on without a gap are read joined, as
+analysis always does, and loaded first), when their lines are logic of one tick a sample. Anything else (a VCD, a
+format added, analog lines) is loaded first and then read in pieces; a piece of it keeps its analog lines.
 
 ## 2. survey
 
@@ -111,10 +114,10 @@ What a long capture decodes is more than memory holds (1.28 million DMI accesses
 FILE` (Python: `items=`) writes them as they are read, one JSON object a line:
 
 ```json
-{"bus": 0, "layer": "dmi", "s": 5512646, "e": 5524342, "op": "R", "addr": 4, ...}
+{"part": 0, "bus": 0, "layer": "dmi", "s": 5512646, "e": 5524342, "op": "R", "addr": 4, ...}
 ```
 
-`bus` is the spec's bus (or the claim), `layer` the result's layer (`dmi`, `dm`, `transactions`, `uninterpreted`,
+`part` is the part, `bus` the spec's bus (or the claim), `layer` the result's layer (`dmi`, `dm`, `transactions`, `uninterpreted`,
 ...), the rest the item as in [analysis-format](analysis-format.md) §3.2, its ticks the part's. The document then gives
 each bus `result.items`: `{"file", "counts"}`.
 

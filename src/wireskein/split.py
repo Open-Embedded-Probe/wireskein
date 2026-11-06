@@ -419,7 +419,11 @@ def run(source: Source, opts: dict | None, watch: list[str] | None = None, noisy
     def level_at(k, a):                              # as Channel.level_at: a change at a is in force at a
         return int(lv0[k] ^ (int(np.searchsorted(buf[k], a, side="right")) & 1))
 
+    whole_cap = getattr(source, "cap", None)        # a capture in memory: its analog and event lines go with it
+
     def cap_of(a, b):
+        if whole_cap is not None and (whole_cap.analog or whole_cap.events):
+            return window(whole_cap, a, b)
         chans = []
         for k in names:
             e = buf[k]
