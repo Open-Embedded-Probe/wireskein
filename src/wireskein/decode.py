@@ -560,6 +560,9 @@ def _piece(pw, spec: dict, head: dict) -> dict:
     return _part(wcap, spec, head, strict=not (p.cut == "end" and p.a == 0))   # one piece: read as always
 
 
+DOUBT = 0.3       # a piece whose bus fits worse than this is told as doubtful
+
+
 def _join_part(outs: list, spec: dict, source, opts, noisy: dict) -> dict:
     """The pieces' part documents as one (the whole's when there was one piece)."""
     if len(outs) == 1 and outs[0][0].a == 0:
@@ -586,7 +589,21 @@ def _join_part(outs: list, spec: dict, source, opts, noisy: dict) -> dict:
             x["s"] = u["s"] + p.a if x["s"] is None else min(x["s"], u["s"] + p.a)
             x["e"] = u["e"] + p.a if x["e"] is None else max(x["e"], u["e"] + p.a)
     out["undeclared"] = list(und.values())
-    out["split"] = {"options": opts, "pieces": [p.doc() for p in pieces], **({"trembling": noisy} if noisy else {})}
+    # pieces the roles read badly (the bus not decoded there, or a poor fit): the capture may change on the way
+    # (another bus, another speed); worth analysing on their own (--from / --to)
+    doubtful = []
+    for p, o in outs:
+        why = []
+        for j, b in enumerate(o["buses"]):
+            if not b.get("decoded"):
+                why.append(f"bus {j} ({b['protocol']}) not decoded")
+            elif b.get("fit", {}).get("score", 1.0) < DOUBT:
+                why.append(f"bus {j} ({b['protocol']}) fits {b['fit']['score']}")
+        if why and p.edges:
+            doubtful.append({"s": p.s, "e": p.e, "seconds": [p.s / source.rate, p.e / source.rate],
+                             "why": "; ".join(why)})
+    out["split"] = {"options": opts, "pieces": [p.doc() for p in pieces], **({"trembling": noisy} if noisy else {}),
+                    **({"doubtful": doubtful} if doubtful else {})}
     return out
 
 

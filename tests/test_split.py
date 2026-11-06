@@ -187,3 +187,13 @@ def test_workers_read_the_same():
     one = decode_file(D / "linke_v203_read_flash_4k.sr", RVSWD, split=opts)["parts"][0]["buses"][0]["result"]
     two = decode_file(D / "linke_v203_read_flash_4k.sr", RVSWD, split=opts + ",workers=2")["parts"][0]["buses"][0]["result"]
     assert one == two
+
+
+def test_a_piece_the_roles_read_badly_is_told():
+    # the stretch before a LinkE connects (frames of 15 clocks, no RVSWD frame) fills a piece RVSWD does not read:
+    # that piece is doubtful, with where it is, to analyse on its own
+    doc = decode_file(D / "linke_v203_read_flash_4k.sr", RVSWD, split="max_edges=20000,min_edges=2000,overlap_edges=500")
+    sp = doc["parts"][0]["split"]
+    (d,) = sp["doubtful"]
+    assert (d["s"], d["e"]) in {(p["s"], p["e"]) for p in sp["pieces"]} and "bus 0 (rvswd)" in d["why"]
+    assert 0.08 < d["seconds"][0] < 0.11
