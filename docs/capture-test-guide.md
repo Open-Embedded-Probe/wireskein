@@ -360,6 +360,7 @@ Some behaviour is allowed by the protocol but worth a look: a test may want to m
 
 | Check | Notice | What it is |
 | --- | --- | --- |
+| `rgb_led` | `latch_short` | A low between frames long enough for `reset_min_s` but shorter than `latch_safe_s` (280 us: later parts, WS2812B-V5 and the like, latch only after it; `length_ticks`, `safe_ticks`). `latch_safe_s=None` does not look for it |
 | `i2c` | `scl_stretch` | SCL held low more than `stretch_min` (2) times its usual low (at its fall; `length_ticks`, `usual_ticks`): a target stretching the clock, or the controller pausing between bytes. Counted in `stretches` |
 | `i2c` | `bus_glitch` | A pulse on SCL or SDA shorter than `spike_max_s` (50 ns, the spikes I2C inputs suppress; `line`, `level`, `width_ticks`). Seen only when the capture resolves it. Counted in `spikes` |
 | `spi` (with `cs`) | `sck_outside_cs` | SCK moved while CS was inactive (at the first edge of that stretch; `count`: its edges). Allowed on a bus shared with other devices; a reconfiguration's stray edges show here too |

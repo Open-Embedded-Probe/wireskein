@@ -818,6 +818,10 @@ def check_rgb_led(cap, x):
         if tail is None or timing.judge(tail[1], res, lo=x["reset_min_s"] * cap.rate) is not True:
             parts.append((None, f"the window ends {_si((tail[1] if tail else 0) / cap.rate)} after the last frame, "
                                 f"before a reset of {_si(x['reset_min_s'])} latched it"))
+    safe = x.get("latch_safe_s", 280e-6)
+    got["notices"] = [{"kind": "latch_short", "tick": t, "length_ticks": n, "safe_ticks": int(round(safe * cap.rate))}
+                      for t, n in r["resets"] if safe and n < safe * cap.rate
+                      and (x.get("reset_min_s") is None or n >= x["reset_min_s"] * cap.rate)]
     ok, why = _verdicts(parts)
     return ok, got, why
 
@@ -1776,6 +1780,8 @@ def _state_text(prior, rate) -> dict | None:
 # a check by themselves; an expectation's notices={kind: n or "ng"} limits them in its segment. Per check, the kinds
 # it finds (docs/capture-test-guide.md §4.9).
 NOTICES = {
+    "rgb_led": {"latch_short": "a reset long enough for reset_min_s but shorter than latch_safe_s, which later "
+                               "parts need (WS2812B-V5 and the like: 280 us; length_ticks, safe_ticks)"},
     "i2c": {"scl_stretch": "SCL held low longer than its usual low (a target stretching the clock, or the controller "
                            "pausing; length_ticks, usual_ticks)",
             "bus_glitch": "a pulse on SCL or SDA shorter than spike_max_s, which inputs suppress (line, width_ticks)"},

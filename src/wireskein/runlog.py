@@ -525,14 +525,18 @@ def pulses(pin: str, count: int | None = None, period_s: float | None = None, pe
 def rgb_led(pin: str, data=None, t0h_min_s: float | None = 0.25e-6, t0h_max_s: float | None = 0.55e-6,
             t1h_min_s: float | None = 0.65e-6, t1h_max_s: float | None = 0.95e-6,
             period_min_s: float | None = 0.65e-6, period_max_s: float | None = 1.85e-6,
-            reset_min_s: float | None = 50e-6, threshold=None) -> dict:
+            reset_min_s: float | None = 50e-6, latch_safe_s: float | None = 280e-6, notices: dict | None = None,
+            threshold=None) -> dict:
     """A WS2812-like line: data, the bytes of each frame between resets as hex in the order sent (one string for
     one frame); every T0H, T1H and bit period within its *_min_s / *_max_s (the defaults: WS2812B's 0.4 / 0.8 /
     1.25 us +- 150 / 150 / 600 ns; None: that side not checked), and every low between frames, and the one after
-    the last, at least reset_min_s."""
+    the last, at least reset_min_s. A low between frames long enough for reset_min_s but shorter than latch_safe_s
+    is a notice (latch_short: later parts, WS2812B-V5 and the like, latch only after 280 us; None: not looked
+    for); notices={"latch_short": "ng"} or a count limits them."""
     return _t({"kind": "rgb_led", "pin": pin, "data": data, "t0h_min_s": t0h_min_s, "t0h_max_s": t0h_max_s,
                "t1h_min_s": t1h_min_s, "t1h_max_s": t1h_max_s, "period_min_s": period_min_s,
-               "period_max_s": period_max_s, "reset_min_s": reset_min_s}, threshold)
+               "period_max_s": period_max_s, "reset_min_s": reset_min_s, "latch_safe_s": latch_safe_s,
+               "notices": notices}, threshold)
 
 
 def onewire(pin: str, data=None, presence: bool | None = True, speed: str = "standard", threshold=None) -> dict:

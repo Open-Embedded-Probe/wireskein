@@ -105,3 +105,32 @@ def test_a_pwm_is_not_an_led_chain():
     w = gen.Wave(0)
     gen.pwm(w, 0, 1e-3, 800e3, 0.4)
     assert _claims(_cap(w, 1e-3, 40e6)) == []
+
+
+def _led_line(frames, resets, rate=40e6):
+    """An encoder of this test's own: each bit a high of 0.4 / 0.8 us in 1.25 us, MSB first; a low of resets[i]
+    after frame i."""
+    from wireskein._engine.model import Capture, Channel
+    t, edges = 10e-6, []
+    for f, r in zip(frames, resets):
+        for b in bytes.fromhex(f):
+            for k in range(7, -1, -1):
+                edges += [t, t + (0.8e-6 if (b >> k) & 1 else 0.4e-6)]
+                t += 1.25e-6
+        t += r
+    return Capture(rate, int(round(t * rate)), [Channel("D", 0, np.array([round(x * rate) for x in edges], np.int64))])
+
+
+def test_rgb_led_a_reset_short_for_later_parts_is_a_notice():
+    cap = _led_line(["00ff00", "ff0000", "0000ff"], [60e-6, 300e-6, 300e-6])
+    x = rgb_led("D", ["00ff00", "ff0000", "0000ff"])
+    ok, got, why = verify.check_rgb_led(cap, x)
+    ok, why, found = verify._notices(ok, why, got, x, cap)
+    assert ok is True and [n["kind"] for n in found] == ["latch_short"], (why, found)
+    assert abs(found[0]["length_ticks"] / 40e6 - 60e-6) < 1e-6
+    x = rgb_led("D", ["00ff00", "ff0000", "0000ff"], notices={"latch_short": "ng"})
+    ok, got, why = verify.check_rgb_led(cap, x)
+    assert verify._notices(ok, why, got, x, cap)[0] is False
+    x = rgb_led("D", ["00ff00", "ff0000", "0000ff"], latch_safe_s=None)
+    ok, got, why = verify.check_rgb_led(cap, x)
+    assert verify._notices(ok, why, got, x, cap)[2] == []

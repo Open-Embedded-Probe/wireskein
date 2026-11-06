@@ -360,6 +360,7 @@ sd_spi("PA5", "PA7", "PA6", "PA4", [{"cmd": 0, "r1": 0x01}, {"cmd": 8, "arg": 0x
 
 | 検査 | 注意 | 何か |
 | --- | --- | --- |
+| `rgb_led` | `latch_short` | フレームの間の low が、`reset_min_s` には足りるが `latch_safe_s` より短い（280 us。WS2812B-V5 などの後の部品は、それより長くないと確定しない。`length_ticks`、`safe_ticks`）。`latch_safe_s=None` なら探さない |
 | `i2c` | `scl_stretch` | SCL がいつもの low の `stretch_min`（2）倍より長く low（下がった所。`length_ticks`、`usual_ticks`）。ターゲットのクロックの引き延ばしか、コントローラがバイトの間で止まったもの。数は `stretches` |
 | `i2c` | `bus_glitch` | SCL か SDA の、`spike_max_s`（50 ns。I2C の入力が取り除くスパイク）より短いパルス（`line`、`level`、`width_ticks`）。キャプチャがそれを分解できるときだけ見える。数は `spikes` |
 | `spi`（`cs` あり） | `sck_outside_cs` | CS が非アクティブのあいだに SCK が動いた（その間の最初の変化の所。`count`: 変化の数）。ほかの機器と共有するバスでは正しい動き。設定し直しの余分な変化もここに出る |

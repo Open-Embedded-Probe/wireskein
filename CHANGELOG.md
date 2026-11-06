@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- (EN) `rgb_led` notice `latch_short`: a low between frames long enough for `reset_min_s` but shorter than `latch_safe_s` (280 us, what WS2812B-V5 and the like need to latch); `latch_safe_s=None` does not look for it.
+- (JA) `rgb_led` の注意 `latch_short` を足した: フレームの間の low が、`reset_min_s` には足りるが `latch_safe_s`（280 us。WS2812B-V5 などが確定に要る長さ）より短い。`latch_safe_s=None` なら探さない。
+
 - (EN) `i2c` notices: `scl_stretch` (SCL held low more than `stretch_min` times its usual low: a target stretching the clock, or the controller pausing) and `bus_glitch` (a pulse on either line shorter than `spike_max_s`, 50 ns); counted in `stretches` and `spikes`; `notices={"scl_stretch": "ng"}` limits them. Tested on lines from an encoder of the test's own.
 - (JA) `i2c` の注意を足した: `scl_stretch`（SCL がいつもの low の `stretch_min` 倍より長く low。ターゲットのクロックの引き延ばしか、コントローラが止まったもの）と `bus_glitch`（どちらかの線の、`spike_max_s` = 50 ns より短いパルス）。数は `stretches` と `spikes`。`notices={"scl_stretch": "ng"}` で限る。試験の中の独自の符号器が作った線で確かめた。
 
