@@ -161,3 +161,29 @@ def test_items_written_out_as_the_pieces_go(tmp_path):
     mem = {e["addr"]: e["value"] for e in by["dm"] if e["op"] == "MEMR"}
     want = {e["addr"]: e["value"] for e in whole["result"]["dm"] if e["op"] == "MEMR"}
     assert {a: mem.get(a) for a in want} == want              # the Debug Module across the pieces: the same reads
+
+
+def test_a_sr_is_read_as_the_pieces_go():
+    src = split.SrSource(D / "linke_l103_target_info.sr")
+    assert src.names == ["SWCLK", "SWDIO"] and src.n == 9399040
+    whole = decode_file(D / "linke_l103_target_info.sr", RVSWD, split="off")["parts"][0]["buses"][0]["result"]
+    pieces = [p for p, _ in split.run(src, split.options("max_edges=20000,min_edges=2000,overlap_edges=500"))]
+    assert len(pieces) > 2
+    got = decode_file(D / "linke_l103_target_info.sr", RVSWD,
+                      split="max_edges=20000,min_edges=2000,overlap_edges=500")["parts"][0]["buses"][0]
+    assert got["result"]["dmi"] == whole["dmi"]
+
+
+def test_unread_stretches_summed_up():
+    u = split.Unread()
+    u.add([{"s": 1, "e": 2, "edges": 2}, {"s": 5, "e": 9, "edges": 2}, {"s": 20, "e": 90, "edges": 7}])
+    assert u.doc() == {"count": 3, "edges": 11, "sizes": {"2": 2, "5-8": 1}, "largest": {"s": 20, "e": 90, "edges": 7}}
+    assert [split.size_bin(k) for k in (1, 2, 3, 4, 5, 8, 9, 16, 17)] == ["1", "2", "3-4", "3-4", "5-8", "5-8",
+                                                                            "9-16", "9-16", "17-32"]
+
+
+def test_workers_read_the_same():
+    opts = "max_edges=20000,min_edges=2000,overlap_edges=500"
+    one = decode_file(D / "linke_v203_read_flash_4k.sr", RVSWD, split=opts)["parts"][0]["buses"][0]["result"]
+    two = decode_file(D / "linke_v203_read_flash_4k.sr", RVSWD, split=opts + ",workers=2")["parts"][0]["buses"][0]["result"]
+    assert one == two

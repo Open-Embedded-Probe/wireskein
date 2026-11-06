@@ -420,7 +420,18 @@ def _file_source(path: Path, pins):
     """A WireSkein file of one part read a block at a time (wireskein.split.FileSource), or None: another kind of
     file, several parts, analog lines or lines of their own step (read whole)."""
     from . import split as _split
-    if not (path.is_file() and fileformat.sniff(path) == "wireskein"):
+    kind = fileformat.sniff(path) if path.is_file() else None
+    if kind == "sr":                                # a sigrok session: a block at a time too
+        try:
+            src = _split.SrSource(path, pins)
+        except ValueError:
+            return None
+        tick = Fraction(src.rate).limit_denominator(10**9)
+        src.raw = {"id": None, "tick_hz": [tick.numerator, tick.denominator], "complete": True, "lost": [],
+                   "layout": "timeline", "parts": [{}]}
+        src.head = {"meta": src.meta, "tick0": 0}
+        return src
+    if kind != "wireskein":
         return None
     raw = fileformat.read_header(path)
     if len(raw["parts"]) != 1:
@@ -475,7 +486,7 @@ def _part_split(source, spec: dict, head: dict, opts, items=None) -> dict:
         for j, b in enumerate(out["buses"]):
             b["result"] = {"items": {"file": str(items), "counts": sink.counts[j]}}
             b.pop("uninterpreted", None)
-            b["uninterpreted_count"] = sink.counts[j].get("uninterpreted", 0)
+            b["uninterpreted_summary"] = sink.unread[j].doc()
     return out
 
 
@@ -487,6 +498,8 @@ class _Items:
         from ._engine.riscv_dm import Across
         self.f = open(path, "w")
         self.counts = [{} for _ in spec["buses"]]
+        from . import split as _split
+        self.unread = [_split.Unread() for _ in spec["buses"]]
         self.dm = {j: Across() for j, b in enumerate(spec["buses"]) if b["protocol"] in ("rvswd", "swio")}
 
     def _write(self, j: int, layer: str, rows) -> None:
@@ -513,7 +526,9 @@ class _Items:
                                          for x in rows])
                         self._dm(j, self.dm[j].ready())
                     res[k] = []                       # written: not held
-            self._write(j, "uninterpreted", _split.join_items([(p, b.get("uninterpreted", []))]))
+            un = _split.join_items([(p, b.get("uninterpreted", []))])
+            self.unread[j].add(un)
+            self._write(j, "uninterpreted", un)
             b["uninterpreted"] = []
             res.pop("dm", None)
 
@@ -591,6 +606,9 @@ def _join_bus(per: list) -> dict:
                      for op, ad, v, sz, t0, t1 in accesses(tx)]
     out["result"] = res
     out["uninterpreted"] = _split.join_items([(p, b.get("uninterpreted", [])) for p, b in per])
+    un = _split.Unread()
+    un.add(out["uninterpreted"])
+    out["uninterpreted_summary"] = un.doc()
     return out
 
 

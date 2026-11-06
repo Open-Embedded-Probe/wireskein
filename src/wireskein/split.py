@@ -512,3 +512,97 @@ def mapped(fn, items, workers: int = 1):
         while pending:
             y, f = pending.popleft()
             yield y, f.result()
+
+
+def size_bin(edges: int) -> str:
+    """A bin of sizes in powers of two: "1", "2", "3-4", "5-8", ..."""
+    if edges <= 2:
+        return str(max(1, edges))
+    k = (edges - 1).bit_length()
+    return f"{(1 << (k - 1)) + 1}-{1 << k}"
+
+
+class Unread:
+    """What was not read, summed up: how many stretches, how many changes, their sizes in bins, the largest (with
+    where it is) - a long capture has many small ones (a line moving between frames) and a few that matter."""
+
+    def __init__(self):
+        self.count, self.edges, self.bins, self.largest = 0, 0, {}, None
+
+    def add(self, items) -> None:
+        for u in items:
+            k = int(u.get("edges", 0))
+            self.count += 1
+            self.edges += k
+            b = size_bin(k)
+            self.bins[b] = self.bins.get(b, 0) + 1
+            if self.largest is None or k > self.largest["edges"]:
+                self.largest = {"s": u.get("s"), "e": u.get("e"), "edges": k}
+
+    def doc(self) -> dict:
+        order = sorted(self.bins, key=lambda b: int(b.split("-")[0]))
+        return {"count": self.count, "edges": self.edges, "sizes": {b: self.bins[b] for b in order},
+                **({"largest": self.largest} if self.largest else {})}
+
+
+class SrSource(Source):
+    """A logic-only sigrok session (.sr) read a block at a time (decompressed as it goes): any length, only the
+    piece being read held."""
+
+    def __init__(self, path, pins: list[str] | None = None):
+        import configparser
+        from ._engine import srio
+        with zipfile.ZipFile(path) as z:
+            cfg = configparser.ConfigParser()
+            cfg.read_string(z.read("metadata").decode())
+            dev = cfg["device 1"]
+            if any(k.startswith("analog") and k[6:].isdigit() for k in dev):
+                raise ValueError("analog channels: read whole")
+            if srio.EXTRA in z.namelist():
+                extra = json.loads(z.read(srio.EXTRA))
+                if extra.get("analog") or any(int(c.get("step", 1)) != 1 for c in extra.get("channels", {}).values()):
+                    raise ValueError("lines of their own step: read whole")
+            self.unitsize = int(dev.get("unitsize", "1"))
+            prefix = dev.get("capturefile", "logic-1")
+            names = {int(k[5:]): v for k, v in dev.items() if k.startswith("probe") and k[5:].isdigit()}
+            total = int(dev.get("total probes", self.unitsize * 8))
+            self.chunks = sorted((n for n in z.namelist() if n == prefix or n.startswith(prefix + "-")),
+                                 key=lambda n: int(n.rsplit("-", 1)[1]) if n != prefix else 0)
+            bits = [b for b in (sorted(b - 1 for b in names) if names else range(min(total, self.unitsize * 8)))
+                    if b < self.unitsize * 8]
+            self.bits = {names.get(b + 1, f"bit{b}"): b for b in bits}
+            if pins:
+                miss = [p for p in pins if p not in self.bits]
+                if miss:
+                    raise ValueError(f"pins not in the capture: {', '.join(miss)}")
+                self.bits = {p: self.bits[p] for p in pins}
+            self.n = sum(z.getinfo(c).file_size for c in self.chunks) // self.unitsize
+            self.rate = srio._parse_rate(dev["samplerate"])
+            dtype = self._dtype()
+            first = next(srio._blocks(z, self.chunks, self.unitsize, dtype, 0, 1), (0, np.zeros(1, dtype)))[1]
+        self.path = path
+        self.names = list(self.bits)
+        self.initial = {k: int((int(first[0]) >> b) & 1) if len(first) else 0 for k, b in self.bits.items()}
+        self.meta = {"file": str(path)}
+
+    def _dtype(self):
+        return {1: np.uint8, 2: np.uint16, 4: np.uint32}[self.unitsize]
+
+    def blocks(self):
+        from ._engine import srio
+        last = dict(self.initial)
+        with zipfile.ZipFile(self.path) as z:
+            for first, data in srio._blocks(z, self.chunks, self.unitsize, self._dtype(), 0, None):
+                out = {}
+                for k, b in self.bits.items():
+                    lv = ((data >> b) & 1).astype(np.int8)
+                    ch = np.flatnonzero(np.diff(lv)) + 1
+                    if len(lv) and lv[0] != last[k]:
+                        ch = np.concatenate(([0], ch))
+                    if len(lv):
+                        last[k] = int(lv[-1])
+                    out[k] = ch.astype(np.int64) + first
+                yield first + len(data), out
+
+
+import json  # noqa: E402  (SrSource)
