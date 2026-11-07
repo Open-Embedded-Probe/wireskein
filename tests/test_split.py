@@ -299,3 +299,19 @@ def test_analyze_reads_several_parts_from_the_file(tmp_path):
     doc = analyze_file(p, split="max_edges=3000,min_edges=500,overlap_edges=100")
     assert [x["part"] for x in doc["parts"]] == [0, 1, 2]
     assert "split" in doc["parts"][0] and "split" not in doc["parts"][1]        # the short one read as always
+
+
+def test_dio_ringing_inside_a_held_clock_is_no_stop(tmp_path):
+    # a LinkE polling SDI holds SWCLK high about 1 us at a turnaround now and then, and SWDIO rings up for a sample
+    # there: taken for a STOP (a high 4 times the usual, 1 us), the frame was cut at 14 clocks and a mailbox read
+    # lost ("150" of "uptime 150 s"). (An excerpt of wch-protocols' more/l103/monitor_sdi.sr, made here.)
+    import argparse
+    from wireskein import cli
+    src = Path("/home/mt/dev_wch/wch-protocols/captures/fixtures/wire-linke-p4-2026-09-25/more/l103/monitor_sdi.sr")
+    if not src.exists():
+        pytest.skip("wch-protocols' monitor_sdi.sr is not here")
+    out = tmp_path / "m.wireskein"
+    cli.convert(argparse.Namespace(input=src, output=out, part=None, from_s=16.82, to_s=16.823, pins=None))
+    dmi = decode_file(out, RVSWD, split="off")["parts"][0]["buses"][0]["result"]["dmi"]
+    assert any(x["reg"] == "data0" and x["data"] == 0x30353103 and x["ok"] for x in dmi)
+    assert all(len(x["bits"]) in (53, 85) for x in dmi)

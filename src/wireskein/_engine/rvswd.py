@@ -55,7 +55,11 @@ def reframe_startstop(fr, cap, hold: float = 1.5, w: int = 16, hold_min_s: float
     turnaround (0.5 us at 3 MHz) and now and then about twice inside a burst read (1.1 us): none is a STOP. A STOP
     holds CLK high 1.8 us or more (a fast LinkE, under the 2 us link-to-target names), 4 to 7 us at slower speeds;
     at its fastest (CLK high 30 ns) a LinkE's STOP may hold only 1.4 us, far over its usual high: so a high `far`
-    times the usual and at least `far_min_s` is a STOP too."""
+    times the usual and at least `far_min_s` is a STOP too.
+
+    A reflection ringing DIO for a sample or two (a 1-sample rise inside a CLK high held at a turnaround) is no
+    START or STOP: at a clock slow enough (9 samples a period or more) DIO's pulses under 3 samples are left out
+    first, as the bits are read (typed.RING)."""
     sb = fr.source
     c, d = cap.channel(sb.clock), cap.channel(sb.data[0])
     ce, de = np.asarray(c.edges), np.asarray(d.edges)
@@ -63,6 +67,11 @@ def reframe_startstop(fr, cap, hold: float = 1.5, w: int = 16, hold_min_s: float
         return []
     clv = K.edge_levels(ce, c.initial)
     rises = ce[clv == 1]
+    from .typed import RING
+    if len(rises) > 1 and float(np.median(np.diff(rises))) >= 3 * RING and d.step == 1:
+        de = K.deglitch(de, RING)
+        if len(de) < 2:
+            return []
     falls = ce[clv == 0]
     # each high: from a rise to the next fall
     fi = np.searchsorted(falls, rises, side="right")

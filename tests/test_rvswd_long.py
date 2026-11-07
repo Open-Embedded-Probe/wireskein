@@ -142,22 +142,25 @@ def test_short_frames_read_by_decode_from_a_sr(name):
 
 
 def test_a_frame_no_layout_reads_is_uninterpreted():
-    # with START and STOP read badly, the frames that fall apart are said, not left out
-    import functools
+    # frames left out of the framing (as a framing that missed them would) are said as unread, not left out
     from wireskein._engine import rvswd
     from wireskein.decode import decode_file
     truth = json.loads((D / "linke_l103_target_info.truth.json").read_text())
     orig = rvswd.reframe_startstop
+    rate = 50e6
+
+    def missing(fr, cap, **kw):
+        sb = fr.source
+        return [f for f in orig(fr, cap, **kw) if not 126.1e-3 <= sb.t[f[0]] / rate <= 128.6e-3]
     try:
-        rvswd.reframe_startstop = functools.partial(orig, hold_min_s=0.0)
-        doc = decode_file(D / "linke_l103_target_info.sr", {"buses": [{"protocol": "rvswd", "pins": truth["roles"]}]})
+        rvswd.reframe_startstop = missing
+        doc = decode_file(D / "linke_l103_target_info.sr", {"buses": [{"protocol": "rvswd", "pins": truth["roles"]}]},
+                          split="off")
     finally:
         rvswd.reframe_startstop = orig
     (bus,) = doc["parts"][0]["buses"]
-    rate = doc["capture"]["tick_hz"][0]
     lost = [u for u in bus["uninterpreted"] if 126.1e-3 <= u["s"] / rate <= 128.6e-3 and u["edges"] > 50]
     assert lost, bus["uninterpreted"]
-
 
 def test_an_answer_a_clock_late_is_marked(docs):
     # as ch32rv lets the V103 go, its answers come 1.05 to 1.1 clocks after the bit's rising edge (0x10 echoed as
