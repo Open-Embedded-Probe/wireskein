@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- (EN) `spi()` with a CS kept at a coarser step than the clock: its windows start up to a CS sample earlier (it is seen to go active up to a sample late, and SPI clocks only inside CS), so no clock right after CS is left out; `cs_sample_s` in what is measured.
+- (JA) クロックより粗い刻みで取った CS での `spi()`: CS の窓を、最大 1 サンプル早く始まるものとする（アクティブになるのが最大 1 サンプル遅れて見え、SPI のクロックは CS の中だけ）。CS のすぐあとのクロックを落とさない。measured に `cs_sample_s`。
+
 ## 0.0.25
 - (EN) `spi(..., edge_sample="before")`: a data line changing in the same sample as a sampling edge is taken as changing after it (the edge reads the value before), for a part whose output hold is known to be under a sample (CH32V103's SPI slave at 40 MS/s); such a hold is then told in `margins` as `hold_under_sample` with `sample_s`.
 - (JA) `spi(..., edge_sample="before")`: データの線がサンプルの縁と同じサンプルで変わったとき、縁のあとの変化として扱う（縁は前の値を読む）。部品の出力のホールドが 1 サンプルより短いと分かっているときに使う（40 MS/s での CH32V103 の SPI スレーブ）。そのホールドは `margins` に `hold_under_sample` と `sample_s` で出る。

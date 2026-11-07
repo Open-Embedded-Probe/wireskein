@@ -459,10 +459,33 @@ def _i2c_notices(cap, scl, sda, spike_s: float, stretch: float) -> list[dict]:
     return sorted(out, key=lambda k: k["tick"])
 
 
+def _cs_coarse(cap, x):
+    """A CS line sampled coarser than the clock (a slower step, to save a probe's bandwidth): its change to active
+    is seen at its next sample, up to a CS sample after it happened, and the clocks in between would fall outside the
+    window. SPI clocks only inside CS: the window is taken to start as early as the change could have been (a CS
+    sample earlier, less a tick). The capture with that line in place of CS, and the CS sample's length (s) or None."""
+    ch = cap.channel(x["cs"])
+    if ch.step <= 1 or not len(ch.edges):
+        return cap, None
+    act = x.get("cs_active", 0)
+    e = np.asarray(ch.edges, np.int64).copy()
+    lv = ch.initial ^ ((np.arange(len(e)) + 1) & 1)
+    to_act = np.flatnonzero(lv == act)
+    prev = np.concatenate(([0], e[:-1] + 1))
+    e[to_act] = np.maximum(e[to_act] - (ch.step - 1), prev[to_act])
+    fine = Channel(ch.name, ch.initial, e, 1, 0, ch.acquisition)
+    chans = [fine if c.name == ch.name else c for c in cap.channels]
+    from dataclasses import replace
+    return replace(cap, channels=chans), ch.step / cap.rate
+
+
 def check_spi(cap, x):
     pins = {"clk": x["clk"], **{k: x[k] for k in ("mosi", "miso", "cs") if x.get(k)}}
     if any(_ch(cap, p) is None for p in pins.values()):
         return None, {}, "pins not captured"
+    cs_sample_s = None
+    if x.get("cs"):
+        cap, cs_sample_s = _cs_coarse(cap, x)
     res = _decode(cap, {"protocols": ["spi"], "pins": {p: {"protocol": "spi", "role": r} for r, p in pins.items()}})
     need = {"clk": x["clk"], **({"cs": x["cs"]} if x.get("cs") else {})}
     # the mode read from the lines themselves (timing.spi_mode): SCK's level as CS becomes active, the edge MOSI
@@ -509,6 +532,8 @@ def check_spi(cap, x):
                  for pin, frs in n.output.items["lines"].items()}
     got = {"mode": n.metrics.get("mode") if n is not None else None, "bytes": hexes,
            "sck_hz": _burst_hz(cap.channel(x["clk"]), cap.rate)}
+    if cs_sample_s is not None:
+        got["cs_sample_s"] = cs_sample_s                # CS sampled coarser: its windows start a CS sample early
     if margins:
         got["margins"] = margins                          # per data line: setup / hold around the sampling edges
         got["modes"] = timing.spi_modes(cap.channel(x["clk"]), lines_, m["cpol"], cap.rate, cap.n_samples, cs_ch, act,
