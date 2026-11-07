@@ -12,6 +12,9 @@ from wireskein.decode import analyze_file, decode_file
 
 D = Path(__file__).parent / "data" / "rvswd_long_truth"
 RVSWD = {"buses": [{"protocol": "rvswd", "pins": {"clk": "SWCLK", "dio": "SWDIO"}}]}
+# a WCH-LinkE polling a CH32L103's SDI, 2 s at 25 MHz (wch-protocols): used where it is here, skipped where not
+MONITOR = Path("/home/mt/dev_wch/wch-protocols/captures/fixtures/wire-linke-p4-2026-09-25/more/l103/"
+               "monitor_sdi.wireskein")
 
 
 def bursts(n_bursts=40, clocks=200, per=10, gap=5000, t0=1000):
@@ -202,14 +205,14 @@ def test_a_piece_the_roles_read_badly_is_told():
 def test_a_data_line_ringing_at_a_slow_enough_clock_still_pairs_with_it(tmp_path):
     # 0.1 s of a LinkE's SDI monitor (25 MHz: SWCLK's period 10 samples, SWDIO ringing 1-2 samples at its edges):
     # the ringing scattered SWDIO's changes over the period and the two never formed a bus; read as they settle,
-    # analyze finds RVSWD. (An excerpt of wch-protocols' more/l103/monitor_sdi.sr, made here from a piece of it.)
+    # analyze finds RVSWD. (An excerpt of wch-protocols' more/l103/monitor_sdi, made here from a piece of it.)
     import argparse
     from wireskein import cli
-    src = Path("/home/mt/dev_wch/wch-protocols/captures/fixtures/wire-linke-p4-2026-09-25/more/l103/monitor_sdi.sr")
+    src = MONITOR
     if not src.exists():
-        pytest.skip("wch-protocols' monitor_sdi.sr is not here")
+        pytest.skip("wch-protocols' monitor_sdi.wireskein is not here")
     out = tmp_path / "m.wireskein"
-    cli.convert(argparse.Namespace(input=src, output=out, part=None, from_s=5.0, to_s=5.05, pins=None))
+    cli.convert(argparse.Namespace(input=src, output=out, part=None, from_s=1.0, to_s=1.05, pins=None))
     (c,) = [c for c in analyze_file(out)["parts"][0]["claims"] if c["protocol"] == "rvswd"]
     assert c["roles"] == {"clk": "SWCLK", "dio": "SWDIO"} and c["verdict"] == "confirmed"
 
@@ -303,15 +306,15 @@ def test_analyze_reads_several_parts_from_the_file(tmp_path):
 
 def test_dio_ringing_inside_a_held_clock_is_no_stop(tmp_path):
     # a LinkE polling SDI holds SWCLK high about 1 us at a turnaround now and then, and SWDIO rings up for a sample
-    # there: taken for a STOP (a high 4 times the usual, 1 us), the frame was cut at 14 clocks and a mailbox read
-    # lost ("150" of "uptime 150 s"). (An excerpt of wch-protocols' more/l103/monitor_sdi.sr, made here.)
+    # there: taken for a STOP (a high 4 times the usual, 1 us), a frame was cut short (50 clocks at 0.35498 s; at
+    # 16.82 s of the whole record, 14 clocks, and the mailbox's "150" of "uptime 150 s" was lost)
     import argparse
     from wireskein import cli
-    src = Path("/home/mt/dev_wch/wch-protocols/captures/fixtures/wire-linke-p4-2026-09-25/more/l103/monitor_sdi.sr")
-    if not src.exists():
-        pytest.skip("wch-protocols' monitor_sdi.sr is not here")
+    if not MONITOR.exists():
+        pytest.skip("wch-protocols' monitor_sdi.wireskein is not here")
     out = tmp_path / "m.wireskein"
-    cli.convert(argparse.Namespace(input=src, output=out, part=None, from_s=16.82, to_s=16.823, pins=None))
+    cli.convert(argparse.Namespace(input=MONITOR, output=out, part=None, from_s=0.354, to_s=0.356, pins=None))
     dmi = decode_file(out, RVSWD, split="off")["parts"][0]["buses"][0]["result"]["dmi"]
-    assert any(x["reg"] == "data0" and x["data"] == 0x30353103 and x["ok"] for x in dmi)
     assert all(len(x["bits"]) in (53, 85) for x in dmi)
+    rate = 25e6
+    assert any(abs(x["s"] / rate + 0.354 - 0.35498) < 2e-5 and len(x["bits"]) == 53 and x["ok"] for x in dmi)
