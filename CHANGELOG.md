@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- (EN) RVSWD: DIO ringing for a sample or two is no START or STOP at a clock of 9 samples a period or more (a LinkE holding SWCLK high at a turnaround, DIO ringing up there: a frame cut short and a mailbox read lost); a 52-clock frame is read only from the stop-interval cuts (cut at START and STOP it lost a clock).
+- (JA) RVSWD: 1 周期が 9 サンプル以上のクロックでは、DIO の 1〜2 サンプルの揺れを START や STOP としない（LinkE が折り返しで SWCLK を high にしている間に DIO が揺れ、フレームが短く切られて mailbox の読みが抜けていた）。52 クロックのフレームは、間隔で切ったときだけ読む（START と STOP で切ったものはクロックが欠けている）。
+
 - (EN) `spi()` with a CS kept at a coarser step than the clock: its windows start up to a CS sample earlier (it is seen to go active up to a sample late, and SPI clocks only inside CS), so no clock right after CS is left out; `cs_sample_s` in what is measured.
 - (JA) クロックより粗い刻みで取った CS での `spi()`: CS の窓を、最大 1 サンプル早く始まるものとする（アクティブになるのが最大 1 サンプル遅れて見え、SPI のクロックは CS の中だけ）。CS のすぐあとのクロックを落とさない。measured に `cs_sample_s`。
 
