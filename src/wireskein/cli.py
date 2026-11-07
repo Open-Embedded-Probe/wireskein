@@ -201,12 +201,32 @@ def decode_cmd(args) -> None:
         doc = decode_file(args.capture, spec, args.split, _pins(args.pins), args.items)
     except (ValueError, FileNotFoundError, zipfile.BadZipFile) as e:
         sys.exit(f"wireskein decode: {e}")
+    _warn_undersampled(doc, [b for p in doc.get("parts", []) for b in p.get("buses", [])])
     text = export.dumps(doc)
     if args.out:
         args.out.write_text(text)
         print(f"{len(text)} bytes -> {args.out}", file=sys.stderr)
     else:
         print(text)
+
+
+def _warn_undersampled(doc: dict, items: list) -> None:
+    """A clock sampled too slowly, told on stderr (decode's buses, analyze's claims): its clocks may be lost."""
+    for x in items:
+        us = x.get("undersampled")
+        if not us:
+            continue
+        print(f"warning: {us['clock']}: {us['frames']} frames at a clock too fast for {us['rate_hz'] / 1e6:g} MS/s "
+              f"(at its fastest a period of {us['period_ns']:g} ns, high {us['high_ns']:g} ns, low "
+              f"{us['low_ns']:g} ns): a clock may fall between samples, its frame lost or read only where its checks "
+              f"leave one reading" + (f" ({us['restored']} read with a lost clock restored)" if us.get("restored")
+                                      else "")
+              + f"; capture at {us['suggest_rate_hz'] / 1e6:g} MS/s or more", file=sys.stderr)
+        for g in x.get("clock_speeds", []):
+            print(f"  {us['clock']} at {g['freq_hz'] / 1e6:.3g} MHz (high {g['high_ns']:g} ns, low {g['low_ns']:g} ns): "
+                  f"{g['frames']} frames from tick {g['s']} to {g['e']}" + ("" if g["rate_ok"] else
+                                                                          ": too fast for the rate"),
+                  file=sys.stderr)
 
 
 def _load_for_decoding(path, args):
@@ -761,6 +781,7 @@ def main() -> None:
                            args.items)
     except (ValueError, FileNotFoundError, zipfile.BadZipFile) as e:
         sys.exit(f"wireskein analyze: {e}")
+    _warn_undersampled(doc, [c for p in doc.get("parts", []) for c in p.get("claims", [])])
     text = export.dumps(doc)
     if args.out:
         args.out.write_text(text)

@@ -383,3 +383,34 @@ def test_pieces_read_on_the_edge_the_first_piece_reads():
     assert b["params"]["sample_edge"] == whole["params"]["sample_edge"] == "rise"
     assert b["result"]["dmi"] == whole["result"]["dmi"]
     assert sum(1 for x in b["result"]["dmi"] if x["op"] == "W" and x["addr"] == 0x17) > 1000
+
+
+def test_a_clock_too_fast_for_the_rate_is_told_with_its_speeds():
+    # a LinkE connects at 0.33 MHz, then reads at 10 MHz with highs of 20 ns: at 50 MS/s a high may fall between two
+    # samples. The speeds come from the frames read, each frame carrying its own clock
+    from wireskein.decode import decode_file
+    b = decode_file(D / "linke_v203_speed_high_read_ram_256.sr", SPEC)["parts"][0]["buses"][0]
+    sp = {round(g["freq_hz"] / 1e4) / 100: g for g in b["clock_speeds"]}
+    assert sp[0.33]["frames"] == 202 and sp[0.33]["rate_ok"] and not sp[10.0]["rate_ok"]
+    us = b["undersampled"]
+    assert us["clock"] == "SWCLK" and us["high_ns"] == 20.0 and us["suggest_rate_hz"] == 200e6
+    x = next(x for x in b["result"]["dmi"] if x.get("form") == "long")
+    assert x["period_ns"] > 2000 and 900 < x["high_ns"] < 1100
+    # at 160 MS/s the same clock's highs last 4 samples: not told
+    b = decode_file(D / "linke_v203_160mhz_flash_pattern4k.sr", SPEC)["parts"][0]["buses"][0]
+    assert "undersampled" not in b and all(g["rate_ok"] for g in b["clock_speeds"])
+
+
+def test_a_frame_a_clock_short_is_read_only_where_one_reading_is_left():
+    # the same 4 KiB flashed, taken at 50 MS/s (a 10 MHz clock's highs of 20 ns: clocks lost between samples) and at
+    # 160 MS/s (none lost). A frame a clock short is read with the lost clock restored only where every place it may
+    # have been lost gives the same bits; each such frame is one the 160 MS/s capture reads too
+    from wireskein.decode import decode_file
+    slow = decode_file(D / "linke_v203_flash_pattern4k.sr", SPEC)["parts"][0]["buses"][0]
+    fast = decode_file(D / "linke_v203_160mhz_flash_pattern4k.sr", SPEC)["parts"][0]["buses"][0]
+    seen = {(x["op"], x["addr"], str(x["data"])) for x in fast["result"]["dmi"] if x["ok"] and x.get("form") == "short"}
+    restored = [x for x in slow["result"]["dmi"] if "restored" in x]
+    assert len(restored) > 100 and all(x["ok"] and len(x["bits"]) == 53 for x in restored)
+    assert all((x["op"], x["addr"], str(x["data"])) in seen for x in restored)
+    assert all(x["s"] < x["restored"][0] < x["e"] for x in restored)
+    assert slow["undersampled"]["restored"] == len(restored)

@@ -532,10 +532,11 @@ class DeclarativePlugin:
             for i, fr_ in enumerate(frames):
                 a, b = fr_[0], fr_[1]
                 skip = fr_[2] if len(fr_) > 2 else ()      # glitch clocks dropped (a reframer's repair)
-                L = layout(b - a - len(skip))
+                ins = fr_[3] if len(fr_) > 3 else ()       # clocks lost between samples, restored: (at, bit, tick)
+                L = layout(b - a - len(skip) + len(ins))
                 if L is None or (delimited and L.get("undelimited_only")):
                     continue
-                if skip or "repeat" in L:
+                if skip or ins or "repeat" in L:
                     rows[i] = (L, None)
                 else:
                     groups.setdefault(b - a, (L, []))[1].append(i)
@@ -567,19 +568,24 @@ class DeclarativePlugin:
                 fr_ = frames[i]
                 a, b = fr_[0], fr_[1]
                 skip = fr_[2] if len(fr_) > 2 else ()
+                ins = fr_[3] if len(fr_) > 3 else ()
                 matched += 1
                 explained += b - a
                 rec = {"start": int(sb.t[a]), **L.get("const", {})}
                 if L.get("keep_span"):                   # the frame's sampling edges, for an adapter that reads more
-                    rec["_span"] = (int(a), int(b), tuple(skip))
+                    rec["_span"] = (int(a), int(b), tuple(skip), tuple(ins))
                 if skip:
                     rec["repaired"] = len(skip)
+                if ins:
+                    rec["restored"] = len(ins)
                 if ends:
                     rec["end"] = int(sb.t[b - 1])
                 if got is None:                          # one by one
                     f = bits[a:b].astype(np.int64)
                     if skip:
                         f = np.delete(f, [x - a for x in skip])
+                    for at, bit, _ in ins:
+                        f = np.insert(f, at, bit)
                     fv = {fld["name"]: _int_bits(f[fld["at"]:fld["at"] + fld["width"]]) for fld in L["fields"]}
                     q = L.get("unanswered_if_ones")
                     unanswered = bool(q and f[q[0]:q[1] + 1].all())

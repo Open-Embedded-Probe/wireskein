@@ -109,6 +109,7 @@ def reframe_startstop(fr, cap, hold: float = 1.5, w: int = 16, hold_min_s: float
     out = [(int(x), int(y)) for x, y in zip(a.tolist(), b.tolist()) if y > x]
     if sb.sample_edge == "rise" and len(rises) == len(sb.t) and np.array_equal(rises, sb.t):
         out = [_repaired(x, y, highs) for x, y in out]
+        out = _restored(out, sb.t, d.initial, de)
     return out
 
 
@@ -130,6 +131,63 @@ def _repaired(a: int, b: int, highs: np.ndarray, glitch: int = 1, most: int = 3)
             drop = short[np.argsort(highs[short], kind="stable")[:m]]
             return (a, b, tuple(sorted(int(i) for i in drop)))
     return (a, b)
+
+
+RESTORE_MARGIN = [1.5, 4.0]   # the places about as likely as the best: within this of its cost (times, + median intervals)
+
+
+def _restored(out: list, t: np.ndarray, initial: int, de: np.ndarray, lengths=(53, 85), least: int = 4,
+              near: int = 16) -> list:
+    """Frames a clock short of a fixed form (52 or 84 clocks between START and STOP) whose clock lost a high between
+    two samples (a LinkE at its fastest, its highs a sample or two at 50 MS/s): the lost clock restored where the
+    frame's clock intervals best match the form's, one interval there as long as two (the form's intervals: the
+    median, position by position, of the `near` whole frames of that length nearest it, at least `least` of them). Its
+    bit is DIO at the tick it is estimated at (the interval before it, as the form has it, past the clock before).
+    -> the frames, a restored one (a, b, (), ((at, bit, tick),)); the layout's checks then tell whether it reads."""
+    out = list(out)
+    for n in lengths:
+        whole = [i for i, x in enumerate(out) if len(x) == 2 and x[1] - x[0] == n]
+        short = [i for i, x in enumerate(out) if len(x) == 2 and x[1] - x[0] == n - 1]
+        if len(whole) < least or not short:
+            continue
+        starts = np.asarray([out[i][0] for i in whole], np.int64)
+        iv_all = np.diff(t[starts[:, None] + np.arange(n)[None, :]], axis=1).astype(np.float64)   # (frames, n - 1)
+        for i in short:
+            a, b = out[i]
+            k = np.searchsorted(starts, a)
+            lo = max(0, min(k - near // 2, len(starts) - near))
+            T = np.median(iv_all[lo:lo + near], axis=0)                 # n - 1 intervals
+            iv = np.diff(t[a:b]).astype(np.float64)                     # n - 2
+            # interval j of the frame is T[j] + T[j + 1]: the ones before it are T[:j], the ones after T[j + 2:]
+            pre = np.concatenate(([0.0], np.cumsum(np.abs(iv - T[:-1]))))          # pre[j]: |iv[:j] - T[:j]|
+            post = np.concatenate((np.cumsum(np.abs(iv - T[1:])[::-1])[::-1], [0.0]))   # post[j]: |iv[j:] - T[j+1:]|
+            j = np.arange(n - 2)
+            cost = pre[j] + np.abs(iv - (T[:-1] + T[1:])) + post[j + 1]
+            lv = ((initial + np.searchsorted(de, t[a:b], side="right")) & 1).astype(np.int64)
+            # the places that match the form nearly as well as the best, tried best first: the first whose bits
+            # pass the form's checks (where the clock was lost is not always plain: intervals alike around it)
+            best = float(cost.min())
+            cands = []
+            for jb in np.argsort(cost, kind="stable").tolist():
+                if cost[jb] > RESTORE_MARGIN[0] * best + RESTORE_MARGIN[1] * float(np.median(T)):
+                    break
+                tick = int(t[a + jb] + round(T[jb]))
+                bit = int((initial + np.searchsorted(de, tick, side="right")) & 1)
+                cands.append((jb, bit, tick, np.insert(lv, jb + 1, bit)))
+            # restored only when every place about as likely gives the same bits, and they pass the checks
+            if cands and all(np.array_equal(c[3], cands[0][3]) for c in cands) and _form_checks(cands[0][3], n):
+                jb, bit, tick, _ = cands[0]
+                out[i] = (a, b, (), ((jb + 1, bit, tick),))
+    return out
+
+
+def _form_checks(f: np.ndarray, n: int) -> bool:
+    """A frame's bits pass its form's checks (rvswd.toml): short, its two parities; long, its echoes."""
+    if n == 53:
+        return bool(f[8] == (f[0:8].sum() & 1) and f[46] == (f[14:46].sum() & 1))
+    if n == 85:
+        return bool(np.array_equal(f[0:7], f[42:49]) and f[40] == f[83])
+    return False
 
 
 LONG_TARGET = 42               # the first clock of the target's phase in the long form
@@ -300,16 +358,22 @@ def frame_details(x: dict, sb, cap) -> dict:
     """A frame's details from its sampling edges (x["_span"]): its bits as sampled (the don't-care ones too), the
     clock's period, the glitch clocks left out, its fields by name and, for a long frame answered, the answer's
     timing. Made for the frames exported only (every hypothesis would make them otherwise)."""
-    a, b, skip = x["_span"]
+    a, b, skip = x["_span"][:3]
+    ins = x["_span"][3] if len(x["_span"]) > 3 else ()
     keep = np.setdiff1d(np.arange(a, b), np.asarray(skip, np.int64)) if skip else np.arange(a, b)
-    out = {"bits": "".join("1" if v else "0" for v in sb.bits[0][keep].tolist())}
-    if len(keep) > 1:
-        out["period_ns"] = round(float(np.median(np.diff(sb.t[keep]))) / cap.rate * 1e9, 1)
+    bits, t = sb.bits[0][keep].astype(np.int64), sb.t[keep].astype(np.int64)
+    for at, bit, tick in ins:
+        bits, t = np.insert(bits, at, bit), np.insert(t, at, tick)
+    out = {"bits": "".join("1" if v else "0" for v in bits.tolist())}
+    if len(t) > 1:
+        out["period_ns"] = round(float(np.median(np.diff(t))) / cap.rate * 1e9, 1)
     if skip:
         out["repaired"] = [int(sb.t[i]) for i in skip]              # the glitch clocks' ticks
+    if ins:
+        out["restored"] = [int(tick) for _, _, tick in ins]          # the lost clocks' ticks, as estimated
     fields = frame_fields(out["bits"], x.get("form", "short"), x.get("op"))
     if fields:
         out["fields"] = fields
-    if x.get("form") == "long" and x.get("answered") is not False and not skip:
+    if x.get("form") == "long" and x.get("answered") is not False and not skip and not ins:
         out.update(long_answer(cap, sb, a, b))
     return out

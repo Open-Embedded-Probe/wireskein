@@ -34,6 +34,7 @@ import numpy as np
 from . import __version__, _fileformat as fileformat
 from ._engine import export as _exp
 from ._engine import fileio, staged, timing
+from ._engine import kernels as K
 from ._engine.export import dumps, export
 from ._engine.model import Capture, Channel
 from ._engine.srio import read_sr, write_sr
@@ -223,6 +224,107 @@ def _idle(cap: Capture, b: dict, n) -> int:
     return int(round(IDLE_S * cap.rate))
 
 
+GOOD_HALF = 4        # samples a clock's high and low should last, at least, to be sure none falls between samples
+TIGHT_HALF = 2.5     # a clock whose usual high or low, where it runs fastest, is shorter than this is told
+
+
+SAME_SPEED = 1.25    # frames whose clock periods are within this of a speed's fastest are of that speed
+
+
+def frame_clocks(cap: Capture, clock: str, items: list, least: int = 8) -> None:
+    """Each frame a clocked bus read (`items`, with s and e) given its clock: `period_ns` (the median of its clock's
+    periods; kept when the decoder gave it) and `high_ns` (the median of its highs), so a reflection's glitch does
+    not count. A frame of fewer than `least` clocks is left as it is."""
+    ch = cap.channel(clock)
+    its = [x for x in items if isinstance(x, dict) and isinstance(x.get("s"), int) and isinstance(x.get("e"), int)
+           and x["e"] > x["s"]]
+    if ch.step != 1 or not its:
+        return
+    e = np.asarray(ch.edges, np.int64)
+    lv = K.edge_levels(e, ch.initial)
+    rise = np.flatnonzero(lv == 1)
+    rise = rise[rise + 1 < len(e)]
+    t = e[rise]
+    high = e[rise + 1] - t
+    se = np.asarray([(x["s"], x["e"]) for x in its], np.int64)
+    lo = np.searchsorted(t, se[:, 0])
+    hi = np.searchsorted(t, se[:, 1], side="right")
+    ns = 1e9 / float(cap.rate)
+    for x, i, j in zip(its, lo.tolist(), hi.tolist()):
+        if j - i >= least:
+            x.setdefault("period_ns", round(float(np.median(np.diff(t[i:j]))) * ns, 1))
+            x["high_ns"] = round(float(np.median(high[i:j - 1])) * ns, 1)
+
+
+def clock_speeds(rate: float, items: list) -> list[dict]:
+    """The speeds a bus's clock ran at, from its frames' clocks (frame_clocks): frames whose periods are within
+    SAME_SPEED of a speed's fastest are that speed, wherever they are. -> [{"period_ns", "freq_hz", "high_ns",
+    "low_ns" (medians), "frames", "s", "e" (its first frame's start, its last's end), "rate_ok"}], fastest first;
+    rate_ok: false when its high or low lasts under TIGHT_HALF samples (a high may fall between two samples, its clock
+    lost)."""
+    rows = sorted((x["period_ns"], x["high_ns"], x["s"], x["e"]) for x in items
+                  if isinstance(x, dict) and "high_ns" in x and x.get("period_ns"))
+    groups: list[list] = []
+    for r in rows:
+        if groups and r[0] <= groups[-1][0][0] * SAME_SPEED:
+            groups[-1].append(r)
+        else:
+            groups.append([r])
+    return [_speed(np.asarray(g, np.float64), rate) for g in groups]
+
+
+def _speed(g: np.ndarray, rate: float, frames: int | None = None) -> dict:
+    p, h = float(np.median(g[:, 0])), float(np.median(g[:, 1]))
+    tight = TIGHT_HALF * 1e9 / rate
+    return {"period_ns": round(p, 1), "freq_hz": round(1e9 / p, 1), "high_ns": round(h, 1), "low_ns": round(p - h, 1),
+            "frames": int(frames if frames is not None else len(g)), "s": int(g[:, 2].min()), "e": int(g[:, 3].max()),
+            "rate_ok": min(h, p - h) >= tight}
+
+
+def undersampled(cap: Capture, speeds: list[dict], clock: str) -> dict | None:
+    """The speeds a clock was sampled too slowly at (clock_speeds' rate_ok false): {"clock", "rate_hz", "frames"
+    (read at those speeds), "high_ns", "low_ns", "period_ns" (the fastest of them), "suggest_rate_hz" (GOOD_HALF
+    samples in the shorter of its high and low)}, or None."""
+    bad = [g for g in speeds if not g["rate_ok"]]
+    if not bad:
+        return None
+    rate = float(cap.rate)
+    worst = min(bad, key=lambda g: min(g["high_ns"], g["low_ns"]))
+    shortest = max(1.0, min(worst["high_ns"], worst["low_ns"]) * rate / 1e9)
+    return {"clock": clock, "rate_hz": rate, "frames": sum(g["frames"] for g in bad),
+            "period_ns": worst["period_ns"], "high_ns": worst["high_ns"], "low_ns": worst["low_ns"],
+            "suggest_rate_hz": float(np.ceil(GOOD_HALF * rate / shortest / 1e6) * 1e6)}
+
+
+def _frame_items(lay: dict, n) -> list:
+    """The items a clocked bus read frame by frame: RVSWD's and SWIO's DMI accesses (not the Debug Module's, which
+    span several), else its frames layer (export.LOWER)."""
+    if isinstance(lay.get("dmi"), list):
+        return lay["dmi"]
+    k = _exp.LOWER.get(n.analyzer) if n is not None else None
+    v = lay.get(k) if k else None
+    return v if isinstance(v, list) else []
+
+
+def _note_undersampled(claims: list, cap: Capture, res) -> None:
+    """analyze's claims on a clock sampled too slowly: told as `undersampled` (as decode's buses), judged on the
+    claim's frames (its lower layers, whatever the export gives)."""
+    nodes = {(c.protocol, tuple(sorted(c.roles.items()))): c.node for c in res.claims}
+    for c in claims:
+        clk = (c.get("roles") or {}).get("clk")
+        n = nodes.get((c["protocol"], tuple(sorted((c.get("roles") or {}).items()))))
+        if not clk or n is None:
+            continue
+        frames = _frame_items(_exp.layers_of(n), n)
+        frame_clocks(cap, clk, frames)
+        speeds = clock_speeds(float(cap.rate), frames)
+        if speeds:
+            c["clock_speeds"] = speeds
+        us = undersampled(cap, speeds, clk)
+        if us:
+            c["undersampled"] = us
+
+
 def _bus(res, cap: Capture, b: dict, depth: str, claimed: list) -> dict:
     n = _node(res, cap, b)
     out = {"protocol": b["protocol"], "pins": b["pins"]}
@@ -281,6 +383,18 @@ def _bus(res, cap: Capture, b: dict, depth: str, claimed: list) -> dict:
         un.append({"s": s, "e": e, "edges": len(x)})
     out["uninterpreted"] = un
     out["idle_ticks"] = idle
+    clk = b["pins"].get("clk")
+    speeds = []
+    if clk:
+        frames = _frame_items(lay, n)
+        frame_clocks(cap, clk, frames)
+        speeds = clock_speeds(float(cap.rate), frames)
+    if speeds:
+        out["clock_speeds"] = speeds
+    us = undersampled(cap, speeds, clk)
+    if us:
+        us["restored"] = sum(1 for x in frames if isinstance(x, dict) and "restored" in x)
+        out["undersampled"] = us
     return out
 
 
@@ -684,7 +798,8 @@ def _join_part(outs: list, spec: dict, source, opts, noisy: dict) -> dict:
     o0 = outs[0][1]
     out = {k: v for k, v in o0.items() if k not in ("buses", "lines", "undeclared", "claims", "_reanalysis")}
     out["ticks"] = source.n
-    out["buses"] = [_join_bus([(p, o["buses"][j]) for p, o in outs]) for j in range(len(spec["buses"]))]
+    out["buses"] = [_join_bus([(p, o["buses"][j]) for p, o in outs], float(source.rate))
+                    for j in range(len(spec["buses"]))]
     lines = []
     for j, ln in enumerate(o0["lines"]):
         edges = []
@@ -716,7 +831,24 @@ def _join_part(outs: list, spec: dict, source, opts, noisy: dict) -> dict:
     return out
 
 
-def _join_bus(per: list) -> dict:
+def _join_speeds(groups: list[dict], rate: float) -> list[dict]:
+    """Clock speeds from the pieces as one (a speed seen in several pieces joined: its frames summed, its medians
+    weighed by them, its first start and last end)."""
+    out: list[dict] = []
+    for g in sorted(groups, key=lambda g: g["period_ns"]):
+        h = out[-1] if out else None
+        if h is not None and g["period_ns"] <= h["_fastest"] * SAME_SPEED:
+            n = h["frames"] + g["frames"]
+            for k in ("period_ns", "high_ns"):
+                h[k] = (h[k] * h["frames"] + g[k] * g["frames"]) / n
+            h.update(s=min(h["s"], g["s"]), e=max(h["e"], g["e"]), frames=n)
+        else:
+            out.append({**g, "_fastest": g["period_ns"]})
+    return [_speed(np.asarray([[h["period_ns"], h["high_ns"], h["s"], h["e"]]], np.float64), rate, h["frames"])
+            for h in out]
+
+
+def _join_bus(per: list, rate: float) -> dict:
     """A bus's results from the pieces, as one: items in the capture's ticks, each from the piece it starts in."""
     from . import split as _split
     first = next((b for _, b in per if b.get("decoded")), per[0][1])
@@ -748,6 +880,18 @@ def _join_bus(per: list) -> dict:
                       "op": op, "addr": ad, "value": v, **({"size": sz} if sz else {})}
                      for op, ad, v, sz, t0, t1 in accesses(tx)]
     out["result"] = res
+    out.pop("undersampled", None)
+    out.pop("clock_speeds", None)
+    speeds = _join_speeds(_split.join_items([(p, b.get("clock_speeds", [])) for p, b in per]), rate)
+    if speeds:
+        out["clock_speeds"] = speeds
+    clk = out.get("pins", {}).get("clk")
+    us = undersampled(SimpleNamespace(rate=rate), speeds, clk) if clk else None
+    if us:
+        # the frames each piece reads past its own ticks are counted by the piece they start in
+        us["restored"] = sum(1 for x in res.get("dmi", []) if isinstance(x, dict) and "restored" in x) \
+            if "dmi" in res else sum(b.get("undersampled", {}).get("restored", 0) for _, b in per)
+        out["undersampled"] = us
     out["uninterpreted"] = _split.join_items([(p, b.get("uninterpreted", [])) for p, b in per])
     un = _split.Unread()
     un.add(out["uninterpreted"])
@@ -785,6 +929,7 @@ def analyze_file(path: str | Path, hints: dict | None = None, mode: str = "final
                     cap = only(fileio.load(path, k) if kind == "wireskein" else load(path), pins)
                     res = staged.analyze(cap, hints)
                     ex = export(res, cap, mode if not select else "select", select, alternatives, None, depth)
+                    _note_undersampled(ex.get("claims", []), cap, res)
                     got = {"claims": ex["claims"], **{x: ex[x] for x in ("relations",) if x in ex}}
                 parts.append({**_part_head(src.head, k, src.n, None), **got})
             doc = {"format": FORMAT, "wireskein": __version__, "hints": hints,
@@ -828,6 +973,7 @@ def analyze_file(path: str | Path, hints: dict | None = None, mode: str = "final
             window = (hit[0].begin, hit[0].end)
             seg_events = markers.events_in(res, cap, found, window)
         ex = export(res, cap, "select" if select else mode, select, alternatives, window, depth)
+        _note_undersampled(ex.get("claims", []), cap, res)
         out = {**_part_head(heads[k], firsts[k], cap.n_samples, spans[k]), "claims": ex["claims"],
                **{x: ex[x] for x in ("window", "relations") if x in ex}}
         if hit:
