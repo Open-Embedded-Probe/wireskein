@@ -289,6 +289,17 @@ def _upper(node: Node, scorer: DefaultScorer) -> None:
     node.total = node.layer_score + 0.5 * (1 - node.layer_score) * support * node.layer_score
 
 
+def _slow_at(edges: np.ndarray, k: int, rises: np.ndarray) -> np.ndarray:
+    """Per edge, whether the clock around it is slow enough to filter pulses of k (its period 4k or more, the median
+    of the periods before and after: a clock's own glitches do not make it look fast)."""
+    edges = np.asarray(edges, np.int64)
+    allow = np.zeros(len(edges), bool)
+    near = np.flatnonzero(np.diff(edges) < k) + 1
+    if len(near):
+        allow[near] = K.local_period(rises, edges[near], q=50) >= 4 * k
+    return allow
+
+
 def glitch_views(cap, sv, g):
     """The capture as is, plus a sibling view with short pulses (reflections)
     removed from the clock and data pins when the clock shows such pulses:
@@ -310,10 +321,14 @@ def glitch_views(cap, sv, g):
         # never exceeds half the clock's typical run.
         k_rel = int(max(2 * step, min(0.3 * med, np.quantile(inner[short], 0.95) + step)))
         pins = {g.clock, *g.data, *([g.select] if g.select else [])}
+        rises = ch.edges[K.edge_levels(ch.edges, ch.initial) == 1]
         for k in sorted({2 * step, 3 * step, 5 * step, k_rel}):
             if k > 0.5 * med:
                 continue
-            chans = [replace(x, edges=K.deglitch(x.edges, k)) if x.name in pins else x for x in cap.channels]
+            # only where the clock around is slow enough for k (its period 4k or more): a capture whose clock
+            # changes speed (a LinkE connecting slowly, then reading fast) keeps its fast clock's short highs
+            chans = [replace(x, edges=K.deglitch(x.edges, k, _slow_at(x.edges, k, rises))) if x.name in pins else x
+                     for x in cap.channels]
             yield Capture(cap.rate, cap.n_samples, chans), k
 
 
@@ -570,8 +585,18 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
         if key in seen:
             continue
         seen.add(key)
-        for view_cap, k in glitch_views(cap, c.sv, g):
-            for edge in typed.sample_edge_for(view_cap, g.clock, g.data):
+        views = list(glitch_views(cap, c.sv, g))
+        # the edges the lines say in any view (a view with its short pulses left out may say the other), and the one
+        # the spec (or a long capture's first piece) gives: every view read on each, so that the same reading is
+        # there whatever the view (a piece of a long capture reads as the whole does)
+        edges = []
+        for view_cap, _ in views:
+            edges += [e for e in typed.sample_edge_for(view_cap, g.clock, g.data) if e not in edges]
+        want = pin_hint.get(g.clock, {}).get("sample_edge")
+        if want in ("rise", "fall") and want not in edges:
+            edges.append(want)
+        for view_cap, k in views:
+            for edge in edges:
                 sb = typed.sync_bits(view_cap, c.sv, g.clock, g.data, g.select, edge)
                 sb.deglitched = k
                 sb.view = view_cap

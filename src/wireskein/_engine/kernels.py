@@ -100,13 +100,47 @@ def relative_phase_concentration(x: np.ndarray, ref: np.ndarray, gap_ratio: floa
     return max(r1, r2)
 
 
-def deglitch(edges: np.ndarray, k: int) -> np.ndarray:
+def deglitch(edges: np.ndarray, k: int, allow: np.ndarray | None = None) -> np.ndarray:
     """Drop pulses shorter than k samples: an edge within k samples of the
-    previous kept edge cancels it (both edges of the short pulse go)."""
+    previous kept edge cancels it (both edges of the short pulse go).
+    allow: per edge, whether it may cancel (None: every edge)."""
     out: list[int] = []
-    for x in edges.tolist():
-        if out and x - out[-1] < k:
+    ok = allow.tolist() if allow is not None else None
+    for i, x in enumerate(edges.tolist()):
+        if out and x - out[-1] < k and (ok is None or ok[i]):
             out.pop()
         else:
             out.append(x)
     return np.asarray(out, dtype=np.int64)
+
+
+def local_period(ticks: np.ndarray, at: np.ndarray, w: int = 8, q: float = 25) -> np.ndarray:
+    """The clock's period around each tick of `at`, the shorter of the lower quartiles of the `w` intervals of `ticks` (a
+    clock's sampling edges) before the one it falls in and the `w` after: a capture whose clock changes speed (slow while connecting,
+    fast reading) is fast at a fast frame's ends too, where what follows is slower or idle."""
+    ticks, at = np.asarray(ticks, np.int64), np.asarray(at, np.int64)
+    if len(ticks) < 2 or not len(at):
+        return np.zeros(len(at))
+    n = len(ticks) - 1                                       # intervals; interval j is ticks[j] .. ticks[j + 1]
+    m = min(w, n)
+    j = np.searchsorted(ticks, at, side="right") - 1         # the interval each falls in (-1: before the first)
+    out = []
+    # the w before the interval it falls in and the w after it (that one left out: a hold at a turnaround or a STOP)
+    for j0 in (np.clip(j - m, 0, n - m), np.clip(j + 1, 0, n - m)):
+        idx = j0[:, None] + np.arange(m)[None, :]
+        # q: the lower quartile by default - a frame's last bits may come slower than its clock (a LinkE at its
+        # fastest)
+        out.append(np.percentile((ticks[idx + 1] - ticks[idx]).astype(np.float64), q, axis=1))
+    return np.minimum(out[0], out[1])
+
+
+def deglitch_slow(edges: np.ndarray, k: int, clock: np.ndarray) -> np.ndarray:
+    """deglitch where the clock is slow enough that no bit is that short (its period around an edge 3 * k samples or
+    more); where it is fast, a pulse of a sample or two is a bit and stays."""
+    edges = np.asarray(edges, np.int64)
+    if len(edges) < 2:
+        return edges
+    allow = np.zeros(len(edges), bool)
+    near = np.flatnonzero(np.diff(edges) < k) + 1               # an edge that could cancel the one before it
+    allow[near] = local_period(clock, edges[near]) >= 3 * k
+    return deglitch(edges, k, allow)

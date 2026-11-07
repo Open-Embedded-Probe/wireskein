@@ -243,6 +243,8 @@ def _shift_item(x: dict, off: int) -> dict:
     for k in ("s", "e"):
         if isinstance(out.get(k), int):
             out[k] += off
+    if isinstance(out.get("repaired"), list):         # RVSWD: the ticks of the glitch clocks left out
+        out["repaired"] = [t + off for t in out["repaired"]]
     return out
 
 

@@ -158,14 +158,13 @@ def sync_bits(cap, sv: Survey, clock: str, data: tuple[str, ...], select: str | 
     lv = K.edge_levels(c.edges, c.initial)
     t = c.edges[lv == (1 if edge == "rise" else 0)]
     # a data line ringing at the sampling edge (a reflection: pulses of a sample or two) is read as it settles, its
-    # pulses shorter than RING samples dropped, when the clock is slow enough that no bit is that short
-    period = float(np.median(np.diff(t))) if len(t) > 1 else 0.0
-    ring = RING if period >= 3 * RING else 0
+    # pulses shorter than RING samples dropped where the clock is slow enough that no bit is that short (the period
+    # around each: a clock may change speed on the way)
     rows = []
     for d in data:
         ch = cap.channel(d)
-        if ring and ch.step == 1:
-            e = K.deglitch(np.asarray(ch.edges), ring)
+        if len(t) > 1 and ch.step == 1:
+            e = K.deglitch_slow(np.asarray(ch.edges), RING, t)
             rows.append(((ch.initial + np.searchsorted(e, t, side="right")) & 1).astype(np.uint8))
         else:
             rows.append(ch.level_at(t))

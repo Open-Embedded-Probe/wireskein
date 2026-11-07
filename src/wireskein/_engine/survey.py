@@ -144,9 +144,10 @@ RING = 3        # samples: at a clock slow enough, a data line's pulses this sho
 def pair_relation(cap: Capture, clk: ClockInfo, other: str) -> PairRelation:
     c, d = cap.channel(clk.name), cap.channel(other)
     de = d.edges
-    if clk.period >= 3 * RING and d.step == 1 and len(de):
+    if d.step == 1 and len(de):
         # a reflection ringing at the clock's edges scatters the line's changes over the period: read as it settles
-        de = K.deglitch(np.asarray(de), RING)
+        # where the clock is slow enough that no bit is that short
+        de = K.deglitch_slow(np.asarray(de), RING, _rising(c))
     if len(de) == 0:
         return PairRelation(clk.name, other, 0, 0, 0, 0, 0, 0)
     inside, k = K.in_windows(clk.bursts.astype(np.int64), de)

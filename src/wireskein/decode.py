@@ -23,6 +23,7 @@ spec: {"buses": [{"protocol": "i2c", "pins": {"scl": "SCL", "sda": "SDA"}, "para
 from __future__ import annotations
 
 import functools
+import itertools
 import hashlib
 from fractions import Fraction
 from pathlib import Path
@@ -151,7 +152,10 @@ def _hints(spec: dict, strict: bool = False, names=()) -> dict:
 
 
 def _sample_edge(cap: Capture, b: dict) -> str | None:
-    """SPI: the edge to sample on, from the mode given or else read from the lines (as verify's spi check)."""
+    """The edge to sample on: params' sample_edge when given (a long capture's pieces all read on the edge its first
+    piece read on); SPI: from the mode given or else read from the lines (as verify's spi check)."""
+    if b["params"].get("sample_edge") in ("rise", "fall"):
+        return b["params"]["sample_edge"]
     if b["protocol"] != "spi":
         return None
     p = b["pins"]
@@ -307,7 +311,11 @@ def _analyze_split(source, hints, opts, depth: str, head: dict, items=None) -> d
     spec = _spec({"buses": [{"protocol": c["protocol"], "pins": c["roles"],
                              "params": {x: c["params"][x] for x in ("baud", "mode") if x in c.get("params", {})}}
                             for c in keep], "depth": depth})
-    work = functools.partial(_piece, spec=spec, head=head, reanalyze=bool((opts or {}).get("reanalyze", 1)))
+    # every piece on the edge the roles' piece read each bus on
+    edges = {j: c["params"]["sample_edge"] for j, c in enumerate(keep)
+             if (c.get("params") or {}).get("sample_edge") in ("rise", "fall")}
+    work = functools.partial(_piece, spec=spec, head=head, reanalyze=bool((opts or {}).get("reanalyze", 1)),
+                             edges=edges)
     sink = _Items(items, spec, head.get("part", 0)) if items is not None else None
     outs = []
     try:
@@ -521,9 +529,11 @@ def _part_split(source, spec: dict, head: dict, opts, items=None) -> dict:
     sink = _Items(items, spec, head.get("part", 0)) if items is not None else None
     outs = []
     try:
-        work = functools.partial(_piece, spec=spec, head=head, reanalyze=bool((opts or {}).get("reanalyze", 1)))
-        for (p, _), o in _split.mapped(work, _split.run(source, opts, watch=watch or None, noisy=noisy),
-                                       int((opts or {}).get("workers", 1))):
+        reanalyze = bool((opts or {}).get("reanalyze", 1))
+        pieces = _split.run(source, opts, watch=watch or None, noisy=noisy)
+        edges, first = _edges_from_first(pieces, spec, head, int((opts or {}).get("roles_from", 3)))
+        work = functools.partial(_piece, spec=spec, head=head, reanalyze=reanalyze, edges=edges)
+        for (p, _), o in _split.mapped(work, itertools.chain(first, pieces), int((opts or {}).get("workers", 1))):
             if sink is not None:
                 sink.take(p, o)
             outs.append((p, o))
@@ -539,6 +549,28 @@ def _part_split(source, spec: dict, head: dict, opts, items=None) -> dict:
             b.pop("uninterpreted", None)
             b["uninterpreted_summary"] = sink.unread[j].doc()
     return out
+
+
+def _edges_from_first(pieces, spec: dict, head: dict, most: int = 3):
+    """The edge each clocked bus samples on, from the first of up to `most` pieces that decodes it: a piece read on its
+    own may pick the other edge where the lines leave it open (a LinkE at its fastest at 160 MS/s), reading every
+    frame a clock early, and is read again on this one (_piece). -> (bus -> edge, the pieces read to find them, to be
+    read again with the others)."""
+    want = [j for j, b in enumerate(spec["buses"]) if "sample_edge" not in b["params"]]
+    first, edges = [], {}
+    if not want:
+        return edges, first
+    for pw in pieces:
+        first.append(pw)
+        o = _part(pw[1], spec, head, strict=True)
+        for j in want:
+            b = o["buses"][j]
+            edge = (b.get("params") or {}).get("sample_edge")
+            if b.get("decoded") and j not in edges and edge in ("rise", "fall"):
+                edges[j] = edge
+        if len(edges) == len(want) or len(first) >= most:
+            break
+    return edges, first
 
 
 class _Items:
@@ -590,13 +622,20 @@ class _Items:
             self._dm(j, st.ready(final=True))
 
 
-def _piece(pw, spec: dict, head: dict, reanalyze: bool = False) -> dict:
+def _piece(pw, spec: dict, head: dict, reanalyze: bool = False, edges: dict | None = None) -> dict:
     """One piece decoded (in a worker process, when there are several): (Piece, its capture) -> its part document.
     reanalyze: a piece the roles read badly is analysed on its own too, what it holds given as "_reanalysis" (the
-    capture may change on the way: another bus, another speed)."""
+    capture may change on the way: another bus, another speed). edges: bus -> the edge the first piece read it on
+    (_edges_from_first); a piece that read a bus on the other is read again on that one."""
     p, wcap = pw
     whole = p.cut == "end" and p.a == 0
     o = _part(wcap, spec, head, strict=not whole)                # one piece: read as always
+    other = {j: e for j, e in (edges or {}).items()
+             if (o["buses"][j].get("params") or {}).get("sample_edge") not in (None, e)}
+    if other:
+        given = {**spec, "buses": [{**b, "params": {**b["params"], "sample_edge": other[j]}} if j in other else b
+                                   for j, b in enumerate(spec["buses"])]}
+        o = _part(wcap, given, head, strict=not whole)
     if reanalyze and not whole and p.edges and _doubt_why(p, o):
         ex = export(staged.analyze(wcap, None), wcap, "final", None, False, None, "protocol")
         o["_reanalysis"] = [{"protocol": c["protocol"], "roles": c["roles"], "verdict": c["verdict"],

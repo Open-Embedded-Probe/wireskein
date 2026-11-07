@@ -338,3 +338,48 @@ def test_a_stop_far_over_the_usual_high_though_short():
     sb = typed.sync_bits(cap, None, "C", ("D",), None, "rise")
     got = reframe_startstop(typed.frames_gap(sb), cap)
     assert [f[1] - f[0] for f in got] == [54, 54]
+
+
+SPEC = {"buses": [{"protocol": "rvswd", "pins": {"clk": "SWCLK", "dio": "SWDIO"}}]}
+
+
+@pytest.mark.parametrize("name,base,size,long_", [("linke_v203_speed_high_read_ram_256", 0x20000000, 256, 202),
+                                                  ("linke_v203_speed_high_read_flash_4k", 0x08000000, 4096, 202)])
+def test_a_clock_slow_then_fast_keeps_the_fast_bits(name, base, size, long_):
+    # a LinkE at its high speed on a CH32V203 at 50 MS/s: it connects slowly (a period of about 106 samples), then
+    # reads fast (about 5): DIO's pulses of a sample or two are ringing only where the clock is slow; the fast clock's
+    # highs of a sample or two are clocks. The truth: the bytes ch32rv wrote (read --range)
+    import struct
+    from wireskein.decode import decode_file
+    r = decode_file(D / f"{name}.sr", SPEC)["parts"][0]["buses"][0]["result"]
+    assert sum(1 for x in r["dmi"] if x.get("form") == "long") == long_
+    words = struct.unpack(f"<{size // 4}I", (D / f"{name}.bin").read_bytes())
+    mem = {e["addr"]: e["value"] for e in r["dm"] if e["op"] == "MEMR"}
+    assert [mem.get(base + 4 * i) for i in range(size // 4)] == list(words)
+
+
+def test_the_first_frames_after_a_slow_connect_are_read():
+    # where wireskein 0.0.26 lost them: the first long query after the connect, and a short read of dmstatus
+    from wireskein.decode import decode_file
+    for name, tick, op, bits in (("linke_v203_speed_high_read_ram_256", 3150780, "NOP", 85),
+                                 ("linke_v203_speed_high_read_flash_4k", 6183619, "R", 53)):
+        r = decode_file(D / f"{name}.sr", SPEC)["parts"][0]["buses"][0]["result"]
+        (x,) = [x for x in r["dmi"] if x["s"] == tick]
+        assert (x["op"], len(x["bits"]), x["addr"]) == (op, bits, 0x11)
+    r = decode_file(D / "linke_v203_speed_high_read_ram_256.sr", SPEC)["parts"][0]["buses"][0]["result"]
+    assert sum(1 for x in r["dmi"] if x["op"] == "BURST") == 4        # no burst read out of the connect's frames
+
+
+def test_pieces_read_on_the_edge_the_first_piece_reads():
+    # a LinkE at its fastest at 160 MS/s: a piece on its own may read on the falling edge, every frame a clock early
+    # (an extra 0 first, the last bit lost); every piece reads on the edge the first one decoded on, as read whole
+    from wireskein.decode import decode_file
+    name = D / "linke_v203_160mhz_flash_pattern4k.sr"
+    whole = decode_file(name, SPEC, split="off")["parts"][0]["buses"][0]
+    doc = decode_file(name, SPEC)
+    part = doc["parts"][0]
+    assert len(part["split"]["pieces"]) > 2
+    b = part["buses"][0]
+    assert b["params"]["sample_edge"] == whole["params"]["sample_edge"] == "rise"
+    assert b["result"]["dmi"] == whole["result"]["dmi"]
+    assert sum(1 for x in b["result"]["dmi"] if x["op"] == "W" and x["addr"] == 0x17) > 1000

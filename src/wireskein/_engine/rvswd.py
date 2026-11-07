@@ -58,8 +58,9 @@ def reframe_startstop(fr, cap, hold: float = 1.5, w: int = 16, hold_min_s: float
     times the usual and at least `far_min_s` is a STOP too.
 
     A reflection ringing DIO for a sample or two (a 1-sample rise inside a CLK high held at a turnaround) is no
-    START or STOP: at a clock slow enough (9 samples a period or more) DIO's pulses under 3 samples are left out
-    first, as the bits are read (typed.RING)."""
+    START or STOP: where the clock is slow enough (9 samples a period or more around it) DIO's pulses under 3 samples
+    are left out first, as the bits are read (typed.RING); where it is fast (a LinkE reading at its high speed after
+    connecting slowly) they are bits."""
     sb = fr.source
     c, d = cap.channel(sb.clock), cap.channel(sb.data[0])
     ce, de = np.asarray(c.edges), np.asarray(d.edges)
@@ -68,8 +69,8 @@ def reframe_startstop(fr, cap, hold: float = 1.5, w: int = 16, hold_min_s: float
     clv = K.edge_levels(ce, c.initial)
     rises = ce[clv == 1]
     from .typed import RING
-    if len(rises) > 1 and float(np.median(np.diff(rises))) >= 3 * RING and d.step == 1:
-        de = K.deglitch(de, RING)
+    if len(rises) > 1 and d.step == 1:
+        de = K.deglitch_slow(de, RING, rises)
         if len(de) < 2:
             return []
     falls = ce[clv == 0]
@@ -305,7 +306,7 @@ def frame_details(x: dict, sb, cap) -> dict:
     if len(keep) > 1:
         out["period_ns"] = round(float(np.median(np.diff(sb.t[keep]))) / cap.rate * 1e9, 1)
     if skip:
-        out["repaired"] = [round(float(sb.t[i]) / cap.rate * 1e9) for i in skip]
+        out["repaired"] = [int(sb.t[i]) for i in skip]              # the glitch clocks' ticks
     fields = frame_fields(out["bits"], x.get("form", "short"), x.get("op"))
     if fields:
         out["fields"] = fields
