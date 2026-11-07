@@ -298,6 +298,23 @@ i2c_timing("PC2", "PC1", "fast")
 i2c_timing("PC2", "PC1", "standard", limits={"t_su_dat_min_s": 300e-9})
 ```
 
+#### 4.4.1 Lines kept at a coarser step
+
+A probe can keep slow lines at a coarser step than the fast ones, to fit its bandwidth (a CS, an EN, a RESET at a
+tenth of the clock's rate). Such a line is its value at each of its samples, the same until the next one; a change
+happened somewhere in the step before the sample that shows it (wireskein-format §4.1). A pulse shorter than its
+step may not show at all: keep at full rate (or in a mode that latches changes) a line whose short pulses matter.
+
+- **Not to be kept coarser**: SPI's SCK and data, I2C's SCL and SDA (a START or STOP is SDA changing while SCL is
+  high), RVSWD, SWD, SWIO, and a UART line fast against the step (eight samples a bit or more is a guide).
+- **SPI's CS**: seen going active up to a step late; `spi()` takes its windows as starting a step earlier (SPI
+  clocks only inside CS), and gives `cs_sample_s`. Frames apart by less than a CS step run together.
+- **Times between lines** (`skew`, `phase`, `dead_time`, setup and hold): the coarser line's step is the resolution
+  (§4.4, `resolution_s`); nothing else is needed.
+- **UART**: the bit time is read to the line's step (`samples_per_bit` in what is measured).
+- **Data latched by a strobe** (a parallel bus): a data line kept coarser shows, at the strobe, only its last
+  sample before it; it reads only when the data is set up a step or more before the strobe.
+
 ### 4.5 SPI mode, multi-line SPI
 
 `spi` reads the mode from the lines themselves. CPOL is SCK's level when CS becomes active (without CS, its level over the longest pause). CPHA comes from the SCK edge before each change of MOSI (else MISO): after a leading edge (leaving the idle level) the bit was put out there and is sampled on the trailing one, CPHA 1; after a trailing edge, CPHA 0. Changes between CS becoming active and the first edge count only when there are no others (in either mode a device may put its first bit out on CS). The decoder's choice stays as `decoded_mode`. For an active-high CS give `cs_active=1`. With `cs`, the bytes are read at that mode's sampling edges, just before each, line by line as the roles say. Reading just before an edge, the bytes often come out the same on the other edge too (a line that changes at the edge it is not sampled on still holds its bit just before it), so the bytes alone do not tell the mode: `modes_ok` lists, from the lines alone, the modes in which no data line changes at the sampling edges (the same list comes out of `wireskein analyze` and `decode`, with no expectation), and `margins` the setup and hold on both edges. A line that changes midway between the edges (a software SPI), or data whose bits are all alike, can be read in two modes. With `cs`, `mode=` passes when the mode is one the transfer reads in: readable, and reading the bytes given (`mode_candidates`); the mode its changes say stays as measured `mode`. More than one candidate is the notice `mode_ambiguous`, not a failure.
