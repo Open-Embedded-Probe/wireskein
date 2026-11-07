@@ -524,6 +524,7 @@ class DeclarativePlugin:
         bits = sb.bits[0]
         ends = bool(self.spec.get("frame", {}).get("ends"))
         for frames in views:
+            delimited = isinstance(frames, Delimited)
             recs, checked, passed, matched, checked_frames, explained = [], 0, 0, 0, 0, 0
             # frames of one length and layout read together (a matrix of their bits), the others one by one
             rows: list = [None] * len(frames)
@@ -532,7 +533,7 @@ class DeclarativePlugin:
                 a, b = fr_[0], fr_[1]
                 skip = fr_[2] if len(fr_) > 2 else ()      # glitch clocks dropped (a reframer's repair)
                 L = layout(b - a - len(skip))
-                if L is None:
+                if L is None or (delimited and L.get("undelimited_only")):
                     continue
                 if skip or "repeat" in L:
                     rows[i] = (L, None)
