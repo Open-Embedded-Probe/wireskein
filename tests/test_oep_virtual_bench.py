@@ -311,6 +311,19 @@ def test_format_1_keeps_each_line_at_its_resolution(probe, tmp_path):
     assert data["format"] == 1 and data["bytes"] <= data["expected_bytes"]
 
 
+def test_a_part_of_reduced_lines_only_keeps_the_probes_length(probe, tmp_path):
+    """No line of every sample: the part's length is the probe's (Part.samples), its last interval cut there."""
+    _reductions()
+    from oep_client import acquire
+    if "samples" not in getattr(acquire.Part, "__dataclass_fields__", {}):
+        pytest.skip("oep-client-python before Part.samples")
+    text = "A=GPIO10/any_high:64,B=GPIO11/change_latch:64"
+    req = sources.Request(sources.parse_channels(text), 20_000_000, 4000, resolution=sources.parse_resolution(text))
+    out = sources.capture(probe(), req, tmp_path / "r.wireskein")
+    head, (a, b) = fileformat.read(out)
+    assert head["ticks"] == 4000 and a.n == b.n == 63 and a.end == 4032
+
+
 def test_a_resolution_on_sigrok_is_refused():
     with pytest.raises(ValueError, match="needs an OEP probe with capture format 1"):
         sources.run("sigrok:demo", sources.Request([("A", "D0")], 1_000_000, 100, resolution={"A": ("sample", 4)}))
