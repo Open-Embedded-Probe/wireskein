@@ -12,7 +12,16 @@ from .model import AnalogTrace, Capture, Channel, EventTrace, edges_from_dense
 
 def decode(c) -> Channel | EventTrace | AnalogTrace:
     """One stored channel as the edge-list model: bits and lossless events (step 1) as a Channel, events of a
-    coarser step as an EventTrace, analog as an AnalogTrace."""
+    coarser step as an EventTrace, analog as an AnalogTrace. A reduced line (wireskein-format §4.5): any_high and
+    any_low as a Channel of their step (each interval a sample at its first tick), change_latch as an EventTrace (its
+    counts lower bounds: 1 an odd number, 2 an even one); acquisition["reduction"] names the reduction."""
+    if isinstance(c, fileformat.ReducedChannel):
+        acq = {**c.acquisition, "reduction": c.encoding}
+        if c.encoding == "change_latch":
+            ks, levels, counts = c.latches()
+            return EventTrace(c.name, c.step, c.phase, c.n, c.start_level, ks, levels, counts, acq)
+        init, edges = edges_from_dense(c.values(), c.step, c.phase)
+        return Channel(c.name, init, edges, c.step, c.phase, acq)
     if isinstance(c, fileformat.EventsChannel):
         ks, levels, counts = c.decode()
         ks = np.array(ks, np.int64)
@@ -41,6 +50,8 @@ def view(head: dict, decoded: list, path: str | Path | None = None, extras: dict
             events.append(d)
             ch = d.as_channel()                  # at most one change a quantum: the decoders read it at that step
             if ch is not None:
+                # the last quantum cut at the part's end (a reduced line): its change before the end
+                ch.edges = np.minimum(ch.edges, max(0, int(head["ticks"]) - 1))
                 out.append(ch)
         elif isinstance(d, AnalogTrace):
             analog.append(d)
@@ -135,14 +146,22 @@ def locate(meta: dict, tick: int) -> tuple[int, int]:
     return int(k), int(tick - off)
 
 
-def to_channel(ch: Channel, n_ticks: int) -> fileformat.Channel:
-    """The samples a channel really has (at phase + k * step) back into a fileformat.Channel."""
+def _acq(d: dict) -> dict:
+    return {k: v for k, v in d.items() if k != "reduction"}
+
+
+def to_channel(ch: Channel, n_ticks: int) -> fileformat.Channel | fileformat.ReducedChannel:
+    """The samples a channel really has (at phase + k * step) back into a fileformat.Channel (a reduced one, any_high
+    or any_low, as its intervals)."""
     n = max(0, (n_ticks - ch.phase + ch.step - 1) // ch.step)
     out, chunk = [], 1 << 23                       # packed a chunk of samples at a time: a long line fits in memory
     for k0 in range(0, n, chunk):
         ticks = ch.phase + np.arange(k0, min(n, k0 + chunk), dtype=np.int64) * ch.step
         out.append(np.packbits(ch.level_at(ticks).astype(np.uint8), bitorder="little").tobytes())
-    return fileformat.Channel(ch.name, b"".join(out), n, ch.step, ch.phase, dict(ch.acquisition))
+    red = ch.acquisition.get("reduction")
+    if red in ("any_high", "any_low"):
+        return fileformat.ReducedChannel(ch.name, red, b"".join(out), n, ch.step, ch.phase, 0, _acq(ch.acquisition))
+    return fileformat.Channel(ch.name, b"".join(out), n, ch.step, ch.phase, _acq(ch.acquisition))
 
 
 def to_analog(a: AnalogTrace) -> fileformat.AnalogChannel:
@@ -154,15 +173,25 @@ def to_analog(a: AnalogTrace) -> fileformat.AnalogChannel:
                              a.zero, a.scale_nv, a.unit, dict(a.acquisition))
 
 
-def to_events(t: EventTrace) -> fileformat.EventsChannel:
+def to_events(t: EventTrace) -> fileformat.EventsChannel | fileformat.ReducedChannel:
+    if t.acquisition.get("reduction") == "change_latch":
+        v = np.zeros(t.n, np.uint8)
+        lv = np.full(t.n, -1, np.int64)
+        lv[t.quanta] = t.levels
+        # each interval's level: the last listed at or before it (start_level before any)
+        idx = np.maximum.accumulate(np.where(lv >= 0, np.arange(t.n), -1)) if t.n else np.zeros(0, np.int64)
+        level = np.where(idx >= 0, lv[np.maximum(idx, 0)], t.start_level).astype(np.uint8)
+        v[:] = level
+        v[t.quanta] |= 2
+        return fileformat.reduced(t.name, "change_latch", v, t.step, t.phase, t.start_level, **_acq(t.acquisition))
     return fileformat.events(t.name, t.quanta.tolist(), t.levels.tolist(), t.counts.tolist(), t.n, t.step, t.phase,
-                             t.start_level, **t.acquisition)
+                             t.start_level, **_acq(t.acquisition))
 
 
-def to_logic(ch: Channel, n_ticks: int) -> fileformat.Channel | fileformat.EventsChannel:
+def to_logic(ch: Channel, n_ticks: int) -> fileformat.Channel | fileformat.EventsChannel | fileformat.ReducedChannel:
     """A Channel for the file: a step-1 line as its changes when that is smaller than its bits (lossless either
     way); a slower one as its samples."""
-    if ch.step == 1:
+    if ch.step == 1 and "reduction" not in ch.acquisition:
         n = max(0, n_ticks - ch.phase)
         ks = ch.edges[(ch.edges > ch.phase) & (ch.edges < ch.phase + n)] - ch.phase
         if len(ks) * 3 >= n // 8:              # an event is 2-3 bytes, a sample 1 bit: bits are not larger
@@ -170,7 +199,7 @@ def to_logic(ch: Channel, n_ticks: int) -> fileformat.Channel | fileformat.Event
         start = int(ch.level_at(np.array([ch.phase]))[0]) if n else ch.initial
         lv = start ^ (np.arange(1, len(ks) + 1) & 1)
         return fileformat.events(ch.name, ks.tolist(), lv.tolist(), [1] * len(ks), n, 1, ch.phase, start,
-                                 **ch.acquisition)
+                                 **_acq(ch.acquisition))
     return to_channel(ch, n_ticks)
 
 
@@ -205,8 +234,11 @@ def save(path: str | Path, cap: Capture, **meta) -> Path:
     for k in ("complete", "lost", "layout", "part", "n_parts"):
         meta.pop(k, None)
     kept = {t.name for t in cap.events}          # their Channel view is not written; the events are
-    path = fileformat.write(path, tick, [to_logic(c, cap.n_samples) for c in cap.channels if c.name not in kept]
-                     + [to_events(t) for t in cap.events] + [to_analog(a) for a in cap.analog],
+    chans = ([to_logic(c, cap.n_samples) for c in cap.channels if c.name not in kept]
+             + [to_events(t) for t in cap.events] + [to_analog(a) for a in cap.analog])
+    # a line at a coarser step may run past the capture's end (its last sample or interval cut there)
+    over = any(not isinstance(c, fileformat.AnalogChannel) and c.end > cap.n_samples for c in chans)
+    path = fileformat.write(path, tick, chans, ticks=cap.n_samples if over else None,
                      capture_id=cap.meta.get("capture_id"), lost=cap.meta.get("lost") or None,
                      **meta)
     if cap.meta.get("extras"):

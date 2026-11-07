@@ -35,6 +35,8 @@ TRIGGERS = ("rise", "fall", "both", "high", "low")
 ANALOG_TRIGGERS = ("rise", "fall", "high", "low")   # crossing up / down, staying above / below a voltage
 
 
+REDUCTIONS = ("sample", "any_high", "any_low", "change_latch")   # a logic line over intervals of D samples
+
 @dataclass
 class Request:
     channels: list[tuple[str, str]]          # logic: (name to record, the device's channel id), in this order
@@ -50,9 +52,10 @@ class Request:
     analog: list[tuple[str, str, int | None]] = field(default_factory=list)   # (name, channel id, input range / frontend)
     analog_rate: int | None = None           # analog samples per second (default: the source's choice or `rate`)
     analog_samples: int | None = None        # default: as long as the logic capture
-    # logic channels kept as their changes (OEP capture's format 1 events): name -> D, the resolution in samples
-    # (1: every change exact; D > 1: per D samples, how many times it changed and the level after)
-    resolution: dict[str, int] = field(default_factory=dict)
+    # logic channels reduced over intervals of D samples (OEP capture's format 1): name -> (mode, D), D 2 or more;
+    # mode "sample" (each interval's first sample), "any_high" (1 when it had a 1), "any_low" (0 when it had a 0),
+    # "change_latch" (its last level and whether it changed). Lines not named are kept as every sample
+    resolution: dict[str, tuple[str, int]] = field(default_factory=dict)
     mode: str = "oneshot"                    # "oneshot" (samples, in the probe's memory), "stream" (for duration
     duration: float | None = None            # seconds, sent as it is taken: longer than the probe's memory) or "repeat"
     segments: int | None = None              # (`segments` acquisitions of `samples` each, read and released as they
@@ -92,9 +95,12 @@ class Request:
         if self.arm not in ("pretrigger", "now"):
             raise ValueError(f"arm {self.arm!r}: pretrigger or now")
         logic = {n for n, _ in self.channels}
-        for name, d in self.resolution.items():
-            if name not in logic or d < 1:
-                raise ValueError(f"{name}/{d}: a resolution is for a logic channel captured, 1 or more samples")
+        for name, how in self.resolution.items():
+            mode, d = how if isinstance(how, (tuple, list)) and len(how) == 2 else (None, 0)
+            if name not in logic or mode not in REDUCTIONS or not isinstance(d, int) or d < 2:
+                raise ValueError(f"{name}={how!r}: a resolution is for a logic channel captured, (one of "
+                                 f"{', '.join(REDUCTIONS)}, 2 or more samples)")
+            self.resolution[name] = (mode, d)
 
 
 @dataclass
@@ -201,16 +207,20 @@ def parse_channels(text: str) -> list[tuple[str, str]]:
     return [(name, cid) for name, cid, _ in _parts(text)]
 
 
-def parse_resolution(text: str) -> dict[str, int]:
-    """The logic channels kept as their changes (Request.resolution), written after the id: "CS=5/64" (per 64
-    samples, how many times it changed and the level after), "EN=7/1" (every change, exact)."""
+def parse_resolution(text: str) -> dict[str, tuple[str, int]]:
+    """The logic channels reduced over intervals (Request.resolution), written after the id as MODE:D: "CS=5/any_low:8"
+    (0 for each 8 samples that held a 0), "CLK=6/sample:4" (every 4th sample), "EN=7/change_latch:64"."""
     out = {}
-    for name, _, d in _parts(text):
-        if d:
+    for name, _, how in _parts(text):
+        if how:
+            mode, _, d = how.partition(":")
             try:
-                out[name] = parse_count(d)
+                if mode not in REDUCTIONS:
+                    raise ValueError
+                out[name] = (mode, parse_count(d))
             except ValueError:
-                raise ValueError(f"{name}=.../{d}: the resolution is a number of samples (CS=5/64)") from None
+                raise ValueError(f"{name}=.../{how}: the resolution is MODE:D, MODE one of {', '.join(REDUCTIONS)}, "
+                                 f"D samples (CS=5/any_low:8)") from None
     return out
 
 

@@ -148,11 +148,12 @@ wireskein capture --source sigrok:fx2lafw --channels SDA=D0,SCL=D1 --rate 12M --
 | `sigrok:<ドライバ>` | sigrok が対応する機器（`fx2lafw`、`dreamsourcelab-dslogic`、`demo` など）。`sigrok-cli` を使う | sigrok のチャンネル名（`D0` など） |
 
 - `--channels` は、ロジックの各チャンネルに名前を付けます（`名前=番号`）。
-- キャプチャの形式 1 を持つ OEP のプローブでは、線を変化で取れます。番号の後ろに書きます。
-  - `CS=5/64`: 64 サンプルごとに、変わった回数とその後のレベル（ファイルでは `events` の step 64）。
-  - `EN=7/1`: すべての変化を正確に（忙しい所はプローブが raw で運ぶので、サンプルで送るより大きくならない）。
-  - レベル、動いたか、パルスの数は確かなまま。1 刻みに 1 回以下しか変わらない線は、その分解能で復号もします。
-  - `capture` は、プローブが送ったバイト数と、形式で決まる最悪の値を示します（`data:`、`meta.probe.data`）。
+- キャプチャの形式 1 を持つ OEP のプローブでは、すべてのサンプルまでは要らない線を、D サンプルの区切りごとに縮めて取れます。番号の後ろに `モード:D` で書きます（[ファイル形式](docs/wireskein-format.ja.md) §4.5）。
+  - `CLK=6/sample:4`: 4 サンプルごとに 1 つ（ファイルでは `bits` の step 4）。
+  - `CS=5/any_low:8`: 8 サンプルごとに、0 があれば 0（`any_low`。`any_high` はその逆）。
+  - `EN=7/change_latch:64`: 64 サンプルごとに、最後のレベルと、変わったかどうか（`change_latch`）。
+  - 照合は、縮めても確かなことだけを答えます（パルスの数は下限、縮めたレベルで読めたレベルは未検査）。
+  - `capture` は、プローブが送ったバイト数と、設定から決まる値を示します（`data:`、`meta.probe.data`）。ストリームでは 1 秒あたりのバイト数も示します（`data rate:`、`meta.probe.data_rate`）。
 - `--mode stream --duration 2s` で、ロジックのチャンネルを、プローブのメモリより長く取りながら送ります。
   - プローブがデータを落としたら、`--on-loss stop`（既定）はそこで止め、`--on-loss continue` は最後まで取ります。
   - どちらでも、取れたところは保存しますが、取得は失敗です（`INCOMPLETE` を出し、終了コード 1。ファイルは `complete: false`）。

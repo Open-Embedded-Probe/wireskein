@@ -104,6 +104,14 @@ def _info_part(head, chans, tick, raw, many) -> None:
                     lo, hi, lo_v, hi_v = hi, lo, hi_v, lo_v
                 print(f"  {'':12s} range {lo_v:.3f}..{hi_v:.3f} {c.unit}" + (
                     f": {lo} samples clipped at <= {lo_v:.3f}, {hi} at >= {hi_v:.3f} (not voltages)" if lo or hi else ""))
+        elif isinstance(c, fileformat.ReducedChannel):
+            extra = ""
+            if c.encoding == "change_latch":
+                counts = c.latches()[2]
+                extra = f", {len(counts)} changed" + (f", {int((counts > 1).sum())} and came back" if
+                                                      (counts > 1).any() else "")
+            print(f"  {c.name:12s} {c.n:>12d} intervals {c.encoding} at {c.step} ticks an interval from tick "
+                  f"{c.phase}{extra}")
         elif isinstance(c, fileformat.EventsChannel):
             counts = c.decode()[2]
             hidden = sum(1 for k in counts if k > 1)
@@ -360,9 +368,14 @@ def capture_cmd(args) -> None:
     if link:
         print("link: " + _link_line(link))
     data = (meta.get("probe") or {}).get("data")
-    if data:                # format 1: what the probe sent against what the format allows at worst, and format 0
-        print(f"data: format {data['format']}, {data['bytes'] / 1000:.1f} KB (worst {data['worst_bytes'] / 1000:.1f} KB, "
-              f"format 0 {data['format0_bytes'] / 1000:.1f} KB), blocks of {data['block']} samples")
+    if data:                # format 1: what the probe sent against what the setting makes of it, and format 0
+        want = data.get("expected_bytes", data.get("worst_bytes"))
+        print(f"data: format {data['format']}, {data['bytes'] / 1000:.1f} KB ("
+              + (f"expected {want / 1000:.1f} KB, " if want is not None else "")
+              + f"format 0 {data['format0_bytes'] / 1000:.1f} KB), blocks of {data['block']} samples")
+    data_rate = (meta.get("probe") or {}).get("data_rate")
+    if data_rate:           # what the setting sends a second (OEP capture §3.3): the host's margin to judge
+        print(f"data rate: {data_rate / 1e6:.3g} MB/s")
     asked = meta.get("requested_rate")
     if asked and abs(rate - asked) > 1e-6 * asked:   # the probe rounds to a rate it keeps (capture §3.3)
         print(f"note: the probe took {rate:g} Hz (asked {asked:g}): the nearest it keeps")
@@ -642,8 +655,8 @@ def main() -> None:
                          "(default: 1.5M / 921600 / 500000 as the client's record of this port and probe says; 0 keeps "
                          "the boot speed; RATE,RATE tries those)")
     cp.add_argument("--channels", default=None, help='logic: "NAME=ID,..." (ID: an OEP probe channel name or line label, GPIO47 / x035.scl; a sigrok channel) or "ID,..."; '
-                         'NAME=ID/D keeps a line as its changes, per D samples how many and the level after (OEP '
-                         'format 1; /1 is every change exact)')
+                         'NAME=ID/MODE:D reduces a line over intervals of D samples (OEP capture format 1): '
+                         'sample (every Dth), any_high, any_low, change_latch - e.g. CS=5/any_low:8')
     cp.add_argument("--analog", default=None, help='analog: "NAME=ID[@FRONTEND],..." (FRONTEND: the input range number, OEP)')
     cp.add_argument("--analog-rate", default=None, help="analog samples per second (default: --rate)")
     cp.add_argument("--analog-samples", default=None, help="default: as long as the logic capture")

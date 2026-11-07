@@ -167,6 +167,14 @@ def _ev(cap: Capture, pin: str) -> EventTrace | None:
     return next((t for t in cap.events if t.name == pin), None)
 
 
+def _any(ch: Channel | None) -> int | None:
+    """A line reduced to any_high or any_low (wireskein-format §4.5): the level an interval reads when the line was at
+    it anywhere in the interval (1 or 0), so reading it there proves nothing about a given tick; the other level is
+    sure (the line was at it the whole interval). None for a line of samples."""
+    red = ch.acquisition.get("reduction") if ch is not None else None
+    return {"any_high": 1, "any_low": 0}.get(red)
+
+
 def _level_at(ch: Channel, s: int) -> int:
     return int(ch.initial ^ (np.searchsorted(ch.edges, s, side="right") & 1))
 
@@ -231,6 +239,9 @@ def check_level(cap, x):
     got = {"initial": ch.initial, "edges": int(len(ch.edges)),
            "high_fraction": float(np.mean(ch.level_at(np.arange(0, cap.n_samples, max(1, cap.n_samples // 4096)))))}
     ok = len(ch.edges) == 0 and ch.initial == x["value"]
+    if ok and _any(ch) == x["value"]:
+        return None, got, (f"{ch.name} is {ch.acquisition['reduction']} at {ch.step} ticks an interval: an interval at "
+                           f"{x['value']} may hold a {1 - x['value']}")
     return ok, got, "" if ok else f"not constant {x['value']}"
 
 
@@ -249,6 +260,9 @@ def _levels(cap, want: dict, at_end: bool):
             continue
         else:
             got[pin] = _level_at(ch, cap.n_samples - 1) if at_end else ch.initial
+            if _any(ch) == got[pin]:          # the line was at it somewhere in that interval, not surely at its tick
+                unknown.append(f"{pin}: {ch.acquisition['reduction']} at {ch.step} ticks an interval")
+                continue
         if got[pin] != v:
             bad.append(f"{pin}={got[pin]} (want {v})")
     if missing and not got:
@@ -295,6 +309,9 @@ def check_pulses(cap, x):
     widths = x.get("width_min_s") is not None or x.get("width_max_s") is not None
     if t is not None and widths:
         return None, {}, f"{events.describe(t)}: a pulse's width needs every edge"
+    if _any(ch) is not None and widths:
+        return None, {}, (f"{ch.name} is {ch.acquisition['reduction']} at {ch.step} ticks an interval: pulses shorter "
+                          f"than one merge or vanish, so their widths are not known")
     if widths:
         if ch is None:
             return None, {}, "pin not captured"
@@ -327,11 +344,16 @@ def check_pulses(cap, x):
         return None, {}, "pin not captured"
     lv = ch.initial
     rises = ch.edges[0::2] if lv == 0 else ch.edges[1::2]
-    got = {"rises": int(len(rises))}
+    reduced = _any(ch) is not None          # pulses within an interval merge or vanish: at least this many
+    got = {"rises_at_least" if reduced else "rises": int(len(rises))}
     ok, why = True, []
-    if x.get("count") is not None and len(rises) != x["count"]:
+    if x.get("count") is not None and (len(rises) > x["count"] if reduced else len(rises) != x["count"]):
         ok = False
-        why.append(f"{len(rises)} rising edges, want {x['count']}")
+        why.append(f"{'at least ' if reduced else ''}{len(rises)} rising edges, want {x['count']}")
+    elif x.get("count") is not None and reduced and len(rises) < x["count"]:
+        ok = None
+        why.append(f"at least {len(rises)} rising edges ({ch.acquisition['reduction']} at {ch.step} ticks an "
+                   f"interval), want {x['count']}")
     if x.get("period_s") is not None and len(rises) >= 2:
         per = float(np.median(np.diff(rises))) / cap.rate
         got["period_s"] = per
@@ -465,9 +487,11 @@ def _cs_coarse(cap, x):
     window. SPI clocks only inside CS: the window is taken to start as early as the change could have been (a CS
     sample earlier, less a tick). The capture with that line in place of CS, and the CS sample's length (s) or None."""
     ch = cap.channel(x["cs"])
-    if ch.step <= 1 or not len(ch.edges):
-        return cap, None
     act = x.get("cs_active", 0)
+    if ch.step <= 1 or not len(ch.edges) or _any(ch) == act:
+        # any_low of an active-low CS (any_high of an active-high one) is active from the interval it became active
+        # in to the one it went idle in: the window already holds every clock inside CS
+        return cap, (ch.step / cap.rate if _any(ch) == act else None)
     e = np.asarray(ch.edges, np.int64).copy()
     lv = ch.initial ^ ((np.arange(len(e)) + 1) & 1)
     to_act = np.flatnonzero(lv == act)

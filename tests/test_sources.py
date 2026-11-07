@@ -55,7 +55,7 @@ def _acquire_stand_in(calls, res):
     """oep_client.acquire as far as the oep source uses it: its types, and capture_at answering `res`."""
     from oep_client import acquire as real
     mod = types.ModuleType("oep_client.acquire")
-    for name in ("Request", "Result", "Part", "Bits", "Changes", "Analog", "OnDisk", "changes", "analog_raw", "pack"):
+    for name in ("Request", "Result", "Part", "Bits", "Reduced", "Analog", "OnDisk", "analog_raw", "pack"):
         setattr(mod, name, getattr(real, name))
 
     def capture_at(address, req, fast=None, owner=None):
@@ -65,11 +65,21 @@ def _acquire_stand_in(calls, res):
     return mod
 
 
-def test_oep_source_writes_the_clients_result_one_to_one(tmp_path, monkeypatch):
+def _client_with_reductions():
+    """oep-client-python with capture format 1's reductions (acquire.Reduced)."""
     pytest.importorskip("oep_client")
     from oep_client import acquire as acq
+    if not hasattr(acq, "Reduced"):
+        pytest.skip("oep-client-python before capture format 1's reductions")
+    return acq
+
+
+def test_oep_source_writes_the_clients_result_one_to_one(tmp_path, monkeypatch):
+    acq = _client_with_reductions()
     a = acq.Bits("SDA", acq.pack(bytes([0, 1, 1, 0, 1])), 5, acquisition={"pin": 47})
-    b = acq.changes("SCL", [1, 3], [1, 0], [1, 1], 5, pin=48)
+    # SCL 0 1 1 0 0 in intervals of 2 (the last cut at the part's 5 ticks): changed to 1, changed to 0, still 0
+    b = acq.Reduced("SCL", "change_latch", fileformat.reduced("SCL", "change_latch", [3, 2, 0], 2).data, 3, 2,
+                    acquisition={"pin": 48})
     v = acq.analog_raw("VBUS", [100, 200], 1000, width=16, value_bits=12, zero=0, scale_nv=805_860, pin=17)
     parts = [acq.Part([a, b, v], {"start_ns": 123_000, "start_uncertainty_ns": 500}, 0),
              acq.Part([a, b, v], {"start_ns": 999_000}, 40)]
@@ -91,7 +101,9 @@ def test_oep_source_writes_the_clients_result_one_to_one(tmp_path, monkeypatch):
     assert p0.meta["start_ns"] == 123_000 and cap.meta["source"] == "oep:oep://30eda0ea068b?via=usb"
     sda, scl, vbus = p0.channels
     assert isinstance(sda, capture.Channel) and sda.changes()[1].tolist() == [1, 3, 4] and sda.acquisition["pin"] == 47
-    assert isinstance(scl, capture.Events) and scl.decode() == ([1, 3], [1, 0], [1, 1])
+    assert isinstance(scl, capture.Reduced) and scl.encoding == "change_latch" and scl.values().tolist() == [3, 2, 0]
+    assert scl.changes()[1].tolist() == [1, 3] and scl.acquisition == {"pin": 48}
+    assert [p.ticks for p in cap.parts] == [5, 5]               # SDA's, not SCL's last interval (to tick 6)
     assert isinstance(vbus, capture.Analog) and vbus.values() == [100, 200] and vbus.scale_nv == 805_860
 
 
@@ -170,3 +182,20 @@ def test_a_busy_port_ends_in_one_line(monkeypatch):
     assert str(e.value) == "wireskein capture: PortBusy: /dev/ttyUSB0 is open in another program"
 
 
+
+
+def test_a_reduced_line_keeps_its_part_to_the_probes_length(tmp_path):
+    """A part of reduced lines only: its length is the probe's (Part.samples) when the client gives it, not the last
+    interval's end."""
+    acq = _client_with_reductions()
+    from wireskein.sources.oep import capture_of
+    cs = acq.Reduced("CS", "any_low", fileformat.reduced("CS", "any_low", [1, 0, 1], 4).data, 3, 4)
+    part = acq.Part([cs], {}, 0)
+    part.samples = 10                      # what the probe says (an attribute the client may carry)
+    res = acq.Result(Fraction(1_000_000), [cs], {"probe": {}}, [part])
+    cap = capture_of(res)
+    assert cap.parts[0].ticks == 10
+    out = tmp_path / "r.wireskein"
+    capture.write(out, cap)
+    got = capture.read(out)
+    assert got.parts[0].ticks == 10 and got.parts[0].channel("CS").changes()[1].tolist() == [4, 8]

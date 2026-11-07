@@ -90,11 +90,11 @@ def _events_part(changes, n_ticks, step, t0, start):
 
 
 def test_lines_kept_as_changes_join_across_a_grid_restart(tmp_path):
-    # format 1 at a step of 4: the first part's last quantum runs 3 ticks past the second part's start
+    # format 1 at a step of 4: the first part's last quantum runs 3 ticks past its own end, the second part's start
     p = wc.write(tmp_path / "e.wireskein", wc.Capture(1_000_000, [_events_part([100, 300, 500], 1001, 4, 0, 0),
                                                                   _events_part([99, 299], 999, 4, 1001, 1)]))
     (run,) = fileio.load_runs(p)
-    assert run.meta["parts"] == [0, 1] and run.n_samples == 2001 and run.channels[0].step == 4
+    assert run.meta["parts"] == [0, 1] and run.n_samples == 2000 and run.channels[0].step == 4
     assert run.channels[0].edges.tolist() == [103, 303, 503, 1100, 1300]     # each change at its quantum's end
     assert fileio.locate(run.meta, 1300) == (1, 299)
 

@@ -274,35 +274,46 @@ def test_a_trigger_that_never_comes_is_named():
 
 
 
+def _reductions():
+    from oep_client import acquire
+    if not hasattr(acquire, "Reduced"):
+        pytest.skip("oep-client-python before capture format 1's reductions")
+
+
 def test_format_1_keeps_each_line_at_its_resolution(probe, tmp_path):
-    """OEP capture format 1 (§1.3) on the bench's counter (channel k is bit k of the sample number): A every change
-    (/1; it changes every sample, so the probe carries it raw), B raw, C per 4 (one change a quantum: also a Channel
-    of step 4), D per 64 (8 changes a quantum: the count exact, where in the quantum hidden)."""
+    """OEP capture format 1 (§1.3) on the bench's counter (the k-th channel asked is bit k of the sample number): A
+    and B raw, C every 4th sample (bits at step 4), D any_high over 4, E any_low over 64, F and G change_latch over 64
+    (F, bit 5, changes twice an interval from the second: changed and came back; G, bit 6, once from the second)."""
+    _reductions()
     from wireskein.decode import load
-    text = "A=GPIO10/1,B=GPIO11,C=GPIO12/4,D=GPIO13/64"
+    text = "A=GPIO10,B=GPIO11,C=GPIO12/sample:4,D=GPIO13/any_high:4,E=GPIO14/any_low:64,F=GPIO15/change_latch:64," \
+           "G=GPIO16/change_latch:64"
     req = sources.Request(sources.parse_channels(text), 20_000_000, 4096, resolution=sources.parse_resolution(text))
     out = sources.capture(probe(), req, tmp_path / "f1.wireskein")
     head, chans = fileformat.read(out)
-    assert [c["encoding"] for c in head["channels"]] == ["events", "bits", "events", "events"]
-    assert [c.get("step") for c in head["channels"]] == [1, 1, 4, 64]
-    i = np.arange(4096)
+    assert [c["encoding"] for c in head["channels"]] == ["bits", "bits", "bits", "any_high", "any_low", "change_latch",
+                                                         "change_latch"]
+    assert [c.get("step") for c in head["channels"]] == [1, 1, 4, 4, 64, 64, 64] and head["ticks"] == 4096
+    k4, k64 = np.arange(1024), np.arange(64)
+    a, _, c, d, e, f, g = chans
+    assert np.array_equal(np.frombuffer(fileformat.unpack(a), np.uint8)[:4096], np.arange(4096) & 1)
+    assert np.array_equal(np.frombuffer(fileformat.unpack(c), np.uint8)[:1024], k4 & 1)
+    assert np.array_equal(d.values(), (k4 >> 1) & 1) and not e.values().any()
+    ks, lv, counts = f.latches()
+    assert ks.tolist() == list(range(64)) and lv.all() and counts.tolist() == [1] + [2] * 63
+    assert np.array_equal(g.values(), (k64 & 1) | np.where(k64 > 0, 2, 0))
     cap = load(out)
-    for name, k in (("A", 0), ("B", 1)):                     # exact lines: every edge where the counter says
-        assert np.array_equal(cap.channel(name).level_at(i), (i >> k) & 1), name
-    c = cap.channel("C")                                     # per 4: right at each quantum's last tick, edges within it
-    ends_ = np.arange(3, 4096, 4)
-    assert c.step == 4 and np.array_equal(c.level_at(ends_), (ends_ >> 2) & 1)
-    traces = {t.name: t for t in cap.events}                 # C (with its Channel view) and D (hidden changes)
-    assert set(traces) == {"C", "D"} and traces["C"].hidden == 0
-    dtrace = traces["D"]
-    assert dtrace.step == 64 and dtrace.counts[0] == 7 and set(dtrace.counts[1:].tolist()) == {8} and dtrace.hidden == 64   # sample 0 is the start level: no change there
+    assert cap.channel("D").acquisition["reduction"] == "any_high" and cap.channel("D").step == 4
+    traces = {t.name: t for t in cap.events}
+    assert set(traces) == {"F", "G"} and traces["F"].hidden == 63 and traces["G"].hidden == 0
+    assert cap.channel("G").step == 64 and "F" not in {ch.name for ch in cap.channels}
     data = head["meta"]["probe"]["data"]
-    assert data["format"] == 1 and data["bytes"] <= data["worst_bytes"]
+    assert data["format"] == 1 and data["bytes"] <= data["expected_bytes"]
 
 
 def test_a_resolution_on_sigrok_is_refused():
     with pytest.raises(ValueError, match="needs an OEP probe with capture format 1"):
-        sources.run("sigrok:demo", sources.Request([("A", "D0")], 1_000_000, 100, resolution={"A": 4}))
+        sources.run("sigrok:demo", sources.Request([("A", "D0")], 1_000_000, 100, resolution={"A": ("sample", 4)}))
 
 
 def test_arm_now_may_leave_a_shorter_pretrigger(probe, tmp_path):
@@ -331,13 +342,14 @@ def test_a_stream_is_one_part_when_nothing_is_lost(probe, tmp_path):
 
 
 def test_a_format_1_stream(probe, tmp_path):
+    _reductions()
     req = sources.Request([("A", "GPIO10"), ("D", "GPIO13")], 1_000_000, 0, mode="stream", duration=0.3,
-                          resolution={"D": 64})
+                          resolution={"D": ("change_latch", 64)})
     out = sources.capture(probe(), req, tmp_path / "f.wireskein")
     raw = fileformat.read_header(out)
     assert raw["complete"] is True
     for head, chans in fileformat.read_parts(out):              # a grid restart may cut parts: never a loss
-        assert [c.encoding for c in chans] == ["bits", "events"]
+        assert [c.encoding for c in chans] == ["bits", "change_latch"]
 
 
 class FakeCap:
@@ -388,22 +400,23 @@ def test_a_stream_that_lost_its_start_keeps_nothing_by_default():
 
 
 def test_a_format_1_stream_reads_the_same_line_as_format_0(probe, tmp_path):
-    """The same UART-like line streamed as samples (format 0) and as every change (/1, format 1): equal where both
-    have it, across segments and the blocks the probe carried raw (a change at a segment's first sample counted)."""
+    """The same lines streamed as samples (format 0) and reduced (format 1): TX every 2nd sample, CLK (a change every 4
+    samples) as change_latch over 2. Equal where both have it - TX at its samples, CLK at each interval's last tick -
+    across segments."""
+    _reductions()
     from wireskein.decode import load
     src = probe("--logic-wave", "10=uart:115200", "--logic-wave", "11=square:8")
     got = {}
-    for name, res in (("f0", {}), ("f1", {"TX": 1, "CLK": 1})):
+    for name, res in (("f0", {}), ("f1", {"TX": ("sample", 2), "CLK": ("change_latch", 2)})):
         req = sources.Request([("TX", "GPIO10"), ("CLK", "GPIO11")], 200_000, 0, mode="stream", duration=0.3, resolution=res)
         out = sources.capture(src, req, tmp_path / f"{name}.wireskein")
         assert fileformat.read_header(out)["complete"] is True
-        caps = [load(out, part=k) for k in range(len(fileformat.read_header(out)["parts"]))]
-        got[name] = caps
-    for line in ("TX", "CLK"):
-        a, b = got["f0"][0].channel(line), got["f1"][0].channel(line)
-        n = min(got["f0"][0].n_samples, got["f1"][0].n_samples)
-        i = np.arange(n)
-        assert np.array_equal(a.level_at(i), b.level_at(i)), line
+        got[name] = load(out, part=0)
+    f0, f1 = got["f0"], got["f1"]
+    n = min(f0.n_samples, f1.n_samples) // 2 * 2
+    for line, ticks in (("TX", np.arange(0, n, 2)), ("CLK", np.arange(1, n, 2))):
+        a, b = f0.channel(line), f1.channel(line)
+        assert np.array_equal(a.level_at(ticks), b.level_at(ticks)), line
 
 
 def _polls(segments, gaps, polls):

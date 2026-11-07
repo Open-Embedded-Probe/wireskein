@@ -102,7 +102,7 @@ Each element of `parts`:
 
 | Key | Type | Meaning |
 | --- | --- | --- |
-| `ticks` | integer | Length of the part (number of ticks). The maximum of the ends of the part's channels. For logic, `phase + n × step`; for analog, `t0_ticks + n × tick_hz / rate_hz` rounded up |
+| `ticks` | integer | Length of the part (number of ticks). The maximum of the ends of the part's channels: for logic, `phase + n × step`; for analog, `t0_ticks + n × tick_hz / rate_hz` rounded up. A logic channel at a `step` of 2 or more may run past it when its last sample or interval is cut at the part's end (§4.1, §4.5): then the part's own length, and no logic sample or interval begins at or after it |
 | `tick0` | integer (optional) | How many ticks after the first part's tick 0 this part's tick 0 is. Required for `timeline` (the gaps follow from it); for `segments`, only when known |
 | `channels` | array | The part's channel list (table below). The order has no meaning (it is the default display order) |
 | `meta` | object | Small facts about the part (its time, the trigger position, §3.3) |
@@ -117,8 +117,8 @@ Each element of `channels`:
 | `file` | string | Name of the data entry (e.g. `part/0/ch/0.bits`) |
 | `encoding` | string | How the data is stored (§4). Handling of unknown values: §3.2 |
 | `n` | integer | Number of samples |
-| `step` | integer (1 or more) | How many ticks per sample (required for `bits` and `events`; for `events`, the ticks of one quantum) |
-| `phase` | integer (0 or more) | Tick of the first sample. Sample k is at tick `phase + k × step` (required for `bits` and `events`; for `events`, the start of the first quantum) |
+| `step` | integer (1 or more) | How many ticks per sample (required for `bits`, `events` and the reductions of §4.5; for `events`, the ticks of one quantum, for a reduction those of one interval) |
+| `phase` | integer (0 or more) | Tick of the first sample. Sample k is at tick `phase + k × step` (required for `bits`, `events` and the reductions; for `events`, the start of the first quantum, for a reduction that of the first interval) |
 
 ### 3.1 Time of channels other than `bits`
 
@@ -230,14 +230,14 @@ float32 voltages (little endian). A form for importing data where only voltages 
 
 ### 4.4 `events` (logic kept as its changes)
 
-A form that holds a logic line not as a run of samples but as its **changes**, so a line that changes little is kept small. OEP's format 1 events (capture §1.3) are stored in this form.
+A form that holds a logic line not as a run of samples but as its **changes**, so a line that changes little is kept small.
 The time resolution is `step` ticks: **quantum** k is ticks `[phase + k × step, phase + (k + 1) × step)`.
 
 | Key | Type | Meaning |
 | --- | --- | --- |
 | `n` | integer | Number of quanta (the channel runs to tick `phase + n × step`) |
 | `step`, `phase` | §3 | Required. Quantum length and start of the first quantum |
-| `start_level` | 0 or 1 | The line's level **before** the first quantum. Required. At the start of an acquisition, the first sample's level (so there is no change at tick `phase`); in a part that follows on from the one before without a gap (§3.4), that part's last level, and a change at tick `phase` is counted in quantum 0 (as OEP format 1's start_level) |
+| `start_level` | 0 or 1 | The line's level **before** the first quantum. Required. At the start of an acquisition, the first sample's level (so there is no change at tick `phase`); in a part that follows on from the one before without a gap (§3.4), that part's last level, and a change at tick `phase` is counted in quantum 0 |
 | `events` | integer | Number of events. Required |
 
 - **Events**: one per quantum in which the line changed at least once, in quantum order. A quantum without a change has no event.
@@ -252,7 +252,32 @@ The time resolution is `step` ticks: **quantum** k is ticks `[phase + k × step,
   - On a channel with a quantum of two or more changes, checks that need the time of every change (`square()`, periods, decoding) are unchecked.
 - `.sr` and VCD: a channel with at most one change a quantum is written as samples at `step` ticks; one with a quantum of two or more changes has no form there, and is refused.
 
-### 4.5 Values from a parallel-output ADC
+### 4.5 `any_high`, `any_low`, `change_latch` (logic reduced over intervals)
+
+Forms that hold a logic line as one value per **interval** of `step` ticks, so a fast stream keeps a line that needs less than every sample at a fraction of the bits. OEP's capture format 1 reductions (capture §1.3) are stored in these forms, one to one (its `sample` reduction is `bits` with `step` D, §4.1). Interval k is ticks `[phase + k × step, phase + (k + 1) × step)`, the last one cut at the part's end (§3.4 `ticks`).
+
+| Key | Type | Meaning |
+| --- | --- | --- |
+| `n` | integer | Number of intervals |
+| `step`, `phase` | §3 | Required. The interval's length and the start of the first one |
+| `start_level` | 0 or 1 | `change_latch` only, required: the line's level before interval 0. At the start of an acquisition, the first sample's level; in a part that follows on from the one before without a gap, that part's last level |
+
+The data is the n values packed `b` bits each, LSB first: interval k's value at bit `k × b`, and bit j of the data at bit `j mod 8` of byte `floor(j / 8)`; the length is `ceil(n × b / 8)` bytes, the bits past the last value 0.
+
+| `encoding` | b | Value of interval k |
+| --- | --- | --- |
+| `any_high` | 1 | 1 when the line was 1 at any tick of the interval (OR) |
+| `any_low` | 1 | 0 when the line was 0 at any tick of the interval (AND) |
+| `change_latch` | 2 | Bit 0: the level at the interval's last tick. Bit 1: 1 when the line changed in the interval, counted from the tick before (interval 0's first tick against `start_level`) |
+
+- `change_latch`: a level other than the one before means an odd number of changes, so bit 1 is then 1 (a file where it is not is wrong); the same level with bit 1 set, an even number, 2 or more; bit 1 clear, no change.
+- **What is sure.** `any_high`: an interval at 0 was 0 throughout; one at 1 held a 1 somewhere, and may hold 0s too. `any_low` the other way round. `change_latch`: the level at each interval's end and whether the line changed; not how many times (odd or even, at least 1 or 2), nor where.
+- **Reading them.** `any_high` and `any_low` are read as a line of samples at `step` ticks, each interval's value at its first tick: a pulse at the reduced level (1 for `any_high`) shows as a run of whole intervals that holds it, and pulses at the other level shorter than an interval may vanish. `change_latch` is read as `events` (§4.4) whose counts are lower bounds (1 for an odd number, 2 for an even one).
+  - Checks follow this. A level read at the reduced level (`level()`, `starts()`, `ends()`) is unchecked; at the other level it is sure. Counts of pulses are lower bounds (`pulses()`'s `rises_at_least`), and pulse widths are unchecked. An SPI CS reduced to its active level (`any_low` of an active-low CS) is active from the interval it became active in to the one it went idle in, so every clock inside CS is read.
+  - A `change_latch` line with an interval of an even number of changes is read as `events` with a quantum of two or more (§4.4); without one, also at `step` ticks.
+- `.sr` and VCD: `any_high` and `any_low` are written as samples at `step` ticks; `change_latch` as §4.4's `events` (refused with an interval of an even number of changes).
+
+### 4.6 Values from a parallel-output ADC
 
 An ADC with parallel output whose pins are captured as logic and turned back into values is held as `analog` (§4.2); it has no `encoding` of its own. The board's description goes in that channel's `acquisition` ([design decisions](design.md) §5.1).
 

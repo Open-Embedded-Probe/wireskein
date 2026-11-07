@@ -53,7 +53,8 @@ FORMAT = "wireskein/1"
 SUFFIX = ".wireskein"
 IDENT = "wireskein.json"          # what the file is; the first entry, stored (wireskein-format §2.1)
 CAPTURE = "capture.json"
-ENCODINGS = {"bits", "events", "analog", "analog-f32"}    # what this version reads; others are skipped (docs/wireskein-format.ja.md §3.2)
+REDUCTIONS = ("any_high", "any_low", "change_latch")   # logic reduced over intervals (wireskein-format §4.5)
+ENCODINGS = {"bits", "events", "analog", "analog-f32", *REDUCTIONS}    # what this version reads; others are skipped (docs/wireskein-format.ja.md §3.2)
 
 
 @dataclass
@@ -153,6 +154,100 @@ class EventsChannel:
                 init, ks = init ^ 1, ks[1:]
             return init, self.phase + ks
         return self.start_level, self.phase + ks * self.step + (self.step - 1)
+
+
+@dataclass
+class ReducedChannel:
+    """A logic channel reduced over intervals of `step` ticks (wireskein-format §4.5): interval k is ticks
+    [phase + k * step, phase + (k + 1) * step), n intervals, the last one cut at the part's end. `encoding`:
+    "any_high" (1 bit: 1 when the interval held a 1), "any_low" (1 bit: 0 when it held a 0), "change_latch" (2 bits:
+    bit 0 the level at the interval's last tick, bit 1 whether the line changed in it, counted from the tick before;
+    start_level the level before interval 0). data: the values packed `width` bits each, interval k at bit
+    k * width (bit j at bit j % 8 of byte j // 8)."""
+    name: str
+    encoding: str
+    data: bytes
+    n: int
+    step: int = 1
+    phase: int = 0
+    start_level: int = 0
+    acquisition: dict = field(default_factory=dict)
+
+    def __post_init__(self):
+        if self.encoding not in REDUCTIONS or self.step < 1 or not 0 <= self.phase or self.n < 0 \
+                or self.start_level not in (0, 1):
+            raise ValueError(f"{self.name}: encoding one of {', '.join(REDUCTIONS)}, step >= 1, phase >= 0, "
+                             f"start_level 0 or 1")
+        if len(self.data) != (self.n * self.width + 7) // 8:
+            raise ValueError(f"{self.name}: {len(self.data)} bytes for {self.n} intervals of {self.width} bits, want "
+                             f"{(self.n * self.width + 7) // 8}")
+
+    @property
+    def width(self) -> int:
+        """Bits an interval."""
+        return 2 if self.encoding == "change_latch" else 1
+
+    @property
+    def end(self) -> int:
+        return self.phase + self.n * self.step
+
+    def values(self):
+        """The n interval values as a numpy uint8 array. Needs numpy."""
+        import numpy as np
+        bits = np.unpackbits(np.frombuffer(self.data, np.uint8), bitorder="little")[: self.n * self.width]
+        if self.width == 1:
+            return bits
+        return (bits[0::2] | (bits[1::2] << 1)).astype(np.uint8)
+
+    def changes(self):
+        """(level before the first tick, ticks of the changes as a numpy array), as Channel.changes(): any_high and
+        any_low each interval as a sample at its first tick; change_latch each change at its interval's last tick (an
+        odd number of changes read as one), ValueError when an interval holds an even number (read them with
+        latches()). Needs numpy."""
+        import numpy as np
+        if self.encoding != "change_latch":
+            v = self.values()
+            if not len(v):
+                return 0, np.zeros(0, np.int64)
+            return int(v[0]), self.phase + (np.flatnonzero(v[1:] != v[:-1]) + 1).astype(np.int64) * self.step
+        ks, _, counts = self.latches()
+        if np.any(counts > 1):
+            raise ValueError(f"{self.name}: {int(np.sum(counts > 1))} intervals of {self.step} ticks changed and came "
+                             f"back; read them with latches()")
+        return self.start_level, self.phase + ks * self.step + (self.step - 1)
+
+    def latches(self):
+        """change_latch: (intervals that changed, the level at each one's last tick, at least how many changes: 1
+        when the level is not the one before (an odd number), 2 when it is (an even number, 2 or more)). ValueError
+        when an interval's level is not the one before and its change bit is 0 (wireskein-format §4.5). Needs numpy."""
+        import numpy as np
+        if self.encoding != "change_latch":
+            raise ValueError(f"{self.name}: {self.encoding}, not change_latch")
+        v = self.values()
+        lv, ch = v & 1, v >> 1
+        before = np.concatenate(([self.start_level], lv[:-1])).astype(np.uint8)
+        bad = np.flatnonzero((lv != before) & (ch == 0))
+        if len(bad):
+            raise ValueError(f"{self.name}: interval {int(bad[0])} ends at {int(lv[bad[0]])} after "
+                             f"{int(before[bad[0]])} with its change bit 0 ({len(bad)} such intervals)")
+        k = np.flatnonzero(ch).astype(np.int64)
+        return k, lv[k].astype(np.uint8), np.where(lv[k] != before[k], 1, 2).astype(np.uint8)
+
+
+def reduced(name: str, encoding: str, values, step: int, phase: int = 0, start_level: int = 0,
+            **acquisition) -> ReducedChannel:
+    """Interval values (0/1, or 0-3 for change_latch: bit 0 the level, bit 1 the change) -> a ReducedChannel."""
+    import numpy as np
+    v = np.asarray(values, np.uint8)
+    width = 2 if encoding == "change_latch" else 1
+    if len(v) and int(v.max()) >= 1 << width:
+        raise ValueError(f"{name}: {encoding} values are {width} bits")
+    bits = v if width == 1 else np.stack((v & 1, v >> 1), axis=1).reshape(-1)
+    out = ReducedChannel(name, encoding, np.packbits(bits, bitorder="little").tobytes(), len(v), step, phase,
+                         start_level, acquisition)
+    if encoding == "change_latch":
+        out.latches()                            # the bits must agree with one another
+    return out
 
 
 def events(name: str, quanta, levels, counts, n: int, step: int = 1, phase: int = 0, start_level: int = 0,
@@ -376,10 +471,12 @@ LAYOUTS = ("timeline", "segments")
 @dataclass
 class Part:
     """One part of a capture (wireskein-format §3.4): channels with contiguous ticks from the part's tick 0, its own
-    facts (start_ns, trigger_tick, ...), and where it starts after the first part's tick 0 (required in a timeline)."""
+    facts (start_ns, trigger_tick, ...), and where it starts after the first part's tick 0 (required in a timeline).
+    ticks: its length, when not the latest channel end (a reduced channel's last interval cut at the part's end)."""
     channels: list
     meta: dict = field(default_factory=dict)
     tick0: int | None = None
+    ticks: int | None = None
 
 
 def _entry(c, prefix: str) -> tuple[dict, bytes]:
@@ -394,6 +491,10 @@ def _entry(c, prefix: str) -> tuple[dict, bytes]:
         if c.unit != "V":
             e["unit"] = c.unit
         data = c.data
+    elif isinstance(c, ReducedChannel):
+        e = {"name": c.name, "file": f"{prefix}.{c.encoding}", "encoding": c.encoding, "n": c.n, "step": c.step,
+             "phase": c.phase, **({"start_level": c.start_level} if c.encoding == "change_latch" else {})}
+        data = c.data
     elif isinstance(c, EventsChannel):
         e = {"name": c.name, "file": f"{prefix}.events", "encoding": "events", "n": c.n, "step": c.step,
              "phase": c.phase, "start_level": c.start_level, "events": c.count}
@@ -407,14 +508,15 @@ def _entry(c, prefix: str) -> tuple[dict, bytes]:
 
 
 def write(path: str | Path, tick_hz: int | float | Fraction | tuple[int, int],
-          channels: list[Channel | EventsChannel | AnalogChannel] | None = None,
+          channels: list[Channel | EventsChannel | ReducedChannel | AnalogChannel] | None = None,
           attachments: dict[str, str | bytes | dict | list] | None = None, *, capture_id: str | None = None,
           parts: list[Part] | None = None, layout: str = "timeline", lost: list[dict] | None = None,
-          **meta) -> Path:
+          ticks: int | None = None, **meta) -> Path:
     """Write a .wireskein file (any name; SUFFIX is the usual one). tick_hz is the tick clock (a Fraction keeps an exact rate
     such as 160 MHz / 3). Either `channels` (one part) or `parts` (wireskein-format §3.4, with `layout`
     "timeline" or "segments"). meta: small JSON-able facts about the capture, e.g. probe; with `channels`,
     start_ns / start_uncertainty_ns / trigger_tick / time_base_slipped go to the part (PART_META).
+    `ticks`: with `channels`, the part's length when not the latest channel end (Part.ticks).
     `lost`: what was lost while capturing ({"after_part", "reason", "stopped", "ticks"?}); any makes the capture
     incomplete (a failure, §3.4).
     attachments: free-form files stored as attach/<name> (see attach()). capture_id: the capture's id
@@ -426,7 +528,7 @@ def write(path: str | Path, tick_hz: int | float | Fraction | tuple[int, int],
     if (channels is None) == (parts is None):
         raise ValueError("give channels (one part) or parts")
     if parts is None:
-        parts = [Part(channels, {k: meta.pop(k) for k in PART_META if k in meta}, 0)]
+        parts = [Part(channels, {k: meta.pop(k) for k in PART_META if k in meta}, 0, ticks)]
     if layout not in LAYOUTS or not parts:
         raise ValueError(f"layout {layout!r}: one of {', '.join(LAYOUTS)}, with one part or more")
     names0 = None
@@ -448,7 +550,17 @@ def write(path: str | Path, tick_hz: int | float | Fraction | tuple[int, int],
             entries.append(e)
             files.append((e["file"], data))
         ends = [c.end(tick) if isinstance(c, AnalogChannel) else c.end for c in part.channels]
-        out_parts.append({"ticks": max(ends, default=0), **({"tick0": part.tick0} if part.tick0 is not None else {}),
+        ticks = max(ends, default=0)
+        if part.ticks is not None:
+            # no channel runs short of it, and no logic sample or interval begins at or after it (the last one is cut
+            # there when it runs past)
+            off = [c.name for c, e in zip(part.channels, ends) if not isinstance(c, AnalogChannel) and c.n
+                   and e - c.step >= part.ticks]
+            if off or part.ticks > ticks:
+                raise ValueError(f"part {i}: {part.ticks} ticks, but its channels end at {max(ends, default=0)}"
+                                 + (f" and samples of {off} begin after it" if off else ""))
+            ticks = part.ticks
+        out_parts.append({"ticks": ticks, **({"tick0": part.tick0} if part.tick0 is not None else {}),
                           "channels": entries, "meta": part.meta})
     lost = list(lost or [])
     for x in lost:
@@ -790,6 +902,9 @@ def read(path: str | Path, analog: bool = True, part: int | None = None,
             if enc == "bits":
                 chans.append(Channel(c["name"], z.read(c["file"]), c["n"], c["step"], c["phase"],
                                      c.get("acquisition", {})))
+            elif enc in REDUCTIONS:
+                chans.append(ReducedChannel(c["name"], enc, z.read(c["file"]), c["n"], c["step"], c["phase"],
+                                            c.get("start_level", 0), c.get("acquisition", {})))
             elif enc == "events":
                 chans.append(EventsChannel(c["name"], z.read(c["file"]), c["n"], c["step"], c["phase"],
                                            c["start_level"], c["events"], c.get("acquisition", {})))

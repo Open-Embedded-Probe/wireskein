@@ -22,7 +22,7 @@ TRIGGER = {"rise": "r", "fall": "f", "both": "e", "high": "1", "low": "0"}
 
 def capture(target: str, req: Request) -> Result:
     if req.resolution:
-        raise ValueError("sigrok keeps every channel as samples: a resolution (NAME=ID/D) needs an OEP probe with "
+        raise ValueError("sigrok keeps every channel as samples: a resolution (NAME=ID/MODE:D) needs an OEP probe with "
                          "capture format 1")
     exe = shutil.which("sigrok-cli")
     if exe is None:

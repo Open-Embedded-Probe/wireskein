@@ -16,9 +16,11 @@ without numpy writes and reads captures); numpy is used when a channel is turned
 decoders' view.
 
 Channels are kept as the file stores them (wireskein-format §4): a logic line as its samples (`Channel`, encoding
-"bits") or as its changes (`Events`, "events"), an analog one as its values (`Analog`). Every logic line reads the
+"bits"), as its changes (`Events`, "events") or reduced over intervals (`Reduced`, "any_high", "any_low",
+"change_latch"), an analog one as its values (`Analog`). Every logic line reads the
 same way, `changes()`: its level before the first tick and the ticks it changes at. A line kept as changes at a
-coarser step whose quanta hide changes is read with `Events.decode()` (where they fall in the quantum is not kept).
+coarser step whose quanta hide changes is read with `Events.decode()`, a change_latch line whose intervals do with
+`Reduced.latches()` (where they fall in the quantum is not kept).
 """
 
 from __future__ import annotations
@@ -31,10 +33,11 @@ from . import _fileformat as fileformat
 from ._fileformat import AnalogChannel as Analog
 from ._fileformat import Channel
 from ._fileformat import EventsChannel as Events
+from ._fileformat import ReducedChannel as Reduced
 from ._fileformat import (add_markers, analog_raw, analog_volts, attach, attachments, events, from_interleaved, markers,
                           note, notes, pack)
 
-__all__ = ["Analog", "Capture", "Channel", "Events", "Part", "add_markers", "analog_raw", "analog_volts", "attach",
+__all__ = ["Analog", "Capture", "Channel", "Events", "Part", "Reduced", "add_markers", "analog_raw", "analog_volts", "attach",
            "attachments", "events", "from_interleaved", "logic", "markers", "note", "notes", "pack", "read", "write"]
 
 
@@ -68,7 +71,7 @@ class Part:
         return p
 
     @property
-    def channels(self) -> list[Channel | Events | Analog]:
+    def channels(self) -> list[Channel | Events | Reduced | Analog]:
         """The channels as stored (read from the file on first use); those of an encoding this version does not
         read are left out (`skipped`)."""
         if self._channels is None:
@@ -85,7 +88,7 @@ class Part:
     def names(self) -> list[str]:
         return [c.name for c in self.channels]
 
-    def channel(self, name: str) -> Channel | Events | Analog:
+    def channel(self, name: str) -> Channel | Events | Reduced | Analog:
         for c in self.channels:
             if c.name == name:
                 return c
@@ -138,6 +141,6 @@ def read(path: str | Path) -> Capture:
 
 def write(path: str | Path, cap: Capture) -> Path:
     """Write a capture as a WireSkein file."""
-    parts = [fileformat.Part(list(p.channels), dict(p.meta), p.tick0) for p in cap.parts]
+    parts = [fileformat.Part(list(p.channels), dict(p.meta), p.tick0, p.ticks) for p in cap.parts]
     return fileformat.write(path, cap.tick_hz, parts=parts, layout=cap.layout, lost=[dict(x) for x in cap.lost] or None,
                             capture_id=cap.id, **cap.meta)
