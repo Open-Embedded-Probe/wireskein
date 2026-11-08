@@ -16,7 +16,7 @@ WireSkein が読めるのは、キャプチャにあるものだけです。バ�
             capture at 150 MS/s at least, 250 MS/s best
        10 MHz (high 20 ns, low 80 ns): 427 frames, ticks 6162091..8073310, too fast
        0.325 MHz (high 1020 ns, low 2060 ns): 404 frames, ticks 2978224..10420978
-     noise: 3554 glitches on the clock, 1403 ringing pulses on SWDIO (...)
+     noise: 1.8% of the clock's changes are glitches, 3.6% of SWDIO's are ringing (...)
    ```
 
    文書にも同じものがあります。バスごとの `reading`、`clock_speeds`、`undersampled`
@@ -53,7 +53,8 @@ high 20〜25 ns、low 75〜80 ns）。
 ## 3. ノイズ
 
 ノイズは、信号でないパルスです。線の上の 1〜2 サンプルのもので、縁にも、どこにでも出ます。分析は、信号ではありえない
-所で、2 種類を数えます（`reading`）。
+所で、2 種類を数え（`reading`）、線の変化のうちの割合で判断します（`glitch_share`、`ringing_share`。1 % を超えると
+`noise:` で知らせる）。数は記録の長さで増えるためです。
 
 | 見えるもの | 何か | よくある原因 |
 | --- | --- | --- |

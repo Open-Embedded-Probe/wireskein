@@ -307,14 +307,15 @@ def noise(cap: Capture, clock: str, data: list[str], lo: int = 0, hi: int | None
     reflection, a neighbour's edge picked up, a ground far away); `ringing`, each data line's pulses under RING
     samples where the clock is slow enough that no bit is that short (typed.RING: a reflection at the edges). What
     the analysis does with them: glitch clocks dropped where that gives a frame a known length, ringing read as it
-    settles."""
+    settles. With `clock_edges` and `data_edges` (each line's changes there), for the shares (_shares)."""
     from ._engine.typed import RING
     hi = cap.n_samples if hi is None else hi
     ch = cap.channel(clock)
-    out = {"glitches": 0, "ringing": {}}
+    out = {"glitches": 0, "clock_edges": 0, "ringing": {}, "data_edges": {}}
     if ch.step != 1:
         return out
     e = np.asarray(ch.edges, np.int64)
+    out["clock_edges"] = int(np.count_nonzero((e >= lo) & (e < hi)))
     rises = e[K.edge_levels(e, ch.initial) == 1]
     near = np.flatnonzero(np.diff(e) <= 1) + 1                   # the edge ending a pulse of a sample
     near = near[(e[near] >= lo) & (e[near] < hi)]
@@ -328,8 +329,8 @@ def noise(cap: Capture, clock: str, data: list[str], lo: int = 0, hi: int | None
         k = np.flatnonzero(np.diff(de) < RING) + 1
         k = k[(de[k] >= lo) & (de[k] < hi)]
         n = int(np.count_nonzero(K.local_period(rises, de[k]) >= 3 * RING)) if len(k) else 0
-        if n:
-            out["ringing"][d] = n
+        out["ringing"][d] = n
+        out["data_edges"][d] = int(np.count_nonzero((de >= lo) & (de < hi)))
     return out
 
 
@@ -349,7 +350,20 @@ def reading(out: dict, frames: list, cap: Capture, b: dict) -> dict:
     clk = b["pins"].get("clk")
     if clk:
         r.update(noise(cap, clk, [p for k, p in b["pins"].items() if k != "clk"]))
+        _shares(r)
     return r
+
+
+NOISY = 0.01         # a line with more of its changes than this in noise pulses is told as noisy
+
+
+def _shares(r: dict) -> None:
+    """The noise as shares of the changes (a pulse is two): `glitch_share` of the clock's, `ringing_share` of each
+    data line's; `noisy` when one is over NOISY (a count alone grows with the capture's length)."""
+    r["glitch_share"] = round(2 * r.get("glitches", 0) / r["clock_edges"], 4) if r.get("clock_edges") else 0.0
+    r["ringing_share"] = {k: round(2 * v / r["data_edges"][k], 4) if r.get("data_edges", {}).get(k) else 0.0
+                          for k, v in r.get("ringing", {}).items()}
+    r["noisy"] = r["glitch_share"] > NOISY or any(v > NOISY for v in r["ringing_share"].values())
 
 
 def _frame_items(lay: dict, n) -> list:
@@ -821,6 +835,7 @@ def _piece(pw, spec: dict, head: dict, reanalyze: bool = False, edges: dict | No
         if r is not None and b["pins"].get("clk"):
             r.update(noise(wcap, b["pins"]["clk"], [q for k, q in b["pins"].items() if k != "clk"],
                            p.s - p.a, p.e - p.a))
+            _shares(r)
     if reanalyze and not whole and p.edges and _doubt_why(p, o):
         ex = export(staged.analyze(wcap, None), wcap, "final", None, False, None, "protocol")
         o["_reanalysis"] = [{"protocol": c["protocol"], "roles": c["roles"], "verdict": c["verdict"],
@@ -978,11 +993,14 @@ def _join_bus(per: list, rate: float) -> dict:
                      rate_ok=all(g["rate_ok"] for g in out.get("clock_speeds", [])))
         if any("glitches" in x for x in rs):
             r["glitches"] = sum(x.get("glitches", 0) for x in rs)
-            ring: dict = {}
-            for x in rs:
-                for k, v in x.get("ringing", {}).items():
-                    ring[k] = ring.get(k, 0) + v
-            r["ringing"] = ring
+            r["clock_edges"] = sum(x.get("clock_edges", 0) for x in rs)
+            for key in ("ringing", "data_edges"):
+                acc: dict = {}
+                for x in rs:
+                    for k, v in x.get(key, {}).items():
+                        acc[k] = acc.get(k, 0) + v
+                r[key] = acc
+            _shares(r)
         out["reading"] = r
     un = _split.Unread()
     un.add(out["uninterpreted"])

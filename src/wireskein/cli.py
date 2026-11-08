@@ -236,12 +236,11 @@ def _warn_undersampled(doc: dict, items: list) -> None:
                 print(f"    {g['freq_hz'] / 1e6:.3g} MHz (high {g['high_ns']:g} ns, low {g['low_ns']:g} ns): "
                       f"{g['frames']} frames, ticks {g['s']}..{g['e']}" + ("" if g["rate_ok"] else ", too fast"),
                       file=sys.stderr)
-        ring = {k: v for k, v in (r.get("ringing") or {}).items() if v}
-        if r.get("glitches") or ring:
-            what = ([f"{r['glitches']} glitches on the clock"] if r.get("glitches") else []) + \
-                   [f"{v} ringing pulses on {k}" for k, v in ring.items()]
-            print(f"  noise: {', '.join(what)} (read past where it could be; a reflection, a neighbouring line picked "
-                  f"up, or a ground far away: docs/capturing.md §3)", file=sys.stderr)
+        if r.get("noisy"):
+            what = [f"{r['glitch_share']:.1%} of the clock's changes are glitches"] if r.get("glitch_share") else []
+            what += [f"{v:.1%} of {k}'s are ringing" for k, v in (r.get("ringing_share") or {}).items() if v]
+            print(f"  noise: {', '.join(what)} (read past where it could be; a reflection, a neighbouring line "
+                  f"picked up, or a ground far away: docs/capturing.md §3)", file=sys.stderr)
 
 
 def _load_for_decoding(path, args):

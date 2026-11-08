@@ -16,7 +16,7 @@ remedies, and the analysis tells which one it is.
             capture at 150 MS/s at least, 250 MS/s best
        10 MHz (high 20 ns, low 80 ns): 427 frames, ticks 6162091..8073310, too fast
        0.325 MHz (high 1020 ns, low 2060 ns): 404 frames, ticks 2978224..10420978
-     noise: 3554 glitches on the clock, 1403 ringing pulses on SWDIO (...)
+     noise: 1.8% of the clock's changes are glitches, 3.6% of SWDIO's are ringing (...)
    ```
 
    The same is in the document: each bus's `reading`, `clock_speeds` and `undersampled`
@@ -53,7 +53,8 @@ Measured on a WCH-LinkE at its fastest (highs of 20-25 ns): at 50 MS/s a third o
 ## 3. Noise
 
 Noise is pulses that are no signal: a sample or two on a line, at edges or anywhere. The analysis counts two kinds
-(`reading`), where they cannot be signal:
+(`reading`), where they cannot be signal, and judges by their share of the line's changes (`glitch_share`,
+`ringing_share`; over 1 % is told as `noise:`), since a count grows with the capture's length:
 
 | Seen | What | Usual causes |
 | --- | --- | --- |
