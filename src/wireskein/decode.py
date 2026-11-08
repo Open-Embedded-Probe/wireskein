@@ -301,6 +301,57 @@ def undersampled(cap: Capture, speeds: list[dict], clock: str) -> dict | None:
             "best_rate_hz": float(np.ceil(BEST_HALF / shortest / 1e6) * 1e6)}
 
 
+def noise(cap: Capture, clock: str, data: list[str], lo: int = 0, hi: int | None = None) -> dict:
+    """Signs of noise on a clocked bus in ticks [lo, hi): `glitches`, the clock's pulses (high or low) of a sample
+    where the clock around them is slow enough that no half of it is that short (its period 8 samples or more: a
+    reflection, a neighbour's edge picked up, a ground far away); `ringing`, each data line's pulses under RING
+    samples where the clock is slow enough that no bit is that short (typed.RING: a reflection at the edges). What
+    the analysis does with them: glitch clocks dropped where that gives a frame a known length, ringing read as it
+    settles."""
+    from ._engine.typed import RING
+    hi = cap.n_samples if hi is None else hi
+    ch = cap.channel(clock)
+    out = {"glitches": 0, "ringing": {}}
+    if ch.step != 1:
+        return out
+    e = np.asarray(ch.edges, np.int64)
+    rises = e[K.edge_levels(e, ch.initial) == 1]
+    near = np.flatnonzero(np.diff(e) <= 1) + 1                   # the edge ending a pulse of a sample
+    near = near[(e[near] >= lo) & (e[near] < hi)]
+    if len(near) and len(rises) > 2:
+        out["glitches"] = int(np.count_nonzero(K.local_period(rises, e[near], q=50) >= 8))
+    for d in data:
+        c = cap.channel(d)
+        de = np.asarray(c.edges, np.int64)
+        if c.step != 1 or len(de) < 2 or len(rises) < 3:
+            continue
+        k = np.flatnonzero(np.diff(de) < RING) + 1
+        k = k[(de[k] >= lo) & (de[k] < hi)]
+        n = int(np.count_nonzero(K.local_period(rises, de[k]) >= 3 * RING)) if len(k) else 0
+        if n:
+            out["ringing"][d] = n
+    return out
+
+
+def reading(out: dict, frames: list, cap: Capture, b: dict) -> dict:
+    """How well a bus read, in counts one acts on: `frames` read frame by frame, `ok` (their checks held),
+    `restored` (a clock lost between samples restored), `repaired` (glitch clocks dropped), `unread` (stretches of
+    activity no frame read) and their `unread_edges`, `rate_ok` (every clock speed sampled well enough), and the noise
+    seen (`glitches`, `ringing`, from noise())."""
+    fr = [x for x in frames if isinstance(x, dict)]
+    r = {"frames": len(fr), "ok": sum(1 for x in fr if x.get("ok", True) is not False),
+         "unanswered": sum(1 for x in fr if x.get("answered") is False),
+         "restored": sum(1 for x in fr if "restored" in x), "repaired": sum(1 for x in fr if "repaired" in x),
+         "rate_ok": all(g["rate_ok"] for g in out.get("clock_speeds", []))}
+    if "uninterpreted" in out:                   # decode's (analyze's claims do not say what is unread)
+        un = out["uninterpreted"]
+        r.update(unread=len(un), unread_edges=int(sum(u.get("edges", 0) for u in un)))
+    clk = b["pins"].get("clk")
+    if clk:
+        r.update(noise(cap, clk, [p for k, p in b["pins"].items() if k != "clk"]))
+    return r
+
+
 def _frame_items(lay: dict, n) -> list:
     """The items a clocked bus read frame by frame: RVSWD's and SWIO's DMI accesses (not the Debug Module's, which
     span several), else its frames layer (export.LOWER)."""
@@ -323,6 +374,7 @@ def _note_undersampled(claims: list, cap: Capture, res) -> None:
         frames = _frame_items(_exp.layers_of(n), n)
         frame_clocks(cap, clk, frames)
         speeds = clock_speeds(float(cap.rate), frames)
+        c["reading"] = reading({"clock_speeds": speeds}, frames, cap, {"pins": c.get("roles") or {}})
         if speeds:
             c["clock_speeds"] = speeds
         us = undersampled(cap, speeds, clk)
@@ -400,6 +452,8 @@ def _bus(res, cap: Capture, b: dict, depth: str, claimed: list) -> dict:
     if us:
         us["restored"] = sum(1 for x in frames if isinstance(x, dict) and "restored" in x)
         out["undersampled"] = us
+    if n is not None:
+        out["reading"] = reading(out, frames if clk else _frame_items(lay, n), cap, b)
     return out
 
 
@@ -755,6 +809,18 @@ def _piece(pw, spec: dict, head: dict, reanalyze: bool = False, edges: dict | No
         given = {**spec, "buses": [{**b, "params": {**b["params"], "sample_edge": other[j]}} if j in other else b
                                    for j, b in enumerate(spec["buses"])]}
         o = _part(wcap, given, head, strict=not whole)
+    for j, b in enumerate(spec["buses"]):            # noise counted in the piece's own ticks (summed when joined)
+        r = o["buses"][j].get("reading")
+        res_ = o["buses"][j].get("result", {})
+        fr = res_.get("dmi") if isinstance(res_.get("dmi"), list) else res_.get(_exp.LOWER.get(b["protocol"]))
+        if r is not None and isinstance(fr, list):      # frames counted by the piece they start in
+            own = [x for x in fr if isinstance(x, dict) and isinstance(x.get("s"), int) and p.s <= x["s"] + p.a < p.e]
+            r.update(frames=len(own), ok=sum(1 for x in own if x.get("ok", True) is not False),
+                     unanswered=sum(1 for x in own if x.get("answered") is False),
+                     restored=sum(1 for x in own if "restored" in x), repaired=sum(1 for x in own if "repaired" in x))
+        if r is not None and b["pins"].get("clk"):
+            r.update(noise(wcap, b["pins"]["clk"], [q for k, q in b["pins"].items() if k != "clk"],
+                           p.s - p.a, p.e - p.a))
     if reanalyze and not whole and p.edges and _doubt_why(p, o):
         ex = export(staged.analyze(wcap, None), wcap, "final", None, False, None, "protocol")
         o["_reanalysis"] = [{"protocol": c["protocol"], "roles": c["roles"], "verdict": c["verdict"],
@@ -898,6 +964,26 @@ def _join_bus(per: list, rate: float) -> dict:
             if "dmi" in res else sum(b.get("undersampled", {}).get("restored", 0) for _, b in per)
         out["undersampled"] = us
     out["uninterpreted"] = _split.join_items([(p, b.get("uninterpreted", [])) for p, b in per])
+    out.pop("reading", None)
+    rs = [b["reading"] for _, b in per if b.get("reading")]
+    if rs:
+        fr = res.get("dmi") if isinstance(res.get("dmi"), list) else next(
+            (v for k, v in res.items() if k == _exp.LOWER.get(out.get("protocol")) and isinstance(v, list)), None)
+        if fr is not None:
+            r = reading(out, fr, SimpleNamespace(rate=rate), {"pins": {}})
+        else:                                    # the items went to a file: the pieces' counts summed
+            r = {k: sum(x.get(k, 0) for x in rs) for k in ("frames", "ok", "unanswered", "restored", "repaired")}
+            r.update(unread=len(out["uninterpreted"]),
+                     unread_edges=int(sum(u.get("edges", 0) for u in out["uninterpreted"])),
+                     rate_ok=all(g["rate_ok"] for g in out.get("clock_speeds", [])))
+        if any("glitches" in x for x in rs):
+            r["glitches"] = sum(x.get("glitches", 0) for x in rs)
+            ring: dict = {}
+            for x in rs:
+                for k, v in x.get("ringing", {}).items():
+                    ring[k] = ring.get(k, 0) + v
+            r["ringing"] = ring
+        out["reading"] = r
     un = _split.Unread()
     un.add(out["uninterpreted"])
     out["uninterpreted_summary"] = un.doc()

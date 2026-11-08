@@ -94,6 +94,14 @@ the lines fit, whether analyze would have claimed it, and what was not read or n
 - `fit.claimed`: whether analyze, finding things alone, would have claimed this very decode; `fit.verdict` then
   gives its verdict (`confirmed` / `likely` / `ambiguous`).
 
+- `reading`: how well the bus read, in counts one acts on ([capturing](capturing.md)): `frames` (read frame by
+  frame), `ok` (their checks held), `unanswered` (a frame no target answered), `restored`, `repaired` (frames read with
+  a lost clock restored, with glitch clocks dropped), `unread` and `unread_edges` (stretches no frame read, their
+  changes), `rate_ok` (every clock speed sampled well enough); for a clocked bus also `glitches` (the clock's pulses of
+  a sample where the clock is slow enough that no half of it is that short) and `ringing` (data line → its pulses
+  under 3 samples at a clock slow enough that no bit is that short): noise, a reflection, a neighbouring line picked up
+  or a ground far away. analyze's claims give it too, without `unread`. In pieces, the counts are each piece's in its
+  own ticks, summed.
 - `clock_speeds` (a clocked bus): the speeds its clock ran at, from the frames it read (each frame's `period_ns`
   and `high_ns`, medians over its clocks, so a reflection's glitch does not count, are on the frame): frames whose
   periods are within 1.25 times a speed's fastest are that speed, wherever they are. Fastest first, each

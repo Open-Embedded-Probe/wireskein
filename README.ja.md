@@ -312,6 +312,11 @@ cap = load("capture.wireskein")                                     # .sr や .v
 doc = export(analyze(cap, {"protocols": ["spi"]}), cap)
 ```
 
+`decode` と `analyze` は、バスごとに、どう読めたかを stderr に出します。読めたフレームとそのうち検査の合ったもの、
+読めなかった所、クロックの速さ、うまく読めないときは、クロックに対してサンプリングが遅いのか（取り直す速さを、少なくとも
+とベストの 2 つで）、線にノイズが乗っているのか（ひげ、揺れ）。読めるように取るには、それぞれに何をするか:
+[docs/capturing.ja.md](docs/capturing.ja.md)。
+
 長いキャプチャ（数 GB）は、ブロックごとに読み、区切って分析します。長さによらず、メモリは決まった量で済みます
 （[docs/long-captures.ja.md](docs/long-captures.ja.md)）:
 

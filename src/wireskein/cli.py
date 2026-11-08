@@ -211,23 +211,37 @@ def decode_cmd(args) -> None:
 
 
 def _warn_undersampled(doc: dict, items: list) -> None:
-    """A clock sampled too slowly, told on stderr (decode's buses, analyze's claims): its clocks may be lost."""
+    """How each bus (decode) or claim (analyze) read, a line each on stderr, and what to do when it did not read
+    well: a clock too fast for the rate (capture faster), or noise (docs/capturing.md)."""
     for x in items:
-        us = x.get("undersampled")
-        if not us:
+        r = x.get("reading")
+        if not r:
             continue
-        print(f"warning: {us['clock']}: {us['frames']} frames at a clock too fast for {us['rate_hz'] / 1e6:g} MS/s "
-              f"(at its fastest a period of {us['period_ns']:g} ns, high {us['high_ns']:g} ns, low "
-              f"{us['low_ns']:g} ns): a clock may fall between samples, its frame lost or read only where its checks "
-              f"leave one reading" + (f" ({us['restored']} read with a lost clock restored)" if us.get("restored")
-                                      else "")
-              + f"; capture at {us['least_rate_hz'] / 1e6:g} MS/s at least, {us['best_rate_hz'] / 1e6:g} MS/s best",
-              file=sys.stderr)
-        for g in x.get("clock_speeds", []):
-            print(f"  {us['clock']} at {g['freq_hz'] / 1e6:.3g} MHz (high {g['high_ns']:g} ns, low {g['low_ns']:g} ns): "
-                  f"{g['frames']} frames from tick {g['s']} to {g['e']}" + ("" if g["rate_ok"] else
-                                                                          ": too fast for the rate"),
-                  file=sys.stderr)
+        name = f"{x['protocol']}({', '.join(f'{k}={v}' for k, v in (x.get('pins') or x.get('roles') or {}).items())})"
+        line = f"{name}: {r['frames']} frames read, {r['ok']} ok"
+        line += "".join(f", {r[k]} {w}" for k, w in (("unanswered", "unanswered"),
+                                                       ("restored", "with a lost clock restored"),
+                                                       ("repaired", "with glitch clocks dropped")) if r.get(k))
+        if "unread" in r:
+            line += f"; {r['unread']} stretches unread ({r['unread_edges']} changes)" if r["unread"] else \
+                "; nothing unread"
+        print(line, file=sys.stderr)
+        us = x.get("undersampled")
+        if us:
+            print(f"  speed: {us['frames']} frames at a clock too fast for {us['rate_hz'] / 1e6:g} MS/s (period "
+                  f"{us['period_ns']:g} ns, high {us['high_ns']:g} ns, low {us['low_ns']:g} ns): a clock may fall "
+                  f"between samples; capture at {us['least_rate_hz'] / 1e6:g} MS/s at least, "
+                  f"{us['best_rate_hz'] / 1e6:g} MS/s best (docs/capturing.md §2)", file=sys.stderr)
+            for g in x.get("clock_speeds", []):
+                print(f"    {g['freq_hz'] / 1e6:.3g} MHz (high {g['high_ns']:g} ns, low {g['low_ns']:g} ns): "
+                      f"{g['frames']} frames, ticks {g['s']}..{g['e']}" + ("" if g["rate_ok"] else ", too fast"),
+                      file=sys.stderr)
+        ring = {k: v for k, v in (r.get("ringing") or {}).items() if v}
+        if r.get("glitches") or ring:
+            what = ([f"{r['glitches']} glitches on the clock"] if r.get("glitches") else []) + \
+                   [f"{v} ringing pulses on {k}" for k, v in ring.items()]
+            print(f"  noise: {', '.join(what)} (read past where it could be; a reflection, a neighbouring line picked "
+                  f"up, or a ground far away: docs/capturing.md §3)", file=sys.stderr)
 
 
 def _load_for_decoding(path, args):

@@ -286,6 +286,11 @@ res = analyze(cap, {"protocols": ["spi"]})
 doc = export(res, cap)
 ```
 
+After each bus, `decode` and `analyze` say how it read on stderr: frames read and ok, unread stretches, the clock's
+speeds, and when it did not read well, whether the sample rate is too low for the clock (with the rate to capture at,
+the least and the best) or the lines carry noise (glitches, ringing). How to capture so that it reads, and what to
+do about each: [docs/capturing.md](docs/capturing.md).
+
 A long capture (gigabytes) is read a block at a time and analysed in pieces, memory bounded whatever its length
 ([docs/long-captures.md](docs/long-captures.md)):
 
