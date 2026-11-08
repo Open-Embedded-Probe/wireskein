@@ -221,7 +221,8 @@ def _warn_undersampled(doc: dict, items: list) -> None:
               f"{us['low_ns']:g} ns): a clock may fall between samples, its frame lost or read only where its checks "
               f"leave one reading" + (f" ({us['restored']} read with a lost clock restored)" if us.get("restored")
                                       else "")
-              + f"; capture at {us['suggest_rate_hz'] / 1e6:g} MS/s or more", file=sys.stderr)
+              + f"; capture at {us['least_rate_hz'] / 1e6:g} MS/s at least, {us['best_rate_hz'] / 1e6:g} MS/s best",
+              file=sys.stderr)
         for g in x.get("clock_speeds", []):
             print(f"  {us['clock']} at {g['freq_hz'] / 1e6:.3g} MHz (high {g['high_ns']:g} ns, low {g['low_ns']:g} ns): "
                   f"{g['frames']} frames from tick {g['s']} to {g['e']}" + ("" if g["rate_ok"] else

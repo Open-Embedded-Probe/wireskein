@@ -98,11 +98,12 @@ the lines fit, whether analyze would have claimed it, and what was not read or n
   and `high_ns`, medians over its clocks, so a reflection's glitch does not count, are on the frame): frames whose
   periods are within 1.25 times a speed's fastest are that speed, wherever they are. Fastest first, each
   `period_ns`, `freq_hz`, `high_ns`, `low_ns` (medians), `frames`, `s` and `e` (its first frame's start, its last's
-  end), and `rate_ok`: false when its high or low lasts under 2.5 samples, so a high may fall between two samples and
+  end), and `rate_ok`: false when its high or low lasts under 3 samples, so a high may fall between two samples and
   its clock be lost (a debugger's speed changes on the way: a WCH-LinkE connects slowly, then reads fast).
 - `undersampled`: when a speed is too fast for the rate (`rate_ok` false): `clock`, `rate_hz`, `frames` (read at
-  such speeds), `period_ns`, `high_ns`, `low_ns` (the worst of them), `suggest_rate_hz` (4 samples in the shorter of
-  its high and low), `restored` (RVSWD frames read with a lost clock restored). Frames a clock short are read only
+  such speeds), `period_ns`, `high_ns`, `low_ns` (the worst of them), `least_rate_hz` (3 samples in the shorter of
+  its high and low: none lost) and `best_rate_hz` (5: about 10 a period of an even clock), from the high and low as
+  measured at this rate, `restored` (RVSWD frames read with a lost clock restored). Frames a clock short are read only
   where that leaves one reading (every place the clock may have been lost, about as likely, gives the same bits, and
   they pass the checks); the rest are unread. `decode` and `analyze` say it on stderr too.
 

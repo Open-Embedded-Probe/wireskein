@@ -224,8 +224,11 @@ def _idle(cap: Capture, b: dict, n) -> int:
     return int(round(IDLE_S * cap.rate))
 
 
-GOOD_HALF = 4        # samples a clock's high and low should last, at least, to be sure none falls between samples
-TIGHT_HALF = 2.5     # a clock whose usual high or low, where it runs fastest, is shorter than this is told
+# samples in the shorter of a clock's high and low, where it runs fastest: LEAST, none falls between two samples (a
+# WCH-LinkE's highs of 20-25 ns lost clocks at 100 MS/s, 2 samples, and none at 160 MS/s, 4); BEST, its edges timed
+# to a fifth of a half (about 10 samples a period of an even clock)
+LEAST_HALF = 3
+BEST_HALF = 5
 
 
 SAME_SPEED = 1.25    # frames whose clock periods are within this of a speed's fastest are of that speed
@@ -260,7 +263,7 @@ def clock_speeds(rate: float, items: list) -> list[dict]:
     """The speeds a bus's clock ran at, from its frames' clocks (frame_clocks): frames whose periods are within
     SAME_SPEED of a speed's fastest are that speed, wherever they are. -> [{"period_ns", "freq_hz", "high_ns",
     "low_ns" (medians), "frames", "s", "e" (its first frame's start, its last's end), "rate_ok"}], fastest first;
-    rate_ok: false when its high or low lasts under TIGHT_HALF samples (a high may fall between two samples, its clock
+    rate_ok: false when its high or low lasts under LEAST_HALF samples (a high may fall between two samples, its clock
     lost)."""
     rows = sorted((x["period_ns"], x["high_ns"], x["s"], x["e"]) for x in items
                   if isinstance(x, dict) and "high_ns" in x and x.get("period_ns"))
@@ -275,7 +278,7 @@ def clock_speeds(rate: float, items: list) -> list[dict]:
 
 def _speed(g: np.ndarray, rate: float, frames: int | None = None) -> dict:
     p, h = float(np.median(g[:, 0])), float(np.median(g[:, 1]))
-    tight = TIGHT_HALF * 1e9 / rate
+    tight = LEAST_HALF * 1e9 / rate
     return {"period_ns": round(p, 1), "freq_hz": round(1e9 / p, 1), "high_ns": round(h, 1), "low_ns": round(p - h, 1),
             "frames": int(frames if frames is not None else len(g)), "s": int(g[:, 2].min()), "e": int(g[:, 3].max()),
             "rate_ok": min(h, p - h) >= tight}
@@ -283,17 +286,19 @@ def _speed(g: np.ndarray, rate: float, frames: int | None = None) -> dict:
 
 def undersampled(cap: Capture, speeds: list[dict], clock: str) -> dict | None:
     """The speeds a clock was sampled too slowly at (clock_speeds' rate_ok false): {"clock", "rate_hz", "frames"
-    (read at those speeds), "high_ns", "low_ns", "period_ns" (the fastest of them), "suggest_rate_hz" (GOOD_HALF
-    samples in the shorter of its high and low)}, or None."""
+    (read at those speeds), "high_ns", "low_ns", "period_ns" (the worst of them), "least_rate_hz" (LEAST_HALF samples
+    in the shorter of its high and low: none lost), "best_rate_hz" (BEST_HALF samples)}, or None. The high and low
+    are as measured at this rate, so to a sample (a short one may read shorter than it is)."""
     bad = [g for g in speeds if not g["rate_ok"]]
     if not bad:
         return None
     rate = float(cap.rate)
     worst = min(bad, key=lambda g: min(g["high_ns"], g["low_ns"]))
-    shortest = max(1.0, min(worst["high_ns"], worst["low_ns"]) * rate / 1e9)
+    shortest = max(1e9 / rate, min(worst["high_ns"], worst["low_ns"])) / 1e9      # seconds
     return {"clock": clock, "rate_hz": rate, "frames": sum(g["frames"] for g in bad),
             "period_ns": worst["period_ns"], "high_ns": worst["high_ns"], "low_ns": worst["low_ns"],
-            "suggest_rate_hz": float(np.ceil(GOOD_HALF * rate / shortest / 1e6) * 1e6)}
+            "least_rate_hz": float(np.ceil(LEAST_HALF / shortest / 1e6) * 1e6),
+            "best_rate_hz": float(np.ceil(BEST_HALF / shortest / 1e6) * 1e6)}
 
 
 def _frame_items(lay: dict, n) -> list:

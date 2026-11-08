@@ -393,7 +393,7 @@ def test_a_clock_too_fast_for_the_rate_is_told_with_its_speeds():
     sp = {round(g["freq_hz"] / 1e4) / 100: g for g in b["clock_speeds"]}
     assert sp[0.33]["frames"] == 202 and sp[0.33]["rate_ok"] and not sp[10.0]["rate_ok"]
     us = b["undersampled"]
-    assert us["clock"] == "SWCLK" and us["high_ns"] == 20.0 and us["suggest_rate_hz"] == 200e6
+    assert us["clock"] == "SWCLK" and us["high_ns"] == 20.0 and (us["least_rate_hz"], us["best_rate_hz"]) == (150e6, 250e6)
     x = next(x for x in b["result"]["dmi"] if x.get("form") == "long")
     assert x["period_ns"] > 2000 and 900 < x["high_ns"] < 1100
     # at 160 MS/s the same clock's highs last 4 samples: not told
