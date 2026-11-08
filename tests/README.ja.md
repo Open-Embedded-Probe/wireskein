@@ -13,6 +13,8 @@ pytest の試験です。`uv run pytest` で実行します。
 | `test_uart_receiver.py` と `data/uart_truth/` | uart の検査を受信器として読む: グリッチ、break、続けて起きる誤り（試験の中で符号化した線）。OEP のプローブの ESP-IDF の UART ドライバが、フレーミングとパリティの誤り、3 % までずらした速さで送ったものと、送ったもの（`<名前>.truth.json`） |
 | `test_examples.py` と `data/examples/` | analyze の例（analysis-format §4）: キャプチャと、それが持つバス（`<名前>.truth.json`） |
 | `test_bench_oep.py` | 本物の OEP のプローブで取る試験。`WIRESKEIN_BENCH_OEP=oep://<unit_id>` が無ければ飛ばす |
+| `test_rvswd_long.py` と `data/rvswd_long_truth/` | WCH-LinkE の記録の RVSWD と SWIO。ch32rv の出力を正解に。わざと残した悪い記録もある（クロックに対して遅い、ノイズが多い: データの [README](data/rvswd_long_truth/README.md)） |
+| `test_degrade.py` | `tools/degrade.py`: 記録から悪くしたテストデータ。シードから同じものを作れる |
 | `demo_run.py` | 不具合を入れた試験の記録を合成する例。`test_verify.py` が使い、単体でも動く（`uv run python tests/demo_run.py OUT && uv run wireskein verify OUT`） |
 
 推定の正しさの評価（正解付きのコーパスでの正答率など）は、ここではなく [eval/](../eval/README.ja.md) で行います。

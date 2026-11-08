@@ -320,7 +320,9 @@ def noise(cap: Capture, clock: str, data: list[str], lo: int = 0, hi: int | None
     near = np.flatnonzero(np.diff(e) <= 1) + 1                   # the edge ending a pulse of a sample
     near = near[(e[near] >= lo) & (e[near] < hi)]
     if len(near) and len(rises) > 2:
-        out["glitches"] = int(np.count_nonzero(K.local_period(rises, e[near], q=50) >= 8))
+        near = near[K.local_period(rises, e[near], q=50) >= 8]
+        out["glitches"] = int(len(near))
+        out["glitch_edges"] = int(len(np.union1d(near - 1, near)))  # the changes in them (a pulse has two)
     for d in data:
         c = cap.channel(d)
         de = np.asarray(c.edges, np.int64)
@@ -328,8 +330,9 @@ def noise(cap: Capture, clock: str, data: list[str], lo: int = 0, hi: int | None
             continue
         k = np.flatnonzero(np.diff(de) < RING) + 1
         k = k[(de[k] >= lo) & (de[k] < hi)]
-        n = int(np.count_nonzero(K.local_period(rises, de[k]) >= 3 * RING)) if len(k) else 0
-        out["ringing"][d] = n
+        k = k[K.local_period(rises, de[k]) >= 3 * RING] if len(k) else k
+        out["ringing"][d] = int(len(k))
+        out.setdefault("ringing_edges", {})[d] = int(len(np.union1d(k - 1, k)))
         out["data_edges"][d] = int(np.count_nonzero((de >= lo) & (de < hi)))
     return out
 
@@ -358,11 +361,11 @@ NOISY = 0.01         # a line with more of its changes than this in noise pulses
 
 
 def _shares(r: dict) -> None:
-    """The noise as shares of the changes (a pulse is two): `glitch_share` of the clock's, `ringing_share` of each
-    data line's; `noisy` when one is over NOISY (a count alone grows with the capture's length)."""
-    r["glitch_share"] = round(2 * r.get("glitches", 0) / r["clock_edges"], 4) if r.get("clock_edges") else 0.0
-    r["ringing_share"] = {k: round(2 * v / r["data_edges"][k], 4) if r.get("data_edges", {}).get(k) else 0.0
-                          for k, v in r.get("ringing", {}).items()}
+    """The noise as shares of the changes: of the clock's, those in its glitches (`glitch_share`); of each data
+    line's, those in its ringing (`ringing_share`); `noisy` when one is over NOISY (a count alone grows with the capture's length)."""
+    r["glitch_share"] = round(r.get("glitch_edges", 0) / r["clock_edges"], 4) if r.get("clock_edges") else 0.0
+    r["ringing_share"] = {k: round(r.get("ringing_edges", {}).get(k, 0) / r["data_edges"][k], 4)
+                          if r.get("data_edges", {}).get(k) else 0.0 for k in r.get("ringing", {})}
     r["noisy"] = r["glitch_share"] > NOISY or any(v > NOISY for v in r["ringing_share"].values())
 
 
@@ -992,9 +995,9 @@ def _join_bus(per: list, rate: float) -> dict:
                      unread_edges=int(sum(u.get("edges", 0) for u in out["uninterpreted"])),
                      rate_ok=all(g["rate_ok"] for g in out.get("clock_speeds", [])))
         if any("glitches" in x for x in rs):
-            r["glitches"] = sum(x.get("glitches", 0) for x in rs)
-            r["clock_edges"] = sum(x.get("clock_edges", 0) for x in rs)
-            for key in ("ringing", "data_edges"):
+            for key in ("glitches", "glitch_edges", "clock_edges"):
+                r[key] = sum(x.get(key, 0) for x in rs)
+            for key in ("ringing", "ringing_edges", "data_edges"):
                 acc: dict = {}
                 for x in rs:
                     for k, v in x.get(key, {}).items():

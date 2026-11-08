@@ -425,7 +425,7 @@ def test_how_a_bus_read_is_told_in_counts():
     assert r["frames"] == len(dmi) and r["ok"] == sum(1 for x in dmi if x["ok"])
     assert r["restored"] == sum(1 for x in dmi if "restored" in x) > 100 and r["rate_ok"] is False
     assert r["unread"] == len(b["uninterpreted"]) and r["glitches"] > 0 and r["ringing"]["SWDIO"] > 0
-    assert r["glitch_share"] == round(2 * r["glitches"] / r["clock_edges"], 4) and r["noisy"]
+    assert r["glitch_share"] == round(r["glitch_edges"] / r["clock_edges"], 4) and r["noisy"]
     # at 160 MS/s: every speed sampled well, nothing restored
     r = decode_file(D / "linke_v203_160mhz_flash_pattern4k.sr", SPEC)["parts"][0]["buses"][0]["reading"]
     assert r["rate_ok"] and r["restored"] == 0 and r["frames"] == 9414

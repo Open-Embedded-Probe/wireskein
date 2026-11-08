@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- (EN) tools/degrade.py (not in the package): test data made worse from a capture, a lower sample rate, glitches, crosstalk, ringing, jitter, the steps, the source's sha256 and the random seed kept in `meta.degraded`. The bad captures in tests/data/rvswd_long_truth (too slow for the clock, noisy) are told as such in its README and kept as the bad case.
+- (JA) tools/degrade.py（パッケージの外）: 記録を悪くしてテストデータを作る。サンプリングを落とす、ひげ、クロストーク、揺れ、時刻の揺らぎ。手順、元の sha256、乱数のシードを `meta.degraded` に残す。tests/data/rvswd_long_truth の悪い記録（クロックに対して遅い、ノイズが多い）は、その README でそう書き、悪い例として残す。
+
 - (EN) Each bus says how it read (`reading`: frames read, ok, unanswered, restored, repaired, unread, rate_ok, and on a clocked bus the noise seen, `glitches` on the clock and `ringing` on data, judged by their share of the line's changes: `noisy` over 1 %), and `decode` / `analyze` print it a line a bus on stderr, with what to do: a clock too fast for the rate (the speeds, the rates to capture at) or noise. docs/capturing.md: how to capture so that it reads, speed and noise apart (ground at the tap, crosstalk, reflections, floating lines, the threshold), and what the analysis does with each.
 - (JA) バスごとに、どう読めたか（`reading`: 読めたフレーム、ok、答えなし、補った、ひげを抜いた、読めない所、rate_ok、クロックのあるバスでは見えたノイズ: クロックの `glitches` とデータの `ringing`。線の変化のうちの割合で判断し、1 % を超えると `noisy`）。`decode` / `analyze` は stderr にバスごと 1 行で出し、何をすればよいかを示す: レートに対して速すぎるクロック（速さと、取り直す速さ）か、ノイズか。docs/capturing.ja.md: 読めるように取るには。速さとノイズを分けて（グラウンドはタップの所で、クロストーク、反射、浮いた線、しきい値）、分析がそれぞれに何をするか。
 

@@ -100,7 +100,8 @@ the lines fit, whether analyze would have claimed it, and what was not read or n
   changes), `rate_ok` (every clock speed sampled well enough); for a clocked bus also `glitches` (the clock's pulses of
   a sample where the clock is slow enough that no half of it is that short) and `ringing` (data line → its pulses
   under 3 samples at a clock slow enough that no bit is that short), with the changes they are counted in
-  (`clock_edges`, `data_edges`), and as shares of them (a pulse is two changes): `glitch_share`, `ringing_share`
+  (`clock_edges`, `data_edges`) and the changes in them (`glitch_edges`, `ringing_edges`), and their share:
+  `glitch_share`, `ringing_share`
   (data line → share), `noisy` when one is over 1 %: noise, a reflection, a neighbouring line picked up or a ground
   far away. A count grows with the capture; the share is what to judge by. analyze's claims give it too, without `unread`. In pieces, the counts are each piece's in its
   own ticks, summed.
