@@ -4,7 +4,7 @@
 
 置き場所は `<方式>/<メーカーまたは分類>/<機種>.toml` です（例: `i2c/sensirion/sht30.toml`、`spi/flash/spi_nor.toml`）。
 
-チップの知識は EmbedBenchDeviceData に置きます（`knowledge/<chip>.yaml`、アドレスは `chips/<chip>.yaml`）。ここの I²C の定義は、そこから EmbedBenchDeviceData の `tools/knowledge_decl.py` で作ったものです（どれも先頭の行にそう書いてあります）。生成したファイルを直すのではなく、知識を直して作り直します。
+チップの知識は EmbedBenchDeviceData に置きます（`knowledge/<chip>.yaml`、アドレスは `chips/<chip>.yaml`）。ここの I²C の定義は、そこから wireskein の `tools/knowledge_decl.py` で作ったものです（どれも先頭の行に、元の DeviceData の commit を書いてあります）。生成したファイルを直すのではなく、知識を直して作り直します: `uv run python tools/knowledge_decl.py --devicedata DIR`（その clone、または `WIRESKEIN_DEVICEDATA`）。`--check` は、ここのファイルと知識のずれを示します（`WIRESKEIN_DEVICEDATA` があれば `tests/test_knowledge_decl.py` が流します）。`spi/flash/spi_nor.toml` は手書きです。
 
 - 最上位のフォルダ名は方式で、ファイル内の `device.bus` と同じにします。違っていると読み込み時にエラーになります。
 - 使う定義は、このフォルダからの相対パスのパターンで選びます。`!` で始まるパターンは除外です。

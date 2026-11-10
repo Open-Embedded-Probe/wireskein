@@ -14,6 +14,7 @@ The pytest suite. Run it with `uv run pytest`.
 | `test_examples.py` and `data/examples/` | The analyze examples (analysis-format §4): captures with the buses they hold (`<name>.truth.json`) |
 | `test_bench_oep.py` | Captures from a real OEP probe. Skipped unless `WIRESKEIN_BENCH_OEP=oep://<unit_id>` is set |
 | `test_rvswd_long.py` and `data/rvswd_long_truth/` | RVSWD and SWIO from WCH-LinkE captures, with ch32rv's output as the truth; some are bad captures kept on purpose (too slow for the clock, noisy: the data's [README](data/rvswd_long_truth/README.md)) |
+| `test_knowledge_decl.py` | The device definitions against EmbedBenchDeviceData's knowledge (`tools/knowledge_decl.py --check`). Skipped unless `WIRESKEIN_DEVICEDATA` names a clone of it |
 | `test_degrade.py` | `tools/degrade.py`: test data made worse from a capture, made again from its seed |
 | `demo_run.py` | Synthesizes a recorded test run with injected bugs. Used by `test_verify.py`; also runs on its own (`uv run python tests/demo_run.py OUT && uv run wireskein verify OUT`) |
 

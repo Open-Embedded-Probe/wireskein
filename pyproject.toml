@@ -34,7 +34,9 @@ Homepage = "https://github.com/Open-Embedded-Probe/wireskein"
 Repository = "https://github.com/Open-Embedded-Probe/wireskein"
 
 [dependency-groups]
-dev = ["pytest>=8", "oep-client-python[usb-async]>=0.0.52"]   # 0.0.52: format 1's reductions on the virtual probe (tests/test_oep_virtual_bench.py)
+# oep-client-python 0.0.52: format 1's reductions on the virtual probe (tests/test_oep_virtual_bench.py); pyyaml:
+# tools/knowledge_decl.py reads EmbedBenchDeviceData's knowledge
+dev = ["pytest>=8", "oep-client-python[usb-async]>=0.0.52", "pyyaml>=6"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/wireskein"]

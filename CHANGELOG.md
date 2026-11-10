@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- (EN) tools/knowledge_decl.py (moved here from EmbedBenchDeviceData, whose knowledge it reads: `--devicedata DIR` or `WIRESKEIN_DEVICEDATA`) generates the I²C device definitions, and `--check` tells any drift between them and the knowledge (`tests/test_knowledge_decl.py`, run when `WIRESKEIN_DEVICEDATA` is set). pyyaml in the dev group.
+- (JA) tools/knowledge_decl.py（EmbedBenchDeviceData から移した。その知識を読む: `--devicedata DIR` か `WIRESKEIN_DEVICEDATA`）が I²C のデバイスの定義を作り、`--check` が知識とのずれを示す（`WIRESKEIN_DEVICEDATA` があれば `tests/test_knowledge_decl.py` が流す）。dev の依存に pyyaml。
+
 ## 0.0.27
 - (EN) tools/degrade.py (not in the package): test data made worse from a capture, a lower sample rate, glitches, crosstalk, ringing, jitter, the steps, the source's sha256 and the random seed kept in `meta.degraded`. The bad captures in tests/data/rvswd_long_truth (too slow for the clock, noisy) are told as such in its README and kept as the bad case.
 - (JA) tools/degrade.py（パッケージの外）: 記録を悪くしてテストデータを作る。サンプリングを落とす、ひげ、クロストーク、揺れ、時刻の揺らぎ。手順、元の sha256、乱数のシードを `meta.degraded` に残す。tests/data/rvswd_long_truth の悪い記録（クロックに対して遅い、ノイズが多い）は、その README でそう書き、悪い例として残す。

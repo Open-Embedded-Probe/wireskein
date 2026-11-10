@@ -4,7 +4,7 @@
 
 A definition lives at `<protocol>/<maker or category>/<model>.toml` (e.g. `i2c/sensirion/sht30.toml`, `spi/flash/spi_nor.toml`).
 
-The chips' knowledge is kept in EmbedBenchDeviceData (`knowledge/<chip>.yaml`, the addresses in `chips/<chip>.yaml`); the I²C definitions here are generated from it by its `tools/knowledge_decl.py` (each says so in its first lines). Correct the knowledge and generate again rather than edit a generated file.
+The chips' knowledge is kept in EmbedBenchDeviceData (`knowledge/<chip>.yaml`, the addresses in `chips/<chip>.yaml`); the I²C definitions here are generated from it by wireskein's `tools/knowledge_decl.py` (each names the DeviceData commit in its first line). Correct the knowledge and generate again rather than edit a generated file: `uv run python tools/knowledge_decl.py --devicedata DIR` (a clone of it, or `WIRESKEIN_DEVICEDATA`); `--check` tells any drift between these files and the knowledge (`tests/test_knowledge_decl.py` runs it when `WIRESKEIN_DEVICEDATA` is set). `spi/flash/spi_nor.toml` is hand-written.
 
 - The top folder is the protocol and must equal `device.bus` in the file; a mismatch is an error when loading.
 - The definitions to use are chosen by path patterns relative to this folder; a pattern starting with `!` excludes.

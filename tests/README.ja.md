@@ -14,6 +14,7 @@ pytest の試験です。`uv run pytest` で実行します。
 | `test_examples.py` と `data/examples/` | analyze の例（analysis-format §4）: キャプチャと、それが持つバス（`<名前>.truth.json`） |
 | `test_bench_oep.py` | 本物の OEP のプローブで取る試験。`WIRESKEIN_BENCH_OEP=oep://<unit_id>` が無ければ飛ばす |
 | `test_rvswd_long.py` と `data/rvswd_long_truth/` | WCH-LinkE の記録の RVSWD と SWIO。ch32rv の出力を正解に。わざと残した悪い記録もある（クロックに対して遅い、ノイズが多い: データの [README](data/rvswd_long_truth/README.md)） |
+| `test_knowledge_decl.py` | デバイスの定義と EmbedBenchDeviceData の知識のずれ（`tools/knowledge_decl.py --check`）。`WIRESKEIN_DEVICEDATA` がその clone を指していなければ飛ばす |
 | `test_degrade.py` | `tools/degrade.py`: 記録から悪くしたテストデータ。シードから同じものを作れる |
 | `demo_run.py` | 不具合を入れた試験の記録を合成する例。`test_verify.py` が使い、単体でも動く（`uv run python tests/demo_run.py OUT && uv run wireskein verify OUT`） |
 

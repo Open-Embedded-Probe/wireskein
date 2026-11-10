@@ -9,6 +9,7 @@ Scripts for development and releases. Not part of the package.
 | `fetch_web.py` | Fetches the wireskein-web viewer pinned in `web.json` from npm, checks its hash and puts it into `src/wireskein/web/`. For trying `wireskein gui` locally, and in CI and releases |
 | `web.json` | The bundled viewer's package name, version and integrity (sha512) |
 | `degrade.py` | Makes a capture worse for test data: a lower sample rate (`--every N[:PHASE]`), glitches, a neighbouring line picked up (crosstalk), ringing at edges, jitter. The output's `meta.degraded` keeps the steps, the source's sha256 and the random seed (`--seed`; drawn and printed when not given), so it is made again exactly. `uv run python tools/degrade.py IN OUT --help` |
+| `knowledge_decl.py` | Generates the I²C device definitions (`src/wireskein/decl/devices`) from EmbedBenchDeviceData's knowledge (`--devicedata DIR` or `WIRESKEIN_DEVICEDATA`); `--check` tells any drift between them (exit 1). Needs pyyaml (in the dev group) |
 | `prepare_release.py` | Called by the release workflow: sets the version in `pyproject.toml` and `src/wireskein/__init__.py`, and moves `## Unreleased` in `CHANGELOG.md` under the version's heading |
 
 The release steps are in the repository [README](../README.md#release).
