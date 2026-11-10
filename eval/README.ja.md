@@ -57,4 +57,8 @@ cd eval && uv run python convert_real.py      # raw/ -> corpus/real/
 cd eval && uv run python export_synth.py      # 生成器（synth.py、seed で決まる）-> corpus/synth/
 ```
 
-元の場所が違うときは `collect.py --i2c-root DIR --wch-root DIR`。
+元の場所が違うときは `collect.py --i2c-root DIR --wch-root DIR`。I²C のケースは I2CDeviceDB から取りました。今は
+アーカイブされています（読むだけ。作り直すために残す）。`corpus/real/` には、正解ごと変換したものが入っているので、
+評価するのに集め直す必要はありません。新しいケースの正解は、確立した道具（WireSkein の外の復号器やドライバ）か、
+合成したキャプチャ（`synth.py`）から取り、WireSkein 自身の出力からは取りません。EmbedBenchDeviceData の runs/ は
+分析する材料で、正解ではありません（その `cNNNN.i2c.json` は WireSkein の復号です）。

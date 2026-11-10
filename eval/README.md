@@ -57,4 +57,8 @@ cd eval && uv run python convert_real.py      # raw/ -> corpus/real/
 cd eval && uv run python export_synth.py      # the generator (synth.py, seeded) -> corpus/synth/
 ```
 
-If the sources live elsewhere: `collect.py --i2c-root DIR --wch-root DIR`.
+If the sources live elsewhere: `collect.py --i2c-root DIR --wch-root DIR`. The I²C cases come from I2CDeviceDB, now
+archived (read only, kept for rebuilding); `corpus/real/` already holds them converted, with their truth, so
+nothing needs collecting to evaluate. Truth for new cases comes from an established tool (a decoder or driver
+outside WireSkein) or from synthetic captures (`synth.py`), never from WireSkein's own output: EmbedBenchDeviceData's
+runs/ are material to analyse, not truth (their `cNNNN.i2c.json` is WireSkein's decode).

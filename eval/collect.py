@@ -5,6 +5,9 @@ raw/manifest.json with its origin, source repository commit and SHA-256,
 so the set can be rebuilt or audited later. Source files are only read.
 
     python3 eval/collect.py [--i2c-root DIR] [--wch-root DIR]
+
+I2CDeviceDB is archived: read from the archive, only to rebuild corpus/real (which already holds its cases with
+their truth). EmbedBenchDeviceData keeps no record of the bus host's transfers, so its runs give no truth.
 """
 
 from __future__ import annotations
