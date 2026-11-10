@@ -354,6 +354,10 @@ def reading(out: dict, frames: list, cap: Capture, b: dict) -> dict:
     if clk:
         r.update(noise(cap, clk, [p for k, p in b["pins"].items() if k != "clk"]))
         _shares(r)
+    if b.get("protocol") == "i2c" and {"scl", "sda"} <= set(b["pins"]):
+        # SDA changing in the same sample as an SCL edge: setup or hold under a sample (verify's same_sample)
+        same = timing.i2c_same_sample(cap.channel(b["pins"]["scl"]), cap.channel(b["pins"]["sda"]))
+        r["same_sample"] = len(same)
     return r
 
 
@@ -391,7 +395,8 @@ def _note_undersampled(claims: list, cap: Capture, res) -> None:
         frames = _frame_items(_exp.layers_of(n), n)
         frame_clocks(cap, clk, frames)
         speeds = clock_speeds(float(cap.rate), frames)
-        c["reading"] = reading({"clock_speeds": speeds}, frames, cap, {"pins": c.get("roles") or {}})
+        c["reading"] = reading({"clock_speeds": speeds}, frames, cap, {"pins": c.get("roles") or {},
+                                                                        "protocol": c["protocol"]})
         if speeds:
             c["clock_speeds"] = speeds
         us = undersampled(cap, speeds, clk)
@@ -835,6 +840,9 @@ def _piece(pw, spec: dict, head: dict, reanalyze: bool = False, edges: dict | No
             r.update(frames=len(own), ok=sum(1 for x in own if x.get("ok", True) is not False),
                      unanswered=sum(1 for x in own if x.get("answered") is False),
                      restored=sum(1 for x in own if "restored" in x), repaired=sum(1 for x in own if "repaired" in x))
+        if r is not None and "same_sample" in r:         # in the piece's own ticks (summed when joined)
+            same = timing.i2c_same_sample(wcap.channel(b["pins"]["scl"]), wcap.channel(b["pins"]["sda"]))
+            r["same_sample"] = sum(1 for t, _ in same if p.s - p.a <= t < p.e - p.a)
         if r is not None and b["pins"].get("clk"):
             r.update(noise(wcap, b["pins"]["clk"], [q for k, q in b["pins"].items() if k != "clk"],
                            p.s - p.a, p.e - p.a))
@@ -994,6 +1002,8 @@ def _join_bus(per: list, rate: float) -> dict:
             r.update(unread=len(out["uninterpreted"]),
                      unread_edges=int(sum(u.get("edges", 0) for u in out["uninterpreted"])),
                      rate_ok=all(g["rate_ok"] for g in out.get("clock_speeds", [])))
+        if any("same_sample" in x for x in rs):
+            r["same_sample"] = sum(x.get("same_sample", 0) for x in rs)
         if any("glitches" in x for x in rs):
             for key in ("glitches", "glitch_edges", "clock_edges"):
                 r[key] = sum(x.get(key, 0) for x in rs)

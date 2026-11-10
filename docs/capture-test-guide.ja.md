@@ -205,7 +205,7 @@ WireSkein は、キャプチャを読み手に要るものに変えます。サ�
 | `starts({pin: v})` / `ends({pin: v})` | 窓の最初・最後のレベル |
 | `only_moving([pins])` | ほかのキャプチャ対象のピンが動かない。ロジックのチャンネルだけを見る |
 | `pulses(pin, count, period_s, period_rel, width_min_s, width_max_s, level)` | 立ち上がりの数と周期。`period_rel` は相対。`width_min_s` / `width_max_s` を付けると、窓の中で始まって終わる `level`（既定 1）のパルスが、どれもその幅で、`count` はその数（ウォッチドッグのリセット: `count=1`）。窓の端で切れたパルスは、1 本のパルスに数えない。測るもの: `widths_s`、`starts_s` |
-| `i2c(scl, sda, transactions, freq_hz, freq_rel, released, notices, spike_max_s, stretch_min)` | トランザクションの列（アドレス、読み書き、バイト、ACK）、SCL の周波数、終了時に両方 High。トランザクションごとに `start`（`S`、`Sr`）と `end`（`P`、`Sr`）を書けば、それも比べる。クロックの引き延ばしとスパイクは注意（§4.9） |
+| `i2c(scl, sda, transactions, freq_hz, freq_rel, released, notices, spike_max_s, stretch_min)` | トランザクションの列（アドレス、読み書き、バイト、ACK）、SCL の周波数、終了時に両方 High。トランザクションごとに `start`（`S`、`Sr`）と `end`（`P`、`Sr`）を書けば、それも比べる。クロックの引き延ばし、SCL と同じサンプルでの SDA の変化、スパイクは注意（§4.9） |
 | `spi(clk, mosi, miso, cs, mode, mosi_bytes, miso_bytes, freq_hz, freq_rel, bit_order, cs_active, bits, notices, setup_min_s, hold_min_s, edge_sample)` | モード、両方向のバイト、SCK の周波数、最後に CS が High。モードは線から読む（§4.5）。`cs` があれば、CS の窓ごとのクロックの数（`frame_bits`。`bits` で比べる）、窓の中で SCK のレベルが中央値の半分より短くないこと（グリッチ）、データ線ごとのサンプルの辺の前後の余裕（`margins`。`setup_min_s` / `hold_min_s` で下限）、受け手が読めるモードの一覧 `modes_ok`（§4.5）。CS が非アクティブのあいだの SCK の動きと、クロックの無い窓は注意（§4.9） `edge_sample="before"`: データの線がサンプルの縁と同じサンプルで変わったとき、縁のあとの変化として扱う（縁は前の値を読む）。部品の出力のホールドが、取り込みの 1 サンプルより短いとデータシートで分かっているときに使う（CH32V103 の SPI スレーブ: th(SO) 15 ns、40 MS/s で）。そのとき `margins` は、そのホールドを `hold_under_sample` と `sample_s` で示す。バイトはどちらでも、サンプルの縁の直前で読む クロックより粗い刻みで取った CS（プローブの帯域を節約するため）は、アクティブになるのが最大 1 サンプル遅れて見える: その窓は、その分早く始まるものとする（SPI のクロックは CS の中だけ）。`cs_sample_s` に CS の 1 サンプルの長さを出す。CS の 1 サンプルより近いフレームどうしは、つながって見える（その間の CS の変化が見えない） |
 | `uart(pin, baud, data, baud_rel, idle, bits, parity, stop, errors)` | ボーレート、バイト列、アイドルレベル、フレームとパリティのエラー（下記） |
 | `rs485(tx, de, baud, data, ..., de_active, lead_min_s, lead_max_s, tail_min_s, tail_max_s)` | TX の UART を `uart` と同じに読み、その周りの半二重のドライバの許可（DE）を見る（§4.2）。どの文字も DE がアクティブな中か、窓ごとの前と後の余裕 |
@@ -380,6 +380,7 @@ sd_spi("PA5", "PA7", "PA6", "PA4", [{"cmd": 0, "r1": 0x01}, {"cmd": 8, "arg": 0x
 | --- | --- | --- |
 | `rgb_led` | `latch_short` | フレームの間の low が、`reset_min_s` には足りるが `latch_safe_s` より短い（280 us。WS2812B-V5 などの後の部品は、それより長くないと確定しない。`length_ticks`、`safe_ticks`）。`latch_safe_s=None` なら探さない |
 | `i2c` | `scl_stretch` | SCL がいつもの low の `stretch_min`（2）倍より長く low（下がった所。`length_ticks`、`usual_ticks`）。ターゲットのクロックの引き延ばしか、コントローラがバイトの間で止まったもの。数は `stretches` |
+| `i2c` | `same_sample` | SDA が SCL の縁と同じサンプルで変わった（`scl`: `rise` はセットアップが 1 サンプル未満、`fall` はホールド）。順が見えず、SCL が high の間の SDA の変化、つまり無い START や STOP に読めることがある（何も復号されない、転送が切れる）。コントローラの波形か、それに対して低すぎるレート。数は `same_sample`。読みが合わないときは理由にも書く |
 | `i2c` | `bus_glitch` | SCL か SDA の、`spike_max_s`（50 ns。I2C の入力が取り除くスパイク）より短いパルス（`line`、`level`、`width_ticks`）。キャプチャがそれを分解できるときだけ見える。数は `spikes` |
 | `spi`（`cs` あり） | `sck_outside_cs` | CS が非アクティブのあいだに SCK が動いた（その間の最初の変化の所。`count`: 変化の数）。ほかの機器と共有するバスでは正しい動き。設定し直しの余分な変化もここに出る |
 | `spi`（`cs` あり） | `empty_cs_window` | クロックの無い、CS がアクティブの窓（CS がアクティブになった所。`length_ticks`） |

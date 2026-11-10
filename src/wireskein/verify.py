@@ -447,6 +447,14 @@ def check_i2c(cap, x):
     got["notices"] = _i2c_notices(cap, scl, sda, x.get("spike_max_s", 50e-9), x.get("stretch_min", 2.0))
     got["stretches"] = sum(1 for k in got["notices"] if k["kind"] == "scl_stretch")
     got["spikes"] = sum(1 for k in got["notices"] if k["kind"] == "bus_glitch")
+    same = [k for k in got["notices"] if k["kind"] == "same_sample"]
+    got["same_sample"] = len(same)
+    if same and why:                                 # a reading that went wrong: say what the lines did
+        k = same[0]
+        why.append(f"SDA changed in the same sample as SCL {'rose' if k['scl'] == 'rise' else 'fell'} {len(same)} "
+                   f"times (first at tick {k['tick']}): its {'setup' if k['scl'] == 'rise' else 'hold'} time is "
+                   f"under a sample ({1e9 / cap.rate:.3g} ns), so the change may read as SDA moving while SCL is "
+                   f"high (a START or STOP that is not there): the controller's waveform, or a rate too low for it")
     if x.get("freq_hz") is not None and (hz is None or abs(hz / x["freq_hz"] - 1) > x["freq_rel"]):
         ok = False
         why.append(f"SCL {hz and round(hz)} Hz vs {x['freq_hz']}")
@@ -461,7 +469,8 @@ def check_i2c(cap, x):
 
 def _i2c_notices(cap, scl, sda, spike_s: float, stretch: float) -> list[dict]:
     """SCL held low more than `stretch` times its usual low (a target stretching the clock, or the controller
-    pausing), and pulses on either line shorter than spike_s (I2C's spikes, which inputs suppress: 50 ns)."""
+    pausing), SDA changing in the same sample as an SCL edge (its setup or hold under a sample), and pulses on either
+    line shorter than spike_s (I2C's spikes, which inputs suppress: 50 ns)."""
     out = []
     start, length, level = scl.runs(cap.n_samples)
     inner = slice(1, len(length) - 1)                  # the first and last runs are cut by the window
@@ -472,6 +481,9 @@ def _i2c_notices(cap, scl, sda, spike_s: float, stretch: float) -> list[dict]:
             if lv == 0 and n > stretch * usual:
                 out.append({"kind": "scl_stretch", "tick": int(a), "length_ticks": int(n),
                             "usual_ticks": int(round(usual))})
+    # SDA changing in the same sample as an SCL edge: its setup (SCL rising) or hold (SCL falling) under a sample
+    for t, edge in timing.i2c_same_sample(scl, sda):
+        out.append({"kind": "same_sample", "tick": t, "scl": edge})
     lim = spike_s * cap.rate
     for name, ch in (("scl", scl), ("sda", sda)):
         st, ln, lv = ch.runs(cap.n_samples)

@@ -83,3 +83,21 @@ def test_a_spike_on_sda_while_scl_low_is_a_glitch_and_still_reads():
     assert ok is True and [(n["kind"], n["line"]) for n in found] == [("bus_glitch", "sda")], (why, found)
     assert found[0]["width_ticks"] <= 2
 
+
+
+def test_sda_changing_in_the_same_sample_as_scl_is_told():
+    # the first data bit's SDA change put on the very sample SCL rises (a controller whose setup is under a sample):
+    # SDA reads as moving while SCL is high, and the reason says why nothing matches
+    cap = lines(0x42, [0x10, 0x20, 0x30])
+    scl, sda = cap.channels
+    e = sda.edges.copy()
+    k = 1                                                # e[0] is START; e[1] the first data change
+    rise = int(scl.edges[np.searchsorted(scl.edges, e[k])])
+    e[k] = rise
+    bad = Capture(cap.rate, cap.n_samples, [scl, Channel("SDA", 1, e)])
+    ok, got, why, found = run(bad)
+    same = [n for n in found if n["kind"] == "same_sample"]
+    assert same and same[0]["tick"] == rise and same[0]["scl"] == "rise" and got["same_sample"] == 1
+    assert ok is False and "same sample as SCL rose" in why
+    ok, got, _, _ = run(cap)                             # the clean line: none
+    assert ok and got["same_sample"] == 0

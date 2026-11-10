@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- (EN) I2C: SDA changing in the same sample as an SCL edge (its setup or hold under a sample, so it may read as a START or STOP that is not there, and nothing decodes) is told: the `i2c()` check's notice `same_sample` (`scl`: rise / fall), named in a failed check's reason, and decode's `reading.same_sample` with a `waveform:` line on stderr.
+- (JA) I2C: SDA が SCL の縁と同じサンプルで変わった所（セットアップかホールドが 1 サンプル未満。無い START や STOP に読め、何も復号されないことがある）を知らせる: `i2c()` の照合の注意 `same_sample`（`scl`: rise / fall）、照合が合わないときは理由にも書く。decode の `reading.same_sample` と、stderr の `waveform:` の行。
+
 - (EN) tools/knowledge_decl.py (moved here from EmbedBenchDeviceData, whose knowledge it reads: `--devicedata DIR` or `WIRESKEIN_DEVICEDATA`) generates the I²C device definitions, and `--check` tells any drift between them and the knowledge (`tests/test_knowledge_decl.py`, run when `WIRESKEIN_DEVICEDATA` is set). pyyaml in the dev group.
 - (JA) tools/knowledge_decl.py（EmbedBenchDeviceData から移した。その知識を読む: `--devicedata DIR` か `WIRESKEIN_DEVICEDATA`）が I²C のデバイスの定義を作り、`--check` が知識とのずれを示す（`WIRESKEIN_DEVICEDATA` があれば `tests/test_knowledge_decl.py` が流す）。dev の依存に pyyaml。
 

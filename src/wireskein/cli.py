@@ -236,6 +236,10 @@ def _warn_undersampled(doc: dict, items: list) -> None:
                 print(f"    {g['freq_hz'] / 1e6:.3g} MHz (high {g['high_ns']:g} ns, low {g['low_ns']:g} ns): "
                       f"{g['frames']} frames, ticks {g['s']}..{g['e']}" + ("" if g["rate_ok"] else ", too fast"),
                       file=sys.stderr)
+        if r.get("same_sample"):
+            print(f"  waveform: SDA changed in the same sample as an SCL edge {r['same_sample']} times (setup or hold "
+                  f"under a sample): it may read as a START or STOP that is not there; the controller's waveform, or "
+                  f"a rate too low for it", file=sys.stderr)
         if r.get("noisy"):
             what = [f"{r['glitch_share']:.1%} of the clock's changes are glitches"] if r.get("glitch_share") else []
             what += [f"{v:.1%} of {k}'s are ringing" for k, v in (r.get("ringing_share") or {}).items() if v]

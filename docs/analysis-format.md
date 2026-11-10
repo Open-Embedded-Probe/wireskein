@@ -103,7 +103,9 @@ the lines fit, whether analyze would have claimed it, and what was not read or n
   (`clock_edges`, `data_edges`) and the changes in them (`glitch_edges`, `ringing_edges`), and their share:
   `glitch_share`, `ringing_share`
   (data line → share), `noisy` when one is over 1 %: noise, a reflection, a neighbouring line picked up or a ground
-  far away. A count grows with the capture; the share is what to judge by. analyze's claims give it too, without `unread`. In pieces, the counts are each piece's in its
+  far away. A count grows with the capture; the share is what to judge by. For I2C also
+  `same_sample`: how often SDA changed in the same sample as an SCL edge (its setup or hold under a sample: it may
+  read as a START or STOP that is not there; the controller's waveform, or a rate too low for it). analyze's claims give it too, without `unread`. In pieces, the counts are each piece's in its
   own ticks, summed.
 - `clock_speeds` (a clocked bus): the speeds its clock ran at, from the frames it read (each frame's `period_ns`
   and `high_ns`, medians over its clocks, so a reflection's glitch does not count, are on the frame): frames whose

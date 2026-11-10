@@ -336,3 +336,18 @@ def spi_mode(clk: Channel, data: list[Channel], n: int, cs: Channel | None = Non
         cpha = (1 if lead > trail else 0) if lead != trail else (0 if before and not lead else None)
         votes[ch.name] = {"after_leading": lead, "after_trailing": trail, "before_first": before, "cpha": cpha}
     return {"windows": len(wins), "cpol": cpol, "cpol_votes": cpols, "lines": votes}
+
+
+def i2c_same_sample(scl, sda) -> list[tuple[int, str]]:
+    """(tick, "rise" / "fall") where SDA changed in the same sample as SCL rose or fell: SDA's setup before SCL rises,
+    or its hold after SCL falls, is under a sample. A decoder cannot tell the order there, and SDA may read as moving
+    while SCL is high (a START or STOP that is not there)."""
+    if scl.step != 1 or sda.step != 1:
+        return []
+    e = np.asarray(scl.edges, np.int64)
+    lv = scl.initial ^ ((np.arange(len(e)) + 1) & 1)        # the level after each change
+    both = np.intersect1d(e, np.asarray(sda.edges, np.int64))
+    if not len(both):
+        return []
+    k = np.searchsorted(e, both)
+    return [(int(t), "rise" if lv[i] == 1 else "fall") for t, i in zip(both.tolist(), k.tolist())]
