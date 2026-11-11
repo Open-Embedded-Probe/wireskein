@@ -15,3 +15,4 @@
 | [独自のプロトコル](protocols.ja.md) | プロトコルを分析と検査に足す: UART、SPI、I2C に乗るもの（Python）、線そのものの上のもの（TOML の定義）。それぞれ見本つき |
 | [マーカー](markers.ja.md) | 見出し型のマーカーと区間の規則 |
 | [キャプチャで試験する](capture-test-guide.ja.md) | 試験の記録の作り方、キャプチャの窓、検査の一覧、許容誤差の決め方 |
+| [WeAct の U3 ロジックアナライザー](instruments/weact-u3-logic-analyzer.ja.md) | WeAct の CH32H417 のロジアナとそのアプリを調べた結果: ソースとライセンス、USB の通信、保存する `.sr`、WireSkein との組み合わせ方 |
