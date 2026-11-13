@@ -8,7 +8,7 @@ WireSkein が読めるのは、キャプチャにあるものだけです。バ�
 
 ## 1. 流れ
 
-1. **取って、decode か analyze をかける。** バスごとに、どう読めたかを stderr に出します。
+1. **取って、`decode` か `analyze` をかける。** バスごとに、どう読めたかを stderr に出します。
 
    ```
    rvswd(clk=SWCLK, dio=SWDIO): 1736 frames read, 1323 ok, 404 unanswered, 33 with a lost clock restored

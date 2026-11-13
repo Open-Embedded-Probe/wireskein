@@ -403,7 +403,7 @@ UTF-8 の JSON のオブジェクトです。
 
 - **sigrok の `.sr`**: 全チャンネルで 1 つのレートです。書き出すときは、遅いチャンネルを刻みのレートに水増しします。各チャンネルの `step` と `phase`、正確な `tick_hz`、`id`、`meta` は、`.sr` の中の `wireskein/sr-extra.json`（`"format": "wireskein-sr-extra/1"`）に入れます。添付とメモと知らない項目（§2.2）も、同じ名前で `.sr` に入れます（知らない項目の名前は `wireskein/sr-extra.json` の `extras` に並べます）。sigrok は、どれも無視します。WireSkein は、これらを読み戻して、元のキャプチャを復元します。
   - 書き出しは、ロジック 32 チャンネルまでです。
-  - `.sr` を 1 つのレートで書くのは、sigrok がレートの違うデバイス（`[device N]`）を複数持つ `.sr` を正しく読めないためです（sigrok-cli 0.7.2 で確かめた）。sigrok は知らない項目を無視するので、本当のレートは同梱の `wireskein/sr-extra.json` で持ち運べます。
+  - `.sr` を 1 つのレートで書くのは、sigrok がレートの違うデバイス（`[device N]`）を複数持つ `.sr` を正しく読めないためです（sigrok-cli 0.7.2）。sigrok は知らない項目を無視するので、本当のレートは同梱の `wireskein/sr-extra.json` で持ち運べます。
   - **アナログ**: `.sr` のアナログは、電圧の float32 で、ロジックと同じレートです。
     - 読むときは、`analog-f32`（`rate_hz` は `.sr` のレート、`t0_ticks` は 0）にします。
     - 書くときは、サンプルの時刻が刻みにそろう（`tick_hz / rate_hz` と `t0_ticks` が整数）チャンネルだけを書き、遅いものは刻みのレートに水増しします。そろわないチャンネルがあれば、断ります。

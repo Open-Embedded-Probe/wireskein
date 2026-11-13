@@ -61,8 +61,8 @@ window; inside it the cut goes where the lines are quiet:
   protocol's turnaround, with frames back to back and gaps between them no longer than it, as a LinkE polling SDI). An
   item read twice is kept by the piece whose own ticks it starts in.
 
-The remainder after the last cut starts the next window. A decode spec's buses and lines are the ones looked at for
-quiet; `analyze` looks at every line.
+The remainder after the last cut starts the next window. A decode spec's buses and its `lines` are the ones looked at
+for quiet; `analyze` looks at every line.
 
 `analyze` takes the roles from the first piece that holds any (its claims confirmed or likely; up to `roles_from`
 pieces), then decodes every piece with them; with none, `split.no_roles` says so.
@@ -110,8 +110,8 @@ piece's, with every piece's score in `fit.pieces`. Claims on pins the spec does 
 
 ## 4. Items written out
 
-What a long capture decodes is more than memory holds (1.28 million DMI accesses from 38 s of a LinkE). `--items
-FILE` (Python: `items=`) writes them as they are read, one JSON object a line:
+What a long capture decodes is more than memory holds (1.28 million DMI accesses from 38 s of a LinkE).
+`--items FILE` (Python: `items=`) writes them as they are read, one JSON object a line:
 
 ```json
 {"part": 0, "bus": 0, "layer": "dmi", "s": 5512646, "e": 5524342, "op": "R", "addr": 4, ...}

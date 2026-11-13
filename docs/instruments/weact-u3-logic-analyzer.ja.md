@@ -8,13 +8,13 @@ WeAct Studio の Logic Analyzer V2（CH32H417、USB 3.0、200 MHz × 16 本）�
 - アプリ: [WeActStudio.U3LogicAnalyzer](https://github.com/WeActStudio/WeActStudio.U3LogicAnalyzer)（commit 54a6d9b、2026-10-28）。
 - 本体: [WeActStudio.LogicAnalyzerV2](https://github.com/WeActStudio/WeActStudio.LogicAnalyzerV2)（commit 2d10d93、2026-11-10）。
 
-実機ではまだ試していません。下の内容は、ソースと README から読んだものです。
+下の内容は、ソースと README から読んだものです。
 
 ## 要点
 
 - アプリは sigrok（libsigrok、libsigrokdecode、PulseView）の改変版で、GPL-3.0-or-later でソースが公開されています。
 - 保存は sigrok の普通の `.sr`（srzip）です。WireSkein はそれをそのまま読めます。
-  - この改変版の形をまねた `.sr` で確かめました。16 本・2 バイトで 187.5 MHz、8 本・1 バイトで 78.125 MHz の 2 つです。
+  - 16 本は 2 バイト、8 本は 1 バイトのサンプルで、`samplerate` は `187.5 MHz` のような端数のある書き方です。どちらも WireSkein の読み込みが扱う形です。
 - 本体との通信は単純です。
   - コマンドは 64 バイトのパケットで送り、答えは 32 バイトで返ります。
   - サンプルは、ヘッダーの無い生のバルク転送で流れてきます。
@@ -32,7 +32,7 @@ WeAct Studio の Logic Analyzer V2（CH32H417、USB 3.0、200 MHz × 16 本）�
   - libusb 版のドライバーは WeAct Studio の著作です。
 - ハードウェアのドライバーは 4 つに絞ってあります。
   - `wch-ch32h417`: Windows の CH375DLL / CH375WDM.sys を使います。Windows だけです。
-  - `wch-ch32h417-libusb`: libusb を使います。Linux で動き、Windows では Zadig で WinUSB に差し替えれば動きます。macOS では確かめていないそうです。
+  - `wch-ch32h417-libusb`: libusb を使います。Linux で動き、Windows では Zadig で WinUSB に差し替えれば動きます。macOS には移植されていません（README）。
   - `fx2lafw`: 公式 sigrok と同じものです。
   - `demo`
 - 改変は次の所にあります。
@@ -144,7 +144,7 @@ WeAct Studio の Logic Analyzer V2（CH32H417、USB 3.0、200 MHz × 16 本）�
      - 設定した時間と、ファイルの長さを比べることもできます。
 2. **sigrok-cli を組み立てて、コマンドラインから取り込む。**
    - リポジトリが入れる libsigrok（`install/`）に対して、公式の sigrok-cli を組み立てれば、このドライバーで取れるはずです。
-   - 独自のキーを sigrok-cli が扱えるかは確かめていません。
+   - 独自のキーを sigrok-cli が扱えるかは分かりません。
    - 試験の中で自動で取り込みたいときの道です。
 3. **本体を WireSkein から直接動かす（`wireskein.sources` に取り込み元を足す）。**
    - 上のとおり通信は単純で、libusb があれば書けます。
@@ -167,5 +167,4 @@ WeAct Studio の Logic Analyzer V2（CH32H417、USB 3.0、200 MHz × 16 本）�
 - 2 本・4 本を選んだとき、データのどのビットにチャンネルが入るか。
   - ドライバーは幅だけを変え、ビット n をチャンネル n として扱っています。
 - 公式の sigrok に取り込まれる予定があるか。
-- 実機の `.sr` を WireSkein で読むこと（確かめたのは、この改変版の形をまねたファイルだけ）。
 - ADC のモード（`01` の機種だけ。V2 には ADC がありません）。

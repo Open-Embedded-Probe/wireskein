@@ -296,8 +296,11 @@ wireskein convert long.sr part.wireskein --from 0.1 --to 0.5   # 一部を切り
 wireskein analyze capture.wireskein          # WireSkein のファイル、sigrok の .sr、VCD
 wireskein analyze capture.sr --hint '{"protocols": ["i2c"]}'
 wireskein analyze m.wireskein --threshold TX=1.0,2.3        # アナログのチャンネルも、ロジックとして読んで復号する
+wireskein analyze capture.sr --mode all --out result.json
 wireskein segments capture.sr --results                   # UART にマーカーの行を流したキャプチャ
 ```
+
+`--hint` は、試すものを絞ります。プロトコルの名前や、ピンとその役割、ボーレートを渡せます。結果は、それでもデコーダー自身の検査で採点します。
 
 配線が分かっているとき（部品をバスで動かした記録など）は、`wireskein decode` が、指定したバスをその役割のとおりに復号します。短いケースで証拠が少なくても出します。キャプチャの区間ごとに、読めなかった所と落ちた所も一緒に出します（[docs/analysis-format.ja.md](docs/analysis-format.ja.md)）:
 
@@ -309,7 +312,8 @@ wireskein decode c0001.wireskein --spec '{"buses": [{"protocol": "i2c", "pins": 
 from wireskein.decode import load, save, analyze, export
 
 cap = load("capture.wireskein")                                     # .sr や .vcd も
-doc = export(analyze(cap, {"protocols": ["spi"]}), cap)
+res = analyze(cap, {"protocols": ["spi"]})
+doc = export(res, cap)
 ```
 
 `decode` と `analyze` は、バスごとに、どう読めたかを stderr に出します。読めたフレームとそのうち検査の合ったもの、

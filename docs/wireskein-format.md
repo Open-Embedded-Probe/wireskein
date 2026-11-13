@@ -403,7 +403,7 @@ Row:
 
 - **sigrok `.sr`**: one rate for all channels. On export, slow channels are padded to the tick rate. Each channel's `step` and `phase`, the exact `tick_hz`, `id` and `meta` go into `wireskein/sr-extra.json` inside the `.sr` (`"format": "wireskein-sr-extra/1"`). Attachments, notes and unknown entries (§2.2) also go into the `.sr` under the same names (the names of unknown entries are listed in `extras` of `wireskein/sr-extra.json`). sigrok ignores all of them. WireSkein reads them back and restores the original capture.
   - Export supports up to 32 logic channels.
-  - The `.sr` is written at one rate because sigrok cannot correctly read an `.sr` with multiple devices (`[device N]`) at different rates (confirmed with sigrok-cli 0.7.2). sigrok ignores unknown entries, so the true rates can travel in the bundled `wireskein/sr-extra.json`.
+  - The `.sr` is written at one rate because sigrok cannot correctly read an `.sr` with multiple devices (`[device N]`) at different rates (sigrok-cli 0.7.2). sigrok ignores unknown entries, so the true rates can travel in the bundled `wireskein/sr-extra.json`.
   - **Analog**: `.sr` analog is float32 voltage at the same rate as logic.
     - On read, it becomes `analog-f32` (`rate_hz` is the `.sr` rate, `t0_ticks` is 0).
     - On write, only channels whose sample times line up with the tick (`tick_hz / rate_hz` and `t0_ticks` are integers) are written, and slow ones are padded to the tick rate. If any channel does not line up, the export refuses.

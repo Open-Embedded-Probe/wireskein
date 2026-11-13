@@ -8,13 +8,13 @@ What was read:
 - The application: [WeActStudio.U3LogicAnalyzer](https://github.com/WeActStudio/WeActStudio.U3LogicAnalyzer) (commit 54a6d9b, 2026-10-28).
 - The hardware: [WeActStudio.LogicAnalyzerV2](https://github.com/WeActStudio/WeActStudio.LogicAnalyzerV2) (commit 2d10d93, 2026-11-10).
 
-Nothing here has been tried on the hardware yet. It all comes from the source and the READMEs.
+Everything here comes from the source and the READMEs.
 
 ## In short
 
 - The application is a modified sigrok (libsigrok, libsigrokdecode and PulseView). Its source is public under GPL-3.0-or-later.
 - It saves sigrok's ordinary `.sr` (srzip), which WireSkein reads as it is.
-  - This was tried on `.sr` files made in this fork's shape: 16 lines at 2 bytes and 187.5 MHz, and 8 lines at 1 byte and 78.125 MHz.
+  - 16 lines take 2-byte samples and 8 lines 1-byte ones, and `samplerate` is written with a fraction, like `187.5 MHz`. WireSkein's reading handles both.
 - Talking to the device is simple.
   - Commands go out as 64-byte packets, and answers come back as 32-byte packets.
   - Samples stream in as raw bulk transfers with no header.
@@ -32,7 +32,7 @@ Nothing here has been tried on the hardware yet. It all comes from the source an
   - The libusb driver is copyright WeAct Studio.
 - The hardware drivers are cut down to four:
   - `wch-ch32h417`: uses Windows' CH375DLL / CH375WDM.sys. Windows only.
-  - `wch-ch32h417-libusb`: uses libusb. It runs on Linux, and on Windows after a WinUSB rebind with Zadig. macOS is not verified.
+  - `wch-ch32h417-libusb`: uses libusb. It runs on Linux, and on Windows after a WinUSB rebind with Zadig. It has not been ported to macOS (the README).
   - `fx2lafw`: the same as upstream.
   - `demo`.
 - The changes are in these places:
@@ -144,7 +144,7 @@ The threshold:
      - The duration that was set can also be compared with the file's length.
 2. **Build sigrok-cli and capture from the command line.**
    - Upstream sigrok-cli built against the libsigrok this repository installs (`install/`) should capture through this driver.
-   - Whether sigrok-cli copes with the fork's own keys was not checked.
+   - Whether sigrok-cli copes with the fork's own keys is not known.
    - This is the way to go for capturing automatically during a test.
 3. **Drive the device from WireSkein (a source added to `wireskein.sources`).**
    - As above, the protocol is simple, and it can be written on libusb.
@@ -167,5 +167,4 @@ The recommendation is 1. Whether to drive the device directly is best decided on
 - Where the lines land in the data when 2 or 4 lines are picked.
   - The driver changes only the width and treats bit n as channel n.
 - Whether upstream sigrok will take the driver.
-- Reading a `.sr` from the real device in WireSkein (only files made in this fork's shape were tried).
 - The ADC mode (only on the `01` models; the V2 has no ADC).
