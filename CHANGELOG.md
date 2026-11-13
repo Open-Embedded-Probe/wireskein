@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- (EN) I2C: the `i2c()` check compares the ACK after each data byte, not only the address's: by default a write's bytes are all ACKed and a read's all but the last (the controller's NACK before the STOP); `"nack_at"` (an index or a list) expects a NACK there, `"acks"` gives each. The measured transactions carry `acks`, and a NACKed byte is written `20:NACK` in the reason. A run whose target NACKed a data byte was reported OK before.
+- (JA) I2C: `i2c()` の照合が、アドレスだけでなくデータの各バイトの後の ACK も比べる。既定は、書き込みはすべて ACK、読み込みは最後を除いて ACK（controller が STOP の前に NACK）。`"nack_at"`（番号かリスト）はそこに NACK を期待し、`"acks"` はすべてを与える。測ったトランザクションは `acks` を持ち、NACK を返されたバイトは理由の中で `20:NACK` と書く。これまでは、target がデータのバイトに NACK を返した記録も OK と出ていた。
+
 - (EN) I2C: SDA changing in the same sample as an SCL edge (its setup or hold under a sample, so it may read as a START or STOP that is not there, and nothing decodes) is told: the `i2c()` check's notice `same_sample` (`scl`: rise / fall), named in a failed check's reason, and decode's `reading.same_sample` with a `waveform:` line on stderr.
 - (JA) I2C: SDA が SCL の縁と同じサンプルで変わった所（セットアップかホールドが 1 サンプル未満。無い START や STOP に読め、何も復号されないことがある）を知らせる: `i2c()` の照合の注意 `same_sample`（`scl`: rise / fall）、照合が合わないときは理由にも書く。decode の `reading.same_sample` と、stderr の `waveform:` の行。
 

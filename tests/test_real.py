@@ -48,7 +48,7 @@ def test_i2c_transaction_cut_at_the_window_end():
     x = {"kind": "i2c", "scl": "PC16", "sda": "PC17", "freq_hz": None, "freq_rel": 0.1, "released": True,
          "transactions": [{"addr": 0x42, "rw": "read", "bytes": [0], "complete": False, "pending_bits": [0]}]}
     ok, got, why = check_i2c(cap, x)
-    assert got["transactions"] == [{"addr": 0x42, "rw": "read", "bytes": [0], "ack": True, "complete": False,
+    assert got["transactions"] == [{"addr": 0x42, "rw": "read", "bytes": [0], "ack": True, "acks": [True], "complete": False,
                                     "start": "S", "end": None, "pending_bits": [0]}]      # still open at the end
     assert ok is False and why == "bus not released at the end (SCL=1, SDA=0)"
 

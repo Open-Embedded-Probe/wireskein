@@ -205,7 +205,7 @@ WireSkein は、キャプチャを読み手に要るものに変えます。サ�
 | `starts({pin: v})` / `ends({pin: v})` | 窓の最初・最後のレベル |
 | `only_moving([pins])` | ほかのキャプチャ対象のピンが動かない。ロジックのチャンネルだけを見る |
 | `pulses(pin, count, period_s, period_rel, width_min_s, width_max_s, level)` | 立ち上がりの数と周期。`period_rel` は相対。`width_min_s` / `width_max_s` を付けると、窓の中で始まって終わる `level`（既定 1）のパルスが、どれもその幅で、`count` はその数（ウォッチドッグのリセット: `count=1`）。窓の端で切れたパルスは、1 本のパルスに数えない。測るもの: `widths_s`、`starts_s` |
-| `i2c(scl, sda, transactions, freq_hz, freq_rel, released, notices, spike_max_s, stretch_min)` | トランザクションの列（アドレス、読み書き、バイト、ACK）、SCL の周波数、終了時に両方 High。トランザクションごとに `start`（`S`、`Sr`）と `end`（`P`、`Sr`）を書けば、それも比べる。クロックの引き延ばし、SCL と同じサンプルでの SDA の変化、スパイクは注意（§4.9） |
+| `i2c(scl, sda, transactions, freq_hz, freq_rel, released, notices, spike_max_s, stretch_min)` | トランザクションの列（アドレス、読み書き、バイト、アドレスと各バイトの後の ACK。§4.1）、SCL の周波数、終了時に両方 High。トランザクションごとに `start`（`S`、`Sr`）と `end`（`P`、`Sr`）を書けば、それも比べる。クロックの引き延ばし、SCL と同じサンプルでの SDA の変化、スパイクは注意（§4.9） |
 | `spi(clk, mosi, miso, cs, mode, mosi_bytes, miso_bytes, freq_hz, freq_rel, bit_order, cs_active, bits, notices, setup_min_s, hold_min_s, edge_sample)` | モード、両方向のバイト、SCK の周波数、最後に CS が High。モードは線から読む（§4.5）。`cs` があれば、CS の窓ごとのクロックの数（`frame_bits`。`bits` で比べる）、窓の中で SCK のレベルが中央値の半分より短くないこと（グリッチ）、データ線ごとのサンプルの辺の前後の余裕（`margins`。`setup_min_s` / `hold_min_s` で下限）、受け手が読めるモードの一覧 `modes_ok`（§4.5）。CS が非アクティブのあいだの SCK の動きと、クロックの無い窓は注意（§4.9） `edge_sample="before"`: データの線がサンプルの縁と同じサンプルで変わったとき、縁のあとの変化として扱う（縁は前の値を読む）。部品の出力のホールドが、取り込みの 1 サンプルより短いとデータシートで分かっているときに使う（CH32V103 の SPI スレーブ: th(SO) 15 ns、40 MS/s で）。そのとき `margins` は、そのホールドを `hold_under_sample` と `sample_s` で示す。バイトはどちらでも、サンプルの縁の直前で読む クロックより粗い刻みで取った CS（プローブの帯域を節約するため）は、アクティブになるのが最大 1 サンプル遅れて見える: その窓は、その分早く始まるものとする（SPI のクロックは CS の中だけ）。`cs_sample_s` に CS の 1 サンプルの長さを出す。CS の 1 サンプルより近いフレームどうしは、つながって見える（その間の CS の変化が見えない） |
 | `uart(pin, baud, data, baud_rel, idle, bits, parity, stop, errors)` | ボーレート、バイト列、アイドルレベル、フレームとパリティのエラー（下記） |
 | `rs485(tx, de, baud, data, ..., de_active, lead_min_s, lead_max_s, tail_min_s, tail_max_s)` | TX の UART を `uart` と同じに読み、その周りの半二重のドライバの許可（DE）を見る（§4.2）。どの文字も DE がアクティブな中か、窓ごとの前と後の余裕 |
@@ -226,9 +226,16 @@ WireSkein は、キャプチャを読み手に要るものに変えます。サ�
 
 検査に使うピンがキャプチャにないなど、検査できなかったものは未検査（`unchecked`）です。
 
-### 4.1 I2C の途中で止まったトランザクション
+### 4.1 I2C のトランザクション: ACK と、途中で止まったもの
 
-STOP のないまま窓が終わった最後のトランザクションは `"complete": False` で、最後の完全なバイトの後に打たれたビットを `pending_bits` に持ちます。期待に `complete` を書かなければ完了として比べ、`pending_bits` は書いたときだけ比べます。アドレスの途中で止まったものは `addr` が `None` です。障害の再現試験で「どこで止まったか」を確かめるためのものです。
+トランザクションの `ack` は、アドレスの後の ACK です。データの各バイトの後の ACK も比べます。既定では、書き込みはすべてのバイトに（target が）ACK を返し、読み込みは最後のバイトを除いて（controller が）ACK を返します。controller は STOP の前の最後のバイトに NACK を返します。`"nack_at": 1`（0 から数えた番号か、そのリスト）は、そのバイトの後に NACK、ほかに ACK を期待します。`"acks": [True, False]` は、すべてを与えます。読めたものは `bytes` の横の `acks` に入り、NACK を返されたバイトは、理由の中で `20:NACK` と書きます。
+
+```python
+# 0x42 に 0x20 0x21 を書き、target が 2 バイト目に NACK を返す
+i2c("PC16", "PC17", [{"addr": 0x42, "rw": "write", "bytes": [0x20, 0x21], "nack_at": 1}])
+```
+
+STOP のないまま窓が終わった最後のトランザクションは `"complete": False` で、最後の完全なバイトの後に打たれたビットを `pending_bits` に持ちます。期待に `complete` を書かなければ完了として比べ、`pending_bits` は書いたときだけ比べます。完了しないと期待したトランザクションの ACK は、`nack_at` か `acks` を書いたときだけ比べます。アドレスの途中で止まったものは `addr` が `None` です。障害の再現試験で「どこで止まったか」を確かめるためのものです。
 
 ```python
 # 0x42 から 1 バイト読み、ACK の後に target が SDA を握ったまま

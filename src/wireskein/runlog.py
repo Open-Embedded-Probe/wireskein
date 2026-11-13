@@ -435,6 +435,9 @@ def i2c(scl: str, sda: str, transactions: list[dict] | None = None, freq_hz: flo
         freq_rel: float = 0.1, released: bool = True, notices: dict | None = None, spike_max_s: float = 50e-9,
         stretch_min: float = 2.0, threshold=None) -> dict:
     """transactions: [{"addr": 0x42, "rw": "write", "bytes": [..], "ack": True}], compared in order.
+    "ack" is the ACK after the address. The ACK after each data byte is compared as well: by default a write's
+    bytes are all ACKed and a read's all but the last (the controller's NACK); "nack_at" (an index from 0, or a
+    list) expects a NACK after those bytes and an ACK after the others, "acks" ([True, False, ...]) gives each.
     Optional per transaction: "complete" (default True; False for the last one
     when the window ends before its STOP), "pending_bits" (bits clocked after
     the last whole byte, compared only when given), "start" ("S": a START after a

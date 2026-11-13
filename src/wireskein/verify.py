@@ -387,7 +387,9 @@ def _burst_hz(ch: Channel, rate: float) -> float | None:
 
 def _i2c_tx(t: dict) -> dict:
     out = {"addr": t["addr"], "rw": t["rw"], "bytes": list(t.get("bytes", [])),
-           "ack": bool(t.get("addr_ack")) if t["addr"] is not None else None, "complete": t.get("complete", True),
+           "ack": bool(t.get("addr_ack")) if t["addr"] is not None else None,
+           "acks": [bool(a) for a in t.get("acks", [])],             # each data byte: True ACK, False NACK
+           "complete": t.get("complete", True),
            "start": t.get("start_cond"), "end": t.get("end_cond")}   # S / Sr, and P / Sr (None: still open)
     if not out["complete"]:
         out["pending_bits"] = list(t.get("pending_bits", []))
@@ -399,17 +401,42 @@ def _i2c_want(t: dict) -> dict:
            "ack": bool(t.get("ack", True)) if t["addr"] is not None else None, "complete": bool(t.get("complete", True))}
     if "pending_bits" in t:
         out["pending_bits"] = list(t["pending_bits"])
+    acks = _i2c_want_acks(t, out)
+    if acks is not None:
+        out["acks"] = acks
     for k in ("start", "end"):                       # compared only when the expectation names them
         if k in t:
             out[k] = t[k]
     return out
 
 
+def _i2c_want_acks(t: dict, out: dict) -> list[bool] | None:
+    """The ACK expected after each data byte: "acks" as given, else NACK at the bytes "nack_at" names (an index or a
+    list) and ACK at the others, else by default every byte ACKed except a read's last (the controller's NACK before
+    the STOP). A transaction expected incomplete is compared only when "acks" or "nack_at" is given."""
+    n = len(out["bytes"])
+    if "acks" in t:
+        return [bool(a) for a in t["acks"]]
+    if "nack_at" in t:
+        at = t["nack_at"]
+        at = {at} if isinstance(at, int) else set(at)
+        return [i not in at for i in range(n)]
+    if not out["complete"] or out["addr"] is None:
+        return None
+    return [not (out["rw"] == "read" and i == n - 1) for i in range(n)]
+
+
+def _i2c_bytes(t: dict) -> str:
+    acks = t.get("acks")
+    return " ".join(f"{b:02x}" + ("" if acks is None or i >= len(acks) or acks[i] else ":NACK")
+                    for i, b in enumerate(t["bytes"]))
+
+
 def _i2c_fmt(t: dict) -> str:
     if t["addr"] is None:
         return f"(cut in the address, bits {t.get('pending_bits', [])})"
     s = (f"{t['start']} " if t.get("start") else "") + \
-        f"0x{t['addr']:02x} {t['rw']} [{' '.join(f'{b:02x}' for b in t['bytes'])}]" + ("" if t["ack"] else " NACK") + \
+        f"0x{t['addr']:02x} {t['rw']} [{_i2c_bytes(t)}]" + ("" if t["ack"] else " NACK") + \
         (f" {t['end']}" if t.get("end") else "")
     if not t["complete"]:
         s += f" incomplete (pending bits {t.get('pending_bits', [])})"

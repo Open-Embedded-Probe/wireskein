@@ -107,7 +107,7 @@ OK  test_pwm/duty=0  level  c0003.wireskein
 | `starts({pin: v})` / `ends({pin: v})` | 最初 / 最後のサンプルでのレベル |
 | `only_moving([pins])` | 取ったほかのピンが動かない |
 | `pulses(pin, count, period_s, period_rel)` | 立ち上がりの数と周期（`period_rel` は相対） |
-| `i2c(scl, sda, transactions, freq_hz, freq_rel, released)` | 取引（アドレス、向き、バイト、ACK、`complete`）、SCL の速さ、終わりにバスが離されていること |
+| `i2c(scl, sda, transactions, freq_hz, freq_rel, released)` | 取引（アドレス、向き、バイト、アドレスと各バイトの後の ACK、`complete`）、SCL の速さ、終わりにバスが離されていること |
 | `spi(clk, mosi, miso, cs, mode, mosi_bytes, miso_bytes, freq_hz)` | モード、両方の線のバイト、SCK の速さ、終わりに CS が High |
 | `uart(pin, baud, data, baud_rel, idle, bits, parity, stop, errors)` | エッジから測ったビットレート、データ、アイドルのレベル、フレーミング / パリティの誤り。`baud=None` は測るだけ |
 | `voltage(pin, level_v, level_abs_v, level_min_v, level_max_v, ripple_max_v)` | アナログのチャンネル: 平均が `level_v` ± `level_abs_v`、すべてのサンプルが `level_min_v`..`level_max_v`、ピークトゥピークが `ripple_max_v` 以下。与えたものだけを検査する |

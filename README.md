@@ -107,7 +107,7 @@ Headings split the run into a tree of segments. `#` is a test, `##` is a step, a
 | `starts({pin: v})` / `ends({pin: v})` | The level at the first / last sample |
 | `only_moving([pins])` | No other captured pin moves |
 | `pulses(pin, count, period_s, period_rel)` | Number of rising edges and their period (`period_rel` relative) |
-| `i2c(scl, sda, transactions, freq_hz, freq_rel, released)` | Transactions (address, direction, bytes, ACK, `complete`), SCL rate, and a released bus at the end |
+| `i2c(scl, sda, transactions, freq_hz, freq_rel, released)` | Transactions (address, direction, bytes, the ACK after the address and after each byte, `complete`), SCL rate, and a released bus at the end |
 | `spi(clk, mosi, miso, cs, mode, mosi_bytes, miso_bytes, freq_hz)` | Mode, bytes on both lines, SCK rate, and CS high at the end |
 | `uart(pin, baud, data, baud_rel, idle, bits, parity, stop, errors)` | Bit rate measured from the edges, data, idle level, and framing / parity errors. `baud=None` only measures |
 | `voltage(pin, level_v, level_abs_v, level_min_v, level_max_v, ripple_max_v)` | An analog channel: mean within `level_v` ± `level_abs_v`, every sample within `level_min_v`..`level_max_v`, peak-to-peak at most `ripple_max_v`. Only what is given is checked |
