@@ -414,7 +414,17 @@ def i2c_burst_ticks(cap: Capture, scl: str, freq_hz: float | None = None, at=Non
     rises = e[K.edge_levels(e, ch.initial) == 1]
     if len(rises) < 3:
         return 0
-    return np.minimum(K.local_period(rises, np.asarray(at, np.int64)) / 6, tr).astype(np.int64)
+    # the clock's own rises: a bounce's rise, nearer the one before than a quarter of the periods around it (the
+    # median of the 4 before and the 4 after: a clock that changes speed is judged by its own speed there), is not
+    d = np.diff(rises).astype(np.float64)
+    keep = [int(rises[0])]
+    for i, r in enumerate(rises[1:].tolist()):
+        m = float(np.median(d[max(0, i - 4):i + 5]))
+        if r - keep[-1] >= m / 4:
+            keep.append(r)
+    if len(keep) < 3:
+        return 0
+    return np.minimum(K.local_period(np.asarray(keep, np.int64), np.asarray(at, np.int64)) / 6, tr).astype(np.int64)
 
 
 def i2c_input(cap: Capture, scl: str, sda: str, spike_s: float = I2C_SPIKE_S,
