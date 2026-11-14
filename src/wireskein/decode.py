@@ -224,11 +224,11 @@ def _idle(cap: Capture, b: dict, n) -> int:
     return int(round(IDLE_S * cap.rate))
 
 
-# samples in the shorter of a clock's high and low, where it runs fastest: LEAST, none falls between two samples (a
-# WCH-LinkE's highs of 20-25 ns lost clocks at 100 MS/s, 2 samples, and none at 160 MS/s, 4); BEST, its edges timed
-# to a fifth of a half (about 10 samples a period of an even clock)
-LEAST_HALF = 3
-BEST_HALF = 5
+# samples in the shorter of a clock's high and low, where it runs fastest (T): LEAST 5 / T, the least a reading is
+# taken as sure at; BEST 10 / T, the norm; 20 / T is plenty. Under about 3 a half may fall between two samples (a
+# WCH-LinkE's highs of 20-25 ns lost clocks at 100 MS/s, 2 samples, and none at 160 MS/s, 4)
+LEAST_HALF = 5
+BEST_HALF = 10
 
 
 SAME_SPEED = 1.25    # frames whose clock periods are within this of a speed's fastest are of that speed

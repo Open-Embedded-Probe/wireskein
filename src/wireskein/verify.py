@@ -459,7 +459,11 @@ def check_i2c(cap, x):
     scl, sda = _ch(cap, x["scl"]), _ch(cap, x["sda"])
     if scl is None or sda is None:
         return None, {}, "pins not captured"
-    res = _decode(cap, {"protocols": ["i2c"], "pins": {x["scl"]: {"protocol": "i2c", "role": "scl"},
+    # read as an I2C input does: its spike filter leaves out pulses shorter than spike_max_s, and its hysteresis
+    # sees a slow edge crossing the threshold more than once as one (the notices see them all)
+    read, _ = timing.i2c_input(cap, x["scl"], x["sda"], x.get("spike_max_s", timing.I2C_SPIKE_S), x.get("freq_hz"))
+    w = x.get("freq_hz")                             # the slow edges' allowance: from freq_hz, or SCL around each
+    res = _decode(read, {"protocols": ["i2c"], "pins": {x["scl"]: {"protocol": "i2c", "role": "scl"},
                                                         x["sda"]: {"protocol": "i2c", "role": "sda"}}})
     n = _best(res, "i2c", {"scl": x["scl"], "sda": x["sda"]})
     got = {"transactions": [_i2c_tx(t) for t in (n.output.items if n else []) if "addr" in t]}
@@ -471,7 +475,7 @@ def check_i2c(cap, x):
             why.append("transactions differ: " + diff)
     hz = _burst_hz(scl, cap.rate)
     got["scl_hz"] = hz
-    got["notices"] = _i2c_notices(cap, scl, sda, x.get("spike_max_s", 50e-9), x.get("stretch_min", 2.0))
+    got["notices"] = _i2c_notices(cap, scl, sda, x.get("spike_max_s", 50e-9), x.get("stretch_min", 2.0), w)
     got["stretches"] = sum(1 for k in got["notices"] if k["kind"] == "scl_stretch")
     got["spikes"] = sum(1 for k in got["notices"] if k["kind"] == "bus_glitch")
     same = [k for k in got["notices"] if k["kind"] == "same_sample"]
@@ -494,10 +498,12 @@ def check_i2c(cap, x):
     return ok, got, "; ".join(why)
 
 
-def _i2c_notices(cap, scl, sda, spike_s: float, stretch: float) -> list[dict]:
+def _i2c_notices(cap, scl, sda, spike_s: float, stretch: float, burst: float | None = None) -> list[dict]:
     """SCL held low more than `stretch` times its usual low (a target stretching the clock, or the controller
-    pausing), SDA changing in the same sample as an SCL edge (its setup or hold under a sample), and pulses on either
-    line shorter than spike_s (I2C's spikes, which inputs suppress: 50 ns)."""
+    pausing), SDA changing in the same sample as an SCL edge (its setup or hold under a sample), pulses on either
+    line shorter than spike_s (I2C's spikes, which inputs suppress: 50 ns), and an edge on either line crossing the
+    threshold more than once within a third of SCL's half around it (slow_edge: a slow rise through a weak pull-up, or
+    ringing; `burst`: SCL's frequency when given)."""
     out = []
     start, length, level = scl.runs(cap.n_samples)
     inner = slice(1, len(length) - 1)                  # the first and last runs are cut by the window
@@ -517,6 +523,10 @@ def _i2c_notices(cap, scl, sda, spike_s: float, stretch: float) -> list[dict]:
         for a, n, v in zip(st[1:-1], ln[1:-1], lv[1:-1]):
             if n < lim:
                 out.append({"kind": "bus_glitch", "tick": int(a), "line": name, "level": int(v), "width_ticks": int(n)})
+        e = np.asarray(ch.edges, np.int64)
+        for i, j in timing.edge_bursts(ch, timing.i2c_burst_ticks(cap, scl.name, burst, e)):
+            out.append({"kind": "slow_edge", "tick": int(e[i]), "line": name, "changes": j - i + 1,
+                        "span_ticks": int(e[j] - e[i]), "to": int((ch.initial + j + 1) & 1)})
     return sorted(out, key=lambda k: k["tick"])
 
 
@@ -1948,7 +1958,10 @@ NOTICES = {
                                "parts need (WS2812B-V5 and the like: 280 us; length_ticks, safe_ticks)"},
     "i2c": {"scl_stretch": "SCL held low longer than its usual low (a target stretching the clock, or the controller "
                            "pausing; length_ticks, usual_ticks)",
-            "bus_glitch": "a pulse on SCL or SDA shorter than spike_max_s, which inputs suppress (line, width_ticks)"},
+            "bus_glitch": "a pulse on SCL or SDA shorter than spike_max_s, which inputs suppress (line, width_ticks)",
+            "slow_edge": "an edge on SCL or SDA crossing the threshold more than once within a third of SCL's half and t_r (1 us): the "
+                         "line's own problem, a slow rise through a weak pull-up or ringing, read as one edge at its "
+                         "last change as an input with hysteresis does (line, changes, span_ticks, to: 1 a rise)"},
     "spi": {"sck_outside_cs": "SCK moved while CS was inactive (count: its edges in that stretch)",
             "empty_cs_window": "a window of CS active with no clock",
             "mode_ambiguous": "the bytes read the same in more than one mode (candidates: those modes)"},
@@ -1964,6 +1977,121 @@ NOTICES = {
 }
 
 
+LEAST_SAMPLES = 5      # samples in T, the shortest length a check looks at, below which it is not answered: a
+BEST_SAMPLES = 10      # time read from edges is sure to a sample, 1 / k of T (eval/rates.py; docs/capturing.md §2)
+
+
+def _sps(r: float) -> str:
+    for unit, f in (("GS/s", 1e9), ("MS/s", 1e6), ("kS/s", 1e3), ("S/s", 1)):
+        if r >= f * 0.9995 or unit == "S/s":
+            return f"{r / f:.3g} {unit}"
+
+
+def _short_half(cap, pin: str) -> float | None:
+    """The shorter of a line's median high and median low, in seconds (its first and last runs left out), or None."""
+    ch = _ch(cap, pin)
+    h = timing.short_half(ch, cap.n_samples) if ch is not None else None
+    return h / float(cap.rate) if h else None
+
+
+def _lengths(cap, x: dict, got: dict) -> list[tuple]:
+    """The lengths a check looks at: (what, T in s, whole, notice kind). whole: the check answers on it (below the
+    least it is unchecked); otherwise a part of it (below the least, told as a notice; unchecked when the
+    expectation limits that notice kind)."""
+    k = x["kind"]
+    rows = []
+
+    def half(pin, what):
+        h = _short_half(cap, pin) if pin else None
+        if h:
+            rows.append((what, h, True, None))
+
+    if k == "i2c":
+        half(x["scl"], "SCL's shorter half")
+        rows.append(("a spike (spike_max_s)", float(x.get("spike_max_s") or 50e-9), False, "bus_glitch"))
+    elif k in ("spi", "sd_spi", "qspi"):
+        half(x["clk"], "SCK's shorter half")
+        for key, what in (("setup_min_s", "the setup bound"), ("hold_min_s", "the hold bound")):
+            if x.get(key):
+                rows.append((f"{what} ({key})", float(x[key]), False, None))
+    elif k in ("uart", "rs485"):
+        baud = x.get("baud") or got.get("baud")
+        if baud:
+            rows.append(("a bit", 1 / float(baud), True, None))
+    elif k == "lin" and x.get("baud"):
+        rows.append(("a bit", 1 / float(x["baud"]), True, None))
+    elif k == "can" and (x.get("bitrate") or got.get("bitrate")):
+        rows.append(("a bit", 1 / float(x.get("bitrate") or got["bitrate"]), True, None))
+    elif k == "i2s":
+        half(x["bclk"], "BCLK's shorter half")
+    elif k == "square":
+        if x.get("duty") is not None and x.get("freq_hz"):
+            d = float(x["duty"])
+            if 0 < d < 1:
+                rows.append(("the wave's shorter half", min(d, 1 - d) / float(x["freq_hz"]), True, None))
+        else:
+            half(x["pin"], "the wave's shorter half")
+    elif k == "pulses":
+        half(x["pin"], "the pulses' shorter half")
+    elif k == "i2c_timing":
+        lim = {n: list(v) for n, v in (timing.I2C_MODES[x["mode"]] if x.get("mode") else {}).items()}
+        for key, v in (x.get("limits") or {}).items():
+            name, side, _ = key.rsplit("_", 2)
+            lim.setdefault(name, [None, None])[side == "max"] = v
+        for name, (lo, hi) in sorted(lim.items()):
+            if name != "f_scl":
+                for side, v in (("min", lo), ("max", hi)):
+                    if v:
+                        rows.append((f"{name} {side} {_si(float(v))}", float(v), False, None))
+    return rows
+
+
+UNDER_RATE = ("a length the check looks at under 5 samples, or within the probe's glitch filter: what it read there "
+              "is not sure (what, t_s, interval_s, samples, whole: the check answers on it, least_rate_hz, "
+              "best_rate_hz, glitch_filter_s)")
+
+
+def _sampling(ok, why: str, got: dict, x: dict, cap) -> tuple:
+    """Each length the check looks at against the capture's sample interval (the coarsest of its pins'), kept in
+    got["sampling"]. The check is always made and its verdict kept: one under LEAST_SAMPLES (or within a probe's
+    glitch filter) is the notice under_rate, with the rate to capture at, so a verdict on a capture too coarse for it
+    is never silent; an expectation that wants it to fail says notices={"under_rate": "ng"}."""
+    rows = _lengths(cap, x, got)
+    if not rows:
+        return ok, why
+    pins = [p for p in _pins_of(x) if _ch(cap, p) is not None]
+    d = max((_ch(cap, p).step for p in pins), default=1) / float(cap.rate)
+    gf = (cap.meta.get("probe") or {}).get("glitch_filter_ns")
+    gf = float(gf) * 1e-9 if gf else None
+    out, under = [], []
+    for what, T, is_whole, kind in rows:
+        n = T / d
+        r = {"what": what, "t_s": T, "samples": round(n, 2), "whole": is_whole}
+        if gf and T <= gf:
+            r["glitch_filter_s"] = gf
+        out.append(r)
+        if n < LEAST_SAMPLES or "glitch_filter_s" in r:
+            under.append((r, kind))
+    got["sampling"] = {"interval_s": d, "lengths": out, "least": LEAST_SAMPLES}
+
+    def say(r):
+        if "glitch_filter_s" in r:
+            return (f"{r['what']} is {_si(r['t_s'])}, within the probe's glitch filter of {_si(r['glitch_filter_s'])}: "
+                    f"not seen")
+        return (f"{r['what']} is {_si(r['t_s'])}, {r['samples']:g} samples of {_si(d)}: under {LEAST_SAMPLES}, not "
+                f"sure at this rate (capture at {_sps(LEAST_SAMPLES / r['t_s'])} or more, "
+                f"{_sps(BEST_SAMPLES / r['t_s'])} best)")
+    for r, kind in under:
+        got.setdefault("notices", []).append({
+            "kind": "under_rate", "tick": 0, "what": r["what"], "t_s": r["t_s"], "interval_s": d,
+            "samples": r["samples"], "whole": r["whole"],
+            "least_rate_hz": float(f"{LEAST_SAMPLES / r['t_s']:.6g}"), "best_rate_hz": float(f"{BEST_SAMPLES / r['t_s']:.6g}"),
+            **({"glitch_filter_s": r["glitch_filter_s"]} if "glitch_filter_s" in r else {})})
+        if ok is False and r["whole"]:                  # a failure read at a rate too low for it: may be the rate's
+            why = "; ".join(filter(None, [why, say(r)]))
+    return ok, why
+
+
 def _notices(ok, why: str, got: dict, x: dict, cap) -> tuple:
     """The notices a check found (window ticks in got["notices"]) at their ticks in the capture part, and the
     verdict with the expectation's limits on them: (ok, why, notices)."""
@@ -1977,7 +2105,7 @@ def _notices(ok, why: str, got: dict, x: dict, cap) -> tuple:
     if got.get("change_tick") is not None:
         got["change_part"], got["change_tick"] = locate(cap.meta, got["change_tick"])
     limits = x.get("notices") or {}
-    known = NOTICES.get(x["kind"], {})
+    known = {**NOTICES.get(x["kind"], {}), "under_rate": UNDER_RATE}      # under_rate: any check (_sampling)
     bad = sorted(set(limits) - set(known))
     if bad:
         return False, "; ".join(filter(None, [why, f"no notice {', '.join(bad)} in {x['kind']} (it finds: "
@@ -2256,6 +2384,7 @@ def _verify(run_dir: Path) -> dict:
                     if ok is False:
                         why = (why + "; " if why else "") + "the section " + " and ".join(
                             {"begin": "began before", "end": "ended after"}[k] for k in clipped) + " the capture"
+                ok, why = _sampling(ok, why, got.get("outer", got), x, cap)
                 ok, why, found = _notices(ok, why, got.get("outer", got), x, cap)
                 if cap.meta.get("time_base_slipped"):
                     # the probe says some samples were taken late: the verdict
@@ -2315,6 +2444,11 @@ def lines(report: dict, ok: bool = False, notices: bool = False) -> list[str]:
         if r["status"] == "ok" and not ok and not (notices and ns):
             continue
         tail = f"  [{len(ns)} notice{'s' if len(ns) != 1 else ''}]" if ns else ""
+        sm = (r.get("measured") or {}).get("sampling") if isinstance(r.get("measured"), dict) else None
+        if sm and sm.get("lengths"):                    # how finely it was seen: the shortest length it answers on
+            s = min(sm["lengths"], key=lambda v: v["samples"] if v.get("whole", True) else 1e9)
+            low = f": under {sm['least']}, not sure" if s["samples"] < sm["least"] else ""
+            tail = f"  [{s['what']} {_si(s['t_s'])}: {s['samples']:g} samples of {_si(sm['interval_s'])}{low}]" + tail
         out.append(f"{MARKS[r['status']]}  {r['path']}  {r['check']}  {r['capture'] or ''}  {r['reason']}".rstrip() + tail)
         if notices:
             for m in ns:

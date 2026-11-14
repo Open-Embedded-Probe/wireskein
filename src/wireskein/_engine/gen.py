@@ -87,16 +87,17 @@ def uart(w: Wave, t: float, data: bytes, baud: float, data_bits=8, parity="none"
 
 
 def i2c(scl: Wave, sda: Wave, t: float, transactions: list[dict], freq: float,
-        stretch: dict[int, float] | None = None, gap: float = 50e-6) -> float:
+        stretch: dict[int, float] | None = None, gap: float = 50e-6, data_at: float = 0.5) -> float:
     """transactions: {addr, rw ('write'|'read'), bytes, nack_at (index or None)}.
     Write bytes are ACKed by the slave unless nack_at; read bytes are ACKed by the
-    master except the last. Clock-high data is stable; SDA changes mid-low."""
+    master except the last. Clock-high data is stable; SDA changes data_at of the way
+    into SCL's low (0.5: mid-low; small: a short hold after SCL falls)."""
     q = 1.0 / freq / 4
     bitno = 0
 
     def bit(v: int) -> None:
         nonlocal t, bitno
-        sda.set(t + q, v)          # change data while SCL low
+        sda.set(t + 2 * q * data_at, v)   # change data while SCL low
         extra = (stretch or {}).get(bitno, 0.0)
         scl.set(t + 2 * q + extra, 1)
         scl.set(t + 4 * q + extra, 0)

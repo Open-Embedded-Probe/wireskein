@@ -24,7 +24,7 @@ the lines fit, whether analyze would have claimed it, and what was not read or n
 | --- | --- |
 | `buses[].protocol` | An analyzer's name (`i2c`, `spi`, `uart`, ...) |
 | `buses[].pins` | Role → channel name. Every pin must be in the capture (else an error). The decode used is the one on exactly these pins |
-| `buses[].params` | Optional. Passed as hints (`baud` for `uart`, ...). For `spi`, `mode` (0–3) picks the sampling edge; without it the mode is read from the lines (capture-test-guide §4.5), `cs_active` for an active-high CS |
+| `buses[].params` | Optional. Passed as hints (`baud` for `uart`, ...). For `spi`, `mode` (0–3) picks the sampling edge; without it the mode is read from the lines (capture-test-guide §4.5), `cs_active` for an active-high CS. For `i2c`, `freq_hz` (SCL's rate) sets how far one slow edge's crossings may spread (a third of its half period, at most 1000 ns, t_r; measured from the clock around each edge without it; none below 5 MS/s). I2C is always read as an I2C input sees it: pulses shorter than 50 ns (t_SP) left out, a slow edge crossing the threshold more than once read as one at its last change (`params.deglitch`: `i2c_input` when that changed anything) |
 | `split` | Optional. How a long part is read in pieces ([long captures](long-captures.md) §3): a dict, `"key=value,..."` or `"off"` |
 | `buses[].layers` | Optional. Lower layers to give in `result` beside the final one, by name (`bits`: every sampling edge `t` and its value; `frames`; SWIO's `pulses`: each pulse's start, width and short/long; `*`: all) |
 | `buses[].idle_s` | Optional. Activity apart by more than this is two bursts (§3.3). Default: 16 bit times of the bus, or 1 ms when it has none |

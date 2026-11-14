@@ -1,0 +1,192 @@
+{
+ "format": "wireskein-run/1",
+ "meta": {
+  "test": "::test_wire_output_only"
+ },
+ "log": [
+  {
+   "host_ns": 2622384465411529,
+   "src": "marker",
+   "text": "# wire output only PA11 PA10",
+   "probe_ns": 24252880127000,
+   "boot_id": 3394634944
+  },
+  {
+   "host_ns": 2622384466926941,
+   "src": "marker",
+   "text": "## rest",
+   "probe_ns": 24252881691000,
+   "boot_id": 3394634944
+  },
+  {
+   "host_ns": 2622384494045228,
+   "src": "marker",
+   "text": "##",
+   "probe_ns": 24252908328000,
+   "boot_id": 3394634944
+  },
+  {
+   "host_ns": 2622384495504853,
+   "src": "marker",
+   "text": "## address 0x42, no target",
+   "probe_ns": 24252910069000,
+   "boot_id": 3394634944
+  },
+  {
+   "host_ns": 2622384499713517,
+   "src": "host",
+   "text": "nack 0x42"
+  },
+  {
+   "host_ns": 2622384610316759,
+   "src": "dut",
+   "text": "NACK 2\r\n"
+  },
+  {
+   "host_ns": 2622384635222097,
+   "src": "marker",
+   "text": "##",
+   "probe_ns": 24253050111000,
+   "boot_id": 3394634944
+  },
+  {
+   "host_ns": 2622384639680231,
+   "src": "marker",
+   "text": "## address 0x13, no target",
+   "probe_ns": 24253054164000,
+   "boot_id": 3394634944
+  },
+  {
+   "host_ns": 2622384640055566,
+   "src": "host",
+   "text": "nack 0x13"
+  },
+  {
+   "host_ns": 2622384660732993,
+   "src": "dut",
+   "text": "NACK 2\r\n"
+  },
+  {
+   "host_ns": 2622384686248265,
+   "src": "marker",
+   "text": "##",
+   "probe_ns": 24253100820000,
+   "boot_id": 3394634944
+  },
+  {
+   "host_ns": 2622384687113380,
+   "src": "marker",
+   "text": "#",
+   "probe_ns": 24253101763000,
+   "boot_id": 3394634944
+  }
+ ],
+ "captures": [
+  {
+   "file": "c0001.wireskein",
+   "host_ns": 2622384419225678,
+   "channels": [
+    "PA11",
+    "PA10"
+   ]
+  }
+ ],
+ "expect": {
+  "wire output only PA11 PA10/rest": {
+   "checks": [
+    {
+     "kind": "starts",
+     "levels": {
+      "PA11": 1,
+      "PA10": 1
+     }
+    },
+    {
+     "kind": "ends",
+     "levels": {
+      "PA11": 1,
+      "PA10": 1
+     }
+    }
+   ]
+  },
+  "wire output only PA11 PA10/address 0x42, no target": {
+   "checks": [
+    {
+     "kind": "i2c",
+     "scl": "PA10",
+     "sda": "PA11",
+     "transactions": [
+      {
+       "addr": 66,
+       "rw": "write",
+       "bytes": [],
+       "ack": false,
+       "start": "S",
+       "end": "P"
+      }
+     ],
+     "freq_hz": null,
+     "freq_rel": 0.1,
+     "released": true,
+     "notices": null,
+     "spike_max_s": 5e-08,
+     "stretch_min": 2.0
+    },
+    {
+     "kind": "starts",
+     "levels": {
+      "PA11": 1,
+      "PA10": 1
+     }
+    },
+    {
+     "kind": "ends",
+     "levels": {
+      "PA11": 1,
+      "PA10": 1
+     }
+    }
+   ]
+  },
+  "wire output only PA11 PA10/address 0x13, no target": {
+   "checks": [
+    {
+     "kind": "i2c",
+     "scl": "PA10",
+     "sda": "PA11",
+     "transactions": [
+      {
+       "addr": 19,
+       "rw": "write",
+       "bytes": [],
+       "ack": false,
+       "start": "S",
+       "end": "P"
+      }
+     ],
+     "freq_hz": null,
+     "freq_rel": 0.1,
+     "released": true,
+     "notices": null,
+     "spike_max_s": 5e-08,
+     "stretch_min": 2.0
+    },
+    {
+     "kind": "starts",
+     "levels": {
+      "PA11": 1,
+      "PA10": 1
+     }
+    },
+    {
+     "kind": "ends",
+     "levels": {
+      "PA11": 1,
+      "PA10": 1
+     }
+    }
+   ]
+  }
+ }
+}

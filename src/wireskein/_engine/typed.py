@@ -133,7 +133,10 @@ class Chars:
 def sample_edge_for(cap, clock: str, data: tuple[str, ...]) -> list[str]:
     """Sample on the clock edge farther from where the data changes. When the
     data changes about midway between both edges there is no evidence here, and
-    both edges are returned as sibling candidates for a later stage to resolve."""
+    both edges are returned as sibling candidates for a later stage to resolve:
+    within 1.3 times, or a sample apart (the distances are whole samples, so a
+    change midway in a half of 5 samples reads 2 from one edge and 3 from the
+    other, either way round by the grid's phase)."""
     c = cap.channel(clock)
     lv = K.edge_levels(c.edges, c.initial)
     rise, fall = c.edges[lv == 1], c.edges[lv == 0]
@@ -144,7 +147,7 @@ def sample_edge_for(cap, clock: str, data: tuple[str, ...]) -> list[str]:
             dr.append(np.median(K.nearest_distance(de, rise)[0]))
             df.append(np.median(K.nearest_distance(de, fall)[0]))
     a, b = float(np.mean(dr or [1])), float(np.mean(df or [0]))
-    if min(a, b) > 0 and max(a, b) / min(a, b) < 1.3:
+    if min(a, b) > 0 and (max(a, b) / min(a, b) < 1.3 or abs(a - b) <= 1):
         return ["rise", "fall"]
     return ["rise" if a >= b else "fall"]
 

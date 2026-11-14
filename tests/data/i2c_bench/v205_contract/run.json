@@ -1,0 +1,550 @@
+{
+ "format": "wireskein-run/1",
+ "meta": {
+  "test": "::test_wire_contract"
+ },
+ "log": [
+  {
+   "host_ns": 2622036664537120,
+   "src": "marker",
+   "text": "# wire PB9 PB8 at 0x42",
+   "probe_ns": 54032668689000,
+   "boot_id": 2838832513
+  },
+  {
+   "host_ns": 2622036671216100,
+   "src": "marker",
+   "text": "## n 1 stop 0",
+   "probe_ns": 54032674997000,
+   "boot_id": 2838832513
+  },
+  {
+   "host_ns": 2622036671806047,
+   "src": "host",
+   "text": "seq 66 1 0"
+  },
+  {
+   "host_ns": 2622036720946250,
+   "src": "dut",
+   "text": "SEQ 0 1 81 0\r\n"
+  },
+  {
+   "host_ns": 2622036735849170,
+   "src": "marker",
+   "text": "##",
+   "probe_ns": 54032739926000,
+   "boot_id": 2838832513
+  },
+  {
+   "host_ns": 2622036738519737,
+   "src": "marker",
+   "text": "## n 1 stop 1",
+   "probe_ns": 54032742594000,
+   "boot_id": 2838832513
+  },
+  {
+   "host_ns": 2622036741755925,
+   "src": "host",
+   "text": "seq 66 1 1"
+  },
+  {
+   "host_ns": 2622036771175943,
+   "src": "dut",
+   "text": "SEQ 0 1 57 0\r\n"
+  },
+  {
+   "host_ns": 2622036784332398,
+   "src": "marker",
+   "text": "##",
+   "probe_ns": 54032788116000,
+   "boot_id": 2838832513
+  },
+  {
+   "host_ns": 2622036787626881,
+   "src": "marker",
+   "text": "## n 2 stop 0",
+   "probe_ns": 54032791818000,
+   "boot_id": 2838832513
+  },
+  {
+   "host_ns": 2622036788868336,
+   "src": "host",
+   "text": "seq 66 2 0"
+  },
+  {
+   "host_ns": 2622036821743653,
+   "src": "dut",
+   "text": "SEQ 0 2 AF9A 0\r\n"
+  },
+  {
+   "host_ns": 2622036838527228,
+   "src": "marker",
+   "text": "##",
+   "probe_ns": 54032842596000,
+   "boot_id": 2838832513
+  },
+  {
+   "host_ns": 2622036841419280,
+   "src": "marker",
+   "text": "## n 2 stop 1",
+   "probe_ns": 54032845579000,
+   "boot_id": 2838832513
+  },
+  {
+   "host_ns": 2622036842712735,
+   "src": "host",
+   "text": "seq 66 2 1"
+  },
+  {
+   "host_ns": 2622036872671250,
+   "src": "dut",
+   "text": "SEQ 0 2 DAE2 0\r\n"
+  },
+  {
+   "host_ns": 2622036889677994,
+   "src": "marker",
+   "text": "##",
+   "probe_ns": 54032893596000,
+   "boot_id": 2838832513
+  },
+  {
+   "host_ns": 2622036893011874,
+   "src": "marker",
+   "text": "## n 3 stop 0",
+   "probe_ns": 54032897263000,
+   "boot_id": 2838832513
+  },
+  {
+   "host_ns": 2622036894446830,
+   "src": "host",
+   "text": "seq 66 3 0"
+  },
+  {
+   "host_ns": 2622036922848689,
+   "src": "dut",
+   "text": "SEQ 0 3 4EF175 0\r\n"
+  },
+  {
+   "host_ns": 2622036939151280,
+   "src": "marker",
+   "text": "##",
+   "probe_ns": 54032942840000,
+   "boot_id": 2838832513
+  },
+  {
+   "host_ns": 2622036944508100,
+   "src": "marker",
+   "text": "## n 3 stop 1",
+   "probe_ns": 54032948641000,
+   "boot_id": 2838832513
+  },
+  {
+   "host_ns": 2622036944869392,
+   "src": "host",
+   "text": "seq 66 3 1"
+  },
+  {
+   "host_ns": 2622036973421230,
+   "src": "dut",
+   "text": "SEQ 0 3 AB54F6 0\r\n"
+  },
+  {
+   "host_ns": 2622036989999630,
+   "src": "marker",
+   "text": "##",
+   "probe_ns": 54032994053000,
+   "boot_id": 2838832513
+  },
+  {
+   "host_ns": 2622036990735555,
+   "src": "marker",
+   "text": "#",
+   "probe_ns": 54032994915000,
+   "boot_id": 2838832513
+  }
+ ],
+ "captures": [
+  {
+   "file": "c0001.wireskein",
+   "host_ns": 2622036642641224,
+   "channels": [
+    "PB9",
+    "PB8"
+   ]
+  }
+ ],
+ "expect": {
+  "wire PB9 PB8 at 0x42/n 1 stop 0": {
+   "checks": [
+    {
+     "kind": "i2c",
+     "scl": "PB8",
+     "sda": "PB9",
+     "transactions": [
+      {
+       "addr": 66,
+       "rw": "write",
+       "bytes": [
+        16
+       ],
+       "ack": true,
+       "start": "S",
+       "end": "Sr"
+      },
+      {
+       "addr": 66,
+       "rw": "read",
+       "bytes": [
+        129
+       ],
+       "ack": true,
+       "start": "Sr",
+       "end": "Sr"
+      },
+      {
+       "addr": 66,
+       "rw": "write",
+       "bytes": [
+        32
+       ],
+       "ack": true,
+       "start": "Sr",
+       "end": "P"
+      }
+     ],
+     "freq_hz": null,
+     "freq_rel": 0.1,
+     "released": true,
+     "notices": null,
+     "spike_max_s": 5e-08,
+     "stretch_min": 2.0
+    },
+    {
+     "kind": "starts",
+     "levels": {
+      "PB9": 1,
+      "PB8": 1
+     }
+    },
+    {
+     "kind": "ends",
+     "levels": {
+      "PB9": 1,
+      "PB8": 1
+     }
+    }
+   ]
+  },
+  "wire PB9 PB8 at 0x42/n 1 stop 1": {
+   "checks": [
+    {
+     "kind": "i2c",
+     "scl": "PB8",
+     "sda": "PB9",
+     "transactions": [
+      {
+       "addr": 66,
+       "rw": "write",
+       "bytes": [
+        16
+       ],
+       "ack": true,
+       "start": "S",
+       "end": "Sr"
+      },
+      {
+       "addr": 66,
+       "rw": "read",
+       "bytes": [
+        87
+       ],
+       "ack": true,
+       "start": "Sr",
+       "end": "P"
+      },
+      {
+       "addr": 66,
+       "rw": "write",
+       "bytes": [
+        32
+       ],
+       "ack": true,
+       "start": "S",
+       "end": "P"
+      }
+     ],
+     "freq_hz": null,
+     "freq_rel": 0.1,
+     "released": true,
+     "notices": null,
+     "spike_max_s": 5e-08,
+     "stretch_min": 2.0
+    },
+    {
+     "kind": "starts",
+     "levels": {
+      "PB9": 1,
+      "PB8": 1
+     }
+    },
+    {
+     "kind": "ends",
+     "levels": {
+      "PB9": 1,
+      "PB8": 1
+     }
+    }
+   ]
+  },
+  "wire PB9 PB8 at 0x42/n 2 stop 0": {
+   "checks": [
+    {
+     "kind": "i2c",
+     "scl": "PB8",
+     "sda": "PB9",
+     "transactions": [
+      {
+       "addr": 66,
+       "rw": "write",
+       "bytes": [
+        16
+       ],
+       "ack": true,
+       "start": "S",
+       "end": "Sr"
+      },
+      {
+       "addr": 66,
+       "rw": "read",
+       "bytes": [
+        175,
+        154
+       ],
+       "ack": true,
+       "start": "Sr",
+       "end": "Sr"
+      },
+      {
+       "addr": 66,
+       "rw": "write",
+       "bytes": [
+        32
+       ],
+       "ack": true,
+       "start": "Sr",
+       "end": "P"
+      }
+     ],
+     "freq_hz": null,
+     "freq_rel": 0.1,
+     "released": true,
+     "notices": null,
+     "spike_max_s": 5e-08,
+     "stretch_min": 2.0
+    },
+    {
+     "kind": "starts",
+     "levels": {
+      "PB9": 1,
+      "PB8": 1
+     }
+    },
+    {
+     "kind": "ends",
+     "levels": {
+      "PB9": 1,
+      "PB8": 1
+     }
+    }
+   ]
+  },
+  "wire PB9 PB8 at 0x42/n 2 stop 1": {
+   "checks": [
+    {
+     "kind": "i2c",
+     "scl": "PB8",
+     "sda": "PB9",
+     "transactions": [
+      {
+       "addr": 66,
+       "rw": "write",
+       "bytes": [
+        16
+       ],
+       "ack": true,
+       "start": "S",
+       "end": "Sr"
+      },
+      {
+       "addr": 66,
+       "rw": "read",
+       "bytes": [
+        218,
+        226
+       ],
+       "ack": true,
+       "start": "Sr",
+       "end": "P"
+      },
+      {
+       "addr": 66,
+       "rw": "write",
+       "bytes": [
+        32
+       ],
+       "ack": true,
+       "start": "S",
+       "end": "P"
+      }
+     ],
+     "freq_hz": null,
+     "freq_rel": 0.1,
+     "released": true,
+     "notices": null,
+     "spike_max_s": 5e-08,
+     "stretch_min": 2.0
+    },
+    {
+     "kind": "starts",
+     "levels": {
+      "PB9": 1,
+      "PB8": 1
+     }
+    },
+    {
+     "kind": "ends",
+     "levels": {
+      "PB9": 1,
+      "PB8": 1
+     }
+    }
+   ]
+  },
+  "wire PB9 PB8 at 0x42/n 3 stop 0": {
+   "checks": [
+    {
+     "kind": "i2c",
+     "scl": "PB8",
+     "sda": "PB9",
+     "transactions": [
+      {
+       "addr": 66,
+       "rw": "write",
+       "bytes": [
+        16
+       ],
+       "ack": true,
+       "start": "S",
+       "end": "Sr"
+      },
+      {
+       "addr": 66,
+       "rw": "read",
+       "bytes": [
+        78,
+        241,
+        117
+       ],
+       "ack": true,
+       "start": "Sr",
+       "end": "Sr"
+      },
+      {
+       "addr": 66,
+       "rw": "write",
+       "bytes": [
+        32
+       ],
+       "ack": true,
+       "start": "Sr",
+       "end": "P"
+      }
+     ],
+     "freq_hz": null,
+     "freq_rel": 0.1,
+     "released": true,
+     "notices": null,
+     "spike_max_s": 5e-08,
+     "stretch_min": 2.0
+    },
+    {
+     "kind": "starts",
+     "levels": {
+      "PB9": 1,
+      "PB8": 1
+     }
+    },
+    {
+     "kind": "ends",
+     "levels": {
+      "PB9": 1,
+      "PB8": 1
+     }
+    }
+   ]
+  },
+  "wire PB9 PB8 at 0x42/n 3 stop 1": {
+   "checks": [
+    {
+     "kind": "i2c",
+     "scl": "PB8",
+     "sda": "PB9",
+     "transactions": [
+      {
+       "addr": 66,
+       "rw": "write",
+       "bytes": [
+        16
+       ],
+       "ack": true,
+       "start": "S",
+       "end": "Sr"
+      },
+      {
+       "addr": 66,
+       "rw": "read",
+       "bytes": [
+        171,
+        84,
+        246
+       ],
+       "ack": true,
+       "start": "Sr",
+       "end": "P"
+      },
+      {
+       "addr": 66,
+       "rw": "write",
+       "bytes": [
+        32
+       ],
+       "ack": true,
+       "start": "S",
+       "end": "P"
+      }
+     ],
+     "freq_hz": null,
+     "freq_rel": 0.1,
+     "released": true,
+     "notices": null,
+     "spike_max_s": 5e-08,
+     "stretch_min": 2.0
+    },
+    {
+     "kind": "starts",
+     "levels": {
+      "PB9": 1,
+      "PB8": 1
+     }
+    },
+    {
+     "kind": "ends",
+     "levels": {
+      "PB9": 1,
+      "PB8": 1
+     }
+    }
+   ]
+  }
+ }
+}

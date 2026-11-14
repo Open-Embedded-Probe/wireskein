@@ -393,12 +393,14 @@ def test_a_clock_too_fast_for_the_rate_is_told_with_its_speeds():
     sp = {round(g["freq_hz"] / 1e4) / 100: g for g in b["clock_speeds"]}
     assert sp[0.33]["frames"] == 202 and sp[0.33]["rate_ok"] and not sp[10.0]["rate_ok"]
     us = b["undersampled"]
-    assert us["clock"] == "SWCLK" and us["high_ns"] == 20.0 and (us["least_rate_hz"], us["best_rate_hz"]) == (150e6, 250e6)
+    assert us["clock"] == "SWCLK" and us["high_ns"] == 20.0 and (us["least_rate_hz"], us["best_rate_hz"]) == (250e6, 500e6)
     x = next(x for x in b["result"]["dmi"] if x.get("form") == "long")
     assert x["period_ns"] > 2000 and 900 < x["high_ns"] < 1100
-    # at 160 MS/s the same clock's highs last 4 samples: not told
+    # at 160 MS/s the same clock's highs last 3 to 4 samples: none lost, but under the least (5), so still told
     b = decode_file(D / "linke_v203_160mhz_flash_pattern4k.sr", SPEC)["parts"][0]["buses"][0]
-    assert "undersampled" not in b and all(g["rate_ok"] for g in b["clock_speeds"])
+    assert b["undersampled"]["least_rate_hz"] > 160e6 and b["reading"]["restored"] == 0
+    # the slow clock at 0.33 MHz is well sampled at either rate
+    assert all(g["rate_ok"] for g in b["clock_speeds"] if g["freq_hz"] < 1e6)
 
 
 def test_a_frame_a_clock_short_is_read_only_where_one_reading_is_left():
@@ -426,6 +428,6 @@ def test_how_a_bus_read_is_told_in_counts():
     assert r["restored"] == sum(1 for x in dmi if "restored" in x) > 100 and r["rate_ok"] is False
     assert r["unread"] == len(b["uninterpreted"]) and r["glitches"] > 0 and r["ringing"]["SWDIO"] > 0
     assert r["glitch_share"] == round(r["glitch_edges"] / r["clock_edges"], 4) and r["noisy"]
-    # at 160 MS/s: every speed sampled well, nothing restored
+    # at 160 MS/s: no clock lost, nothing restored, but its fastest speed under the least rate (5 samples a half)
     r = decode_file(D / "linke_v203_160mhz_flash_pattern4k.sr", SPEC)["parts"][0]["buses"][0]["reading"]
-    assert r["rate_ok"] and r["restored"] == 0 and r["frames"] == 9414
+    assert r["rate_ok"] is False and r["restored"] == 0 and r["frames"] == 9414

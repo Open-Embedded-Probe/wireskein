@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from .model import Channel
+from .model import Capture, Channel
 
 
 def res_of(*chs: Channel) -> int:
@@ -351,3 +351,97 @@ def i2c_same_sample(scl, sda) -> list[tuple[int, str]]:
         return []
     k = np.searchsorted(e, both)
     return [(int(t), "rise" if lv[i] == 1 else "fall") for t, i in zip(both.tolist(), k.tolist())]
+
+
+I2C_SPIKE_S = 50e-9     # UM10204's t_SP: the spikes an I2C input's filter suppresses
+I2C_RISE_S = 1000e-9    # UM10204's t_r, standard mode: the slowest an edge of a working bus rises
+
+
+def short_half(ch: Channel, n_samples: int) -> float | None:
+    """The shorter of a line's median high and median low, in ticks (its first and last runs left out), or None."""
+    if len(ch.edges) < 5:
+        return None
+    _, length, level = ch.runs(n_samples)
+    length, level = length[1:-1], level[1:-1]
+    hi, lo = length[level == 1], length[level == 0]
+    if not len(hi) or not len(lo):
+        return None
+    return min(float(np.median(hi)), float(np.median(lo)))
+
+
+def edge_bursts(ch: Channel, w) -> list[tuple[int, int]]:
+    """Runs of changes on a line each within w ticks of the one before (w: one number, or one per edge, the allowance
+    before it), an odd number of 3 or more: one edge crossing the threshold more than once (a slow edge with noise on
+    it, or ringing). -> (index of its first change, of its last)."""
+    e = np.asarray(ch.edges, np.int64)
+    if len(e) < 3:
+        return []
+    w = np.broadcast_to(np.asarray(w, np.float64), e.shape)
+    out, i = [], 0
+    close = np.diff(e) <= w[1:]
+    while i < len(e) - 1:
+        if close[i]:
+            j = i
+            while j < len(close) and close[j]:
+                j += 1
+            if (j - i + 1) % 2 == 1:                           # changes i..j: a net change, crossed j - i + 1 times
+                out.append((i, j))
+            i = j + 1
+        else:
+            i += 1
+    return out
+
+
+def i2c_burst_ticks(cap: Capture, scl: str, freq_hz: float | None = None, at=None):
+    """How far one edge's crossings may spread: at most t_r (I2C_RISE_S, the slowest rise of a working bus), and
+    under a third of SCL's half (a line never changes three times in that) - the half from the clock's frequency
+    when it is given; else per edge of `at`, from SCL's period around it (its rising edges' lower quartile before
+    and after: a clock that changes speed is fast where it is fast), or SCL's shorter half over all without `at`.
+    0 (none) when a sample is longer than a fifth of t_r: a capture that coarse cannot show an edge's crossings, and
+    a pulse of a sample next to an edge is noise, not the edge."""
+    rate = float(cap.rate)
+    tr = I2C_RISE_S * rate
+    if tr < 5:
+        return 0
+    if freq_hz:
+        return int(min(tr, rate / (2 * float(freq_hz)) / 3))
+    ch = cap.channel(scl)
+    if at is None:
+        h = short_half(ch, cap.n_samples)
+        return int(min(tr, h / 3)) if h else 0
+    from . import kernels as K
+    e = np.asarray(ch.edges, np.int64)
+    rises = e[K.edge_levels(e, ch.initial) == 1]
+    if len(rises) < 3:
+        return 0
+    return np.minimum(K.local_period(rises, np.asarray(at, np.int64)) / 6, tr).astype(np.int64)
+
+
+def i2c_input(cap: Capture, scl: str, sda: str, spike_s: float = I2C_SPIKE_S,
+              freq_hz: float | None = None) -> tuple[Capture, bool]:
+    """The two lines as an I2C input sees them: pulses shorter than spike_s left out (its spike filter; none can be
+    when a sample is spike_s or longer), and an edge crossing the threshold more than once within a third of SCL's
+    half around it (i2c_burst_ticks) read as one at its last change (its hysteresis). -> (the capture, whether anything changed)."""
+    from . import kernels as K
+    k = int(np.ceil(spike_s * float(cap.rate) - 1e-9))     # a pulse of fewer samples is shorter than spike_s
+    changed = False
+    chans = []
+    for c in cap.channels:
+        if c.name in (scl, sda) and c.step == 1:
+            e = np.asarray(c.edges, np.int64)
+            if k >= 2:
+                e = K.deglitch(e, k)
+            c2 = Channel(c.name, c.initial, e, c.step, c.phase, c.acquisition)
+            b = edge_bursts(c2, i2c_burst_ticks(cap, scl, freq_hz, e))
+            if b:
+                keep = np.ones(len(e), bool)
+                for i, j in b:
+                    keep[i:j] = False
+                e = e[keep]
+            if len(e) != len(c.edges):
+                changed = True
+                c = Channel(c.name, c.initial, e, c.step, c.phase, c.acquisition)
+        chans.append(c)
+    if not changed:
+        return cap, False
+    return Capture(cap.rate, cap.n_samples, chans, cap.meta, cap.analog, cap.events), True

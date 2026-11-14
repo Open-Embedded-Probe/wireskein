@@ -387,7 +387,8 @@ Some behaviour is allowed by the protocol but worth a look: a test may want to m
 | `rgb_led` | `latch_short` | A low between frames long enough for `reset_min_s` but shorter than `latch_safe_s` (280 us: later parts, WS2812B-V5 and the like, latch only after it; `length_ticks`, `safe_ticks`). `latch_safe_s=None` does not look for it |
 | `i2c` | `scl_stretch` | SCL held low more than `stretch_min` (2) times its usual low (at its fall; `length_ticks`, `usual_ticks`): a target stretching the clock, or the controller pausing between bytes. Counted in `stretches` |
 | `i2c` | `same_sample` | SDA changed in the same sample as an SCL edge (`scl`: `rise`, its setup under a sample; `fall`, its hold): the order is not seen, and SDA may read as moving while SCL is high, a START or STOP that is not there (nothing decoded, or a transaction cut). The controller's waveform, or a rate too low for it. Counted in `same_sample`; a failed reading names it in its reason |
-| `i2c` | `bus_glitch` | A pulse on SCL or SDA shorter than `spike_max_s` (50 ns, the spikes I2C inputs suppress; `line`, `level`, `width_ticks`). Seen only when the capture resolves it. Counted in `spikes` |
+| `i2c` | `bus_glitch` | A pulse on SCL or SDA shorter than `spike_max_s` (50 ns, the spikes I2C inputs suppress; `line`, `level`, `width_ticks`), left out before the bytes are read, as such an input does. Seen only when the capture resolves it (§4.11). Counted in `spikes` |
+| `i2c` | `slow_edge` | An edge on SCL or SDA crossing the threshold more than once within a third of SCL's half around it (from `freq_hz` when given) and at most 1000 ns (t_r, standard mode), on a capture of 5 MS/s or more (`line`, `changes`, `span_ticks`, `to`: 1 a rise): the line's own problem, a slow rise through a weak pull-up with noise on it, or ringing. Read as one edge at its last change, as an input with hysteresis sees it; a stronger pull-up (or a shorter, quieter wire) is the cure |
 | `spi` (with `cs`) | `sck_outside_cs` | SCK moved while CS was inactive (at the first edge of that stretch; `count`: its edges). Allowed on a bus shared with other devices; a reconfiguration's stray edges show here too |
 | `spi` (with `cs`) | `empty_cs_window` | A window of CS active with no clock (at CS becoming active; `length_ticks`) |
 | `spi` (with `cs`) | `mode_ambiguous` | The transfer reads as given in more than one mode (at the first CS edge; `candidates`) |
@@ -398,6 +399,8 @@ Some behaviour is allowed by the protocol but worth a look: a test may want to m
 | `can` | `bitrate_near_limit` | The bit rate within `bitrate_rel` but more than half of it off (`value`: the error, `limit`) |
 | `can` | `overload` | An overload frame: dominant at the last bit of an end of frame or in the intermission |
 
+| every check | `under_rate` | A length the check looks at under 5 samples, or within a glitch filter: what it read there is not sure (§4.11; `what`, `t_s`, `interval_s`, `samples`, `whole`, `least_rate_hz`, `best_rate_hz`, `glitch_filter_s`) |
+
 ### 4.10 Checks from elsewhere
 
 A rule wireskein has no check for can be added as a check kind, judged and reported like wireskein's own (by `wireskein verify` and pytest-embedded-wireskein alike).
@@ -407,6 +410,26 @@ A rule wireskein has no check for can be added as a check kind, judged and repor
 - It may put notices in `measured["notices"]` (`[{"kind", "tick", ...}]`, ticks of the window); they are placed, limited by `notices=` and marked as §4.9 says.
 - A kind wireskein has is not replaced. An expectation naming a kind nobody added is `ng`.
 - A verdict on something no check reads at all (a test's own reading of the analyses) goes in with `rec.result()` instead (§3.3).
+
+### 4.11 How finely a check sees
+
+A check answers on lengths of the wire: a clock's half, a bit, a pulse it bounds. Read from samples, each is sure to a sample, and a pulse shorter than a sample may not be seen at all ([capturing](capturing.md) §2). So each check weighs the shortest length it looks at, `T`, against the capture's sample interval (the coarsest of its pins'):
+
+- **The check is always made**, however coarse the capture: what it read, and its verdict, are in the result.
+- **A length under 5 samples is the notice `under_rate`**, with the rate to capture at (`least_rate_hz`: 5 / `T`; `best_rate_hz`: 10 / `T`), so a verdict on a capture too coarse for it is never silent. `whole: true` when the check answers on that length (SCL's half for `i2c`), false for a part of it (the `i2c` check's spikes, `spi`'s `setup_min_s` / `hold_min_s`, `i2c_timing`'s limits). A failure answered on such a length says so in its reason: the rate may be what failed.
+- **A test that wants it strict** limits the notice, as any other: `notices={"under_rate": "ng"}` fails the check on a capture too coarse for it.
+- **A probe's glitch filter** (`meta.probe.glitch_filter_ns`) as wide as a length leaves it unseen the same way (`under_rate` with `glitch_filter_s`): spikes are told only above the filter's width.
+- **Each result says how finely it saw**: `sampling` in its measured values (`interval_s`, and each length with `what`, `t_s`, `samples`, `whole`), and on its report line the length it answers on (`[SCL's shorter half 4.85 us: 485 samples of 10 ns]`, with `: under 5, not sure` when it is).
+
+| Check | `T` (whole) | Parts |
+| --- | --- | --- |
+| `i2c` | SCL's shorter half (median high or low) | spikes: `spike_max_s` |
+| `spi`, `sd_spi`, `qspi` | SCK's shorter half | `setup_min_s`, `hold_min_s` |
+| `uart`, `rs485`, `lin`, `can` | a bit | |
+| `i2s` | BCLK's shorter half | |
+| `square` | the wave's shorter half (from `freq_hz` and `duty`) | |
+| `pulses` | the pulses' shorter half | |
+| `i2c_timing` | | each limit of the mode and of `limits` |
 
 ## 5. Choosing tolerances
 

@@ -67,6 +67,8 @@ class Request:
                                              # (capture() puts them by the output; not /tmp, which may be memory)
     fast: list[int] | None = None            # oep: the rates a UART probe's link is raised to for reading back (None: the
                                              # client's record of this port and probe; []: keep the boot speed)
+    glitch_filter_ns: int | None = None      # oep: the probe's glitch filter on every logic line: pulses shorter than
+                                             # this dropped (the width it used: meta.probe.glitch_filter_ns)
 
     def __post_init__(self):
         names = [n for n, _ in self.channels] + [n for n, *_ in self.analog]

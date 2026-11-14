@@ -375,7 +375,7 @@ def capture_cmd(args) -> None:
         analog=sources.parse_analog(args.analog) if args.analog else [],
         analog_rate=sources.parse_count(args.analog_rate) if args.analog_rate else None,
         analog_samples=sources.parse_count(args.analog_samples) if args.analog_samples else None,
-        resolution=sources.parse_resolution(args.channels or ""), fast=sources.parse_fast(args.fast))
+        resolution=sources.parse_resolution(args.channels or ""), fast=sources.parse_fast(args.fast), glitch_filter_ns=args.glitch_filter)
     out = sources.capture(args.source, req, args.output)
     if args.note:
         from . import _fileformat as fileformat
@@ -709,6 +709,9 @@ def main() -> None:
                          "acquisitions of --samples: with --trigger one per trigger, into one file as its parts)")
     cp.add_argument("--segments", type=int, default=None, help="repeat: how many acquisitions")
     cp.add_argument("--duration", default=None, help="stream: how long, e.g. 2s, 500ms")
+    cp.add_argument("--glitch-filter", type=int, default=None, metavar="NS",
+                    help="oep: the probe drops pulses shorter than NS on every logic line (steadier reading; spikes "
+                         "under it are not seen, so not judged: the width used goes to meta.probe.glitch_filter_ns)")
     cp.add_argument("--on-loss", choices=("stop", "continue"), default="stop",
                     help="stream: when the probe drops data, stop there (default) or go on to the end; either way "
                          "what was taken is kept and the capture fails (exit 1)")

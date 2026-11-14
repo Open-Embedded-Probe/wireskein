@@ -13,7 +13,7 @@ remedies, and the analysis tells which one it is.
    ```
    rvswd(clk=SWCLK, dio=SWDIO): 1736 frames read, 1323 ok, 404 unanswered, 33 with a lost clock restored
      speed: 1110 frames at a clock too fast for 50 MS/s (period 100 ns, high 20 ns, low 80 ns): ...
-            capture at 150 MS/s at least, 250 MS/s best
+            capture at 250 MS/s at least, 500 MS/s best
        10 MHz (high 20 ns, low 80 ns): 427 frames, ticks 6162091..8073310, too fast
        0.325 MHz (high 1020 ns, low 2060 ns): 404 frames, ticks 2978224..10420978
      noise: 1.8% of the clock's changes are glitches, 3.6% of SWDIO's are ringing (...)
@@ -29,19 +29,37 @@ remedies, and the analysis tells which one it is.
 
 ## 2. Speed
 
-A clock's high or low that lasts less than a sample may fall between two samples: that clock is lost, and its frame
-is a clock short (an RVSWD frame of 52 clocks). What counts is the **shorter of the clock's high and low where it runs
-fastest**, not its frequency alone: a debugger's clock is often far from even (a WCH-LinkE at 10 MHz: high 20-25 ns,
-low 75-80 ns).
+What a rate is enough for depends on **T, the shortest length the question looks at**:
 
-| Samples in the shorter half | |
+- decoding a bus: the clock's shorter half (high or low) where it runs fastest, or a bit. A debugger's clock is often
+  far from even (a WCH-LinkE at 10 MHz: high 20-25 ns, low 75-80 ns), so it is the half, not the frequency.
+- a time a check bounds (a setup, a hold, a delay, a pulse's width): that time, or its tolerance.
+- spikes (the `i2c` check's `spike_max_s`, 50 ns): the shortest pulse to tell.
+
+Count the samples in T. Measured on synthetic captures (`eval/rates.py`: 100 each at a random phase of the sample grid,
+read through the checks a test uses):
+
+| Samples in T | What holds |
 | --- | --- |
-| under 3 | Clocks lost (`rate_ok` false; `least_rate_hz` is 3) |
-| 3 | None lost: the least |
-| 5 | Edges timed to a fifth of a half (about 10 samples a period of an even clock): the best (`best_rate_hz`) |
+| under 1 | A pulse of T may fall between two samples, or show a whole sample long: at half a sample, none of 100 was told right |
+| 2 to 4 | Clean lines decode (I2C, SPI, UART: all 100 from 2). With edges jittering by T/20, readings fail: UART 70 of 100 at 2, 92 at 3, 99 at 4; I2C 57 at 2, 79 at 2.5. A time is sure to 1 / k of T: 48 % of T at 2, 25 % at 4 |
+| **5: the least** | Every reading held, with the jitter too; a time is sure to 19 % of T. Checks answer from here (capture-test-guide §4.11) |
+| **10: the norm** | A time to 9 % of T |
+| 20: plenty | A time to 4.5 % of T |
+
+So capture at **10 / T, at least 5 / T**; 20 / T is plenty. Several questions on one capture: the shortest T sets the
+rate. A slower capture is still read as far as it goes, and every check still made; what was read under 5 samples
+is told (the notice `under_rate`, with the rate to take), never passed silently. `decode` and `analyze` say the same of a clock (`speed:`, `undersampled` with
+`least_rate_hz` and `best_rate_hz`).
+
+Spikes need their own T. I2C at 100 kHz with three pulses of 20 ns on each line, read through the check's spike filter
+(50 ns): at 5 to 20 MS/s 83 to 87 of 100 read right (a pulse seen a whole sample long is taken for the signal), at
+40 MS/s and over all 100. The bus itself (halves of 5 us) needs only 1 MS/s; the spikes ask for 100 MS/s (5 / 50 ns).
+A probe's glitch filter (`glitch_filter_ns`) steadies a reading by dropping pulses under its width, and so hides them:
+spikes are told only above the filter's width.
 
 Measured on a WCH-LinkE at its fastest (highs of 20-25 ns): at 50 MS/s a third of its frames lost a clock, at
-100 MS/s some still did, at 160 MS/s (4 samples) none.
+100 MS/s some still did, at 160 MS/s (3 to 4 samples) none, and that is still under the least: told.
 
 - **A debugger changes speed on the way.** A LinkE connects at 0.33 MHz and reads at 10 MHz: the start may read well
   and the rest not. `clock_speeds` gives each speed with where its frames are.
@@ -72,8 +90,9 @@ The usual causes, and what to do:
   line rings after each edge. Tap near the receiver (the target's pin), keep wires short; a series resistor
   (22-100 ohms) at the driver damps it, where the design allows.
 - **A floating or slow line.** An input left floating trembles; an open-drain line (I2C) rising slowly through the
-  threshold may cross it more than once. Pull it up or down; a stronger pull-up for a faster rise. A line nothing to do
-  with the bus: leave it out ([long captures](long-captures.md) §5).
+  threshold may cross it more than once (told as `slow_edge`; a slow rise can also leave a whole high under the
+  probe's threshold, which nothing reads back). Pull it up or down; a stronger pull-up for a faster rise. A line
+  nothing to do with the bus: leave it out ([long captures](long-captures.md) §5).
 - **The threshold.** A probe's logic threshold should sit midway in the signal's swing (1.8 V logic read with a 3.3 V
   threshold crosses it late and noisily).
 
@@ -87,6 +106,7 @@ Nothing it does is a guess: each is told where it was done, and anything else is
 | Glitch clocks in a frame of a length no form has | Dropped when that gives a known length and the checks hold | `repaired` (the ticks) |
 | A clock lost between samples (a frame a clock short) | Restored only where every likely place gives the same bits and they pass the checks | `restored` (the tick), `undersampled` |
 | A clock too fast for the rate | — | `undersampled`, `clock_speeds` |
+| I2C: a pulse shorter than 50 ns (t_SP); an edge crossing the threshold more than once within a third of SCL's half and 1000 ns (t_r; from 5 MS/s) | Left out; read as one at its last change, as an I2C input does (its spike filter, its hysteresis) | `params.deglitch: i2c_input`; the `i2c` check's `bus_glitch`, `slow_edge` |
 | Activity no frame reads | — | `uninterpreted` |
 
 On 4 KiB flashed by a LinkE at 50 MS/s, 174 of 3026 frames a clock short read so, each one a 160 MS/s capture of the

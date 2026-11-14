@@ -21,6 +21,8 @@ TRIGGER = {"rise": "r", "fall": "f", "both": "e", "high": "1", "low": "0"}
 
 
 def capture(target: str, req: Request) -> Result:
+    if req.glitch_filter_ns:
+        raise ValueError("a glitch filter is an OEP probe's (--glitch-filter): sigrok captures every pulse")
     if req.resolution:
         raise ValueError("sigrok keeps every channel as samples: a resolution (NAME=ID/MODE:D) needs an OEP probe with "
                          "capture format 1")

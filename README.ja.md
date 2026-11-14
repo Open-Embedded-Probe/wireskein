@@ -153,6 +153,7 @@ wireskein capture --source sigrok:fx2lafw --channels SDA=D0,SCL=D1 --rate 12M --
   - `CS=5/any_low:8`: 8 サンプルごとに、0 があれば 0（`any_low`。`any_high` はその逆）。
   - `EN=7/change_latch:64`: 64 サンプルごとに、最後のレベルと、変わったかどうか（`change_latch`）。
   - 照合は、縮めても確かなことだけを答えます（パルスの数は下限、縮めたレベルで読めたレベルは未検査）。
+  - `--glitch-filter NS` で、プローブがすべてのロジックの線から NS より短いパルスを除き、読みを安定させます。使った幅は残し（`meta.probe.glitch_filter_ns`）、それより短いひげは判定しません（[capture-test-guide](docs/capture-test-guide.ja.md) §4.11）。
   - `capture` は、プローブが送ったバイト数と、設定から決まる値を示します（`data:`、`meta.probe.data`）。ストリームでは 1 秒あたりのバイト数も示します（`data rate:`、`meta.probe.data_rate`）。
 - `--mode stream --duration 2s` で、ロジックのチャンネルを、プローブのメモリより長く取りながら送ります。
   - プローブがデータを落としたら、`--on-loss stop`（既定）はそこで止め、`--on-loss continue` は最後まで取ります。

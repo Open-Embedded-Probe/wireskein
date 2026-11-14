@@ -24,7 +24,7 @@ wireskein の中を知らない道具が後で読みます。
 | --- | --- |
 | `buses[].protocol` | 解析器の名前（`i2c`、`spi`、`uart` など） |
 | `buses[].pins` | 役割 → チャンネルの名前。どのピンもキャプチャに無ければならない（無ければエラー）。ちょうどこのピンの上の復号を使う |
-| `buses[].params` | 任意。指示として渡す（`uart` の `baud` など）。`spi` の `mode`（0〜3）は標本のエッジを決める。無ければ線からモードを読む（capture-test-guide §4.5）。active high の CS には `cs_active` |
+| `buses[].params` | 任意。指示として渡す（`uart` の `baud` など）。`spi` の `mode`（0〜3）は標本のエッジを決める。無ければ線からモードを読む（capture-test-guide §4.5）。active high の CS には `cs_active`。`i2c` の `freq_hz`（SCL の速さ）は、1 つの遅い縁のまたぎがどこまで広がってよいかを決める（その半周期の 3 分の 1、多くて 1000 ns（t_r）。無ければ縁ごとにその辺りのクロックから測る。5 MS/s 未満ではしない）。I2C は、いつも I2C の入力が見るとおりに読む: 50 ns（t_SP）より短いパルスを除き、しきい値を何度もまたいだ遅い縁は、最後の変化で 1 つとして読む（それで何か変わったときは `params.deglitch` が `i2c_input`） |
 | `split` | 任意。長い区間を区切って読む方法（[長いキャプチャ](long-captures.ja.md) §3）: 辞書、`"key=value,..."`、`"off"` |
 | `buses[].layers` | 任意。最後の読みのほかに `result` に出す下の層の名前（`bits`: サンプルの縁 `t` とその値のすべて、`frames`、SWIO の `pulses`: パルスごとの始まり・幅・短い / 長い、`*`: すべて） |
 | `buses[].idle_s` | 任意。これより離れた活動は別のかたまり（§3.3）。既定はそのバスの 16 ビット分、ビットの無いバスは 1 ms |

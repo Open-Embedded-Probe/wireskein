@@ -26,7 +26,8 @@ def capture(target: str, req: Request) -> Result:
     areq = acquire.Request(list(req.channels), req.rate, req.samples, trigger=req.trigger, pretrigger=req.pretrigger,
                            arm=req.arm, timeout=req.timeout, analog=list(req.analog), analog_rate=req.analog_rate,
                            analog_samples=req.analog_samples, resolution=dict(req.resolution), mode=req.mode,
-                           seconds=req.duration, segments=req.segments, on_loss=req.on_loss, spool_dir=req.spool_dir)
+                           seconds=req.duration, segments=req.segments, on_loss=req.on_loss, spool_dir=req.spool_dir,
+                           **_glitch(req, acquire))
     res = acquire.capture_at(target, areq, fast=req.fast, owner="wireskein capture")
     if res.parts is None and _ticks(res.all_parts[0], res.tick_hz, acquire) is None:
         return Result(res.tick_hz, [_channel(c, acquire) for c in res.channels], dict(res.meta), None, list(res.lost),
@@ -88,3 +89,13 @@ def _channel(c, acquire):
         return fileformat.AnalogChannel(c.name, c.data, c.n, c.rate_hz, c.t0_ticks, "analog", c.width, c.value_bits,
                                         c.zero, c.scale_nv, c.unit, dict(c.acquisition))
     raise TypeError(f"{c!r}: not a channel the client gives")
+
+
+def _glitch(req, acquire) -> dict:
+    """The request's glitch filter for acquire.Request, refused clearly by a client that has none."""
+    if not req.glitch_filter_ns:
+        return {}
+    import dataclasses
+    if "glitch_filter_ns" not in {f.name for f in dataclasses.fields(acquire.Request)}:
+        raise RuntimeError("a glitch filter needs an oep-client-python that has one (acquire.Request.glitch_filter_ns)")
+    return {"glitch_filter_ns": int(req.glitch_filter_ns)}

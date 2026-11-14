@@ -435,6 +435,10 @@ def i2c(scl: str, sda: str, transactions: list[dict] | None = None, freq_hz: flo
         freq_rel: float = 0.1, released: bool = True, notices: dict | None = None, spike_max_s: float = 50e-9,
         stretch_min: float = 2.0, threshold=None) -> dict:
     """transactions: [{"addr": 0x42, "rw": "write", "bytes": [..], "ack": True}], compared in order.
+    The lines are read as an I2C input sees them: pulses shorter than spike_max_s left out (its spike filter), and
+    an edge crossing the threshold more than once within a third of SCL's half and 1000 ns (t_r; a capture of 5 MS/s
+    or more; a slow rise, ringing) read as
+    one at its last change (its hysteresis).
     "ack" is the ACK after the address. The ACK after each data byte is compared as well: by default a write's
     bytes are all ACKed and a read's all but the last (the controller's NACK); "nack_at" (an index from 0, or a
     list) expects a NACK after those bytes and an ACK after the others, "acks" ([True, False, ...]) gives each.
@@ -444,8 +448,8 @@ def i2c(scl: str, sda: str, transactions: list[dict] | None = None, freq_hz: flo
     STOP or an idle bus, "Sr": a repeated START) and "end" ("P": a STOP, "Sr": the
     next transaction's repeated START), each compared only when given.
     Notices: SCL held low more than stretch_min times its usual low (scl_stretch: a target stretching the clock, or
-    the controller pausing) and a pulse on either line shorter than spike_max_s (bus_glitch: I2C inputs suppress
-    spikes up to 50 ns); notices={"scl_stretch": "ng"} or a count limits them."""
+    the controller pausing), a pulse on either line shorter than spike_max_s (bus_glitch: I2C inputs suppress
+    spikes up to 50 ns) and such an edge (slow_edge); notices={"scl_stretch": "ng"} or a count limits them."""
     return _t({"kind": "i2c", "scl": scl, "sda": sda, "transactions": transactions, "freq_hz": freq_hz, "freq_rel": freq_rel,
                "released": released, "notices": notices, "spike_max_s": spike_max_s, "stretch_min": stretch_min},
               threshold)

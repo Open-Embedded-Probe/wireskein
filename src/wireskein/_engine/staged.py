@@ -27,7 +27,7 @@ import numpy as np
 
 from . import kernels as K
 from . import plugins_uartlike as UL
-from . import typed
+from . import timing, typed
 from .analyzers.pulse import NecPlugin, OneWirePlugin, RgbLedPlugin
 from .analyzers.upper import Lines, MarkerGrammar, ModbusRtu, Nmea
 from .model import Capture
@@ -586,6 +586,15 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
             continue
         seen.add(key)
         views = list(glitch_views(cap, c.sv, g))
+        # I2C reads the lines as an I2C input sees them (its spike filter, its hysteresis: timing.i2c_input), the
+        # only reading such a device makes of them; the other plugins the views above
+        i2c_view = None
+        if not g.select and len(g.data) == 1 and any(p.name == "i2c" for p in by_type.get("frames.startstop", [])):
+            iv, changed = timing.i2c_input(cap, g.clock, g.data[0],
+                                           freq_hz=pin_hint.get(g.clock, {}).get("freq_hz"))   # a spec's SCL rate
+            if changed:
+                i2c_view = iv
+                views.append((iv, "i2c_input"))
         # the edges the lines say in any view (a view with its short pulses left out may say the other), and the one
         # the spec (or a long capture's first piece) gives: every view read on each, so that the same reading is
         # there whatever the view (a piece of a long capture reads as the whole does)
@@ -613,6 +622,8 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
                     streams.append(("frames.startstop", typed.frames_startstop(view_cap, sb)))
                 for kind, fr in streams:
                     for p in by_type.get(kind, []):
+                        if i2c_view is not None and (p.name == "i2c") != (k == "i2c_input"):
+                            continue
                         runs += 1
                         got = p.run(c, fr if getattr(p, "open_tail", False) else fr.closed(), g)
                         for n in got:

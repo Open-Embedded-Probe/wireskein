@@ -388,7 +388,8 @@ sd_spi("PA5", "PA7", "PA6", "PA4", [{"cmd": 0, "r1": 0x01}, {"cmd": 8, "arg": 0x
 | `rgb_led` | `latch_short` | フレームの間の low が、`reset_min_s` には足りるが `latch_safe_s` より短い（280 us。WS2812B-V5 などの後の部品は、それより長くないと確定しない。`length_ticks`、`safe_ticks`）。`latch_safe_s=None` なら探さない |
 | `i2c` | `scl_stretch` | SCL がいつもの low の `stretch_min`（2）倍より長く low（下がった所。`length_ticks`、`usual_ticks`）。ターゲットのクロックの引き延ばしか、コントローラがバイトの間で止まったもの。数は `stretches` |
 | `i2c` | `same_sample` | SDA が SCL の縁と同じサンプルで変わった（`scl`: `rise` はセットアップが 1 サンプル未満、`fall` はホールド）。順が見えず、SCL が high の間の SDA の変化、つまり無い START や STOP に読めることがある（何も復号されない、転送が切れる）。コントローラの波形か、それに対して低すぎるレート。数は `same_sample`。読みが合わないときは理由にも書く |
-| `i2c` | `bus_glitch` | SCL か SDA の、`spike_max_s`（50 ns。I2C の入力が取り除くスパイク）より短いパルス（`line`、`level`、`width_ticks`）。キャプチャがそれを分解できるときだけ見える。数は `spikes` |
+| `i2c` | `bus_glitch` | SCL か SDA の、`spike_max_s`（50 ns。I2C の入力が取り除くスパイク）より短いパルス（`line`、`level`、`width_ticks`）。そういう入力と同じく、バイトを読む前に除く。キャプチャがそれを分解できるときだけ見える（§4.11）。数は `spikes` |
+| `i2c` | `slow_edge` | SCL か SDA の 1 つの縁が、その辺りの SCL の半周期の 3 分の 1（`freq_hz` があればそこから）かつ 1000 ns（t_r、標準モード）のうちに、5 MS/s 以上のキャプチャで、しきい値を何度もまたいだ所（`line`、`changes`、`span_ticks`、`to`: 1 が立ち上がり）。線そのものの問題で、弱いプルアップでの遅い立ち上がりにノイズが乗ったものか、揺れ。ヒステリシスのある入力と同じく、最後の変化で 1 つの縁として読む。直すには、プルアップを強くする（線を短く、静かにする） |
 | `spi`（`cs` あり） | `sck_outside_cs` | CS が非アクティブのあいだに SCK が動いた（その間の最初の変化の所。`count`: 変化の数）。ほかの機器と共有するバスでは正しい動き。設定し直しの余分な変化もここに出る |
 | `spi`（`cs` あり） | `empty_cs_window` | クロックの無い、CS がアクティブの窓（CS がアクティブになった所。`length_ticks`） |
 | `spi`（`cs` あり） | `mode_ambiguous` | 転送が、2 つ以上のモードで与えたとおりに読める（最初の CS の変化の所。`candidates`） |
@@ -399,6 +400,8 @@ sd_spi("PA5", "PA7", "PA6", "PA4", [{"cmd": 0, "r1": 0x01}, {"cmd": 8, "arg": 0x
 | `can` | `bitrate_near_limit` | ビットレートが `bitrate_rel` の中だが、その半分より外れている（`value`: 誤差、`limit`） |
 | `can` | `overload` | オーバーロードフレーム。フレームの終わりの最後のビットか、インターミッションでドミナント |
 
+| どの検査も | `under_rate` | 検査が見る長さが 5 サンプルに届かないか、グリッチフィルタの幅のうち。そこで読めたものは確かでない（§4.11。`what`、`t_s`、`interval_s`、`samples`、`whole`、`least_rate_hz`、`best_rate_hz`、`glitch_filter_s`） |
+
 ### 4.10 ほかから足す検査
 
 wireskein に検査の無いきまりは、検査の種類として足せます。wireskein の検査と同じに判定し、報告します（`wireskein verify` でも pytest-embedded-wireskein でも）。
@@ -408,6 +411,26 @@ wireskein に検査の無いきまりは、検査の種類として足せます�
 - `measured["notices"]` に注意を入れられます（`[{"kind", "tick", ...}]`、窓の tick）。§4.9 のとおり、場所を付け、`notices=` で制限し、印にします。
 - wireskein の持つ種類は置き換えません。だれも足していない種類を書いた期待は `ng` です。
 - どの検査も読まないものの判定（試験が自分で分析を読んだもの）は、代わりに `rec.result()` で入れます（§3.3）。
+
+### 4.11 検査がどの細かさで見たか
+
+検査は、線の上の長さで答えます: クロックの半周期、1 ビット、限度を付けたパルス。サンプルから読むと、どれも 1 サンプルまでしか確かでなく、1 サンプルより短いパルスは見えないこともあります（[うまく取る](capturing.ja.md) §2）。そこで、どの検査も、見る一番短い長さ `T` を、キャプチャの標本の間隔（その検査のピンのうち粗いもの）と比べます。
+
+- **検査は、キャプチャがどれだけ粗くても必ず行います。** 読めたものと判定は、結果に入ります。
+- **5 サンプルに届かない長さは、注意 `under_rate` です。** 取る速さ（`least_rate_hz`: 5 / `T`、`best_rate_hz`: 10 / `T`）を添えるので、粗すぎるキャプチャでの判定が黙って通ることはありません。検査がその長さで答えるとき（`i2c` なら SCL の半周期）は `whole: true`、検査の一部（`i2c` のひげ、`spi` の `setup_min_s` / `hold_min_s`、`i2c_timing` の限度）なら false です。そういう長さで出た NG は、理由にそう書きます。NG の原因が速さのこともあるためです。
+- **厳しくしたい試験は**、ほかの注意と同じく限ります: `notices={"under_rate": "ng"}` で、粗すぎるキャプチャでは検査を失敗にします。
+- **プローブのグリッチフィルタ**（`meta.probe.glitch_filter_ns`）がその長さ以上なら、同じく見えないとします（`glitch_filter_s` 付きの `under_rate`）。ひげは、フィルタの幅より長いものだけを知らせられます。
+- **どの結果も、どの細かさで見たかを示します。** 測った値の `sampling`（`interval_s` と、長さごとの `what`、`t_s`、`samples`、`whole`）と、報告の行の、答えた長さ（`[SCL's shorter half 4.85 us: 485 samples of 10 ns]`。届かなければ `: under 5, not sure` が付く）です。
+
+| 検査 | `T`（全体） | 一部 |
+| --- | --- | --- |
+| `i2c` | SCL の短い方の半周期（high か low の中央値） | ひげ: `spike_max_s` |
+| `spi`、`sd_spi`、`qspi` | SCK の短い方の半周期 | `setup_min_s`、`hold_min_s` |
+| `uart`、`rs485`、`lin`、`can` | 1 ビット | |
+| `i2s` | BCLK の短い方の半周期 | |
+| `square` | 波の短い方の半周期（`freq_hz` と `duty` から） | |
+| `pulses` | パルスの短い方の半周期 | |
+| `i2c_timing` | | モードと `limits` のそれぞれの限度 |
 
 ## 5. 許容誤差の決め方
 
