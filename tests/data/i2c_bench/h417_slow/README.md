@@ -26,9 +26,12 @@ What they show:
   it as a clock. Read with such clocks kept and the missing ones restored where one reading is left, the
   transactions match the waveform they must make (`eval/i2c_vs_truth.py`) in 1172 of 1200 (`impl-*`, `pin-*`,
   `nohys-*-g0`, `hys-*-g0`, 20-100 MS/s); as sampled, 0 to 38 of each 50.
-- `impl-*`: the firmware after oep-spec 4ab3327 (the pin's fixed 25 ns filter, input hysteresis on by default):
+- `impl-*`: the firmware after oep-spec 4ab3327 (the pin's fixed 25 ns filter, input hysteresis then on by default):
   `g0` default, `h0` hysteresis off, `g25` the pin's filter. Hysteresis brings SCL's changes from 1108-1142 to
-  1008-1014 for 1000 clock edges; read, 48 to 50 of 50 either way.
+  1008-1014 for 1000 clock edges; read, 48 to 50 of 50 either way, but with it twice as many clocks go uncaptured
+  and are restored (so hysteresis is off by default since oep-spec 31a77ec).
+- `clk20000-*`, `clk100000-*`: the controller at 20 and 100 kHz, hysteresis off, 50 and 100 MS/s. Even at 20 kHz
+  45 to 47 of some 500 clocks are clipped to 10-70 ns; 48 to 50 of 50 transactions read exactly right.
 - With the P4's flex glitch filter (25-200 ns), 0 to 11 of 50: on these slow, noisy edges the filter locks up, the
   line changing no more from some point (SCL silent from 0.29 s at 100 ns, SDA going on), or oscillates (SCL 1.86
   million changes), with the pads' hysteresis too; on clean edges it lets a short pulse through and recovers.

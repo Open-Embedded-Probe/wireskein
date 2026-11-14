@@ -1,0 +1,26 @@
+[
+ {
+  "tag": "clk100000",
+  "rate": 50000000,
+  "glitch_ns": 0,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 50,
+  "correct": 50,
+  "lost": 0,
+  "hys_used": false,
+  "glitch_used": null
+ },
+ {
+  "tag": "clk100000",
+  "rate": 100000000,
+  "glitch_ns": 0,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 49,
+  "correct": 49,
+  "lost": 0,
+  "hys_used": false,
+  "glitch_used": null
+ }
+]

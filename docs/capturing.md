@@ -57,9 +57,11 @@ Spikes need their own T. I2C at 100 kHz with three pulses of 20 ns on each line,
 40 MS/s and over all 100. The bus itself (halves of 5 us) needs only 1 MS/s; the spikes ask for 100 MS/s (5 / 50 ns).
 A probe's glitch filter (`glitch_filter_ns`, the ESP32-P4's: the pin's fixed 25 ns) drops spikes shorter than its
 width, and so hides them: spikes are told only above the filter's width. It does nothing for a slow edge's wobble.
-For slow edges, the probe's input hysteresis (`input_hysteresis`, on by default where a probe has it,
-`meta.probe.input_hysteresis`) is what helps: through 45 kOhm pull-ups it brought SCL's changes from 1108-1142 to
-1008-1014 for 1000 clock edges. The analysis reads I2C right either way (below). Older ESP32-P4 firmware had a flex
+The probe's input hysteresis (`input_hysteresis`, off by default, `meta.probe.input_hysteresis`) steadies a slow
+edge: through 45 kOhm pull-ups it brought SCL's changes from 1108-1142 to 1008-1014 for 1000 clock edges. It raises
+the threshold a short high must cross, though, so a short real pulse may not show at all (twice as many clocks went
+uncaptured with it): turn it on where a wobbling edge misleads a trigger. The analysis reads I2C right either way
+(below). Older ESP32-P4 firmware had a flex
 glitch filter that locked up or oscillated on slow, noisy edges, leaving SCL silent from some point on or swinging a
 million times; the analysis tells a line that stops or oscillates (`reading.stopped`, `oscillating`) in such
 captures.
@@ -71,9 +73,11 @@ analysis keeps such a clipped clock (an SCL high between whole lows), and restor
 one reading is left (`clock_restored`, `restored` on the transaction). Checked against the waveform the transactions
 must have made (`eval/i2c_vs_truth.py`, 1200 transactions of oep's CH32H417 captures at 20-100 MS/s, with and without
 hysteresis and the pin's filter), 1172 read exactly right; as sampled, 0 to 38 of each 50 showed the right changes.
-A stronger pull-up (a few kOhm) is still the cure for the bus itself. **Take slow I2C without a glitch filter**,
-with hysteresis alone: a clock clipped to 20-40 ns is about as short as the filter's 25 ns, and a filter can drop it
-(with the pin's filter, 48 and 49 of 50 read exactly right at 100 and 50 MS/s, against 50 and 50 without).
+A stronger pull-up (a few kOhm) is still the cure for the bus itself. **Take slow I2C with neither a glitch filter
+nor hysteresis**: a clock clipped to 10-70 ns is about as short as the filter's 25 ns, and a filter can drop it
+(with the pin's filter, 48 and 49 of 50 read exactly right at 100 and 50 MS/s, against 50 and 50 without), and
+hysteresis leaves more of them uncaptured (at 50 and 100 MS/s, 6 and 8 restored with it, 2 and 4 without). Even at
+20 kHz, 45 to 47 of some 500 clocks were clipped to 10-70 ns; 48 to 50 of 50 transactions read right.
 
 Measured on a WCH-LinkE at its fastest (highs of 20-25 ns): at 50 MS/s a third of its frames lost a clock, at
 100 MS/s some still did, at 160 MS/s (3 to 4 samples) none, and that is still under the least: told.
