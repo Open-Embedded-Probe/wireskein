@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- (EN) A bus's `reading` (decode, analyze) gives each line's `line_changes`, and tells a line that stops changing while the bus's other lines go on (`stopped`) or oscillates (`oscillating`), with `glitch_filter_ns` when the probe filtered its lines; `decode` and `analyze` print them (`line:`). An ESP32-P4's flex glitch filter locked up or oscillated so on slow I2C edges. oep's captures of an I2C through the probe's weak pull-ups (with and without the filter, 9 MB) are kept in tests/data/i2c_bench/h417_slow, left out of the sdist.
+- (JA) バスの `reading`（decode、analyze）は、線ごとの `line_changes` を持ち、バスのほかの線が動くのに変わらなくなった線（`stopped`）と、発振する線（`oscillating`）を知らせる。プローブが線にフィルタを掛けていれば `glitch_filter_ns` も付く。`decode` と `analyze` はそれを出す（`line:`）。ESP32-P4 のフレックスのグリッチフィルタが、I2C の遅い縁でこう固まり、発振した。プローブの弱いプルアップだけの I2C を oep が取ったもの（フィルタあり・なし、9 MB）を tests/data/i2c_bench/h417_slow に残した。sdist には入れない。
+
 - (EN) `wireskein capture --glitch-filter NS` (oep): the probe drops pulses shorter than NS on every logic line; the width it used is `meta.probe.glitch_filter_ns` (an oep-client-python with `acquire.Request.glitch_filter_ns`). A decode spec's `i2c` bus takes `freq_hz` (SCL's rate) to place its slow edges from, instead of measuring the clock. The I2C runs from the bench whose lines bounce are kept in tests/data/i2c_bench, the one that still does not read among them (a whole half of SCL captured at the other level).
 - (JA) `wireskein capture --glitch-filter NS`（oep）: プローブが、すべてのロジックの線で NS より短いパルスを除く。使った幅は `meta.probe.glitch_filter_ns`（`acquire.Request.glitch_filter_ns` を持つ oep-client-python が要る）。decode の spec の `i2c` のバスは `freq_hz`（SCL の速さ）を受け、クロックを測る代わりにそこから遅い縁の幅を決める。線が跳ねるベンチの I2C の記録を tests/data/i2c_bench に残した。まだ読めない 1 つも含む（SCL の半周期がまるごと逆のレベルで取り込まれたもの）。
 

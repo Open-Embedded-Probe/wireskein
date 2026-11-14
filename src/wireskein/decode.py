@@ -340,8 +340,9 @@ def noise(cap: Capture, clock: str, data: list[str], lo: int = 0, hi: int | None
 def reading(out: dict, frames: list, cap: Capture, b: dict) -> dict:
     """How well a bus read, in counts one acts on: `frames` read frame by frame, `ok` (their checks held),
     `restored` (a clock lost between samples restored), `repaired` (glitch clocks dropped), `unread` (stretches of
-    activity no frame read) and their `unread_edges`, `rate_ok` (every clock speed sampled well enough), and the noise
-    seen (`glitches`, `ringing`, from noise())."""
+    activity no frame read) and their `unread_edges`, `rate_ok` (every clock speed sampled well enough), the noise
+    seen (`glitches`, `ringing`, from noise()), and a line stopped or oscillating (`stopped`, `oscillating`, from
+    line_faults())."""
     fr = [x for x in frames if isinstance(x, dict)]
     r = {"frames": len(fr), "ok": sum(1 for x in fr if x.get("ok", True) is not False),
          "unanswered": sum(1 for x in fr if x.get("answered") is False),
@@ -354,11 +355,53 @@ def reading(out: dict, frames: list, cap: Capture, b: dict) -> dict:
     if clk:
         r.update(noise(cap, clk, [p for k, p in b["pins"].items() if k != "clk"]))
         _shares(r)
+    r.update(line_faults(cap, list(b["pins"].values())))
     if b.get("protocol") == "i2c" and {"scl", "sda"} <= set(b["pins"]):
         # SDA changing in the same sample as an SCL edge: setup or hold under a sample (verify's same_sample)
         same = timing.i2c_same_sample(cap.channel(b["pins"]["scl"]), cap.channel(b["pins"]["sda"]))
         r["same_sample"] = len(same)
     return r
+
+
+STOPPED_AFTER = 16   # a bus line silent while the others change this many times more has stopped (a working bus's
+                     # lines move together)
+OSCILLATING = 1000   # this many changes in a row, each within 2 samples of the one before: the line oscillates
+
+
+def line_faults(cap: Capture, pins: list[str]) -> dict:
+    """Each line's `line_changes` (`changes`, the tick of its `last`), a bus line that stops changing while the others
+    go on (`stopped`: line, tick of its last change, the others' changes after it), and a line that oscillates
+    (`oscillating`: line, first and last tick, changes): neither is a bus at work - a probe's input stuck or swinging (a glitch filter locking up on slow, noisy edges does both), a
+    line come loose. With `glitch_filter_ns` when the capture says the probe filtered its lines."""
+    if not pins:
+        return {}
+    chans = [cap.channel(p) for p in pins]
+    edges = {c.name: np.asarray(c.edges, np.int64) for c in chans if c.step == 1}
+    out: dict = {"line_changes": {n: {"changes": int(len(e)), "last": int(e[-1]) if len(e) else None}
+                                  for n, e in edges.items()}}
+    for name, e in edges.items():
+        last = int(e[-1]) if len(e) else 0
+        after = sum(int(np.count_nonzero(o > last)) for n, o in edges.items() if n != name)
+        if after >= STOPPED_AFTER and (not len(e) or last < cap.n_samples - 1):
+            out.setdefault("stopped", []).append({"line": name, "tick": last, "others_after": after})
+        if len(e) > OSCILLATING:
+            close = np.diff(e) <= 2
+            i = 0
+            while i < len(close):
+                if close[i]:
+                    j = i
+                    while j < len(close) and close[j]:
+                        j += 1
+                    if j - i >= OSCILLATING:
+                        out.setdefault("oscillating", []).append({"line": name, "s": int(e[i]), "e": int(e[j]),
+                                                                  "changes": j - i + 1})
+                    i = j
+                else:
+                    i += 1
+    gf = (getattr(cap, "meta", {}).get("probe") or {}).get("glitch_filter_ns")
+    if gf and ("stopped" in out or "oscillating" in out):
+        out["glitch_filter_ns"] = gf
+    return out
 
 
 NOISY = 0.01         # a line with more of its changes than this in noise pulses is told as noisy
@@ -887,6 +930,43 @@ def _owned(p, b: dict) -> int:
     return n
 
 
+def _join_faults(per: list) -> dict:
+    """line_faults over a split's pieces: each line's changes summed and its last at the whole's ticks; a line
+    stopped when the other lines change STOPPED_AFTER times in the pieces after the one with its last change (a lower
+    bound: that piece's own are not counted); the pieces' oscillations at the whole's ticks, each counted by the
+    piece it starts in."""
+    out: dict = {}
+    lines: dict = {}
+    counts = []
+    for p, b in per:
+        r = b.get("reading") or {}
+        ls = r.get("line_changes") or {}
+        counts.append((p, ls))
+        for n, v in ls.items():
+            row = lines.setdefault(n, {"changes": 0, "last": None})
+            last = v["last"] + p.a if v["last"] is not None else None
+            if last is not None and p.s <= last < p.e:
+                row["last"] = max(row["last"] or 0, last)
+            e = v["changes"]
+            row["changes"] += e                        # the pieces overlap a little: a count to an overlap's changes
+        for o in r.get("oscillating", []):
+            if p.s <= o["s"] + p.a < p.e:
+                out.setdefault("oscillating", []).append({**o, "s": o["s"] + p.a, "e": o["e"] + p.a})
+    if lines:
+        out["line_changes"] = lines
+    end = max((p.e for p, _ in per), default=0)
+    for n, v in lines.items():
+        at = v["last"] if v["last"] is not None else -1
+        after = sum(w["changes"] for p, ls in counts if p.s > at for m, w in ls.items() if m != n)
+        if after >= STOPPED_AFTER and at < end - 1:
+            out.setdefault("stopped", []).append({"line": n, "tick": at, "others_after": int(after)})
+    gf = next(((b.get("reading") or {}).get("glitch_filter_ns") for _, b in per
+               if (b.get("reading") or {}).get("glitch_filter_ns")), None)
+    if gf and ("stopped" in out or "oscillating" in out):
+        out["glitch_filter_ns"] = gf
+    return out
+
+
 def _join_part(outs: list, spec: dict, source, opts, noisy: dict) -> dict:
     """The pieces' part documents as one (the whole's when there was one piece)."""
     if len(outs) == 1 and outs[0][0].a == 0:
@@ -1014,6 +1094,7 @@ def _join_bus(per: list, rate: float) -> dict:
                         acc[k] = acc.get(k, 0) + v
                 r[key] = acc
             _shares(r)
+        r.update(_join_faults(per))
         out["reading"] = r
     un = _split.Unread()
     un.add(out["uninterpreted"])

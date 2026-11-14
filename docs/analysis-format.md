@@ -105,8 +105,14 @@ the lines fit, whether analyze would have claimed it, and what was not read or n
   (data line → share), `noisy` when one is over 1 %: noise, a reflection, a neighbouring line picked up or a ground
   far away. A count grows with the capture; the share is what to judge by. For I2C also
   `same_sample`: how often SDA changed in the same sample as an SCL edge (its setup or hold under a sample: it may
-  read as a START or STOP that is not there; the controller's waveform, or a rate too low for it). analyze's claims give it too, without `unread`. In pieces, the counts are each piece's in its
-  own ticks, summed.
+  read as a START or STOP that is not there; the controller's waveform, or a rate too low for it). Every bus also
+  `line_changes` (line → `changes`, the tick of its `last`), and, when it happened, `stopped` (`line`, `tick` of its
+  last change, `others_after`: a line silent while the bus's other lines changed 16 times or more after it) and
+  `oscillating` (`line`, `s`, `e`, `changes`: 1000 changes or more in a row, each within 2 samples of the one
+  before): neither is a bus at work, but an input stuck or swinging, or a line come loose; `glitch_filter_ns` with
+  them when the capture says the probe filtered its lines (a glitch filter can lock up or oscillate on slow, noisy
+  edges). analyze's claims give it too, without `unread`. In pieces, the counts are each piece's in its
+  own ticks, summed; a line stopped is judged on the pieces after its last change.
 - `clock_speeds` (a clocked bus): the speeds its clock ran at, from the frames it read (each frame's `period_ns`
   and `high_ns`, medians over its clocks, so a reflection's glitch does not count, are on the frame): frames whose
   periods are within 1.25 times a speed's fastest are that speed, wherever they are. Fastest first, each

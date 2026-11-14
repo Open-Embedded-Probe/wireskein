@@ -1,0 +1,22 @@
+[
+ {
+  "tag": "lk1",
+  "rate": 50000000,
+  "glitch_ns": 100,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 0,
+  "correct": 0,
+  "lost": 0
+ },
+ {
+  "tag": "lk1",
+  "rate": 50000000,
+  "glitch_ns": 0,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 44,
+  "correct": 35,
+  "lost": 0
+ }
+]

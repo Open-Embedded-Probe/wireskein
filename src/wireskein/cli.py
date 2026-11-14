@@ -240,6 +240,19 @@ def _warn_undersampled(doc: dict, items: list) -> None:
             print(f"  waveform: SDA changed in the same sample as an SCL edge {r['same_sample']} times (setup or hold "
                   f"under a sample): it may read as a START or STOP that is not there; the controller's waveform, or "
                   f"a rate too low for it", file=sys.stderr)
+        filt = (f"; the probe's glitch filter of {r['glitch_filter_ns']} ns can lock up or oscillate on slow, noisy "
+                f"edges" if r.get("glitch_filter_ns") else "")
+        for s in r.get("stopped", []):
+            print(f"  line: {s['line']} stopped changing at tick {s['tick']}, while the bus's other lines changed "
+                  f"{s['others_after']} times more (an input stuck or a line come loose{filt})", file=sys.stderr)
+        osc: dict = {}
+        for s in r.get("oscillating", []):
+            osc.setdefault(s["line"], []).append(s)
+        for line, ss in osc.items():
+            span = (f"from tick {ss[0]['s']} to {ss[0]['e']}" if len(ss) == 1 else
+                    f"{len(ss)} times, first from tick {ss[0]['s']}")
+            print(f"  line: {line} oscillates, {sum(s['changes'] for s in ss)} changes a sample or two apart, {span}"
+                  f"{filt}", file=sys.stderr)
         if r.get("noisy"):
             what = [f"{r['glitch_share']:.1%} of the clock's changes are glitches"] if r.get("glitch_share") else []
             what += [f"{v:.1%} of {k}'s are ringing" for k, v in (r.get("ringing_share") or {}).items() if v]

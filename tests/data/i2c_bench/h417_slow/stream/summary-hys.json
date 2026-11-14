@@ -1,0 +1,152 @@
+[
+ {
+  "tag": "hys",
+  "rate": 20000000,
+  "glitch_ns": 0,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 50,
+  "correct": 29,
+  "lost": 0
+ },
+ {
+  "tag": "hys",
+  "rate": 20000000,
+  "glitch_ns": 25,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 0,
+  "correct": 0,
+  "lost": 0
+ },
+ {
+  "tag": "hys",
+  "rate": 20000000,
+  "glitch_ns": 50,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 11,
+  "correct": 6,
+  "lost": 0
+ },
+ {
+  "tag": "hys",
+  "rate": 20000000,
+  "glitch_ns": 100,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 2,
+  "correct": 1,
+  "lost": 0
+ },
+ {
+  "tag": "hys",
+  "rate": 20000000,
+  "glitch_ns": 200,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 2,
+  "correct": 1,
+  "lost": 0
+ },
+ {
+  "tag": "hys",
+  "rate": 50000000,
+  "glitch_ns": 0,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 45,
+  "correct": 35,
+  "lost": 0
+ },
+ {
+  "tag": "hys",
+  "rate": 50000000,
+  "glitch_ns": 25,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 1,
+  "correct": 1,
+  "lost": 0
+ },
+ {
+  "tag": "hys",
+  "rate": 50000000,
+  "glitch_ns": 50,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 5,
+  "correct": 3,
+  "lost": 0
+ },
+ {
+  "tag": "hys",
+  "rate": 50000000,
+  "glitch_ns": 100,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 0,
+  "correct": 0,
+  "lost": 0
+ },
+ {
+  "tag": "hys",
+  "rate": 50000000,
+  "glitch_ns": 200,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 12,
+  "correct": 10,
+  "lost": 0
+ },
+ {
+  "tag": "hys",
+  "rate": 100000000,
+  "glitch_ns": 0,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 46,
+  "correct": 34,
+  "lost": 0
+ },
+ {
+  "tag": "hys",
+  "rate": 100000000,
+  "glitch_ns": 25,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 4,
+  "correct": 3,
+  "lost": 0
+ },
+ {
+  "tag": "hys",
+  "rate": 100000000,
+  "glitch_ns": 50,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 5,
+  "correct": 5,
+  "lost": 0
+ },
+ {
+  "tag": "hys",
+  "rate": 100000000,
+  "glitch_ns": 100,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 7,
+  "correct": 4,
+  "lost": 0
+ },
+ {
+  "tag": "hys",
+  "rate": 100000000,
+  "glitch_ns": 200,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 0,
+  "correct": 0,
+  "lost": 0
+ }
+]

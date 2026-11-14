@@ -23,3 +23,6 @@ as 0x40). Read as an I2C input sees the lines (spikes shorter than t_SP left out
 of 40 us should be, and then a low for 40 us: a whole half of the clock is captured at the other level (the line's
 high level near the probe's threshold, as the weak pull-up leaves it), not an edge bouncing. Nothing in the samples
 tells the high that was there; the test keeps it failing until the capture shows it.
+
+`h417_slow/` holds many more captures of the same board's I2C through the probe's weak pull-ups alone, with and
+without the probe's glitch filter, and its own README.

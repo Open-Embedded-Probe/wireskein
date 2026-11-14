@@ -1,0 +1,317 @@
+[
+ {
+  "tag": "nohys",
+  "rate": 20000000,
+  "glitch_ns": 0,
+  "runs": 10,
+  "failed": 0,
+  "extra_scl_rises": 21,
+  "missing_scl_rises": 0,
+  "runs_scl_off": 10,
+  "extra_sda_while_high": 18,
+  "runs_sda_off": 7,
+  "dut": [
+   "NACK 2"
+  ]
+ },
+ {
+  "tag": "nohys",
+  "rate": 20000000,
+  "glitch_ns": 25,
+  "runs": 10,
+  "failed": 0,
+  "extra_scl_rises": 13,
+  "missing_scl_rises": 0,
+  "runs_scl_off": 9,
+  "extra_sda_while_high": 4,
+  "runs_sda_off": 2,
+  "dut": [
+   "NACK 2"
+  ]
+ },
+ {
+  "tag": "nohys",
+  "rate": 20000000,
+  "glitch_ns": 50,
+  "runs": 10,
+  "failed": 0,
+  "extra_scl_rises": 11,
+  "missing_scl_rises": 0,
+  "runs_scl_off": 10,
+  "extra_sda_while_high": 0,
+  "runs_sda_off": 0,
+  "dut": [
+   "NACK 2"
+  ]
+ },
+ {
+  "tag": "nohys",
+  "rate": 20000000,
+  "glitch_ns": 75,
+  "runs": 10,
+  "failed": 0,
+  "extra_scl_rises": 8,
+  "missing_scl_rises": 9,
+  "runs_scl_off": 8,
+  "extra_sda_while_high": 12,
+  "runs_sda_off": 2,
+  "dut": [
+   "NACK 2"
+  ]
+ },
+ {
+  "tag": "nohys",
+  "rate": 20000000,
+  "glitch_ns": 100,
+  "runs": 10,
+  "failed": 0,
+  "extra_scl_rises": 7,
+  "missing_scl_rises": 0,
+  "runs_scl_off": 7,
+  "extra_sda_while_high": 5,
+  "runs_sda_off": 2,
+  "dut": [
+   "NACK 2"
+  ]
+ },
+ {
+  "tag": "nohys",
+  "rate": 20000000,
+  "glitch_ns": 150,
+  "runs": 10,
+  "failed": 0,
+  "extra_scl_rises": 4,
+  "missing_scl_rises": 8,
+  "runs_scl_off": 6,
+  "extra_sda_while_high": 7,
+  "runs_sda_off": 3,
+  "dut": [
+   "NACK 2"
+  ]
+ },
+ {
+  "tag": "nohys",
+  "rate": 20000000,
+  "glitch_ns": 200,
+  "runs": 10,
+  "failed": 0,
+  "extra_scl_rises": 5,
+  "missing_scl_rises": 6,
+  "runs_scl_off": 6,
+  "extra_sda_while_high": 0,
+  "runs_sda_off": 1,
+  "dut": [
+   "NACK 2"
+  ]
+ },
+ {
+  "tag": "nohys",
+  "rate": 50000000,
+  "glitch_ns": 0,
+  "runs": 10,
+  "failed": 0,
+  "extra_scl_rises": 27,
+  "missing_scl_rises": 0,
+  "runs_scl_off": 10,
+  "extra_sda_while_high": 12,
+  "runs_sda_off": 5,
+  "dut": [
+   "NACK 2"
+  ]
+ },
+ {
+  "tag": "nohys",
+  "rate": 50000000,
+  "glitch_ns": 25,
+  "runs": 10,
+  "failed": 0,
+  "extra_scl_rises": 16,
+  "missing_scl_rises": 4,
+  "runs_scl_off": 10,
+  "extra_sda_while_high": 16,
+  "runs_sda_off": 5,
+  "dut": [
+   "NACK 2"
+  ]
+ },
+ {
+  "tag": "nohys",
+  "rate": 50000000,
+  "glitch_ns": 50,
+  "runs": 10,
+  "failed": 0,
+  "extra_scl_rises": 14,
+  "missing_scl_rises": 0,
+  "runs_scl_off": 9,
+  "extra_sda_while_high": 10,
+  "runs_sda_off": 5,
+  "dut": [
+   "NACK 2"
+  ]
+ },
+ {
+  "tag": "nohys",
+  "rate": 50000000,
+  "glitch_ns": 75,
+  "runs": 9,
+  "failed": 1,
+  "extra_scl_rises": 7,
+  "missing_scl_rises": 7,
+  "runs_scl_off": 8,
+  "extra_sda_while_high": 15,
+  "runs_sda_off": 4,
+  "dut": [
+   "NACK 2"
+  ]
+ },
+ {
+  "tag": "nohys",
+  "rate": 50000000,
+  "glitch_ns": 100,
+  "runs": 10,
+  "failed": 0,
+  "extra_scl_rises": 6,
+  "missing_scl_rises": 22,
+  "runs_scl_off": 9,
+  "extra_sda_while_high": 12,
+  "runs_sda_off": 4,
+  "dut": [
+   "NACK 2"
+  ]
+ },
+ {
+  "tag": "nohys",
+  "rate": 50000000,
+  "glitch_ns": 150,
+  "runs": 10,
+  "failed": 0,
+  "extra_scl_rises": 7,
+  "missing_scl_rises": 10,
+  "runs_scl_off": 9,
+  "extra_sda_while_high": 6,
+  "runs_sda_off": 1,
+  "dut": [
+   "NACK 2"
+  ]
+ },
+ {
+  "tag": "nohys",
+  "rate": 50000000,
+  "glitch_ns": 200,
+  "runs": 9,
+  "failed": 1,
+  "extra_scl_rises": 6,
+  "missing_scl_rises": 0,
+  "runs_scl_off": 6,
+  "extra_sda_while_high": 0,
+  "runs_sda_off": 0,
+  "dut": [
+   "NACK 2"
+  ]
+ },
+ {
+  "tag": "nohys",
+  "rate": 100000000,
+  "glitch_ns": 0,
+  "runs": 5,
+  "failed": 5,
+  "extra_scl_rises": 12,
+  "missing_scl_rises": 5,
+  "runs_scl_off": 5,
+  "extra_sda_while_high": 7,
+  "runs_sda_off": 4,
+  "dut": [
+   "NACK 2"
+  ]
+ },
+ {
+  "tag": "nohys",
+  "rate": 100000000,
+  "glitch_ns": 25,
+  "runs": 10,
+  "failed": 0,
+  "extra_scl_rises": 18,
+  "missing_scl_rises": 5,
+  "runs_scl_off": 9,
+  "extra_sda_while_high": 16,
+  "runs_sda_off": 9,
+  "dut": [
+   "NACK 2"
+  ]
+ },
+ {
+  "tag": "nohys",
+  "rate": 100000000,
+  "glitch_ns": 50,
+  "runs": 5,
+  "failed": 5,
+  "extra_scl_rises": 2,
+  "missing_scl_rises": 6,
+  "runs_scl_off": 3,
+  "extra_sda_while_high": 2,
+  "runs_sda_off": 2,
+  "dut": [
+   "NACK 2"
+  ]
+ },
+ {
+  "tag": "nohys",
+  "rate": 100000000,
+  "glitch_ns": 75,
+  "runs": 9,
+  "failed": 1,
+  "extra_scl_rises": 2,
+  "missing_scl_rises": 15,
+  "runs_scl_off": 7,
+  "extra_sda_while_high": 1,
+  "runs_sda_off": 5,
+  "dut": [
+   "NACK 2"
+  ]
+ },
+ {
+  "tag": "nohys",
+  "rate": 100000000,
+  "glitch_ns": 100,
+  "runs": 7,
+  "failed": 3,
+  "extra_scl_rises": 2,
+  "missing_scl_rises": 19,
+  "runs_scl_off": 7,
+  "extra_sda_while_high": 11,
+  "runs_sda_off": 5,
+  "dut": [
+   "NACK 2"
+  ]
+ },
+ {
+  "tag": "nohys",
+  "rate": 100000000,
+  "glitch_ns": 150,
+  "runs": 7,
+  "failed": 3,
+  "extra_scl_rises": 2,
+  "missing_scl_rises": 18,
+  "runs_scl_off": 6,
+  "extra_sda_while_high": 7,
+  "runs_sda_off": 3,
+  "dut": [
+   "NACK 2"
+  ]
+ },
+ {
+  "tag": "nohys",
+  "rate": 100000000,
+  "glitch_ns": 200,
+  "runs": 8,
+  "failed": 2,
+  "extra_scl_rises": 3,
+  "missing_scl_rises": 6,
+  "runs_scl_off": 4,
+  "extra_sda_while_high": 4,
+  "runs_sda_off": 3,
+  "dut": [
+   "NACK 2"
+  ]
+ }
+]

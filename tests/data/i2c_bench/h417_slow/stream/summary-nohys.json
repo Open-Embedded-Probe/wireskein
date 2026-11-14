@@ -1,0 +1,152 @@
+[
+ {
+  "tag": "nohys",
+  "rate": 20000000,
+  "glitch_ns": 0,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 49,
+  "correct": 39,
+  "lost": 0
+ },
+ {
+  "tag": "nohys",
+  "rate": 20000000,
+  "glitch_ns": 25,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 2,
+  "correct": 1,
+  "lost": 0
+ },
+ {
+  "tag": "nohys",
+  "rate": 20000000,
+  "glitch_ns": 50,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 2,
+  "correct": 1,
+  "lost": 0
+ },
+ {
+  "tag": "nohys",
+  "rate": 20000000,
+  "glitch_ns": 100,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 1,
+  "correct": 1,
+  "lost": 0
+ },
+ {
+  "tag": "nohys",
+  "rate": 20000000,
+  "glitch_ns": 200,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 3,
+  "correct": 1,
+  "lost": 0
+ },
+ {
+  "tag": "nohys",
+  "rate": 50000000,
+  "glitch_ns": 0,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 47,
+  "correct": 42,
+  "lost": 0
+ },
+ {
+  "tag": "nohys",
+  "rate": 50000000,
+  "glitch_ns": 25,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 5,
+  "correct": 5,
+  "lost": 0
+ },
+ {
+  "tag": "nohys",
+  "rate": 50000000,
+  "glitch_ns": 50,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 17,
+  "correct": 11,
+  "lost": 0
+ },
+ {
+  "tag": "nohys",
+  "rate": 50000000,
+  "glitch_ns": 100,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 4,
+  "correct": 4,
+  "lost": 0
+ },
+ {
+  "tag": "nohys",
+  "rate": 50000000,
+  "glitch_ns": 200,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 1,
+  "correct": 0,
+  "lost": 0
+ },
+ {
+  "tag": "nohys",
+  "rate": 100000000,
+  "glitch_ns": 0,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 49,
+  "correct": 35,
+  "lost": 0
+ },
+ {
+  "tag": "nohys",
+  "rate": 100000000,
+  "glitch_ns": 25,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 9,
+  "correct": 6,
+  "lost": 0
+ },
+ {
+  "tag": "nohys",
+  "rate": 100000000,
+  "glitch_ns": 50,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 8,
+  "correct": 8,
+  "lost": 0
+ },
+ {
+  "tag": "nohys",
+  "rate": 100000000,
+  "glitch_ns": 100,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 10,
+  "correct": 7,
+  "lost": 0
+ },
+ {
+  "tag": "nohys",
+  "rate": 100000000,
+  "glitch_ns": 200,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 2,
+  "correct": 0,
+  "lost": 0
+ }
+]

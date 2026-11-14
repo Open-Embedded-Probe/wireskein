@@ -56,7 +56,10 @@ Spikes need their own T. I2C at 100 kHz with three pulses of 20 ns on each line,
 (50 ns): at 5 to 20 MS/s 83 to 87 of 100 read right (a pulse seen a whole sample long is taken for the signal), at
 40 MS/s and over all 100. The bus itself (halves of 5 us) needs only 1 MS/s; the spikes ask for 100 MS/s (5 / 50 ns).
 A probe's glitch filter (`glitch_filter_ns`) steadies a reading by dropping pulses under its width, and so hides them:
-spikes are told only above the filter's width.
+spikes are told only above the filter's width. On slow, noisy edges a filter may also lock up or oscillate: the
+ESP32-P4's flex glitch filter, on I2C through 45 kOhm pull-ups, left SCL silent from some point on, or swinging a
+million times, and 0 to 11 of 50 transactions read right against 29 to 42 without it. The analysis tells a line
+that stops or oscillates (`reading.stopped`, `oscillating`); take such lines without the filter.
 
 Measured on a WCH-LinkE at its fastest (highs of 20-25 ns): at 50 MS/s a third of its frames lost a clock, at
 100 MS/s some still did, at 160 MS/s (3 to 4 samples) none, and that is still under the least: told.

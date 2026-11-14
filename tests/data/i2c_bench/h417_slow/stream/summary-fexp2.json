@@ -1,0 +1,32 @@
+[
+ {
+  "tag": "fexp2",
+  "rate": 50000000,
+  "glitch_ns": 75,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 2,
+  "correct": 2,
+  "lost": 0
+ },
+ {
+  "tag": "fexp2",
+  "rate": 50000000,
+  "glitch_ns": 150,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 8,
+  "correct": 7,
+  "lost": 0
+ },
+ {
+  "tag": "fexp2",
+  "rate": 50000000,
+  "glitch_ns": 100,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 2,
+  "correct": 2,
+  "lost": 0
+ }
+]

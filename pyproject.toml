@@ -44,6 +44,7 @@ artifacts = ["src/wireskein/web/**"]      # the viewer: not in git, fetched by t
 
 [tool.hatch.build.targets.sdist]
 only-include = ["src/wireskein", "tests", "README.md", "README.ja.md", "CHANGELOG.md", "LICENSE", "pyproject.toml"]
+exclude = ["tests/data/i2c_bench/h417_slow"]   # 9 MB of bench captures kept in git, not shipped (their tests skip)
 artifacts = ["src/wireskein/web/**"]
 
 [tool.pytest.ini_options]

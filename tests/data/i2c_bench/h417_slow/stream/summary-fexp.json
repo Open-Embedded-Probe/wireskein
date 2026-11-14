@@ -1,0 +1,12 @@
+[
+ {
+  "tag": "fexp",
+  "rate": 50000000,
+  "glitch_ns": 25,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 48,
+  "correct": 39,
+  "lost": 0
+ }
+]
