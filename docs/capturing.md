@@ -55,11 +55,23 @@ is told (the notice `under_rate`, with the rate to take), never passed silently.
 Spikes need their own T. I2C at 100 kHz with three pulses of 20 ns on each line, read through the check's spike filter
 (50 ns): at 5 to 20 MS/s 83 to 87 of 100 read right (a pulse seen a whole sample long is taken for the signal), at
 40 MS/s and over all 100. The bus itself (halves of 5 us) needs only 1 MS/s; the spikes ask for 100 MS/s (5 / 50 ns).
-A probe's glitch filter (`glitch_filter_ns`) steadies a reading by dropping pulses under its width, and so hides them:
-spikes are told only above the filter's width. On slow, noisy edges a filter may also lock up or oscillate: the
-ESP32-P4's flex glitch filter, on I2C through 45 kOhm pull-ups, left SCL silent from some point on, or swinging a
-million times, and 0 to 11 of 50 transactions read right against 29 to 42 without it. The analysis tells a line
-that stops or oscillates (`reading.stopped`, `oscillating`); take such lines without the filter.
+A probe's glitch filter (`glitch_filter_ns`, the ESP32-P4's: the pin's fixed 25 ns) drops spikes shorter than its
+width, and so hides them: spikes are told only above the filter's width. It does nothing for a slow edge's wobble.
+For slow edges, the probe's input hysteresis (`input_hysteresis`, on by default where a probe has it,
+`meta.probe.input_hysteresis`) is what helps: through 45 kOhm pull-ups it brought SCL's changes from 1108-1142 to
+1008-1014 for 1000 clock edges. The analysis reads I2C right either way (below). Older ESP32-P4 firmware had a flex
+glitch filter that locked up or oscillated on slow, noisy edges, leaving SCL silent from some point on or swinging a
+million times; the analysis tells a line that stops or oscillates (`reading.stopped`, `oscillating`) in such
+captures.
+
+**I2C through weak pull-ups.** A released line takes long to rise through a weak pull-up (about 5 us through
+45 kOhm), and a controller counts its high from releasing SCL, so a clock can be on the line for a moment only (20-40
+ns), or shorter than a sample and not in the capture at all; the devices on the bus still take it as a clock. The
+analysis keeps such a clipped clock (an SCL high between whole lows), and restores one that is not captured where
+one reading is left (`clock_restored`, `restored` on the transaction). Checked against the waveform the transactions
+must have made (`eval/i2c_vs_truth.py`, 1200 transactions of oep's CH32H417 captures at 20-100 MS/s, with and without
+hysteresis and the pin's filter), 1172 read exactly right; as sampled, 0 to 38 of each 50 showed the right changes.
+A stronger pull-up (a few kOhm) is still the cure for the bus itself.
 
 Measured on a WCH-LinkE at its fastest (highs of 20-25 ns): at 50 MS/s a third of its frames lost a clock, at
 100 MS/s some still did, at 160 MS/s (3 to 4 samples) none, and that is still under the least: told.
@@ -109,7 +121,7 @@ Nothing it does is a guess: each is told where it was done, and anything else is
 | Glitch clocks in a frame of a length no form has | Dropped when that gives a known length and the checks hold | `repaired` (the ticks) |
 | A clock lost between samples (a frame a clock short) | Restored only where every likely place gives the same bits and they pass the checks | `restored` (the tick), `undersampled` |
 | A clock too fast for the rate | — | `undersampled`, `clock_speeds` |
-| I2C: a pulse shorter than 50 ns (t_SP); an edge crossing the threshold more than once within a third of SCL's half and 1000 ns (t_r; from 5 MS/s) | Left out; read as one at its last change, as an I2C input does (its spike filter, its hysteresis) | `params.deglitch: i2c_input`; the `i2c` check's `bus_glitch`, `slow_edge` |
+| I2C: a pulse shorter than 50 ns (t_SP), but an SCL high where a clock is due with whole lows around it (a clock a slow rise clipped short: kept); an edge crossing the threshold more than once within a third of SCL's half and 1000 ns (t_r; from 5 MS/s) | Left out; read as one at its last change, as an I2C input does (its spike filter, its hysteresis) | `params.deglitch: i2c_input`; the `i2c` check's `bus_glitch`, `slow_edge` |
 | Activity no frame reads | — | `uninterpreted` |
 
 On 4 KiB flashed by a LinkE at 50 MS/s, 174 of 3026 frames a clock short read so, each one a 160 MS/s capture of the

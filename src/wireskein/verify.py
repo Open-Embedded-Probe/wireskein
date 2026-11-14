@@ -375,14 +375,15 @@ def _best(res, analyzer, need: dict, also=None):
 
 
 def _burst_hz(ch: Channel, rate: float) -> float | None:
-    """Clock frequency inside bursts (rise-to-rise, gaps between bursts ignored)."""
+    """Clock frequency inside bursts: rise to rise, the median (one short interval left by a spike, or a long one by
+    a stretched clock, does not move it), gaps between bursts ignored."""
     rises = ch.edges[0::2] if ch.initial == 0 else ch.edges[1::2]
     if len(rises) < 3:
         return None
     d = np.diff(rises)
     med = float(np.median(d))
     d = d[d < 1.5 * med]
-    return rate / float(np.mean(d)) if len(d) else None
+    return rate / float(np.median(d)) if len(d) else None
 
 
 def _i2c_tx(t: dict) -> dict:
@@ -463,7 +464,10 @@ def check_i2c(cap, x):
     # sees a slow edge crossing the threshold more than once as one (the notices see them all)
     read, _ = timing.i2c_input(cap, x["scl"], x["sda"], x.get("spike_max_s", timing.I2C_SPIKE_S), x.get("freq_hz"))
     w = x.get("freq_hz")                             # the slow edges' allowance: from freq_hz, or SCL around each
-    res = _decode(read, {"protocols": ["i2c"], "pins": {x["scl"]: {"protocol": "i2c", "role": "scl"},
+    # decoded from the lines as captured: the analysis reads them as an input does itself (one pass, with this
+    # check's spike_max_s and freq_hz); `read` is for the measures below
+    lim = {"spike_max_s": x.get("spike_max_s", timing.I2C_SPIKE_S), **({"freq_hz": w} if w else {})}
+    res = _decode(cap, {"protocols": ["i2c"], "pins": {x["scl"]: {"protocol": "i2c", "role": "scl", **lim},
                                                         x["sda"]: {"protocol": "i2c", "role": "sda"}}})
     n = _best(res, "i2c", {"scl": x["scl"], "sda": x["sda"]})
     got = {"transactions": [_i2c_tx(t) for t in (n.output.items if n else []) if "addr" in t]}
@@ -473,9 +477,12 @@ def check_i2c(cap, x):
         if diff:
             ok = False
             why.append("transactions differ: " + diff)
-    hz = _burst_hz(scl, cap.rate)
+    hz = _burst_hz(read.channel(x["scl"]), cap.rate)   # on the lines as an input sees them, as the bytes are
     got["scl_hz"] = hz
     got["notices"] = _i2c_notices(cap, scl, sda, x.get("spike_max_s", 50e-9), x.get("stretch_min", 2.0), w)
+    for t in (n.output.items if n else []):        # a clock clipped shorter than a sample, restored (timing.i2c_restore)
+        got["notices"] += [{"kind": "clock_restored", "tick": int(at)} for at in t.get("restored", [])]
+    got["notices"].sort(key=lambda k: k["tick"])
     got["stretches"] = sum(1 for k in got["notices"] if k["kind"] == "scl_stretch")
     got["spikes"] = sum(1 for k in got["notices"] if k["kind"] == "bus_glitch")
     same = [k for k in got["notices"] if k["kind"] == "same_sample"]
@@ -1959,6 +1966,8 @@ NOTICES = {
     "i2c": {"scl_stretch": "SCL held low longer than its usual low (a target stretching the clock, or the controller "
                            "pausing; length_ticks, usual_ticks)",
             "bus_glitch": "a pulse on SCL or SDA shorter than spike_max_s, which inputs suppress (line, width_ticks)",
+            "clock_restored": "a transaction a clock short, its clock restored where one reading is left: a clock "
+                              "clipped shorter than a sample by a slow rise (tick: where it was put)",
             "slow_edge": "an edge on SCL or SDA crossing the threshold more than once within a third of SCL's half and t_r (1 us): the "
                          "line's own problem, a slow rise through a weak pull-up or ringing, read as one edge at its "
                          "last change as an input with hysteresis does (line, changes, span_ticks, to: 1 a rise)"},

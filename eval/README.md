@@ -15,6 +15,7 @@ uv run python evaluate.py --set heldout --tag NAME                 # a frozen se
 uv run python evaluate.py --synth 200 --tag NAME                   # the real records + 200 generated cases
 uv run python large_eval.py                                        # the real records with a million edges
 uv run python rates.py --trials 100                                # how checks read at k samples in T -> work/rates.json
+uv run python i2c_vs_truth.py FILE...                              # an I2C capture against the waveform it must show
 ```
 
 Main arguments of `evaluate.py`:

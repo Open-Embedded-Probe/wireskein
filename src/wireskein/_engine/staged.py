@@ -588,13 +588,18 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
         views = list(glitch_views(cap, c.sv, g))
         # I2C reads the lines as an I2C input sees them (its spike filter, its hysteresis: timing.i2c_input), the
         # only reading such a device makes of them; the other plugins the views above
-        i2c_view = None
+        i2c_view, i2c_only = None, False
         if not g.select and len(g.data) == 1 and any(p.name == "i2c" for p in by_type.get("frames.startstop", [])):
-            iv, changed = timing.i2c_input(cap, g.clock, g.data[0],
-                                           freq_hz=pin_hint.get(g.clock, {}).get("freq_hz"))   # a spec's SCL rate
+            hint = pin_hint.get(g.clock, {})
+            spike = float(hint.get("spike_max_s") or timing.I2C_SPIKE_S)       # a check's spike_max_s
+            iv, changed = timing.i2c_input(cap, g.clock, g.data[0], spike, freq_hz=hint.get("freq_hz"))
             if changed:
                 i2c_view = iv
                 views.append((iv, "i2c_input"))
+            # at a rate that shows t_SP (2 samples or more in it) the input view is the whole reading: no view with
+            # short pulses dropped by width (it would drop clocks clipped short, and restored ones); slower, the
+            # views as for any clocked bus
+            i2c_only = spike * float(cap.rate) >= 2
         # the edges the lines say in any view (a view with its short pulses left out may say the other), and the one
         # the spec (or a long capture's first piece) gives: every view read on each, so that the same reading is
         # there whatever the view (a piece of a long capture reads as the whole does)
@@ -622,7 +627,14 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
                     streams.append(("frames.startstop", typed.frames_startstop(view_cap, sb)))
                 for kind, fr in streams:
                     for p in by_type.get(kind, []):
-                        if i2c_view is not None and (p.name == "i2c") != (k == "i2c_input"):
+                        # I2C reads its input view (timing.i2c_input) or, when that changed nothing, the lines as
+                        # they are: never a view with short pulses dropped by width, which would drop clocks clipped
+                        # short and restored ones; the other plugins every view but I2C's
+                        if p.name == "i2c" and i2c_view is not None and k != "i2c_input":
+                            continue
+                        if p.name == "i2c" and i2c_only and k != ("i2c_input" if i2c_view is not None else 0):
+                            continue
+                        if p.name != "i2c" and k == "i2c_input":
                             continue
                         runs += 1
                         got = p.run(c, fr if getattr(p, "open_tail", False) else fr.closed(), g)

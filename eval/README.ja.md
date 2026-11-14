@@ -15,6 +15,7 @@ uv run python evaluate.py --set heldout --tag NAME                 # 凍結し�
 uv run python evaluate.py --synth 200 --tag NAME                   # 実記録と、生成した 200 件
 uv run python large_eval.py                                        # 100 万エッジの実記録
 uv run python rates.py --trials 100                                # T に k サンプルで検査がどう読むか -> work/rates.json
+uv run python i2c_vs_truth.py FILE...                              # I2C のキャプチャを、写るはずの波形と突き合わせる
 ```
 
 `evaluate.py` の主な引数:

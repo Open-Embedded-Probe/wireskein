@@ -435,7 +435,8 @@ def i2c(scl: str, sda: str, transactions: list[dict] | None = None, freq_hz: flo
         freq_rel: float = 0.1, released: bool = True, notices: dict | None = None, spike_max_s: float = 50e-9,
         stretch_min: float = 2.0, threshold=None) -> dict:
     """transactions: [{"addr": 0x42, "rw": "write", "bytes": [..], "ack": True}], compared in order.
-    The lines are read as an I2C input sees them: pulses shorter than spike_max_s left out (its spike filter), and
+    The lines are read as an I2C input sees them: pulses shorter than spike_max_s left out (its spike filter; an SCL
+    high where a clock is due, between whole lows, kept: a clock a slow rise clipped short), and
     an edge crossing the threshold more than once within a third of SCL's half and 1000 ns (t_r; a capture of 5 MS/s
     or more; a slow rise, ringing) read as
     one at its last change (its hysteresis).

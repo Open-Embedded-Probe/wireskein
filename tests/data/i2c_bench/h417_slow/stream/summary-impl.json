@@ -1,0 +1,86 @@
+[
+ {
+  "tag": "impl",
+  "rate": 50000000,
+  "glitch_ns": 0,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 48,
+  "correct": 48,
+  "lost": 0,
+  "hys_used": true,
+  "glitch_used": null
+ },
+ {
+  "tag": "impl",
+  "rate": 50000000,
+  "glitch_ns": 0,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 49,
+  "correct": 49,
+  "lost": 0,
+  "hys_used": false,
+  "glitch_used": null
+ },
+ {
+  "tag": "impl",
+  "rate": 50000000,
+  "glitch_ns": 25,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 48,
+  "correct": 48,
+  "lost": 0,
+  "hys_used": true,
+  "glitch_used": 25
+ },
+ {
+  "tag": "impl",
+  "rate": 50000000,
+  "glitch_ns": 25,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 50,
+  "correct": 50,
+  "lost": 0,
+  "hys_used": false,
+  "glitch_used": 25
+ },
+ {
+  "tag": "impl",
+  "rate": 20000000,
+  "glitch_ns": 0,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 48,
+  "correct": 48,
+  "lost": 0,
+  "hys_used": true,
+  "glitch_used": null
+ },
+ {
+  "tag": "impl",
+  "rate": 100000000,
+  "glitch_ns": 0,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 49,
+  "correct": 49,
+  "lost": 0,
+  "hys_used": true,
+  "glitch_used": null
+ },
+ {
+  "tag": "impl",
+  "rate": 100000000,
+  "glitch_ns": 0,
+  "sent": 50,
+  "dut_nack2": 50,
+  "decoded": 49,
+  "correct": 47,
+  "lost": 0,
+  "hys_used": false,
+  "glitch_used": null
+ }
+]

@@ -93,3 +93,26 @@ def test_five_samples_a_half_reads_at_every_phase_of_the_sample_grid():
     for phase in np.linspace(0, 1e-6, 7, endpoint=False):
         ok, _, why, _ = judge(capture(1e6, scl, sda, end, phase))
         assert ok is True, (phase, why)
+
+
+def test_a_clock_clipped_short_by_a_slow_rise_is_kept_as_a_clock():
+    # a controller counts its high from releasing SCL: through a slow rise the line is high for a moment only (40 ns
+    # here), and the devices take it as a clock all the same. A spike filter alone would drop it and lose a bit
+    scl, sda, end = waves(data_at=0.1)
+    rise = scl.times[5]                                               # a rise inside the address byte
+    i = scl.times.index(rise)
+    scl.times[i + 1] = rise + 40e-9                                   # its fall, 40 ns on
+    ok, got, why, found = judge(capture(100e6, scl, sda, end))
+    assert ok is True, why
+    assert any(n["kind"] == "bus_glitch" and n["width_ticks"] == 4 for n in found)   # still told as short
+
+
+def test_a_spike_in_the_middle_of_scl_low_is_no_clock():
+    # 20 ns high on SCL halfway through a low (a neighbour's edge picked up): the low on either side is half the
+    # usual one, so it is a spike, left out, not a clock clipped short
+    scl, sda, end = waves(data_at=0.1)
+    fall, rise = scl.times[4], scl.times[5]                           # a low inside the address byte
+    mid = (fall + rise) / 2
+    scl.times = sorted(scl.times + [mid, mid + 20e-9])
+    ok, got, why, found = judge(capture(100e6, scl, sda, end))
+    assert ok is True, why

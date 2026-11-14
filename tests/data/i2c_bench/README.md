@@ -17,12 +17,13 @@ as 0x40). Read as an I2C input sees the lines (spikes shorter than t_SP left out
 | `x035_12k5` | CH32X035 | 12.5 kHz | yes |
 | `v205_contract` | CH32V205 (PB9 SDA, PB8 SCL) | 100 kHz | yes |
 | `h417_a` | CH32H417 (PB11 SDA, PB10 SCL) | 12.5 kHz | yes |
-| `h417_b` | CH32H417 | 12.5 kHz | **no**: "address 0x13, no target" |
+| `h417_b` | CH32H417 | 12.5 kHz | yes |
 
-`h417_b` is kept as data that does not read. In "address 0x13, no target", SCL shows a high of 30 ns where a high
-of 40 us should be, and then a low for 40 us: a whole half of the clock is captured at the other level (the line's
-high level near the probe's threshold, as the weak pull-up leaves it), not an edge bouncing. Nothing in the samples
-tells the high that was there; the test keeps it failing until the capture shows it.
+`h417_b` was kept as data that did not read. In "address 0x13, no target", SCL shows a high of 30 ns where a clock
+was, then a low for 40 us: a controller counts its high from releasing SCL, so through a slow rise the line is high
+for a moment only, and it holds SCL low while it waits for the line. One more clock of that transaction is shorter
+than a sample and not in the capture at all. Read with such clocks kept, and the missing one restored where one
+reading is left (`clock_restored`), it reads as the device sent it.
 
 `h417_slow/` holds many more captures of the same board's I2C through the probe's weak pull-ups alone, with and
 without the probe's glitch filter, and its own README.

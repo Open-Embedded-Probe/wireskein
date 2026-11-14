@@ -780,8 +780,14 @@ def load_all(names: list[str] | None = None) -> list[DeclarativePlugin]:
 def _adapt_i2c(c, fr, n):
     # the transactions as the checks read them, from all frames (an open last one: complete=False, pending_bits)
     # SCL from the view the bits were read from (a deglitched one, when it was)
-    scl = getattr(fr.source, "view", c.cap).channel(fr.source.clock)
-    n.output = Stream("i2c.transactions", typed.i2c_from_words(fr, typed.words(fr, 9), scl))
+    view = getattr(fr.source, "view", c.cap)
+    scl = view.channel(fr.source.clock)
+    items = typed.i2c_from_words(fr, typed.words(fr, 9), scl)
+    for at in view.meta.get("i2c_restored", []):          # a clock restored (timing.i2c_restore): told on its own
+        for x in items:
+            if x.get("start", 0) <= at <= x.get("end", -1):
+                x.setdefault("restored", []).append(int(at))
+    n.output = Stream("i2c.transactions", items)
     return n
 
 

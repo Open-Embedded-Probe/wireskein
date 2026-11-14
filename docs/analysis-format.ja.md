@@ -24,7 +24,7 @@ wireskein の中を知らない道具が後で読みます。
 | --- | --- |
 | `buses[].protocol` | 解析器の名前（`i2c`、`spi`、`uart` など） |
 | `buses[].pins` | 役割 → チャンネルの名前。どのピンもキャプチャに無ければならない（無ければエラー）。ちょうどこのピンの上の復号を使う |
-| `buses[].params` | 任意。指示として渡す（`uart` の `baud` など）。`spi` の `mode`（0〜3）は標本のエッジを決める。無ければ線からモードを読む（capture-test-guide §4.5）。active high の CS には `cs_active`。`i2c` の `freq_hz`（SCL の速さ）は、1 つの遅い縁のまたぎがどこまで広がってよいかを決める（その半周期の 3 分の 1、多くて 1000 ns（t_r）。無ければ縁ごとにその辺りのクロックから測る。5 MS/s 未満ではしない）。I2C は、いつも I2C の入力が見るとおりに読む: 50 ns（t_SP）より短いパルスを除き、しきい値を何度もまたいだ遅い縁は、最後の変化で 1 つとして読む（それで何か変わったときは `params.deglitch` が `i2c_input`） |
+| `buses[].params` | 任意。指示として渡す（`uart` の `baud` など）。`spi` の `mode`（0〜3）は標本のエッジを決める。無ければ線からモードを読む（capture-test-guide §4.5）。active high の CS には `cs_active`。`i2c` の `freq_hz`（SCL の速さ）は、1 つの遅い縁のまたぎがどこまで広がってよいかを決める（その半周期の 3 分の 1、多くて 1000 ns（t_r）。無ければ縁ごとにその辺りのクロックから測る。5 MS/s 未満ではしない）。I2C は、いつも I2C の入力が見るとおりに読む: 50 ns（t_SP）より短いパルスを除き（ただし、クロックが来るはずの所にあり、前後にまるごとの Low がある SCL の High は除かない: 遅い立ち上がりで短く切られたクロックで、バスの機器はクロックとして扱う）、しきい値を何度もまたいだ遅い縁は、最後の変化で 1 つとして読む（それで何か変わったときは `params.deglitch` が `i2c_input`） |
 | `split` | 任意。長い区間を区切って読む方法（[長いキャプチャ](long-captures.ja.md) §3）: 辞書、`"key=value,..."`、`"off"` |
 | `buses[].layers` | 任意。最後の読みのほかに `result` に出す下の層の名前（`bits`: サンプルの縁 `t` とその値のすべて、`frames`、SWIO の `pulses`: パルスごとの始まり・幅・短い / 長い、`*`: すべて） |
 | `buses[].idle_s` | 任意。これより離れた活動は別のかたまり（§3.3）。既定はそのバスの 16 ビット分、ビットの無いバスは 1 ms |
@@ -128,7 +128,7 @@ analyze の書き出し（`--mode final`、`depth` まで）の層。刻みは�
 
 | 方式 | 層 |
 | --- | --- |
-| `i2c` | `transactions`: `s`、`e`、`addr`、`rw`、`addr_ack`、`bytes`（16 進）、`acks`、`start_cond`（S / Sr）、`end_cond`（P / Sr / null: 区間の終わりで開いたまま）、`scl_low_ticks`、`scl_waits`（`[{after_word, bit, ticks, s}]`）。区間の終わりで切れたものは `complete: false` と `pending_bits` |
+| `i2c` | `transactions`: `s`、`e`、`addr`、`rw`、`addr_ack`、`bytes`（16 進）、`acks`、`start_cond`（S / Sr）、`end_cond`（P / Sr / null: 区間の終わりで開いたまま）、`scl_low_ticks`、`restored`（補ったクロックの tick: 遅い立ち上がりで 1 サンプルより短く切られたもの。読みが 1 つに決まる所に置く）、`scl_waits`（`[{after_word, bit, ticks, s}]`）。区間の終わりで切れたものは `complete: false` と `pending_bits` |
 | 独自のプロトコル（[独自のプロトコル](protocols.ja.md)） | バスの下に、その名前で: `{"messages", "checks_passed", "checks_failed"}`。チェックが通ったときに出て、そのときはバスの最終の読み |
 | `spi` | `transfers`: `s`、`e`（最初と最後の標本のビット）と、データのピンごとのバイト（16 進、チャンネルの名前の下）。SD のコマンドを読めたら、横に `sd`（capture-test-guide §4.8）。CS があれば `modes`: SCK の待機のレベルに合う 2 つのモードそれぞれの `readable`（そのサンプルの辺でどのデータ線も変わらない）と、そのモードで読んだ `bytes`（MSB から）。`modes_ok` は読めるもの。読めるモードが 1 つならモードが決まる。読めるモードのバイトが同じなら、見分けなくてよい |
 | `uart` | `lines`、`nmea`、`modbus_rtu`（読めたもの）と `bytes`（`{"s": [...], "hex"}`） |

@@ -21,10 +21,14 @@ the device saw; an external pull-up of a few kOhm is the cure, which this bench 
 
 What they show:
 
-- Without a filter, 29 to 45 of 50 transactions read right at any rate. Hysteresis on the probe's pads brings
-  SCL's changes near the 1000 the transactions make (1004-1032, against 1070-1106 without), and still 34 to 45 read
-  right: what is left is mostly the ninth clock's SDA read low (an ACK) and R/W misread, the slow rises racing, not
-  spikes.
+- Through 45 kOhm a controller's clock can be clipped to a moment: it counts its high from releasing SCL, the line
+  crosses the threshold for 20-40 ns, or for less than a sample and not at all in the capture, and the devices take
+  it as a clock. Read with such clocks kept and the missing ones restored where one reading is left, the
+  transactions match the waveform they must make (`eval/i2c_vs_truth.py`) in 1172 of 1200 (`impl-*`, `pin-*`,
+  `nohys-*-g0`, `hys-*-g0`, 20-100 MS/s); as sampled, 0 to 38 of each 50.
+- `impl-*`: the firmware after oep-spec 4ab3327 (the pin's fixed 25 ns filter, input hysteresis on by default):
+  `g0` default, `h0` hysteresis off, `g25` the pin's filter. Hysteresis brings SCL's changes from 1108-1142 to
+  1008-1014 for 1000 clock edges; read, 48 to 50 of 50 either way.
 - With the P4's flex glitch filter (25-200 ns), 0 to 11 of 50: on these slow, noisy edges the filter locks up, the
   line changing no more from some point (SCL silent from 0.29 s at 100 ns, SDA going on), or oscillates (SCL 1.86
   million changes), with the pads' hysteresis too; on clean edges it lets a short pulse through and recovers.

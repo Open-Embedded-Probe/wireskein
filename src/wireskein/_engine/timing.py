@@ -415,11 +415,12 @@ def i2c_burst_ticks(cap: Capture, scl: str, freq_hz: float | None = None, at=Non
     if len(rises) < 3:
         return 0
     # the clock's own rises: a bounce's rise, nearer the one before than a quarter of the periods around it (the
-    # median of the 4 before and the 4 after: a clock that changes speed is judged by its own speed there), is not
+    # upper quartile of the 4 before and the 4 after: bounces may be most of them where every edge bounces; a clock
+    # that changes speed is judged by its own speed there), is not
     d = np.diff(rises).astype(np.float64)
     keep = [int(rises[0])]
     for i, r in enumerate(rises[1:].tolist()):
-        m = float(np.median(d[max(0, i - 4):i + 5]))
+        m = float(np.quantile(d[max(0, i - 4):i + 5], 0.75))
         if r - keep[-1] >= m / 4:
             keep.append(r)
     if len(keep) < 3:
@@ -427,11 +428,88 @@ def i2c_burst_ticks(cap: Capture, scl: str, freq_hz: float | None = None, at=Non
     return np.minimum(K.local_period(np.asarray(keep, np.int64), np.asarray(at, np.int64)) / 6, tr).astype(np.int64)
 
 
+CLIPPED_LOW = 0.7      # a clipped clock's lows: this much of the usual low on either side (a spike mid-low leaves half)
+
+
+def clipped_clocks(e: np.ndarray, initial: int, k: int) -> np.ndarray:
+    """SCL's highs shorter than k samples that are clocks, not spikes: a controller counts its high from releasing
+    SCL, so through a slow rise the line is high for only a moment (20-40 ns through 45 kOhm), and the devices take
+    it as a clock and move on. Such a high has a whole low on either side (CLIPPED_LOW of the usual low or more): a
+    spike on a low splits it, and one at an edge sits beside a high. Where it comes is not a test: a controller
+    waiting for the line it released clocks late, by up to a half. -> per edge, whether it may cancel the one before
+    (K.deglitch's allow): False for such a high's fall."""
+    allow = np.ones(len(e), bool)
+    if len(e) < 6:
+        return allow
+    from . import kernels as K
+    lv = K.edge_levels(e, initial)
+    d = np.diff(e)
+    lows = d[lv[:-1] == 0]
+    lows = lows[lows >= k]
+    if len(lows) < 4:
+        return allow
+    usual_low = float(np.median(lows))
+    for i in np.flatnonzero(lv == 1):
+        if i == 0 or i + 2 >= len(e) or d[i] >= k:
+            continue
+        if min(d[i - 1], d[i + 1]) >= CLIPPED_LOW * usual_low:          # the lows around the short high
+            allow[i + 1] = False
+    return allow
+
+
+def i2c_restore(cap: Capture, scl: str, sda: str) -> tuple[Capture, list[int]]:
+    """A clock clipped shorter than a sample is not in the capture at all: its transaction is a clock short. It is
+    restored only where one reading is left: a transaction (START to STOP or a repeated START) whose SCL rises are a
+    multiple of 9, one short of the 9n + 1 a whole one has (its STOP's included), with one SCL low longer than 1.5 of
+    the usual - the clock vanished in it - and SDA not moving from 0.6 to 0.9 of the usual low into it. A controller
+    releases SCL a usual low into its low and moves SDA on as soon as the clipped clock falls, so the bit is SDA's
+    level just before 0.9 of the usual low; it is put there, a tick long. -> (the capture, the ticks restored)."""
+    from . import kernels as K
+    s, d = cap.channel(scl), cap.channel(sda)
+    e = np.asarray(s.edges, np.int64)
+    de = np.asarray(d.edges, np.int64)
+    if len(e) < 10 or len(de) < 2 or s.step != 1:
+        return cap, []
+    lv = K.edge_levels(e, s.initial)
+    lows = np.diff(e)[lv[:-1] == 0]
+    usual = float(np.median(lows))
+    sl, dl = s.level_at(de), d.level_at(de)
+    starts, stops = de[(sl == 1) & (dl == 0)], de[(sl == 1) & (dl == 1)]
+    add = []
+    for a in starts:
+        ends = [x for x in (stops[stops > a][:1].tolist() + starts[starts > a][:1].tolist())]
+        if not ends:
+            continue
+        b = min(ends)
+        inside = (e > a) & (e < b)
+        rises = int(np.count_nonzero(inside & (lv == 1)))
+        if rises < 9 or rises % 9:
+            continue
+        idx = np.flatnonzero(inside[:-1] & (lv[:-1] == 0))
+        long = [i for i in idx if e[i + 1] - e[i] > 1.5 * usual]
+        if len(long) != 1:
+            continue
+        i = long[0]
+        at = int(e[i] + 0.9 * usual)
+        if np.any((de > e[i] + 0.6 * usual) & (de <= at)):
+            continue
+        add.append(at)
+    if not add:
+        return cap, []
+    ne = np.sort(np.concatenate([e, np.asarray(add, np.int64), np.asarray(add, np.int64) + 1]))
+    chans = [Channel(c.name, c.initial, ne, c.step, c.phase, c.acquisition) if c.name == scl else c
+             for c in cap.channels]
+    return Capture(cap.rate, cap.n_samples, chans, {**cap.meta, "i2c_restored": add}, cap.analog, cap.events), add
+
+
 def i2c_input(cap: Capture, scl: str, sda: str, spike_s: float = I2C_SPIKE_S,
               freq_hz: float | None = None) -> tuple[Capture, bool]:
     """The two lines as an I2C input sees them: pulses shorter than spike_s left out (its spike filter; none can be
-    when a sample is spike_s or longer), and an edge crossing the threshold more than once within a third of SCL's
-    half around it (i2c_burst_ticks) read as one at its last change (its hysteresis). -> (the capture, whether anything changed)."""
+    when a sample is spike_s or longer) but SCL's clocks clipped short by a slow rise (clipped_clocks: the devices
+    on the bus took them as clocks), and an edge crossing the threshold more than once within a third of SCL's half
+    around it (i2c_burst_ticks) read as one at its last change (its hysteresis); then a clock clipped shorter than a
+    sample restored where one reading is left (i2c_restore; its ticks in meta["i2c_restored"]). -> (the capture,
+    whether anything changed)."""
     from . import kernels as K
     k = int(np.ceil(spike_s * float(cap.rate) - 1e-9))     # a pulse of fewer samples is shorter than spike_s
     changed = False
@@ -440,7 +518,8 @@ def i2c_input(cap: Capture, scl: str, sda: str, spike_s: float = I2C_SPIKE_S,
         if c.name in (scl, sda) and c.step == 1:
             e = np.asarray(c.edges, np.int64)
             if k >= 2:
-                e = K.deglitch(e, k)
+                keep = clipped_clocks(e, c.initial, k) if c.name == scl else None
+                e = K.deglitch(e, k, keep)
             c2 = Channel(c.name, c.initial, e, c.step, c.phase, c.acquisition)
             b = edge_bursts(c2, i2c_burst_ticks(cap, scl, freq_hz, e))
             if b:
@@ -452,6 +531,6 @@ def i2c_input(cap: Capture, scl: str, sda: str, spike_s: float = I2C_SPIKE_S,
                 changed = True
                 c = Channel(c.name, c.initial, e, c.step, c.phase, c.acquisition)
         chans.append(c)
-    if not changed:
-        return cap, False
-    return Capture(cap.rate, cap.n_samples, chans, cap.meta, cap.analog, cap.events), True
+    out = Capture(cap.rate, cap.n_samples, chans, cap.meta, cap.analog, cap.events) if changed else cap
+    out, restored = i2c_restore(out, scl, sda)
+    return out, bool(changed or restored)

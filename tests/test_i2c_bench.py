@@ -10,7 +10,7 @@ from wireskein.verify import verify
 D = Path(__file__).parent / "data" / "i2c_bench"
 
 
-@pytest.mark.parametrize("run", ["x035_100k", "x035_12k5", "v205_contract", "h417_a"])
+@pytest.mark.parametrize("run", ["x035_100k", "x035_12k5", "v205_contract", "h417_a", "h417_b"])
 def test_bouncing_lines_read_as_the_device_read_them(run):
     r = verify(D / run)
     bad = [(x["path"], x["reason"]) for x in r["results"] if x["status"] != "ok"]
@@ -18,11 +18,13 @@ def test_bouncing_lines_read_as_the_device_read_them(run):
     assert any(n["kind"] == "bus_glitch" or n["kind"] == "slow_edge" for x in r["results"] for n in x["notices"])
 
 
-def test_a_half_of_the_clock_captured_at_the_other_level_does_not_read():
+def test_a_clock_clipped_to_a_moment_and_one_not_captured_at_all_read_right():
+    # h417_b's "address 0x13": SCL high for 30 ns where a clock was (a controller counting its high from releasing
+    # SCL through a slow rise), and in that transaction one clock not in the samples at all, restored
     r = verify(D / "h417_b")
-    bad = [x for x in r["results"] if x["status"] != "ok"]
-    assert [(x["path"], x["check"]) for x in bad] == [("wire output only PB11 PB10/address 0x13, no target", "i2c")]
-    assert "0 decoded" in bad[0]["reason"]
+    assert [x for x in r["results"] if x["status"] != "ok"] == []
+    seg = next(x for x in r["results"] if x["path"].endswith("0x13, no target") and x["check"] == "i2c")
+    assert [n["kind"] for n in seg["notices"]].count("clock_restored") == 1
 
 
 def test_the_automatic_decode_reads_them_too():
