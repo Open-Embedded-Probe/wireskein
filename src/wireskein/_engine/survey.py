@@ -203,8 +203,10 @@ def survey(cap: Capture, fs: dict[str, ChannelFeatures] | None = None, asyncs: b
             clocks[n] = ci
     asyncs = {n: async_info(cap, fs[n]) for n in active} if asyncs else {}
     s = Survey(fs, active, clocks, asyncs)
+    from . import methods
+    relation = methods.get("pair_relation", pair_relation)
     for c in clocks.values():
         for o in active:
             if o != c.name:
-                s.pairs[(c.name, o)] = pair_relation(cap, c, o)
+                s.pairs[(c.name, o)] = relation(cap, c, o)
     return s

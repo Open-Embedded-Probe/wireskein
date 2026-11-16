@@ -542,6 +542,10 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
     allowed, pin_hint, excluded = _hinted(hints)
     if excluded:
         cap = Capture(cap.rate, cap.n_samples, [x for x in cap.channels if x.name not in excluded])
+    from . import methods
+    pre = methods.get("preclean", None)       # none of the engine's own: the lines as captured
+    if pre is not None:
+        cap = pre(cap)
     ext = _external_plugins()
     # a protocol added from outside runs where its input is made: on clock and data, or on one NRZ line
     SYNC = SYNC_PROTOCOLS | {p.name for p in ext if any(k.startswith("frames") for k in p.consumes)}

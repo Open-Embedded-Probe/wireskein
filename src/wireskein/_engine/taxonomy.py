@@ -254,7 +254,8 @@ def classify(cap, sv: Survey | None = None) -> Taxonomy:
     sv = sv or survey(cap)
     t["survey"] = time.perf_counter() - t0
     t0 = time.perf_counter()
-    pins = pin_classes(sv, cap)
+    from . import methods
+    pins = methods.get("pin_classes", pin_classes)(sv, cap)
     t["T1"] = time.perf_counter() - t0
     t0 = time.perf_counter()
     gs = groups(sv, pins)
