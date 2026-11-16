@@ -227,6 +227,9 @@ class E2E(Stage):
                  "claims_confirmed": sum(c["verdict"] == "confirmed" for c in rec["claims"]),
                  "claims_likely": sum(c["verdict"] == "likely" for c in rec["claims"]),
                  "claims_ambiguous": sum(c["verdict"] == "ambiguous" for c in rec["claims"]),
+                 # each claim's own figures, for calibrating the verdict's thresholds afterwards (bench/calibrate.py)
+                 "claim_list": [[c["protocol"], c["verdict"], round(float(c["total"]), 4), round(float(c["margin"]), 4),
+                                 bool(c["correct"])] for c in rec["claims"]],
                  "decode": [b.get("decode") for b in buses if b["outcome"] in ("confirmed", "likely")]}]
 
     def summarize(self, rows):
