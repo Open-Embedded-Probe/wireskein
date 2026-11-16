@@ -48,7 +48,7 @@ jobs:
       run_id: ${{ steps.plan.outputs.run_id }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Plan
         id: plan
@@ -69,10 +69,10 @@ jobs:
         shard: ${{ fromJson(needs.plan.outputs.shards) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v10
 
       - name: Run the shard
         env:
@@ -95,7 +95,7 @@ jobs:
             --status "$STATUS" --note "$NOTE" --shard "$SHARD/$N" --run-id "$RUN_ID" -j "$(nproc)"
 
       - name: Keep the shard's items
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: bench-shard-${{ matrix.shard }}
           path: bench/results/runs/
@@ -111,13 +111,13 @@ jobs:
       UV_PY: "--python 3.13 --with-requirements bench/requirements.txt"
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v10
 
       - name: Fetch the shards
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: bench-shard-*
           merge-multiple: true
@@ -137,7 +137,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Keep the run
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: bench-${{ needs.plan.outputs.run_id }}
           path: ${{ runner.temp }}/results/runs/
