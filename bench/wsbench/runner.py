@@ -245,9 +245,10 @@ def aggregate(run_id: str, item_files: list[Path]) -> tuple[dict, list[str]]:
                "algo_path": a["path"], "algo_sha": a["sha"], "suite": suite, "role": role, "dataset": ds,
                "source": src, "transforms": chain, "cases": len(cases),
                "inputs_sha": hashlib.sha256(json.dumps(cases).encode()).hexdigest()[:16],
-               "summary": STAGES[stage].summarize(p["rows"]),
-               "seconds_median": float(np.median(p["seconds"])) if p["seconds"] else None,
-               "cost": cost.summarize(p["cost"], None if a["status"] == "main" else mains.get((stage, ds))),
+               # rounded: scores to 6 significant digits, costs to 4 (they vary more than that run to run)
+               "summary": _round(STAGES[stage].summarize(p["rows"]), 6),
+               "seconds_median": _round(float(np.median(p["seconds"])), 4) if p["seconds"] else None,
+               "cost": _round(cost.summarize(p["cost"], None if a["status"] == "main" else mains.get((stage, ds))), 4),
                "errors": len(p["errors"]), "first_errors": p["errors"][:3]}
         lines.append(json.dumps(rec, default=_json))
     run_rec = {"run": run_id, "label": m0["label"], "time": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -319,6 +320,16 @@ def _rel(p: str) -> str:
         return str(Path(p).resolve().relative_to(data.REPO))
     except ValueError:
         return p
+
+
+def _round(o, digits: int):
+    if isinstance(o, (float, np.floating)):
+        return float(f"{float(o):.{digits}g}")
+    if isinstance(o, dict):
+        return {k: _round(v, digits) for k, v in o.items()}
+    if isinstance(o, (list, tuple)):
+        return [_round(v, digits) for v in o]
+    return o
 
 
 def _json(o):

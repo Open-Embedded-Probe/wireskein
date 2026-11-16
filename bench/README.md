@@ -93,10 +93,12 @@ def comb(cap, lines, max_mult):
 
 ### 1.5 The ledger, and taking a trial in
 
-- **Every run is added to the ledger** (`results/ledger.jsonl`, in git): one line per (run, stage, algorithm,
-  dataset) with the summary, the commit, whether the tree was dirty, a hash of `src/wireskein`, the algorithm's hash
-  and parameters, the dataset, the inputs' hash, and `--note`'s reason. Lines are never removed. Every item's row
-  goes to `results/runs/<run>.jsonl` (not in git).
+- **Every run is added to the ledger** (in git). `results/ledger.jsonl` has one line per (run, stage, algorithm,
+  dataset): the summary, the cost, the algorithm's hash and parameters, the dataset, the inputs' hash.
+  `results/runs.jsonl` has one line per run: what all its results share (the commit, whether the tree was dirty, a
+  hash of `src/wireskein`, the machine and versions, `--note`'s reason, the command). The tools read the two joined.
+  Lines are never removed. Scores are rounded to 6 significant digits, costs to 4. Every item's row goes to
+  `results/runs/<run>.jsonl` (not in git).
 - **Runs worth keeping are made on a commit.** Work in progress writes to another ledger with
   `WSBENCH_RESULTS=<dir>`.
 - **A trial becomes main** (goes into the product) when:
@@ -161,7 +163,7 @@ they are measured. Costs are not.
 
 | What | Where | How |
 | --- | --- | --- |
-| Scores of whole suites | GitHub Actions | Start "Bench" by hand (stages, suites, algorithms, jobs, note). The cases are split over parallel jobs (every algorithm of a case in the same job), merged at the end, and kept as the artifact `bench-<run id>`; into a ledger with `uv run python bench/merge.py --import <unpacked dir>` |
+| Scores of whole suites | GitHub Actions | Start "Bench" by hand (stages, suites, algorithms, jobs, note, whether to commit). The cases are split over parallel jobs (every algorithm of a case in the same job), merged at the end, and the ledger's new lines committed to the branch it ran on (on the branch as it is just before the push, added again; again if another push came first). The items are kept as the artifact `bench-<run id>`; here with `uv run python bench/merge.py --import <unpacked dir>` |
 | Costs | a machine that counts instructions (native Ubuntu) | the `cost` suite with `--memory`, one job fewer than the cores |
 | Quick tries | here | `smoke`, `rate-smoke` ...; another ledger with `WSBENCH_RESULTS` |
 
