@@ -74,7 +74,9 @@ def comb(cap, lines, max_mult):
   - Sources: `set:<name>[a:b]` (a frozen set of `eval/corpus/synth`), `real` (`eval/corpus/real`), `dir:<path>[a:b]`
     (any directory of `<id>.wireskein` beside `<id>.truth.json`), `gen:<profile>[/<stress>][a:b]@<rate>`
     (`eval/synth.py`'s scenarios taken at that rate: the same traffic at any rate, so with `decimate` the rate is
-    swept)
+    swept), `i2cbench:h417_slow/stream[a:b]` (real captures of `tests/data/i2c_bench`: I2C through weak pull-ups,
+    50 times "S, 0x13 write, NACK, P"; truth made on reading, SCL / SDA renamed D0 / D1, the address's ACK compared
+    too: the truth's `expect.compare_ack`, which eval's generated cases do not set)
   - Transforms: `spike:L` (1-tick pulses at random, L per edge), `bounce:L` (a share L of the edges bounce just
     after), `xtalk:L` (a 1-tick pulse at a share L of the next channel's edges), `crop:A:B` (the part from A to B),
     `decimate:K` (taken K times slower), joined with `+` (`crop:0:0.5+spike:0.1`)
@@ -152,6 +154,11 @@ uv run python bench/select.py --stage e2e --suite noise --by noise
 | `oracle` | per item, the best one, knowing the truth: the most any switching can reach |
 | `confidence` | per item, the one whose `confidence` is highest |
 | `dispatch:<key>` | per group (protocol, line class, noise, rate ...), the one best on that group; the choices made on half of the cases and scored on the other half (and the other way round), so fitting the scored cases earns nothing |
+
+Of the `dispatch` groups, a switch can go at run time only by `rate` and what the capture shows of itself
+(`wsbench/observe.py`): `obs_noise` (the share of runs under a fifth of their line's unit), `obs_os` (samples per
+unit of the most finely taken line), `obs` (both). The groups marked `(truth)` (protocol, line class, dataset, kind
+of noise) are known to the bench only: an upper bound.
 
 If `oracle` is well above the best `fixed` and `dispatch` or `confidence` come close to it, switching is worth
 building; if not, one algorithm is enough. `--by <key>` adds a table of which algorithm wins on each group.

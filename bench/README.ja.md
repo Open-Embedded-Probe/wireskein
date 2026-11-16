@@ -74,7 +74,9 @@ def comb(cap, lines, max_mult):
   - 元: `set:<名前>[a:b]`（`eval/corpus/synth` の固定のセット）、`real`（`eval/corpus/real`）、`dir:<パス>[a:b]`
     （`<id>.wireskein` と `<id>.truth.json` が並ぶ任意のディレクトリ）、`gen:<プロファイル>[/<ストレス>][a:b]@<速度>`
     （`eval/synth.py` のシナリオを、指定の速度で取ったもの。どの速度でも通信は同じなので、`decimate` と組み合わせて
-    速度を振れます）
+    速度を振れます）、`i2cbench:h417_slow/stream[a:b]`（`tests/data/i2c_bench` の実機の記録。弱いプルアップの I2C
+    に「S, 0x13 書き込み, NACK, P」が 50 回。正解は読むときに作る。SCL と SDA は D0 と D1 に付け替える。アドレスの
+    ACK / NACK まで比べる（正解の `expect.compare_ack`。eval の生成データは比べない）
   - 変換: `spike:L`（ランダムな 1 刻みのパルス。エッジ 1 つあたり L 個）、`bounce:L`（エッジの L の割合で直後に
     跳ね返り）、`xtalk:L`（隣のチャンネルのエッジの L の割合で 1 刻みのパルス）、`crop:A:B`（A から B の部分）、
     `decimate:K`（K 倍遅く取ったもの）。`+` でつなぎます（`crop:0:0.5+spike:0.1`）
@@ -153,6 +155,11 @@ uv run python bench/select.py --stage e2e --suite noise --by noise
 | `oracle` | 項目ごとに、正解を知って最良を選んだもの。どんな切り替えでも、ここまでしか届かない |
 | `confidence` | 項目ごとに、方式が出す自信度（`confidence`）の一番高いもの |
 | `dispatch:<キー>` | プロトコル、線の種類、ノイズ、速度などの組ごとに、その組で一番の方式。組ごとの選択はケースの半分で決め、残りの半分で採点する（入れ替えて 2 回）ので、採点するケースに合わせた分は得点にならない |
+
+`dispatch` の組のうち、実行時に分かるのは `rate`（取り込みの速度）と、キャプチャを測って得られる量
+（`wsbench/observe.py`）で分けた `obs_noise`（その線のビット時間の 5 分の 1 より短いランの割合）、`obs_os`
+（一番細かい線の 1 ビットあたりのサンプル数）、`obs`（その両方）だけです。`(truth)` の付いた組（プロトコル、
+線の種類、データセット、ノイズの種類）は測定台だけが知っている正解の情報で、上限の目安にしかなりません。
 
 `oracle` が一番の `fixed` より大きく上で、`dispatch` か `confidence` がそれに近いなら、切り替えを作る価値が
 あります。そうでなければ、1 つの方式で足ります。`--by <キー>` で、組ごとにどの方式が勝つかの表も出ます。

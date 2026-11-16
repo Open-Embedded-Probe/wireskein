@@ -8,9 +8,12 @@ Strategies, each scored on the same items:
   fixed <algo>     one algorithm for everything
   oracle           the best algorithm per item, knowing the truth: the most any switching can reach
   confidence       per item, the algorithm that says it is most sure ("confidence" in its output)
-  dispatch:<key>   per group (protocol, line class, noise, rate ...), the algorithm best on that group; the groups'
-                   choices made on half of the cases and scored on the other half (and the other way round), so it
-                   is not credited for fitting the very cases it is scored on
+  dispatch:<key>   per group, the algorithm best on that group; the groups' choices made on half of the cases and
+                   scored on the other half (and the other way round), so it is not credited for fitting the very
+                   cases it is scored on. Groups a switch could go by at run time (what the capture shows of
+                   itself, wsbench/observe.py): rate, obs_noise (share of runs under a fifth of their line's unit), obs_os (fewest
+                   samples per unit among the lines), obs (both). Marked (truth): protocol, label, dataset, noise -
+                   known to the bench, not to a switch; an upper bound only
 
 If oracle is far above the best fixed algorithm and dispatch or confidence get close to it, switching is worth
 building; if not, one algorithm is enough.
@@ -29,7 +32,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from wsbench import runner  # noqa: E402
 
-KEYS = ("protocol", "label", "dataset", "noise", "rate")
+KEYS = ("rate", "obs_noise", "obs_os", "obs", "protocol", "label", "dataset", "noise")
+TRUTH_KEYS = {"protocol", "label", "dataset", "noise"}
 
 
 def item_value(stage: str, row: dict) -> tuple[float, float, float]:
@@ -50,8 +54,12 @@ def groups(row: dict, out: dict) -> dict:
     ds = out["dataset"]
     chain = ds.split("+", 1)[1] if "+" in ds else ""
     noise = "+".join(t for t in chain.split("+") if t and not t.startswith(("decimate", "crop"))) or "none"
+    from wsbench.observe import bucket_noise, bucket_os
+    ob = out.get("obs") or {}
+    bn, bo = bucket_noise(ob.get("short_rel", ob.get("short_share"))), bucket_os(ob.get("samples_bit"))
     return {"protocol": row.get("protocol") or "-", "label": row.get("label") or row.get("truth") or "-",
-            "dataset": ds, "noise": noise, "rate": f"{out.get('rate', 0) / 1e6:g}M"}
+            "dataset": ds, "noise": noise, "rate": f"{out.get('rate', 0) / 1e6:g}M",
+            "obs_noise": bn, "obs_os": bo, "obs": f"{bn} {bo}"}
 
 
 def load(stage: str, suite: str, run: str | None):
@@ -137,7 +145,7 @@ def main() -> None:
             for k in items:
                 if fold(k[0]) == f:
                     picks[k] = choice.get(meta[k][key], overall)
-        add(f"dispatch:{key}", picks)
+        add(f"dispatch:{key}" + (" (truth)" if key in TRUTH_KEYS else ""), picks)
     w = max(len(n) for n, _ in res) + 2
     pen = st == "e2e"
     print(f"\n{'strategy':<{w}}  score   vs best fixed" + ("   false (confirmed + likely/10)" if pen else ""))

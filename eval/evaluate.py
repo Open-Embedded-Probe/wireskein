@@ -66,8 +66,15 @@ def match(bus: dict, claim: dict) -> dict:
     elif bus["protocol"] == "i2c":
         r["roles"] = nr == tr
         r["params"] = r["roles"]
-        want = [(t["addr"], t["rw"], tuple(t["bytes"])) for t in bus["expect"]["transactions"]]
-        r["decode"] = _ratio(want, decoded(claim))
+        tx = bus["expect"]["transactions"]
+        want = [(t["addr"], t["rw"], tuple(t["bytes"])) for t in tx]
+        got = decoded(claim)
+        if bus["expect"].get("compare_ack"):
+            # a truth that asks for it (a recorded bus whose device answered NACK) is matched on the address's ACK too;
+            # the generated ones carry addr_ack but are not (their decode match stays what it has been)
+            want = [(*w, t["addr_ack"]) for w, t in zip(want, tx)]
+            got = [(*g, bool(t.get("addr_ack"))) for g, t in zip(got, claim["layers"]["transactions"])]
+        r["decode"] = _ratio(want, got)
     elif bus["protocol"] in ("swio", "rvswd"):
         r["roles"] = nr == tr
         r["params"] = r["roles"]

@@ -27,7 +27,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import cost, data, registry
+from . import cost, data, observe, registry
 from .stages import STAGES
 
 BENCH = Path(__file__).resolve().parents[1]
@@ -85,7 +85,8 @@ def _work(job):
         return {"case": str(path).rsplit("/", 1)[-1], "source": source, "chain": chain, "error": f"load: {type(e).__name__}: {e}"}
     out = {"case": case.id, "dataset": case.dataset, "input_sha": case.input_sha, "results": [],
            "load_s": time.perf_counter() - t0, "ref": cost.reference(),
-           "edges": sum(len(c.edges) for c in case.cap.channels), "rate": float(case.cap.rate)}
+           "edges": sum(len(c.edges) for c in case.cap.channels), "rate": float(case.cap.rate),
+           "obs": observe.observe(case.cap)}
     algos = registry.load(_EXTRA)
     for stage_name, names in plan:
         st = STAGES[stage_name]
