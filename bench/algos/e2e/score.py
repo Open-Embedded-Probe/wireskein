@@ -196,10 +196,14 @@ def score(cap, ack_neutral, soft):
 
 @algorithm("e2e", "combo", status="trial",
            about="binomial.rule_clear_free_hz's I2C score with grouping/gated.w4's pair relation put in together",
-           variants={"clear_gated": {}})
-def combo(cap):
+           variants={"clear_gated": {},
+                     # and SPI's CS read through the clock's period too (e2e select.w4_sparse_gated's steps)
+                     "clear_gated_select": {"select": True}})
+def combo(cap, select=False):
     from wsbench import registry
     steps = {"frame_score": _binomial(0.5, 0.25, True, True, 2 / 9, True),
              **registry.get("grouping", "gated.w4").engine_steps()}
+    if select:
+        steps.update(registry.get("e2e", "select.w4_sparse_gated").engine_steps())
     with methods.use(steps):
         return _claims(cap)

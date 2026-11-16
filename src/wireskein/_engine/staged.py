@@ -129,7 +129,7 @@ class SyncUnknownPlugin:
         # all views of the same clock/data, with or without the select candidate
         views = [typed.frames_gap(sb), typed.frames_startstop(c.cap, sb).closed()]
         if sb.select:
-            views.append(typed.frames_select(c.cap, c.sv, sb))
+            views.append(methods.get("select_frames", typed.frames_select)(c.cap, c.sv, sb))
         for v in views:
             ln = np.diff(v.bounds, axis=1).ravel()
             ln = ln[ln > 0]
@@ -620,7 +620,7 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
                 sb.view = view_cap
                 streams = []
                 if g.select:
-                    streams.append(("frames.select", typed.frames_select(view_cap, c.sv, sb)))
+                    streams.append(("frames.select", methods.get("select_frames", typed.frames_select)(view_cap, c.sv, sb)))
                 else:
                     # gap threshold is undecidable here (a slow clock with short idle
                     # gaps between frames): both views are siblings, deduplicated

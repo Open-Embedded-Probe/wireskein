@@ -116,3 +116,20 @@ def test_frame_score_and_verdict_are_steps():
     with methods.use({"verdict": lambda total, margin: "ambiguous"}):
         got = json.loads(_claims(cap))
     assert got and all(c["verdict"] in ("ambiguous", "unknown-sync") for c in got)
+
+
+def test_select_frames_is_a_step():
+    clk, mosi, miso, cs = gen.Wave(0), gen.Wave(0), gen.Wave(0), gen.Wave(1)
+    t = gen.spi(clk, mosi, miso, cs, 1e-5, [(bytes([i, 0x5A, 0xC3]), bytes([0xA5, i, 0x3C])) for i in range(12)], 1e6)
+    cap = gen.quantize({"CLK": clk, "MOSI": mosi, "MISO": miso, "CS": cs}, 20e6, t + 1e-4, np.random.default_rng(0))
+    plain = _claims(cap)
+    assert any(c["protocol"] == "spi" and c["roles"].get("cs") == "CS" for c in json.loads(plain))
+    from wireskein._engine import typed
+    seen = []
+
+    def frames(cap, sv, sb):
+        seen.append(sb.select)
+        return typed.frames_select(cap, sv, sb)
+    with methods.use({"select_frames": frames}):
+        assert _claims(cap) == plain              # the engine's own, called through the step: the same claims
+    assert "CS" in seen
