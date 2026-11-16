@@ -1,8 +1,10 @@
 """Running stages x algorithms x datasets, and writing what was measured.
 
-bench/results/ledger.jsonl (in git): one line per (run, stage, algorithm, dataset) with the summary and everything
-needed to run it again: the commit (and whether the tree was dirty), the algorithm's source hash and parameters,
-the dataset's text and a hash of the exact inputs. Lines are only ever added.
+bench/results/ledger.jsonl (in git): one line per (run, stage, algorithm, dataset): the summary, the cost, the
+algorithm's source hash and parameters, the dataset's text and a hash of the exact inputs.
+bench/results/runs.jsonl (in git): one line per run: what is the same for all its results (the commit and whether the
+tree was dirty, the machine and versions, the note, the command). read_ledger() gives the two joined.
+Lines of both are only ever added.
 bench/results/runs/<run>[.shard-i-of-n].jsonl and .meta.json (not in git): every item's row and how the run was
 made, for looking into one result and for merging shards (merge.py).
 """
@@ -32,6 +34,8 @@ BENCH = Path(__file__).resolve().parents[1]
 # WSBENCH_RESULTS: somewhere else (a scratch ledger while an algorithm is being written)
 RESULTS = Path(os.environ.get("WSBENCH_RESULTS") or BENCH / "results")
 LEDGER = RESULTS / "ledger.jsonl"
+RUNS = RESULTS / "runs.jsonl"
+RUN_KEYS = ("label", "time", "note", "git", "env", "argv")     # kept once per run in RUNS
 
 
 def suites() -> dict:
@@ -183,15 +187,15 @@ def run(stage_names: list[str], algos_by_stage: dict[str, list], dsets: list[tup
     meta["seconds"] = time.time() - t0
     (runs_dir / f"{stem}.meta.json").write_text(json.dumps(meta, indent=1, default=_json))
     if not shard:
-        lines = aggregate(run_id, [runs_dir / f"{stem}.jsonl"])
-        append(lines)
+        run_rec, lines = aggregate(run_id, [runs_dir / f"{stem}.jsonl"])
+        append(lines, run_rec)
         print(f"{len(lines)} results added to {_rel(str(LEDGER))} (items: {_rel(str(runs_dir / stem))}.jsonl)",
               file=sys.stderr)
     return run_id
 
 
-def aggregate(run_id: str, item_files: list[Path]) -> list[str]:
-    """Ledger lines from a run's item files (one, or every shard's): each with its .meta.json beside it."""
+def aggregate(run_id: str, item_files: list[Path]) -> tuple[dict, list[str]]:
+    """(the run's record, its ledger lines) from its item files (one, or every shard's), each with its .meta.json."""
     metas = [json.loads(f.with_suffix(".meta.json").read_text()) for f in item_files]
     m0 = metas[0]
     for m in metas[1:]:
@@ -237,29 +241,55 @@ def aggregate(run_id: str, item_files: list[Path]) -> list[str]:
         a = m0["algos"][f"{stage}/{name}"]
         suite, role, src, chain = m0["datasets"][ds]
         cases = sorted(map(tuple, p["cases"]))
-        rec = {"run": run_id, "label": m0["label"], "time": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-               "note": m0["note"], "stage": stage, "algo": name, "status": a["status"], "params": a["params"],
+        rec = {"run": run_id, "stage": stage, "algo": name, "status": a["status"], "params": a["params"],
                "algo_path": a["path"], "algo_sha": a["sha"], "suite": suite, "role": role, "dataset": ds,
                "source": src, "transforms": chain, "cases": len(cases),
                "inputs_sha": hashlib.sha256(json.dumps(cases).encode()).hexdigest()[:16],
                "summary": STAGES[stage].summarize(p["rows"]),
                "seconds_median": float(np.median(p["seconds"])) if p["seconds"] else None,
                "cost": cost.summarize(p["cost"], None if a["status"] == "main" else mains.get((stage, ds))),
-               "errors": len(p["errors"]), "first_errors": p["errors"][:3],
-               "git": m0["git"], "env": env, "argv": m0["argv"]}
+               "errors": len(p["errors"]), "first_errors": p["errors"][:3]}
         lines.append(json.dumps(rec, default=_json))
-    return lines
+    run_rec = {"run": run_id, "label": m0["label"], "time": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+               "note": m0["note"], "git": m0["git"], "env": env, "argv": m0["argv"], "plan": m0["plan"],
+               "cases": m0["cases_total"], "results": len(lines),
+               "seconds": max(m.get("seconds", 0) for m in metas)}
+    return run_rec, lines
 
 
-def append(lines: list[str]) -> int:
-    """Add lines to the ledger, leaving out those already there (the same run, stage, algorithm and dataset)."""
+def read_ledger() -> list[dict]:
+    """The ledger's lines, each with its run's record (runs.jsonl) joined in, in the order they were added."""
+    runs = {}
+    if RUNS.exists():
+        for ln in RUNS.read_text().splitlines():
+            if ln.strip():
+                r = json.loads(ln)
+                runs[r["run"]] = r
+    out = []
+    if LEDGER.exists():
+        for ln in LEDGER.read_text().splitlines():
+            if ln.strip():
+                r = json.loads(ln)
+                run = runs.get(r["run"], {})
+                out.append({**{k: run.get(k) for k in RUN_KEYS}, **r})
+    return out
+
+
+def append(lines: list[str], run_rec: dict | None = None) -> int:
+    """Add the run's record (once) and its lines to the ledger, leaving out lines already there (the same run, stage,
+    algorithm and dataset)."""
+    LEDGER.parent.mkdir(parents=True, exist_ok=True)
+    if run_rec is not None:
+        known = {json.loads(ln)["run"] for ln in RUNS.read_text().splitlines() if ln.strip()} if RUNS.exists() else set()
+        if run_rec["run"] not in known:
+            with RUNS.open("a") as fh:
+                fh.write(json.dumps(run_rec, default=_json) + "\n")
     have = set()
     if LEDGER.exists():
         for ln in LEDGER.read_text().splitlines():
             if ln.strip():
                 r = json.loads(ln)
                 have.add((r["run"], r["stage"], r["algo"], r["dataset"]))
-    LEDGER.parent.mkdir(parents=True, exist_ok=True)
     n = 0
     with LEDGER.open("a") as fh:
         for ln in lines:

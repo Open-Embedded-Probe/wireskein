@@ -55,7 +55,7 @@ def groups(row: dict, out: dict) -> dict:
 
 
 def load(stage: str, suite: str, run: str | None):
-    recs = [json.loads(ln) for ln in runner.LEDGER.read_text().splitlines() if ln.strip()]
+    recs = runner.read_ledger()
     recs = [r for r in recs if r["stage"] == stage and r["suite"] == suite and (not run or r["run"].startswith(run))]
     if not recs:
         sys.exit(f"no results of {stage} on suite {suite} in {runner.LEDGER}")

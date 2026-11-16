@@ -1,9 +1,9 @@
 name: Bench
 
 # The algorithm bench (bench/README.md) on GitHub's runners: started by hand, the cases split over parallel jobs (all
-# algorithms of a case in one job, so that costs against main pair up), merged into ledger lines. Nothing is pushed:
-# the run comes back as the artifact bench-<run id>, taken into a ledger with
-#   uv run python bench/merge.py --import DIR
+# algorithms of a case in one job, so that costs against main pair up), merged into ledger lines and committed to the
+# branch it ran on (bench/results/ledger.jsonl, runs.jsonl: added lines only; "commit" off for a try). Every item is
+# kept as the artifact bench-<run id> (uv run python bench/merge.py --import DIR takes it into a ledger).
 # Scores are the same on any machine; times on shared runners are not (see bench/README.md 1.7).
 
 on:
@@ -31,6 +31,10 @@ on:
         description: "Also each call's peak memory"
         type: boolean
         default: false
+      commit:
+        description: "Commit the results to the branch (off: the artifact only)"
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -100,6 +104,11 @@ jobs:
   merge:
     needs: [plan, shard]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write      # to commit the ledger's new lines
+    env:
+      RUN_ID: ${{ needs.plan.outputs.run_id }}
+      UV_PY: "--python 3.13 --with-requirements bench/requirements.txt"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -112,21 +121,18 @@ jobs:
         with:
           pattern: bench-shard-*
           merge-multiple: true
-          path: bench/results/runs/
+          path: ${{ runner.temp }}/results/runs/
 
       - name: Merge
         env:
-          RUN_ID: ${{ needs.plan.outputs.run_id }}
+          WSBENCH_RESULTS: ${{ runner.temp }}/results
         run: |
-          uv run --python 3.13 --with-requirements bench/requirements.txt python bench/merge.py "$RUN_ID" \
-            --lines "bench/results/runs/$RUN_ID.ledger.jsonl"
+          uv run $UV_PY python bench/merge.py "$RUN_ID" --out "$WSBENCH_RESULTS/runs"
           {
             echo "### Bench run $RUN_ID"
             echo
-            echo "Take it into a ledger: download the artifact bench-$RUN_ID, then \`uv run python bench/merge.py --import DIR\`."
-            echo
             echo '```'
-            uv run --python 3.13 --with-requirements bench/requirements.txt python bench/report.py --run "$RUN_ID"
+            uv run $UV_PY python bench/report.py --run "$RUN_ID"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -134,5 +140,36 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: bench-${{ needs.plan.outputs.run_id }}
-          path: bench/results/runs/
+          path: ${{ runner.temp }}/results/runs/
           retention-days: 90
+
+      - name: Commit the results
+        if: ${{ inputs.commit }}
+        env:
+          BRANCH: ${{ github.ref_name }}
+          NOTE: ${{ inputs.note }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # the ledger only grows: on the branch as it is now, add this run's lines again and push; again if another
+          # push came first
+          for attempt in 1 2 3 4 5; do
+            git fetch --quiet origin "$BRANCH"
+            git reset --quiet --hard "origin/$BRANCH"
+            uv run $UV_PY python bench/merge.py --import "$RUNNER_TEMP/results/runs"
+            git add bench/results/ledger.jsonl bench/results/runs.jsonl
+            if git diff --cached --quiet; then
+              echo "nothing new to commit"
+              exit 0
+            fi
+            msg=(-m "bench: results of run $RUN_ID")
+            if [ -n "$NOTE" ]; then msg+=(-m "$NOTE"); fi
+            git commit --quiet "${msg[@]}"
+            if git push --quiet origin "HEAD:$BRANCH"; then
+              echo "committed to $BRANCH: $(git rev-parse --short HEAD)" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep $((attempt * 5))
+          done
+          echo "could not push to $BRANCH (protected?): the run is in the artifact" >> "$GITHUB_STEP_SUMMARY"
+          exit 1

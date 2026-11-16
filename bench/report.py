@@ -16,7 +16,6 @@ P (with --cost) on the Pareto front: no other algorithm both scores higher and c
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 
@@ -29,9 +28,7 @@ MARK = {"main": "*", "trial": ".", "retired": "x"}
 
 
 def read() -> list[dict]:
-    if not runner.LEDGER.exists():
-        return []
-    return [json.loads(ln) for ln in runner.LEDGER.read_text().splitlines() if ln.strip()]
+    return runner.read_ledger()
 
 
 def fmt(v) -> str:
@@ -154,7 +151,7 @@ def cost_table(recs: list[dict], stage: str, metric: str) -> None:
           "against main's on the same cases;\n   scaling: how CPU time grows with the edges (1 linear, 2 square); "
           "mem kB: peak allocation (--memory)" + ("; M instr, vs main, scaling: the same on instructions retired "
           "(hardware counter), which the load does not move" if instr else ""))
-    busy = [r for r in latest.values() if (r["env"].get("load_before") or 0) > 0.25 * (r["env"].get("cpus") or 1)]
+    busy = [r for r in latest.values() if r["env"] and (r["env"].get("load_before") or 0) > 0.25 * (r["env"].get("cpus") or 1)]
     if busy:
         worst = max(busy, key=lambda r: r["env"]["load_before"])
         print(f"   note: {len(busy)} of these results ran on a busy machine (load {worst['env']['load_before']:.1f} "
@@ -166,8 +163,8 @@ def history(recs: list[dict], key: str) -> None:
     rows = [r for r in recs if r["stage"] == stage and (r["algo"] == algo or r["algo"].startswith(algo + "."))]
     st = STAGES[stage]
     for r in rows:
-        dirty = "+dirty" if r["git"]["dirty"] else ""
-        print(f"{r['run']}  {r['algo']:20s} {r['algo_sha']}  {r['git']['commit'][:7]}{dirty:6s} {r['dataset']:40s} "
+        dirty = "+dirty" if (r["git"] or {}).get("dirty") else ""
+        print(f"{r['run']}  {r['algo']:20s} {r['algo_sha']}  {(r['git'] or {}).get('commit', '?')[:7]}{dirty:6s} {r['dataset']:40s} "
               f"{st.headline}={fmt(r['summary'].get(st.headline))}  {r['note']}")
 
 
