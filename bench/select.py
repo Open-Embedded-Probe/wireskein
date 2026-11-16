@@ -60,6 +60,7 @@ def load(stage: str, suite: str, run: str | None):
     if not recs:
         sys.exit(f"no results of {stage} on suite {suite} in {runner.LEDGER}")
     run_id = recs[-1]["run"]
+    dsets = {r["dataset"] for r in recs if r["run"] == run_id}       # this suite's datasets (a run may hold several)
     paths = [p for p in sorted((runner.RESULTS / "runs").glob(f"{run_id}*.jsonl")) if not p.name.endswith(".ledger.jsonl")]
     if not paths:
         sys.exit(f"the items of run {run_id} are not in {runner.RESULTS / 'runs'} (merge.py --import them)")
@@ -67,6 +68,8 @@ def load(stage: str, suite: str, run: str | None):
     meta = {}
     for ln in (x for p in paths for x in p.read_text().splitlines()):
         out = json.loads(ln)
+        if out.get("dataset") not in dsets:
+            continue
         for r in out.get("results", []):
             if r["stage"] != stage:
                 continue
@@ -88,6 +91,11 @@ def score(stage: str, picks: dict, items: dict) -> float:
     return num / den if den else float("nan")
 
 
+def penalty(stage: str, picks: dict, items: dict) -> float:
+    """False claims the picks make (e2e: false confirmed + a tenth of false likely)."""
+    return sum(item_value(stage, items[k][a])[2] for k, a in picks.items())
+
+
 def fold(case: str) -> int:
     return zlib.crc32(case.encode()) & 1
 
@@ -103,16 +111,20 @@ def main() -> None:
     st = args.stage
     print(f"{st} on {args.suite}, run {run_id}: {len(items)} items, {len(algos)} algorithms")
     res = []
+    picks_of = {}
+
+    def add(name, picks):
+        picks_of[name] = picks
+        res.append((name, score(st, picks, items)))
     for a in algos:
-        res.append((f"fixed {a}", score(st, {k: a for k in items}, items)))
+        add(f"fixed {a}", {k: a for k in items})
     best_fixed = max(v for _, v in res)
 
     def oracle_pick(k):
         return max(algos, key=lambda a: (item_value(st, items[k][a])[0], -item_value(st, items[k][a])[2]))
-    res.append(("oracle", score(st, {k: oracle_pick(k) for k in items}, items)))
+    add("oracle", {k: oracle_pick(k) for k in items})
     if all(items[k][a].get("confidence") is not None for k in items for a in algos):
-        res.append(("confidence", score(st, {k: max(algos, key=lambda a: items[k][a]["confidence"]) for k in items},
-                                         items)))
+        add("confidence", {k: max(algos, key=lambda a: items[k][a]["confidence"]) for k in items})
     for key in KEYS:
         picks = {}
         for f in (0, 1):
@@ -125,11 +137,12 @@ def main() -> None:
             for k in items:
                 if fold(k[0]) == f:
                     picks[k] = choice.get(meta[k][key], overall)
-        res.append((f"dispatch:{key}", score(st, picks, items)))
+        add(f"dispatch:{key}", picks)
     w = max(len(n) for n, _ in res) + 2
-    print(f"\n{'strategy':<{w}}  score   vs best fixed")
+    pen = st == "e2e"
+    print(f"\n{'strategy':<{w}}  score   vs best fixed" + ("   false (confirmed + likely/10)" if pen else ""))
     for n, v in res:
-        print(f"{n:<{w}}  {v:.3f}  {v - best_fixed:+.3f}")
+        print(f"{n:<{w}}  {v:.3f}  {v - best_fixed:+.3f}" + (f"   {penalty(st, picks_of[n], items):8.1f}" if pen else ""))
     if args.by:
         print(f"\nby {args.by} (* the best in its row):")
         gs = sorted({meta[k][args.by] for k in items})
