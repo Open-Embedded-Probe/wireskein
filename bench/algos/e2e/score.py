@@ -80,7 +80,45 @@ def clearance(e, share: float = 0.15) -> float | None:
     return float(np.mean(d >= np.maximum(step, share * half)))
 
 
-def _binomial(chance: float | None, soft: float, clear: bool = False):
+def bus_free(e, allow: int = 2) -> float | None:
+    """Of the STOPs, the share after which SCL stays still (at most `allow` changes: a spike) until the next START:
+    an I2C bus is free between a STOP and a START. A free-running clock (one aliased to an I2C-like rate) goes on.
+    None: no STOP to judge by."""
+    import numpy as np
+    fr, sb = e["frames_obj"], e["bits"]
+    cap = getattr(sb, "view", None)
+    ev = list(fr.events or [])
+    if cap is None or not any(k == "P" for k, _ in ev):
+        return None
+    ce = np.asarray(cap.channel(sb.clock).edges, np.int64)
+    free = n = 0
+    for i, (kind, t) in enumerate(ev):
+        if kind != "P":
+            continue
+        nxt = next((u for k, u in ev[i + 1:] if k in ("S", "Sr")), cap.n_samples)
+        n += 1
+        free += int(np.searchsorted(ce, nxt) - np.searchsorted(ce, t, side="right")) <= allow
+    return free / n if n else None
+
+
+I2C_MAX_HZ = 5e6     # UM10204: Hs-mode 3.4 MHz, Ultra Fast-mode (one way) 5 MHz
+
+
+def scl_hz(e) -> float | None:
+    """SCL's rate inside the frames: the median interval between its sampling edges there."""
+    import numpy as np
+    fr, sb = e["frames_obj"], e["bits"]
+    cap = getattr(sb, "view", None)
+    t = np.asarray(sb.t, np.int64)
+    if cap is None or len(fr.bounds) == 0 or len(t) < 3:
+        return None
+    iv = [np.diff(t[a:b]) for a, b in fr.bounds.tolist() if b - a >= 3]
+    iv = np.concatenate(iv) if iv else np.array([], np.int64)
+    return float(cap.rate) / float(np.median(iv)) if len(iv) else None
+
+
+def _binomial(chance: float | None, soft: float, clear: bool = False, free: bool = False,
+              above_chance: float | None = None, max_hz: bool = False):
     """I2C counted by its frames above chance: of n frames, k fit the length rule; by chance (p per frame) at least
     k fit with probability P(X >= k). The score: the fit above chance ((fit - p) / (1 - p)) x (1 - P(X >= k)) x the
     clock and pair terms (soft). A true bus (every frame fits) comes near 1 with a few frames; lines whose frames fit
@@ -90,28 +128,49 @@ def _binomial(chance: float | None, soft: float, clear: bool = False):
             return frame_score(e)
         p = chance if chance is not None else _chance(e["rule"])
         n, k = e["frames"], e["fits"]
-        above = max(0.0, (e["fit"] - p) / (1 - p))
+        pa = above_chance if above_chance is not None else p
+        above = max(0.0, (e["fit"] - pa) / (1 - pa))
         a = 1 - soft
         s = above * (1 - _tail(n, k, p)) * (a + soft * e["clk"]) * (a + soft * e["pair"])
         if clear:
             cl = clearance(e)
             if cl is not None:
                 s *= cl
+        if free:
+            fb = bus_free(e)
+            if fb is not None:
+                s *= fb
+        if max_hz:
+            hz = scl_hz(e)
+            if hz is not None and hz > I2C_MAX_HZ:
+                s = 0.0                          # no I2C runs this fast
         return s
     return score
 
 
 @algorithm("e2e", "binomial", status="trial", about="I2C's score from its frames' fit above chance (binomial tail)",
            variants={  # and only as far as its START / STOP stand clear of SCL's changes
-                     "half_clear": {"chance": 0.5, "soft": 0.25, "clear": True}})
+                     "half_clear": {"chance": 0.5, "soft": 0.25, "clear": True},
+                     # and the bus free between a STOP and the next START; the fit above the rule's chance (2/9,
+                     # so that one frame of ten out costs less); no faster than the spec's fastest SCL
+                     "rule_clear_free_hz": {"chance": 0.5, "soft": 0.25, "clear": True, "free": True,
+                                            "above_chance": 2 / 9, "max_hz": True}})
+@algorithm("e2e", "binomial", status="retired", about="I2C's score from its frames' fit above chance (binomial tail)",
+           variants={"half_clear_free": {"chance": 0.5, "soft": 0.25, "clear": True, "free": True},
+                     "rule_clear_free": {"chance": 0.5, "soft": 0.25, "clear": True, "free": True,
+                                         "above_chance": 2 / 9}},
+           reason="steps to rule_clear_free_hz (2026-11-16, local nack / smoke / rate-smoke): bus_free brings nack's "
+                  "false likely back to main's (8 -> 6 with bounces), the rule's chance gives a bus with one frame "
+                  "of ten out its due (smoke spike ok 0.750 -> 0.792); the rate bound changed nothing there and "
+                  "is the spec's, so it stays")
 @algorithm("e2e", "binomial", status="retired", about="I2C's score from its frames' fit above chance (binomial tail)",
            variants={"rule": {"chance": None, "soft": 0.25}, "half": {"chance": 0.5, "soft": 0.25}},
            reason="2026-11-16, local (nack, smoke, rate-smoke): counting only the fit above chance still lets an I2C "
                   "hypothesis on an SPI data line (mode 1 / 3: it changes with the clock, so START-like events come "
                   "by the hundred and the lengths fit) take an SPI bus's margin (synth-mixed-0: 0.56 -> 0.03); rule's "
                   "chance (2/9) also confirmed wrongly twice. half_clear asks the START / STOP to stand clear")
-def binomial(cap, chance, soft, clear=False):
-    with methods.use({"frame_score": _binomial(chance, soft, clear)}):
+def binomial(cap, chance, soft, clear=False, free=False, above_chance=None, max_hz=False):
+    with methods.use({"frame_score": _binomial(chance, soft, clear, free, above_chance, max_hz)}):
         return _claims(cap)
 
 
@@ -136,10 +195,11 @@ def score(cap, ack_neutral, soft):
 
 
 @algorithm("e2e", "combo", status="trial",
-           about="binomial.half_clear's I2C score with grouping/gated.w4's pair relation put in together",
+           about="binomial.rule_clear_free_hz's I2C score with grouping/gated.w4's pair relation put in together",
            variants={"clear_gated": {}})
 def combo(cap):
     from wsbench import registry
-    steps = {"frame_score": _binomial(0.5, 0.25, True), **registry.get("grouping", "gated.w4").engine_steps()}
+    steps = {"frame_score": _binomial(0.5, 0.25, True, True, 2 / 9, True),
+             **registry.get("grouping", "gated.w4").engine_steps()}
     with methods.use(steps):
         return _claims(cap)
