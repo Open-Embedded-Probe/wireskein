@@ -198,8 +198,9 @@ def main() -> None:
             except KeyError:
                 want = {r["dataset"] for r in rs if r["suite"] == suite}
             sub = [{**r, "suite": suite} for r in rs if r["dataset"] in want]
-            if not sub:
-                continue
+            metric = args.metric or STAGES[stage].headline
+            if not sub or not any(value(r, metric) is not None for r in sub):
+                continue                             # this stage has no such figure for this suite
             print(f"\n[suite {suite}, {sub[-1]['role']}]", end="")
             if args.cost:
                 cost_table(sub, stage, args.metric or STAGES[stage].headline)
