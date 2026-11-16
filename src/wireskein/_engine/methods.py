@@ -13,6 +13,9 @@ Steps (name: what replaces it is called as the engine's own is):
     preclean      fn(cap) -> Capture            the lines before anything reads them (default: as captured)
     pin_classes   fn(sv, cap) -> {pin: PinClass}  taxonomy.pin_classes: each line's class candidates
     pair_relation fn(cap, clk, other) -> PairRelation   survey.pair_relation: how a line keeps to a clock
+    frame_score   fn(evidence: dict) -> float    declarative.frame_score: a framed protocol's (I2C, SPI, SWD, CAN,
+                                                 RVSWD) score from its evidence, before the core's terms
+    verdict       fn(total, margin) -> str       staged.verdict: confirmed / likely / ambiguous
 """
 
 from __future__ import annotations
@@ -20,7 +23,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from contextvars import ContextVar
 
-STEPS = ("preclean", "pin_classes", "pair_relation")
+STEPS = ("preclean", "pin_classes", "pair_relation", "frame_score", "verdict")
 
 _SWAPPED: ContextVar[dict] = ContextVar("wireskein_methods", default={})
 

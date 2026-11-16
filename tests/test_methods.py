@@ -88,3 +88,31 @@ def test_unknown_steps_are_refused():
             pass
     with pytest.raises(KeyError):
         methods.get("no_such_step", None)
+
+
+def _i2c_cap(nack=False):
+    scl, sda = gen.Wave(1), gen.Wave(1)
+    tx = [{"addr": 0x13, "rw": "write", "bytes": [] if nack else [0x10, 0x20], "nack_at": 0 if nack else None}] * 20
+    t = gen.i2c(scl, sda, 1e-5, tx, 100e3)
+    return gen.quantize({"SCL": scl, "SDA": sda}, 4e6, t + 1e-4, np.random.default_rng(0))
+
+
+def test_frame_score_and_verdict_are_steps():
+    cap = _i2c_cap()
+    plain = _claims(cap)
+    seen, verdicts = [], []
+
+    def score(e):
+        seen.append(e["protocol"])
+        from wireskein._engine.declarative import frame_score
+        return frame_score(e)
+
+    def verdict(total, margin):
+        verdicts.append((total, margin))
+        return staged.verdict(total, margin)
+    with methods.use({"frame_score": score, "verdict": verdict}):
+        assert _claims(cap) == plain             # the engine's own, called through the steps: the same claims
+    assert "i2c" in seen and verdicts
+    with methods.use({"verdict": lambda total, margin: "ambiguous"}):
+        got = json.loads(_claims(cap))
+    assert got and all(c["verdict"] in ("ambiguous", "unknown-sync") for c in got)

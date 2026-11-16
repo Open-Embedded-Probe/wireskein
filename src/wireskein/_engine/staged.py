@@ -26,6 +26,7 @@ from functools import lru_cache
 import numpy as np
 
 from . import kernels as K
+from . import methods
 from . import plugins_uartlike as UL
 from . import timing, typed
 from .analyzers.pulse import NecPlugin, OneWirePlugin, RgbLedPlugin
@@ -542,7 +543,6 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
     allowed, pin_hint, excluded = _hinted(hints)
     if excluded:
         cap = Capture(cap.rate, cap.n_samples, [x for x in cap.channels if x.name not in excluded])
-    from . import methods
     pre = methods.get("preclean", None)       # none of the engine's own: the lines as captured
     if pre is not None:
         cap = pre(cap)
@@ -753,7 +753,7 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
             margin = (best_score - alt_score) / max(1, changed_channels(best, alt_set))
             chans = set(n.roles.values())
             ru = max((r for r in alt_set if chans & set(r.roles.values())), key=lambda r: r.total, default=None)
-            v = verdict(n.total, margin)
+            v = methods.get("verdict", verdict)(n.total, margin)
             if n.analyzer == "sync_unknown":
                 v = "unknown-sync"
             claims.append(Claim(n.analyzer, dict(n.roles), dict(n.params), n.total, margin, v, n, ru))

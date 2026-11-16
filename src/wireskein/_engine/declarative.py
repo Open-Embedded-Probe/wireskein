@@ -39,6 +39,15 @@ from .stack import Node, Stream
 HERE = Path(__file__).resolve().parents[1] / "decl"
 
 
+def frame_score(e: dict) -> float:
+    """A framed protocol's score before the core's terms (select_boundary, degenerate, single_frame_penalty): the
+    frames' fit to the length rule (as evidence) x the checked fields x the quantity of words x how clock-like the
+    clock is x how the weakest data pin keeps to it. e: the evidence (see _score_inputs); a swapped step
+    (methods "frame_score") is given the same."""
+    return (e["fit_evidence"] * (1 - e["check_weight"] + e["check_weight"] * e["check_rate"])
+            * q(e["words"], e["evidence_scale"]) * (0.5 + 0.5 * e["clk"]) * (0.5 + 0.5 * e["pair"]))
+
+
 def q(n: float, scale: float = 8.0) -> float:
     return 1.0 - math.exp(-n / scale)
 
@@ -463,8 +472,15 @@ class DeclarativePlugin:
         clk = c.sv.clocks[sb.clock].clock_score
         # a bus claim is only as strong as its weakest assigned data pin
         pair = float(np.min([c.sv.pairs[(sb.clock, d)].data_score for d in sb.data]))
-        score = fit_evidence * (1 - cw + cw * check_rate) * q(n_words, sc.get("evidence_scale", 8)) \
-            * (0.5 + 0.5 * clk) * (0.5 + 0.5 * pair)
+        from . import methods
+        evidence = {"protocol": self.name, "fit": fit, "fit_evidence": fit_evidence, "rule": rule,
+                    "fits": int(fits.sum()), "frames": int(keep.sum()), "check_rate": check_rate,
+                    "check_hits": check_hits, "check_total": check_total, "check_weight": cw, "words": n_words,
+                    "evidence_scale": sc.get("evidence_scale", 8), "clk": clk, "pair": pair,
+                    "delimiter": fr.delimiter,
+                    # the material itself, for a swapped step that counts its evidence otherwise
+                    "frames_obj": fr, "bits": sb, "survey": c.sv, "spec": sp}
+        score = methods.get("frame_score", frame_score)(evidence)
         # evidence terms the core provides by name (not protocol code)
         terms = sc.get("terms", [])
         if "select_boundary" in terms and sb.select:
