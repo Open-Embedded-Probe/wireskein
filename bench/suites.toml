@@ -88,3 +88,9 @@ role = "tune"
 about = "rates that change in time: eval's baudhop (UART switching baud) and freqhop (clock per frame), clean and noisy"
 sources = ["set:baudhop", "set:freqhop"]
 transforms = ["", "spike:0.1", "bounce:0.1", "decimate:2"]
+
+[suite.real-ebdd]
+role = "holdout"
+about = "EmbedBenchDeviceData's 35 real I2C runs (M5Stack ENV unit's SHT30 / QMP6988 with proper pull-ups, address scans, NACK answers, clock stretching; 100 / 400 kHz taken at 2 MS/s): truth the firmware's own lines"
+sources = ["ebdd:~/dev/EmbedBenchDeviceData"]
+transforms = [""]

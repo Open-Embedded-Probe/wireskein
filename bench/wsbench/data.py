@@ -9,6 +9,9 @@ was measured:
                 gen:<profile>[/<stress>][a:b][@<rate>]   eval/synth.py's scenarios of seeds a..b, sampled at <rate>
                                   (the same traffic whatever the rate: a base for decimate, sweeping the rate), or at
                                   the scenario's own
+                ebdd:<dir>[a:b]   EmbedBenchDeviceData's runs (<dir>/runs/*/run.json, real I2C taken by an OEP probe):
+                                  truth the bus (SDA / SCL renamed D0 / D1), its rate (from the run's name) and
+                                  the bytes the firmware said it read (its dut lines: bytes=.. crc=1, data=..)
                 i2cbench:h417_slow/stream[a:b]   real captures of tests/data/i2c_bench: I2C through weak
                                   pull-ups, 50 times "S, 0x13 write, NACK, P" each (what the device answered: the
                                   summaries beside them), truth made on reading; SCL / SDA renamed D0 / D1
@@ -90,6 +93,11 @@ def source_items(source: str) -> list[str]:
         rate = float(g["rate"]) if g["rate"] else 0.0          # 0: the scenario's own rate
         return [f"gen:{g['profile']}:{g['stress'] or ''}:{s}:{rate}" for s in range(int(g["a"]), int(g["b"]))]
     m = _RANGE.match(source)
+    if m and m["base"].startswith("ebdd:"):
+        d = Path(m["base"][len("ebdd:"):]).expanduser() / "runs"
+        if not d.is_dir():
+            raise FileNotFoundError(d)
+        return [f"ebdd:{p.parent}" for p in _slice(sorted(d.glob("*/run.json")), m["a"], m["b"])]
     if m and m["base"].startswith("i2cbench:"):
         d = I2C_BENCH / m["base"][len("i2cbench:"):]
         if not d.is_dir():
@@ -149,7 +157,39 @@ def source_paths(source: str) -> list[Path]:
     return _slice(paths, a, b)
 
 
+_DUT_READ = re.compile(r"(?:^|\s)(?:bytes|data)=([0-9a-fA-F]+)(?:\s|$)")
+
+
+def _ebdd(run: Path) -> tuple[Capture, dict]:
+    """An EmbedBenchDeviceData run: one capture of SDA and SCL, and the firmware's own lines (src dut) saying what it
+    read. Truth: the bus, its rate (the run's name: i2c-100k), the payloads read (a CRC that failed, crc=0, left
+    out). Not the decode beside it (c0001.i2c.json is WireSkein's)."""
+    meta = json.loads((run / "run.json").read_text())
+    capf = run / meta["captures"][0]["file"]
+    cap = _capture.read(capf).parts[0].view()
+    names = {ch.name for ch in cap.channels}
+    if names != {"SCL", "SDA"}:
+        raise ValueError(f"{capf}: channels {sorted(names)}, want SCL and SDA")
+    flip = zlib.crc32(run.name.encode()) & 1
+    new = {"SCL": "D1" if flip else "D0", "SDA": "D0" if flip else "D1"}
+    chans = sorted((replace(ch, name=new[ch.name]) for ch in cap.channels), key=lambda c: c.name)
+    m = re.search(r"__i2c-(\d+)k__", run.name)
+    reads = []
+    for x in meta.get("log", []):
+        if x.get("src") != "dut" or "crc=0" in x["text"]:
+            continue
+        reads += [h.lower() for h in _DUT_READ.findall(x["text"])]
+    truth = {"id": f"ebdd-{run.name}", "source": {"path": str(run), "repo": "EmbedBenchDeviceData"},
+             "buses": [{"protocol": "i2c", "roles": {"scl": new["SCL"], "sda": new["SDA"]},
+                        "params": {"clock_hz": float(m.group(1)) * 1e3 if m else None},
+                        "expect": {"dut_reads": reads}}],
+             "decoys": [], "notes": "real capture; truth: the bus and what the firmware said it read"}
+    return Capture(cap.rate, cap.n_samples, chans), truth
+
+
 def read(ref: str) -> tuple[Capture, dict]:
+    if ref.startswith("ebdd:"):
+        return _ebdd(Path(ref[len("ebdd:"):]))
     if ref.startswith("i2cbench:"):
         return _i2cbench(Path(ref[len("i2cbench:"):]))
     if ref.startswith("gen:"):

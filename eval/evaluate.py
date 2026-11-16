@@ -63,6 +63,16 @@ def match(bus: dict, claim: dict) -> dict:
             r["decode"] = _ratio([b & mask for b in want], [b & mask for b in got])
         else:
             r["decode"] = None
+    elif bus["protocol"] == "i2c" and "transactions" not in bus["expect"] and "dut_reads" in bus["expect"]:
+        # a recorded run whose truth is what the firmware said it read (EmbedBenchDeviceData's dut lines), not every
+        # transaction: the share of those payloads found as the bytes of decoded reads (each used once)
+        r["roles"] = nr == tr
+        r["params"] = r["roles"]
+        from collections import Counter
+        want = Counter(bus["expect"]["dut_reads"])
+        got = Counter(bytes(b).hex() for a, rw, b in decoded(claim) if rw == "read")
+        n = sum(want.values())
+        r["decode"] = sum(min(c, got[p]) for p, c in want.items()) / n if n else None
     elif bus["protocol"] == "i2c":
         r["roles"] = nr == tr
         r["params"] = r["roles"]
