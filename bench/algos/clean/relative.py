@@ -12,8 +12,11 @@ from wireskein._engine import kernels as K
 from wireskein._engine.model import Capture
 
 
-@algorithm("clean", "relative", status="trial", about="pulses under r of the line's own unit (comb) dropped",
-           variants={"r2": {"r": 0.2}, "r3": {"r": 0.3}, "r4": {"r": 0.4}})
+@algorithm("clean", "relative", status="retired", about="pulses under r of the line's own unit (comb) dropped",
+           variants={"r2": {"r": 0.2}, "r3": {"r": 0.3}, "r4": {"r": 0.4}},
+           reason="clean/hybrid does as well on rate and better on noise in ticks (Actions run 20261116T060355Z: "
+                  "e2e 0.912 vs 0.908 on rate, 0.818 vs 0.783 on noise); it leaves 1-sample spikes where a "
+                  "line's unit is a few samples")
 def relative(cap, r):
     out = []
     for ch in cap.channels:
