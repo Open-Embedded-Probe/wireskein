@@ -8,6 +8,8 @@ truth. An algorithm sees only the capture (channels named D0..Dn in a shuffled o
     bit_unit      fn(cap, lines) -> {line: {"unit_s": float | None, "confidence": float}}
     clean         fn(cap) -> Capture (the same channels, edges cleaned)
     grouping      fn(cap) -> [{"clock", "data": [...], "select": str | None, "score"}] (candidate buses, any order)
+    segments      fn(cap, lines: {line: "clock" | "async"}) -> {line: [(start, end, unit)]} (ticks; a clock's unit
+                  its period rising to rising, an asynchronous line's its bit): where a line's rate changes
     e2e           fn(cap) -> claims (wireskein.decode.export(..., mode="all", alternatives=True)["claims"])
 
 clock_period and bit_unit are asked only about the lines whose truth has the value (a clock's period, an
@@ -313,4 +315,81 @@ class Grouping(Stage):
                 "wrong_clock_groups": float(np.mean([r["wrong_clock_groups"] for r in rows]))}
 
 
-STAGES = {s.name: s for s in (LineClass(), ClockPeriod(), BitUnit(), Clean(), Grouping(), E2E())}
+def true_segments(case: Case) -> dict:
+    """{line: (kind, [(start, end, unit)])} where the truth knows the line's rate changing: a UART's baud segments
+    (eval/synth.py's baudhop), a clock's bursts as the capture without noise has them (each burst its own period:
+    freqhop changes it frame by frame)."""
+    from wireskein._engine import kernels as K
+    out = {}
+    rate = float(case.cap.rate)
+    for b in case.truth.get("buses", []):
+        pm = b.get("params", {})
+        if b["protocol"] == "uart" and len(pm.get("baud_segments", [])) > 1:
+            seg = pm["baud_segments"]
+            starts = [int(x["from"] * rate) for x in seg] + [case.cap.n_samples]
+            out[b["roles"]["data"]] = ("async", [(starts[i], starts[i + 1], rate / seg[i]["baud"])
+                                                 for i in range(len(seg))])
+        spec = SYNC_ROLES.get(b["protocol"])
+        if spec and case.clean is not None and spec[0] in b["roles"]:
+            ch = case.clean.channel(b["roles"][spec[0]])
+            e = np.asarray(ch.edges, np.int64)
+            r = e[K.edge_levels(e, ch.initial) == 1]
+            if len(r) < 8:
+                continue
+            st = K.burst_split(r)
+            en = np.concatenate((st[1:], [len(r)]))
+            segs = [(int(r[a]), int(r[z - 1]), float(np.median(np.diff(r[a:z])))) for a, z in zip(st, en) if z - a >= 3]
+            rates = [x[2] for x in segs]
+            if segs and max(rates) / min(rates) >= 1.5:          # a rate that changes: else no segments to find
+                out[b["roles"][spec[0]]] = ("clock", segs)
+    return out
+
+
+def _blocks(segs, ratio=1.5):
+    """Neighbouring segments of about the same unit as one block: how many rates there are in time."""
+    n, last = 0, None
+    for _, _, u in segs:
+        if last is None or max(u, last) / min(u, last) >= ratio:
+            n += 1
+        last = u
+    return n
+
+
+class Segments(Stage):
+    name = "segments"
+    about = "where a line's rate changes: blocks of one rate in time (a UART switching baud, a clock per frame)"
+    headline = "rate_ok"
+    LOWER = ("blocks_err",)
+
+    def wants(self, case):
+        return bool(true_segments(case))
+
+    def run(self, algo, case):
+        return algo(case.cap, {ln: kind for ln, (kind, _) in true_segments(case).items()})
+
+    def score(self, out, case):
+        rows = []
+        for ln, (kind, segs) in true_segments(case).items():
+            got = sorted(out.get(ln) or [])
+            ok = 0
+            for a, z, u in segs:
+                mid = (a + z) // 2
+                blk = next((g for g in got if g[0] <= mid < g[1]), None)
+                ok += bool(blk) and abs(blk[2] / u - 1) <= 0.05
+            rows.append({"item": ln, "kind": kind, "segments": len(segs), "rate_ok": ok / len(segs),
+                         "blocks_true": _blocks(segs), "blocks_got": _blocks(got) if got else 0})
+        return rows
+
+    def summarize(self, rows):
+        n = len(rows)
+        if not n:
+            return {"n": 0}
+        return {"n": n, "rate_ok": float(np.mean([r["rate_ok"] for r in rows])),
+                "rate_ok_clock": float(np.mean([r["rate_ok"] for r in rows if r["kind"] == "clock"]))
+                if any(r["kind"] == "clock" for r in rows) else None,
+                "rate_ok_async": float(np.mean([r["rate_ok"] for r in rows if r["kind"] == "async"]))
+                if any(r["kind"] == "async" for r in rows) else None,
+                "blocks_err": float(np.mean([abs(r["blocks_got"] - r["blocks_true"]) for r in rows]))}
+
+
+STAGES = {s.name: s for s in (LineClass(), ClockPeriod(), BitUnit(), Clean(), Grouping(), Segments(), E2E())}

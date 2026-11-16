@@ -82,3 +82,9 @@ role = "tune"
 about = "generated cases with mostly NACKed I2C, its lines' rises late as through a weak pull-up (1, 2.5, 4 us; and with bounces), as the real bench's (tests/data/i2c_bench/h417_slow)"
 sources = ["gen:mixed/nack[0:100]"]
 transforms = ["", "odslow:1000", "odslow:2500", "odslow:4000", "odslow:2500+pbounce:0.3:60"]
+
+[suite.segments]
+role = "tune"
+about = "rates that change in time: eval's baudhop (UART switching baud) and freqhop (clock per frame), clean and noisy"
+sources = ["set:baudhop", "set:freqhop"]
+transforms = ["", "spike:0.1", "bounce:0.1", "decimate:2"]
