@@ -190,7 +190,7 @@ they are measured. Costs are not.
 
 | What | Where | How |
 | --- | --- | --- |
-| Scores of whole suites | GitHub Actions | Start "Bench" by hand (stages, suites, algorithms, jobs, note, whether to commit). The cases are split over parallel jobs (every algorithm of a case in the same job), merged at the end, and the ledger's new lines committed to the branch it ran on (on the branch as it is just before the push, added again; again if another push came first). The items are kept as the artifact `bench-<run id>`; here with `uv run python bench/merge.py --import <unpacked dir>` |
+| Scores of whole suites | GitHub Actions | Start "Bench" by hand (stages, suites, algorithms, jobs, note, whether to commit). Suites default to `all` (every suite whose data is in the repository: `real-ebdd`, `wch-fixture` and `wch-ladder` read local repositories, EmbedBenchDeviceData and wch-protocols, and run here only); `tune` leaves the holdouts out. The cases are split over parallel jobs (every algorithm of a case in the same job), merged at the end, and the ledger's new lines committed to the branch it ran on (on the branch as it is just before the push, added again; again if another push came first). The items are kept as the artifact `bench-<run id>`; here with `uv run python bench/merge.py --import <unpacked dir>` |
 | Costs | a machine that counts instructions (native Ubuntu) | the `cost` suite with `--memory`, one job fewer than the cores |
 | Quick tries | here | `smoke`, `rate-smoke` ...; another ledger with `WSBENCH_RESULTS` |
 

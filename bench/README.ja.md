@@ -189,7 +189,7 @@ e2e では、各方式の出力そのもの（確定・有力・拮抗の数、�
 
 | 何を | どこで | どう |
 | --- | --- | --- |
-| 全スイートの点数（本計測） | GitHub Actions | Actions の「Bench」を手動で起動（段、スイート、方式、並列数、メモ、コミットするか）。ケースを並列のジョブに分け（1 つのケースの方式はすべて同じジョブ）、最後に集計して、台帳の新しい行を起動したブランチにコミットする（push の直前にブランチの最新を取り直し、その上に追記し直す。先に別の push があればやり直す）。明細は artifact `bench-<実行 ID>` に置き、手元へは `uv run python bench/merge.py --import <展開したディレクトリ>` |
+| 全スイートの点数（本計測） | GitHub Actions | Actions の「Bench」を手動で起動（段、スイート、方式、並列数、メモ、コミットするか）。スイートの既定は `all`（データがリポジトリにあるスイート全部。EmbedBenchDeviceData と wch-protocols の `real-ebdd`、`wch-fixture`、`wch-ladder` は手元だけ）、確認用を除くなら `tune`。ケースを並列のジョブに分け（1 つのケースの方式はすべて同じジョブ）、最後に集計して、台帳の新しい行を起動したブランチにコミットする（push の直前にブランチの最新を取り直し、その上に追記し直す。先に別の push があればやり直す）。明細は artifact `bench-<実行 ID>` に置き、手元へは `uv run python bench/merge.py --import <展開したディレクトリ>` |
 | コスト | 命令数を数えられる機械（ネイティブの Ubuntu） | `cost` スイートを `--memory` 付きで。並列数はコア数より 1 少なく |
 | 素早い試行 | 手元 | `smoke`、`rate-smoke` など。`WSBENCH_RESULTS` で別の台帳に |
 

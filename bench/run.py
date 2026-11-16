@@ -3,6 +3,7 @@
     uv run python bench/run.py --list
     uv run python bench/run.py --stage clock_period --suite noise --note "comb: candidates from the histogram"
     uv run python bench/run.py --stage all --suite smoke
+    uv run python bench/run.py --stage all --suite all        # every suite whose data is on this machine
     uv run python bench/run.py --stage e2e --algo wireskein --algo preclean --suite noise
     uv run python bench/run.py --stage all --suite noise --shard 0/8 --run-id ID   # one of 8 shards: merge.py ID
 """
@@ -28,7 +29,8 @@ from wsbench.stages import STAGES  # noqa: E402
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--stage", action="append", default=[], help=f"one of {', '.join(STAGES)}, or all")
-    ap.add_argument("--suite", action="append", default=[], help="a suite of bench/suites.toml")
+    ap.add_argument("--suite", action="append", default=[],
+                    help="a suite of bench/suites.toml; all: every suite whose data is here; tune: those for tuning")
     ap.add_argument("--algo", action="append", default=[], help="by name (a variant's base name runs all variants)")
     ap.add_argument("--status", default="main,trial", help="when no --algo: which to run (main,trial,retired)")
     ap.add_argument("--algos-dir", action="append", default=[], help="more algorithms (also WSBENCH_ALGOS)")
@@ -60,6 +62,11 @@ def main() -> None:
     stages = list(STAGES) if "all" in args.stage else args.stage
     if not stages or not args.suite:
         ap.error("--stage and --suite are needed (see --list)")
+    args.suite, skipped = runner.expand(args.suite)
+    if skipped:
+        print(f"suites without their data here, left out: {', '.join(skipped)}", file=sys.stderr)
+    if not args.suite:
+        ap.error("no suite with its data here")
     for s in stages:
         if s not in STAGES:
             ap.error(f"no stage {s!r}")

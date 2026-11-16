@@ -48,6 +48,34 @@ def suite_datasets(name: str) -> list[str]:
     return [src + (f"+{chain}" if chain else "") for _, _, src, chain in datasets_of([name])]
 
 
+def has_data(name: str) -> bool:
+    """Whether every source of a suite is on this machine (EmbedBenchDeviceData and wch-protocols are local
+    repositories, not in GitHub's runners)."""
+    from . import data
+    try:
+        return all(data.source_items(src) for src in suites()[name]["sources"])
+    except FileNotFoundError:
+        return False
+
+
+def expand(names: list[str]) -> tuple[list[str], list[str]]:
+    """Suite names with "all" (every suite whose data is here) and "tune" (those of them with role tune) expanded,
+    in suites.toml's order; also the suites left out for want of their data."""
+    all_ = suites()
+    want, skipped = [], []
+    for n in names:
+        if n in ("all", "tune"):
+            for s, d in all_.items():
+                if n == "tune" and d.get("role", "tune") != "tune":
+                    continue
+                if s in want or s in skipped:
+                    continue
+                (want if has_data(s) else skipped).append(s)
+        elif n not in want:
+            want.append(n)
+    return want, skipped
+
+
 def datasets_of(names: list[str]) -> list[tuple[str, str, str, str]]:
     """(suite, role, source, chain) for each dataset of the suites."""
     all_ = suites()
