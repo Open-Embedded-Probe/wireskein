@@ -92,6 +92,15 @@ def comb(cap, lines, max_mult):
     sixteenth of it. An algorithm that does worse with more information has a fault, such as thresholds in samples
   - Noise is seeded from the case id and the transform text: the same data on every run and machine. Each run keeps
     a hash of its exact inputs (`inputs_sha`)
+- **Data a capture cannot show is kept, tagged, and counted apart** (`wsbench/data.py`'s `hardness`). Tags come
+  from the truth, physics and the records' facts alone, never from an algorithm's result: `undersampled` (a clocked
+  bus under 4 samples a period, an asynchronous one under 3 a bit; where the rate changes, at its fastest),
+  `noise_over_bit` (noise lasting half a bit or more), `defective_capture` (a real record taken with a probe filter
+  its README records locking up), `aliased` (a decoy periodic line faster than the rate / 2.5). Besides its metrics
+  so far, e2e gives `ok_readable` / `confirmed_readable` over the untagged buses, `ok_hard` / `confirmed_hard` /
+  `decode_hard` over the tagged ones (how far an algorithm gets), `ok_<tag>` per tag, and
+  `false_confirmed_aliased` (wrong confirmations using an aliasing line). **False confirmations count in the total
+  on any data**: a confident wrong claim harms a user however hard the capture.
 - **A suite is not changed once it has results** (`suites.toml`); a changed one gets a new name (`noise-v2`).
 - **Tune and holdout are kept apart.** Algorithms are never adjusted on what a holdout suite (the generated heldout
   seeds, the real records) shows.

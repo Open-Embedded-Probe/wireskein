@@ -206,6 +206,10 @@ class E2E(Stage):
     def score(self, out, case):
         import evaluate  # eval/evaluate.py
         rec = evaluate.judge(case.cap, case.truth, out)
+        # each truth bus with its hardness tags (data.hardness: judge keeps the truth's order)
+        detail = [{"protocol": b["protocol"], "outcome": b["outcome"], "tags": t, "decode": b.get("decode")}
+                  for b, t in zip(rec["buses"], case.bus_tags or [[]] * len(rec["buses"]))
+                  if b["in_scope"] and b["outcome"] != "absent"]
         buses = [b for b in rec["buses"] if b["in_scope"] and b["outcome"] != "absent"]
         return [{"item": "case", "buses": len(buses),
                  "ok": sum(b["outcome"] in ("confirmed", "likely") for b in buses),
@@ -213,16 +217,34 @@ class E2E(Stage):
                  "outcomes": [f"{b['protocol']}:{b['outcome']}" for b in buses],
                  "false_confirmed": sum(not c["correct"] and c["verdict"] == "confirmed" for c in rec["claims"]),
                  "false_likely": sum(not c["correct"] and c["verdict"] == "likely" for c in rec["claims"]),
+                 # wrong claims that use a line aliasing at this rate (counted in false_confirmed too)
+                 "false_confirmed_aliased": sum(not c["correct"] and c["verdict"] == "confirmed"
+                                                and bool(set(c["roles"].values()) & case.aliased) for c in rec["claims"]),
+                 "detail": detail,
                  "decode": [b.get("decode") for b in buses if b["outcome"] in ("confirmed", "likely")]}]
 
     def summarize(self, rows):
         nb = sum(r["buses"] for r in rows)
         dec = [d for r in rows for d in r["decode"] if d is not None]
-        return {"n": len(rows), "buses": nb, "ok": sum(r["ok"] for r in rows) / nb if nb else None,
-                "confirmed": sum(r["confirmed"] for r in rows) / nb if nb else None,
-                "false_confirmed": sum(r["false_confirmed"] for r in rows),
-                "false_likely": sum(r["false_likely"] for r in rows),
-                "decode_mean": float(np.mean(dec)) if dec else None}
+        out = {"n": len(rows), "buses": nb, "ok": sum(r["ok"] for r in rows) / nb if nb else None,
+               "confirmed": sum(r["confirmed"] for r in rows) / nb if nb else None,
+               "false_confirmed": sum(r["false_confirmed"] for r in rows),
+               "false_likely": sum(r["false_likely"] for r in rows),
+               "decode_mean": float(np.mean(dec)) if dec else None,
+               "false_confirmed_aliased": sum(r.get("false_confirmed_aliased", 0) for r in rows)}
+        # apart: buses a capture can show (no hardness tag) and those it cannot well (data.hardness), each tag too
+        det = [b for r in rows for b in r.get("detail", [])]
+        good = lambda bs: sum(b["outcome"] in ("confirmed", "likely") for b in bs) / len(bs) if bs else None  # noqa
+        conf = lambda bs: sum(b["outcome"] == "confirmed" for b in bs) / len(bs) if bs else None  # noqa
+        easy, hard = [b for b in det if not b["tags"]], [b for b in det if b["tags"]]
+        out.update({"buses_readable": len(easy), "ok_readable": good(easy), "confirmed_readable": conf(easy),
+                    "buses_hard": len(hard), "ok_hard": good(hard), "confirmed_hard": conf(hard)})
+        dh = [b["decode"] for b in hard if b["outcome"] in ("confirmed", "likely") and b["decode"] is not None]
+        out["decode_hard"] = float(np.mean(dh)) if dh else None
+        for tag in sorted({t for b in hard for t in b["tags"]}):
+            bs = [b for b in hard if tag in b["tags"]]
+            out[f"ok_{tag}"], out[f"confirmed_{tag}"] = good(bs), conf(bs)
+        return out
 
 
 # the clock, data and select roles of the clocked buses, as eval's truth names them

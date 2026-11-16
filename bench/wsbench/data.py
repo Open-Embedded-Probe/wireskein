@@ -64,6 +64,8 @@ class Case:
     truth: dict                        # the eval/ truth.json (algorithms never see it)
     lines: dict[str, LineTruth] = field(default_factory=dict)
     input_sha: str = ""
+    bus_tags: list = field(default_factory=list)   # per truth bus: why it is hard to read (see hardness), [] if not
+    aliased: set = field(default_factory=set)     # lines that alias at this rate (a decoy clock too fast for it)
 
 
 # ---------------- sources ----------------
@@ -359,12 +361,87 @@ def input_sha(cap: Capture) -> str:
     return h.hexdigest()[:16]
 
 
+# ---------------- hardness: what a capture cannot show, from the truth and physics alone ----------------
+# Decided before looking at any algorithm's result on a case, and never from one: a bus tagged is still scored (how
+# far an algorithm gets is worth knowing), and apart.
+
+UNDER_PERIOD = 4      # a clocked bus under 4 samples a clock period (2 a half): each half seen as one sample or less
+UNDER_BIT = 3         # an asynchronous bit under 3 samples: its middle not sampled clear of its edges
+NOISE_REACH = 0.5     # noise lasting half a bit (half of a clock's half) or more reaches where a bit is sampled
+ALIAS = 2.5           # a periodic line faster than rate / 2.5 shows in the samples as another rate
+FREQHOP_MAX = 4       # eval/synth.py's freqhop: frames up to 4 times the bus's clock
+
+
+def noise_span_s(chain: str, rate0: float) -> float:
+    """How long the chain's noise lasts, in seconds (noise in ticks counted at the rate it was added at)."""
+    rate, span = float(rate0), 0.0
+    for spec in [x for x in chain.split("+") if x]:
+        kind, *a = spec.split(":")
+        if kind == "decimate":
+            rate /= int(a[0])
+        elif kind in ("pbounce", "pspike"):
+            span = max(span, float(a[1]) * 1e-9)
+        elif kind == "bounce":
+            span = max(span, 7 / rate)           # pulses 1-3 ticks wide within 4 ticks of the edge
+        elif kind in ("spike", "xtalk"):
+            span = max(span, 1 / rate)
+    return span
+
+
+def defective_i2cbench(name: str) -> bool:
+    """tests/data/i2c_bench/h417_slow: captures through the ESP32-P4's flex glitch filter, which its README records
+    locking up or oscillating on these slow edges (hys / nohys with g 25-200, fexp2, lk1 g100, fhys g100 / g1025).
+    The pin's fixed filter (fexp g25, pin-*) and no filter read fine."""
+    parts = name.split("-")
+    tag, g = parts[0], parts[-1] if len(parts) > 2 else ""
+    g = g.split("h")[0].lstrip("g") if g.startswith("g") else ""
+    if tag in ("hys", "nohys"):
+        return g.isdigit() and int(g) > 0
+    return tag == "fexp2" or (tag == "lk1" and g == "100") or (tag == "fhys" and g in ("100", "1025"))
+
+
+def hardness(truth: dict, cap: Capture, chain: str, rate0: float) -> tuple[list, set]:
+    """(per truth bus the reasons it is hard to read, the lines that alias)."""
+    rate = float(cap.rate)
+    span = noise_span_s(chain, rate0)
+    gen = truth.get("generator") or {}
+    stress = gen.get("stress")
+    src = (truth.get("source") or {}).get("path", "")
+    defective = "i2c_bench" in src and defective_i2cbench(Path(src).stem if "/stream/" in src
+                                                         else Path(src).parent.name)
+    tags = []
+    for b in truth.get("buses", []):
+        pm, t = b.get("params", {}), set()
+        hz = pm.get("clock_hz")
+        bauds = [x["baud"] for x in pm.get("baud_segments", [])] or [pm.get("baud") or pm.get("bitrate")]
+        if hz:
+            fastest = hz * (FREQHOP_MAX if stress == "freqhop" else 1)
+            if rate / fastest < UNDER_PERIOD:
+                t.add("undersampled")
+            if span and span >= NOISE_REACH * (0.5 / fastest):
+                t.add("noise_over_bit")
+        elif bauds[0]:
+            fastest = max(bauds)
+            if rate / fastest < UNDER_BIT:
+                t.add("undersampled")
+            if span and span >= NOISE_REACH / fastest:
+                t.add("noise_over_bit")
+        if defective:
+            t.add("defective_capture")
+        tags.append(sorted(t))
+    aliased = {d["channel"] for d in truth.get("decoys") or []
+               if d.get("kind") in ("clock", "pwm", "burst_clock") and d.get("freq") and d["freq"] * ALIAS > rate}
+    return tags, aliased
+
+
 def load_case(ref: str, source: str, chain: str) -> Case:
     cap, truth = read(ref)
+    rate0 = float(cap.rate)
     # a generated case is its own clean reference, unless its frozen set already holds noise
     gen = truth.get("generator")
     clean = cap if gen and gen.get("stress") != "glitch" else None
     cap, clean = apply(cap, clean, chain, truth["id"])
     dataset = source + (f"+{chain}" if chain else "")
+    tags, aliased = hardness(truth, cap, chain, rate0)
     return Case(truth["id"] + (f"+{chain}" if chain else ""), dataset, cap, clean, truth,
-                line_truth(truth, cap, clean or cap), input_sha(cap))
+                line_truth(truth, cap, clean or cap), input_sha(cap), tags, aliased)
