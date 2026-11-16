@@ -9,6 +9,9 @@ was measured:
                 gen:<profile>[/<stress>][a:b][@<rate>]   eval/synth.py's scenarios of seeds a..b, sampled at <rate>
                                   (the same traffic whatever the rate: a base for decimate, sweeping the rate), or at
                                   the scenario's own
+                wchfix:<sub>[a:b]   wch-protocols' LinkE fixture (wire-linke-p4-2026-09-25/<sub>: l103, v203,
+                                  v203-100mhz, v003, extra/l103 ...): real RVSWD / SWIO with truth from wch-protocols'
+                                  own decoders (.dmi.txt, swio.py); captures over 300 kB left out (wchfix-large: in)
                 ebdd:<dir>[a:b]   EmbedBenchDeviceData's runs (<dir>/runs/*/run.json, real I2C taken by an OEP probe):
                                   truth the bus (SDA / SCL renamed D0 / D1), its rate (from the run's name) and
                                   the bytes the firmware said it read (its dut lines: bytes=.. crc=1, data=..)
@@ -93,6 +96,13 @@ def source_items(source: str) -> list[str]:
         rate = float(g["rate"]) if g["rate"] else 0.0          # 0: the scenario's own rate
         return [f"gen:{g['profile']}:{g['stress'] or ''}:{s}:{rate}" for s in range(int(g["a"]), int(g["b"]))]
     m = _RANGE.match(source)
+    if m and m["base"].startswith(("wchfix:", "wchfix-large:")):
+        large = m["base"].startswith("wchfix-large:")
+        d = WCH_FIXTURE / m["base"].split(":", 1)[1]
+        if not d.is_dir():
+            raise FileNotFoundError(d)
+        files = [p for p in sorted(d.glob("*.sr")) if large or p.stat().st_size <= WCH_MAX_BYTES]
+        return [f"wchfix:{p}" for p in _slice(files, m["a"], m["b"])]
     if m and m["base"].startswith("ebdd:"):
         d = Path(m["base"][len("ebdd:"):]).expanduser() / "runs"
         if not d.is_dir():
@@ -157,6 +167,70 @@ def source_paths(source: str) -> list[Path]:
     return _slice(paths, a, b)
 
 
+WCH_FIXTURE = Path.home() / "dev_wch/wch-protocols/captures/fixtures/wire-linke-p4-2026-09-25"
+WCH_MAX_BYTES = 300_000          # the flash writes and the like (a million edges) only through wchfix-large:
+
+
+def _dmi_rows(dmi: Path) -> list:
+    """wch-protocols' tools/dmi_decode.py output, as eval/convert_real.py reads it: [W|R, register, data]."""
+    rows = []
+    for line in dmi.read_text().splitlines():
+        f = line.split()
+        if len(f) >= 4 and f[1] in ("W", "R"):
+            rows.append([f[1], f[2], int(f[3], 16)])
+    return rows
+
+
+def _wchfix(sr: Path) -> tuple[Capture, dict]:
+    """A capture of the LinkE fixture with its truth from wch-protocols' own decoders (not WireSkein): RVSWD's DMI
+    accesses from <op>.dmi.txt (where only the 50 MHz run of the same operation has one - v203-100mhz, v203-160mhz -
+    that one, marked cross-session: ch32rv's steps are fixed, a polling count may differ), SWIO's from
+    captures/tools/swio.py (gone from wch-protocols since: SWIO then has its lines only). A .dmi.txt whose decoder left
+    over 5 % of its frames raw is no truth. Channels renamed D0.. in an order from the file's name."""
+    from wireskein import decode as _decode
+    cap = _decode.load(sr)
+    rel = sr.relative_to(WCH_FIXTURE)
+    order = sorted(cap.channels, key=lambda c: zlib.crc32(f"{rel}|{c.name}".encode()))
+    new = {c.name: f"D{i}" for i, c in enumerate(order)}
+    chans = sorted((replace(c, name=new[c.name]) for c in cap.channels), key=lambda c: int(c.name[1:]))
+    names = {c.name for c in cap.channels}
+    expect, source = {}, None
+    if "SWCLK" in names:
+        dmi = sr.with_suffix(".dmi.txt")
+        if not dmi.exists() and sr.parent.name.startswith("v203-"):
+            alt = WCH_FIXTURE / "v203" / dmi.name
+            if alt.exists():
+                dmi, source = alt, "wch-protocols tools/dmi_decode.py, the 50 MHz run of the same operation (cross-session)"
+        if dmi.exists():
+            rows = _dmi_rows(dmi)
+            raw = sum(1 for ln in dmi.read_text().splitlines() if " RAW" in ln)
+            # the reference decoder left frames unread (V203's SWCLK reflections: up to 884 raw lines, target_info 0
+            # accesses against L103's 132): no truth then, the bus's lines only
+            if rows and raw <= 0.05 * (len(rows) + raw):
+                expect["dmi"] = rows
+                source = source or "wch-protocols tools/dmi_decode.py (.dmi.txt)"
+        bus = {"protocol": "rvswd", "roles": {"clk": new["SWCLK"], "dio": new["SWDIO"]}, "params": {}}
+    else:
+        import sys as _sys
+        tools = WCH_FIXTURE.parent.parent / "tools"
+        if str(tools) not in _sys.path:
+            _sys.path.insert(0, str(tools))
+        try:
+            import swio as ref
+            frames, _ = ref.frames(str(sr), 0)
+            rows = [[d["kind"], d["addr"], d["data"]] for _, b, _ in frames if (d := ref.decode(b))]
+            if rows:
+                expect["dmi_addr"], source = rows, "wch-protocols captures/tools/swio.py"
+        except Exception:  # noqa: BLE001 - no reference decoder: roles only
+            pass
+        bus = {"protocol": "swio", "roles": {"dio": new["SWIO"]}, "params": {}}
+    if expect:
+        bus["expect"], bus["expect_source"] = expect, source
+    truth = {"id": "wchfix-" + str(rel.with_suffix("")).replace("/", "-"), "source": {"path": str(sr)},
+             "buses": [bus], "decoys": [], "notes": "real LinkE <-> target capture (wch-protocols fixture 2026-09-25)"}
+    return Capture(cap.rate, cap.n_samples, chans), truth
+
+
 _DUT_READ = re.compile(r"(?:^|\s)(?:bytes|data)=([0-9a-fA-F]+)(?:\s|$)")
 
 
@@ -188,6 +262,8 @@ def _ebdd(run: Path) -> tuple[Capture, dict]:
 
 
 def read(ref: str) -> tuple[Capture, dict]:
+    if ref.startswith("wchfix:"):
+        return _wchfix(Path(ref[len("wchfix:"):]))
     if ref.startswith("ebdd:"):
         return _ebdd(Path(ref[len("ebdd:"):]))
     if ref.startswith("i2cbench:"):

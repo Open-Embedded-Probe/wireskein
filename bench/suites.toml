@@ -100,3 +100,15 @@ role = "tune"
 about = "real WCH debug captures (eval's target-info: L103 and V203 RVSWD, V003 SWIO; 50 and 100 MS/s) taken again 2, 4, 8 times slower by decimation: how slow a capture still reads the DMI accesses right (the device's clock cannot be slowed)"
 sources = ["real[4:8]"]
 transforms = ["", "decimate:2", "decimate:4", "decimate:8"]
+
+[suite.wch-fixture]
+role = "tune"
+about = "wch-protocols' LinkE fixture (2026-09-25), the operations under 300 kB: L103 / V203 RVSWD and V003 SWIO at 50 MS/s, V203 at 100 MS/s (truth from the 50 MHz run), extra L103 operations (LinkE speeds, clocks, errors); truth from wch-protocols' decoders"
+sources = ["wchfix:l103", "wchfix:v203", "wchfix:v003", "wchfix:v203-100mhz", "wchfix:extra/l103"]
+transforms = [""]
+
+[suite.wch-ladder]
+role = "tune"
+about = "the fixture's L103, V003 and V203-at-100-MS/s operations decimated 2, 4, 8 times: where a slower capture stops reading the DMI accesses"
+sources = ["wchfix:l103", "wchfix:v003", "wchfix:v203-100mhz"]
+transforms = ["", "decimate:2", "decimate:4", "decimate:8"]
