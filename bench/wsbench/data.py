@@ -210,6 +210,9 @@ def _wchfix(sr: Path) -> tuple[Capture, dict]:
             unread = sum(1 for n in re.findall(r"RAW(\d+)", dmi.read_text()) if not (80 <= int(n) <= 86 or int(n) == 99))
             if rows and unread <= 0.1 * (len(rows) + unread):
                 expect["dmi"] = rows
+                # its R / W is not always right (it splits frames by idle time: the fixture's README), its
+                # addresses and data are
+                expect["dmi_ignore_op"] = True
                 source = source or "wch-protocols tools/dmi_decode.py (.dmi.txt)"
         bus = {"protocol": "rvswd", "roles": {"clk": new["SWCLK"], "dio": new["SWDIO"]}, "params": {}}
     else:

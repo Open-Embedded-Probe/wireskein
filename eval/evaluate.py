@@ -89,15 +89,27 @@ def match(bus: dict, claim: dict) -> dict:
         r["roles"] = nr == tr
         r["params"] = r["roles"]
         # a frame no target answered is a request, no access
-        # a BURST's data is a list (a run of reads): hashable for the sequence match
-        got = [(x["op"], x["addr"], tuple(x["data"]) if isinstance(x["data"], list) else x["data"])
-               for x in lay["dmi"] if x.get("answered", True)]
+        # a BURST (WireSkein's one access for a run of reads of one register) is each of its reads, as a reference
+        # decoder lists them (wch-protocols' dmi_decode.py: one R line each)
+        got = []
+        for x in lay["dmi"]:
+            if not x.get("answered", True):
+                continue
+            if x["op"] == "BURST" and isinstance(x["data"], list):
+                got += [("R", x["addr"], v) for v in x["data"]]
+            else:
+                got.append((x["op"], x["addr"], tuple(x["data"]) if isinstance(x["data"], list) else x["data"]))
         if bus["protocol"] == "swio" and "expect" in bus and "dmi_addr" in bus["expect"]:
             r["decode"] = _ratio([tuple(x) for x in bus["expect"]["dmi_addr"]], got)
         elif bus["protocol"] == "rvswd" and "expect" in bus and "dmi" in bus["expect"]:
             names = {x["reg"]: x["addr"] for x in lay["dmi"] if x.get("reg")}
             addr = lambda name: names.get(name, int(name, 16) if name.startswith("0x") else -1)  # noqa: E731
-            r["decode"] = _ratio([(op, addr(nm), d) for op, nm, d in bus["expect"]["dmi"]], got)
+            want = [(op, addr(nm), d) for op, nm, d in bus["expect"]["dmi"]]
+            if bus["expect"].get("dmi_ignore_op"):
+                # a reference that labels some writes R (wch-protocols' dmi_decode.py splits frames by idle time:
+                # its values and addresses match, its R / W does not always): compared on address and data
+                want, got = [w[1:] for w in want], [g[1:] for g in got]
+            r["decode"] = _ratio(want, got)
         else:
             r["decode"] = None
     elif bus["protocol"] in ("lin", "dmx512"):
