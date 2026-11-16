@@ -15,6 +15,12 @@ Strategies, each scored on the same items:
                    samples per unit among the lines), obs (both). Marked (truth): protocol, label, dataset, noise -
                    known to the bench, not to a switch; an upper bound only
 
+  (e2e, from what each output itself says - its claims by verdict, known at run time:)
+  cascade A->B     A first; B's output where A is not sure of all it says (a likely or ambiguous claim, or none
+                   confirmed): a plain mode first, a harder one when the first is unsure
+  most_confirmed   every algorithm run, the output with the most confirmed claims (trusting confidence)
+  least_unsure     every algorithm run, the output with the fewest likely / ambiguous claims
+
 If oracle is far above the best fixed algorithm and dispatch or confidence get close to it, switching is worth
 building; if not, one algorithm is enough.
 """
@@ -68,6 +74,7 @@ def load(stage: str, suite: str, run: str | None):
     if not recs:
         sys.exit(f"no results of {stage} on suite {suite} in {runner.LEDGER}")
     run_id = recs[-1]["run"]
+    main = next((r["algo"] for r in recs if r["run"] == run_id and r["status"] == "main"), None)
     dsets = {r["dataset"] for r in recs if r["run"] == run_id}       # this suite's datasets (a run may hold several)
     paths = [p for p in sorted((runner.RESULTS / "runs").glob(f"{run_id}*.jsonl")) if not p.name.endswith(".ledger.jsonl")]
     if not paths:
@@ -87,7 +94,7 @@ def load(stage: str, suite: str, run: str | None):
                 meta[k] = groups(row, out)
     algos = sorted({a for v in items.values() for a in v})
     full = {k: v for k, v in items.items() if len(v) == len(algos)}
-    return run_id, algos, full, meta
+    return run_id, algos, full, meta, main
 
 
 def score(stage: str, picks: dict, items: dict) -> float:
@@ -115,7 +122,7 @@ def main() -> None:
     ap.add_argument("--run", default=None, help="a run id (prefix); default the latest with this stage and suite")
     ap.add_argument("--by", default=None, help=f"also a table per group: one of {', '.join(KEYS)}")
     args = ap.parse_args()
-    run_id, algos, items, meta = load(args.stage, args.suite, args.run)
+    run_id, algos, items, meta, main = load(args.stage, args.suite, args.run)
     st = args.stage
     print(f"{st} on {args.suite}, run {run_id}: {len(items)} items, {len(algos)} algorithms")
     res = []
@@ -133,6 +140,19 @@ def main() -> None:
     add("oracle", {k: oracle_pick(k) for k in items})
     if all(items[k][a].get("confidence") is not None for k in items for a in algos):
         add("confidence", {k: max(algos, key=lambda a: items[k][a]["confidence"]) for k in items})
+    if st == "e2e" and all("claims_confirmed" in items[k][a] for k in items for a in algos):
+        def unsure(row):
+            return row["claims_likely"] + row["claims_ambiguous"] > 0 or row["claims_confirmed"] == 0
+        first = main or algos[0]
+        for b in algos:
+            if b != first:
+                add(f"cascade {first}->{b}", {k: (b if unsure(items[k][first]) else first) for k in items})
+        order = [first] + [a for a in algos if a != first]       # ties: the main algorithm, then by name
+        add("most_confirmed", {k: max(order, key=lambda a: (items[k][a]["claims_confirmed"], -order.index(a)))
+                               for k in items})
+        add("least_unsure", {k: min(order, key=lambda a: (items[k][a]["claims_likely"]
+                                                          + items[k][a]["claims_ambiguous"], order.index(a)))
+                             for k in items})
     for key in KEYS:
         picks = {}
         for f in (0, 1):

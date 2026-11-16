@@ -16,6 +16,8 @@ was measured:
                 spike / bounce / xtalk: noise in ticks of the capture (as wide whatever the rate)
                 pspike:L:NS / pbounce:L:NS: noise in time (NS nanoseconds), the way a line shows it: wider in
                 samples the faster it is taken, missed when shorter than a sample and no sample falls in it
+                odslow:NS: an open-drain bus (I2C) through a weak pull-up: each rise NS x U(0.6, 1) ns late, a high
+                shorter than that gone (clocks clipped to nothing, as on tests/data/i2c_bench's bench)
 
 Noise is seeded from the case id and the transform text (never Python's hash()), so a dataset is the same on every
 run and machine. The clean capture (the same transforms without the noise) is kept beside the noisy one: stages
@@ -34,6 +36,7 @@ from pathlib import Path
 import numpy as np
 
 from wireskein import capture as _capture
+from wireskein._engine import kernels as K
 from wireskein._engine.model import Capture
 
 REPO = Path(__file__).resolve().parents[2]
@@ -266,6 +269,36 @@ def noise_pbounce(cap: Capture, lvl: float, ns: float, rng) -> Capture:
     return Capture(cap.rate, cap.n_samples, out)
 
 
+OPEN_DRAIN = {"i2c": ("scl", "sda")}       # lines pulled up by a resistor: their rises are slow
+
+
+def noise_odslow(cap: Capture, ns: float, rng, lines: set) -> Capture:
+    """An open-drain line through a weak pull-up (tests/data/i2c_bench/h417_slow: 45 kOhm, about 5 us to the
+    threshold): each rise reaches the threshold ns x U(0.6, 1) nanoseconds late, falls are driven and on time. A
+    high shorter than its delay never shows (a clock clipped to nothing), as on the bench."""
+    d0 = ns * 1e-9 * float(cap.rate)
+    out = []
+    for ch in cap.channels:
+        e = np.asarray(ch.edges, np.int64)
+        if ch.name not in lines or len(e) == 0:
+            out.append(ch)
+            continue
+        lv = K.edge_levels(e, ch.initial)
+        rise = np.flatnonzero(lv == 1)
+        late = e[rise] + np.round(d0 * rng.uniform(0.6, 1.0, len(rise))).astype(np.int64)
+        nxt = np.where(rise + 1 < len(e), e[np.minimum(rise + 1, len(e) - 1)], cap.n_samples)
+        gone = late >= nxt                      # the high ends before the line gets there
+        keep = np.ones(len(e), bool)
+        e2 = e.copy()
+        e2[rise[~gone]] = late[~gone]
+        keep[rise[gone]] = False
+        keep[np.minimum(rise[gone] + 1, len(e) - 1)[rise[gone] + 1 < len(e)]] = False
+        e2 = e2[keep]
+        e2 = e2[e2 < cap.n_samples]
+        out.append(replace(ch, edges=_toggle(np.sort(e2), np.array([], np.int64))))
+    return Capture(cap.rate, cap.n_samples, out)
+
+
 def crop(cap: Capture, a: float, b: float) -> Capture:
     """The part from a to b (fractions of the length)."""
     s0, s1 = int(a * cap.n_samples), int(b * cap.n_samples)
@@ -293,10 +326,15 @@ NOISE = {"spike": noise_spike, "bounce": noise_bounce, "xtalk": noise_xtalk}
 TIMED_NOISE = {"pspike": noise_pspike, "pbounce": noise_pbounce}
 
 
-def apply(cap: Capture, clean: Capture | None, chain: str, case_id: str) -> tuple[Capture, Capture | None]:
+def apply(cap: Capture, clean: Capture | None, chain: str, case_id: str,
+          truth: dict | None = None) -> tuple[Capture, Capture | None]:
     for spec in [s for s in chain.split("+") if s]:
         kind, *args = spec.split(":")
-        if kind in NOISE:
+        if kind == "odslow":
+            lines = {b["roles"][r] for b in (truth or {}).get("buses", []) for r in OPEN_DRAIN.get(b["protocol"], ())
+                     if r in b["roles"]}
+            cap = noise_odslow(cap, float(args[0]), _rng(case_id, spec), lines)
+        elif kind in NOISE:
             cap = NOISE[kind](cap, float(args[0]), _rng(case_id, spec))
         elif kind in TIMED_NOISE:
             cap = TIMED_NOISE[kind](cap, float(args[0]), float(args[1]), _rng(case_id, spec))
@@ -307,8 +345,8 @@ def apply(cap: Capture, clean: Capture | None, chain: str, case_id: str) -> tupl
             cap = decimate(cap, int(args[0]))
             clean = decimate(clean, int(args[0])) if clean else None
         else:
-            raise ValueError(f"transform {spec!r}: spike:L, bounce:L, xtalk:L, pspike:L:NS, pbounce:L:NS, crop:A:B "
-                             "or decimate:K")
+            raise ValueError(f"transform {spec!r}: spike:L, bounce:L, xtalk:L, pspike:L:NS, pbounce:L:NS, odslow:NS, "
+                             "crop:A:B or decimate:K")
     return cap, clean
 
 
@@ -372,8 +410,9 @@ ALIAS = 2.5           # a periodic line faster than rate / 2.5 shows in the samp
 FREQHOP_MAX = 4       # eval/synth.py's freqhop: frames up to 4 times the bus's clock
 
 
-def noise_span_s(chain: str, rate0: float) -> float:
-    """How long the chain's noise lasts, in seconds (noise in ticks counted at the rate it was added at)."""
+def noise_span_s(chain: str, rate0: float, open_drain: bool = False) -> float:
+    """How long the chain's noise lasts, in seconds (noise in ticks counted at the rate it was added at); odslow's
+    late rises only on an open-drain bus."""
     rate, span = float(rate0), 0.0
     for spec in [x for x in chain.split("+") if x]:
         kind, *a = spec.split(":")
@@ -385,6 +424,8 @@ def noise_span_s(chain: str, rate0: float) -> float:
             span = max(span, 7 / rate)           # pulses 1-3 ticks wide within 4 ticks of the edge
         elif kind in ("spike", "xtalk"):
             span = max(span, 1 / rate)
+        elif kind == "odslow" and open_drain:
+            span = max(span, float(a[0]) * 1e-9)
     return span
 
 
@@ -403,7 +444,6 @@ def defective_i2cbench(name: str) -> bool:
 def hardness(truth: dict, cap: Capture, chain: str, rate0: float) -> tuple[list, set]:
     """(per truth bus the reasons it is hard to read, the lines that alias)."""
     rate = float(cap.rate)
-    span = noise_span_s(chain, rate0)
     gen = truth.get("generator") or {}
     stress = gen.get("stress")
     src = (truth.get("source") or {}).get("path", "")
@@ -412,6 +452,7 @@ def hardness(truth: dict, cap: Capture, chain: str, rate0: float) -> tuple[list,
     tags = []
     for b in truth.get("buses", []):
         pm, t = b.get("params", {}), set()
+        span = noise_span_s(chain, rate0, b["protocol"] in OPEN_DRAIN)
         hz = pm.get("clock_hz")
         bauds = [x["baud"] for x in pm.get("baud_segments", [])] or [pm.get("baud") or pm.get("bitrate")]
         if hz:
@@ -440,7 +481,7 @@ def load_case(ref: str, source: str, chain: str) -> Case:
     # a generated case is its own clean reference, unless its frozen set already holds noise
     gen = truth.get("generator")
     clean = cap if gen and gen.get("stress") != "glitch" else None
-    cap, clean = apply(cap, clean, chain, truth["id"])
+    cap, clean = apply(cap, clean, chain, truth["id"], truth)
     dataset = source + (f"+{chain}" if chain else "")
     tags, aliased = hardness(truth, cap, chain, rate0)
     return Case(truth["id"] + (f"+{chain}" if chain else ""), dataset, cap, clean, truth,
