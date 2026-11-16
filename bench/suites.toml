@@ -1,0 +1,42 @@
+# Suites: named sets of datasets. A dataset = a source x a chain of transforms (see wsbench/data.py).
+# A suite's definition is never changed once results exist for it: add a new suite (noise-v2 ...) instead, so the
+# ledger's numbers keep meaning what they meant.
+#
+# role: tune     algorithms may be adjusted on what it shows
+#       holdout  looked at to confirm only; never adjusted on (the generated heldout seeds, the real records)
+
+[suite.smoke]
+role = "tune"
+about = "a few cases, clean and noisy: that everything runs (seconds)"
+sources = ["set:tuning[0:12]"]
+transforms = ["", "spike:0.1", "bounce:0.1"]
+
+[suite.noise]
+role = "tune"
+about = "100 generated cases, clean and with three kinds of noise at two or three strengths"
+sources = ["set:tuning[0:100]"]
+transforms = ["", "spike:0.02", "spike:0.1", "spike:0.3", "bounce:0.1", "bounce:0.5", "xtalk:0.05", "xtalk:0.3"]
+
+[suite.noise-holdout]
+role = "holdout"
+about = "the same noise on cases never tuned on"
+sources = ["set:heldout[0:100]"]
+transforms = ["", "spike:0.02", "spike:0.1", "spike:0.3", "bounce:0.1", "bounce:0.5", "xtalk:0.05", "xtalk:0.3"]
+
+[suite.size]
+role = "tune"
+about = "less data: a half, a quarter, the second half; sampled 2 and 4 times slower"
+sources = ["set:tuning[0:100]"]
+transforms = ["", "crop:0:0.5", "crop:0:0.25", "crop:0.5:1", "decimate:2", "decimate:4"]
+
+[suite.stress]
+role = "tune"
+about = "eval's frozen stress sets: rate changes, mid-stream start, low sampling, jitter, light glitches"
+sources = ["set:freqhop", "set:baudhop", "set:midstart", "set:lowrate", "set:jitter", "set:glitch"]
+transforms = [""]
+
+[suite.real]
+role = "holdout"
+about = "the real records of eval/corpus/real (nominal rates)"
+sources = ["real"]
+transforms = [""]

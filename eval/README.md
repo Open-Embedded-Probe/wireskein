@@ -6,6 +6,9 @@ What `wireskein analyze` infers (protocol, line roles, parameters, decoded conte
 ground truth. Not part of the package. The scripts read only what analyze exports (`wireskein.decode`), so they
 measure what a user gets; how the evaluation is done and why: [design decisions](../docs/design.md) §6.
 
+This measures the analysis as a whole. Each stage's algorithms one against another (the main one and the ones
+being tried, on the same noisy data, every run kept in a ledger): [the algorithm bench](../bench/README.md).
+
 ## Running
 
 ```sh

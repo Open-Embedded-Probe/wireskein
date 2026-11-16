@@ -139,6 +139,11 @@ def evaluate_case(args):
     res = decode.analyze(cap)
     seconds = time.perf_counter() - t0
     claims = decode.export(res, cap, mode="all", alternatives=True)["claims"]
+    return judge(cap, truth, claims, seconds)
+
+
+def judge(cap, truth: dict, claims: list[dict], seconds: float = 0.0) -> dict:
+    """One case's record: each true bus's outcome against the claims (analyze's export, mode "all")."""
     rec = {"id": truth["id"], "rate": cap.rate, "seconds": seconds, "buses": [], "claims": []}
     claimed_correct = set()
     for bus in truth["buses"]:

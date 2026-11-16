@@ -14,3 +14,6 @@ uv.lock
 
 # the viewer, fetched by tools/fetch_web.py (in the wheel, not in git)
 src/wireskein/web/
+
+# the bench: every item of a run (the ledger, bench/results/ledger.jsonl, is in git)
+bench/results/runs/
