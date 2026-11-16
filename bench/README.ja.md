@@ -82,6 +82,13 @@ def comb(cap, lines, max_mult):
     速度を振れます）、`i2cbench:h417_slow/stream[a:b]`（`tests/data/i2c_bench` の実機の記録。弱いプルアップの I2C
     に「S, 0x13 書き込み, NACK, P」が 50 回。正解は読むときに作る。SCL と SDA は D0 と D1 に付け替える。アドレスの
     ACK / NACK まで比べる（正解の `expect.compare_ack`。eval の生成データは比べない）
+  - ほかのリポジトリの記録（コピー）: `wchfix:<サブディレクトリ>[a:b]`（wch-protocols の LinkE の fixture。実機の
+    RVSWD / SWIO、正解は参照の復号器の `.dmi.txt`）、`ebdd:<名前>[a:b]`（EmbedBenchDeviceData の記録。実機の I2C、
+    正解はファームウェアの出力）
+- **測定台は、このリポジトリのファイルしか読まない**（Actions でも手元でも同じ。`dir:` でリポジトリの外を指すと
+  拒否します）。スイートが使うほかのリポジトリの記録は、要るものだけを `bench/data/extract.py` で `bench/data/` に
+  コピーし、元の `LICENSE` と `SOURCE.json`（リポジトリ、コミット、各ファイルの元と SHA-256）を付けます。記録は
+  `.wireskein` に変換することがありますが、エッジは同じで、ケースの `input_sha` も変わりません（コピーのときに確認）
   - 変換: `spike:L`（ランダムな 1 刻みのパルス。エッジ 1 つあたり L 個）、`bounce:L`（エッジの L の割合で直後に
     跳ね返り）、`xtalk:L`（隣のチャンネルのエッジの L の割合で 1 刻みのパルス）、`crop:A:B`（A から B の部分）、
     `decimate:K`（K 倍遅く取ったもの）。`+` でつなぎます（`crop:0:0.5+spike:0.1`）
@@ -189,7 +196,7 @@ e2e では、各方式の出力そのもの（確定・有力・拮抗の数、�
 
 | 何を | どこで | どう |
 | --- | --- | --- |
-| 全スイートの点数（本計測） | GitHub Actions | Actions の「Bench」を手動で起動（段、スイート、方式、並列数、メモ、コミットするか）。スイートの既定は `all`（データがリポジトリにあるスイート全部。EmbedBenchDeviceData と wch-protocols の `real-ebdd`、`wch-fixture`、`wch-ladder` は手元だけ）、確認用を除くなら `tune`。ケースを並列のジョブに分け（1 つのケースの方式はすべて同じジョブ）、最後に集計して、台帳の新しい行を起動したブランチにコミットする（push の直前にブランチの最新を取り直し、その上に追記し直す。先に別の push があればやり直す）。明細は artifact `bench-<実行 ID>` に置き、手元へは `uv run python bench/merge.py --import <展開したディレクトリ>` |
+| 全スイートの点数（本計測） | GitHub Actions | Actions の「Bench」を手動で起動（段、スイート、方式、並列数、メモ、コミットするか）。スイートの既定は `all`（全部のスイート）、確認用を除くなら `tune`。ケースを並列のジョブに分け（1 つのケースの方式はすべて同じジョブ）、最後に集計して、台帳の新しい行を起動したブランチにコミットする（push の直前にブランチの最新を取り直し、その上に追記し直す。先に別の push があればやり直す）。明細は artifact `bench-<実行 ID>` に置き、手元へは `uv run python bench/merge.py --import <展開したディレクトリ>` |
 | コスト | 命令数を数えられる機械（ネイティブの Ubuntu） | `cost` スイートを `--memory` 付きで。並列数はコア数より 1 少なく |
 | 素早い試行 | 手元 | `smoke`、`rate-smoke` など。`WSBENCH_RESULTS` で別の台帳に |
 

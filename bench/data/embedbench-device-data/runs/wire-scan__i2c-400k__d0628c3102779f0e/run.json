@@ -1,0 +1,37 @@
+{
+ "format": "wireskein-run/1",
+ "meta": {
+  "case": "scan"
+ },
+ "captures": [
+  {
+   "file": "c0001.wireskein",
+   "channels": [
+    "SDA",
+    "SCL"
+   ]
+  }
+ ],
+ "log": [
+  {
+   "src": "marker",
+   "text": "# scan"
+  },
+  {
+   "src": "dut",
+   "text": "found 0x44"
+  },
+  {
+   "src": "dut",
+   "text": "found 0x70"
+  },
+  {
+   "src": "dut",
+   "text": "found=2"
+  },
+  {
+   "src": "marker",
+   "text": "#"
+  }
+ ]
+}

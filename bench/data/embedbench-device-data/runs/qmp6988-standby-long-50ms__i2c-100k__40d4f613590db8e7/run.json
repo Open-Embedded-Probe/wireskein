@@ -1,0 +1,193 @@
+{
+ "format": "wireskein-run/1",
+ "meta": {
+  "case": "qmp6988-standby-long-50ms"
+ },
+ "captures": [
+  {
+   "file": "c0001.wireskein",
+   "channels": [
+    "SDA",
+    "SCL"
+   ]
+  }
+ ],
+ "log": [
+  {
+   "src": "marker",
+   "text": "# qmp6988-standby-long-50ms"
+  },
+  {
+   "src": "marker",
+   "text": "## setup"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## normal"
+  },
+  {
+   "src": "dut",
+   "text": "end=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=2 data=a2b2056e3468"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=15001 data=a2b4476e491c"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=70001 data=a2b4276e4904"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=125001 data=a2b4406e4835"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=185001 data=a2b43b6e4821"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=240001 data=a2b4226e47c5"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=300000 data=a2b41c6e4769"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=355001 data=a2b41b6e46ee"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=410000 data=a2b4156e46c4"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=470001 data=a2b4126e468b"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=525000 data=a2b40a6e4639"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=585000 data=a2b3fb6e45ca"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=640001 data=a2b3fc6e45cf"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=695001 data=a2b40a6e46ea"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=755000 data=a2b4036e4692"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=810001 data=a2b4066e4646"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=870001 data=a2b3dd6e4632"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=925000 data=a2b3d06e45fc"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=980000 data=a2b3eb6e4618"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1040001 data=a2b3c36e45fc"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1095001 data=a2b3b66e45ce"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1155001 data=a2b3ce6e45c7"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1210000 data=a2b3e16e457b"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1265001 data=a2b3cc6e4432"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1325028 data=a2b3d46e4487"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1380000 data=a2b3dc6e4497"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1440000 data=a2b3df6e44bb"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1495001 data=a2b3eb6e44a2"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1550001 data=a2b3de6e4513"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1610000 data=a2b3ed6e4516"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1665001 data=a2b4016e44d1"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1725001 data=a2b3fc6e44fd"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1780001 data=a2b3ff6e44e1"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1835001 data=a2b41b6e444d"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1895001 data=a2b4266e4489"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1950000 data=a2b4206e43f6"
+  },
+  {
+   "src": "dut",
+   "text": "reads=401 changes=36"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "#"
+  }
+ ]
+}

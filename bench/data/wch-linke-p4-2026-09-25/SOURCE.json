@@ -1,0 +1,550 @@
+{
+ "repository": {
+  "remote": "https://github.com/ch32-riscv-ug/wch-protocols",
+  "commit": "48c5a9849a55390675db08e93fcdbe3bc266fdeb",
+  "dirty": false
+ },
+ "fixture": "captures/fixtures/wire-linke-p4-2026-09-25",
+ "subdirs": [
+  "l103",
+  "v203",
+  "v003",
+  "v203-100mhz",
+  "extra/l103"
+ ],
+ "max_sr_bytes": 300000,
+ "files": {
+  "l103/dbg_halt.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/l103/dbg_halt.sr",
+   "sha256": "db472a562b78ef73b0c45922c2fda3eed7489c4eca1c45be52ed257a14e7ac85"
+  },
+  "l103/dbg_halt.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/l103/dbg_halt.dmi.txt",
+   "sha256": "430d7bbeee98d1a4639c9552e722ba580ce2fb0b25533c966996525b21d7f803"
+  },
+  "l103/dbg_regs.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/l103/dbg_regs.sr",
+   "sha256": "515bab08a85c7e7ff691a7db51c340b419c94685329782008ce556bc35f538f2"
+  },
+  "l103/dbg_regs.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/l103/dbg_regs.dmi.txt",
+   "sha256": "f3c7245ae75660d016ed7e42898257f02795cfad4583877127e3a8842f9e59a7"
+  },
+  "l103/dbg_resume.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/l103/dbg_resume.sr",
+   "sha256": "a11c226f200cc7215674f17a3c5d75b8e51a0f1165dd4876d0f780d86bde2393"
+  },
+  "l103/dbg_resume.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/l103/dbg_resume.dmi.txt",
+   "sha256": "0be54cd0070c68b4b96e344f4c8313461c673ad58699c4aa9bb8a4a2d88359f4"
+  },
+  "l103/dbg_step.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/l103/dbg_step.sr",
+   "sha256": "b1c530bbcf026861f8b6c02c3d9edf7ef790267eb5a517c552a532794de12c28"
+  },
+  "l103/dbg_step.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/l103/dbg_step.dmi.txt",
+   "sha256": "6490e034a54e2e0383afe2e7704e2573d3f28a5f0d340b93ad66d484a6e72ad0"
+  },
+  "l103/erase_all.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/l103/erase_all.sr",
+   "sha256": "caa11b9e2f20a2be9b9cfe6cbc9ed11cd79e5112070c7c8bbcd6abd39bf279b4"
+  },
+  "l103/erase_all.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/l103/erase_all.dmi.txt",
+   "sha256": "8e090e228f2317ff7ea31a87136186c9600d298b463e18d8046239aca4552588"
+  },
+  "l103/read_flash_4k.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/l103/read_flash_4k.sr",
+   "sha256": "0ce9690c735f6e911b9a30ddf6897ab71bf710808d88254e599f4edd8030a06f"
+  },
+  "l103/read_flash_4k.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/l103/read_flash_4k.dmi.txt",
+   "sha256": "9696050cca3e864035bda660d5a81eb91a535fb6cf4050d977c756762231762a"
+  },
+  "l103/read_ram_256.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/l103/read_ram_256.sr",
+   "sha256": "a25109251f3637945659064d5269b1263888594e03d6fa001ac5b12949f386ff"
+  },
+  "l103/read_ram_256.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/l103/read_ram_256.dmi.txt",
+   "sha256": "720501808b8b2187897b3a2ec5a7c682dcefd8f4ca6b1651f413751e1cff0bcb"
+  },
+  "l103/reset.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/l103/reset.sr",
+   "sha256": "bdf3406a0e5365e30bfc46d7967c3ef029f05e89c28ae023c20a42d2d353a2e6"
+  },
+  "l103/reset.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/l103/reset.dmi.txt",
+   "sha256": "6a8f81b0575dacf3960d276d1685d0b64bed701548047c801a6f11c0ae4b71ea"
+  },
+  "l103/target_info.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/l103/target_info.sr",
+   "sha256": "51273b2093f0ce8e10ac99af5f0fc322e7ea98982d7efdae73426173943fdd46"
+  },
+  "l103/target_info.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/l103/target_info.dmi.txt",
+   "sha256": "9f2ae8cd3c35c29809dddc7b15400654a6b29dc39a6c163225e4b5a3109fcc51"
+  },
+  "l103/verify_pattern4k.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/l103/verify_pattern4k.sr",
+   "sha256": "f9bd16636955861cebfb3fbe7840286ee85006870deeac39e367ea4f507209d0"
+  },
+  "l103/verify_pattern4k.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/l103/verify_pattern4k.dmi.txt",
+   "sha256": "f1d8443a47506064cde7bd6e9cd69bf5e22d8ef2a75f4bc99bee6ebc7ce49eb6"
+  },
+  "v203/dbg_halt.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203/dbg_halt.sr",
+   "sha256": "4de8760ea9deebd2b775d58a97f0392868257fb5c7dd0371139a2c36f1fced6c"
+  },
+  "v203/dbg_halt.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203/dbg_halt.dmi.txt",
+   "sha256": "3c008fc439e13d456793bdcddc46a8c3e397ba3ebfc05a14bed8350fbd09af1c"
+  },
+  "v203/dbg_regs.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203/dbg_regs.sr",
+   "sha256": "4b073d5dd7d03a35d4e2f0969a85e136ec26d3dd4f2f30797be4b3b619a2c55c"
+  },
+  "v203/dbg_regs.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203/dbg_regs.dmi.txt",
+   "sha256": "cdbf1cb4dbd4f32ad2eb3e9a263a9ea0bf21b9eb209765aad50f4adc208b0a2c"
+  },
+  "v203/dbg_resume.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203/dbg_resume.sr",
+   "sha256": "58d502a91cb580ce96eed891d923ba33d76ec4496638d030614cd93e052c50f0"
+  },
+  "v203/dbg_resume.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203/dbg_resume.dmi.txt",
+   "sha256": "50e287044edce9b24e99beb49532b6523b5bf08f611250354c624f815c59b2ea"
+  },
+  "v203/dbg_step.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203/dbg_step.sr",
+   "sha256": "c43fbbb7546e1eac82534fcb7d62b5ab2a99c7b49c728403415e2997d11405a6"
+  },
+  "v203/dbg_step.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203/dbg_step.dmi.txt",
+   "sha256": "825ad1b54da0a96a7937a4bd7c0169704eabcb5677c6478f3620df7b7f0bdc4f"
+  },
+  "v203/erase_all.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203/erase_all.sr",
+   "sha256": "50028f41566182c7f05f1bde52dcf7e84f345150f723fb58c1012c160ef1a2b0"
+  },
+  "v203/erase_all.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203/erase_all.dmi.txt",
+   "sha256": "901202cc7609283bcfeaa5ca5dac378dd72aff44b0240d1690ac98925b3878b9"
+  },
+  "v203/read_flash_4k.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203/read_flash_4k.sr",
+   "sha256": "24a25ed3cb58d6d892ad2e8539a58459dac32d95acf2530e2246316805491828"
+  },
+  "v203/read_flash_4k.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203/read_flash_4k.dmi.txt",
+   "sha256": "99d2c2af202bf727bacefcf787e146afb65c9ca0fd3aba37abe1ba736613d447"
+  },
+  "v203/read_ram_256.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203/read_ram_256.sr",
+   "sha256": "d3cd976968b4b0e75f2d8a75ac56c39be8e881e737a60bed4fbcaf0d19fbb063"
+  },
+  "v203/read_ram_256.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203/read_ram_256.dmi.txt",
+   "sha256": "18d4d4e110893049a0d6e30229ad30f03fd1432d6e8d3a57c77884d979f1d265"
+  },
+  "v203/reset.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203/reset.sr",
+   "sha256": "26331e49bfc0b1032902a32804900ed847da40b389bec562741c423bd53d8e88"
+  },
+  "v203/reset.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203/reset.dmi.txt",
+   "sha256": "84c8a1ef4e571946d9494cc1d5955a3faf6109914c181d109cc60dd49d75ffcd"
+  },
+  "v203/target_info.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203/target_info.sr",
+   "sha256": "1d59feafa54ad7f1b1d6f8439b01582c2c163d0e28b03625250b78ef53092028"
+  },
+  "v203/target_info.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203/target_info.dmi.txt",
+   "sha256": "61458a2858821e9f303c735afe8857dcf749cdbd75e2679a8444d9263484181e"
+  },
+  "v203/verify_pattern4k.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203/verify_pattern4k.sr",
+   "sha256": "40c8e06e1012bef39ae6f996ac161c1c7c8f4bbae03c6545ccfd7d54aa310c28"
+  },
+  "v203/verify_pattern4k.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203/verify_pattern4k.dmi.txt",
+   "sha256": "81f2d948897718f068c5fbf57a4e5c347affccb19e45ce438ea5c71afbc87401"
+  },
+  "v003/dbg_halt.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v003/dbg_halt.sr",
+   "sha256": "53a972407e6eb382202a4beb4b33b7d6ebafd948b70e9a592ffa9bb67b96dede"
+  },
+  "v003/dbg_regs.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v003/dbg_regs.sr",
+   "sha256": "07d07ea04e1791b1ba89dc67863a3d9e093b43d94a4ab765928427bbd807a17c"
+  },
+  "v003/dbg_resume.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v003/dbg_resume.sr",
+   "sha256": "0f67edf441991161a5158ab1f22e8b347cb6c7979b8cff861a34e69cb0f14153"
+  },
+  "v003/dbg_step.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v003/dbg_step.sr",
+   "sha256": "cc71ffcf7f3d0f458e22928e30e8514ab0db8a5951cb2d8b68a03133109dedf4"
+  },
+  "v003/erase_all.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v003/erase_all.sr",
+   "sha256": "cffb7274f3f50df436a16b08058cc1eb4fa22573d4896ea8a1e8e25a0d2b8daa"
+  },
+  "v003/flash_sketch.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v003/flash_sketch.sr",
+   "sha256": "b01ef04142aaa83597904d7e2b0bb8462c26b83fc1009f6654ae0d6bd5dd7104"
+  },
+  "v003/read_flash_4k.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v003/read_flash_4k.sr",
+   "sha256": "9e4c6f6b33e6785a0cb0e42ccd55e61b7207f1f2e1a99e62316b5a666514edf3"
+  },
+  "v003/read_ram_256.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v003/read_ram_256.sr",
+   "sha256": "a26e3cd28994d15b6fbd409d472e2df65d145977a1fa90fe55209b8012d15d96"
+  },
+  "v003/reset.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v003/reset.sr",
+   "sha256": "4d9aacbf226a77b1aea3defd1674e6c008c85976f9380f12697666fd05033c68"
+  },
+  "v003/target_info.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v003/target_info.sr",
+   "sha256": "b07bbd812539114a481533e27027feaee1e3fd10128d4be797bf4c8b70e12683"
+  },
+  "v003/verify_pattern4k.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v003/verify_pattern4k.sr",
+   "sha256": "479d49f6823e7eeabd2b389437bc461a9e402bf9fa02caa194727749312e146c"
+  },
+  "v203-100mhz/clock_target_info.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203-100mhz/clock_target_info.sr",
+   "sha256": "0e44953d2e1f84dcc7b3a7f210b959af925be3d571a7b84957814df4e83208cd"
+  },
+  "v203-100mhz/dbg_halt.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203-100mhz/dbg_halt.sr",
+   "sha256": "63f2a69296e10af591ba43f61eb0c22e80942fb1dd6e21761cfb3e2726400676"
+  },
+  "v203-100mhz/dbg_regs.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203-100mhz/dbg_regs.sr",
+   "sha256": "299a949df89be2ee8ba48afe4a16feac8c9f65daad3b33aa0114d580e37258a4"
+  },
+  "v203-100mhz/dbg_resume.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203-100mhz/dbg_resume.sr",
+   "sha256": "bc0b1dfdac1c087822dcc4df6a061e54b658ee9a5dccb1a2ee4e680cd48c2523"
+  },
+  "v203-100mhz/dbg_step.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203-100mhz/dbg_step.sr",
+   "sha256": "4102b9c8f367287d45ba7bd11592118b96a0f09595e0307e3132883a834fc062"
+  },
+  "v203-100mhz/read_flash_4k.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203-100mhz/read_flash_4k.sr",
+   "sha256": "813f1f1b08adbbb84af67d315ee53ac5ab33e98bee3faf42f7a1580fd290aba6"
+  },
+  "v203-100mhz/read_ram_256.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203-100mhz/read_ram_256.sr",
+   "sha256": "1aaf97972704cc495db8d06883e308d320b0c3bb90bda1c4560a88ef4c166400"
+  },
+  "v203-100mhz/reset.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203-100mhz/reset.sr",
+   "sha256": "5e2d35185aa3cb4c3a32fff85cacbca3c412f5491c27004d13d2b19ddbfa4375"
+  },
+  "v203-100mhz/target_info.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203-100mhz/target_info.sr",
+   "sha256": "4dc11759a60e2714855465d48c291839d837a794d293c124993ba07914fa4ad7"
+  },
+  "v203-100mhz/verify_pattern4k.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203-100mhz/verify_pattern4k.sr",
+   "sha256": "4c25d7f7b9430f97fef4b16c978c021d863f0e80ff8f68ae166985a46c2989e4"
+  },
+  "extra/l103/clock_dbg_halt.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/clock_dbg_halt.sr",
+   "sha256": "4430ab6e863186f0c868f3ce94a3fe2db54e9f7171f2b8f18bc86b8a9f6d0d2c"
+  },
+  "extra/l103/clock_dbg_halt.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/clock_dbg_halt.dmi.txt",
+   "sha256": "01642396996d28a06a3d7565ee00063e5953f7fb2710b0fce848898ae07046ab"
+  },
+  "extra/l103/clock_dbg_resume.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/clock_dbg_resume.sr",
+   "sha256": "5a763f73fd89366e2acc439a03ff5bb98132cd37f44dc318f83e97f809dde053"
+  },
+  "extra/l103/clock_dbg_resume.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/clock_dbg_resume.dmi.txt",
+   "sha256": "b6ea15f4983050cdba61b313e3e7412d7d6c188ecffa9662b64b8bcfdd04a149"
+  },
+  "extra/l103/clock_read_actlr_0.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/clock_read_actlr_0.sr",
+   "sha256": "38a1f7147f32e814f43c4a72f7eafccd63e8dec1d501325e220b4c85d31ae81d"
+  },
+  "extra/l103/clock_read_actlr_0.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/clock_read_actlr_0.dmi.txt",
+   "sha256": "6dd0cc28189d1f2d40f93078390e8bf36a2216252954f4d67cedf622f87baa8a"
+  },
+  "extra/l103/clock_read_actlr_3.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/clock_read_actlr_3.sr",
+   "sha256": "cce201ab30f4a9566635e787ccfe93e7b29f1a6825113f679e35c48a894b2f54"
+  },
+  "extra/l103/clock_read_actlr_3.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/clock_read_actlr_3.dmi.txt",
+   "sha256": "4ba22ce39b818c63b71a7b49fd39e51ad6237617ebae11ad75f5d8238614b2da"
+  },
+  "extra/l103/clock_read_rcc_0.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/clock_read_rcc_0.sr",
+   "sha256": "aaff8078741a7da4fa8ff7fb302223274edc063766e6496cf4ee333a68ebbdf7"
+  },
+  "extra/l103/clock_read_rcc_0.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/clock_read_rcc_0.dmi.txt",
+   "sha256": "e362645c2d7f070d86e7dc22ea41a15b9fc49e0d24918d3864db1bbf3d28fdae"
+  },
+  "extra/l103/clock_read_rcc_1.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/clock_read_rcc_1.sr",
+   "sha256": "dde554cd1c7f06a9c62d36c7064c1e7f6aea0fbe6be743a62309e761c24251ee"
+  },
+  "extra/l103/clock_read_rcc_1.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/clock_read_rcc_1.dmi.txt",
+   "sha256": "228994806ea3b00f327b4426440ed6ac4da5119326598a8f49a70df05831c802"
+  },
+  "extra/l103/clock_read_rcc_2.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/clock_read_rcc_2.sr",
+   "sha256": "31e92accdd037f7d0d74aca18c40dfa4aa38f4b5bdea0754f71ef66d09da8d4f"
+  },
+  "extra/l103/clock_read_rcc_2.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/clock_read_rcc_2.dmi.txt",
+   "sha256": "fed0e2b857d83d7306c16f8f0582ae3527069eb9b75b519a324ec145a9cbd7c0"
+  },
+  "extra/l103/clock_read_rcc_3.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/clock_read_rcc_3.sr",
+   "sha256": "7b270e75ab86bd85e6f006b558a5822c18429b416f2c6689986dd7d4d5a4d961"
+  },
+  "extra/l103/clock_read_rcc_3.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/clock_read_rcc_3.dmi.txt",
+   "sha256": "4f5699e87bceed9ad10edd7f791906a8b22a22625ced424d50810b2bf85b3916"
+  },
+  "extra/l103/clock_reset.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/clock_reset.sr",
+   "sha256": "198b30427c7eb4c1d1c4f05c2c10c7021f74956673690efc7b8b5aa4c4fbd050"
+  },
+  "extra/l103/clock_reset.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/clock_reset.dmi.txt",
+   "sha256": "a7ab592f835d52438ef75ec3d5ec8162b7d09bc7e5590e549858ad9190e949bf"
+  },
+  "extra/l103/clock_target_info.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/clock_target_info.sr",
+   "sha256": "2d2496db0528312f9651ffc13ed30c288d87cb341a5a94d9f505fca04da1bf8c"
+  },
+  "extra/l103/clock_target_info.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/clock_target_info.dmi.txt",
+   "sha256": "86b496665bc8a4c2eb9404ccb989c66e67867c3f58961028d17bfe3a3c66c9d0"
+  },
+  "extra/l103/connect_under_reset.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/connect_under_reset.sr",
+   "sha256": "34d77eac1f8c70406853e002d234824ab5759b5edaae9f4ba74f67c452057046"
+  },
+  "extra/l103/connect_under_reset.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/connect_under_reset.dmi.txt",
+   "sha256": "b29c40e32bf0cdfa21220b7bde7b8c964d0ef372454b7a94d9e748b1294d0680"
+  },
+  "extra/l103/dmi_read_abstractcs.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/dmi_read_abstractcs.sr",
+   "sha256": "befbc38d5e3941861435a6b0ea833fcc4c549b0cd11c05200fda46005d9d5b77"
+  },
+  "extra/l103/dmi_read_abstractcs.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/dmi_read_abstractcs.dmi.txt",
+   "sha256": "0fd24fc5d1a7fc89d443b2c9cfea2db568ce6776a238c01c4736b08e3153afbc"
+  },
+  "extra/l103/dmi_read_data0.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/dmi_read_data0.sr",
+   "sha256": "7bdf4b1afa45cfcc5411e79a162988b599803b3788e31f3a54bd1df1a972a1f8"
+  },
+  "extra/l103/dmi_read_data0.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/dmi_read_data0.dmi.txt",
+   "sha256": "1dbd13d9bfc2a494fa7ae940e52d9361c252e0f21ed2a0b6e633cf359c6e0522"
+  },
+  "extra/l103/dmi_read_dmstatus.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/dmi_read_dmstatus.sr",
+   "sha256": "74e87eb320114c3235a56eecdb2aabc93e99909b3976822c8c163808cc8e6bfc"
+  },
+  "extra/l103/dmi_read_dmstatus.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/dmi_read_dmstatus.dmi.txt",
+   "sha256": "97de46002689ad254ffc0ed261af0447fd25f0c25a5dc02bb03545588a2336ac"
+  },
+  "extra/l103/dmi_write_dmcontrol_01.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/dmi_write_dmcontrol_01.sr",
+   "sha256": "f95b7903bb18e6b820ea13585236f28c0f7124cacd5752573eb48f03fe892526"
+  },
+  "extra/l103/dmi_write_dmcontrol_01.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/dmi_write_dmcontrol_01.dmi.txt",
+   "sha256": "bf58caf9f798d97e70de279582044fc06e91104d2ba6b64ae6f25a7cd881eed3"
+  },
+  "extra/l103/err_read_unmapped.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/err_read_unmapped.sr",
+   "sha256": "da2d16fdbf4fd0dec5ad1f873b6e51d1c810458b1eb8dd9a7e09d00e84ee7d62"
+  },
+  "extra/l103/err_read_unmapped.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/err_read_unmapped.dmi.txt",
+   "sha256": "86ff15f814f3dc058875eaaf6073141df020fbc8afc2dfc70808ed6d31dad527"
+  },
+  "extra/l103/err_wrong_chip.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/err_wrong_chip.sr",
+   "sha256": "3d0d3bee2d8001108fd417a4e5ab0a0438ef2e1bebc36886a0ab4849cc01c7de"
+  },
+  "extra/l103/err_wrong_chip.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/err_wrong_chip.dmi.txt",
+   "sha256": "2a925df22ee4775e521211030f85dd9c0a322f48c2599b9aef7864043ed911b5"
+  },
+  "extra/l103/option_get.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/option_get.sr",
+   "sha256": "018706768f01ff1d6e967647d9beba658a358bb74e15a391ad6d9ffca628ae18"
+  },
+  "extra/l103/option_get.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/option_get.dmi.txt",
+   "sha256": "7bfc6075e19b96aa64ea8901294f79a7409c8644d385fa2fdc98feeefefee278"
+  },
+  "extra/l103/option_get_after_reset.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/option_get_after_reset.sr",
+   "sha256": "59b440f37e340830b9809638be252cb5f2053590438bbbb0fdb3a2a1d9674164"
+  },
+  "extra/l103/option_get_after_reset.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/option_get_after_reset.dmi.txt",
+   "sha256": "acb811b9aeaa722b8ba0994700c830b396b5729b4a19193c7f1c0b37e42f8804"
+  },
+  "extra/l103/option_get_after_set.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/option_get_after_set.sr",
+   "sha256": "08c7020f911ab644fbb19dda3d8b1b85994d4f97366f4852309085b683529ad1"
+  },
+  "extra/l103/option_get_after_set.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/option_get_after_set.dmi.txt",
+   "sha256": "3f87ab720765187cde6d303f8cf56726ef6e1eaa726bdac8172363d0963559f9"
+  },
+  "extra/l103/option_reset.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/option_reset.sr",
+   "sha256": "f9435b653545da1046a815737e5b49429fac800fa80de353b4074f8faac2bfa9"
+  },
+  "extra/l103/option_reset.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/option_reset.dmi.txt",
+   "sha256": "8f95c80e39ff5c0760e4db6a7e55f0c9cdc44e3bfa27fe517584afd660d263b8"
+  },
+  "extra/l103/option_set_data.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/option_set_data.sr",
+   "sha256": "831953f3fb7e9acb22da1b2081d59748a78397dcec41f2ac67407d6433227bfa"
+  },
+  "extra/l103/option_set_data.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/option_set_data.dmi.txt",
+   "sha256": "6cbdbc4832d17c63a030591fa53175326c27b956b4cbca5479ec632c282b592f"
+  },
+  "extra/l103/protect_get_off.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/protect_get_off.sr",
+   "sha256": "f6891fd200799f948ebb4ea43c90ab74d1f852852d0a2842747c92f7cda975e8"
+  },
+  "extra/l103/protect_get_off.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/protect_get_off.dmi.txt",
+   "sha256": "bc4d8556498a6889433fd25f2f9467e36c8438115022daa1a6d7112760bdd95d"
+  },
+  "extra/l103/protect_get_on.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/protect_get_on.sr",
+   "sha256": "56789501124c7b246e27a0b2549438c3378c43cc0a08a6febf9d32ef78a72686"
+  },
+  "extra/l103/protect_get_on.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/protect_get_on.dmi.txt",
+   "sha256": "4a16aa738db4c95d1fbfd5597ed2bb7b4d0f3773127a454da9365ebcbc99e3a3"
+  },
+  "extra/l103/protect_off.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/protect_off.sr",
+   "sha256": "ffd269faebdedb2b6b52e49b43f1f93bdc57399cc13814033d12dc2ffcf8a0cf"
+  },
+  "extra/l103/protect_off.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/protect_off.dmi.txt",
+   "sha256": "6dafc3dbf837efe02c3bdc21b762279c12cca3e179d03658e90e9b6b123377a1"
+  },
+  "extra/l103/protect_on.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/protect_on.sr",
+   "sha256": "af40e3362cecf7015aeb251b8758d1062f7cc9410bda9495dae8a9fd7f8ceb73"
+  },
+  "extra/l103/protect_on.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/protect_on.dmi.txt",
+   "sha256": "6d001090ed5dc6960342e93ae4036b1697777ffd0bd5347b96627bcd9fada4af"
+  },
+  "extra/l103/read_obr_after_set.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/read_obr_after_set.sr",
+   "sha256": "73ae621c4742a6ec1ec4f988627e26d48b5add93d420c6c1b2a223caf63be5e2"
+  },
+  "extra/l103/read_obr_after_set.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/read_obr_after_set.dmi.txt",
+   "sha256": "a1b82c84045a8b7c08ea27d390aeff7af4a65934c40717281e09c14d36950422"
+  },
+  "extra/l103/speed_high_read_flash_4k.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_high_read_flash_4k.sr",
+   "sha256": "67bffcabcd4a597312686a280fb35c4004dbeab02c341237aa590a4ab840dd59"
+  },
+  "extra/l103/speed_high_read_flash_4k.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_high_read_flash_4k.dmi.txt",
+   "sha256": "309a5a7678e3d89600ab44a073145d8b51416001eef8c906c85b8a009805b8bb"
+  },
+  "extra/l103/speed_high_read_ram_256.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_high_read_ram_256.sr",
+   "sha256": "8d3f9a32b14e417e75fb4ea9a260aa6f3c8289b8ef11da12593218a0760619af"
+  },
+  "extra/l103/speed_high_read_ram_256.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_high_read_ram_256.dmi.txt",
+   "sha256": "619b90ae09ffcf83a5f2ae61729e379cad76924df86477070600643079f4133d"
+  },
+  "extra/l103/speed_high_target_info.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_high_target_info.sr",
+   "sha256": "5ac7dd2ec0cd7027a8646143181abda46444a8c91060d735f81919ae7296b044"
+  },
+  "extra/l103/speed_high_target_info.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_high_target_info.dmi.txt",
+   "sha256": "6d94b915ba19c808157f1b643faa31e693e737b181727612efa9f741d37db47d"
+  },
+  "extra/l103/speed_low_read_flash_4k.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_low_read_flash_4k.sr",
+   "sha256": "034abd665fe097f71e891437bdcd85c678a0732f3e446183a4003978f5d5111d"
+  },
+  "extra/l103/speed_low_read_flash_4k.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_low_read_flash_4k.dmi.txt",
+   "sha256": "bd079f46febfbd4ffedcceead7b86a9aca26e00eb0af9bf9b10cd27997d3b9b5"
+  },
+  "extra/l103/speed_low_read_ram_256.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_low_read_ram_256.sr",
+   "sha256": "4031678b20883adc8d243904b7e49680808d76dfe5ead0613aba190fe441b229"
+  },
+  "extra/l103/speed_low_read_ram_256.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_low_read_ram_256.dmi.txt",
+   "sha256": "0c57b7d26e4f8f54ff3913c95b6e3747b39d522ccb9f7a36f26aabec2c8418f6"
+  },
+  "extra/l103/speed_low_target_info.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_low_target_info.sr",
+   "sha256": "f1ece7f2cfbe99307499eb9a6d7363a126cdc306318492e9617ef5adc5741790"
+  },
+  "extra/l103/speed_low_target_info.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_low_target_info.dmi.txt",
+   "sha256": "fc39629f13eedf97f058cf824931f734cdf69203e84deb3f4dcb4679ab9c7142"
+  },
+  "extra/l103/speed_medium_read_flash_4k.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_medium_read_flash_4k.sr",
+   "sha256": "bc880faf5351e3c384b930f37adc6019bd02bd2626d679ec8d881a0f2230fc8b"
+  },
+  "extra/l103/speed_medium_read_flash_4k.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_medium_read_flash_4k.dmi.txt",
+   "sha256": "019645507bbc1a511675939acd029459e1527edf3f0771cd7c27a44c8feef1ba"
+  },
+  "extra/l103/speed_medium_read_ram_256.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_medium_read_ram_256.sr",
+   "sha256": "5282b85589fe328c688fa0a878fe695b0a53b29b05b921cd1d25343b7d2d5064"
+  },
+  "extra/l103/speed_medium_read_ram_256.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_medium_read_ram_256.dmi.txt",
+   "sha256": "6e40539cd5af50b3ff44d5f8c948272a28921e08fa2d277bc9d1ebc1b60a1268"
+  },
+  "extra/l103/speed_medium_target_info.wireskein": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_medium_target_info.sr",
+   "sha256": "d615aacb5aafa38d9ba09161c932dcda52063ea1116e6c87ced30bd164bb6a06"
+  },
+  "extra/l103/speed_medium_target_info.dmi.txt": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_medium_target_info.dmi.txt",
+   "sha256": "ff8c8008e2eeb6c243814b796f6054c202223cc11aa053bfb0cb19e687792089"
+  }
+ }
+}

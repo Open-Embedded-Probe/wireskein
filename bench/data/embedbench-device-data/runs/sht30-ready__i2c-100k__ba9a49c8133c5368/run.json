@@ -1,0 +1,125 @@
+{
+ "format": "wireskein-run/1",
+ "meta": {
+  "case": "sht30-ready"
+ },
+ "captures": [
+  {
+   "file": "c0001.wireskein",
+   "channels": [
+    "SDA",
+    "SCL"
+   ]
+  }
+ ],
+ "log": [
+  {
+   "src": "marker",
+   "text": "# sht30-ready"
+  },
+  {
+   "src": "dut",
+   "text": "since_boot_ms=23085"
+  },
+  {
+   "src": "marker",
+   "text": "## power-on"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=5 bytes=5e73a0a37812 crc=1"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=12501 bytes=5e73a0a370ab crc=1"
+  },
+  {
+   "src": "dut",
+   "text": "end=0 nacks=29 answers=2"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## reset-wait-0ms"
+  },
+  {
+   "src": "dut",
+   "text": "end=4 nacks=31 answers=0"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## reset-wait-2ms"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=12501 bytes=5e6dfca3677f crc=1"
+  },
+  {
+   "src": "dut",
+   "text": "end=0 nacks=30 answers=1"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## reset-wait-10ms"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=12500 bytes=5e784aa36a33 crc=1"
+  },
+  {
+   "src": "dut",
+   "text": "end=0 nacks=30 answers=1"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## reset-wait-100ms"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=12501 bytes=5e73a0a36960 crc=1"
+  },
+  {
+   "src": "dut",
+   "text": "end=0 nacks=30 answers=1"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## after-measurement"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=12500 bytes=5e73a0a37812 crc=1"
+  },
+  {
+   "src": "dut",
+   "text": "end=0 nacks=30 answers=1"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "#"
+  }
+ ]
+}

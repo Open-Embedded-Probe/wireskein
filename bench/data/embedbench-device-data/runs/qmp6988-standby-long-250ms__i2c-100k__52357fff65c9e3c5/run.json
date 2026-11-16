@@ -1,0 +1,89 @@
+{
+ "format": "wireskein-run/1",
+ "meta": {
+  "case": "qmp6988-standby-long-250ms"
+ },
+ "captures": [
+  {
+   "file": "c0001.wireskein",
+   "channels": [
+    "SDA",
+    "SCL"
+   ]
+  }
+ ],
+ "log": [
+  {
+   "src": "marker",
+   "text": "# qmp6988-standby-long-250ms"
+  },
+  {
+   "src": "marker",
+   "text": "## setup"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## normal"
+  },
+  {
+   "src": "dut",
+   "text": "end=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=3 data=a2b4206e43f6"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=15000 data=a2b4a36e4ba8"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=250001 data=a2b4b26e4b7f"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=485001 data=a2b4c76e4bc0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=720001 data=a2b4d06e4b6f"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=955001 data=a2b4b76e4b81"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1190000 data=a2b4c76e4b67"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1425001 data=a2b4ce6e4b52"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1660000 data=a2b4b86e4b86"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1895000 data=a2b4cf6e4b75"
+  },
+  {
+   "src": "dut",
+   "text": "reads=401 changes=10"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "#"
+  }
+ ]
+}

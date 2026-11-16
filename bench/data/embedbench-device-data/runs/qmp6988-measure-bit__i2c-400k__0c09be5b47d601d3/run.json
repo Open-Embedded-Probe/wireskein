@@ -1,0 +1,397 @@
+{
+ "format": "wireskein-run/1",
+ "meta": {
+  "case": "qmp6988-measure-bit"
+ },
+ "captures": [
+  {
+   "file": "c0001.wireskein",
+   "channels": [
+    "SDA",
+    "SCL"
+   ]
+  }
+ ],
+ "log": [
+  {
+   "src": "marker",
+   "text": "# qmp6988-measure-bit"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-0us"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=153 status=0x00"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-20us"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=163 status=0x00"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-40us"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=181 status=0x00"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-60us"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=201 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-80us"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=221 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-100us"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=241 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-120us"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=261 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-140us"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=281 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-160us"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=303 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-180us"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=322 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-200us"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=341 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-220us"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=362 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-240us"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=381 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-260us"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=401 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-280us"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=421 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-300us"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=441 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-320us"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=461 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-340us"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=481 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-360us"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=501 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-380us"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=521 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-400us"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=541 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-420us"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=560 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-440us"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=581 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-460us"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=601 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-480us"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=621 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-500us"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=641 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-520us"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=661 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-540us"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=681 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-560us"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=701 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-580us"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=721 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-600us"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=741 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "#"
+  }
+ ]
+}

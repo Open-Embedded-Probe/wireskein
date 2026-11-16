@@ -1,0 +1,121 @@
+{
+ "format": "wireskein-run/1",
+ "meta": {
+  "case": "sht30-modes"
+ },
+ "captures": [
+  {
+   "file": "c0001.wireskein",
+   "channels": [
+    "SDA",
+    "SCL"
+   ]
+  }
+ ],
+ "log": [
+  {
+   "src": "marker",
+   "text": "# sht30-modes"
+  },
+  {
+   "src": "marker",
+   "text": "## soft-reset"
+  },
+  {
+   "src": "dut",
+   "text": "end=0"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## status"
+  },
+  {
+   "src": "dut",
+   "text": "end=0 got=3 bytes=8010e1 crc=1"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## polling-high"
+  },
+  {
+   "src": "dut",
+   "text": "end=0 tries=20 elapsed_us=12931 got=6 bytes=5e73a0a37812 crc=1"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## stretch-high"
+  },
+  {
+   "src": "dut",
+   "text": "end=0 elapsed_us=6705 got=0 bytes= crc=0"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## polling-medium"
+  },
+  {
+   "src": "dut",
+   "text": "end=0 tries=8 elapsed_us=5177 got=6 bytes=5e73a0a38bc3 crc=1"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## stretch-medium"
+  },
+  {
+   "src": "dut",
+   "text": "end=0 elapsed_us=4901 got=6 bytes=5e784aa385dc crc=1"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## polling-low"
+  },
+  {
+   "src": "dut",
+   "text": "end=0 tries=5 elapsed_us=3274 got=6 bytes=5e8d3da37812 crc=1"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## stretch-low"
+  },
+  {
+   "src": "dut",
+   "text": "end=0 elapsed_us=3044 got=6 bytes=5e7dbfa35894 crc=1"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "#"
+  }
+ ]
+}

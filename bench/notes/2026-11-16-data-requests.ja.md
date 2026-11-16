@@ -67,8 +67,16 @@
   これらに効くか・害がないかを実機で確かめられない。
 - **SPI**: SPI フラッシュ（W25Q など）、SD カード、ディスプレイ。SPI の速さ 1 / 4 / 10 / 20 MHz、モード 0 と 3、CS あり。
   取り込み 160 MS/s。正解は `CaptureSPI` の MOSI / MISO のバイト列。
+  - **CS の線が汚れる条件も**（長い配線、CS を別のボードから引く、CS の近くを速いクロックが通る）。合成では、
+    本命の誤確定の 8 割が「SPI は正しく読めたが CS を付け損ねた」もので、原因は CS の線のひげ（クロストーク、
+    スパイク）でした（較正の実行、レビューの 2.6 節）。実機で CS にどのくらいひげが乗るかが分からない。
+  - CS のない SPI（3 線、CS を常時アクティブにした機器）と、1 本の CS を複数の転送で共有するもの。
 - **UART**: 9600 / 115200 / 1 Mbaud、パリティあり・なし、途中で速さを変えるもの（ブートローダーの速さの切り替え）。
   正解は `CaptureSerial` と、相手の機器の受信のログ。
+  - **送り手のクロックが公称からずれている機器も**（内蔵 RC 発振の MCU、±1〜3%）。合成では、ノイズのあるときに
+    推定の速さが 3.6〜4.8% ずれる誤り（バイトは正しく読めている）があり、当てはめ直しで 0.2% 以内に戻りました。
+    実機の正解の速さは公称値ではなく、オシロスコープかキャプチャの全区間の当てはめで測った値にする（eval の
+    許容は 3%）。
 - **CAN**（機材があれば）: 125 k / 500 k / 1 Mbps、トランシーバーの RX の線。正解はコントローラーの送受信のログ。
 
 ## 5. ノイズのある実機の環境
@@ -99,19 +107,22 @@
 
 | 場所 | 中身 | 状態 |
 | --- | --- | --- |
-| `~/dev_wch/wch-protocols/captures/fixtures/wire-linke-p4-2026-09-25` | L103 / V203 / V003 の 12 操作、`extra/`（LinkE の速度、クロックの設定、誤った操作）、`more/` | 測定台の `wchfix:` で読める（L103 は DMI の正解付き、V203 は参照の復号器が読めず正解なし、V003 は参照の復号器 `swio.py` が wch-protocols から消えていて正解なし）。`more/` はまだ見ていない |
-| `~/dev_wch/wch-protocols/experiments/e163_linke_speed_codes` | LinkE の速度の設定ごとの SWCLK（L103 / V203、50 MS/s） | 未使用 |
-| `~/dev_wch/wch-protocols/experiments/e173_oep_tap_linke_v103_long` | CH32V103（長い形式）を LinkE の速度 3 段で、80 MS/s。ch32rv の出力付き | 未使用。ch32rv の出力（チップの ID、UID）から正解を作れる |
-| `~/dev/EmbedBenchDeviceData/runs` | 実機の I2C 35 本（2 MS/s） | 測定台の `ebdd:` で読める（`real-ebdd`、確認用） |
+| wch-protocols の `captures/fixtures/wire-linke-p4-2026-09-25` | L103 / V203 / V003 の 12 操作、`extra/`（LinkE の速度、クロックの設定、誤った操作）、`more/` | 300 kB 以下の記録を `bench/data/wch-linke-p4-2026-09-25` にコピー済み、`wchfix:` で読める（L103 は DMI の正解付き、V203 は参照の復号器が読めず正解なし、V003 は参照の復号器 `swio.py` が wch-protocols から消えていて正解なし）。`more/`、100 万エッジの書き込み、`v203-160mhz` はコピーしていない |
+| wch-protocols の `experiments/e163_linke_speed_codes` | LinkE の速度の設定ごとの SWCLK（L103 / V203、50 MS/s） | 未使用 |
+| wch-protocols の `experiments/e173_oep_tap_linke_v103_long` | CH32V103（長い形式）を LinkE の速度 3 段で、80 MS/s。ch32rv の出力付き | 未使用。ch32rv の出力（チップの ID、UID）から正解を作れる |
+| EmbedBenchDeviceData の `runs/` | 実機の I2C 35 本（2 MS/s） | `bench/data/embedbench-device-data` にコピー済み、`ebdd:` で読める（`real-ebdd`、確認用） |
 | `tests/data/i2c_bench/{x035_100k,x035_12k5,v205_contract,h417_a,h417_b}` | 弱いプルアップの I2C の試験の記録（run.json の期待値付き） | 未使用。run.json の `expect` の照合を正解にできる |
 | `tests/data/{qspi_truth,rs485_truth,uart_truth,can_truth,rvswd_long_truth}` | 製品のテストの正解付きの記録 | 未使用。中身を確かめて、測定台の元にできるか見る |
 
 ## 9. 作ったデータを測定台に入れる手順
 
-1. 記録と正解を、リポジトリの外（EmbedBenchDeviceData か wch-protocols のような、データのリポジトリ）に置く。
-2. `bench/wsbench/data.py` に、読み方（`ebdd:`、`wchfix:` と同じ形）を足す。正解は、その場で外の記録から作る。
-   チャンネルの名前は付け替えて隠す。
-3. `bench/suites.toml` に、調整用（tune）と確認用（holdout）のスイートを分けて足す。読めない条件のラベル
+1. 記録と正解の元を、データのリポジトリ（EmbedBenchDeviceData、wch-protocols など）に置く（公開できるライセンスで）。
+2. **測定台は、このリポジトリのファイルしか読まない**（Actions でも手元でも同じ）。スイートが使う分だけを
+   `bench/data/extract.py` で `bench/data/` にコピーする（元の `LICENSE` と `SOURCE.json` を付ける。キャプチャは
+   `.wireskein` に変換してよい。エッジが同じことを確かめる）。新しい種類の記録なら、extract.py に取り出し方を足す。
+3. `bench/wsbench/data.py` に、読み方（`ebdd:`、`wchfix:` と同じ形）を足す。正解は、コピーした元の記録（参照の
+   復号器の出力、ファームウェアのログ）から、読むときに作る。チャンネルの名前は付け替えて隠す。
+4. `bench/suites.toml` に、調整用（tune）と確認用（holdout）のスイートを分けて足す。読めない条件のラベル
    （`data.hardness`）が付くかを確かめる。
-4. 本命だけで一度走らせ、正解の作り方の誤り（今日の V203 の `.dmi.txt`、SWIO の参照の復号器の消失、BURST の扱い）がないかを
+5. 本命だけで一度走らせ、正解の作り方の誤り（今日の V203 の `.dmi.txt`、SWIO の参照の復号器の消失、BURST の扱い）がないかを
    確かめてから、試行と比べる。

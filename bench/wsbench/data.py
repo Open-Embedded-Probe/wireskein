@@ -5,16 +5,17 @@ was measured:
 
     source      set:<name>[a:b]   a frozen set under eval/corpus/synth (cases a..b in file order)
                 real              eval/corpus/real (the records with about a million edges left out)
-                dir:<path>[a:b]   any directory of <id>.wireskein beside <id>.truth.json (the eval/ truth format)
+                dir:<path>[a:b]   a directory of this repository of <id>.wireskein beside <id>.truth.json (the
+                                  eval/ truth format)
                 gen:<profile>[/<stress>][a:b][@<rate>]   eval/synth.py's scenarios of seeds a..b, sampled at <rate>
                                   (the same traffic whatever the rate: a base for decimate, sweeping the rate), or at
                                   the scenario's own
-                wchfix:<sub>[a:b]   wch-protocols' LinkE fixture (wire-linke-p4-2026-09-25/<sub>: l103, v203,
-                                  v203-100mhz, v003, extra/l103 ...): real RVSWD / SWIO with truth from wch-protocols'
-                                  own decoders (.dmi.txt, swio.py); captures over 300 kB left out (wchfix-large: in)
-                ebdd:<dir>[a:b]   EmbedBenchDeviceData's runs (<dir>/runs/*/run.json, real I2C taken by an OEP probe):
-                                  truth the bus (SDA / SCL renamed D0 / D1), its rate (from the run's name) and
-                                  the bytes the firmware said it read (its dut lines: bytes=.. crc=1, data=..)
+                wchfix:<sub>[a:b]   wch-protocols' LinkE fixture, as copied to bench/data/wire-linke-p4-2026-09-25
+                                  (<sub>: l103, v203, v203-100mhz, v003, extra/l103; the captures of 300 kB or less):
+                                  real RVSWD / SWIO with truth from wch-protocols' own decoder (.dmi.txt)
+                ebdd:<name>[a:b]  EmbedBenchDeviceData's runs, as copied to bench/data/<name>/runs (real I2C taken by
+                                  an OEP probe): truth the bus (SDA / SCL renamed D0 / D1), its rate (from the run's
+                                  name) and the bytes the firmware said it read (its dut lines: bytes=.. crc=1, data=..)
                 i2cbench:h417_slow/stream[a:b]   real captures of tests/data/i2c_bench: I2C through weak
                                   pull-ups, 50 times "S, 0x13 write, NACK, P" each (what the device answered: the
                                   summaries beside them), truth made on reading; SCL / SDA renamed D0 / D1
@@ -24,6 +25,9 @@ was measured:
                 samples the faster it is taken, missed when shorter than a sample and no sample falls in it
                 odslow:NS: an open-drain bus (I2C) through a weak pull-up: each rise NS x U(0.6, 1) ns late, a high
                 shorter than that gone (clocks clipped to nothing, as on tests/data/i2c_bench's bench)
+
+Every source is a file of this repository (bench/data/ holds the copies of other repositories' records the suites
+use: bench/data/extract.py): the bench reads nothing else, on GitHub's runners as here.
 
 Noise is seeded from the case id and the transform text (never Python's hash()), so a dataset is the same on every
 run and machine. The clean capture (the same transforms without the noise) is kept beside the noisy one: stages
@@ -48,6 +52,7 @@ from wireskein._engine.model import Capture
 REPO = Path(__file__).resolve().parents[2]
 SETS = REPO / "eval" / "corpus" / "synth"
 REAL = REPO / "eval" / "corpus" / "real"
+DATA = REPO / "bench" / "data"            # other repositories' records, copied (bench/data/extract.py)
 
 # truth labels of a line (stage lineclass)
 LABELS = ("clock", "data", "select", "periodic", "random", "static")
@@ -96,15 +101,13 @@ def source_items(source: str) -> list[str]:
         rate = float(g["rate"]) if g["rate"] else 0.0          # 0: the scenario's own rate
         return [f"gen:{g['profile']}:{g['stress'] or ''}:{s}:{rate}" for s in range(int(g["a"]), int(g["b"]))]
     m = _RANGE.match(source)
-    if m and m["base"].startswith(("wchfix:", "wchfix-large:")):
-        large = m["base"].startswith("wchfix-large:")
-        d = WCH_FIXTURE / m["base"].split(":", 1)[1]
+    if m and m["base"].startswith("wchfix:"):
+        d = _inside(WCH_FIXTURE / m["base"].split(":", 1)[1])
         if not d.is_dir():
             raise FileNotFoundError(d)
-        files = [p for p in sorted(d.glob("*.sr")) if large or p.stat().st_size <= WCH_MAX_BYTES]
-        return [f"wchfix:{p}" for p in _slice(files, m["a"], m["b"])]
+        return [f"wchfix:{p}" for p in _slice(sorted(d.glob("*.wireskein")), m["a"], m["b"])]
     if m and m["base"].startswith("ebdd:"):
-        d = Path(m["base"][len("ebdd:"):]).expanduser() / "runs"
+        d = _inside(DATA / m["base"][len("ebdd:"):]) / "runs"
         if not d.is_dir():
             raise FileNotFoundError(d)
         return [f"ebdd:{p.parent}" for p in _slice(sorted(d.glob("*/run.json")), m["a"], m["b"])]
@@ -155,8 +158,7 @@ def source_paths(source: str) -> list[Path]:
     elif base == "real":
         d = REAL
     elif base.startswith("dir:"):
-        d = Path(base[4:]).expanduser()
-        d = d if d.is_absolute() else REPO / d
+        d = _inside(REPO / base[4:])
     else:
         raise ValueError(f"source {source!r}: set:<name>[a:b], real or dir:<path>[a:b]")
     if not d.is_dir():
@@ -167,8 +169,16 @@ def source_paths(source: str) -> list[Path]:
     return _slice(paths, a, b)
 
 
-WCH_FIXTURE = Path.home() / "dev_wch/wch-protocols/captures/fixtures/wire-linke-p4-2026-09-25"
-WCH_MAX_BYTES = 300_000          # the flash writes and the like (a million edges) only through wchfix-large:
+def _inside(d: Path) -> Path:
+    """d, which must be inside this repository: the bench reads no one's local files (put a copy under bench/data)."""
+    d = d.resolve()
+    if not d.is_relative_to(REPO):
+        raise ValueError(f"{d}: outside this repository (the bench reads only its files: copy what a suite needs "
+                         f"under bench/data, as bench/data/extract.py does)")
+    return d
+
+
+WCH_FIXTURE = DATA / "wch-linke-p4-2026-09-25"    # wch-protocols' captures/fixtures/wire-linke-p4-2026-09-25, in part
 
 
 def _dmi_rows(dmi: Path) -> list:
@@ -181,23 +191,24 @@ def _dmi_rows(dmi: Path) -> list:
     return rows
 
 
-def _wchfix(sr: Path) -> tuple[Capture, dict]:
-    """A capture of the LinkE fixture with its truth from wch-protocols' own decoders (not WireSkein): RVSWD's DMI
-    accesses from <op>.dmi.txt (where only the 50 MHz run of the same operation has one - v203-100mhz, v203-160mhz -
-    that one, marked cross-session: ch32rv's steps are fixed, a polling count may differ), SWIO's from
-    captures/tools/swio.py (gone from wch-protocols since: SWIO then has its lines only). A .dmi.txt whose decoder left
-    over 10 % of its frames unread is no truth. Channels renamed D0.. in an order from the file's name."""
+def _wchfix(path: Path) -> tuple[Capture, dict]:
+    """A capture of the LinkE fixture (copied: bench/data/extract.py) with its truth from wch-protocols' own decoder
+    (not WireSkein): RVSWD's DMI accesses from <op>.dmi.txt (where only the 50 MHz run of the same operation has one -
+    v203-100mhz - that one, marked cross-session: ch32rv's steps are fixed, a polling count may differ). A .dmi.txt
+    whose decoder left over 10 % of its frames unread is no truth. SWIO has its lines only (wch-protocols' reference,
+    captures/tools/swio.py, is gone from it). Channels renamed D0.. in an order from the file's name (the sigrok
+    file's, <op>.sr, as before the copy: the same cases, the same input_sha)."""
     from wireskein import decode as _decode
-    cap = _decode.load(sr)
-    rel = sr.relative_to(WCH_FIXTURE)
+    cap = _decode.load(path)
+    rel = path.relative_to(WCH_FIXTURE).with_suffix(".sr")
     order = sorted(cap.channels, key=lambda c: zlib.crc32(f"{rel}|{c.name}".encode()))
     new = {c.name: f"D{i}" for i, c in enumerate(order)}
     chans = sorted((replace(c, name=new[c.name]) for c in cap.channels), key=lambda c: int(c.name[1:]))
     names = {c.name for c in cap.channels}
     expect, source = {}, None
     if "SWCLK" in names:
-        dmi = sr.with_suffix(".dmi.txt")
-        if not dmi.exists() and sr.parent.name.startswith("v203-"):
+        dmi = path.with_suffix(".dmi.txt")
+        if not dmi.exists() and path.parent.name.startswith("v203-"):
             alt = WCH_FIXTURE / "v203" / dmi.name
             if alt.exists():
                 dmi, source = alt, "wch-protocols tools/dmi_decode.py, the 50 MHz run of the same operation (cross-session)"
@@ -216,22 +227,11 @@ def _wchfix(sr: Path) -> tuple[Capture, dict]:
                 source = source or "wch-protocols tools/dmi_decode.py (.dmi.txt)"
         bus = {"protocol": "rvswd", "roles": {"clk": new["SWCLK"], "dio": new["SWDIO"]}, "params": {}}
     else:
-        import sys as _sys
-        tools = WCH_FIXTURE.parent.parent / "tools"
-        if str(tools) not in _sys.path:
-            _sys.path.insert(0, str(tools))
-        try:
-            import swio as ref
-            frames, _ = ref.frames(str(sr), 0)
-            rows = [[d["kind"], d["addr"], d["data"]] for _, b, _ in frames if (d := ref.decode(b))]
-            if rows:
-                expect["dmi_addr"], source = rows, "wch-protocols captures/tools/swio.py"
-        except Exception:  # noqa: BLE001 - no reference decoder: roles only
-            pass
         bus = {"protocol": "swio", "roles": {"dio": new["SWIO"]}, "params": {}}
     if expect:
         bus["expect"], bus["expect_source"] = expect, source
-    truth = {"id": "wchfix-" + str(rel.with_suffix("")).replace("/", "-"), "source": {"path": str(sr)},
+    truth = {"id": "wchfix-" + str(rel.with_suffix("")).replace("/", "-"),
+             "source": {"path": str(path.relative_to(REPO)), "repo": "wch-protocols", "file": str(rel)},
              "buses": [bus], "decoys": [], "notes": "real LinkE <-> target capture (wch-protocols fixture 2026-09-25)"}
     return Capture(cap.rate, cap.n_samples, chans), truth
 
@@ -258,7 +258,7 @@ def _ebdd(run: Path) -> tuple[Capture, dict]:
         if x.get("src") != "dut" or "crc=0" in x["text"]:
             continue
         reads += [h.lower() for h in _DUT_READ.findall(x["text"])]
-    truth = {"id": f"ebdd-{run.name}", "source": {"path": str(run), "repo": "EmbedBenchDeviceData"},
+    truth = {"id": f"ebdd-{run.name}", "source": {"path": str(run.relative_to(REPO)), "repo": "EmbedBenchDeviceData"},
              "buses": [{"protocol": "i2c", "roles": {"scl": new["SCL"], "sda": new["SDA"]},
                         "params": {"clock_hz": float(m.group(1)) * 1e3 if m else None},
                         "expect": {"dut_reads": reads}}],

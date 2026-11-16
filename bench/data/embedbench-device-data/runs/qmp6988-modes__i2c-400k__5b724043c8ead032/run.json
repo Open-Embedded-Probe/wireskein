@@ -1,0 +1,157 @@
+{
+ "format": "wireskein-run/1",
+ "meta": {
+  "case": "qmp6988-modes"
+ },
+ "captures": [
+  {
+   "file": "c0001.wireskein",
+   "channels": [
+    "SDA",
+    "SCL"
+   ]
+  }
+ ],
+ "log": [
+  {
+   "src": "marker",
+   "text": "# qmp6988-modes"
+  },
+  {
+   "src": "marker",
+   "text": "## chip-id"
+  },
+  {
+   "src": "dut",
+   "text": "got=1 chip_id=0x5c"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## reset"
+  },
+  {
+   "src": "dut",
+   "text": "end=0"
+  },
+  {
+   "src": "dut",
+   "text": "iir=ff"
+  },
+  {
+   "src": "dut",
+   "text": "f3_f5=000000"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## calibration"
+  },
+  {
+   "src": "dut",
+   "text": "got=25 bytes=52dc0da7f4820ddc0cd201e6fc86f9c9faa2f72b0cbb03d8bb"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## forced"
+  },
+  {
+   "src": "dut",
+   "text": "end=0"
+  },
+  {
+   "src": "dut",
+   "text": "polls=1 elapsed_us=146 status=0x00"
+  },
+  {
+   "src": "dut",
+   "text": "got=6 data=000000000000"
+  },
+  {
+   "src": "dut",
+   "text": "ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## normal"
+  },
+  {
+   "src": "dut",
+   "text": "end=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=268 got=6 data=000000000000"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=10220 got=6 data=a2b27129544f"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=20218 got=6 data=a2b27129544f"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=30217 got=6 data=a2b2743a8c77"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=40215 got=6 data=a2b2864776e1"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=50217 got=6 data=a2b27951263c"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=60217 got=6 data=a2b262586987"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=70217 got=6 data=a2b26b5ddc34"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=80217 got=6 data=a2b26061f17f"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=90217 got=6 data=a2b26061f17f"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=100217 got=6 data=a2b2306501f8"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=110209 got=6 data=a2b22b674e22"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=120208 got=6 data=a2b23c69071e"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "#"
+  }
+ ]
+}

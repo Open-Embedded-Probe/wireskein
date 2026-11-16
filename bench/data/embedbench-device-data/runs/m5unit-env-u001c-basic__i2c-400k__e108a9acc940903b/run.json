@@ -1,0 +1,121 @@
+{
+ "format": "wireskein-run/1",
+ "meta": {
+  "case": "m5unit-env-u001c-basic"
+ },
+ "captures": [
+  {
+   "file": "c0001.wireskein",
+   "channels": [
+    "SDA",
+    "SCL"
+   ]
+  }
+ ],
+ "log": [
+  {
+   "src": "marker",
+   "text": "# m5unit-env-u001c-basic"
+  },
+  {
+   "src": "marker",
+   "text": "## sht30-begin"
+  },
+  {
+   "src": "dut",
+   "text": "ok=1"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## qmp6988-begin"
+  },
+  {
+   "src": "dut",
+   "text": "ok=1"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## sht30-update"
+  },
+  {
+   "src": "dut",
+   "text": "ok=1 elapsed_us=250003 temperature_c=19.54 humidity_rh=63.86"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## qmp6988-update"
+  },
+  {
+   "src": "dut",
+   "text": "ok=1 elapsed_us=1033 pressure_pa=102346.6 temperature_c=19.52"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## sht30-update"
+  },
+  {
+   "src": "dut",
+   "text": "ok=1 elapsed_us=250010 temperature_c=19.54 humidity_rh=63.86"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## qmp6988-update"
+  },
+  {
+   "src": "dut",
+   "text": "ok=1 elapsed_us=825 pressure_pa=102346.1 temperature_c=19.57"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## sht30-update"
+  },
+  {
+   "src": "dut",
+   "text": "ok=1 elapsed_us=250013 temperature_c=19.55 humidity_rh=63.86"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## qmp6988-update"
+  },
+  {
+   "src": "dut",
+   "text": "ok=1 elapsed_us=819 pressure_pa=102345.3 temperature_c=19.59"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "#"
+  }
+ ]
+}

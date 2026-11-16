@@ -1,0 +1,153 @@
+{
+ "format": "wireskein-run/1",
+ "meta": {
+  "case": "qmp6988-modes"
+ },
+ "captures": [
+  {
+   "file": "c0001.wireskein",
+   "channels": [
+    "SDA",
+    "SCL"
+   ]
+  }
+ ],
+ "log": [
+  {
+   "src": "marker",
+   "text": "# qmp6988-modes"
+  },
+  {
+   "src": "marker",
+   "text": "## chip-id"
+  },
+  {
+   "src": "dut",
+   "text": "got=1 chip_id=0x5c"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## reset"
+  },
+  {
+   "src": "dut",
+   "text": "end=0"
+  },
+  {
+   "src": "dut",
+   "text": "iir=ff"
+  },
+  {
+   "src": "dut",
+   "text": "f3_f5=000000"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## calibration"
+  },
+  {
+   "src": "dut",
+   "text": "got=25 bytes=52dc0da7f4820ddc0cd201e6fc86f9c9faa2f72b0cbb03d8bb"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## forced"
+  },
+  {
+   "src": "dut",
+   "text": "end=0"
+  },
+  {
+   "src": "dut",
+   "text": "polls=12 elapsed_us=10795 status=0x00"
+  },
+  {
+   "src": "dut",
+   "text": "got=6 data=a2b2746e3514"
+  },
+  {
+   "src": "dut",
+   "text": "ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## normal"
+  },
+  {
+   "src": "dut",
+   "text": "end=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=901 got=6 data=a2b2746e3514"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=11033 got=6 data=a2b2746e3514"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=21033 got=6 data=a2b24e6e3908"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=31033 got=6 data=a2b2486e3847"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=41033 got=6 data=a2b22f6e37fc"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=51032 got=6 data=a2b23b6e374c"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=61051 got=6 data=a2b23c6e36d9"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=71032 got=6 data=a2b2366e3650"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=81033 got=6 data=a2b22e6e3562"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=91032 got=6 data=a2b22e6e3562"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=101032 got=6 data=a2b2256e34d6"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=111030 got=6 data=a2b21c6e346a"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "#"
+  }
+ ]
+}

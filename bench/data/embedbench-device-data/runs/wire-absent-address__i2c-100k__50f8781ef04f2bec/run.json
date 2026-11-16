@@ -1,0 +1,29 @@
+{
+ "format": "wireskein-run/1",
+ "meta": {
+  "case": "wire-absent-address"
+ },
+ "captures": [
+  {
+   "file": "c0001.wireskein",
+   "channels": [
+    "SDA",
+    "SCL"
+   ]
+  }
+ ],
+ "log": [
+  {
+   "src": "marker",
+   "text": "## write 2 bytes to 0x50"
+  },
+  {
+   "src": "dut",
+   "text": "endTransmission=4"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  }
+ ]
+}

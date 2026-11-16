@@ -1,0 +1,61 @@
+{
+ "format": "wireskein-run/1",
+ "meta": {
+  "case": "sht30-stretch-wait"
+ },
+ "captures": [
+  {
+   "file": "c0001.wireskein",
+   "channels": [
+    "SDA",
+    "SCL"
+   ]
+  }
+ ],
+ "log": [
+  {
+   "src": "marker",
+   "text": "# sht30-stretch-wait"
+  },
+  {
+   "src": "marker",
+   "text": "## idf-scl-wait-20000us"
+  },
+  {
+   "src": "marker",
+   "text": "### start measure-high via=stretch"
+  },
+  {
+   "src": "marker",
+   "text": "### after measure-high at=release"
+  },
+  {
+   "src": "dut",
+   "text": "transmit=0 receive=0 elapsed_us=12828 bytes=5e9250a1b366 crc=1"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## wire-timeout-1000ms"
+  },
+  {
+   "src": "marker",
+   "text": "### start measure-high via=stretch"
+  },
+  {
+   "src": "dut",
+   "text": "end=0 elapsed_us=6696 got=0 bytes= crc=0"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "#"
+  }
+ ]
+}

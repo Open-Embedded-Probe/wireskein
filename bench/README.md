@@ -83,6 +83,14 @@ def comb(cap, lines, max_mult):
     swept), `i2cbench:h417_slow/stream[a:b]` (real captures of `tests/data/i2c_bench`: I2C through weak pull-ups,
     50 times "S, 0x13 write, NACK, P"; truth made on reading, SCL / SDA renamed D0 / D1, the address's ACK compared
     too: the truth's `expect.compare_ack`, which eval's generated cases do not set)
+  - Other repositories' records, copied: `wchfix:<sub>[a:b]` (wch-protocols' LinkE fixture: real RVSWD / SWIO, truth
+    from its reference decoder's `.dmi.txt`), `ebdd:<name>[a:b]` (EmbedBenchDeviceData's runs: real I2C, truth the
+    firmware's own lines)
+- **The bench reads only this repository's files** (on GitHub's runners as here; `dir:` outside it is refused).
+  Records of other repositories a suite needs are copied, only what it needs, under `bench/data/` by
+  `bench/data/extract.py`, each with its source's `LICENSE` and a `SOURCE.json` (the repository, its commit, each
+  file's source and SHA-256). A capture may be converted to `.wireskein` there; its edges, and so the case's
+  `input_sha`, stay the same (checked when copying)
   - Transforms: `spike:L` (1-tick pulses at random, L per edge), `bounce:L` (a share L of the edges bounce just
     after), `xtalk:L` (a 1-tick pulse at a share L of the next channel's edges), `crop:A:B` (the part from A to B),
     `decimate:K` (taken K times slower), joined with `+` (`crop:0:0.5+spike:0.1`)
@@ -190,7 +198,7 @@ they are measured. Costs are not.
 
 | What | Where | How |
 | --- | --- | --- |
-| Scores of whole suites | GitHub Actions | Start "Bench" by hand (stages, suites, algorithms, jobs, note, whether to commit). Suites default to `all` (every suite whose data is in the repository: `real-ebdd`, `wch-fixture` and `wch-ladder` read local repositories, EmbedBenchDeviceData and wch-protocols, and run here only); `tune` leaves the holdouts out. The cases are split over parallel jobs (every algorithm of a case in the same job), merged at the end, and the ledger's new lines committed to the branch it ran on (on the branch as it is just before the push, added again; again if another push came first). The items are kept as the artifact `bench-<run id>`; here with `uv run python bench/merge.py --import <unpacked dir>` |
+| Scores of whole suites | GitHub Actions | Start "Bench" by hand (stages, suites, algorithms, jobs, note, whether to commit). Suites default to `all` (every suite); `tune` leaves the holdouts out. The cases are split over parallel jobs (every algorithm of a case in the same job), merged at the end, and the ledger's new lines committed to the branch it ran on (on the branch as it is just before the push, added again; again if another push came first). The items are kept as the artifact `bench-<run id>`; here with `uv run python bench/merge.py --import <unpacked dir>` |
 | Costs | a machine that counts instructions (native Ubuntu) | the `cost` suite with `--memory`, one job fewer than the cores |
 | Quick tries | here | `smoke`, `rate-smoke` ...; another ledger with `WSBENCH_RESULTS` |
 

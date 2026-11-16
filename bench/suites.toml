@@ -91,8 +91,8 @@ transforms = ["", "spike:0.1", "bounce:0.1", "decimate:2"]
 
 [suite.real-ebdd]
 role = "holdout"
-about = "EmbedBenchDeviceData's 35 real I2C runs (M5Stack ENV unit's SHT30 / QMP6988 with proper pull-ups, address scans, NACK answers, clock stretching; 100 / 400 kHz taken at 2 MS/s): truth the firmware's own lines"
-sources = ["ebdd:~/dev/EmbedBenchDeviceData"]
+about = "EmbedBenchDeviceData's 35 real I2C runs (M5Stack ENV unit's SHT30 / QMP6988 with proper pull-ups, address scans, NACK answers, clock stretching; 100 / 400 kHz taken at 2 MS/s): truth the firmware's own lines. Read from bench/data since 2026-11-16 (before: ebdd:~/dev/EmbedBenchDeviceData, the same cases and input_sha)"
+sources = ["ebdd:embedbench-device-data"]
 transforms = [""]
 
 [suite.rvswd-rate]

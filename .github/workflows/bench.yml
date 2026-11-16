@@ -13,7 +13,7 @@ on:
         description: "Stages, space separated, or all"
         default: "all"
       suites:
-        description: "Suites of bench/suites.toml, space separated; all: every suite whose data is in the repository (tune: those for tuning)"
+        description: "Suites of bench/suites.toml, space separated; all: every suite (tune: those for tuning)"
         default: "all"
       algos:
         description: "Algorithms by name, space separated (empty: by status)"
