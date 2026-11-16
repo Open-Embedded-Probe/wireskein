@@ -36,7 +36,8 @@ class Counter:
 
 _COUNTER: Counter | None = None
 _WHY = ""
-
+_PID = None          # the process that opened it: a counter counts the thread that opened it, so a forked worker
+                     # that kept its parent's would count the parent
 
 def _open() -> tuple[Counter | None, str]:
     nr = _SYSCALL.get(platform.machine())
@@ -60,11 +61,14 @@ def _open() -> tuple[Counter | None, str]:
 
 
 def counter() -> Counter | None:
-    """The process's counter, opened once (None where there is none)."""
-    global _COUNTER, _WHY
-    if _COUNTER is None and not _WHY:
+    """This process's counter, opened once in it (None where there is none)."""
+    global _COUNTER, _WHY, _PID
+    if _PID != os.getpid():
+        if _COUNTER is not None:
+            os.close(_COUNTER.fd)          # the parent's, inherited through fork
         _COUNTER, _WHY = _open()
         _WHY = _WHY or "ok"
+        _PID = os.getpid()
     return _COUNTER
 
 
@@ -84,3 +88,17 @@ if __name__ == "__main__":
         sum(range(1_000_000))
         n.append(c.stop())
     print("instruction counter works: sum(range(1e6)) =", n, "instructions (should be nearly equal)")
+    # the bench's workers are forked: each must count itself, not the parent it came from
+    r, w = os.pipe()
+    pid = os.fork()
+    if pid == 0:
+        c = counter()
+        c.start()
+        sum(range(1_000_000))
+        os.write(w, str(c.stop()).encode())
+        os._exit(0)
+    os.waitpid(pid, 0)
+    got = int(os.read(r, 64))
+    ok = abs(got - n[0]) < 0.05 * n[0]
+    print(f"in a forked worker: {got} instructions", "(counts itself: ok)" if ok else "(NOT its own count: a bug)")
+    raise SystemExit(0 if ok else 1)

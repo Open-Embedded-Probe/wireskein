@@ -174,6 +174,17 @@ they are measured. Costs are not.
 | Costs | a machine that counts instructions (native Ubuntu) | the `cost` suite with `--memory`, one job fewer than the cores |
 | Quick tries | here | `smoke`, `rate-smoke` ...; another ledger with `WSBENCH_RESULTS` |
 
+- Costs on a machine that counts instructions:
+
+  ```sh
+  git pull                                       # a clean tree (or the ledger's lines say dirty)
+  python3 bench/wsbench/perfcount.py             # its second line "counts itself: ok": a worker counts itself
+  uv run --with-requirements bench/requirements.txt python bench/run.py --stage all --suite cost --memory -j 3 \
+      --note "cost on <machine>"
+  uv run python bench/report.py --suite cost --cost
+  git add bench/results && git commit -m "bench: cost run on <machine>" && git push
+  ```
+
 - Split by hand: `run.py --shard I/N --run-id ID` N times, then `merge.py ID` (what Actions does). Split or not, the
   scores and the inputs' hashes are the same.
 - Versions are pinned in `bench/requirements.txt`. Changing one changes what is measured: say so in the next run's

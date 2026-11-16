@@ -174,6 +174,17 @@ uv run python bench/select.py --stage e2e --suite noise --by noise
 | コスト | 命令数を数えられる機械（ネイティブの Ubuntu） | `cost` スイートを `--memory` 付きで。並列数はコア数より 1 少なく |
 | 素早い試行 | 手元 | `smoke`、`rate-smoke` など。`WSBENCH_RESULTS` で別の台帳に |
 
+- 命令数を数える機械でのコストの計測:
+
+  ```sh
+  git pull                                       # 作業ツリーはきれいなまま（台帳の行に dirty と残らないように）
+  python3 bench/wsbench/perfcount.py             # 2 行目が「counts itself: ok」なら、ワーカーも自分を数えられる
+  uv run --with-requirements bench/requirements.txt python bench/run.py --stage all --suite cost --memory -j 3 \
+      --note "cost on <機械>"
+  uv run python bench/report.py --suite cost --cost
+  git add bench/results && git commit -m "bench: cost run on <機械>" && git push
+  ```
+
 - 分けて走らせるときは `run.py --shard I/N --run-id ID` を N 回、そのあと `merge.py ID` です（Actions はこれを
   しています）。分けても分けなくても、点数と入力のハッシュは同じになります。
 - 依存の版は `bench/requirements.txt` で固定します。変えると測るものが変わるので、変えた後の最初の実行の `--note`
