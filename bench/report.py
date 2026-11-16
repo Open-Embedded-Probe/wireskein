@@ -190,9 +190,16 @@ def main() -> None:
     if args.run:
         recs = [r for r in recs if r["run"].startswith(args.run)]
     for stage in args.stage or list(dict.fromkeys(r["stage"] for r in recs)):
-        rs = [r for r in recs if r["stage"] == stage and (not args.suite or r["suite"] in args.suite)]
-        for suite in dict.fromkeys(r["suite"] for r in rs):
-            sub = [r for r in rs if r["suite"] == suite]
+        rs = [r for r in recs if r["stage"] == stage]
+        names = args.suite or list(dict.fromkeys(r["suite"] for r in rs))
+        for suite in names:
+            try:                                     # by the suite's definition: a shared dataset shows in each
+                want = set(runner.suite_datasets(suite))
+            except KeyError:
+                want = {r["dataset"] for r in rs if r["suite"] == suite}
+            sub = [{**r, "suite": suite} for r in rs if r["dataset"] in want]
+            if not sub:
+                continue
             print(f"\n[suite {suite}, {sub[-1]['role']}]", end="")
             if args.cost:
                 cost_table(sub, stage, args.metric or STAGES[stage].headline)

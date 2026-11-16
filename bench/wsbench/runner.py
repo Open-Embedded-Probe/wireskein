@@ -42,6 +42,12 @@ def suites() -> dict:
     return tomllib.loads((BENCH / "suites.toml").read_text())["suite"]
 
 
+def suite_datasets(name: str) -> list[str]:
+    """The datasets a suite defines (suites.toml), whichever suite a ledger line names: a dataset two suites share
+    is run once and belongs to both."""
+    return [src + (f"+{chain}" if chain else "") for _, _, src, chain in datasets_of([name])]
+
+
 def datasets_of(names: list[str]) -> list[tuple[str, str, str, str]]:
     """(suite, role, source, chain) for each dataset of the suites."""
     all_ = suites()
@@ -114,12 +120,18 @@ def _work(job):
 
 def plan_work(stage_names: list[str], algos_by_stage: dict[str, list], dsets: list[tuple[str, str, str, str]],
               memory: bool):
-    """(plan, the cases to run in a fixed order, each dataset's suite / role / source / chain)."""
+    """(plan, the cases to run in a fixed order, each dataset's suite / role / source / chain / all its suites).
+    A dataset two suites share (nack's clean cases are odslow's too) runs once; its line names its first suite and
+    lists all."""
     plan = [(s, [a.name for a in algos_by_stage[s]]) for s in stage_names]
     work, meta_ds = [], {}
     for suite, role, src, chain in dsets:
         ds = src + (f"+{chain}" if chain else "")
-        meta_ds[ds] = (suite, role, src, chain)
+        if ds in meta_ds:
+            if suite not in meta_ds[ds][4]:
+                meta_ds[ds][4].append(suite)
+            continue
+        meta_ds[ds] = [suite, role, src, chain, [suite]]
         work += [(ref, src, chain, plan, memory) for ref in data.source_items(src)]
     return plan, work, meta_ds
 
@@ -240,10 +252,12 @@ def aggregate(run_id: str, item_files: list[Path]) -> tuple[dict, list[str]]:
              if m0["algos"][f"{s}/{n}"]["status"] == "main"}
     for (stage, name, ds), p in sorted(per.items()):
         a = m0["algos"][f"{stage}/{name}"]
-        suite, role, src, chain = m0["datasets"][ds]
+        suite, role, src, chain, *rest = m0["datasets"][ds]
+        in_suites = rest[0] if rest else [suite]
         cases = sorted(map(tuple, p["cases"]))
         rec = {"run": run_id, "stage": stage, "algo": name, "status": a["status"], "params": a["params"],
-               "algo_path": a["path"], "algo_sha": a["sha"], "suite": suite, "role": role, "dataset": ds,
+               "algo_path": a["path"], "algo_sha": a["sha"], "suite": suite, "suites": in_suites, "role": role,
+               "dataset": ds,
                "source": src, "transforms": chain, "cases": len(cases),
                "inputs_sha": hashlib.sha256(json.dumps(cases).encode()).hexdigest()[:16],
                # rounded: scores to 6 significant digits, costs to 4 (they vary more than that run to run)
