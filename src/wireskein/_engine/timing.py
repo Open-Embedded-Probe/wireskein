@@ -392,6 +392,23 @@ def edge_bursts(ch: Channel, w) -> list[tuple[int, int]]:
     return out
 
 
+def upper_quartiles_around(d: np.ndarray) -> np.ndarray:
+    """For each i, the upper quartile of d[i - 4 .. i + 4] (cut short at the ends), as np.quantile(.., 0.75) gives it:
+    where the window holds all 9 it is the 7th smallest (0.75 of 8 falls on it), all of them from one sort; the 8
+    windows cut short at the ends one by one. One np.quantile per value took a minute on a fast clock's million
+    edges."""
+    from numpy.lib.stride_tricks import sliding_window_view
+    m = np.empty(len(d))
+    if len(d) >= 9:
+        m[4:len(d) - 4] = np.sort(sliding_window_view(d, 9), axis=1)[:, 6]
+        ends = [*range(4), *range(len(d) - 4, len(d))]
+    else:
+        ends = range(len(d))
+    for i in ends:
+        m[i] = np.quantile(d[max(0, i - 4):i + 5], 0.75)
+    return m
+
+
 def i2c_burst_ticks(cap: Capture, scl: str, freq_hz: float | None = None, at=None):
     """How far one edge's crossings may spread: at most t_r (I2C_RISE_S, the slowest rise of a working bus), and
     under a third of SCL's half (a line never changes three times in that) - the half from the clock's frequency
@@ -417,11 +434,10 @@ def i2c_burst_ticks(cap: Capture, scl: str, freq_hz: float | None = None, at=Non
     # the clock's own rises: a bounce's rise, nearer the one before than a quarter of the periods around it (the
     # upper quartile of the 4 before and the 4 after: bounces may be most of them where every edge bounces; a clock
     # that changes speed is judged by its own speed there), is not
-    d = np.diff(rises).astype(np.float64)
+    m = upper_quartiles_around(np.diff(rises).astype(np.float64))
     keep = [int(rises[0])]
-    for i, r in enumerate(rises[1:].tolist()):
-        m = float(np.quantile(d[max(0, i - 4):i + 5], 0.75))
-        if r - keep[-1] >= m / 4:
+    for r, mi in zip(rises[1:].tolist(), m.tolist()):
+        if r - keep[-1] >= mi / 4:
             keep.append(r)
     if len(keep) < 3:
         return 0
