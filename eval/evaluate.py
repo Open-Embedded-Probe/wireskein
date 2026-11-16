@@ -99,7 +99,17 @@ def match(bus: dict, claim: dict) -> dict:
                 got += [("R", x["addr"], v) for v in x["data"]]
             else:
                 got.append((x["op"], x["addr"], tuple(x["data"]) if isinstance(x["data"], list) else x["data"]))
-        if bus["protocol"] == "swio" and "expect" in bus and "dmi_addr" in bus["expect"]:
+        if "expect" in bus and "read_bytes" in bus["expect"]:
+            # what the debugger itself read (ch32rv's output: a memory dump, not a decoder's listing): the share of its
+            # 32-bit words found, in order, among the values read from data0 (DMI 0x04, the word each read brings).
+            # A reference decoder's listing may leave reads out (wch-protocols' dmi_decode.py lists a run of
+            # auto-executed reads as a few): where both are there, this is the reading's measure
+            mem = bytes.fromhex(bus["expect"]["read_bytes"])
+            words = [int.from_bytes(mem[i:i + 4], "little") for i in range(0, len(mem) - 3, 4)]
+            vals = [g[2] for g in got if g[0] == "R" and g[1] == 0x04 and isinstance(g[2], int)]
+            blocks = SequenceMatcher(None, words, vals, autojunk=False).get_matching_blocks()
+            r["decode"] = sum(b.size for b in blocks) / len(words) if words else None
+        elif bus["protocol"] == "swio" and "expect" in bus and "dmi_addr" in bus["expect"]:
             r["decode"] = _ratio([tuple(x) for x in bus["expect"]["dmi_addr"]], got)
         elif bus["protocol"] == "rvswd" and "expect" in bus and "dmi" in bus["expect"]:
             names = {x["reg"]: x["addr"] for x in lay["dmi"] if x.get("reg")}

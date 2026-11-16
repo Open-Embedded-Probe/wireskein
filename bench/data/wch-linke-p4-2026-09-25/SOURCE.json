@@ -58,6 +58,10 @@
    "from": "captures/fixtures/wire-linke-p4-2026-09-25/l103/read_flash_4k.sr",
    "sha256": "0ce9690c735f6e911b9a30ddf6897ab71bf710808d88254e599f4edd8030a06f"
   },
+  "l103/read_flash_4k.bin": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/l103/read_flash_4k.bin",
+   "sha256": "c8f5d0341d54d951a71b136e6e2afcb14d11ed8489a7ae126a8fee0df6ecf193"
+  },
   "l103/read_flash_4k.dmi.txt": {
    "from": "captures/fixtures/wire-linke-p4-2026-09-25/l103/read_flash_4k.dmi.txt",
    "sha256": "9696050cca3e864035bda660d5a81eb91a535fb6cf4050d977c756762231762a"
@@ -65,6 +69,10 @@
   "l103/read_ram_256.wireskein": {
    "from": "captures/fixtures/wire-linke-p4-2026-09-25/l103/read_ram_256.sr",
    "sha256": "a25109251f3637945659064d5269b1263888594e03d6fa001ac5b12949f386ff"
+  },
+  "l103/read_ram_256.bin": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/l103/read_ram_256.bin",
+   "sha256": "7f071e5e533efda84ba496115213ddc55bd84ff87c2a20682a3704fe2d27fbc7"
   },
   "l103/read_ram_256.dmi.txt": {
    "from": "captures/fixtures/wire-linke-p4-2026-09-25/l103/read_ram_256.dmi.txt",
@@ -138,6 +146,10 @@
    "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203/read_flash_4k.sr",
    "sha256": "24a25ed3cb58d6d892ad2e8539a58459dac32d95acf2530e2246316805491828"
   },
+  "v203/read_flash_4k.bin": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203/read_flash_4k.bin",
+   "sha256": "c8f5d0341d54d951a71b136e6e2afcb14d11ed8489a7ae126a8fee0df6ecf193"
+  },
   "v203/read_flash_4k.dmi.txt": {
    "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203/read_flash_4k.dmi.txt",
    "sha256": "99d2c2af202bf727bacefcf787e146afb65c9ca0fd3aba37abe1ba736613d447"
@@ -145,6 +157,10 @@
   "v203/read_ram_256.wireskein": {
    "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203/read_ram_256.sr",
    "sha256": "d3cd976968b4b0e75f2d8a75ac56c39be8e881e737a60bed4fbcaf0d19fbb063"
+  },
+  "v203/read_ram_256.bin": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203/read_ram_256.bin",
+   "sha256": "a532001fbabdfc7af5a14bf7d03a0e81ecec70044f8a86b54aa6a2799d50e257"
   },
   "v203/read_ram_256.dmi.txt": {
    "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203/read_ram_256.dmi.txt",
@@ -202,9 +218,17 @@
    "from": "captures/fixtures/wire-linke-p4-2026-09-25/v003/read_flash_4k.sr",
    "sha256": "9e4c6f6b33e6785a0cb0e42ccd55e61b7207f1f2e1a99e62316b5a666514edf3"
   },
+  "v003/read_flash_4k.bin": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v003/read_flash_4k.bin",
+   "sha256": "c8f5d0341d54d951a71b136e6e2afcb14d11ed8489a7ae126a8fee0df6ecf193"
+  },
   "v003/read_ram_256.wireskein": {
    "from": "captures/fixtures/wire-linke-p4-2026-09-25/v003/read_ram_256.sr",
    "sha256": "a26e3cd28994d15b6fbd409d472e2df65d145977a1fa90fe55209b8012d15d96"
+  },
+  "v003/read_ram_256.bin": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v003/read_ram_256.bin",
+   "sha256": "f4277318f96ec61cefbd8d0d371b6fcf1112580f14d9e87f3632c6682f4da80b"
   },
   "v003/reset.wireskein": {
    "from": "captures/fixtures/wire-linke-p4-2026-09-25/v003/reset.sr",
@@ -242,9 +266,17 @@
    "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203-100mhz/read_flash_4k.sr",
    "sha256": "813f1f1b08adbbb84af67d315ee53ac5ab33e98bee3faf42f7a1580fd290aba6"
   },
+  "v203-100mhz/read_flash_4k.bin": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203-100mhz/read_flash_4k.bin",
+   "sha256": "c8f5d0341d54d951a71b136e6e2afcb14d11ed8489a7ae126a8fee0df6ecf193"
+  },
   "v203-100mhz/read_ram_256.wireskein": {
    "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203-100mhz/read_ram_256.sr",
    "sha256": "1aaf97972704cc495db8d06883e308d320b0c3bb90bda1c4560a88ef4c166400"
+  },
+  "v203-100mhz/read_ram_256.bin": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203-100mhz/read_ram_256.bin",
+   "sha256": "a532001fbabdfc7af5a14bf7d03a0e81ecec70044f8a86b54aa6a2799d50e257"
   },
   "v203-100mhz/reset.wireskein": {
    "from": "captures/fixtures/wire-linke-p4-2026-09-25/v203-100mhz/reset.sr",
@@ -478,6 +510,10 @@
    "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_high_read_flash_4k.sr",
    "sha256": "67bffcabcd4a597312686a280fb35c4004dbeab02c341237aa590a4ab840dd59"
   },
+  "extra/l103/speed_high_read_flash_4k.bin": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_high_read_flash_4k.bin",
+   "sha256": "fe3be8adf23e15bfa73a09548d7c08d8425d9353827d685dd0c6bfcb6d410fb3"
+  },
   "extra/l103/speed_high_read_flash_4k.dmi.txt": {
    "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_high_read_flash_4k.dmi.txt",
    "sha256": "309a5a7678e3d89600ab44a073145d8b51416001eef8c906c85b8a009805b8bb"
@@ -485,6 +521,10 @@
   "extra/l103/speed_high_read_ram_256.wireskein": {
    "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_high_read_ram_256.sr",
    "sha256": "8d3f9a32b14e417e75fb4ea9a260aa6f3c8289b8ef11da12593218a0760619af"
+  },
+  "extra/l103/speed_high_read_ram_256.bin": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_high_read_ram_256.bin",
+   "sha256": "aeb400b07f6c37b5168374e88116d5ce3ab3653516067a8d3ab0221bed24e8d8"
   },
   "extra/l103/speed_high_read_ram_256.dmi.txt": {
    "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_high_read_ram_256.dmi.txt",
@@ -502,6 +542,10 @@
    "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_low_read_flash_4k.sr",
    "sha256": "034abd665fe097f71e891437bdcd85c678a0732f3e446183a4003978f5d5111d"
   },
+  "extra/l103/speed_low_read_flash_4k.bin": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_low_read_flash_4k.bin",
+   "sha256": "fe3be8adf23e15bfa73a09548d7c08d8425d9353827d685dd0c6bfcb6d410fb3"
+  },
   "extra/l103/speed_low_read_flash_4k.dmi.txt": {
    "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_low_read_flash_4k.dmi.txt",
    "sha256": "bd079f46febfbd4ffedcceead7b86a9aca26e00eb0af9bf9b10cd27997d3b9b5"
@@ -509,6 +553,10 @@
   "extra/l103/speed_low_read_ram_256.wireskein": {
    "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_low_read_ram_256.sr",
    "sha256": "4031678b20883adc8d243904b7e49680808d76dfe5ead0613aba190fe441b229"
+  },
+  "extra/l103/speed_low_read_ram_256.bin": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_low_read_ram_256.bin",
+   "sha256": "e105d235300ae2db1ec567af89dbcc4cf9adeefcc26a2af013933dffaa32df09"
   },
   "extra/l103/speed_low_read_ram_256.dmi.txt": {
    "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_low_read_ram_256.dmi.txt",
@@ -526,6 +574,10 @@
    "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_medium_read_flash_4k.sr",
    "sha256": "bc880faf5351e3c384b930f37adc6019bd02bd2626d679ec8d881a0f2230fc8b"
   },
+  "extra/l103/speed_medium_read_flash_4k.bin": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_medium_read_flash_4k.bin",
+   "sha256": "fe3be8adf23e15bfa73a09548d7c08d8425d9353827d685dd0c6bfcb6d410fb3"
+  },
   "extra/l103/speed_medium_read_flash_4k.dmi.txt": {
    "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_medium_read_flash_4k.dmi.txt",
    "sha256": "019645507bbc1a511675939acd029459e1527edf3f0771cd7c27a44c8feef1ba"
@@ -533,6 +585,10 @@
   "extra/l103/speed_medium_read_ram_256.wireskein": {
    "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_medium_read_ram_256.sr",
    "sha256": "5282b85589fe328c688fa0a878fe695b0a53b29b05b921cd1d25343b7d2d5064"
+  },
+  "extra/l103/speed_medium_read_ram_256.bin": {
+   "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_medium_read_ram_256.bin",
+   "sha256": "378cda3b617580da611f09da8c6335548d2e2292391ebcf753768bf2643410ca"
   },
   "extra/l103/speed_medium_read_ram_256.dmi.txt": {
    "from": "captures/fixtures/wire-linke-p4-2026-09-25/extra/l103/speed_medium_read_ram_256.dmi.txt",

@@ -195,8 +195,9 @@ def _wchfix(path: Path) -> tuple[Capture, dict]:
     """A capture of the LinkE fixture (copied: bench/data/extract.py) with its truth from wch-protocols' own decoder
     (not WireSkein): RVSWD's DMI accesses from <op>.dmi.txt (where only the 50 MHz run of the same operation has one -
     v203-100mhz - that one, marked cross-session: ch32rv's steps are fixed, a polling count may differ). A .dmi.txt
-    whose decoder left over 10 % of its frames unread is no truth. SWIO has its lines only (wch-protocols' reference,
-    captures/tools/swio.py, is gone from it). Channels renamed D0.. in an order from the file's name (the sigrok
+    whose decoder left over 10 % of its frames unread is no truth. SWIO has no DMI reference (wch-protocols' swio.py
+    is gone from it). A read operation's <op>.bin (what ch32rv read: read_flash_4k, read_ram_256) is truth for RVSWD
+    and SWIO alike, the reading measured by it (eval: expect.read_bytes). Channels renamed D0.. in an order from the file's name (the sigrok
     file's, <op>.sr, as before the copy: the same cases, the same input_sha)."""
     from wireskein import decode as _decode
     cap = _decode.load(path)
@@ -228,6 +229,12 @@ def _wchfix(path: Path) -> tuple[Capture, dict]:
         bus = {"protocol": "rvswd", "roles": {"clk": new["SWCLK"], "dio": new["SWDIO"]}, "params": {}}
     else:
         bus = {"protocol": "swio", "roles": {"dio": new["SWIO"]}, "params": {}}
+    # what ch32rv itself read in this run (<op>.bin, a memory dump of 256 bytes or more: read_flash_4k, read_ram_256),
+    # independent of any decoder: eval then measures the reading by it (the share of its words among data0's reads)
+    dump = path.with_suffix(".bin")
+    if dump.exists() and dump.stat().st_size >= 256:
+        expect["read_bytes"] = dump.read_bytes().hex()
+        source = (source + "; " if source else "") + "ch32rv's read (<op>.bin)"
     if expect:
         bus["expect"], bus["expect_source"] = expect, source
     truth = {"id": "wchfix-" + str(rel.with_suffix("")).replace("/", "-"),
