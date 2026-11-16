@@ -196,11 +196,33 @@ class Clean(Stage):
                 "spurious_per_1k": 1000 * fp / max(1, tp + fn)}
 
 
+def wrong_kind(claim: dict, truth: dict, aliased: set) -> str:
+    """Why a wrong claim is wrong (eval's judge says only that it is):
+    'protocol': no bus of its protocol on its lines (another protocol's bus, a decoy, nothing);
+    'aliased':  the same, on a line aliasing at this rate (a decoy clock too fast for it: data.hardness);
+    'roles':    its protocol's bus, but not the bus's lines (a select line left out, a data line missing or extra);
+    'params':   the bus's lines, its parameters off (SPI mode, UART baud beyond eval's 3 %).
+    The first two are the protocol named wrongly; the last two a right protocol told incompletely."""
+    import evaluate  # eval/evaluate.py
+    ch = set(claim["roles"].values())
+    same = [b for b in truth["buses"] if b["protocol"] == claim["protocol"] and ch & set(b["roles"].values())]
+    if not same:
+        return "aliased" if ch & aliased else "protocol"
+    for b in same:
+        try:
+            if evaluate.match(b, claim)["roles"]:
+                return "params"
+        except (KeyError, TypeError, ValueError):   # a truth without what match compares on
+            pass
+    return "roles"
+
+
 class E2E(Stage):
     name = "e2e"
     about = "the whole analysis: buses found against the truth (eval/evaluate.py's judging)"
     headline = "ok"
-    LOWER = ("false_confirmed", "false_likely", "seconds")
+    LOWER = ("false_confirmed", "false_likely", "seconds", "false_confirmed_aliased", "false_confirmed_protocol",
+             "false_confirmed_roles", "false_confirmed_params")
 
     def run(self, algo, case):
         return algo(case.cap)
@@ -227,9 +249,17 @@ class E2E(Stage):
                  "claims_confirmed": sum(c["verdict"] == "confirmed" for c in rec["claims"]),
                  "claims_likely": sum(c["verdict"] == "likely" for c in rec["claims"]),
                  "claims_ambiguous": sum(c["verdict"] == "ambiguous" for c in rec["claims"]),
-                 # each claim's own figures, for calibrating the verdict's thresholds afterwards (bench/calibrate.py)
+                 # each claim's own figures, for calibrating the verdict's thresholds afterwards (bench/calibrate.py):
+                 # protocol, verdict, total, margin, right, and why not (wrong_kind; None when right)
                  "claim_list": [[c["protocol"], c["verdict"], round(float(c["total"]), 4), round(float(c["margin"]), 4),
-                                 bool(c["correct"])] for c in rec["claims"]],
+                                 bool(c["correct"]),
+                                 None if c["correct"] or c["verdict"] == "unknown-sync"
+                                 else wrong_kind(out[i], case.truth, case.aliased)]
+                                for i, c in enumerate(rec["claims"])],
+                 # wrong confirmed claims by why (wrong_kind): the protocol named wrongly, or told incompletely
+                 "false_confirmed_kinds": dict(Counter(
+                     wrong_kind(out[i], case.truth, case.aliased) for i, c in enumerate(rec["claims"])
+                     if not c["correct"] and c["verdict"] == "confirmed")),
                  "decode": [b.get("decode") for b in buses if b["outcome"] in ("confirmed", "likely")]}]
 
     def summarize(self, rows):
@@ -241,6 +271,13 @@ class E2E(Stage):
                "false_likely": sum(r["false_likely"] for r in rows),
                "decode_mean": float(np.mean(dec)) if dec else None,
                "false_confirmed_aliased": sum(r.get("false_confirmed_aliased", 0) for r in rows)}
+        # the wrong confirmed apart: a wrong protocol (incl. on an aliasing line) or a right one told incompletely
+        kinds = Counter()
+        for r in rows:
+            kinds.update(r.get("false_confirmed_kinds", {}))
+        out["false_confirmed_protocol"] = kinds["protocol"] + kinds["aliased"]
+        out["false_confirmed_roles"] = kinds["roles"]
+        out["false_confirmed_params"] = kinds["params"]
         # apart: buses a capture can show (no hardness tag) and those it cannot well (data.hardness), each tag too
         det = [b for r in rows for b in r.get("detail", [])]
         good = lambda bs: sum(b["outcome"] in ("confirmed", "likely") for b in bs) / len(bs) if bs else None  # noqa

@@ -8,7 +8,10 @@ pair reaching the target precision, then that pair on each suite (a check suite 
 not chosen). The engine's own: total 0.85, margin 0.15 (staged.verdict).
 
 Only claims that are not "unknown-sync" count. A claim's correctness is eval's: right protocol, lines and main
-parameters.
+parameters. With --wrong protocol, only a claim naming the wrong protocol counts as wrong (stages.wrong_kind:
+"protocol" or "aliased"); one telling a right protocol incompletely (a select line left out, a baud 4 % off) counts as
+right: the precision of the protocol named. That needs runs whose claim_list carries the kind (after 2026-11-16's
+calibration run).
 """
 
 from __future__ import annotations
@@ -27,7 +30,7 @@ TOTALS = [0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95]
 MARGINS = [0.05, 0.1, 0.15, 0.2, 0.3, 0.4]
 
 
-def claims(run_ids: list[str], algo: str, suites: list[str] | None):
+def claims(run_ids: list[str], algo: str, suites: list[str] | None, wrong: str = "any"):
     want = None
     if suites:
         want = {d for s in suites for d in runner.suite_datasets(s)}
@@ -43,9 +46,14 @@ def claims(run_ids: list[str], algo: str, suites: list[str] | None):
                 for r in o.get("results", []):
                     if r["stage"] != "e2e" or r["algo"] != algo or not r["rows"]:
                         continue
-                    for pr, v, t, m, ok in r["rows"][0].get("claim_list", []):
-                        if v != "unknown-sync":
-                            out[o["dataset"]].append((pr, t, m, ok))
+                    for pr, v, t, m, ok, *why in r["rows"][0].get("claim_list", []):
+                        if v == "unknown-sync":
+                            continue
+                        if wrong == "protocol" and not ok:
+                            if not why:
+                                sys.exit(f"run {rid}: its claim_list has no wrong_kind (--wrong protocol needs it)")
+                            ok = why[0] not in ("protocol", "aliased")
+                        out[o["dataset"]].append((pr, t, m, ok))
     return out
 
 
@@ -63,8 +71,10 @@ def main() -> None:
     ap.add_argument("--suite", action="append", default=[], help="choose on these suites' datasets (default: all)")
     ap.add_argument("--check", action="append", default=[], help="then show the choice on these suites")
     ap.add_argument("--target", type=float, default=0.99, help="precision wanted of confirmed")
+    ap.add_argument("--wrong", choices=("any", "protocol"), default="any",
+                    help="what counts as wrong: eval's judging (any) or only a wrong protocol")
     args = ap.parse_args()
-    by_ds = claims(args.run, args.algo, args.suite or None)
+    by_ds = claims(args.run, args.algo, args.suite or None, args.wrong)
     cl = [c for v in by_ds.values() for c in v]
     if not cl:
         sys.exit("no claim_list in these runs' items (runs before claim_list was kept?)")
@@ -88,7 +98,7 @@ def main() -> None:
         print(f"loosest reaching {args.target}: total >= {t}, margin >= {m}: precision {r / (r + w):.4f}, confirms {r} "
               f"of {n} right ({w} wrong)")
         for s in args.check:
-            c2 = [c for v in claims(args.run, args.algo, [s]).values() for c in v]
+            c2 = [c for v in claims(args.run, args.algo, [s], args.wrong).values() for c in v]
             for name, (tt, mm) in (("engine", (0.85, 0.15)), ("chosen", (t, m))):
                 r2, w2, n2 = table(c2, tt, mm)
                 print(f"  check {s:14s} {name:6s}: precision {r2 / (r2 + w2) if r2 + w2 else float('nan'):.4f}, "
