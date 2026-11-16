@@ -186,7 +186,7 @@ def _wchfix(sr: Path) -> tuple[Capture, dict]:
     accesses from <op>.dmi.txt (where only the 50 MHz run of the same operation has one - v203-100mhz, v203-160mhz -
     that one, marked cross-session: ch32rv's steps are fixed, a polling count may differ), SWIO's from
     captures/tools/swio.py (gone from wch-protocols since: SWIO then has its lines only). A .dmi.txt whose decoder left
-    over 5 % of its frames raw is no truth. Channels renamed D0.. in an order from the file's name."""
+    over 10 % of its frames unread is no truth. Channels renamed D0.. in an order from the file's name."""
     from wireskein import decode as _decode
     cap = _decode.load(sr)
     rel = sr.relative_to(WCH_FIXTURE)
@@ -203,10 +203,12 @@ def _wchfix(sr: Path) -> tuple[Capture, dict]:
                 dmi, source = alt, "wch-protocols tools/dmi_decode.py, the 50 MHz run of the same operation (cross-session)"
         if dmi.exists():
             rows = _dmi_rows(dmi)
-            raw = sum(1 for ln in dmi.read_text().splitlines() if " RAW" in ln)
-            # the reference decoder left frames unread (V203's SWCLK reflections: up to 884 raw lines, target_info 0
-            # accesses against L103's 132): no truth then, the bus's lines only
-            if rows and raw <= 0.05 * (len(rows) + raw):
+            # frames the reference decoder left unread: raw lines of a length no known frame has (the long form's
+            # 80-86 clocks and the 99-clock one every run has are frames it prints raw, not failures). V203's
+            # SWCLK reflections leave 4, 322, 17171 ... (target_info 0 accesses read against L103's 132): no truth
+            # then, the bus's lines only
+            unread = sum(1 for n in re.findall(r"RAW(\d+)", dmi.read_text()) if not (80 <= int(n) <= 86 or int(n) == 99))
+            if rows and unread <= 0.1 * (len(rows) + unread):
                 expect["dmi"] = rows
                 source = source or "wch-protocols tools/dmi_decode.py (.dmi.txt)"
         bus = {"protocol": "rvswd", "roles": {"clk": new["SWCLK"], "dio": new["SWDIO"]}, "params": {}}
