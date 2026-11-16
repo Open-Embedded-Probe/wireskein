@@ -7,6 +7,7 @@ truth. An algorithm sees only the capture (channels named D0..Dn in a shuffled o
     clock_period  fn(cap, lines) -> {line: {"period_s": float | None, "confidence": float}}
     bit_unit      fn(cap, lines) -> {line: {"unit_s": float | None, "confidence": float}}
     clean         fn(cap) -> Capture (the same channels, edges cleaned)
+    grouping      fn(cap) -> [{"clock", "data": [...], "select": str | None, "score"}] (candidate buses, any order)
     e2e           fn(cap) -> claims (wireskein.decode.export(..., mode="all", alternatives=True)["claims"])
 
 clock_period and bit_unit are asked only about the lines whose truth has the value (a clock's period, an
@@ -70,7 +71,7 @@ class Stage:
 class LineClass(Stage):
     name = "lineclass"
     about = "each line's class: clock / data / select / periodic / random / static"
-    headline = "accuracy"
+    headline = "accuracy_ns"        # select is grouping's to tell (see summarize); accuracy is kept beside it
 
     def run(self, algo, case):
         return algo(case.cap)
@@ -90,7 +91,11 @@ class LineClass(Stage):
         said = sum(r["got"] == "clock" for r in rows)
         real = sum(r["truth"] == "clock" for r in rows)
         conf = Counter(f"{r['truth']}->{r['got']}" for r in rows if not r["correct"])
+        # select is a role a line plays for others (it frames their bursts): told by grouping, not by the line alone.
+        # accuracy_ns counts select and data as one class
+        ns = lambda x: "data" if x == "select" else x  # noqa: E731
         return {"n": n, "accuracy": sum(r["correct"] for r in rows) / n if n else None,
+                "accuracy_ns": sum(ns(r["truth"]) == ns(r["got"]) for r in rows) / n if n else None,
                 "clock_precision": tp / said if said else None, "clock_recall": tp / real if real else None,
                 "confusion": dict(conf.most_common(8))}
 
@@ -220,4 +225,66 @@ class E2E(Stage):
                 "decode_mean": float(np.mean(dec)) if dec else None}
 
 
-STAGES = {s.name: s for s in (LineClass(), ClockPeriod(), BitUnit(), Clean(), E2E())}
+# the clock, data and select roles of the clocked buses, as eval's truth names them
+SYNC_ROLES = {"i2c": ("scl", ("sda",), None), "spi": ("clk", ("mosi", "miso"), "cs"),
+              "rvswd": ("clk", ("dio",), None), "swd": ("swclk", ("swdio",), None)}
+
+
+def true_groups(case: Case) -> list[dict]:
+    out = []
+    for b in case.truth.get("buses", []):
+        spec = SYNC_ROLES.get(b["protocol"])
+        if not spec:
+            continue
+        clk, datas, sel = spec
+        r = b["roles"]
+        if clk not in r or len(case.cap.channel(r[clk]).edges) < 2:
+            continue
+        out.append({"protocol": b["protocol"], "clock": r[clk], "data": sorted(r[d] for d in datas if d in r),
+                    "select": r.get(sel) if sel else None})
+    return out
+
+
+class Grouping(Stage):
+    name = "grouping"
+    about = "the clocked buses' lines grouped: clock + data lines (+ select) among the candidates"
+    headline = "found"
+    LOWER = ("groups_per_case", "wrong_clock_groups")
+
+    def wants(self, case):
+        return bool(true_groups(case))
+
+    def run(self, algo, case):
+        return algo(case.cap)
+
+    def score(self, out, case):
+        rows = []
+        cand = [{"clock": g["clock"], "data": sorted(g["data"]), "select": g.get("select"),
+                 "score": float(g.get("score", 0))} for g in out]
+        clocks = {t["clock"] for t in true_groups(case)}
+        for t in true_groups(case):
+            same = sorted((g for g in cand if g["clock"] == t["clock"]), key=lambda g: -g["score"])
+            hit = [i for i, g in enumerate(same) if g["data"] == t["data"] and g["select"] == t["select"]]
+            best_data = same[0]["data"] if same else []
+            rows.append({"item": t["clock"], "protocol": t["protocol"], "found": bool(hit),
+                         "true_score": same[hit[0]]["score"] if hit else 0.0,
+                         "top": bool(hit) and hit[0] == 0, "clock_seen": bool(same),
+                         "data_recall": len(set(best_data) & set(t["data"])) / len(t["data"]) if t["data"] else 1.0,
+                         "groups": len(cand), "wrong_clock_groups": sum(g["clock"] not in clocks for g in cand)})
+        return rows
+
+    def summarize(self, rows):
+        n = len(rows)
+        if not n:
+            return {"n": 0}
+        return {"n": n, "found": sum(r["found"] for r in rows) / n, "top": sum(r["top"] for r in rows) / n,
+                # how strongly the true group is told (its score; 0 when not among the candidates): what the
+                # protocols' scores build on, not only whether it passes the threshold
+                "true_score": float(np.mean([r["true_score"] for r in rows])),
+                "clock_seen": sum(r["clock_seen"] for r in rows) / n,
+                "data_recall": float(np.mean([r["data_recall"] for r in rows])),
+                "groups_per_case": float(np.median([r["groups"] for r in rows])),
+                "wrong_clock_groups": float(np.mean([r["wrong_clock_groups"] for r in rows]))}
+
+
+STAGES = {s.name: s for s in (LineClass(), ClockPeriod(), BitUnit(), Clean(), Grouping(), E2E())}

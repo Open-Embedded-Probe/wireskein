@@ -42,9 +42,10 @@ python bench/...`, 1.9).
 
 | Stage | Given → returns | Main metrics |
 | --- | --- | --- |
-| `lineclass` | `fn(cap)` → `{line: {"label": ...}}` | `accuracy` (clock / data / select / periodic / random / static) |
+| `lineclass` | `fn(cap)` → `{line: {"label": ...}}` | `accuracy` (clock / data / select / periodic / random / static), `accuracy_ns` (select and data one class: a select line is a role it plays for others, told by grouping, not by the line alone) |
 | `clock_period` | `fn(cap, lines)` → `{line: {"period_s", "confidence"}}` | `hit3` (within ±3 %), `octave` (off by a whole factor) |
 | `bit_unit` | `fn(cap, lines)` → `{line: {"unit_s", "confidence"}}` | `hit3` |
+| `grouping` | `fn(cap)` → `[{"clock", "data", "select", "score"}]` (candidate buses) | `found` (the true clock + data + select among the candidates), `true_score` (its score: how strongly later stages can build on it), `groups_per_case` |
 | `clean` | `fn(cap)` → `Capture` | `f1_rel`: against the edges before the noise, an edge matching within a quarter of the line's shortest run (a bounce read at its last crossing moves an edge by tens of ns: many samples at a high rate); `f1` within 2 samples; no loss on the column without noise |
 | `e2e` | `fn(cap)` → claims (`decode.export`'s) | `ok` (buses confirmed or likely and right), `false_confirmed` (**kept at 0**) |
 

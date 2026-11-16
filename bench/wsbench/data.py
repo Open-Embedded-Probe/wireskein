@@ -87,7 +87,7 @@ def source_items(source: str) -> list[str]:
         d = I2C_BENCH / m["base"][len("i2cbench:"):]
         if not d.is_dir():
             raise FileNotFoundError(d)
-        return [f"i2cbench:{p}" for p in _slice(sorted(d.glob("*.wireskein")), m["a"], m["b"])]
+        return [f"i2cbench:{p}" for p in _slice(sorted(d.rglob("*.wireskein")), m["a"], m["b"])]
     return [str(p) for p in source_paths(source)]
 
 
@@ -95,8 +95,9 @@ I2C_BENCH = REPO / "tests" / "data" / "i2c_bench"
 
 
 def _i2cbench(path: Path) -> tuple[Capture, dict]:
-    """A stream of tests/data/i2c_bench/h417_slow/stream: 50 transactions "S, 0x13 write, NACK, P" (the device
-    answered NACK to each: summary-<tag>.json's dut_nack2), SCL 100 kHz (20 kHz for the clk20000 ones)."""
+    """A capture of tests/data/i2c_bench/h417_slow: stream/ 50 transactions "S, 0x13 write, NACK, P" (the device
+    answered NACK to each: summary-<tag>.json's dut_nack2), noise/<tag>/run<k> one of them; SCL 100 kHz (20 kHz for
+    the clk20000 ones)."""
     cap = _capture.read(path).parts[0].view()
     names = {ch.name for ch in cap.channels}
     if names != {"SCL", "SDA"}:
@@ -104,13 +105,16 @@ def _i2cbench(path: Path) -> tuple[Capture, dict]:
     flip = zlib.crc32(path.name.encode()) & 1          # which is D0, and the order: from the name, not the role
     new = {"SCL": "D1" if flip else "D0", "SDA": "D0" if flip else "D1"}
     chans = sorted((replace(ch, name=new[ch.name]) for ch in cap.channels), key=lambda c: c.name)
-    tag = path.stem.split("-")[0]
+    one = path.parent.parent.name == "noise"                       # noise/<tag>/run<k>: one transaction
+    tag = (path.parent.name if one else path.stem).split("-")[0]
     hz = 20e3 if tag == "clk20000" else 100e3
-    truth = {"id": f"i2cbench-{path.parent.parent.name}-{path.stem}",
+    rel = path.relative_to(I2C_BENCH)
+    truth = {"id": "i2cbench-" + str(rel.with_suffix("")).replace("/", "-"),
              "source": {"path": str(path.relative_to(REPO))},
              "buses": [{"protocol": "i2c", "roles": {"scl": new["SCL"], "sda": new["SDA"]}, "params": {"clock_hz": hz},
                         "expect": {"compare_ack": True,
-                                   "transactions": [{"addr": 0x13, "rw": "write", "bytes": [], "addr_ack": False}] * 50}}],
+                                   "transactions": [{"addr": 0x13, "rw": "write", "bytes": [], "addr_ack": False}]
+                                   * (1 if one else 50)}}],
              "decoys": [],
              "notes": "real capture; truth: what the controller was told to send and the device's answer (NACK)"}
     return Capture(cap.rate, cap.n_samples, chans), truth

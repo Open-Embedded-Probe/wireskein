@@ -64,3 +64,9 @@ role = "holdout"
 about = "real I2C through weak pull-ups (tests/data/i2c_bench/h417_slow/stream): 61 captures of 50 transactions, with and without the probe's filters and hysteresis, 20-100 MS/s"
 sources = ["i2cbench:h417_slow/stream"]
 transforms = [""]
+
+[suite.real-i2c-tune]
+role = "tune"
+about = "real I2C of the same board, one transaction a capture (tests/data/i2c_bench/h417_slow/noise, 326 captures): to tune on, so that real-i2c stays a check"
+sources = ["i2cbench:h417_slow/noise"]
+transforms = [""]

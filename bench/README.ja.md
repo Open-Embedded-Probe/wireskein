@@ -41,9 +41,10 @@ uv run python bench/select.py --stage e2e --suite noise --by noise # 切り替�
 
 | 段 | 受け取るもの → 返すもの | 主な指標 |
 | --- | --- | --- |
-| `lineclass` | `fn(cap)` → `{線: {"label": ...}}` | `accuracy`（ラベル: clock / data / select / periodic / random / static） |
+| `lineclass` | `fn(cap)` → `{線: {"label": ...}}` | `accuracy`（ラベル: clock / data / select / periodic / random / static）、`accuracy_ns`（select と data を同じ組として数える。選択線はほかの線を囲む役割で、線 1 本からではなくグループ分けで決まるため） |
 | `clock_period` | `fn(cap, lines)` → `{線: {"period_s", "confidence"}}` | `hit3`（±3% に入った割合）。`octave`（整数倍の取り違え） |
 | `bit_unit` | `fn(cap, lines)` → `{線: {"unit_s", "confidence"}}` | `hit3` |
+| `grouping` | `fn(cap)` → `[{"clock", "data", "select", "score"}]`（バスの候補） | `found`（正解のクロック・データ線・選択線の組が候補にある割合）、`true_score`（その組の点数。後の段の証拠の強さ）、`groups_per_case` |
 | `clean` | `fn(cap)` → `Capture` | `f1_rel`: ノイズを入れる前のエッジとの一致。その線の一番短いランの 4 分の 1 以内なら一致とする（跳ね返りを最後にまたいだ所で読むと、エッジは数十 ns ずれ、速い取り込みでは何サンプルにもなる）。`f1` は 2 サンプル以内。ノイズなしの列で劣化しないことも見る |
 | `e2e` | `fn(cap)` → claims（`decode.export` の形） | `ok`（確定または有力で正しいバス）、`false_confirmed`（**0 を保つ**） |
 
