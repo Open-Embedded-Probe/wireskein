@@ -30,7 +30,7 @@ jobs:
           python-version-file: ".python-version"
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v10
+        uses: astral-sh/setup-uv@v10.3.3   # no floating major tag since v8: the full version
 
       - name: Run release preparation
         run: uv run python tools/prepare_release.py --version "${{ github.event.inputs.version }}"
@@ -152,7 +152,7 @@ jobs:
           python-version-file: ".python-version"
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v10
+        uses: astral-sh/setup-uv@v10.3.3   # no floating major tag since v8: the full version
 
       - name: Fetch the viewer (wireskein-web, pinned in tools/web.json)
         run: python tools/fetch_web.py
