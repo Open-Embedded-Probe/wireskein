@@ -91,13 +91,17 @@ def raw_rates(blocks: list, e: np.ndarray, initial: int) -> list:
 
 
 @algorithm("segments", "bursts", status="trial", about="a clock burst by burst, similar ones one block; raw or gated locally",
-           variants={"raw": {"gate": None}, "gated": {"gate": 0.3}, "gated2": {"gate": 0.2},
-                     # blocks where the gated line has them, each one's period from the raw line
-                     "gated_raw": {"gate": 0.3, "raw_rate": True},
-                     # the gate from the faster side's median where the rate changes
-                     "gated_lr": {"gate": 0.3, "lr": True}, "gated2_lr": {"gate": 0.2, "lr": True},
+           variants={"raw": {"gate": None}, "gated2": {"gate": 0.2},
                      # the 2-sample floor only where a half has 4 samples or more
-                     "gated2_f4": {"gate": 0.2, "floor_from": 4}, "gated2_lr_f4": {"gate": 0.2, "lr": True, "floor_from": 4}})
+                     "gated2_f4": {"gate": 0.2, "floor_from": 4}})
+@algorithm("segments", "bursts", status="retired", about="a clock burst by burst, similar ones one block; raw or gated locally",
+           variants={"gated": {"gate": 0.3}, "gated_raw": {"gate": 0.3, "raw_rate": True},
+                     "gated_lr": {"gate": 0.3, "lr": True}, "gated2_lr": {"gate": 0.2, "lr": True},
+                     "gated2_lr_f4": {"gate": 0.2, "lr": True, "floor_from": 4}},
+           reason="2026-11-16, local (segments suite): a gate of 0.3 cuts more of a UART's spikes-free bits than 0.2 "
+                  "and no more of a clock's; measuring each block's period again on the raw line, or gating by the "
+                  "faster side's median where the rate changes, changed nothing: what erased fast frames was the "
+                  "2-sample floor where a half is 2 samples (gated2_f4 lifts it)")
 def bursts(cap, lines, gate, raw_rate=False, lr=False, floor_from=0):
     out = {}
     view = cap

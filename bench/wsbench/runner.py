@@ -65,8 +65,9 @@ def datasets_of(names: list[str]) -> list[tuple[str, str, str, str]]:
 def git_state() -> dict:
     def g(*a):
         return subprocess.run(["git", "-C", str(data.REPO), *a], capture_output=True, text=True).stdout.strip()
-    # the ledger itself is written by the runs: not a change to what is measured
-    dirty = [ln[3:] for ln in g("status", "--porcelain").splitlines() if not ln[3:].startswith("bench/results")]
+    # the ledger itself is written by the runs, notes are written about them: not a change to what is measured
+    dirty = [ln[3:] for ln in g("status", "--porcelain").splitlines()
+             if not ln[3:].startswith(("bench/results", "bench/notes"))]
     return {"commit": g("rev-parse", "HEAD"), "dirty": bool(dirty), "dirty_files": dirty[:20]}
 
 
