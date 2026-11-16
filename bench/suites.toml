@@ -40,3 +40,21 @@ role = "holdout"
 about = "the real records of eval/corpus/real (nominal rates)"
 sources = ["real"]
 transforms = [""]
+
+[suite.rate]
+role = "tune"
+about = "the same traffic taken at 200 MS/s and 2-16 times slower: clean, 60 ns bounces at 30 % of edges, 20 ns spikes"
+sources = ["gen:mixed[0:60]@2e8"]
+transforms = ["", "decimate:2", "decimate:4", "decimate:8", "decimate:16", "pbounce:0.3:60", "pbounce:0.3:60+decimate:2", "pbounce:0.3:60+decimate:4", "pbounce:0.3:60+decimate:8", "pbounce:0.3:60+decimate:16", "pspike:0.05:20", "pspike:0.05:20+decimate:2", "pspike:0.05:20+decimate:4", "pspike:0.05:20+decimate:8", "pspike:0.05:20+decimate:16"]
+
+[suite.rate-smoke]
+role = "tune"
+about = "rate, on 6 scenarios"
+sources = ["gen:mixed[0:6]@2e8"]
+transforms = ["", "decimate:8", "pbounce:0.3:60", "pbounce:0.3:60+decimate:8"]
+
+[suite.cost]
+role = "tune"
+about = "a small set for costs, run on the machine with instruction counters: sizes spread, clean and noisy"
+sources = ["set:tuning[0:40]"]
+transforms = ["", "spike:0.1", "bounce:0.1"]

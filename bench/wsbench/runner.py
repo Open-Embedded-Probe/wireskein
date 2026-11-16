@@ -3,7 +3,8 @@
 bench/results/ledger.jsonl (in git): one line per (run, stage, algorithm, dataset) with the summary and everything
 needed to run it again: the commit (and whether the tree was dirty), the algorithm's source hash and parameters,
 the dataset's text and a hash of the exact inputs. Lines are only ever added.
-bench/results/runs/<run>.jsonl (not in git): every item's row, for looking into one result.
+bench/results/runs/<run>[.shard-i-of-n].jsonl and .meta.json (not in git): every item's row and how the run was
+made, for looking into one result and for merging shards (merge.py).
 """
 
 from __future__ import annotations
@@ -75,12 +76,12 @@ def _work(job):
     path, source, chain, plan, memory = job
     t0 = time.perf_counter()
     try:
-        case = data.load_case(Path(path), source, chain)
+        case = data.load_case(path, source, chain)
     except Exception as e:  # noqa: BLE001 - a case that cannot be made is reported, the run goes on
-        return {"case": Path(path).name, "source": source, "chain": chain, "error": f"load: {type(e).__name__}: {e}"}
+        return {"case": str(path).rsplit("/", 1)[-1], "source": source, "chain": chain, "error": f"load: {type(e).__name__}: {e}"}
     out = {"case": case.id, "dataset": case.dataset, "input_sha": case.input_sha, "results": [],
            "load_s": time.perf_counter() - t0, "ref": cost.reference(),
-           "edges": sum(len(c.edges) for c in case.cap.channels)}
+           "edges": sum(len(c.edges) for c in case.cap.channels), "rate": float(case.cap.rate)}
     algos = registry.load(_EXTRA)
     for stage_name, names in plan:
         st = STAGES[stage_name]
@@ -91,7 +92,7 @@ def _work(job):
             r = {"stage": stage_name, "algo": name}
             c1, t1 = time.process_time(), time.perf_counter()
             try:
-                got, r["cpu"], r["seconds"], r["calls"] = cost.measure(lambda: st.run(a, case))
+                got, r["cpu"], r["seconds"], r["instr"], r["calls"] = cost.measure(lambda: st.run(a, case))
                 if memory:
                     r["mem"] = cost.peak_memory(lambda: st.run(a, case))
                 r["rows"] = st.score(got, case)          # not part of the cost
@@ -106,72 +107,168 @@ def _work(job):
 
 # ---------------- run ----------------
 
-def run(stage_names: list[str], algos_by_stage: dict[str, list], dsets: list[tuple[str, str, str, str]],
-        jobs: int, note: str, extra: list[str], label: str = "", memory: bool = False) -> str:
-    git = git_state()
-    load_before = os.getloadavg()[0]      # the others' load (a build beside): told with the costs
-    run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + (git["commit"][:7] or "nogit")
+def plan_work(stage_names: list[str], algos_by_stage: dict[str, list], dsets: list[tuple[str, str, str, str]],
+              memory: bool):
+    """(plan, the cases to run in a fixed order, each dataset's suite / role / source / chain)."""
     plan = [(s, [a.name for a in algos_by_stage[s]]) for s in stage_names]
-    work = []
-    meta_ds = {}
+    work, meta_ds = [], {}
     for suite, role, src, chain in dsets:
         ds = src + (f"+{chain}" if chain else "")
         meta_ds[ds] = (suite, role, src, chain)
-        work += [(str(p), src, chain, plan, memory) for p in data.source_paths(src)]
-    print(f"run {run_id}: {len(work)} cases, stages {stage_names}, "
+        work += [(ref, src, chain, plan, memory) for ref in data.source_items(src)]
+    return plan, work, meta_ds
+
+
+def new_run_id(git: dict) -> str:
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + (git["commit"][:7] or "nogit")
+
+
+def machine() -> dict:
+    model = ""
+    try:
+        for ln in Path("/proc/cpuinfo").read_text().splitlines():
+            if ln.startswith("model name"):
+                model = ln.split(":", 1)[1].strip()
+                break
+    except OSError:
+        model = platform.processor()
+    from . import perfcount
+    return {"cpu_model": model or platform.machine(), "cpus": os.cpu_count(), "instructions": perfcount.why(),
+            "ci": os.environ.get("GITHUB_RUN_ID") and {
+                "run_id": os.environ.get("GITHUB_RUN_ID"), "runner": os.environ.get("RUNNER_NAME"),
+                "url": f"{os.environ.get('GITHUB_SERVER_URL')}/{os.environ.get('GITHUB_REPOSITORY')}/actions/runs/"
+                       f"{os.environ.get('GITHUB_RUN_ID')}"} or None}
+
+
+def run(stage_names: list[str], algos_by_stage: dict[str, list], dsets: list[tuple[str, str, str, str]],
+        jobs: int, note: str, extra: list[str], label: str = "", memory: bool = False,
+        shard: tuple[int, int] | None = None, run_id: str | None = None) -> str:
+    """Run the cases (of one shard: every n-th from the i-th, all algorithms of a case in the same worker, so that
+    against-main costs pair up) and write their items; without a shard, add the results to the ledger too (with
+    shards, merge.py does once all are in)."""
+    git = git_state()
+    run_id = run_id or new_run_id(git)
+    plan, work, meta_ds = plan_work(stage_names, algos_by_stage, dsets, memory)
+    total = len(work)
+    if shard:
+        i, n = shard
+        work = work[i::n]
+    stem = run_id + (f".shard-{shard[0]}-of-{shard[1]}" if shard else "")
+    print(f"run {stem}: {len(work)} of {total} cases, stages {stage_names}, "
           f"{sum(len(v) for _, v in plan)} algorithms", file=sys.stderr)
-    RESULTS.mkdir(exist_ok=True)
-    (RESULTS / "runs").mkdir(exist_ok=True)
-    per = defaultdict(lambda: {"rows": [], "seconds": [], "errors": [], "cases": [], "cost": []})
+    runs_dir = RESULTS / "runs"
+    runs_dir.mkdir(parents=True, exist_ok=True)
+    algos = registry.load(extra)
+    meta = {"run": run_id, "shard": list(shard) if shard else None, "label": label, "note": note,
+            "argv": sys.argv[1:], "git": git, "plan": plan, "datasets": meta_ds, "cases_total": total,
+            "algos": {f"{s}/{n}": {"status": algos[(s, n)].status, "params": algos[(s, n)].params,
+                                   "path": _rel(algos[(s, n)].path), "sha": algos[(s, n)].src_sha}
+                      for s, names in plan for n in names},
+            "env": {"python": platform.python_version(), "numpy": np.__version__,
+                    "wireskein": _wireskein_version(),
+                    # what ran, even on a dirty tree: the package's sources and the bench's own (stages, data, suites)
+                    "wireskein_src_sha": tree_sha(data.REPO / "src" / "wireskein", "*.py", "*.toml"),
+                    "bench_sha": tree_sha(BENCH / "wsbench", "*.py") + tree_sha(BENCH, "suites.toml")[:4],
+                    **machine(), "jobs": jobs, "load_before": os.getloadavg()[0]}}
     t0 = time.time()
-    with (RESULTS / "runs" / f"{run_id}.jsonl").open("w") as fh, \
+    with (runs_dir / f"{stem}.jsonl").open("w") as fh, \
             mp.get_context("fork").Pool(jobs, _init, (extra,)) as pool:
         for k, out in enumerate(pool.imap_unordered(_work, work, chunksize=1), 1):
             fh.write(json.dumps(out, default=_json) + "\n")
             if "error" in out:
                 print(f"  case {out['case']}: {out['error']}", file=sys.stderr)
+            if k % 20 == 0 or k == len(work):
+                print(f"  [{k}/{len(work)}] {time.time() - t0:.0f}s", file=sys.stderr)
+    meta["env"]["load_after"] = os.getloadavg()[0]
+    meta["seconds"] = time.time() - t0
+    (runs_dir / f"{stem}.meta.json").write_text(json.dumps(meta, indent=1, default=_json))
+    if not shard:
+        lines = aggregate(run_id, [runs_dir / f"{stem}.jsonl"])
+        append(lines)
+        print(f"{len(lines)} results added to {_rel(str(LEDGER))} (items: {_rel(str(runs_dir / stem))}.jsonl)",
+              file=sys.stderr)
+    return run_id
+
+
+def aggregate(run_id: str, item_files: list[Path]) -> list[str]:
+    """Ledger lines from a run's item files (one, or every shard's): each with its .meta.json beside it."""
+    metas = [json.loads(f.with_suffix(".meta.json").read_text()) for f in item_files]
+    m0 = metas[0]
+    for m in metas[1:]:
+        for k in ("run", "git", "plan", "algos", "datasets"):
+            if json.dumps(m[k], sort_keys=True) != json.dumps(m0[k], sort_keys=True):
+                raise ValueError(f"run {run_id}: the shards differ in {k}")
+    if m0["shard"]:
+        n = m0["shard"][1]
+        got = sorted(m["shard"][0] for m in metas)
+        if got != list(range(n)):
+            raise ValueError(f"run {run_id}: shards {got} of {n}")
+    per = defaultdict(lambda: {"rows": [], "seconds": [], "errors": [], "cases": [], "cost": []})
+    for f, m in zip(item_files, metas):
+        for ln in f.read_text().splitlines():
+            out = json.loads(ln)
+            if "error" in out:
                 continue
             for r in out["results"]:
                 p = per[(r["stage"], r["algo"], out["dataset"])]
                 p["rows"] += r["rows"]
                 p["seconds"].append(r["seconds"])
                 p["cost"].append({"case": out["case"], "cpu": r["cpu"], "wall": r["seconds"], "edges": out["edges"],
-                                  "ref": out["ref"], "calls": r.get("calls", 1), "mem": r.get("mem")})
+                                  "ref": out["ref"], "calls": r.get("calls", 1), "mem": r.get("mem"),
+                                  "instr": r.get("instr")})
                 p["cases"].append((out["case"], out["input_sha"]))
                 if "error" in r:
                     p["errors"].append(f"{out['case']}: {r['error']}")
-            if k % 20 == 0 or k == len(work):
-                print(f"  [{k}/{len(work)}] {time.time() - t0:.0f}s", file=sys.stderr)
-    algos = registry.load(extra)
-    env = {"python": platform.python_version(), "numpy": np.__version__, "wireskein": _wireskein_version(),
-           # what ran, even on a dirty tree: the package's sources and the bench's own (stages, data, suites)
-           "wireskein_src_sha": tree_sha(data.REPO / "src" / "wireskein", "*.py", "*.toml"),
-           "bench_sha": tree_sha(BENCH / "wsbench", "*.py") + tree_sha(BENCH, "suites.toml")[:4],
-           "cpus": os.cpu_count(), "jobs": jobs, "load_before": load_before, "load_after": os.getloadavg()[0]}
+    envs = [m["env"] for m in metas]
+    env = dict(envs[0])
+    for k in ("cpu_model", "instructions", "runner"):
+        vals = sorted({str(e.get(k)) for e in envs})
+        if len(vals) > 1:
+            env[k] = vals
+    env["load_before"] = max(e["load_before"] for e in envs)
+    env["load_after"] = max(e.get("load_after", 0) for e in envs)
+    env["shards"] = len(metas)
+    if env.get("ci"):
+        env["ci"] = {k: v for k, v in env["ci"].items() if k != "runner"}
     lines = []
-    mains = {(s, ds): {e["case"]: e["cpu"] for e in p["cost"]} for (s, n, ds), p in per.items()
-             if algos[(s, n)].status == "main"}
+    mains = {(s, ds): {e["case"]: e for e in p["cost"]} for (s, n, ds), p in per.items()
+             if m0["algos"][f"{s}/{n}"]["status"] == "main"}
     for (stage, name, ds), p in sorted(per.items()):
-        a = algos[(stage, name)]
-        suite, role, src, chain = meta_ds[ds]
-        cases = sorted(p["cases"])
-        rec = {"run": run_id, "label": label, "time": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-               "note": note, "stage": stage, "algo": name, "status": a.status, "params": a.params,
-               "algo_path": _rel(a.path), "algo_sha": a.src_sha, "suite": suite, "role": role, "dataset": ds,
+        a = m0["algos"][f"{stage}/{name}"]
+        suite, role, src, chain = m0["datasets"][ds]
+        cases = sorted(map(tuple, p["cases"]))
+        rec = {"run": run_id, "label": m0["label"], "time": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+               "note": m0["note"], "stage": stage, "algo": name, "status": a["status"], "params": a["params"],
+               "algo_path": a["path"], "algo_sha": a["sha"], "suite": suite, "role": role, "dataset": ds,
                "source": src, "transforms": chain, "cases": len(cases),
                "inputs_sha": hashlib.sha256(json.dumps(cases).encode()).hexdigest()[:16],
                "summary": STAGES[stage].summarize(p["rows"]),
                "seconds_median": float(np.median(p["seconds"])) if p["seconds"] else None,
-               "cost": cost.summarize(p["cost"], None if a.status == "main" else mains.get((stage, ds))),
+               "cost": cost.summarize(p["cost"], None if a["status"] == "main" else mains.get((stage, ds))),
                "errors": len(p["errors"]), "first_errors": p["errors"][:3],
-               "git": git, "env": env, "argv": sys.argv[1:]}
+               "git": m0["git"], "env": env, "argv": m0["argv"]}
         lines.append(json.dumps(rec, default=_json))
+    return lines
+
+
+def append(lines: list[str]) -> int:
+    """Add lines to the ledger, leaving out those already there (the same run, stage, algorithm and dataset)."""
+    have = set()
+    if LEDGER.exists():
+        for ln in LEDGER.read_text().splitlines():
+            if ln.strip():
+                r = json.loads(ln)
+                have.add((r["run"], r["stage"], r["algo"], r["dataset"]))
+    LEDGER.parent.mkdir(parents=True, exist_ok=True)
+    n = 0
     with LEDGER.open("a") as fh:
         for ln in lines:
+            r = json.loads(ln)
+            if (r["run"], r["stage"], r["algo"], r["dataset"]) in have:
+                continue
             fh.write(ln + "\n")
-    print(f"{len(lines)} results added to {_rel(str(LEDGER))} (items: {_rel(str(RESULTS / 'runs' / run_id))}.jsonl)",
-          file=sys.stderr)
-    return run_id
+            n += 1
+    return n
 
 
 def tree_sha(root: Path, *globs: str) -> str:

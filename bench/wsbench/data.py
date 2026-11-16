@@ -6,7 +6,12 @@ was measured:
     source      set:<name>[a:b]   a frozen set under eval/corpus/synth (cases a..b in file order)
                 real              eval/corpus/real (the records with about a million edges left out)
                 dir:<path>[a:b]   any directory of <id>.wireskein beside <id>.truth.json (the eval/ truth format)
+                gen:<profile>[/<stress>][a:b]@<rate>   eval/synth.py's scenarios of seeds a..b, sampled at <rate>
+                                  (the same traffic whatever the rate: a base for decimate, sweeping the rate)
     transforms  "spike:0.1+bounce:0.1"  applied left to right; "" for none
+                spike / bounce / xtalk: noise in ticks of the capture (as wide whatever the rate)
+                pspike:L:NS / pbounce:L:NS: noise in time (NS nanoseconds), the way a line shows it: wider in
+                samples the faster it is taken, missed when shorter than a sample and no sample falls in it
 
 Noise is seeded from the case id and the transform text (never Python's hash()), so a dataset is the same on every
 run and machine. The clean capture (the same transforms without the noise) is kept beside the noisy one: stages
@@ -66,10 +71,21 @@ def _slice(paths: list[Path], a: str | None, b: str | None) -> list[Path]:
     return paths[int(a) if a else None:int(b) if b else None]
 
 
+_GEN = re.compile(r"^gen:(?P<profile>[a-z]+)(/(?P<stress>[a-z]+))?\[(?P<a>\d+):(?P<b>\d+)\]@(?P<rate>[0-9.e+]+)$")
+
+
+def source_items(source: str) -> list[str]:
+    """The cases of a source: file paths, or gen:<profile>:<stress>:<seed>:<rate> for generated ones."""
+    g = _GEN.match(source)
+    if g:
+        return [f"gen:{g['profile']}:{g['stress'] or ''}:{s}:{float(g['rate'])}" for s in range(int(g["a"]), int(g["b"]))]
+    return [str(p) for p in source_paths(source)]
+
+
 def source_paths(source: str) -> list[Path]:
     m = _RANGE.match(source)
     if not m:
-        raise ValueError(f"source {source!r}: set:<name>[a:b], real or dir:<path>[a:b]")
+        raise ValueError(f"source {source!r}: set:<name>[a:b], real, dir:<path>[a:b] or gen:<profile>[a:b]@<rate>")
     base, a, b = m["base"], m["a"], m["b"]
     if base.startswith("set:"):
         d = SETS / base[4:]
@@ -88,7 +104,16 @@ def source_paths(source: str) -> list[Path]:
     return _slice(paths, a, b)
 
 
-def read(path: Path) -> tuple[Capture, dict]:
+def read(ref: str) -> tuple[Capture, dict]:
+    if ref.startswith("gen:"):
+        import sys
+        sys.path.insert(0, str(REPO / "eval"))
+        import synth  # eval/synth.py
+        _, profile, stress, seed, rate = ref.split(":")
+        cap, truth = synth.scenario(int(seed), profile, stress or None, rate=float(rate))
+        truth["id"] += f"@{float(rate) / 1e6:g}M"
+        return cap, truth
+    path = Path(ref)
     truth = json.loads(path.with_suffix("").with_suffix(".truth.json").read_text())
     return _capture.read(path).parts[0].view(), truth
 
@@ -154,6 +179,48 @@ def noise_xtalk(cap: Capture, lvl: float, rng) -> Capture:
     return Capture(cap.rate, cap.n_samples, out)
 
 
+def _pulses(e0: np.ndarray, width: np.ndarray) -> np.ndarray:
+    """Toggles for pulses from e0 (ticks, real-valued) width ticks long, as samples on whole ticks see them: a level
+    is seen from the first tick at or after its start, so a pulse no tick falls in is not seen (both toggles on one
+    tick cancel)."""
+    return np.concatenate([np.ceil(e0), np.ceil(e0 + width)]).astype(np.int64)
+
+
+def noise_pspike(cap: Capture, lvl: float, ns: float, rng) -> Capture:
+    """Pulses ns nanoseconds wide at random places, lvl per real edge of the channel."""
+    w = ns * 1e-9 * float(cap.rate)
+    out = []
+    for ch in cap.channels:
+        e = np.asarray(ch.edges, np.int64)
+        if len(e) == 0:
+            out.append(ch)
+            continue
+        t0 = rng.uniform(1, cap.n_samples - 2 - w, rng.poisson(len(e) * lvl))
+        extra = _pulses(t0, np.full(len(t0), w))
+        out.append(replace(ch, edges=_toggle(e, extra[(extra > 0) & (extra < cap.n_samples)])))
+    return Capture(cap.rate, cap.n_samples, out)
+
+
+def noise_pbounce(cap: Capture, lvl: float, ns: float, rng) -> Capture:
+    """At a share lvl of the real edges, within ns nanoseconds after it, a pulse back to the old level 10-40 % of ns
+    wide, and at half of those a second one: a slow or ringing edge crossing the threshold more than once."""
+    span = ns * 1e-9 * float(cap.rate)
+    out = []
+    for ch in cap.channels:
+        e = np.asarray(ch.edges, np.int64)
+        if len(e) == 0:
+            out.append(ch)
+            continue
+        sel = e[rng.random(len(e)) < lvl].astype(np.float64)
+        parts = []
+        for keep, at in ((1.0, (0.0, 0.4)), (0.5, (0.5, 0.8))):
+            s = sel[rng.random(len(sel)) < keep]
+            parts.append(_pulses(s + span * rng.uniform(*at, len(s)), span * rng.uniform(0.1, 0.4, len(s))))
+        extra = np.concatenate(parts)
+        out.append(replace(ch, edges=_toggle(e, extra[(extra > 0) & (extra < cap.n_samples)])))
+    return Capture(cap.rate, cap.n_samples, out)
+
+
 def crop(cap: Capture, a: float, b: float) -> Capture:
     """The part from a to b (fractions of the length)."""
     s0, s1 = int(a * cap.n_samples), int(b * cap.n_samples)
@@ -178,6 +245,7 @@ def decimate(cap: Capture, k: int) -> Capture:
 
 
 NOISE = {"spike": noise_spike, "bounce": noise_bounce, "xtalk": noise_xtalk}
+TIMED_NOISE = {"pspike": noise_pspike, "pbounce": noise_pbounce}
 
 
 def apply(cap: Capture, clean: Capture | None, chain: str, case_id: str) -> tuple[Capture, Capture | None]:
@@ -185,6 +253,8 @@ def apply(cap: Capture, clean: Capture | None, chain: str, case_id: str) -> tupl
         kind, *args = spec.split(":")
         if kind in NOISE:
             cap = NOISE[kind](cap, float(args[0]), _rng(case_id, spec))
+        elif kind in TIMED_NOISE:
+            cap = TIMED_NOISE[kind](cap, float(args[0]), float(args[1]), _rng(case_id, spec))
         elif kind == "crop":
             cap = crop(cap, float(args[0]), float(args[1]))
             clean = crop(clean, float(args[0]), float(args[1])) if clean else None
@@ -192,7 +262,8 @@ def apply(cap: Capture, clean: Capture | None, chain: str, case_id: str) -> tupl
             cap = decimate(cap, int(args[0]))
             clean = decimate(clean, int(args[0])) if clean else None
         else:
-            raise ValueError(f"transform {spec!r}: spike:L, bounce:L, xtalk:L, crop:A:B or decimate:K")
+            raise ValueError(f"transform {spec!r}: spike:L, bounce:L, xtalk:L, pspike:L:NS, pbounce:L:NS, crop:A:B "
+                             "or decimate:K")
     return cap, clean
 
 
@@ -245,8 +316,8 @@ def input_sha(cap: Capture) -> str:
     return h.hexdigest()[:16]
 
 
-def load_case(path: Path, source: str, chain: str) -> Case:
-    cap, truth = read(path)
+def load_case(ref: str, source: str, chain: str) -> Case:
+    cap, truth = read(ref)
     # a generated case is its own clean reference, unless its frozen set already holds noise
     gen = truth.get("generator")
     clean = cap if gen and gen.get("stress") != "glitch" else None

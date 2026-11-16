@@ -14,7 +14,11 @@ uv run python bench/run.py --stage clock_period --suite noise --note "comb: cand
 uv run python bench/report.py                                      # algorithms x datasets
 uv run python bench/report.py --stage e2e --delta                  # against the main algorithm
 uv run python bench/report.py --history clock_period/comb          # the trail of one algorithm
+uv run python bench/select.py --stage e2e --suite noise --by noise # choosing between algorithms (1.8)
 ```
+
+Runs kept in the ledger use the same versions on every machine (`uv run --with-requirements bench/requirements.txt
+python bench/...`, 1.9).
 
 ## 1. Rules
 
@@ -41,7 +45,7 @@ uv run python bench/report.py --history clock_period/comb          # the trail o
 | `lineclass` | `fn(cap)` → `{line: {"label": ...}}` | `accuracy` (clock / data / select / periodic / random / static) |
 | `clock_period` | `fn(cap, lines)` → `{line: {"period_s", "confidence"}}` | `hit3` (within ±3 %), `octave` (off by a whole factor) |
 | `bit_unit` | `fn(cap, lines)` → `{line: {"unit_s", "confidence"}}` | `hit3` |
-| `clean` | `fn(cap)` → `Capture` | `f1` against the edges before the noise; no loss on the column without noise |
+| `clean` | `fn(cap)` → `Capture` | `f1_rel`: against the edges before the noise, an edge matching within a quarter of the line's shortest run (a bounce read at its last crossing moves an edge by tens of ns: many samples at a high rate); `f1` within 2 samples; no loss on the column without noise |
 | `e2e` | `fn(cap)` → claims (`decode.export`'s) | `ok` (buses confirmed or likely and right), `false_confirmed` (**kept at 0**) |
 
 ### 1.3 Algorithms
@@ -68,10 +72,17 @@ def comb(cap, lines, max_mult):
 
 - **A dataset is a source and a chain of transforms,** both strings, kept in the ledger as written.
   - Sources: `set:<name>[a:b]` (a frozen set of `eval/corpus/synth`), `real` (`eval/corpus/real`), `dir:<path>[a:b]`
-    (any directory of `<id>.wireskein` beside `<id>.truth.json`)
+    (any directory of `<id>.wireskein` beside `<id>.truth.json`), `gen:<profile>[/<stress>][a:b]@<rate>`
+    (`eval/synth.py`'s scenarios taken at that rate: the same traffic at any rate, so with `decimate` the rate is
+    swept)
   - Transforms: `spike:L` (1-tick pulses at random, L per edge), `bounce:L` (a share L of the edges bounce just
     after), `xtalk:L` (a 1-tick pulse at a share L of the next channel's edges), `crop:A:B` (the part from A to B),
     `decimate:K` (taken K times slower), joined with `+` (`crop:0:0.5+spike:0.1`)
+  - Noise in time: `pspike:L:NS` (pulses NS nanoseconds wide, L per edge), `pbounce:L:NS` (a share L of the edges
+    bounce within NS nanoseconds after). As on a real line, the faster it is taken the more samples they span, and
+    taken slowly one may fall between samples and not show. Noise in ticks (`spike` ...) is one tick at any rate
+  - **A faster capture must not score lower**: the `rate` suite takes the same traffic at 200 MS/s down to a
+    sixteenth of it. An algorithm that does worse with more information has a fault, such as thresholds in samples
   - Noise is seeded from the case id and the transform text: the same data on every run and machine. Each run keeps
     a hash of its exact inputs (`inputs_sha`)
 - **A suite is not changed once it has results** (`suites.toml`); a changed one gets a new name (`noise-v2`).
@@ -119,7 +130,47 @@ the steadiest down (`wsbench/cost.py`):
 - **Choose on `vs main` and `scaling`.** Ten times slower, or growing with the square of the data, shows under
   load too; a 10 % difference is measured again on an idle machine.
 - The load before a run (loadavg) is kept (`env.load_before`); tables warn about results from a busy machine.
-- Instruction counts (hardware counters) would hardly move with the load, but WSL2 has no PMU to read them from.
+- **Instructions** (`M instr`): on a machine with hardware counters (native Linux) each call's instructions retired
+  are recorded, and against-main and scaling are given on them too. Load and clock speed hardly move them: where
+  they are counted, decide on them. WSL2 and most cloud VMs (GitHub's runners too) have no PMU and record none;
+  `python bench/wsbench/perfcount.py` tells whether a machine counts (and if not, why).
+
+### 1.8 Choosing between algorithms (`select.py`)
+
+No one algorithm need be best on every kind of data. `select.py` compares ways of switching between them from a
+run's item rows (nothing is run again).
+
+```sh
+uv run python bench/select.py --stage e2e --suite noise --by noise
+```
+
+| Strategy | Meaning |
+| --- | --- |
+| `fixed <algo>` | one algorithm for everything |
+| `oracle` | per item, the best one, knowing the truth: the most any switching can reach |
+| `confidence` | per item, the one whose `confidence` is highest |
+| `dispatch:<key>` | per group (protocol, line class, noise, rate ...), the one best on that group; the choices made on half of the cases and scored on the other half (and the other way round), so fitting the scored cases earns nothing |
+
+If `oracle` is well above the best `fixed` and `dispatch` or `confidence` come close to it, switching is worth
+building; if not, one algorithm is enough. `--by <key>` adds a table of which algorithm wins on each group.
+
+### 1.9 Where to measure
+
+Scores are deterministic (the same cases, seeds and algorithm give the same values), so they are the same wherever
+they are measured. Costs are not.
+
+| What | Where | How |
+| --- | --- | --- |
+| Scores of whole suites | GitHub Actions | Start "Bench" by hand (stages, suites, algorithms, jobs, note). The cases are split over parallel jobs (every algorithm of a case in the same job), merged at the end, and kept as the artifact `bench-<run id>`; into a ledger with `uv run python bench/merge.py --import <unpacked dir>` |
+| Costs | a machine that counts instructions (native Ubuntu) | the `cost` suite with `--memory`, one job fewer than the cores |
+| Quick tries | here | `smoke`, `rate-smoke` ...; another ledger with `WSBENCH_RESULTS` |
+
+- Split by hand: `run.py --shard I/N --run-id ID` N times, then `merge.py ID` (what Actions does). Split or not, the
+  scores and the inputs' hashes are the same.
+- Versions are pinned in `bench/requirements.txt`. Changing one changes what is measured: say so in the next run's
+  `--note`. The Python version is kept in the ledger.
+- Ubuntu's default (`kernel.perf_event_paranoid=4`) lets no user count instructions;
+  `sudo sysctl kernel.perf_event_paranoid=2` lets a user count their own processes' user space.
 
 ## 2. Adding a stage
 

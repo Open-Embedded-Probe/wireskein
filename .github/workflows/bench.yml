@@ -1,0 +1,138 @@
+name: Bench
+
+# The algorithm bench (bench/README.md) on GitHub's runners: started by hand, the cases split over parallel jobs (all
+# algorithms of a case in one job, so that costs against main pair up), merged into ledger lines. Nothing is pushed:
+# the run comes back as the artifact bench-<run id>, taken into a ledger with
+#   uv run python bench/merge.py --import DIR
+# Scores are the same on any machine; times on shared runners are not (see bench/README.md 1.7).
+
+on:
+  workflow_dispatch:
+    inputs:
+      stages:
+        description: "Stages, space separated, or all"
+        default: "all"
+      suites:
+        description: "Suites of bench/suites.toml, space separated"
+        default: "smoke"
+      algos:
+        description: "Algorithms by name, space separated (empty: by status)"
+        default: ""
+      status:
+        description: "With no algorithm named: which statuses (main,trial,retired)"
+        default: "main,trial"
+      shards:
+        description: "Parallel jobs (1-20)"
+        default: "8"
+      note:
+        description: "Why this run (kept in the ledger)"
+        default: ""
+      memory:
+        description: "Also each call's peak memory"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      shards: ${{ steps.plan.outputs.shards }}
+      n: ${{ steps.plan.outputs.n }}
+      run_id: ${{ steps.plan.outputs.run_id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Plan
+        id: plan
+        env:
+          SHARDS: ${{ inputs.shards }}
+        run: |
+          n=$(python3 -c 'import os; print(max(1, min(20, int(os.environ["SHARDS"]))))')
+          echo "n=$n" >> "$GITHUB_OUTPUT"
+          echo "shards=$(python3 -c "print(list(range($n)))")" >> "$GITHUB_OUTPUT"
+          echo "run_id=$(date -u +%Y%m%dT%H%M%SZ)-$(git rev-parse --short=7 HEAD)-gh${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
+
+  shard:
+    needs: plan
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJson(needs.plan.outputs.shards) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Run the shard
+        env:
+          STAGES: ${{ inputs.stages }}
+          SUITES: ${{ inputs.suites }}
+          ALGOS: ${{ inputs.algos }}
+          STATUS: ${{ inputs.status }}
+          NOTE: ${{ inputs.note }}
+          MEMORY: ${{ inputs.memory }}
+          SHARD: ${{ matrix.shard }}
+          N: ${{ needs.plan.outputs.n }}
+          RUN_ID: ${{ needs.plan.outputs.run_id }}
+        run: |
+          args=()
+          for s in $STAGES; do args+=(--stage "$s"); done
+          for s in $SUITES; do args+=(--suite "$s"); done
+          for a in $ALGOS; do args+=(--algo "$a"); done
+          if [ "$MEMORY" = "true" ]; then args+=(--memory); fi
+          uv run --python 3.13 --with-requirements bench/requirements.txt python bench/run.py "${args[@]}" \
+            --status "$STATUS" --note "$NOTE" --shard "$SHARD/$N" --run-id "$RUN_ID" -j "$(nproc)"
+
+      - name: Keep the shard's items
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-shard-${{ matrix.shard }}
+          path: bench/results/runs/
+          retention-days: 7
+
+  merge:
+    needs: [plan, shard]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Fetch the shards
+        uses: actions/download-artifact@v4
+        with:
+          pattern: bench-shard-*
+          merge-multiple: true
+          path: bench/results/runs/
+
+      - name: Merge
+        env:
+          RUN_ID: ${{ needs.plan.outputs.run_id }}
+        run: |
+          uv run --python 3.13 --with-requirements bench/requirements.txt python bench/merge.py "$RUN_ID" \
+            --lines "bench/results/runs/$RUN_ID.ledger.jsonl"
+          {
+            echo "### Bench run $RUN_ID"
+            echo
+            echo "Take it into a ledger: download the artifact bench-$RUN_ID, then \`uv run python bench/merge.py --import DIR\`."
+            echo
+            echo '```'
+            uv run --python 3.13 --with-requirements bench/requirements.txt python bench/report.py --run "$RUN_ID"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the run
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-${{ needs.plan.outputs.run_id }}
+          path: bench/results/runs/
+          retention-days: 90

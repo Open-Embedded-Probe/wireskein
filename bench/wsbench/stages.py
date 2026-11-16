@@ -78,8 +78,10 @@ class LineClass(Stage):
     def score(self, out, case):
         rows = []
         for ch, t in case.lines.items():
-            got = (out.get(ch) or {}).get("label")
-            rows.append({"item": ch, "truth": t.label, "got": got, "correct": got == t.label})
+            o = out.get(ch) or {}
+            got = o.get("label")
+            rows.append({"item": ch, "truth": t.label, "protocol": t.protocol, "got": got, "correct": got == t.label,
+                         "confidence": o.get("confidence")})
         return rows
 
     def summarize(self, rows):
@@ -112,9 +114,9 @@ class _Rate(Stage):
         rows = []
         for ch in self._lines(case):
             t = case.lines[ch]
-            got = (out.get(ch) or {}).get(self.out_key)
+            o = out.get(ch) or {}
             rows.append({"item": ch, "label": t.label, "protocol": t.protocol, "nominal": t.nominal,
-                         **_ratio_scores(got, getattr(t, self.key))})
+                         "confidence": o.get("confidence"), **_ratio_scores(o.get(self.out_key), getattr(t, self.key))})
         return rows
 
     def summarize(self, rows):
@@ -146,8 +148,11 @@ def _match(want: np.ndarray, got: np.ndarray, tol: int) -> int:
 class Clean(Stage):
     name = "clean"
     about = "noise left out of the lines: edges against the capture without the noise"
-    headline = "f1"
-    TOL = 2           # ticks (times the channel's step)
+    headline = "f1_rel"
+    TOL = 2           # ticks (times the channel's step): f1
+    TOL_REL = 0.25    # of the line's shortest run (its 5th percentile, without the noise): f1_rel. A cleaning that
+                      # reads a bouncing edge at its last crossing moves it by the bounce, tens of ns: many ticks at
+                      # a high rate, still a small part of a bit
 
     def wants(self, case):
         return case.clean is not None
@@ -164,8 +169,11 @@ class Clean(Stage):
             if not len(want) and not len(noisy):
                 continue
             tp = _match(want, got, self.TOL * max(1, ch.step))
+            short = float(np.percentile(np.diff(want), 5)) if len(want) > 2 else 0.0
+            tp_rel = _match(want, got, max(self.TOL * max(1, ch.step), self.TOL_REL * short))
             rows.append({"item": ch.name, "label": case.lines[ch.name].label, "want": len(want), "got": len(got),
                          "noisy": len(noisy), "tp": tp, "fp": len(got) - tp, "fn": len(want) - tp,
+                         "tp_rel": tp_rel, "fp_rel": len(got) - tp_rel, "fn_rel": len(want) - tp_rel,
                          "level_ok": (ch.initial == out.channel(ch.name).initial)})
         return rows
 
@@ -174,7 +182,9 @@ class Clean(Stage):
         p = tp / (tp + fp) if tp + fp else 1.0
         r = tp / (tp + fn) if tp + fn else 1.0
         exact = sum(r_["fp"] == 0 and r_["fn"] == 0 for r_ in rows)
-        return {"n": len(rows), "f1": 2 * p * r / (p + r) if p + r else 0.0, "precision": p, "recall": r,
+        tq, fq, nq = (sum(r_.get(k, 0) for r_ in rows) for k in ("tp_rel", "fp_rel", "fn_rel"))
+        f1_rel = 2 * tq / (2 * tq + fq + nq) if tq + fq + nq else 1.0
+        return {"n": len(rows), "f1_rel": f1_rel, "f1": 2 * p * r / (p + r) if p + r else 0.0, "precision": p, "recall": r,
                 "lines_exact": exact / len(rows) if rows else None,
                 "spurious_per_1k": 1000 * fp / max(1, tp + fn)}
 

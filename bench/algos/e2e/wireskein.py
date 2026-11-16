@@ -14,6 +14,7 @@ def wireskein(cap):
 
 
 @algorithm("e2e", "preclean", status="trial", about="a clean algorithm of the bench, then wireskein.decode.analyze",
-           variants={"deglitch.k2": {"clean": "deglitch.k2"}, "deglitch.k3": {"clean": "deglitch.k3"}})
+           variants={"deglitch.k2": {"clean": "deglitch.k2"}, "deglitch.k3": {"clean": "deglitch.k3"},
+                     "relative.r3": {"clean": "relative.r3"}})
 def preclean(cap, clean):
     return claims(registry.get("clean", clean)(cap))

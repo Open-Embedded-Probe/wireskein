@@ -123,28 +123,37 @@ def cost_table(recs: list[dict], stage: str, metric: str) -> None:
         rows.append({"algo": a, "status": rs[0]["status"], "n": len(rs), "score": sum(sc) / len(sc) if sc else None,
                      "cpu": _med([x.get("cpu_median_ms") for x in c]), "ref": _med([x.get("cost_ref") for x in c]),
                      "kedge": _med([x.get("us_per_kedge") for x in c]), "vs": _med([x.get("vs_main") for x in c]),
-                     "scaling": _med([x.get("scaling") for x in c]), "mem": _med([x.get("mem_peak_kb_median") for x in c])})
+                     "scaling": _med([x.get("scaling") for x in c]), "mem": _med([x.get("mem_peak_kb_median") for x in c]),
+                     "minstr": _med([x.get("instr_median_M") for x in c]), "vs_i": _med([x.get("vs_main_instr") for x in c]),
+                     "sc_i": _med([x.get("scaling_instr") for x in c])})
+    instr = any(r["minstr"] is not None for r in rows)
     hi = metric not in (STAGES[stage].LOWER if stage in STAGES else ())
     def dominates(o, r):    # o scores at least as well and costs no more, and is strictly better in one of them
-        if o is r or None in (o["score"], o["ref"]):
+        if o is r or None in (o["score"], o["c"]):
             return False
         so, sr = (o["score"], r["score"]) if hi else (-o["score"], -r["score"])
-        return so >= sr and o["ref"] <= r["ref"] and (so > sr or o["ref"] < r["ref"])
+        return so >= sr and o["c"] <= r["c"] and (so > sr or o["c"] < r["c"])
 
-    for r in rows:          # Pareto: no algorithm dominates it (cost in the reference units)
-        r["P"] = None not in (r["score"], r["ref"]) and not any(dominates(o, r) for o in rows)
+    for r in rows:          # Pareto: no algorithm dominates it (cost: instructions where counted, else reference units)
+        r["c"] = r["minstr"] if instr else r["ref"]
+    for r in rows:
+        r["P"] = None not in (r["score"], r["c"]) and not any(dominates(o, r) for o in rows)
     rows.sort(key=lambda r: (registry.STATUSES.index(r["status"]), r["algo"]))
     print(f"\n== {stage}: {metric} (mean over {len(dsets)} datasets) against cost (median over them)")
     w = max([len(r["algo"]) for r in rows] + [10]) + 2
-    print(" " * (w + 3) + f"{metric:>9s}  {'cpu ms':>8s}  {'ref':>7s}  {'us/kedge':>9s}  {'vs main':>8s}  {'scaling':>7s}  {'mem kB':>8s}")
+    print(" " * (w + 3) + f"{metric:>9s}  {'cpu ms':>8s}  {'ref':>7s}  {'us/kedge':>9s}  {'vs main':>8s}  {'scaling':>7s}  {'mem kB':>8s}"
+          + (f"  {'M instr':>9s}  {'vs main':>8s}  {'scaling':>7s}" if instr else ""))
     for r in rows:
         f = lambda v, p=3: "-" if v is None else f"{v:.{p}f}"  # noqa: E731
         print(f"{MARK[r['status']]}{'P' if r['P'] else ' '} {r['algo']:<{w}}{f(r['score']):>9s}  {f(r['cpu'], 2):>8s}  "
               f"{f(r['ref'], 2):>7s}  {f(r['kedge'], 1):>9s}  {('x' + f(r['vs'], 2)) if r['vs'] else '-':>8s}  "
-              f"{f(r['scaling'], 2):>7s}  {f(r['mem'], 0):>8s}")
+              f"{f(r['scaling'], 2):>7s}  {f(r['mem'], 0):>8s}"
+              + (f"  {f(r['minstr'], 2):>9s}  {('x' + f(r['vs_i'], 2)) if r['vs_i'] else '-':>8s}  {f(r['sc_i'], 2):>7s}"
+                 if instr else ""))
     print("   cpu ms: CPU time per case; ref: in units of the reference work (machines compare); vs main: CPU time "
           "against main's on the same cases;\n   scaling: how CPU time grows with the edges (1 linear, 2 square); "
-          "mem kB: peak allocation (--memory)")
+          "mem kB: peak allocation (--memory)" + ("; M instr, vs main, scaling: the same on instructions retired "
+          "(hardware counter), which the load does not move" if instr else ""))
     busy = [r for r in latest.values() if (r["env"].get("load_before") or 0) > 0.25 * (r["env"].get("cpus") or 1)]
     if busy:
         worst = max(busy, key=lambda r: r["env"]["load_before"])

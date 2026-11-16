@@ -369,7 +369,11 @@ STRESS = {
 }
 
 
-def scenario(seed: int, profile: str = "mixed", stress: str | None = None) -> tuple[Capture, dict]:
+def scenario(seed: int, profile: str = "mixed", stress: str | None = None,
+             rate: float | None = None) -> tuple[Capture, dict]:
+    """rate: sample at this rate instead of the seed's (the random draws are the same either way, so the traffic is
+    too): the same scenario taken at several rates."""
+    rate_given = rate
     rng = np.random.default_rng(seed)
     b = Builder(rng, stress)
     b._deferred = []
@@ -390,7 +394,9 @@ def scenario(seed: int, profile: str = "mixed", stress: str | None = None) -> tu
     rate = min(max(b.fastest * oversample, 1e6), 200e6)
     rate = float(min([1e6, 2e6, 4e6, 8e6, 10e6, 12e6, 16e6, 20e6, 24e6, 25e6, 50e6, 100e6, 200e6],
                      key=lambda x: (x < rate, abs(x - rate))))
-    jitter = float(st.get("jitter", rng.choice([0, 0, 0.02, 0.1]))) / rate
+    jitter = float(st.get("jitter", rng.choice([0, 0, 0.02, 0.1]))) / rate     # seconds: the same at any rate
+    if rate_given:
+        rate = float(rate_given)
     glitches = None
     if "glitches" in st:
         glitches = {k: int(rng.poisson(max(1, len(w.times)) * st["glitches"])) + 1 for k, w in b.waves.items()

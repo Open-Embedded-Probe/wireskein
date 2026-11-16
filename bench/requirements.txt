@@ -1,0 +1,4 @@
+# The bench runs on these versions everywhere (here, GitHub Actions, the cost machine), so that results compare:
+#   uv run --with-requirements bench/requirements.txt python bench/run.py ...
+# Changing one is a change of what is measured: note it in the next run.
+numpy==2.5.5

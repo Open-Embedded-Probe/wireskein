@@ -12,11 +12,13 @@
   three, and what to decide on.
 - scaling: the slope of log(cpu) against log(edges of the input) over the cases: 1 grows with the data, 2 with its
   square. Constant factors (a slower machine, a busy one) do not move it.
+- instructions (native Linux with hardware counters: perfcount.py): what the call retired, user space; with it
+  vs_main and scaling are also given on instructions (`vs_main_instr`, `scaling_instr`), which a busy machine does
+  not move. The best measure where there is one.
 - memory (--memory): the peak of what Python and numpy allocate during the call (tracemalloc), in a call of its
   own after the timed ones (tracemalloc slows the call). It does not move with the load at all.
 
 Workers run with one thread for numpy's libraries (run.py sets it before numpy loads), so one call is one CPU.
-With hardware counters (native Linux) the instructions retired would be steadier still; WSL2 has none.
 """
 
 from __future__ import annotations
@@ -26,23 +28,33 @@ import tracemalloc
 
 import numpy as np
 
+from . import perfcount
+
 MIN_CPU = 2e-3        # seconds: shorter calls are too coarse for ratios and slopes
+MIN_INSTR = 1e5       # instructions: below, the call's own overhead weighs
 BUDGET = 0.05         # CPU seconds: calls are repeated while all of them so far took less
 REPS = 5
 
 
-def measure(call):
-    """(the call's result, least CPU seconds, least wall seconds, calls made)."""
+def _once(call, ctr):
+    if ctr:
+        ctr.start()
     c, w = time.process_time(), time.perf_counter()
     got = call()
     cpu, wall = time.process_time() - c, time.perf_counter() - w
+    return got, cpu, wall, (ctr.stop() if ctr else None)
+
+
+def measure(call) -> tuple:
+    """(the call's result, least CPU seconds, least wall seconds, least instructions or None, calls made)."""
+    ctr = perfcount.counter()
+    got, cpu, wall, ins = _once(call, ctr)
     total, n = cpu, 1
     while n < REPS and total < BUDGET:
-        c, w = time.process_time(), time.perf_counter()
-        call()
-        dc, dw = time.process_time() - c, time.perf_counter() - w
+        _, dc, dw, di = _once(call, ctr)
         cpu, wall, total, n = min(cpu, dc), min(wall, dw), total + dc, n + 1
-    return got, cpu, wall, n
+        ins = min(ins, di) if ins is not None else None
+    return got, cpu, wall, ins, n
 
 
 def peak_memory(call) -> int:
@@ -71,8 +83,25 @@ def reference(reps: int = 3) -> float:
     return best
 
 
-def summarize(entries: list[dict], main: dict[str, float] | None) -> dict:
-    """entries: one per case {"case", "cpu", "wall", "edges", "ref"}; main: the main algorithm's cpu per case."""
+def _paired(entries: list[dict], main: dict[str, dict] | None, key: str, floor: float) -> tuple[float, int] | None:
+    if main is None:
+        return None
+    r = [e[key] / main[e["case"]][key] for e in entries
+         if e.get(key) is not None and (main.get(e["case"]) or {}).get(key) is not None
+         and main[e["case"]][key] >= floor and e[key] >= floor / 10]
+    return (float(np.exp(np.mean(np.log(r)))), len(r)) if r else None
+
+
+def _slope(edges: np.ndarray, y: np.ndarray, floor: float) -> float | None:
+    ok = (y >= floor) & (edges > 0)
+    if ok.sum() >= 8 and np.ptp(np.log(edges[ok])) > np.log(4):      # sizes spread over 4x at least
+        return float(np.polyfit(np.log(edges[ok]), np.log(y[ok]), 1)[0])
+    return None
+
+
+def summarize(entries: list[dict], main: dict[str, dict] | None) -> dict:
+    """entries: one per case {"case", "cpu", "wall", "edges", "ref", "instr", "mem"}; main: the main algorithm's
+    entries per case."""
     if not entries:
         return {}
     cpu = np.array([e["cpu"] for e in entries])
@@ -84,15 +113,23 @@ def summarize(entries: list[dict], main: dict[str, float] | None) -> dict:
            "ref_ms": 1000 * ref, "cost_ref": float(np.median(cpu / np.maximum(refs, 1e-9))),
            "calls_median": float(np.median([e.get("calls", 1) for e in entries])),
            "us_per_kedge": float(np.median(1e6 * cpu / np.maximum(edges / 1000, 1e-3)))}
-    ok = (cpu >= MIN_CPU) & (edges > 0)
-    if ok.sum() >= 8 and np.ptp(np.log(edges[ok])) > np.log(4):      # sizes spread over 4x at least
-        out["scaling"] = float(np.polyfit(np.log(edges[ok]), np.log(cpu[ok]), 1)[0])
-    if main is not None:
-        r = [e["cpu"] / main[e["case"]] for e in entries
-             if main.get(e["case"], 0) >= MIN_CPU and e["cpu"] >= MIN_CPU / 10]
-        if r:
-            out["vs_main"] = float(np.exp(np.mean(np.log(r))))
-            out["vs_main_cases"] = len(r)
+    s = _slope(edges, cpu, MIN_CPU)
+    if s is not None:
+        out["scaling"] = s
+    p = _paired(entries, main, "cpu", MIN_CPU)
+    if p:
+        out["vs_main"], out["vs_main_cases"] = p
+    ins = [e.get("instr") for e in entries]
+    if all(x is not None for x in ins):
+        ins = np.array(ins, dtype=np.float64)
+        out["instr_median_M"] = float(np.median(ins)) / 1e6
+        out["instr_per_edge"] = float(np.median(ins / np.maximum(edges, 1)))
+        s = _slope(edges, ins, MIN_INSTR)
+        if s is not None:
+            out["scaling_instr"] = s
+        p = _paired(entries, main, "instr", MIN_INSTR)
+        if p:
+            out["vs_main_instr"] = p[0]
     mem = [e["mem"] for e in entries if e.get("mem") is not None]
     if mem:
         out["mem_peak_kb_median"] = float(np.median(mem)) / 1024

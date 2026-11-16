@@ -4,6 +4,7 @@
     uv run python bench/run.py --stage clock_period --suite noise --note "comb: candidates from the histogram"
     uv run python bench/run.py --stage all --suite smoke
     uv run python bench/run.py --stage e2e --algo wireskein --algo preclean --suite noise
+    uv run python bench/run.py --stage all --suite noise --shard 0/8 --run-id ID   # one of 8 shards: merge.py ID
 """
 
 from __future__ import annotations
@@ -35,6 +36,8 @@ def main() -> None:
     ap.add_argument("--label", default="", help="a short name for this run")
     ap.add_argument("-j", type=int, default=max(1, mp.cpu_count() - 2))
     ap.add_argument("--memory", action="store_true", help="also each call's peak allocation (a call more, traced)")
+    ap.add_argument("--shard", default=None, help="I/N: every N-th case from the I-th; items only (merge.py adds them)")
+    ap.add_argument("--run-id", default=None, help="the run's id (the same for every shard of it)")
     ap.add_argument("--list", action="store_true", help="stages, algorithms and suites")
     ap.add_argument("--dry-run", action="store_true", help="what would run")
     args = ap.parse_args()
@@ -76,7 +79,16 @@ def main() -> None:
         for d in dsets:
             print(" ", d)
         return
-    runner.run(stages, by_stage, dsets, args.j, args.note, args.algos_dir, args.label, args.memory)
+    shard = None
+    if args.shard:
+        i, n = (int(x) for x in args.shard.split("/"))
+        if not 0 <= i < n:
+            ap.error("--shard I/N with 0 <= I < N")
+        if not args.run_id:
+            ap.error("--shard needs --run-id (the same for every shard)")
+        shard = (i, n)
+    runner.run(stages, by_stage, dsets, args.j, args.note, args.algos_dir, args.label, args.memory, shard,
+               args.run_id)
 
 
 if __name__ == "__main__":

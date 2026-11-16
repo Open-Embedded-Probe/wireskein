@@ -13,7 +13,10 @@ uv run python bench/run.py --stage clock_period --suite noise --note "comb: 候�
 uv run python bench/report.py                                      # アルゴリズム × データセットの表
 uv run python bench/report.py --stage e2e --delta                  # 本命との差
 uv run python bench/report.py --history clock_period/comb          # 1 つの方式の試行の跡
+uv run python bench/select.py --stage e2e --suite noise --by noise # 切り替えの検討（1.8）
 ```
+
+台帳に残す計測は、どの機械でも同じ版で走らせます（`uv run --with-requirements bench/requirements.txt python bench/...`、1.9）。
 
 ## 1. 決まり
 
@@ -41,7 +44,7 @@ uv run python bench/report.py --history clock_period/comb          # 1 つの方
 | `lineclass` | `fn(cap)` → `{線: {"label": ...}}` | `accuracy`（ラベル: clock / data / select / periodic / random / static） |
 | `clock_period` | `fn(cap, lines)` → `{線: {"period_s", "confidence"}}` | `hit3`（±3% に入った割合）。`octave`（整数倍の取り違え） |
 | `bit_unit` | `fn(cap, lines)` → `{線: {"unit_s", "confidence"}}` | `hit3` |
-| `clean` | `fn(cap)` → `Capture` | `f1`（ノイズを入れる前のエッジとの一致）。ノイズなしの列で劣化しないことも見る |
+| `clean` | `fn(cap)` → `Capture` | `f1_rel`: ノイズを入れる前のエッジとの一致。その線の一番短いランの 4 分の 1 以内なら一致とする（跳ね返りを最後にまたいだ所で読むと、エッジは数十 ns ずれ、速い取り込みでは何サンプルにもなる）。`f1` は 2 サンプル以内。ノイズなしの列で劣化しないことも見る |
 | `e2e` | `fn(cap)` → claims（`decode.export` の形） | `ok`（確定または有力で正しいバス）、`false_confirmed`（**0 を保つ**） |
 
 ### 1.3 アルゴリズム
@@ -69,10 +72,17 @@ def comb(cap, lines, max_mult):
 
 - **データセット = 元のデータ × 変換の列。** どちらも文字列で書き、そのまま台帳に残ります。
   - 元: `set:<名前>[a:b]`（`eval/corpus/synth` の固定のセット）、`real`（`eval/corpus/real`）、`dir:<パス>[a:b]`
-    （`<id>.wireskein` と `<id>.truth.json` が並ぶ任意のディレクトリ）
+    （`<id>.wireskein` と `<id>.truth.json` が並ぶ任意のディレクトリ）、`gen:<プロファイル>[/<ストレス>][a:b]@<速度>`
+    （`eval/synth.py` のシナリオを、指定の速度で取ったもの。どの速度でも通信は同じなので、`decimate` と組み合わせて
+    速度を振れます）
   - 変換: `spike:L`（ランダムな 1 刻みのパルス。エッジ 1 つあたり L 個）、`bounce:L`（エッジの L の割合で直後に
     跳ね返り）、`xtalk:L`（隣のチャンネルのエッジの L の割合で 1 刻みのパルス）、`crop:A:B`（A から B の部分）、
     `decimate:K`（K 倍遅く取ったもの）。`+` でつなぎます（`crop:0:0.5+spike:0.1`）
+  - 時間で決めたノイズ: `pspike:L:NS`（NS ナノ秒のパルス。エッジ 1 つあたり L 個）、`pbounce:L:NS`（エッジの L の
+    割合で、直後の NS ナノ秒のうちに跳ね返り）。実際の線と同じく、速く取るほど何サンプルにも見え、遅く取ると
+    サンプルが当たらずに写らないことがあります。刻みで決めたノイズ（`spike` など）は、どの速度でも 1 刻みです
+  - **取り込みの速度を上げても点数が下がらないこと**を、`rate` スイートで確かめます（同じ通信を 200 MS/s から
+    16 分の 1 まで）。情報が増えて悪くなる方式は、閾値をサンプル数で決めているなどの欠陥がある印です
   - ノイズの乱数の種は、ケースの ID と変換の文字列から作ります。いつ、どの機械でも同じデータになります。各ケース
     の入力のハッシュも台帳に残ります（`inputs_sha`）
 - **スイートは、結果ができたら変えない**（`suites.toml`）。変えたいときは新しい名前で足します（`noise-v2`）。
@@ -121,7 +131,46 @@ def comb(cap, lines, max_mult):
 - **方式を選ぶときは `vs main` と `scaling` で決める。** 10 倍遅い、データの 2 乗で遅くなる、といった違いは負荷が
   あっても見えます。10% の差を論じるときは、空いた機械で測り直します。
 - 実行前の負荷（loadavg）は台帳に残り（`env.load_before`）、混んでいた実行は表に注意が出ます。
-- 命令数（ハードウェアのカウンタ）なら負荷にほとんど左右されませんが、WSL2 には PMU がないので取れません。
+- **命令数**（`M instr`）: ハードウェアのカウンタがある機械（ネイティブの Linux）では、呼び出しごとに実行した命令の
+  数を自動で記録し、本命比と伸びも命令数で出します。負荷やクロックの変化でほとんど動かないので、取れるときは
+  これで判断します。WSL2 や多くのクラウドの VM（GitHub のランナーも）には PMU がなく、記録しません。
+  `python bench/wsbench/perfcount.py` で、その機械で取れるか（取れないなら理由）が分かります。
+
+### 1.8 切り替えの検討（`select.py`）
+
+どんなデータにも一番の方式があるとは限りません。`select.py` は、実行の明細から（走らせ直さずに）切り替えの
+やり方を比べます。
+
+```sh
+uv run python bench/select.py --stage e2e --suite noise --by noise
+```
+
+| やり方 | 意味 |
+| --- | --- |
+| `fixed <方式>` | どのデータにも 1 つの方式 |
+| `oracle` | 項目ごとに、正解を知って最良を選んだもの。どんな切り替えでも、ここまでしか届かない |
+| `confidence` | 項目ごとに、方式が出す自信度（`confidence`）の一番高いもの |
+| `dispatch:<キー>` | プロトコル、線の種類、ノイズ、速度などの組ごとに、その組で一番の方式。組ごとの選択はケースの半分で決め、残りの半分で採点する（入れ替えて 2 回）ので、採点するケースに合わせた分は得点にならない |
+
+`oracle` が一番の `fixed` より大きく上で、`dispatch` か `confidence` がそれに近いなら、切り替えを作る価値が
+あります。そうでなければ、1 つの方式で足ります。`--by <キー>` で、組ごとにどの方式が勝つかの表も出ます。
+
+### 1.9 どこで測るか
+
+点数は決定的（同じケース、同じ種、同じ方式なら同じ値）なので、どこで測っても同じです。コストは機械で変わります。
+
+| 何を | どこで | どう |
+| --- | --- | --- |
+| 全スイートの点数（本計測） | GitHub Actions | Actions の「Bench」を手動で起動（段、スイート、方式、並列数、メモ）。ケースを並列のジョブに分け（1 つのケースの方式はすべて同じジョブ）、最後に集計して、artifact `bench-<実行 ID>` に置く。台帳への取り込みは `uv run python bench/merge.py --import <展開したディレクトリ>` |
+| コスト | 命令数を数えられる機械（ネイティブの Ubuntu） | `cost` スイートを `--memory` 付きで。並列数はコア数より 1 少なく |
+| 素早い試行 | 手元 | `smoke`、`rate-smoke` など。`WSBENCH_RESULTS` で別の台帳に |
+
+- 分けて走らせるときは `run.py --shard I/N --run-id ID` を N 回、そのあと `merge.py ID` です（Actions はこれを
+  しています）。分けても分けなくても、点数と入力のハッシュは同じになります。
+- 依存の版は `bench/requirements.txt` で固定します。変えると測るものが変わるので、変えた後の最初の実行の `--note`
+  に書きます。Python の版は台帳に残ります。
+- Ubuntu の既定（`kernel.perf_event_paranoid=4`）では、ふつうの利用者は命令数を数えられません。
+  `sudo sysctl kernel.perf_event_paranoid=2` で、自分のプロセスのユーザー空間だけを数えられるようになります。
 
 ## 2. 段を足す
 
