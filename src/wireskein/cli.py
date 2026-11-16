@@ -561,6 +561,8 @@ def convert(args) -> None:
             meta0 = dict(cap.meta)
             cap = _window(cap, s0, s1)
             cap.meta = {**meta0, "excerpt": {"from_tick": s0, "to_tick": s1}}
+            if cap.meta.get("start_ns") is not None:    # the probe clock of the excerpt's own first sample
+                cap.meta["start_ns"] = int(cap.meta["start_ns"] + round(Fraction(s0) / Fraction(cap.meta.get("tick_hz", cap.rate)) * 10**9))
     meta = {k: v for k, v in cap.meta.items()
             if k not in ("file", "sr_file", "vcd_file", "tick_hz", "unitsize", "extras", "skipped_channels",
                          "vcd_not_read")}

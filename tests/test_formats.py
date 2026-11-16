@@ -187,3 +187,20 @@ def test_convert_an_excerpt(tmp_path):
     cli.convert(argparse.Namespace(input=p, output=out, part=None, from_s=2e-4, to_s=5e-4))
     cap = capture.read(out)
     assert cap.meta["excerpt"] == {"from_tick": 200, "to_tick": 500} and cap.parts[0].ticks == 300
+
+
+def test_an_excerpt_keeps_its_own_first_sample_on_the_probe_clock(tmp_path):
+    # start_ns is the probe clock of the first sample (wireskein-format): an excerpt's is later by where it starts,
+    # so that a run's markers still fall on the same changes
+    import argparse
+    from wireskein import capture, cli
+    from wireskein._engine.model import Capture, Channel
+    from wireskein.decode import save
+    import numpy as np
+    p = tmp_path / "in.wireskein"
+    save(p, Capture(1e6, 1000, [Channel("TX", 1, np.array([300, 600], np.int64))]), start_ns=5_000_000,
+         start_uncertainty_ns=5000)
+    out = tmp_path / "x.wireskein"
+    cli.convert(argparse.Namespace(input=p, output=out, part=None, from_s=2e-4, to_s=5e-4))
+    part = capture.read(out).parts[0]
+    assert part.meta["start_ns"] == 5_200_000 and part.meta["start_uncertainty_ns"] == 5000

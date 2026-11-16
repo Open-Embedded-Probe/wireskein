@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) `wireskein convert --from`: the excerpt's `start_ns` is the probe clock of its own first sample (the original's plus where it starts), so a run's markers still fall on the same changes; it kept the original's.
+- (JA) `wireskein convert --from`: 切り出したものの `start_ns` を、その最初のサンプルのプローブの時計（元の値に、切り出した位置の分を足したもの）にした。run の目印が同じ変化の所に来る。これまでは元の値のままだった。
 - (EN) The analysis has swappable steps (`_engine/methods.py`: preclean, pin classes, pair relation, a framed protocol's score `frame_score`, the verdict): the engine's own by default, another function within a `methods.use({...})` block only (contextvars; nothing changes unless a caller asks). The algorithm bench puts its trials in through it (e2e `inject`) to measure the whole analysis with one step swapped. Not a public interface.
 - (JA) 解析に、差し替えられる段ができた（`_engine/methods.py`: 前処理、線の分類、線どうしの関係、枠のある方式の点数 `frame_score`、確定 / 有力 / 拮抗の判定）。既定はエンジンのもので、`methods.use({...})` のブロックの中でだけ別の関数になる（contextvars。呼ぶ側が頼まない限り何も変わらない）。アルゴリズムの測定台は、これで試行中の方式を差し込み（e2e の `inject`）、1 段だけ替えた解析全体を測る。公開のインターフェースではない。
 - (EN) I2C's input view no longer takes minutes on a fast clock: the upper quartile of SCL's periods around each rise (how far a bounce's crossings may spread) comes from one sort over all of them, not one np.quantile per rise. The same values to the bit (tests/test_i2c_burst_ticks.py). A 12 MHz clock taken at 25 MS/s (two samples a period, so it reads as no clock and is tried as SCL) took 196 s to analyze, now 8 s.
