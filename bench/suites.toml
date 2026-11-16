@@ -70,3 +70,9 @@ role = "tune"
 about = "real I2C of the same board, one transaction a capture (tests/data/i2c_bench/h417_slow/noise, 326 captures): to tune on, so that real-i2c stays a check"
 sources = ["i2cbench:h417_slow/noise"]
 transforms = [""]
+
+[suite.nack]
+role = "tune"
+about = "generated cases whose I2C buses mostly address no one (eval/synth.py's stress nack: 7 in 10 NACKed), clean and noisy"
+sources = ["gen:mixed/nack[0:100]"]
+transforms = ["", "spike:0.1", "bounce:0.1"]

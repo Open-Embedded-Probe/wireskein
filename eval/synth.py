@@ -104,7 +104,8 @@ class Builder:
             rw = "read" if r.random() < 0.4 else "write"
             tr = {"addr": addr if r.random() < 0.8 else int(r.integers(0x08, 0x78)), "rw": rw,
                   "bytes": [int(x) for x in r.integers(0, 256, int(r.integers(0 if rw == "write" else 1, 7)))]}
-            if r.random() < 0.1:
+            # stress "nack": most addresses answer no one (a bus scan, a device not there)
+            if r.random() < (0.7 if self.stress == "nack" else 0.1):
                 tr["nack_at"] = 0
                 tr["bytes"] = []
             txs.append(tr)
@@ -366,6 +367,7 @@ STRESS = {
     "jitter": {"jitter": 0.3},         # timing jitter in samples (std)
     "freqhop": {},                     # SPI / I2C clock changes per frame (x0.25..x4)
     "baudhop": {},                     # UART baud rate switches mid-stream (x2/x4/x8)
+    "nack": {},                        # I2C: 7 in 10 transactions an address no one answers (a bus scan)
 }
 
 

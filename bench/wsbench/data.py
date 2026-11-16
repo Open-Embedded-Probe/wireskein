@@ -6,8 +6,9 @@ was measured:
     source      set:<name>[a:b]   a frozen set under eval/corpus/synth (cases a..b in file order)
                 real              eval/corpus/real (the records with about a million edges left out)
                 dir:<path>[a:b]   any directory of <id>.wireskein beside <id>.truth.json (the eval/ truth format)
-                gen:<profile>[/<stress>][a:b]@<rate>   eval/synth.py's scenarios of seeds a..b, sampled at <rate>
-                                  (the same traffic whatever the rate: a base for decimate, sweeping the rate)
+                gen:<profile>[/<stress>][a:b][@<rate>]   eval/synth.py's scenarios of seeds a..b, sampled at <rate>
+                                  (the same traffic whatever the rate: a base for decimate, sweeping the rate), or at
+                                  the scenario's own
                 i2cbench:h417_slow/stream[a:b]   real captures of tests/data/i2c_bench: I2C through weak
                                   pull-ups, 50 times "S, 0x13 write, NACK, P" each (what the device answered: the
                                   summaries beside them), truth made on reading; SCL / SDA renamed D0 / D1
@@ -74,14 +75,15 @@ def _slice(paths: list[Path], a: str | None, b: str | None) -> list[Path]:
     return paths[int(a) if a else None:int(b) if b else None]
 
 
-_GEN = re.compile(r"^gen:(?P<profile>[a-z]+)(/(?P<stress>[a-z]+))?\[(?P<a>\d+):(?P<b>\d+)\]@(?P<rate>[0-9.e+]+)$")
+_GEN = re.compile(r"^gen:(?P<profile>[a-z]+)(/(?P<stress>[a-z]+))?\[(?P<a>\d+):(?P<b>\d+)\](@(?P<rate>[0-9.e+]+))?$")
 
 
 def source_items(source: str) -> list[str]:
     """The cases of a source: file paths, i2cbench:<path>, or gen:<profile>:<stress>:<seed>:<rate>."""
     g = _GEN.match(source)
     if g:
-        return [f"gen:{g['profile']}:{g['stress'] or ''}:{s}:{float(g['rate'])}" for s in range(int(g["a"]), int(g["b"]))]
+        rate = float(g["rate"]) if g["rate"] else 0.0          # 0: the scenario's own rate
+        return [f"gen:{g['profile']}:{g['stress'] or ''}:{s}:{rate}" for s in range(int(g["a"]), int(g["b"]))]
     m = _RANGE.match(source)
     if m and m["base"].startswith("i2cbench:"):
         d = I2C_BENCH / m["base"][len("i2cbench:"):]
@@ -150,8 +152,9 @@ def read(ref: str) -> tuple[Capture, dict]:
         sys.path.insert(0, str(REPO / "eval"))
         import synth  # eval/synth.py
         _, profile, stress, seed, rate = ref.split(":")
-        cap, truth = synth.scenario(int(seed), profile, stress or None, rate=float(rate))
-        truth["id"] += f"@{float(rate) / 1e6:g}M"
+        cap, truth = synth.scenario(int(seed), profile, stress or None, rate=float(rate) or None)
+        if float(rate):
+            truth["id"] += f"@{float(rate) / 1e6:g}M"
         return cap, truth
     path = Path(ref)
     truth = json.loads(path.with_suffix("").with_suffix(".truth.json").read_text())
