@@ -569,8 +569,25 @@ def defective_i2cbench(name: str) -> bool:
     return tag == "fexp2" or (tag == "lk1" and g == "100") or (tag == "fhys" and g in ("100", "1025"))
 
 
-def hardness(truth: dict, cap: Capture, chain: str, rate0: float) -> tuple[list, set]:
-    """(per truth bus the reasons it is hard to read, the lines that alias)."""
+CLOCK_ROLES = ("clk", "scl", "swclk", "sck")
+
+
+def clock_phase_s(cap: Capture, name: str) -> float | None:
+    """The shortest phase (high or low) a clock line holds, in seconds: the 2nd percentile of its runs between edges,
+    idle gaps (over 20 x the median run) left out. For a bus whose truth has no rate (a real debug bus: RVSWD), read
+    from the capture as recorded, before any transform. A clock of uneven duty (V203's fast SWCLK: high about 20 ns of
+    100) is as hard to read as its shorter phase."""
+    e = np.asarray(cap.channel(name).edges, np.int64)
+    if len(e) < 16:
+        return None
+    runs = np.diff(e)
+    runs = runs[runs <= 20 * np.median(runs)]
+    return float(np.percentile(runs, 2)) / float(cap.rate) if len(runs) else None
+
+
+def hardness(truth: dict, cap: Capture, chain: str, rate0: float, orig: Capture | None = None) -> tuple[list, set]:
+    """(per truth bus the reasons it is hard to read, the lines that alias). orig: the capture before the transforms
+    (a clock's shortest phase where the truth gives no rate)."""
     rate = float(cap.rate)
     gen = truth.get("generator") or {}
     stress = gen.get("stress")
@@ -595,6 +612,13 @@ def hardness(truth: dict, cap: Capture, chain: str, rate0: float) -> tuple[list,
                 t.add("undersampled")
             if span and span >= NOISE_REACH / fastest:
                 t.add("noise_over_bit")
+        elif orig is not None and (clk := next((b["roles"][r] for r in CLOCK_ROLES if r in b.get("roles", {})), None)):
+            phase = clock_phase_s(orig, clk)
+            if phase:
+                if rate * phase < UNDER_PERIOD / 2:
+                    t.add("undersampled")
+                if span and span >= NOISE_REACH * phase:
+                    t.add("noise_over_bit")
         if defective:
             t.add("defective_capture")
         tags.append(sorted(t))
@@ -605,12 +629,12 @@ def hardness(truth: dict, cap: Capture, chain: str, rate0: float) -> tuple[list,
 
 def load_case(ref: str, source: str, chain: str) -> Case:
     cap, truth = read(ref)
-    rate0 = float(cap.rate)
+    rate0, orig = float(cap.rate), cap
     # a generated case is its own clean reference, unless its frozen set already holds noise
     gen = truth.get("generator")
     clean = cap if gen and gen.get("stress") != "glitch" else None
     cap, clean = apply(cap, clean, chain, truth["id"], truth)
     dataset = source + (f"+{chain}" if chain else "")
-    tags, aliased = hardness(truth, cap, chain, rate0)
+    tags, aliased = hardness(truth, cap, chain, rate0, orig)
     return Case(truth["id"] + (f"+{chain}" if chain else ""), dataset, cap, clean, truth,
                 line_truth(truth, cap, clean or cap), input_sha(cap), tags, aliased)
