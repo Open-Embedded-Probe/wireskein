@@ -45,6 +45,7 @@ uv run python bench/select.py --stage e2e --suite noise --by noise # 切り替�
 | `clock_period` | `fn(cap, lines)` → `{線: {"period_s", "confidence"}}` | `hit3`（±3% に入った割合）。`octave`（整数倍の取り違え） |
 | `bit_unit` | `fn(cap, lines)` → `{線: {"unit_s", "confidence"}}` | `hit3` |
 | `grouping` | `fn(cap)` → `[{"clock", "data", "select", "score"}]`（バスの候補） | `found`（正解のクロック・データ線・選択線の組が候補にある割合）、`true_score`（その組の点数。後の段の証拠の強さ）、`groups_per_case` |
+| `segments` | `fn(cap, {線: "clock" / "async"})` → `{線: [(始め, 終わり, 単位)]}` | `rate_ok`（正解の区間の中ほどで速さが 5% 以内）、`blocks_err`（速さの区間の数の誤差） |
 | `clean` | `fn(cap)` → `Capture` | `f1_rel`: ノイズを入れる前のエッジとの一致。その線の一番短いランの 4 分の 1 以内なら一致とする（跳ね返りを最後にまたいだ所で読むと、エッジは数十 ns ずれ、速い取り込みでは何サンプルにもなる）。`f1` は 2 サンプル以内。ノイズなしの列で劣化しないことも見る |
 | `e2e` | `fn(cap)` → claims（`decode.export` の形） | `ok`（確定または有力で正しいバス）、`false_confirmed`（**0 を保つ**） |
 
@@ -84,6 +85,8 @@ def comb(cap, lines, max_mult):
   - 変換: `spike:L`（ランダムな 1 刻みのパルス。エッジ 1 つあたり L 個）、`bounce:L`（エッジの L の割合で直後に
     跳ね返り）、`xtalk:L`（隣のチャンネルのエッジの L の割合で 1 刻みのパルス）、`crop:A:B`（A から B の部分）、
     `decimate:K`（K 倍遅く取ったもの）。`+` でつなぎます（`crop:0:0.5+spike:0.1`）
+  - オープンドレインの遅い立ち上がり: `odslow:NS`（I2C の線の立ち上がりが NS ナノ秒ほど遅れ、それより短い High は
+    消える。弱いプルアップの実機と同じ、切り詰められたクロック）
   - 時間で決めたノイズ: `pspike:L:NS`（NS ナノ秒のパルス。エッジ 1 つあたり L 個）、`pbounce:L:NS`（エッジの L の
     割合で、直後の NS ナノ秒のうちに跳ね返り）。実際の線と同じく、速く取るほど何サンプルにも見え、遅く取ると
     サンプルが当たらずに写らないことがあります。刻みで決めたノイズ（`spike` など）は、どの速度でも 1 刻みです
@@ -174,6 +177,9 @@ uv run python bench/select.py --stage e2e --suite noise --by noise
 （一番細かい線の 1 ビットあたりのサンプル数）、`obs`（その両方）だけです。`(truth)` の付いた組（プロトコル、
 線の種類、データセット、ノイズの種類）は測定台だけが知っている正解の情報で、上限の目安にしかなりません。
 
+e2e では、各方式の出力そのもの（確定・有力・拮抗の数、実行時に分かる）で切り替える案も比べます: `cascade A->B`
+（まず A、A に迷いがあれば B）、`most_confirmed`（確定の一番多い出力）、`least_unsure`（迷いの一番少ない出力）。
+
 `oracle` が一番の `fixed` より大きく上で、`dispatch` か `confidence` がそれに近いなら、切り替えを作る価値が
 あります。そうでなければ、1 つの方式で足ります。`--by <キー>` で、組ごとにどの方式が勝つかの表も出ます。
 
@@ -204,6 +210,8 @@ uv run python bench/select.py --stage e2e --suite noise --by noise
   に書きます。Python の版は台帳に残ります。
 - Ubuntu の既定（`kernel.perf_event_paranoid=4`）では、ふつうの利用者は命令数を数えられません。
   `sudo sysctl kernel.perf_event_paranoid=2` で、自分のプロセスのユーザー空間だけを数えられるようになります。
+
+調査の記録は `bench/notes/` に置きます（例: [2026-11-16 判定のゼロベースの見直し](notes/2026-11-16-detection-review.ja.md)）。
 
 ## 2. 段を足す
 

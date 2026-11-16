@@ -46,6 +46,7 @@ python bench/...`, 1.9).
 | `clock_period` | `fn(cap, lines)` → `{line: {"period_s", "confidence"}}` | `hit3` (within ±3 %), `octave` (off by a whole factor) |
 | `bit_unit` | `fn(cap, lines)` → `{line: {"unit_s", "confidence"}}` | `hit3` |
 | `grouping` | `fn(cap)` → `[{"clock", "data", "select", "score"}]` (candidate buses) | `found` (the true clock + data + select among the candidates), `true_score` (its score: how strongly later stages can build on it), `groups_per_case` |
+| `segments` | `fn(cap, {line: "clock" / "async"})` → `{line: [(start, end, unit)]}` | `rate_ok` (at the middle of each true segment the rate within 5 %), `blocks_err` (how many rates in time, against the truth) |
 | `clean` | `fn(cap)` → `Capture` | `f1_rel`: against the edges before the noise, an edge matching within a quarter of the line's shortest run (a bounce read at its last crossing moves an edge by tens of ns: many samples at a high rate); `f1` within 2 samples; no loss on the column without noise |
 | `e2e` | `fn(cap)` → claims (`decode.export`'s) | `ok` (buses confirmed or likely and right), `false_confirmed` (**kept at 0**) |
 
@@ -85,6 +86,8 @@ def comb(cap, lines, max_mult):
   - Transforms: `spike:L` (1-tick pulses at random, L per edge), `bounce:L` (a share L of the edges bounce just
     after), `xtalk:L` (a 1-tick pulse at a share L of the next channel's edges), `crop:A:B` (the part from A to B),
     `decimate:K` (taken K times slower), joined with `+` (`crop:0:0.5+spike:0.1`)
+  - Open-drain slow rises: `odslow:NS` (an I2C bus's rises NS nanoseconds late, a shorter high gone: the clipped
+    clocks of a real bus through weak pull-ups)
   - Noise in time: `pspike:L:NS` (pulses NS nanoseconds wide, L per edge), `pbounce:L:NS` (a share L of the edges
     bounce within NS nanoseconds after). As on a real line, the faster it is taken the more samples they span, and
     taken slowly one may fall between samples and not show. Noise in ticks (`spike` ...) is one tick at any rate
@@ -174,6 +177,9 @@ Of the `dispatch` groups, a switch can go at run time only by `rate` and what th
 unit of the most finely taken line), `obs` (both). The groups marked `(truth)` (protocol, line class, dataset, kind
 of noise) are known to the bench only: an upper bound.
 
+For e2e it also compares switching on what each output itself says (its claims by verdict, known at run time):
+`cascade A->B` (A first, B where A is unsure), `most_confirmed`, `least_unsure`.
+
 If `oracle` is well above the best `fixed` and `dispatch` or `confidence` come close to it, switching is worth
 building; if not, one algorithm is enough. `--by <key>` adds a table of which algorithm wins on each group.
 
@@ -205,6 +211,8 @@ they are measured. Costs are not.
   `--note`. The Python version is kept in the ledger.
 - Ubuntu's default (`kernel.perf_event_paranoid=4`) lets no user count instructions;
   `sudo sysctl kernel.perf_event_paranoid=2` lets a user count their own processes' user space.
+
+Notes on what was measured go in `bench/notes/` (e.g. [2026-11-16, the detection reviewed from zero](notes/2026-11-16-detection-review.ja.md), in Japanese).
 
 ## 2. Adding a stage
 
