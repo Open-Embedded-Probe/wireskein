@@ -27,18 +27,36 @@ def collapse(edges: np.ndarray, w: float) -> np.ndarray:
     return e[last[np.bincount(cid) % 2 == 1]]
 
 
+def _view(cap, clk, w):
+    """The capture with every line's changes closer than T / w merged, and the clock read in it."""
+    if not clk.period:
+        return None, None
+    view = Capture(cap.rate, cap.n_samples, [replace(x, edges=collapse(x.edges, clk.period / w)) for x in cap.channels])
+    vch = view.channel(clk.name)
+    vci = clock_info(view, channel_features(view, vch)) if len(vch.edges) >= 8 else None
+    return view, vci
+
+
+def engine(w):
+    """Into the engine as its pair relation: each clock's pairs measured on its gated view (made once a clock)."""
+    views = {}
+
+    def relation(cap, clk, other):
+        key = (id(cap), clk.name)
+        if key not in views:
+            views[key] = _view(cap, clk, w)
+        view, vci = views[key]
+        return pair_relation(view, vci, other) if vci is not None else pair_relation(cap, clk, other)
+    return {"pair_relation": relation}
+
+
 @algorithm("grouping", "gated", status="trial", about="pairs measured with changes closer than T/w merged (T: the clock's period)",
-           variants={"w8": {"w": 8}, "w4": {"w": 4}})
+           variants={"w8": {"w": 8}, "w4": {"w": 4}}, engine=engine)
 def gated(cap, w):
     sv = survey(cap, asyncs=False)
     pins = pin_classes(sv, cap)
     for c, ci in list(sv.clocks.items()):
-        if not ci.period:
-            continue
-        k = ci.period / w
-        view = Capture(cap.rate, cap.n_samples, [replace(x, edges=collapse(x.edges, k)) for x in cap.channels])
-        vch = view.channel(c)
-        vci = clock_info(view, channel_features(view, vch)) if len(vch.edges) >= 8 else None
+        view, vci = _view(cap, ci, w)
         if vci is None:
             continue
         for o in sv.active:

@@ -50,7 +50,8 @@ def main() -> None:
             print(f"{s}: {st.about}  [headline: {st.headline}]")
             for a in registry.pick(s, None, list(registry.STATUSES)):
                 params = f" {a.params}" if a.params else ""
-                print(f"  {a.status:7s} {a.name:28s}{params}  {a.about}" + (f"  (retired: {a.reason})" if a.reason else ""))
+                print(f"  {a.status:7s} {a.name:28s}{params}  {a.about}" + ("  [engine step]" if a.engine else "")
+                      + (f"  (retired: {a.reason})" if a.reason else ""))
         print("suites:")
         for n, s in runner.suites().items():
             nds = len(s["sources"]) * len(s.get("transforms", [""]))

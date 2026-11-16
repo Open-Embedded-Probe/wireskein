@@ -2,6 +2,7 @@
 
 from wsbench import algorithm, registry
 from wireskein import decode
+from wireskein._engine import methods
 
 
 def claims(cap):
@@ -20,3 +21,17 @@ def wireskein(cap):
            variants={"relative.r3": {"clean": "relative.r3"}}, reason="its clean, clean/relative, is retired")
 def preclean(cap, clean):
     return claims(registry.get("clean", clean)(cap))
+
+
+@algorithm("e2e", "inject", status="trial",
+           about="WireSkein's analysis with steps of the bench's algorithms put in (wireskein._engine.methods)",
+           variants={"rhythm": {"use": ["lineclass/rhythm.g3ns"]},
+                     "gated": {"use": ["grouping/gated.w4"]},
+                     "rhythm+gated": {"use": ["lineclass/rhythm.g3ns", "grouping/gated.w4"]}})
+def inject(cap, use):
+    steps = {}
+    for ref in use:
+        stage, name = ref.split("/", 1)
+        steps.update(registry.get(stage, name).engine_steps())
+    with methods.use(steps):
+        return claims(cap)

@@ -57,6 +57,10 @@ python bench/...`, 1.9).
 - **Retired, never deleted.** An idea that did not work stays with `status="retired", reason="..."`, so what was
   tried and why it was dropped can be read later. Retired algorithms run only when asked by name.
 - **The same input gives the same output.** An algorithm that needs random numbers seeds them from its input.
+- **An algorithm that can go into the engine says how** (`@algorithm(..., engine=fn)`: fn takes the algorithm's
+  parameters and returns `wireskein._engine.methods` steps by name). e2e's `inject` puts it in and measures the
+  whole analysis: winning on a stage's metric does not by itself make the analysis better, so it is measured so
+  before it is taken in.
 - **Shared helpers go in `wsbench/kit.py`** (algorithm files cannot import each other). The file's and `kit.py`'s
   hash is kept in the ledger (`algo_sha`); a table marks `!` where it changed since (to be measured again).
 

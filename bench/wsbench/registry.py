@@ -12,6 +12,9 @@
 status: main (what WireSkein does today; one per stage), trial (being tried), retired (kept with its reason so the
 trail of what was tried stays readable; not run unless asked by name).
 
+engine: how the algorithm goes into WireSkein's analysis as one of its steps (wireskein._engine.methods), called
+with the algorithm's parameters: engine(**params) -> {step name: function}. e2e/inject runs the analysis with it.
+
 Algorithms are found in bench/algos/<stage>/*.py, then in each --algos-dir and in WSBENCH_ALGOS (os.pathsep
 separated): a user's own algorithms live outside the repository and are measured the same way.
 """
@@ -41,6 +44,12 @@ class Algo:
     path: str = ""
     src_sha: str = ""
     reason: str = ""                  # retired: why
+    engine: Callable | None = None    # (**params) -> {wireskein._engine.methods step: function}
+
+    def engine_steps(self) -> dict:
+        if self.engine is None:
+            raise ValueError(f"{self.stage}/{self.name} has no engine step")
+        return self.engine(**self.params)
 
     def __call__(self, *args):
         return self.fn(*args, **self.params)
@@ -51,7 +60,7 @@ _LOADING: list[Path] = []
 
 
 def algorithm(stage: str, name: str, status: str = "trial", about: str = "", variants: dict | None = None,
-              reason: str = ""):
+              reason: str = "", engine: Callable | None = None):
     if status not in STATUSES:
         raise ValueError(f"{name}: status {status!r} (one of {STATUSES})")
 
@@ -65,7 +74,7 @@ def algorithm(stage: str, name: str, status: str = "trial", about: str = "", var
             if key in _ALGOS and _ALGOS[key].path != str(path):
                 raise ValueError(f"{stage}/{full}: registered twice ({_ALGOS[key].path}, {path})")
             _ALGOS[key] = Algo(stage, full, fn, status, about or (fn.__doc__ or "").strip().split("\n")[0],
-                               dict(params), str(path), sha, reason)
+                               dict(params), str(path), sha, reason, engine)
         return fn
     return deco
 

@@ -13,8 +13,12 @@ from wireskein._engine import kernels as K
 from wireskein._engine.model import Capture
 
 
+def engine(**params):
+    return {"preclean": lambda cap: hybrid(cap, **params)}
+
+
 @algorithm("clean", "hybrid", status="trial", about="max(r of the line's unit, 2 samples where a bit has 4 or more)",
-           variants={"r2": {"r": 0.2}, "r3": {"r": 0.3}})
+           variants={"r2": {"r": 0.2}, "r3": {"r": 0.3}}, engine=engine)
 def hybrid(cap, r, floor=2, floor_from=4):
     out = []
     for ch in cap.channels:

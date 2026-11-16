@@ -13,6 +13,7 @@ taxonomy.pin_classes (main) measures on the raw lines, and calls a line sparse a
 import numpy as np
 
 from wsbench import algorithm
+from wireskein._engine.taxonomy import PinClass, pin_classes
 from wsbench.kit import comb_unit, runs
 from wireskein._engine import kernels as K
 
@@ -101,8 +102,31 @@ def _line(cap, ch, gate, short_ok=False):
             "dscore": dscore, "unit": u2, "two_valued": _two_valued(hi, lo), "local": local}
 
 
+def engine(**params):
+    """Into the engine as its pin classes: rhythm decides whether a line is a clock; the engine's other candidates
+    (sparse for a select, pulse) stay as its own pin_classes gives them (rhythm leaves select to grouping)."""
+    def classes(sv, cap):
+        own = pin_classes(sv, cap)
+        got = rhythm(cap, **params)
+        out = {}
+        for n, pc in own.items():
+            label = (got.get(n) or {}).get("label")
+            sc, cand = dict(pc.scores), list(pc.candidates)
+            if label in ("clock", "periodic"):
+                sc["clock"] = max(sc["clock"], 0.9)
+                cand = ["clock"] + [c for c in cand if c not in ("clock", "data")]
+            elif label in ("data", "random"):
+                sc["clock"] = min(sc["clock"], 0.1)
+                cand = [c for c in cand if c != "clock"]
+                if "data" not in cand:
+                    cand.append("data")
+            out[n] = PinClass(n, sc, cand)
+        return out
+    return {"pin_classes": classes}
+
+
 @algorithm("lineclass", "rhythm", status="trial", about="each line's unit, the line gated by it, then its class",
-           variants={
+           engine=engine, variants={
                # no select here (grouping tells it, from what the line frames); too few runs: data; a line of a
                # few clocks only (3 to 7 rising intervals) judged on them
                "g3ns": {"gate": 0.3, "sparse": 0.0, "local": 0.8, "few_data": True, "select": False,
