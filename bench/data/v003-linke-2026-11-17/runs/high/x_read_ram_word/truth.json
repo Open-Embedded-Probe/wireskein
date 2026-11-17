@@ -33,10 +33,10 @@
  "read_bytes": "0fe1c3a5",
  "agreement_160M": {
   "dmi_ops": 4,
-  "found_in_order": 0,
-  "wire_frames": 28,
-  "wire_ok": 28,
-  "wire_answered": 28,
-  "usable": false
+  "found_in_order": 4,
+  "wire_frames": 46,
+  "wire_ok": 46,
+  "wire_answered": 46,
+  "usable": true
  }
 }

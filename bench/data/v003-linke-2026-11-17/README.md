@@ -17,7 +17,4 @@ The LinkE's two-line try on attach (some 100 ms with SWCLK moving too) is not in
 2 KiB RAM); `runs/rate/<MHz>/<op>` 4 operations taken by the probe at 160, 133.3, 50, 10 and 5 MHz. A run's files, the
 half set aside for checking and the truth are as in `l103-linke-2026-11-17`.
 
-Every one of ch32rv's DMI operations is found in the 160 MS/s reading in 101 of the 123 runs (`truth.json`
-`agreement_160M`). The other 22 are short operations whose frames after the attach come out unread: the LinkE's
-firmware 2.23 packs SWIO frames closer than WireSkein's SWIO can tell apart (hole b of bench/notes/2026-11-17-test-plan).
-Their truth is ch32rv's DMI operations and reads only; the 160 MS/s reading is no truth for them, decimated or not.
+Every one of ch32rv's DMI operations is found in the 160 MS/s reading in all 123 runs (`truth.json` `agreement_160M`, remade by bench/data/refresh_linke.py after WireSkein's SWIO fix: hole b of bench/notes/2026-11-17-test-plan; before it, 22 short operations' frames came out unread, the LinkE's two-wire try on attach outnumbering SWIO's own pulses). Their truth is ch32rv's DMI operations and reads, and, taken down, the 160 MS/s reading.

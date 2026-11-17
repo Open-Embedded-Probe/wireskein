@@ -2,6 +2,8 @@
  "wireskein": "0.0.28",
  "parts": [
   {
+   "protocol": "rvswd",
+   "decoded": true,
    "fit": {
     "score": 1.0,
     "claimed": true,
@@ -14,8 +16,8 @@
     "restored": 0,
     "repaired": 0,
     "rate_ok": true,
-    "unread": 590,
-    "unread_edges": 1228,
+    "unread": 216,
+    "unread_edges": 1001,
     "glitches": 66,
     "clock_edges": 160534,
     "ringing": {

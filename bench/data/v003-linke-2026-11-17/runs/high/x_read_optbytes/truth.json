@@ -34,9 +34,9 @@
  "agreement_160M": {
   "dmi_ops": 4,
   "found_in_order": 4,
-  "wire_frames": 37,
-  "wire_ok": 37,
-  "wire_answered": 37,
+  "wire_frames": 59,
+  "wire_ok": 59,
+  "wire_answered": 59,
   "usable": true
  }
 }

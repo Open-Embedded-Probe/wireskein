@@ -1,22 +1,23 @@
 {
+ "wireskein": "0.0.28",
  "parts": [
   {
    "protocol": "swio",
    "decoded": true,
    "fit": {
-    "score": 0.827,
+    "score": 0.8385,
     "claimed": true,
     "verdict": "likely"
    },
    "reading": {
-    "frames": 61,
-    "ok": 61,
+    "frames": 65,
+    "ok": 65,
     "unanswered": 0,
     "restored": 0,
     "repaired": 0,
     "rate_ok": true,
-    "unread": 22,
-    "unread_edges": 5637,
+    "unread": 21,
+    "unread_edges": 5636,
     "line_changes": {
      "SWIO": {
       "changes": 10968,
@@ -27,7 +28,6 @@
    "clock_speeds": null
   }
  ],
- "wireskein": "0.0.28",
  "tick_hz": [
   160000000,
   1
@@ -37,6 +37,16 @@
    "W",
    "0x7e",
    1520763904
+  ],
+  [
+   "W",
+   "0x7d",
+   1520763904
+  ],
+  [
+   "R",
+   "0x7c",
+   66563
   ],
   [
    "R",
@@ -332,6 +342,16 @@
    "R",
    "0x04",
    2
+  ],
+  [
+   "W",
+   "0x10",
+   1073741825
+  ],
+  [
+   "R",
+   "0x11",
+   4983938
   ],
   [
    "W",

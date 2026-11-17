@@ -25,7 +25,7 @@
    "from": "v003-linke-2026-11-17/runs/high/dbg_halt/ch32rv.stderr"
   },
   "runs/high/dbg_halt/reading.json": {
-   "sha256": "41c1d4dd14374e4ff578d4ce872262c10dfdd4cd772c9abd4e6b38aaf9a781d4",
+   "sha256": "5f96fadfab5762c8a4467de947fbd726a0d7b530901d8a485e478a48c8512fa7",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/dbg_halt/run.json": {
@@ -38,8 +38,9 @@
    "added": "excerpt_s"
   },
   "runs/high/dbg_halt/truth.json": {
-   "sha256": "caee8a426ed8ae6f15e38588a82149c93351fd1708230c495940780d8fe4a1bb",
-   "from": "v003-linke-2026-11-17/runs/high/dbg_halt/truth.json"
+   "sha256": "acc78655b3c808c6d1fe749b14e9430496e38a94f7c0f17683cdb5b52b74715d",
+   "from": "v003-linke-2026-11-17/runs/high/dbg_halt/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/dbg_regs/c0001.wireskein": {
    "sha256": "f2ade538be40be12929910a7b35fa51a47b8a3ecc42470802da6cf66b841a2d4",
@@ -60,7 +61,7 @@
    "from": "v003-linke-2026-11-17/runs/high/dbg_regs/ch32rv.stderr"
   },
   "runs/high/dbg_regs/reading.json": {
-   "sha256": "244403896dc5ed7dfebcec72d8d4850ec0d558529ab0f816531865e5d5ac88bc",
+   "sha256": "3a137c4a09ae61480123db0f91be2e35bf73d583c8e4592c51c768e440af7b7a",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/dbg_regs/run.json": {
@@ -74,7 +75,8 @@
   },
   "runs/high/dbg_regs/truth.json": {
    "sha256": "339c083a7cc5528ab911102ccd6d29177ab969462bdb2acedd7d74ac1c5f7952",
-   "from": "v003-linke-2026-11-17/runs/high/dbg_regs/truth.json"
+   "from": "v003-linke-2026-11-17/runs/high/dbg_regs/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/dbg_resume/c0001.wireskein": {
    "sha256": "78323548d53ca57fc697dda81a3f367d4c4a6ed10b8a90c63f061d1335d889dd",
@@ -95,7 +97,7 @@
    "from": "v003-linke-2026-11-17/runs/high/dbg_resume/ch32rv.stderr"
   },
   "runs/high/dbg_resume/reading.json": {
-   "sha256": "40469b681039a5d04c036a4d92ebc740e4509a1b3fe72aae85c5971d7f435c27",
+   "sha256": "083a2fd325433c9a3717c199e65b7703fdaca7c9a9a72e4f2585945683ddcc16",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/dbg_resume/run.json": {
@@ -108,8 +110,9 @@
    "added": "excerpt_s"
   },
   "runs/high/dbg_resume/truth.json": {
-   "sha256": "018d35adc635f9d8928959e2a0a785559018ed2d150a27b4b24a04703a145e00",
-   "from": "v003-linke-2026-11-17/runs/high/dbg_resume/truth.json"
+   "sha256": "068302afa8e017be001c5315bbf22c5bce0cb43341940ffe8453c326afe80d65",
+   "from": "v003-linke-2026-11-17/runs/high/dbg_resume/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/dbg_step/c0001.wireskein": {
    "sha256": "f568e637e437183f8a076b7f1227e76334226315ffa9099a909164d22707297a",
@@ -130,7 +133,7 @@
    "from": "v003-linke-2026-11-17/runs/high/dbg_step/ch32rv.stderr"
   },
   "runs/high/dbg_step/reading.json": {
-   "sha256": "0b835a21d65f47f2bb1a12eb2fbcfcaa27b92594b89b74d1e3df509948f89bbd",
+   "sha256": "f12e43766fe999427a15ed977d4781d23df259f51fb7a0b526f0671e0be30007",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/dbg_step/run.json": {
@@ -143,8 +146,9 @@
    "added": "excerpt_s"
   },
   "runs/high/dbg_step/truth.json": {
-   "sha256": "9550167c18cf16fade05003dba9f4bbf36dbf077625b0e0bae81537b0a48e901",
-   "from": "v003-linke-2026-11-17/runs/high/dbg_step/truth.json"
+   "sha256": "d5d9ed806b1dd4d1f445928fb2a2afd5e13dc2851b0c8c6d14149a95ed0ca1f3",
+   "from": "v003-linke-2026-11-17/runs/high/dbg_step/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/erase_all/c0001.wireskein": {
    "sha256": "8a1bbf8904ec098dd5b18fa52e828a6ff03379f1aef7b2aeeadfddcf5cb94cff",
@@ -165,7 +169,7 @@
    "from": "v003-linke-2026-11-17/runs/high/erase_all/ch32rv.stderr"
   },
   "runs/high/erase_all/reading.json": {
-   "sha256": "b09f12be8b72e203deb8e0fa7bc760b7cbbd271d6afed84b8a3d83a6973c88e8",
+   "sha256": "e53ea578f7e423ed3cc1a2bcf8ec34a028455168fbf00926331698bb10998452",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/erase_all/run.json": {
@@ -179,7 +183,8 @@
   },
   "runs/high/erase_all/truth.json": {
    "sha256": "d54c6c270303cdc0d963dfc7e2a32b44f0fcec7c06efe64c00c8edd9888f2035",
-   "from": "v003-linke-2026-11-17/runs/high/erase_all/truth.json"
+   "from": "v003-linke-2026-11-17/runs/high/erase_all/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/flash_pattern4k/c0001.wireskein": {
    "sha256": "115ca3c372e2378d39451788eebf7f67f24ede542f1b9ae7a18e0aa16eab8080",
@@ -200,7 +205,7 @@
    "from": "v003-linke-2026-11-17/runs/high/flash_pattern4k/ch32rv.stderr"
   },
   "runs/high/flash_pattern4k/reading.json": {
-   "sha256": "b2095c4a6d266123371f76238ab73342e448916b9bcd2e9b235916469303b03e",
+   "sha256": "7252070a3bc9e2103d81d224359cacf9946e5e522eb8e9be90ac97806e78f626",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/flash_pattern4k/run.json": {
@@ -214,7 +219,8 @@
   },
   "runs/high/flash_pattern4k/truth.json": {
    "sha256": "2fb3b50a7f41e3142d21e9b4634fd4168da71b9f147b45a8ffd98c14a9ac3b17",
-   "from": "v003-linke-2026-11-17/runs/high/flash_pattern4k/truth.json"
+   "from": "v003-linke-2026-11-17/runs/high/flash_pattern4k/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/flash_sketch/c0001.wireskein": {
    "sha256": "3dd54514e82d42eb814b9661396dc3742ad096764536afffa085656ef16493bb",
@@ -235,7 +241,7 @@
    "from": "v003-linke-2026-11-17/runs/high/flash_sketch/ch32rv.stderr"
   },
   "runs/high/flash_sketch/reading.json": {
-   "sha256": "9840e63c3699f892b02817f22dfc7c869e4171024a02f4321ca5b1657032a05b",
+   "sha256": "ce9ae7fb620a281494dda9d2847d456f0135b78a44d80194a98aace1d1ed4f1a",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/flash_sketch/run.json": {
@@ -249,7 +255,8 @@
   },
   "runs/high/flash_sketch/truth.json": {
    "sha256": "a5f31363e79956c298b8c5aa2b671c7f3b7d726cc29cd15d7a222bdbadcfc6f2",
-   "from": "v003-linke-2026-11-17/runs/high/flash_sketch/truth.json"
+   "from": "v003-linke-2026-11-17/runs/high/flash_sketch/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/read_erased_1k/c0001.wireskein": {
    "sha256": "10780f719f59d90003c68bf152c3b4b2195a1f4aab507dd9ddaac0ae6f26cec9",
@@ -274,7 +281,7 @@
    "from": "v003-linke-2026-11-17/runs/high/read_erased_1k/read.bin"
   },
   "runs/high/read_erased_1k/reading.json": {
-   "sha256": "c5431d0b072c42f3311c3cafdb84a626bcea08f9dc283d262e4038d50f757596",
+   "sha256": "f3ff5a4bacbc420e86e6787830b227ba3b4f91e2d9f8c191aca06751a78453da",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/read_erased_1k/run.json": {
@@ -288,7 +295,8 @@
   },
   "runs/high/read_erased_1k/truth.json": {
    "sha256": "e0e70d8a82d56cf31815ad7450e1874ea48d8ddbeb71f47077e1522922947e9e",
-   "from": "v003-linke-2026-11-17/runs/high/read_erased_1k/truth.json"
+   "from": "v003-linke-2026-11-17/runs/high/read_erased_1k/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/read_flash_4k/c0001.wireskein": {
    "sha256": "298623027a6b5af8deae67271d0a259c856f4ad6407585e6741aa5fe18b3b8ff",
@@ -313,7 +321,7 @@
    "from": "v003-linke-2026-11-17/runs/high/read_flash_4k/read.bin"
   },
   "runs/high/read_flash_4k/reading.json": {
-   "sha256": "6e81b9e722c04c589b371cbf59d435bc785cd6b9c0118f6653a4a204bad1acbd",
+   "sha256": "f4c610b426fbc519ac00bbc811ce3aec009efcc655e4572bf1decea4c82acba5",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/read_flash_4k/run.json": {
@@ -327,7 +335,8 @@
   },
   "runs/high/read_flash_4k/truth.json": {
    "sha256": "bd445a010fd4dec64b0db1bc3408a42db53a8db2e9045ce11954a06c8e109588",
-   "from": "v003-linke-2026-11-17/runs/high/read_flash_4k/truth.json"
+   "from": "v003-linke-2026-11-17/runs/high/read_flash_4k/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/read_pattern4k/c0001.wireskein": {
    "sha256": "df9f0a33845806c7b4e6a4215a4e11ca20e5f819481a00abcd70f9320d07dbaa",
@@ -352,7 +361,7 @@
    "from": "v003-linke-2026-11-17/runs/high/read_pattern4k/read.bin"
   },
   "runs/high/read_pattern4k/reading.json": {
-   "sha256": "cff2861bf1c5e9018a66b7d51c7ee145dcee9f498e8db8e47e395b5496e0f9fc",
+   "sha256": "4206c3b85e3b68f570c088fb77616052222a47ee851b59169596000a48cf50be",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/read_pattern4k/run.json": {
@@ -366,7 +375,8 @@
   },
   "runs/high/read_pattern4k/truth.json": {
    "sha256": "0a2571e4b80441c05fe480985c57aa28e9f4f82b25e460aedc476bafcf3372da",
-   "from": "v003-linke-2026-11-17/runs/high/read_pattern4k/truth.json"
+   "from": "v003-linke-2026-11-17/runs/high/read_pattern4k/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/read_ram_256/c0001.wireskein": {
    "sha256": "cb3cc2dfaf075bb95b2abb089e1826b4625a7257e4387e1479bfb985fc124511",
@@ -391,7 +401,7 @@
    "from": "v003-linke-2026-11-17/runs/high/read_ram_256/read.bin"
   },
   "runs/high/read_ram_256/reading.json": {
-   "sha256": "95e723174f51a62ed813a55534a483d106ca09abeab6b1a94b95d8d434d407ca",
+   "sha256": "a73510e80c9ba1bedb4dc54e9122b07a05c9c3bce4582ef16ad48a48306a1528",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/read_ram_256/run.json": {
@@ -405,7 +415,8 @@
   },
   "runs/high/read_ram_256/truth.json": {
    "sha256": "a1f75475b54af55ea43e4e8bdb8334aa4a3c8e689fb27dd2c788a215a67db691",
-   "from": "v003-linke-2026-11-17/runs/high/read_ram_256/truth.json"
+   "from": "v003-linke-2026-11-17/runs/high/read_ram_256/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/reset/c0001.wireskein": {
    "sha256": "7ec0828b1287c4f604c63e6ed7d0a9019c86a2efbc79d758c05de1d645a19c26",
@@ -426,7 +437,7 @@
    "from": "v003-linke-2026-11-17/runs/high/reset/ch32rv.stderr"
   },
   "runs/high/reset/reading.json": {
-   "sha256": "5bea7d42820dff2bb3152863989598d5e2d76e23f07e899f941e782d21e726c2",
+   "sha256": "66d5446d606a1ddc48c7ebe18882bd30c5cb68e2f3a862ff0174e07279260148",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/reset/run.json": {
@@ -439,8 +450,9 @@
    "added": "excerpt_s"
   },
   "runs/high/reset/truth.json": {
-   "sha256": "3c255387a9afcd7c91f7cbe6ce5a56bad28ecb7c3982ba993a1ec5e53459b321",
-   "from": "v003-linke-2026-11-17/runs/high/reset/truth.json"
+   "sha256": "9ee965bd6dcbac4b9de8049ded4d2ab2ab33777d819cc313dcd7e69e60eda396",
+   "from": "v003-linke-2026-11-17/runs/high/reset/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/target_info/c0001.wireskein": {
    "sha256": "dc6919810d026d423b925e280a5aacf202312d54566344a02023ec660e06ee49",
@@ -461,7 +473,7 @@
    "from": "v003-linke-2026-11-17/runs/high/target_info/ch32rv.stderr"
   },
   "runs/high/target_info/reading.json": {
-   "sha256": "36bfefadcbfde888a5e79cbc253a08aab66e6f4a0e348e551578f72661b3feab",
+   "sha256": "67a9052f67c53394a8fe98b79d8b78c6fe241b8c363cb013599d1b623989eeb3",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/target_info/run.json": {
@@ -474,8 +486,9 @@
    "added": "excerpt_s"
   },
   "runs/high/target_info/truth.json": {
-   "sha256": "b39db9ad36c8037592da9f6e85d955017b4e7659fe9168ae394690824c6d7181",
-   "from": "v003-linke-2026-11-17/runs/high/target_info/truth.json"
+   "sha256": "e1dafc5166e22fd998ec771ab21fa54de8fd89518f8899e1fced4e5b25183a84",
+   "from": "v003-linke-2026-11-17/runs/high/target_info/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/verify_pattern4k/c0001.wireskein": {
    "sha256": "0b858c48053e534a6b544219b1d815ac3c6ed6c0c2c488de720c5d8f703a1cc5",
@@ -496,7 +509,7 @@
    "from": "v003-linke-2026-11-17/runs/high/verify_pattern4k/ch32rv.stderr"
   },
   "runs/high/verify_pattern4k/reading.json": {
-   "sha256": "be5e55e712e5cbd466b98ecc56844f176a39e424814e3f515910c0ed683d28e7",
+   "sha256": "167dd1374ec3f60521eba0f4750c15e4e734d348a935763f4e5dbc893f634432",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/verify_pattern4k/run.json": {
@@ -510,7 +523,8 @@
   },
   "runs/high/verify_pattern4k/truth.json": {
    "sha256": "bcb53f979e67069c57ac2750978e898a9502c5ea24c62984aebfd61dfed328dd",
-   "from": "v003-linke-2026-11-17/runs/high/verify_pattern4k/truth.json"
+   "from": "v003-linke-2026-11-17/runs/high/verify_pattern4k/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_clock_dbg_halt/c0001.wireskein": {
    "sha256": "51330cf31851cc2d29dfa9abc033a8d110845bb06cf5fa038bfd157e61116921",
@@ -531,7 +545,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_clock_dbg_halt/ch32rv.stderr"
   },
   "runs/high/x_clock_dbg_halt/reading.json": {
-   "sha256": "90abce1c6120a3bf128d02a9cb75132fc8cd880c105253bbdacf6e46ea48d6d5",
+   "sha256": "c627cfd6fb7bc03e6647a52b91915b8ed6bf9221a5844affd9af2774a479270f",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_clock_dbg_halt/run.json": {
@@ -544,8 +558,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_clock_dbg_halt/truth.json": {
-   "sha256": "a48450e96b2f8b235218573a53d177fd1b79a370d1412656e48f57ba7973f4f4",
-   "from": "v003-linke-2026-11-17/runs/high/x_clock_dbg_halt/truth.json"
+   "sha256": "031ce0cf81b09a1cbc3d605493e102612761b00072a065c4065fb40e17c46b06",
+   "from": "v003-linke-2026-11-17/runs/high/x_clock_dbg_halt/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_clock_dbg_regs/c0001.wireskein": {
    "sha256": "84649942d03eb00ba316c1b8120b279a88ac04378a684fce210c277872775315",
@@ -566,7 +581,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_clock_dbg_regs/ch32rv.stderr"
   },
   "runs/high/x_clock_dbg_regs/reading.json": {
-   "sha256": "b17584df829230c5ec7b2e168233ccf39e162c3a12daee27960e562226b02712",
+   "sha256": "53d6358b52d70f655d396fc3fc27046512388d05a4c1e86cc0736b6450246853",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_clock_dbg_regs/run.json": {
@@ -580,7 +595,8 @@
   },
   "runs/high/x_clock_dbg_regs/truth.json": {
    "sha256": "0cbd8743c3633cc230c4195878d0d915f45ee1cd8e8cf17ac5a55ad95d2674ad",
-   "from": "v003-linke-2026-11-17/runs/high/x_clock_dbg_regs/truth.json"
+   "from": "v003-linke-2026-11-17/runs/high/x_clock_dbg_regs/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_clock_dbg_resume/c0001.wireskein": {
    "sha256": "f5939ffdccd3fc2b48c7e15da11f2b259b3490272b904b8c5739bbe80c6d5d75",
@@ -601,7 +617,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_clock_dbg_resume/ch32rv.stderr"
   },
   "runs/high/x_clock_dbg_resume/reading.json": {
-   "sha256": "f5fce66f9ab7d2936455d071e5d46ac3edf3e360fa350f58a16fd06adc5439e5",
+   "sha256": "7a7ad66fe943662767fdeb29a03d4c5264f4953f413f24ce09fd305d220e3d41",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_clock_dbg_resume/run.json": {
@@ -614,8 +630,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_clock_dbg_resume/truth.json": {
-   "sha256": "f6fefac6070ae682aa4b3777ae4ea2151f5065db3fa77e318bc9a800ccd003c4",
-   "from": "v003-linke-2026-11-17/runs/high/x_clock_dbg_resume/truth.json"
+   "sha256": "6f7dca42f19707a019f38f73244bfc7c1acbd63b84e051984de64895e38ebf3f",
+   "from": "v003-linke-2026-11-17/runs/high/x_clock_dbg_resume/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_clock_flash/c0001.wireskein": {
    "sha256": "215ccb1dd2b8e6bd0182c92b51bd055af7c643acb8a4a2e6fd00cb36ef27f1b7",
@@ -636,7 +653,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_clock_flash/ch32rv.stderr"
   },
   "runs/high/x_clock_flash/reading.json": {
-   "sha256": "d98f40b5a935b73731796d5f4ce3445822a234c5c94405135a02212e812a059c",
+   "sha256": "c9a09409e2bf28583e09ce73085d56aff0115d5400b99a24d6d935cf0fa72884",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_clock_flash/run.json": {
@@ -650,7 +667,8 @@
   },
   "runs/high/x_clock_flash/truth.json": {
    "sha256": "ca216ef31d68f0565b728a2cdc8470d7cd85d59454ced944fcbf6ec77dbfc670",
-   "from": "v003-linke-2026-11-17/runs/high/x_clock_flash/truth.json"
+   "from": "v003-linke-2026-11-17/runs/high/x_clock_flash/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_clock_flash_pattern4k/c0001.wireskein": {
    "sha256": "29c619dc7e8a921976eb5a72c14d5807047de58ccdcfc8158599c0884b1eaddc",
@@ -671,7 +689,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_clock_flash_pattern4k/ch32rv.stderr"
   },
   "runs/high/x_clock_flash_pattern4k/reading.json": {
-   "sha256": "a653309df5c49b1d00f9312e603e17e489f8edcd0342ec61d50a90beea70eb2f",
+   "sha256": "897d2c97ac27c63cbd6f1b7fc716c998fc510446021eabb4e5556819d9454f54",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_clock_flash_pattern4k/run.json": {
@@ -685,7 +703,8 @@
   },
   "runs/high/x_clock_flash_pattern4k/truth.json": {
    "sha256": "3e1754b8900c3636b9f4504c1fa85c32b3dbfe7271549715c4ffc618c253afeb",
-   "from": "v003-linke-2026-11-17/runs/high/x_clock_flash_pattern4k/truth.json"
+   "from": "v003-linke-2026-11-17/runs/high/x_clock_flash_pattern4k/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_clock_low_target_info/c0001.wireskein": {
    "sha256": "0ea42733823c77f663681fe13565e8a4ff587f9933fec380d86d22535290a1a7",
@@ -706,7 +725,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_clock_low_target_info/ch32rv.stderr"
   },
   "runs/high/x_clock_low_target_info/reading.json": {
-   "sha256": "36bfefadcbfde888a5e79cbc253a08aab66e6f4a0e348e551578f72661b3feab",
+   "sha256": "cf55004fe7def3038ba0459d822c03e004b755140ad69be0c0cc2952ed31a493",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_clock_low_target_info/run.json": {
@@ -719,8 +738,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_clock_low_target_info/truth.json": {
-   "sha256": "b39db9ad36c8037592da9f6e85d955017b4e7659fe9168ae394690824c6d7181",
-   "from": "v003-linke-2026-11-17/runs/high/x_clock_low_target_info/truth.json"
+   "sha256": "e1dafc5166e22fd998ec771ab21fa54de8fd89518f8899e1fced4e5b25183a84",
+   "from": "v003-linke-2026-11-17/runs/high/x_clock_low_target_info/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_clock_read_flash_4k/c0001.wireskein": {
    "sha256": "37bc13a1669e44ad14bd0544a27b7a54b08136d7a8b646ec7309406c68c2c2a7",
@@ -745,7 +765,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_clock_read_flash_4k/read.bin"
   },
   "runs/high/x_clock_read_flash_4k/reading.json": {
-   "sha256": "bb63aa8c2683446ad1e52432597b7517a134a5130f92036a0c2bb705cb95cf68",
+   "sha256": "77751acb1c97ea8d66d9a43357e302ec81949885db550fd48f473093aaafcab2",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_clock_read_flash_4k/run.json": {
@@ -759,7 +779,8 @@
   },
   "runs/high/x_clock_read_flash_4k/truth.json": {
    "sha256": "a540507d7d959c7f085cbf628ddc36b8cacc45518d0e7440990f79f70e94d8d3",
-   "from": "v003-linke-2026-11-17/runs/high/x_clock_read_flash_4k/truth.json"
+   "from": "v003-linke-2026-11-17/runs/high/x_clock_read_flash_4k/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_clock_read_rcc_0/c0001.wireskein": {
    "sha256": "e2d5be732db99687e7fb2d61c379fbda6921cb0c19a1c54769e2f04a48efeac4",
@@ -784,7 +805,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_clock_read_rcc_0/read.bin"
   },
   "runs/high/x_clock_read_rcc_0/reading.json": {
-   "sha256": "231b97ce4c8e26d433c9d91d5e11a3f89777015bb729ecd6d511b8a095509f0d",
+   "sha256": "7f1d426ec3c3a8a731c7e768151cb2c8441a233d73b1915ac5b0539cf3cf507b",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_clock_read_rcc_0/run.json": {
@@ -797,8 +818,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_clock_read_rcc_0/truth.json": {
-   "sha256": "5cbd4626b3694e834e0c2e0c1d1c5d4e45d85d5089b2f533ad01b607f04504de",
-   "from": "v003-linke-2026-11-17/runs/high/x_clock_read_rcc_0/truth.json"
+   "sha256": "22f1cf6a524b62b80e49131d3bd6e9a539013c37f2df2166b12a1ebcd3cd1cf4",
+   "from": "v003-linke-2026-11-17/runs/high/x_clock_read_rcc_0/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_clock_read_rcc_1/c0001.wireskein": {
    "sha256": "16cff546201a518849d23d62bdb31377ee1e1972b6e914be0d9877e992150e46",
@@ -823,7 +845,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_clock_read_rcc_1/read.bin"
   },
   "runs/high/x_clock_read_rcc_1/reading.json": {
-   "sha256": "3db43eab5343ac887dfca7899e1c44cf3b0a4688a4395c82f4215910c4ff3eb7",
+   "sha256": "0aabe4050df640bb95f5ac626feab022881f26f9c995f69791dd2f9fa2857f64",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_clock_read_rcc_1/run.json": {
@@ -836,8 +858,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_clock_read_rcc_1/truth.json": {
-   "sha256": "17bd397cafb55c9c8f2b9f326ad6053f725316190fbffb0c71cbb9a391a26b7b",
-   "from": "v003-linke-2026-11-17/runs/high/x_clock_read_rcc_1/truth.json"
+   "sha256": "c8aa9f47106b3074d6c1d19c8b5d4e2929a5bd3b4db1ced0239c284c749fbed5",
+   "from": "v003-linke-2026-11-17/runs/high/x_clock_read_rcc_1/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_clock_read_rcc_2/c0001.wireskein": {
    "sha256": "f7baaf13b4d8bb0bbd3374cc03590942a89965a79b714f07cb42c565ffdc2c8d",
@@ -862,7 +885,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_clock_read_rcc_2/read.bin"
   },
   "runs/high/x_clock_read_rcc_2/reading.json": {
-   "sha256": "30f45ac0a530e970bdf80dc2e03b57aa6b23af30ed3d3be8c03f1e9f6daa481f",
+   "sha256": "c617f80fde1b46453cd6a2530806d1f1bd97fffe46e9d3e36c8c72872c537baa",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_clock_read_rcc_2/run.json": {
@@ -875,8 +898,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_clock_read_rcc_2/truth.json": {
-   "sha256": "d106487ca1d15426aa52f8ffe327435e9ccbf2adcd95458a0c021e3e7a5dc40a",
-   "from": "v003-linke-2026-11-17/runs/high/x_clock_read_rcc_2/truth.json"
+   "sha256": "795828572f3191b7f6c16a8958d28ac8a2d49ae6d2e6f42931614d54df287906",
+   "from": "v003-linke-2026-11-17/runs/high/x_clock_read_rcc_2/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_clock_reset/c0001.wireskein": {
    "sha256": "414feaabd91fc9d18ee9d1099f511663d8e0472095d45b4670c847d74833583d",
@@ -897,7 +921,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_clock_reset/ch32rv.stderr"
   },
   "runs/high/x_clock_reset/reading.json": {
-   "sha256": "ae877e6a0fba1464243f222d5e176182ebd26cb5dbcdcc645eca9272e9d8d3ba",
+   "sha256": "6018c61bb4afc619641026ad9314a227373dc5e5c66c433397c84c3d93ea83e1",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_clock_reset/run.json": {
@@ -910,8 +934,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_clock_reset/truth.json": {
-   "sha256": "e27ac5ee558b35330c5cbb610619884f8ad43ebfbc6e75f411e1032b1e981a56",
-   "from": "v003-linke-2026-11-17/runs/high/x_clock_reset/truth.json"
+   "sha256": "46153e6fbe73056358097d6d1b03af763beba1dcfe945501fd84e009140586f3",
+   "from": "v003-linke-2026-11-17/runs/high/x_clock_reset/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_clock_target_info/c0001.wireskein": {
    "sha256": "c7eca4ce96f0c520c1309879003010aedc33afa1546ff4504c81e38c23ae06a7",
@@ -932,7 +957,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_clock_target_info/ch32rv.stderr"
   },
   "runs/high/x_clock_target_info/reading.json": {
-   "sha256": "69831e7e1ed819b72dcbf3028fd409da9e498da97f95aaf4374616dfc8722fee",
+   "sha256": "f27606e006f90d4d1821dfe6b8c3ff6d94676f40c7a3b9d03a4ac7d786b854ae",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_clock_target_info/run.json": {
@@ -945,8 +970,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_clock_target_info/truth.json": {
-   "sha256": "25ebe512891159eee422dbe2dba776ecc7e368875f107c23110f7e96fd3c5db1",
-   "from": "v003-linke-2026-11-17/runs/high/x_clock_target_info/truth.json"
+   "sha256": "e1dafc5166e22fd998ec771ab21fa54de8fd89518f8899e1fced4e5b25183a84",
+   "from": "v003-linke-2026-11-17/runs/high/x_clock_target_info/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_connect_under_reset/c0001.wireskein": {
    "sha256": "608da345e5ddfd5e334bdba4174892a06451cfdf5d65fcd177d8095aab9b6c6d",
@@ -967,7 +993,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_connect_under_reset/ch32rv.stderr"
   },
   "runs/high/x_connect_under_reset/reading.json": {
-   "sha256": "bcf4a54296202a2fda1bfdcf813ee139ce3a1278b98f6969ef7be34e88efc08e",
+   "sha256": "10db8e885115c6c1d680424a3da6cf93139336d70b679189337b6b1f2dffbb3e",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_connect_under_reset/run.json": {
@@ -980,8 +1006,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_connect_under_reset/truth.json": {
-   "sha256": "2f570d4d2093a0448ae479c57587eddc393f59150dd967709c44f0606b5716e9",
-   "from": "v003-linke-2026-11-17/runs/high/x_connect_under_reset/truth.json"
+   "sha256": "bd68b5686c88e668799bd814e063157c8551e67471e1fcf4704609fef5af5846",
+   "from": "v003-linke-2026-11-17/runs/high/x_connect_under_reset/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_dbg_halt_w/c0001.wireskein": {
    "sha256": "2acfb482031513a66e034da7d3eb02e1d7b98b0c4f925595540bba07042d6ccd",
@@ -1002,7 +1029,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_dbg_halt_w/ch32rv.stderr"
   },
   "runs/high/x_dbg_halt_w/reading.json": {
-   "sha256": "6e71ba3d9118dc470fe0373e3dabdfd433330fbe3117f85171384c5ca1514f2a",
+   "sha256": "b9415c73ec103dffba02185d4949483381ebebf47a190166a63858ce06ccadec",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_dbg_halt_w/run.json": {
@@ -1015,8 +1042,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_dbg_halt_w/truth.json": {
-   "sha256": "9dfb6c8ec5f0d76e9b347ddc4c944ea37a19dfb4b5a174065fc0339ad7fe03be",
-   "from": "v003-linke-2026-11-17/runs/high/x_dbg_halt_w/truth.json"
+   "sha256": "26f0952915d082b4806e2acb8ae0d467aaf26b09578f7341b1091ffdc725008a",
+   "from": "v003-linke-2026-11-17/runs/high/x_dbg_halt_w/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_dbg_reg_misa/c0001.wireskein": {
    "sha256": "98382b2678ee8fb3e215ce7a4fb96318b9c6e40f0bf0fe5c9ef9aac4b578835c",
@@ -1037,7 +1065,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_dbg_reg_misa/ch32rv.stderr"
   },
   "runs/high/x_dbg_reg_misa/reading.json": {
-   "sha256": "3a559da7738f0980c2c1a116d13c8f657b91667010f6377ba3b37e1d1b726018",
+   "sha256": "f00dd73de53a961d99fcb74f2643f8811220f6227db04a061a253034638682e9",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_dbg_reg_misa/run.json": {
@@ -1050,8 +1078,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_dbg_reg_misa/truth.json": {
-   "sha256": "256d90af1334dbbd96df4bbf2beef5611f725632efcd171646d5ecfa85a5ffe4",
-   "from": "v003-linke-2026-11-17/runs/high/x_dbg_reg_misa/truth.json"
+   "sha256": "55eb0c6045b33661a0d1862e9d136f5345b50f6f53b661b85d426e0362a7ea03",
+   "from": "v003-linke-2026-11-17/runs/high/x_dbg_reg_misa/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_dbg_reg_pc/c0001.wireskein": {
    "sha256": "a44b5eeb014a9442073ab1a0d63d5aa1a2546e3fe9f8d3e032c465cf77b6e4c6",
@@ -1072,7 +1101,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_dbg_reg_pc/ch32rv.stderr"
   },
   "runs/high/x_dbg_reg_pc/reading.json": {
-   "sha256": "93ba4dff33464b100c3837daf022d33f4b1ae16673109589b06fb628f76a931c",
+   "sha256": "a356012758e04d2e4dfc34c54a29bb0ef78c6d01481f5974067e489302f62aae",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_dbg_reg_pc/run.json": {
@@ -1085,8 +1114,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_dbg_reg_pc/truth.json": {
-   "sha256": "b1eca0f50e092ad0fe93cb43e74e02a28ca5b8ac9de72fc984f1140c519ecae5",
-   "from": "v003-linke-2026-11-17/runs/high/x_dbg_reg_pc/truth.json"
+   "sha256": "6826729398adda55cd883e2d0cc6d96f06cc1f24882408da84d89817bb63d7e5",
+   "from": "v003-linke-2026-11-17/runs/high/x_dbg_reg_pc/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_dbg_reg_sp/c0001.wireskein": {
    "sha256": "cb2ffe2b7e12f0e16ee8f2c8f380475ee8ae877b138e6ceee77d8541bd5e23f7",
@@ -1107,7 +1137,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_dbg_reg_sp/ch32rv.stderr"
   },
   "runs/high/x_dbg_reg_sp/reading.json": {
-   "sha256": "de21c9ed7dea32f5114cc9abfd1693026cf01b9b671ebb8760bccc7fba429135",
+   "sha256": "39b1b2d1d5864dedb7fda57085f0a660ace68457996ce4056b1e8fafcd423c29",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_dbg_reg_sp/run.json": {
@@ -1120,8 +1150,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_dbg_reg_sp/truth.json": {
-   "sha256": "72b42fc6c57032d67a11bb52c90d15b76360b15aea37cc64d254c1b0d82893d6",
-   "from": "v003-linke-2026-11-17/runs/high/x_dbg_reg_sp/truth.json"
+   "sha256": "cd9977a7448d514856e4d74be796dd16cc4054359c4dcacc346e11b7412a9c53",
+   "from": "v003-linke-2026-11-17/runs/high/x_dbg_reg_sp/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_dbg_reg_t0/c0001.wireskein": {
    "sha256": "3e8a5c8f7cecb9e884f92af35db5405efaf126c2fd9396d245576a1268279f75",
@@ -1142,7 +1173,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_dbg_reg_t0/ch32rv.stderr"
   },
   "runs/high/x_dbg_reg_t0/reading.json": {
-   "sha256": "7749ef78448967e07c429f1179e9d663702663b475e20b1a62513755f764e975",
+   "sha256": "6be777c45d1204529fe392147f6b8701d0aa9368ec84ab684155d8b5254072e4",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_dbg_reg_t0/run.json": {
@@ -1155,8 +1186,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_dbg_reg_t0/truth.json": {
-   "sha256": "afb14750d37cdb9054680caa72585caf80ddac6ec4b1cda798d7cd728b95e0ee",
-   "from": "v003-linke-2026-11-17/runs/high/x_dbg_reg_t0/truth.json"
+   "sha256": "c47262e8c02da5ee4bfc32fb750fcdbf0cd2c081b4b8ea64ed09fa04e59f70b8",
+   "from": "v003-linke-2026-11-17/runs/high/x_dbg_reg_t0/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_dbg_reg_write_t0/c0001.wireskein": {
    "sha256": "3d0226db0830f6cfaf4f60b530670ef8a4b6d57d13faf35eb6e40890381bad9f",
@@ -1177,7 +1209,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_dbg_reg_write_t0/ch32rv.stderr"
   },
   "runs/high/x_dbg_reg_write_t0/reading.json": {
-   "sha256": "c4e6495c1959e0283a12c2015e8a60f4a2620bed44d6eb22b8272c43f9461862",
+   "sha256": "60b23b02a67f50c08b3b2cb00afb3088e1c61e40ffa4122e40b8ae6240e7e541",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_dbg_reg_write_t0/run.json": {
@@ -1190,8 +1222,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_dbg_reg_write_t0/truth.json": {
-   "sha256": "3a885206131b9cd02a8be23a1aa3ddb958bbc9e02efcf741198645f2138a20c1",
-   "from": "v003-linke-2026-11-17/runs/high/x_dbg_reg_write_t0/truth.json"
+   "sha256": "f2193a2716bfd680207d84130f87bd8b6e50edde69798e1dcbd5a70c1a8b875d",
+   "from": "v003-linke-2026-11-17/runs/high/x_dbg_reg_write_t0/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_dbg_regs_after_step/c0001.wireskein": {
    "sha256": "d86b230b3f7a80d9565d9e209b82cf7a6395ef94a5a38173bfd27af1e576aa8b",
@@ -1212,7 +1245,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_dbg_regs_after_step/ch32rv.stderr"
   },
   "runs/high/x_dbg_regs_after_step/reading.json": {
-   "sha256": "912d90327204d0f37ba8c917f5a41ddb89fb25e619444c7c05ff0600eae2fb3f",
+   "sha256": "a8824d529af555e16cdffaf44b69b5e90b7ed0b11acaaea65f95f9390af9992c",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_dbg_regs_after_step/run.json": {
@@ -1226,7 +1259,8 @@
   },
   "runs/high/x_dbg_regs_after_step/truth.json": {
    "sha256": "16aa19eef1d2a497dcc2ad7fa38e9775edc7de0b3f58802e9c3bf4fd4a9785db",
-   "from": "v003-linke-2026-11-17/runs/high/x_dbg_regs_after_step/truth.json"
+   "from": "v003-linke-2026-11-17/runs/high/x_dbg_regs_after_step/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_dbg_resume_w/c0001.wireskein": {
    "sha256": "62421697795ba9ed140ca89e997b01f46b7abad2bacb73377b207b7c3a87600d",
@@ -1247,7 +1281,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_dbg_resume_w/ch32rv.stderr"
   },
   "runs/high/x_dbg_resume_w/reading.json": {
-   "sha256": "fab8f8ca9944c52fbc0941a0f609b801e74c561bdb4dd8e9709311bf28ac17c1",
+   "sha256": "d800d6f9c114deedad29a6211a2efa55d638a98f869366491f8d799a9b4a4c8b",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_dbg_resume_w/run.json": {
@@ -1260,8 +1294,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_dbg_resume_w/truth.json": {
-   "sha256": "fda4ddaef1261bbf4b5ca54d4309cbf96a11f67691e9d0650e6f2f7d246ac506",
-   "from": "v003-linke-2026-11-17/runs/high/x_dbg_resume_w/truth.json"
+   "sha256": "8efd691a631cfa9b2172bd1c570b016b402a28922d1238dd74003692224eb495",
+   "from": "v003-linke-2026-11-17/runs/high/x_dbg_resume_w/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_dbg_step_1/c0001.wireskein": {
    "sha256": "13ac702df5b225d2df7f2aed900e7b49f524c7aea8d492e3fd636ea4295abe92",
@@ -1282,7 +1317,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_dbg_step_1/ch32rv.stderr"
   },
   "runs/high/x_dbg_step_1/reading.json": {
-   "sha256": "1127f292ac15f3c907d0106533285701097bc665da3b1e474fee45f6f0ee93a1",
+   "sha256": "04b2eae871ba390e120fcd2ae6b36b8f9ac76c29672f87f5508d4a4b505ce217",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_dbg_step_1/run.json": {
@@ -1296,7 +1331,8 @@
   },
   "runs/high/x_dbg_step_1/truth.json": {
    "sha256": "31e87b8a55928c9017d1cc125c04db031ee8d1ecf81a4fc069224b00743cd5ff",
-   "from": "v003-linke-2026-11-17/runs/high/x_dbg_step_1/truth.json"
+   "from": "v003-linke-2026-11-17/runs/high/x_dbg_step_1/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_dbg_step_2/c0001.wireskein": {
    "sha256": "06cc20f1e5364218733a3445ea3ab04bfde002919693035d24f38804cbd0cd98",
@@ -1317,7 +1353,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_dbg_step_2/ch32rv.stderr"
   },
   "runs/high/x_dbg_step_2/reading.json": {
-   "sha256": "8cbe7e1d5eba78bc4971298be3b16cb2b6eb2d5a66cff8af32003b60cc299631",
+   "sha256": "97cfccdf0c72d886eda90af6c932efddfaca34b87e893687d36161b651c07efe",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_dbg_step_2/run.json": {
@@ -1331,7 +1367,8 @@
   },
   "runs/high/x_dbg_step_2/truth.json": {
    "sha256": "52f64035475f17d3aca96876143d851e9a599935e69a759dcf2a9357ee593f94",
-   "from": "v003-linke-2026-11-17/runs/high/x_dbg_step_2/truth.json"
+   "from": "v003-linke-2026-11-17/runs/high/x_dbg_step_2/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_dbg_step_3/c0001.wireskein": {
    "sha256": "aa4c5dd1b457b1fd65621e03bb1233a5096b7fb54ba5fe48de318698075b9199",
@@ -1352,7 +1389,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_dbg_step_3/ch32rv.stderr"
   },
   "runs/high/x_dbg_step_3/reading.json": {
-   "sha256": "1c88d67bb1dff7d6235e20e9e0bbb2bcff47c826ad75590a6f14dee5518ec213",
+   "sha256": "5c7ed80ff3e73e586cc89b05e80a853e9e3be38cfdcd63cd90185bde765eb085",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_dbg_step_3/run.json": {
@@ -1366,7 +1403,8 @@
   },
   "runs/high/x_dbg_step_3/truth.json": {
    "sha256": "b32367e0824908b891c0775623166d3258b711fd5f468a7e1c3e992c183a57f9",
-   "from": "v003-linke-2026-11-17/runs/high/x_dbg_step_3/truth.json"
+   "from": "v003-linke-2026-11-17/runs/high/x_dbg_step_3/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_dmi_read_abstractcs/c0001.wireskein": {
    "sha256": "aa7af988e753c6c66fa5d10057a6af6f12dd55fb0a7e7bb3257199362719c393",
@@ -1387,7 +1425,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_dmi_read_abstractcs/ch32rv.stderr"
   },
   "runs/high/x_dmi_read_abstractcs/reading.json": {
-   "sha256": "c0b682f4208c0e97fdf6a76aa76367ed99ca44f5db00d3c95cad0b9c802ece2c",
+   "sha256": "7b96f0556dbd582dce635bd9134ee47883bdf9af019d00e69944a24f8627e25b",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_dmi_read_abstractcs/run.json": {
@@ -1400,8 +1438,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_dmi_read_abstractcs/truth.json": {
-   "sha256": "8c20e6a0c67d77885260f68f13a2941dfc58b54dc31fbc03c40df25818318e1a",
-   "from": "v003-linke-2026-11-17/runs/high/x_dmi_read_abstractcs/truth.json"
+   "sha256": "7b538da740948f5f10db0e1277205c07ad674bc96801d66f37f271a9358624f1",
+   "from": "v003-linke-2026-11-17/runs/high/x_dmi_read_abstractcs/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_dmi_read_data0/c0001.wireskein": {
    "sha256": "d691aeab37e732fe199d10d60affeb779ea84b403f6dd524bdb9043482b2b206",
@@ -1422,7 +1461,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_dmi_read_data0/ch32rv.stderr"
   },
   "runs/high/x_dmi_read_data0/reading.json": {
-   "sha256": "53df2ee61029705063dae2ccefe36a49a4f3df843d34f27694d1654b7438f913",
+   "sha256": "523d6f78023bac42de8936a17fca3038e913025dd7b0f614241d07bd211f3b8b",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_dmi_read_data0/run.json": {
@@ -1435,8 +1474,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_dmi_read_data0/truth.json": {
-   "sha256": "8d612ecc6954741658f9252f6333cf63d61989802cb9880bdd546737d446adfe",
-   "from": "v003-linke-2026-11-17/runs/high/x_dmi_read_data0/truth.json"
+   "sha256": "162d3190ad741bfaa2f8dcb16c44200dc9a2fd8bfab3485f7f7a4348a6542a11",
+   "from": "v003-linke-2026-11-17/runs/high/x_dmi_read_data0/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_dmi_read_data0_after/c0001.wireskein": {
    "sha256": "a9884fd2ef2fb58e69c523ff16a40ff0c05527a7c0ad2aded5857ae74142f51b",
@@ -1457,7 +1497,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_dmi_read_data0_after/ch32rv.stderr"
   },
   "runs/high/x_dmi_read_data0_after/reading.json": {
-   "sha256": "b51f116f73323f1f93dcbf4186a0bcb0c53104da9478b889ba697f851f4e16ff",
+   "sha256": "c81461d8f7b246f308b29367aecd8846883f8df8c5ed47273e9e06aeb46b3893",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_dmi_read_data0_after/run.json": {
@@ -1470,8 +1510,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_dmi_read_data0_after/truth.json": {
-   "sha256": "7ee635662e0e9cc91343bdee654b84b078f0d7804ad64a00083707a70b6ddeda",
-   "from": "v003-linke-2026-11-17/runs/high/x_dmi_read_data0_after/truth.json"
+   "sha256": "ac3e36dbc238df2234205d5112c809020308b1098785ae09460baed4a42b47f7",
+   "from": "v003-linke-2026-11-17/runs/high/x_dmi_read_data0_after/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_dmi_read_dmcontrol/c0001.wireskein": {
    "sha256": "c377e26fe2fb46d8db181efefb65426f15ed9ba2511773e84ab4e0617d5078a5",
@@ -1492,7 +1533,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_dmi_read_dmcontrol/ch32rv.stderr"
   },
   "runs/high/x_dmi_read_dmcontrol/reading.json": {
-   "sha256": "b20331ed2af505704011e8f7872dd47b397395424dfd72b0ae5c47c89a01a07d",
+   "sha256": "fcac263a37c45ac838fe0adffde92cefdb02c731ca11e2dde66696825e3f7943",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_dmi_read_dmcontrol/run.json": {
@@ -1505,8 +1546,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_dmi_read_dmcontrol/truth.json": {
-   "sha256": "b3d046f0f47137c406c2a81000b387ac561b708be293ee5013a9239418493d90",
-   "from": "v003-linke-2026-11-17/runs/high/x_dmi_read_dmcontrol/truth.json"
+   "sha256": "a1c95d9c42046e029c087d407e99d72bd6910e6e5eb7ab9a693b7493d82ad34c",
+   "from": "v003-linke-2026-11-17/runs/high/x_dmi_read_dmcontrol/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_dmi_read_dmstatus/c0001.wireskein": {
    "sha256": "7890f3777068df170dd8f439c2ba2c14b8c062f6b10a6a2f0436f204c04c2137",
@@ -1527,7 +1569,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_dmi_read_dmstatus/ch32rv.stderr"
   },
   "runs/high/x_dmi_read_dmstatus/reading.json": {
-   "sha256": "bc5c9db896e0277b76faf8272810fd5d42dbb43c850b134c471ef384c69eb06b",
+   "sha256": "368c6613fb3ddaa2b7f679cf1961ba9cffe8a5f22cb62fe02993349fce65fd93",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_dmi_read_dmstatus/run.json": {
@@ -1540,8 +1582,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_dmi_read_dmstatus/truth.json": {
-   "sha256": "55168682b6640f236d33f92bc24fdfad5cef2cc10973073e22f8e1083bd4cc9b",
-   "from": "v003-linke-2026-11-17/runs/high/x_dmi_read_dmstatus/truth.json"
+   "sha256": "43d0f04868d07d0715681ef263ce1c10da7fc8c91765913ef5b7533786d06410",
+   "from": "v003-linke-2026-11-17/runs/high/x_dmi_read_dmstatus/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_dmi_read_hartinfo/c0001.wireskein": {
    "sha256": "7a51fb134b4ff14d1c442d5633886e39601c8e28cd76809ea9d98d61e42c28ad",
@@ -1562,7 +1605,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_dmi_read_hartinfo/ch32rv.stderr"
   },
   "runs/high/x_dmi_read_hartinfo/reading.json": {
-   "sha256": "e80f170022f3a0e14a2c7e9cc00bc140b0f52adf30da76a4a9ab6c577e911d96",
+   "sha256": "827e63ab654a06e2ee1d1b422067f8196b07ba97ecc534eb0867e5c697aea684",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_dmi_read_hartinfo/run.json": {
@@ -1575,8 +1618,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_dmi_read_hartinfo/truth.json": {
-   "sha256": "2678335d99cc3ac9cbc26529500018143ffa191c62bab3a939bceb8052b6493f",
-   "from": "v003-linke-2026-11-17/runs/high/x_dmi_read_hartinfo/truth.json"
+   "sha256": "4bdda98b92a4dc08652e743e9c8cd34f1c7bd58c0eee8b2803f86ae7bd8cd0f2",
+   "from": "v003-linke-2026-11-17/runs/high/x_dmi_read_hartinfo/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_dmi_write_data0/c0001.wireskein": {
    "sha256": "af4028cd7fd08193224408226aa035b195f0ffb4b7f229a2f53957d43461d577",
@@ -1597,7 +1641,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_dmi_write_data0/ch32rv.stderr"
   },
   "runs/high/x_dmi_write_data0/reading.json": {
-   "sha256": "21be107708cbf4e3177084272bb277bcd5dd29bb2f3be2c8f55a4a969eed8265",
+   "sha256": "55159d4ea8ce1454c7685ed7a8b6cdf0bff049bb5617ae38a14b4eab9f2ffaa2",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_dmi_write_data0/run.json": {
@@ -1610,8 +1654,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_dmi_write_data0/truth.json": {
-   "sha256": "e444d1488585cb5d7bb109deb7d88ddc78d4b659c0d5651b852d0963b6e94931",
-   "from": "v003-linke-2026-11-17/runs/high/x_dmi_write_data0/truth.json"
+   "sha256": "5b3c84659d7388e4e53b28c4f4470edffd510f6100c07a94553df46273972bd1",
+   "from": "v003-linke-2026-11-17/runs/high/x_dmi_write_data0/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_dmi_write_dmcontrol_01/c0001.wireskein": {
    "sha256": "ff526abded1af69fd80ede887ce35ec98c1778a1c5b3417d1e3e5cfc26e9967f",
@@ -1632,7 +1677,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_dmi_write_dmcontrol_01/ch32rv.stderr"
   },
   "runs/high/x_dmi_write_dmcontrol_01/reading.json": {
-   "sha256": "0605fd40db79f0496b3cf39de8fe4bae83690c2fa08eb7eebd005c106faaecc8",
+   "sha256": "e5b0940ab61431291f1580f1ae48f00839a3473c30abbf15e8f39821d11c82f1",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_dmi_write_dmcontrol_01/run.json": {
@@ -1645,8 +1690,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_dmi_write_dmcontrol_01/truth.json": {
-   "sha256": "95310c650c9e5b99c961287fe979f658f96946a748a098681aaeae6f1cb616c4",
-   "from": "v003-linke-2026-11-17/runs/high/x_dmi_write_dmcontrol_01/truth.json"
+   "sha256": "48613f53c6e8fa4cd243ae72b12fad9089764622ec491925d42c0e9d0c3e4be1",
+   "from": "v003-linke-2026-11-17/runs/high/x_dmi_write_dmcontrol_01/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_err_read_unmapped/c0001.wireskein": {
    "sha256": "8b9c8d0bbb130a57d8327f6c46c0f037a9b44d538511fed83a5cff1a501228df",
@@ -1671,7 +1717,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_err_read_unmapped/read.bin"
   },
   "runs/high/x_err_read_unmapped/reading.json": {
-   "sha256": "b9d8762d1a623d72a052d65bb19bd2fd657418913765b8590cab730b924d8b6d",
+   "sha256": "9b369e126c07422e37eac3bf30c531f1237e761f1675e7a77edc688d991d703d",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_err_read_unmapped/run.json": {
@@ -1684,8 +1730,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_err_read_unmapped/truth.json": {
-   "sha256": "8c156324947ba4627a5fe9fcbce2b47762fe38d6ff246d8d124c7f438d37a41e",
-   "from": "v003-linke-2026-11-17/runs/high/x_err_read_unmapped/truth.json"
+   "sha256": "3bd5718f560541283defbf45a0727202eb20a71588f5135320266c489be625e4",
+   "from": "v003-linke-2026-11-17/runs/high/x_err_read_unmapped/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_err_verify_mismatch/c0001.wireskein": {
    "sha256": "d261532264c60f537ba3e7690cf9e3e83e1b86026bc75352d76a8b3024358756",
@@ -1706,7 +1753,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_err_verify_mismatch/ch32rv.stderr"
   },
   "runs/high/x_err_verify_mismatch/reading.json": {
-   "sha256": "0665e0bc0ea5069d90c77663f33d13f34fd585dc9144d9f59cd1ef12baa884cd",
+   "sha256": "2399c678a51f805224ad5924fcc9a08961b52908ca6c2421c7b77cdbd3135e5f",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_err_verify_mismatch/run.json": {
@@ -1720,7 +1767,8 @@
   },
   "runs/high/x_err_verify_mismatch/truth.json": {
    "sha256": "f6e3d5784f32fa8634cabf5501366ac5765aa5d29411b7a4f9863da3e8db2249",
-   "from": "v003-linke-2026-11-17/runs/high/x_err_verify_mismatch/truth.json"
+   "from": "v003-linke-2026-11-17/runs/high/x_err_verify_mismatch/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_err_wrong_chip/c0001.wireskein": {
    "sha256": "8db74b4c284c3e5cdbda0d828d5f4c43306fc88833d4ad311e71809ec8dafd8f",
@@ -1741,7 +1789,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_err_wrong_chip/ch32rv.stderr"
   },
   "runs/high/x_err_wrong_chip/reading.json": {
-   "sha256": "36bfefadcbfde888a5e79cbc253a08aab66e6f4a0e348e551578f72661b3feab",
+   "sha256": "f4fe04a78dbdd52699446b4be3339b37ff7a396a2f3765aa5361f349fc253d66",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_err_wrong_chip/run.json": {
@@ -1754,8 +1802,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_err_wrong_chip/truth.json": {
-   "sha256": "b39db9ad36c8037592da9f6e85d955017b4e7659fe9168ae394690824c6d7181",
-   "from": "v003-linke-2026-11-17/runs/high/x_err_wrong_chip/truth.json"
+   "sha256": "193a4372f5bad84e49550892a986d4ca802490e18d88652bca6e1f05447a0d51",
+   "from": "v003-linke-2026-11-17/runs/high/x_err_wrong_chip/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_flash_sketch_end/c0001.wireskein": {
    "sha256": "b541cd6eb7f3df305d30596771d91369ffe3bec48362a3c7401c5cc0121333d2",
@@ -1776,7 +1825,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_flash_sketch_end/ch32rv.stderr"
   },
   "runs/high/x_flash_sketch_end/reading.json": {
-   "sha256": "53de14fcf091507c3cf1980934ae7cc288f7d5fd59052b8c76ff105075a99a7f",
+   "sha256": "3fde60b7b34d9ca3f5b432f448903229f976e71973487da0012b9d86da05b52a",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_flash_sketch_end/run.json": {
@@ -1790,7 +1839,8 @@
   },
   "runs/high/x_flash_sketch_end/truth.json": {
    "sha256": "5f51f17a4f754823a8136e76e01b3d650a4a64bb1aa790cf58f74ebc8e5191be",
-   "from": "v003-linke-2026-11-17/runs/high/x_flash_sketch_end/truth.json"
+   "from": "v003-linke-2026-11-17/runs/high/x_flash_sketch_end/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_option_get/c0001.wireskein": {
    "sha256": "83ddf6f2877e365fd2fb0670deeb6bbbb6a26ce626aaaffbfa4faccab22413d6",
@@ -1811,7 +1861,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_option_get/ch32rv.stderr"
   },
   "runs/high/x_option_get/reading.json": {
-   "sha256": "4dd356cc31157676ac6a13dc021e1019a15038d7777bdc6be62fcc7972768a7d",
+   "sha256": "bef65b074470ee230f81dc9ae9ff86ee0f45a3bcf3a051bca5c05464fe8112e0",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_option_get/run.json": {
@@ -1825,7 +1875,8 @@
   },
   "runs/high/x_option_get/truth.json": {
    "sha256": "f160b8f4ae12b056145bdd19cb511ed4d87e0ae9e2d7a39a10bf909d7d1d2101",
-   "from": "v003-linke-2026-11-17/runs/high/x_option_get/truth.json"
+   "from": "v003-linke-2026-11-17/runs/high/x_option_get/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_option_get_after_reset/c0001.wireskein": {
    "sha256": "b7e2c04bbd68aee78c69f104b12574394ff0fdf63564b19a9c6e213fff602295",
@@ -1846,7 +1897,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_option_get_after_reset/ch32rv.stderr"
   },
   "runs/high/x_option_get_after_reset/reading.json": {
-   "sha256": "9bcb4ec4ab65dbb01de6f2048db61ad86b2ea3489befaa26da9472079c77624f",
+   "sha256": "01a846969a4862ab4880b5516760692d8286dc49599c5ffdac69db8465531b35",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_option_get_after_reset/run.json": {
@@ -1860,7 +1911,8 @@
   },
   "runs/high/x_option_get_after_reset/truth.json": {
    "sha256": "beb49dba39be4f311d65c138ad44b95fa89eabba03de16072ef5b59aa5cb9701",
-   "from": "v003-linke-2026-11-17/runs/high/x_option_get_after_reset/truth.json"
+   "from": "v003-linke-2026-11-17/runs/high/x_option_get_after_reset/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_option_get_after_set/c0001.wireskein": {
    "sha256": "b10821588b85ef55db4df4b81a3259221bd406099d4c447186483986ad5ef332",
@@ -1881,7 +1933,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_option_get_after_set/ch32rv.stderr"
   },
   "runs/high/x_option_get_after_set/reading.json": {
-   "sha256": "0d82038c86c7896e628acdc0bb2bee88c1f7ad6f0152d032a79eb95bbc8aaa2e",
+   "sha256": "7b60d6d8686e5bf2a3d70101a4a857aae26d0329355968ae85ccc98e1f0deb1e",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_option_get_after_set/run.json": {
@@ -1895,7 +1947,8 @@
   },
   "runs/high/x_option_get_after_set/truth.json": {
    "sha256": "e768b238cb3bb0afa95e2f92b5ccdeaa0ea6a17ae031d05e37c1a30c007a64f5",
-   "from": "v003-linke-2026-11-17/runs/high/x_option_get_after_set/truth.json"
+   "from": "v003-linke-2026-11-17/runs/high/x_option_get_after_set/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_option_reset/c0001.wireskein": {
    "sha256": "8ff080ae8f8410d82d9691b0d39b7de235b293de8c77ca7ed600583540c5635d",
@@ -1916,7 +1969,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_option_reset/ch32rv.stderr"
   },
   "runs/high/x_option_reset/reading.json": {
-   "sha256": "39e27527639c30cfafd6028e2c560f49da137619e26a39f611ab270dd27048f1",
+   "sha256": "df35e56fb8ed24ba90acbb349fdfdb3d5f639cc3148e3a0aebc209030f0e8c1f",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_option_reset/run.json": {
@@ -1930,7 +1983,8 @@
   },
   "runs/high/x_option_reset/truth.json": {
    "sha256": "184b01e57ad5ef80f786b654d781f96775585af23b1d54c1a8998217e19c1033",
-   "from": "v003-linke-2026-11-17/runs/high/x_option_reset/truth.json"
+   "from": "v003-linke-2026-11-17/runs/high/x_option_reset/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_option_set_data/c0001.wireskein": {
    "sha256": "db12fbecc6b35b4ea537fc537aa040bf71376c114ee3b7a3d81fdf0317934496",
@@ -1951,7 +2005,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_option_set_data/ch32rv.stderr"
   },
   "runs/high/x_option_set_data/reading.json": {
-   "sha256": "5c25c0a734f8a1173647c398045bb4154e813ac39e3d11ec77679aa8bc564d05",
+   "sha256": "70c7e222d59368fc711b90a87517c7a900396f1ed4a1a2292ea6148cf2fe530a",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_option_set_data/run.json": {
@@ -1965,7 +2019,8 @@
   },
   "runs/high/x_option_set_data/truth.json": {
    "sha256": "449de92251b0288636854c8bfe04a82046771cb14f2cec01670c7e85277a3e46",
-   "from": "v003-linke-2026-11-17/runs/high/x_option_set_data/truth.json"
+   "from": "v003-linke-2026-11-17/runs/high/x_option_set_data/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_read_esig/c0001.wireskein": {
    "sha256": "bc82631632c167f62564518d1b6e0a40c4c3accca3336263fc97a4d1469dbedb",
@@ -1990,7 +2045,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_read_esig/read.bin"
   },
   "runs/high/x_read_esig/reading.json": {
-   "sha256": "075ea284cbcc77b690748440ce4ba450fb1537b876af2ac8e4d6df00555af71e",
+   "sha256": "cd7b6545cb7c02f547e6ea1b7f7b8b30a3d96f0f9c2c7031c75d7d275f7b686d",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_read_esig/run.json": {
@@ -2003,8 +2058,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_read_esig/truth.json": {
-   "sha256": "db22f4740ee5bcecb91eda24f116ee38f2e8efa814a6472c97e8a33e8f8644ab",
-   "from": "v003-linke-2026-11-17/runs/high/x_read_esig/truth.json"
+   "sha256": "83b9628c69892fd072c175fe8e14c83e9b673f90b85699965cc4f9787a3f14b1",
+   "from": "v003-linke-2026-11-17/runs/high/x_read_esig/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_read_flash_16k/c0001.wireskein": {
    "sha256": "4ab8eb689eb833750522ba877869163698dd416b6c5fb21bbb41e26481fcb320",
@@ -2029,7 +2085,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_read_flash_16k/read.bin"
   },
   "runs/high/x_read_flash_16k/reading.json": {
-   "sha256": "cefc7b86b6475c8651f50e682ec1c6d73ea3e12a82a0aba319f888488687b5a9",
+   "sha256": "b3217e905326c69e97fcbb0d5d6b35a4006005f5d9ac208fca0a107195b6b6ef",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_read_flash_16k/run.json": {
@@ -2043,7 +2099,8 @@
   },
   "runs/high/x_read_flash_16k/truth.json": {
    "sha256": "401a464cf7d3bcb66ec4f19ec85a04b662a7722f18ab3ac40426d98dc2586f8a",
-   "from": "v003-linke-2026-11-17/runs/high/x_read_flash_16k/truth.json"
+   "from": "v003-linke-2026-11-17/runs/high/x_read_flash_16k/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_read_flash_4k_2/c0001.wireskein": {
    "sha256": "7eccf329cebdfe1fb653ab4ef87be8acb43af7f496f2fd54290ccdf279ba31ec",
@@ -2068,7 +2125,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_read_flash_4k_2/read.bin"
   },
   "runs/high/x_read_flash_4k_2/reading.json": {
-   "sha256": "9b07212f04b55a13cad53db24a17d392bba715b4fb105eda9da4aeb596d157b0",
+   "sha256": "38032f3b7dd0759bddb45cf4d231a7510630f72a5edc90fe4560bdd3d04ac93c",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_read_flash_4k_2/run.json": {
@@ -2082,7 +2139,8 @@
   },
   "runs/high/x_read_flash_4k_2/truth.json": {
    "sha256": "1ec4a95954ba264b91b9988de6cb293834adb69685d5c13163a6e6ae7cef4f0c",
-   "from": "v003-linke-2026-11-17/runs/high/x_read_flash_4k_2/truth.json"
+   "from": "v003-linke-2026-11-17/runs/high/x_read_flash_4k_2/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_read_flash_4k_3/c0001.wireskein": {
    "sha256": "07f1743d4a86a4e3a9f75c8c527d0a92117a027fbaa10eeed58cf0dcf4ec2570",
@@ -2107,7 +2165,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_read_flash_4k_3/read.bin"
   },
   "runs/high/x_read_flash_4k_3/reading.json": {
-   "sha256": "2b109a3cb805dd6b60f547c291f9a2ec538143b0f07766f290a85dbfbaced3cc",
+   "sha256": "6b57e3b7d9b5102bfbad996482d38f4ff4ca7808ec17b0971aea9ac40624718b",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_read_flash_4k_3/run.json": {
@@ -2121,7 +2179,8 @@
   },
   "runs/high/x_read_flash_4k_3/truth.json": {
    "sha256": "6ff2a8a149d4b5d7c6e2356f559fd543ca2ad2a109b556a551adfd57449a64aa",
-   "from": "v003-linke-2026-11-17/runs/high/x_read_flash_4k_3/truth.json"
+   "from": "v003-linke-2026-11-17/runs/high/x_read_flash_4k_3/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_read_obr_after_set/c0001.wireskein": {
    "sha256": "212b78c2ada8ca7e52bb1413fdc337819f1e39be8291cc73373a770b099b036c",
@@ -2146,7 +2205,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_read_obr_after_set/read.bin"
   },
   "runs/high/x_read_obr_after_set/reading.json": {
-   "sha256": "993d4330684c58da66a5f5d7329fc734076feff58ecefdf9902e4523b8484c66",
+   "sha256": "f498b8075ffc018662f19b405fc2b31f19d44c14e1d278a0c09a45c5a6870599",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_read_obr_after_set/run.json": {
@@ -2159,8 +2218,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_read_obr_after_set/truth.json": {
-   "sha256": "4279ad0edd509450702f17633373dc07f9cf6082832bb07e1c89028b38096e13",
-   "from": "v003-linke-2026-11-17/runs/high/x_read_obr_after_set/truth.json"
+   "sha256": "ae4f0d580a50a9d4a2b003cf8ab5944da3a07793a43f79bb7d5fa590ce8e064c",
+   "from": "v003-linke-2026-11-17/runs/high/x_read_obr_after_set/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_read_optbytes/c0001.wireskein": {
    "sha256": "eb8fbb3002fdf6546de005c4a5aff8f531f83cec21304acb86eeb1d2717bbb91",
@@ -2185,7 +2245,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_read_optbytes/read.bin"
   },
   "runs/high/x_read_optbytes/reading.json": {
-   "sha256": "828f40326b6baedc7091d68508b91259d7d18310a7957757ca17231ad5270677",
+   "sha256": "05733bc9d76db19fb9b7ae9f66e1be5534e2b1e235663cf8e2cd643a69fe2e6b",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_read_optbytes/run.json": {
@@ -2198,8 +2258,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_read_optbytes/truth.json": {
-   "sha256": "61cf5c8b594d8a8758ad2707c094e97d4af902377884473988eb97415803394f",
-   "from": "v003-linke-2026-11-17/runs/high/x_read_optbytes/truth.json"
+   "sha256": "8626d7fc81ccac5e899c1905eb50f8a4e83308f0e9bde62b2f9fd1a4b49cb29a",
+   "from": "v003-linke-2026-11-17/runs/high/x_read_optbytes/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_read_ram_2k/c0001.wireskein": {
    "sha256": "7ed86c6936b23e96786e8ef628a6742396f89c56c16d34dc1cd353bd6cda2c54",
@@ -2224,7 +2285,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_read_ram_2k/read.bin"
   },
   "runs/high/x_read_ram_2k/reading.json": {
-   "sha256": "7ff20796700f372c6bbd0a0029a1a79492598924673a49027c165c6508994945",
+   "sha256": "4019fb3ef59661a23ca3c08950f236cb4b21233c30647adcc6faee251dc3d38d",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_read_ram_2k/run.json": {
@@ -2238,7 +2299,8 @@
   },
   "runs/high/x_read_ram_2k/truth.json": {
    "sha256": "8352fb6a1a1c6de59f5acff50505e97bafab0810b9da6d5731a4f3ead4867c80",
-   "from": "v003-linke-2026-11-17/runs/high/x_read_ram_2k/truth.json"
+   "from": "v003-linke-2026-11-17/runs/high/x_read_ram_2k/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_read_ram_word/c0001.wireskein": {
    "sha256": "92962625c7e4d93eafd92a1ff77badec46df68dc2e98acf20f083d0e2944895d",
@@ -2263,7 +2325,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_read_ram_word/read.bin"
   },
   "runs/high/x_read_ram_word/reading.json": {
-   "sha256": "3b8aa8ca8569dacea7cdca92cb4d5311c6d53d3aa570bd5c74bca2b2e7cfb48d",
+   "sha256": "a1032302a0c51985a98be5f170c0e727ceb97419ea1c113e0b8f3744ca9893aa",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_read_ram_word/run.json": {
@@ -2276,8 +2338,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_read_ram_word/truth.json": {
-   "sha256": "9597862e12b22d873ca2a05617b8b4a6fe04cbcd8ddbe96d378cf971965591c5",
-   "from": "v003-linke-2026-11-17/runs/high/x_read_ram_word/truth.json"
+   "sha256": "3ece0d1785d8937ddfdeecaef4e664ef6999e8293061786b5d210c01ab75114f",
+   "from": "v003-linke-2026-11-17/runs/high/x_read_ram_word/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_read_ram_written/c0001.wireskein": {
    "sha256": "4703ee46a3684f8a8e51669a5cbeaa966d28f59514629791c462251cd9c0af22",
@@ -2302,7 +2365,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_read_ram_written/read.bin"
   },
   "runs/high/x_read_ram_written/reading.json": {
-   "sha256": "49cdd1846acdc58b913275df2ef1f933d400ea6ac6ab85f8f22c77e37919ad94",
+   "sha256": "3023820926506a1ddf0ee7189ff5d85e1ddb21ab88f4e2d486abcf3a013e08f5",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_read_ram_written/run.json": {
@@ -2316,7 +2379,8 @@
   },
   "runs/high/x_read_ram_written/truth.json": {
    "sha256": "7a1af8c9369502ab013d5749304eab00ccce44eb3339e90fecddb5f8f4eb1044",
-   "from": "v003-linke-2026-11-17/runs/high/x_read_ram_written/truth.json"
+   "from": "v003-linke-2026-11-17/runs/high/x_read_ram_written/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_read_unaligned_odd/c0001.wireskein": {
    "sha256": "31058a85202e17001fc8669da4b8d2e9f201e76a6f381ca99c9c1e21daccc933",
@@ -2341,7 +2405,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_read_unaligned_odd/read.bin"
   },
   "runs/high/x_read_unaligned_odd/reading.json": {
-   "sha256": "9de4ec7cc3fb412c518bf5160074c182a43e9a598a47c5975c654ab302e4831c",
+   "sha256": "6d83e9e288d358c810a613544f2c55ab099cdae61ec6723ed68780abe18cd3d3",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_read_unaligned_odd/run.json": {
@@ -2354,8 +2418,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_read_unaligned_odd/truth.json": {
-   "sha256": "bfc67992f7ec31a15a6194716772d7081d5fb0075bf27213306cfaaa7b44cf89",
-   "from": "v003-linke-2026-11-17/runs/high/x_read_unaligned_odd/truth.json"
+   "sha256": "9c051c3ff2b758646b1bce71b30ac2e006561486b919f9861df2b0aaa788b6a9",
+   "from": "v003-linke-2026-11-17/runs/high/x_read_unaligned_odd/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_release_dm_info/c0001.wireskein": {
    "sha256": "25c1e1d7cdec1d4085fef5f2ad7c4fa76d309790db0ec2b2a17b9097557cafe3",
@@ -2376,7 +2441,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_release_dm_info/ch32rv.stderr"
   },
   "runs/high/x_release_dm_info/reading.json": {
-   "sha256": "800c2927ac8389aa71fa107bba3d0ddd0e722d37ca6b1dc1bcb65a748314069d",
+   "sha256": "05ec51b958e99631290c4ad348790f5c6d2580b1cb274d2edf496d17f288e171",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_release_dm_info/run.json": {
@@ -2389,8 +2454,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_release_dm_info/truth.json": {
-   "sha256": "fa76cff1fdfc356987020b4c3feffcd1e8aebc947e0f475d039065753d5733ec",
-   "from": "v003-linke-2026-11-17/runs/high/x_release_dm_info/truth.json"
+   "sha256": "e7460d84c0814bdd08ea139db049c9e3ed8c6a5abae0fe51461f4fd897a1f923",
+   "from": "v003-linke-2026-11-17/runs/high/x_release_dm_info/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_reset_confirm_pc/c0001.wireskein": {
    "sha256": "ae878d9ee8968c316458539682417b84d0f91a7e8c3a809d8ddb7d09746e2abf",
@@ -2411,7 +2477,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_reset_confirm_pc/ch32rv.stderr"
   },
   "runs/high/x_reset_confirm_pc/reading.json": {
-   "sha256": "3672581816cee30c5e272a19b1ffba15fdb60ab1cce2974676da56ab3117b848",
+   "sha256": "390c1234f98de9bcabc20a6eb91ae52f17bb22c4468b174364915c60df486b97",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_reset_confirm_pc/run.json": {
@@ -2425,7 +2491,8 @@
   },
   "runs/high/x_reset_confirm_pc/truth.json": {
    "sha256": "b1f6c0b4a0bb3ae6c93ad191c3b6a2a6f552f81bfc1b12860a542c8168733626",
-   "from": "v003-linke-2026-11-17/runs/high/x_reset_confirm_pc/truth.json"
+   "from": "v003-linke-2026-11-17/runs/high/x_reset_confirm_pc/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_reset_dm/c0001.wireskein": {
    "sha256": "c3f046bb13b4befbc8d153b14aecbe94e4a94aa488bcb8616d48c09e1a797362",
@@ -2446,7 +2513,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_reset_dm/ch32rv.stderr"
   },
   "runs/high/x_reset_dm/reading.json": {
-   "sha256": "493685ae89bff88708ebf46299bcbce5a1e75897fd77266ce4f7aa6858b00b62",
+   "sha256": "25d8aede815e664620c2df6e500b77274c0ec4fac4b3fa1b91ba75de2e64f753",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_reset_dm/run.json": {
@@ -2459,8 +2526,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_reset_dm/truth.json": {
-   "sha256": "25ebe512891159eee422dbe2dba776ecc7e368875f107c23110f7e96fd3c5db1",
-   "from": "v003-linke-2026-11-17/runs/high/x_reset_dm/truth.json"
+   "sha256": "3d8d6b8f323e82446c1c2a3ddcc90f2f1e024493c70f670e1ede2686bae22871",
+   "from": "v003-linke-2026-11-17/runs/high/x_reset_dm/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_reset_halt/c0001.wireskein": {
    "sha256": "9c177012dc4f90a6a43b8946bfaf0a777119eae594868e727e5bb4893a9c1c3b",
@@ -2481,7 +2549,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_reset_halt/ch32rv.stderr"
   },
   "runs/high/x_reset_halt/reading.json": {
-   "sha256": "f697f8088bdef2c1e52a7376d36da295101046a4f513ad3d17a65ed863668e5e",
+   "sha256": "b6c221cb33311c2866ee0c3703ca58924976e375ea7c842fb99201f0a35fffac",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_reset_halt/run.json": {
@@ -2494,8 +2562,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_reset_halt/truth.json": {
-   "sha256": "56ab037696f22bffe55437a669dd7f0a604a25d145c43aac56ad1ac8035c3aa3",
-   "from": "v003-linke-2026-11-17/runs/high/x_reset_halt/truth.json"
+   "sha256": "d178ddbabddece31ca57fb883643755d8b3099910312c4a095337da8bc98ca5b",
+   "from": "v003-linke-2026-11-17/runs/high/x_reset_halt/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_target_info_2/c0001.wireskein": {
    "sha256": "bceaa3f8f286fd48c11245e2017039939afb77be332a7be1b4620b116e3214db",
@@ -2516,7 +2585,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_target_info_2/ch32rv.stderr"
   },
   "runs/high/x_target_info_2/reading.json": {
-   "sha256": "36bfefadcbfde888a5e79cbc253a08aab66e6f4a0e348e551578f72661b3feab",
+   "sha256": "086d13f7d93ebc4761439676d21d71f6694a1b569b04d0239f489fd16e3bf6a5",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_target_info_2/run.json": {
@@ -2529,8 +2598,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_target_info_2/truth.json": {
-   "sha256": "b39db9ad36c8037592da9f6e85d955017b4e7659fe9168ae394690824c6d7181",
-   "from": "v003-linke-2026-11-17/runs/high/x_target_info_2/truth.json"
+   "sha256": "e1dafc5166e22fd998ec771ab21fa54de8fd89518f8899e1fced4e5b25183a84",
+   "from": "v003-linke-2026-11-17/runs/high/x_target_info_2/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_target_info_3/c0001.wireskein": {
    "sha256": "993aacead98fbce520d21d065793de897ed24d874655ee28b987d7b537044712",
@@ -2551,7 +2621,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_target_info_3/ch32rv.stderr"
   },
   "runs/high/x_target_info_3/reading.json": {
-   "sha256": "be0b6e2c4c50a09f24099dadfa013ae9ae833af118d0dd4d03216be4e56c63d4",
+   "sha256": "58f64c796b7e175ef1622ceb6e76cfa20d4b224dce9ce4509c42594154631f9b",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_target_info_3/run.json": {
@@ -2564,8 +2634,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_target_info_3/truth.json": {
-   "sha256": "474345c52666c39f0f4f0ddbb27dcb6312cca95a975af34d60bb1122a1b098d4",
-   "from": "v003-linke-2026-11-17/runs/high/x_target_info_3/truth.json"
+   "sha256": "e1dafc5166e22fd998ec771ab21fa54de8fd89518f8899e1fced4e5b25183a84",
+   "from": "v003-linke-2026-11-17/runs/high/x_target_info_3/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_target_info_4/c0001.wireskein": {
    "sha256": "1d536f7d487c9262e16f927aeb077613580da27716b5082af077bcac6e49c5e4",
@@ -2586,7 +2657,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_target_info_4/ch32rv.stderr"
   },
   "runs/high/x_target_info_4/reading.json": {
-   "sha256": "36bfefadcbfde888a5e79cbc253a08aab66e6f4a0e348e551578f72661b3feab",
+   "sha256": "c51d35833805b4828a8ee663c1170a9d2974a671a6c7c19007e9aae23b16b2a5",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_target_info_4/run.json": {
@@ -2599,8 +2670,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_target_info_4/truth.json": {
-   "sha256": "b39db9ad36c8037592da9f6e85d955017b4e7659fe9168ae394690824c6d7181",
-   "from": "v003-linke-2026-11-17/runs/high/x_target_info_4/truth.json"
+   "sha256": "e1dafc5166e22fd998ec771ab21fa54de8fd89518f8899e1fced4e5b25183a84",
+   "from": "v003-linke-2026-11-17/runs/high/x_target_info_4/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_target_info_5/c0001.wireskein": {
    "sha256": "0f7ae08c20b8810bce4aea2f1d75a07fe07139eb1f2a1bd58f66e09e0f9c52ff",
@@ -2621,7 +2693,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_target_info_5/ch32rv.stderr"
   },
   "runs/high/x_target_info_5/reading.json": {
-   "sha256": "9b35a31baf64ae80b33955d70222873131e9adb23a3cac558c60147bd9732e65",
+   "sha256": "1daf4146dfabdc0c0a6f72eb41c04ffee59bb525700ca7434d99a6162ae3f3ff",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_target_info_5/run.json": {
@@ -2634,8 +2706,9 @@
    "added": "excerpt_s"
   },
   "runs/high/x_target_info_5/truth.json": {
-   "sha256": "25ebe512891159eee422dbe2dba776ecc7e368875f107c23110f7e96fd3c5db1",
-   "from": "v003-linke-2026-11-17/runs/high/x_target_info_5/truth.json"
+   "sha256": "e1dafc5166e22fd998ec771ab21fa54de8fd89518f8899e1fced4e5b25183a84",
+   "from": "v003-linke-2026-11-17/runs/high/x_target_info_5/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_write_ram_256/c0001.wireskein": {
    "sha256": "d01809cc06fbb1ad0146de14d84482bd4c1239fe0e6d94c2a4dabc67f1b38726",
@@ -2656,7 +2729,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_write_ram_256/ch32rv.stderr"
   },
   "runs/high/x_write_ram_256/reading.json": {
-   "sha256": "bda68a7a4b7d42056392e7cf1594e268950a21f5eb32cadca1bccfbd97852efc",
+   "sha256": "5ae76f2a94b05501fe719b84b1a41ad5f27bf42163521053be668554e1da9d84",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_write_ram_256/run.json": {
@@ -2670,7 +2743,8 @@
   },
   "runs/high/x_write_ram_256/truth.json": {
    "sha256": "f43735430e12b5091c133f9c1f54251b312b2cb6583a4e5b7699c857770165e6",
-   "from": "v003-linke-2026-11-17/runs/high/x_write_ram_256/truth.json"
+   "from": "v003-linke-2026-11-17/runs/high/x_write_ram_256/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/high/x_write_ram_word/c0001.wireskein": {
    "sha256": "f4266fa9cb11c60189176f7b44bf5fd4eeb60f75ff8921b7a7f27d2bc87798de",
@@ -2691,7 +2765,7 @@
    "from": "v003-linke-2026-11-17/runs/high/x_write_ram_word/ch32rv.stderr"
   },
   "runs/high/x_write_ram_word/reading.json": {
-   "sha256": "1ff4aa732277103ad5728843ce85fd0716a0970e543003791696bf9a8fecdb13",
+   "sha256": "ce0e682473ae8971f3dd8d65e87cd4e89a62f4f9c9a02a4df7dbcad0c2fc98b0",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/high/x_write_ram_word/run.json": {
@@ -2705,7 +2779,8 @@
   },
   "runs/high/x_write_ram_word/truth.json": {
    "sha256": "bda5b7b3537b9b89f0df5e6de5da79860dce4d9ce16fb8c0d34759d5aed9b145",
-   "from": "v003-linke-2026-11-17/runs/high/x_write_ram_word/truth.json"
+   "from": "v003-linke-2026-11-17/runs/high/x_write_ram_word/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/low/dbg_halt/c0001.wireskein": {
    "sha256": "6c3eb4a14d543c8bd0e1efaecfa5375fdc3441c99f43145aaff6ee8b81ecbe53",
@@ -2726,7 +2801,7 @@
    "from": "v003-linke-2026-11-17/runs/low/dbg_halt/ch32rv.stderr"
   },
   "runs/low/dbg_halt/reading.json": {
-   "sha256": "0735643a318cdd93fd4f2629c3e434cd03c81847ed1448710b37e8b0e89931ee",
+   "sha256": "176a89ed62f89cf1629caaaa1b1c3598c3f11b8177530813580401800904dcaa",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/low/dbg_halt/run.json": {
@@ -2739,8 +2814,9 @@
    "added": "excerpt_s"
   },
   "runs/low/dbg_halt/truth.json": {
-   "sha256": "80853f16782751752b135f1aba31d1afb56325d75baae5a128507f6d52f4cecf",
-   "from": "v003-linke-2026-11-17/runs/low/dbg_halt/truth.json"
+   "sha256": "ea7fab5bf4f9479a227843d97ef40a0d25d9d2c689e2a517735c427c77ec936d",
+   "from": "v003-linke-2026-11-17/runs/low/dbg_halt/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/low/dbg_regs/c0001.wireskein": {
    "sha256": "5e309a5b531ee3981b6ecd0a7b7c9baf58605c48353c48ea6374f6206c32b1c5",
@@ -2761,7 +2837,7 @@
    "from": "v003-linke-2026-11-17/runs/low/dbg_regs/ch32rv.stderr"
   },
   "runs/low/dbg_regs/reading.json": {
-   "sha256": "6e886db7b283a43ba24eb7be804f19054c0c2bd1b016f1bf5e5ec2000574898d",
+   "sha256": "00b1ee85e484f2c7f6815b5182a863a8424af04c2e9425607c32ab9c46e60b57",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/low/dbg_regs/run.json": {
@@ -2775,7 +2851,8 @@
   },
   "runs/low/dbg_regs/truth.json": {
    "sha256": "b880caaa3780db14d76cbf1c19e124694a6ff8d30c8ba79ee0c78c9af5997041",
-   "from": "v003-linke-2026-11-17/runs/low/dbg_regs/truth.json"
+   "from": "v003-linke-2026-11-17/runs/low/dbg_regs/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/low/dbg_resume/c0001.wireskein": {
    "sha256": "3564c82215bb5d6dc534537969b674bb390f967a8572aab4da65af442dfd2e4c",
@@ -2796,7 +2873,7 @@
    "from": "v003-linke-2026-11-17/runs/low/dbg_resume/ch32rv.stderr"
   },
   "runs/low/dbg_resume/reading.json": {
-   "sha256": "e24f46600cfd91b52ae8b99597e91dfa60a86347a60e19d4e511a41ec2e1da36",
+   "sha256": "5f20c49c638997a19aa3384e43d442e9a07b87b1652250aaa13e2550681dbcd9",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/low/dbg_resume/run.json": {
@@ -2809,8 +2886,9 @@
    "added": "excerpt_s"
   },
   "runs/low/dbg_resume/truth.json": {
-   "sha256": "62b38d6e692e6a18cd743be4123a580747e77672d66bae1e31b9090bd5450e49",
-   "from": "v003-linke-2026-11-17/runs/low/dbg_resume/truth.json"
+   "sha256": "7cf8083488570cfade2e677d972ae21062caefce8b42100ec64d5a532a2ad96c",
+   "from": "v003-linke-2026-11-17/runs/low/dbg_resume/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/low/dbg_step/c0001.wireskein": {
    "sha256": "b22bbd70ad779d6c9532cda9a7b524917b37b98adea0d11656022cc4fcaff5d5",
@@ -2831,7 +2909,7 @@
    "from": "v003-linke-2026-11-17/runs/low/dbg_step/ch32rv.stderr"
   },
   "runs/low/dbg_step/reading.json": {
-   "sha256": "975f98c6109d2f6e639d29afe75838e7d727d8a2e046e286e309402938ecc35d",
+   "sha256": "0bb5cb7c3903dfb2b6a2964bbc32ee252394d2b977a377f233283c78a79b68e0",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/low/dbg_step/run.json": {
@@ -2845,7 +2923,8 @@
   },
   "runs/low/dbg_step/truth.json": {
    "sha256": "cd22750c23e09d9d993563279da3ba6b93e8f684a72da8a45a70ef35ddb27ca4",
-   "from": "v003-linke-2026-11-17/runs/low/dbg_step/truth.json"
+   "from": "v003-linke-2026-11-17/runs/low/dbg_step/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/low/erase_all/c0001.wireskein": {
    "sha256": "f09d760b2265251b474275b9bee0f04c660eb86b5a974a4fe52b9dea6cf3d601",
@@ -2866,7 +2945,7 @@
    "from": "v003-linke-2026-11-17/runs/low/erase_all/ch32rv.stderr"
   },
   "runs/low/erase_all/reading.json": {
-   "sha256": "8874c258b1c96eebbda7898fda2681db4b85c8d0bdfb3f477718253560854ef8",
+   "sha256": "fb6df6d79aae01bad7437abd74cde07bf99b0149c330b7e9c245e48a51076bb0",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/low/erase_all/run.json": {
@@ -2880,7 +2959,8 @@
   },
   "runs/low/erase_all/truth.json": {
    "sha256": "2ca979a9cef9aaf4f564117c663fef264064421b6d4101e1ab0bee635b93bb62",
-   "from": "v003-linke-2026-11-17/runs/low/erase_all/truth.json"
+   "from": "v003-linke-2026-11-17/runs/low/erase_all/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/low/flash_pattern4k/c0001.wireskein": {
    "sha256": "48d21368350a8aa13660f40219d88c2d365882b5794b4a3dba2b0c4cc3d5e621",
@@ -2901,7 +2981,7 @@
    "from": "v003-linke-2026-11-17/runs/low/flash_pattern4k/ch32rv.stderr"
   },
   "runs/low/flash_pattern4k/reading.json": {
-   "sha256": "f40135e73e5ee96c554aa844fb26bca600d12f05f2d1bf04bbd8b3ec58d431da",
+   "sha256": "582023ff6372a13935190e3f0d0c1186623cc527bf3e8eaea4c196eacd63c62c",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/low/flash_pattern4k/run.json": {
@@ -2915,7 +2995,8 @@
   },
   "runs/low/flash_pattern4k/truth.json": {
    "sha256": "cb81a1ded0cb332597924484030b575896d097e1e8857592ce34fbc6621dc6aa",
-   "from": "v003-linke-2026-11-17/runs/low/flash_pattern4k/truth.json"
+   "from": "v003-linke-2026-11-17/runs/low/flash_pattern4k/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/low/flash_sketch/c0001.wireskein": {
    "sha256": "aee7a5bed808e90a36c9d5275bb8ad8b6d000efbb804460b77b65299b447da0d",
@@ -2936,7 +3017,7 @@
    "from": "v003-linke-2026-11-17/runs/low/flash_sketch/ch32rv.stderr"
   },
   "runs/low/flash_sketch/reading.json": {
-   "sha256": "d32b9fd08d3e2ab842d719771b5352106b6d4e18bd082e058cd35d81505a010c",
+   "sha256": "5990cd3e9cf70bfc4c1cc660518ae06a89847364233b3729852dee93d5ea1d23",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/low/flash_sketch/run.json": {
@@ -2950,7 +3031,8 @@
   },
   "runs/low/flash_sketch/truth.json": {
    "sha256": "4ff64ce1700b33a5faa8a8354ac15e6030d04fbfa9691216625780cf76c0b670",
-   "from": "v003-linke-2026-11-17/runs/low/flash_sketch/truth.json"
+   "from": "v003-linke-2026-11-17/runs/low/flash_sketch/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/low/read_erased_1k/c0001.wireskein": {
    "sha256": "53d1bf000003e6d717adf1105ea9664832c838b200bd645a9a7617cd61962b3f",
@@ -2975,7 +3057,7 @@
    "from": "v003-linke-2026-11-17/runs/low/read_erased_1k/read.bin"
   },
   "runs/low/read_erased_1k/reading.json": {
-   "sha256": "ab0054b72222285c02bc121fa07129e51db732e571d5de4f65432801a8fc224d",
+   "sha256": "d28626f709017dbbd19586ad1367cbdab9d1e20df52a2b718a6e80f0e4fb5591",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/low/read_erased_1k/run.json": {
@@ -2989,7 +3071,8 @@
   },
   "runs/low/read_erased_1k/truth.json": {
    "sha256": "e16f8fd6ec3cfb10f56e407d78fcde4ad38fb3a37b08b426fc65d899650e40b0",
-   "from": "v003-linke-2026-11-17/runs/low/read_erased_1k/truth.json"
+   "from": "v003-linke-2026-11-17/runs/low/read_erased_1k/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/low/read_flash_4k/c0001.wireskein": {
    "sha256": "6942b091ecab08e339cf502689d45a37ae956f863b429af976b38b88325b1c95",
@@ -3014,7 +3097,7 @@
    "from": "v003-linke-2026-11-17/runs/low/read_flash_4k/read.bin"
   },
   "runs/low/read_flash_4k/reading.json": {
-   "sha256": "cfcd55311661e8e214e5cda6cc7107e6d4480644e8aed2ba13ea3abbfb5c4f98",
+   "sha256": "072f20aeb01d476d89f4f249f8e232eb42ef041945d2203fcf1c084b58accb45",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/low/read_flash_4k/run.json": {
@@ -3028,7 +3111,8 @@
   },
   "runs/low/read_flash_4k/truth.json": {
    "sha256": "605286953d48e80adecd5ae5630aa866b7b30d2a0e7cca736be93e323e370fa5",
-   "from": "v003-linke-2026-11-17/runs/low/read_flash_4k/truth.json"
+   "from": "v003-linke-2026-11-17/runs/low/read_flash_4k/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/low/read_pattern4k/c0001.wireskein": {
    "sha256": "0aa8defbb74aea907092fd04445ec8f5d068ed8602914bb7e2f448872e3a16f4",
@@ -3053,7 +3137,7 @@
    "from": "v003-linke-2026-11-17/runs/low/read_pattern4k/read.bin"
   },
   "runs/low/read_pattern4k/reading.json": {
-   "sha256": "ce0f0cc5e1f219b83655b648f9001bb93cbe7a08d5e35e057a94582cef588375",
+   "sha256": "31fef95522a0b0a20681b3aa388e1ba9095610cf17e9303f61a1f3dae3f4fec4",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/low/read_pattern4k/run.json": {
@@ -3067,7 +3151,8 @@
   },
   "runs/low/read_pattern4k/truth.json": {
    "sha256": "92946b9c05234bbf04004e6b02773773db9267006f7c1b7ab4f70479ceff5f32",
-   "from": "v003-linke-2026-11-17/runs/low/read_pattern4k/truth.json"
+   "from": "v003-linke-2026-11-17/runs/low/read_pattern4k/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/low/read_ram_256/c0001.wireskein": {
    "sha256": "c05ed180828d0e35f3f02c819ba544f56443a47b53b34bbe95263021b57b694e",
@@ -3092,7 +3177,7 @@
    "from": "v003-linke-2026-11-17/runs/low/read_ram_256/read.bin"
   },
   "runs/low/read_ram_256/reading.json": {
-   "sha256": "b0c99e504b4eec5c1b183f3198f979a5964f96a4aa6e2b09a7fd7e73a0a5139d",
+   "sha256": "dbea86b60a36c4a8ae5d00dcb77bdef1f6fce612ba2b9eefc60ee3b5182d1281",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/low/read_ram_256/run.json": {
@@ -3106,7 +3191,8 @@
   },
   "runs/low/read_ram_256/truth.json": {
    "sha256": "85b2601db15b01539a889c1fc9603add3077741f8498059a5f9f57df817b9fc3",
-   "from": "v003-linke-2026-11-17/runs/low/read_ram_256/truth.json"
+   "from": "v003-linke-2026-11-17/runs/low/read_ram_256/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/low/reset/c0001.wireskein": {
    "sha256": "db5f55ac67ae84acd25e41859e91db6bac03949e449c6887959ca97709d9249d",
@@ -3127,7 +3213,7 @@
    "from": "v003-linke-2026-11-17/runs/low/reset/ch32rv.stderr"
   },
   "runs/low/reset/reading.json": {
-   "sha256": "f3a4d5fc5ada215a94b182b038181fcc96a5d8bc0733678baba7c36803ab47e1",
+   "sha256": "481d1bf90bc5317f38fdc427f4e8fd87d80bc5e6ca7a1ec2c78b8c0abe29558c",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/low/reset/run.json": {
@@ -3140,8 +3226,9 @@
    "added": "excerpt_s"
   },
   "runs/low/reset/truth.json": {
-   "sha256": "fb49ef3ba5e0504d08a0081c3e6a8dd3ce87dab7ae9b3c103a3a6dd98478d640",
-   "from": "v003-linke-2026-11-17/runs/low/reset/truth.json"
+   "sha256": "a86fabc794f5f8cd6a9f172278a6107de7ec478518fef5be2ed64ff3f501982e",
+   "from": "v003-linke-2026-11-17/runs/low/reset/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/low/target_info/c0001.wireskein": {
    "sha256": "0e0ad63921d5960a83fe6edae9569048f51658456508e6b95cc03da06686eb84",
@@ -3162,7 +3249,7 @@
    "from": "v003-linke-2026-11-17/runs/low/target_info/ch32rv.stderr"
   },
   "runs/low/target_info/reading.json": {
-   "sha256": "36bfefadcbfde888a5e79cbc253a08aab66e6f4a0e348e551578f72661b3feab",
+   "sha256": "91c91ffee284207b8730432193b3d27b82fb8bbaf5f600c41d3fa76541ad2f85",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/low/target_info/run.json": {
@@ -3175,8 +3262,9 @@
    "added": "excerpt_s"
   },
   "runs/low/target_info/truth.json": {
-   "sha256": "b39db9ad36c8037592da9f6e85d955017b4e7659fe9168ae394690824c6d7181",
-   "from": "v003-linke-2026-11-17/runs/low/target_info/truth.json"
+   "sha256": "e1dafc5166e22fd998ec771ab21fa54de8fd89518f8899e1fced4e5b25183a84",
+   "from": "v003-linke-2026-11-17/runs/low/target_info/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/low/verify_pattern4k/c0001.wireskein": {
    "sha256": "5aa663800a2ba61157e83e198270ad74d87ebaac038036fe8ea3104e8c325ec6",
@@ -3197,7 +3285,7 @@
    "from": "v003-linke-2026-11-17/runs/low/verify_pattern4k/ch32rv.stderr"
   },
   "runs/low/verify_pattern4k/reading.json": {
-   "sha256": "30f3714e36533ff9e97a80c28b5a795bbc4a7d0d3f914f3435a340be6863f74f",
+   "sha256": "0989b5b55aef416e9e849ab4a08737f739b38b2ce9efe6e6e6bb8a4454b58c74",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/low/verify_pattern4k/run.json": {
@@ -3211,7 +3299,8 @@
   },
   "runs/low/verify_pattern4k/truth.json": {
    "sha256": "49a05480a9348e2b3747bd65d68ce236d7e8674e50a5b914aa5d9c149ccc8c1b",
-   "from": "v003-linke-2026-11-17/runs/low/verify_pattern4k/truth.json"
+   "from": "v003-linke-2026-11-17/runs/low/verify_pattern4k/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/medium/dbg_halt/c0001.wireskein": {
    "sha256": "76695f70323c876f4cdfe2c3bd2f40783848ad95a592e379c12fe6b2fd384360",
@@ -3232,7 +3321,7 @@
    "from": "v003-linke-2026-11-17/runs/medium/dbg_halt/ch32rv.stderr"
   },
   "runs/medium/dbg_halt/reading.json": {
-   "sha256": "0a67f49f35d7f423c33baa6c47fad10f1f6f7b13c9df49758285d19a0f1f2e37",
+   "sha256": "73b7555baffe452c1ff3c4bc381ef6f200f1b61b3e6d321f0d83ab04185231ea",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/medium/dbg_halt/run.json": {
@@ -3245,8 +3334,9 @@
    "added": "excerpt_s"
   },
   "runs/medium/dbg_halt/truth.json": {
-   "sha256": "e79852a82ee8c183b8dc7b782dfa526fc1b480bbe4089878665a453f1d505ea3",
-   "from": "v003-linke-2026-11-17/runs/medium/dbg_halt/truth.json"
+   "sha256": "0e9fe9cd372a6e32c97e48aee21a16e5586deaa95826a535374261039862cc05",
+   "from": "v003-linke-2026-11-17/runs/medium/dbg_halt/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/medium/dbg_regs/c0001.wireskein": {
    "sha256": "ca74c168b225aee131f69bc1636d371bb5709b9e10d62bc10a0889763c7f2dae",
@@ -3267,7 +3357,7 @@
    "from": "v003-linke-2026-11-17/runs/medium/dbg_regs/ch32rv.stderr"
   },
   "runs/medium/dbg_regs/reading.json": {
-   "sha256": "14984f898e0f53bc30b35b8e4d8b8fc7c4691a46be53363348e5bbc33e4c9af8",
+   "sha256": "0c115bf9335a14150949b11cf7412cafeaa5544506f21301cb99bd1f120bcc07",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/medium/dbg_regs/run.json": {
@@ -3281,7 +3371,8 @@
   },
   "runs/medium/dbg_regs/truth.json": {
    "sha256": "33bdb435a6964f122899de639ad6745b8a67559e4cd4c41a8ab01ed5250a630d",
-   "from": "v003-linke-2026-11-17/runs/medium/dbg_regs/truth.json"
+   "from": "v003-linke-2026-11-17/runs/medium/dbg_regs/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/medium/dbg_resume/c0001.wireskein": {
    "sha256": "5ec8a378451a3067739070f55ae4953f7fc8dd6e341988595a72d007f2316e94",
@@ -3302,7 +3393,7 @@
    "from": "v003-linke-2026-11-17/runs/medium/dbg_resume/ch32rv.stderr"
   },
   "runs/medium/dbg_resume/reading.json": {
-   "sha256": "3f8b3f277e24bb245dbdbddc7440fd71630caec1234bfe4ec6c3c3616b939593",
+   "sha256": "e93b296957aea310858d2c3d621c530ce1d504828626a52f2c750a09a8451259",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/medium/dbg_resume/run.json": {
@@ -3315,8 +3406,9 @@
    "added": "excerpt_s"
   },
   "runs/medium/dbg_resume/truth.json": {
-   "sha256": "e2986d9e0d0bf69f7f21c80e626094f5c1bd0b4d8b4ffee543f967955dff179b",
-   "from": "v003-linke-2026-11-17/runs/medium/dbg_resume/truth.json"
+   "sha256": "b0466de3e36e3e3c9734b2ebc854c5c84219a701c3d4939f52602ecf6f19d653",
+   "from": "v003-linke-2026-11-17/runs/medium/dbg_resume/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/medium/dbg_step/c0001.wireskein": {
    "sha256": "0e58827ba84d08cea62302ad317c3b98af25fa58179a0f951417a1d5583cdb42",
@@ -3337,7 +3429,7 @@
    "from": "v003-linke-2026-11-17/runs/medium/dbg_step/ch32rv.stderr"
   },
   "runs/medium/dbg_step/reading.json": {
-   "sha256": "5e336c908e1d09adb1c933600b02348c8b27a3729b4195b482e0030b22a5ee9d",
+   "sha256": "9fe020caa7d19953c43c8d2c73979f4216f1d7591168779cfe382029b50633a0",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/medium/dbg_step/run.json": {
@@ -3351,7 +3443,8 @@
   },
   "runs/medium/dbg_step/truth.json": {
    "sha256": "82bf8b8d30f2f6f224abcccabc30928eb4313060c523cd38529fbd195ace334a",
-   "from": "v003-linke-2026-11-17/runs/medium/dbg_step/truth.json"
+   "from": "v003-linke-2026-11-17/runs/medium/dbg_step/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/medium/erase_all/c0001.wireskein": {
    "sha256": "d36936636bbd801adb5093439503c168c1746e0b187c8507052ac3e7fe61d39b",
@@ -3372,7 +3465,7 @@
    "from": "v003-linke-2026-11-17/runs/medium/erase_all/ch32rv.stderr"
   },
   "runs/medium/erase_all/reading.json": {
-   "sha256": "02217cd2d9521be4b4883a16d9e683815094a949455a1a73830b89bb2ac268d4",
+   "sha256": "2704074c01c1ba90802c2a21389af6ad5b9fdeafa4114ff6bd9646bc8abf82e5",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/medium/erase_all/run.json": {
@@ -3386,7 +3479,8 @@
   },
   "runs/medium/erase_all/truth.json": {
    "sha256": "ec2b75e8df4b4f04ba2d3c26d34c5331e95d75b86a7664a26e383740501b1a8b",
-   "from": "v003-linke-2026-11-17/runs/medium/erase_all/truth.json"
+   "from": "v003-linke-2026-11-17/runs/medium/erase_all/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/medium/flash_pattern4k/c0001.wireskein": {
    "sha256": "2da2a5527c1487039d316ec5b48afe9b0cef7f9883fbcdd20df89db371eaa8e0",
@@ -3407,7 +3501,7 @@
    "from": "v003-linke-2026-11-17/runs/medium/flash_pattern4k/ch32rv.stderr"
   },
   "runs/medium/flash_pattern4k/reading.json": {
-   "sha256": "364f7e84850d825493d885697eabe993df105bb27ca60649e85674a489112876",
+   "sha256": "fc12acdb07ada7bc008c60bdc17a35744c6ab0e38957c31f6a9fb5a0be37a07f",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/medium/flash_pattern4k/run.json": {
@@ -3421,7 +3515,8 @@
   },
   "runs/medium/flash_pattern4k/truth.json": {
    "sha256": "e86f9abfcc72c043df5348c654db80d1d3c2751ca56441672759ed163821a3a9",
-   "from": "v003-linke-2026-11-17/runs/medium/flash_pattern4k/truth.json"
+   "from": "v003-linke-2026-11-17/runs/medium/flash_pattern4k/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/medium/flash_sketch/c0001.wireskein": {
    "sha256": "eb6f34c9b3ffd2f879e4e8f8454be7d8a416321c02e99662813c8ff2838f015b",
@@ -3442,7 +3537,7 @@
    "from": "v003-linke-2026-11-17/runs/medium/flash_sketch/ch32rv.stderr"
   },
   "runs/medium/flash_sketch/reading.json": {
-   "sha256": "fbdc421a1f59f0a7af5639228e65a69db496514544426246a8059df08391735d",
+   "sha256": "95d02af7b7625d0c37706e53ba82ef6d671c151603a39cf85180c20fec15261f",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/medium/flash_sketch/run.json": {
@@ -3456,7 +3551,8 @@
   },
   "runs/medium/flash_sketch/truth.json": {
    "sha256": "44559a9f0bb986f325981b167038452b4946ec0296f8de99a564847b4289adfc",
-   "from": "v003-linke-2026-11-17/runs/medium/flash_sketch/truth.json"
+   "from": "v003-linke-2026-11-17/runs/medium/flash_sketch/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/medium/read_erased_1k/c0001.wireskein": {
    "sha256": "e45962e4406cd71a432f9cc9f0de43c483155160ca3a557efe9df7c8c2e3c070",
@@ -3481,7 +3577,7 @@
    "from": "v003-linke-2026-11-17/runs/medium/read_erased_1k/read.bin"
   },
   "runs/medium/read_erased_1k/reading.json": {
-   "sha256": "7c0876d815e2b5264878b8fa6cf30c1a54a206478905020eb32c203fe0ccdb52",
+   "sha256": "4c37e7770725812a9280203849b0ae7bd2282ac433dbcef876b8b0a8e8f5f701",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/medium/read_erased_1k/run.json": {
@@ -3495,7 +3591,8 @@
   },
   "runs/medium/read_erased_1k/truth.json": {
    "sha256": "313106ae6cadfbf447ef1185bbecaf4418a46aac3b9da1bf37e3680c266c17d0",
-   "from": "v003-linke-2026-11-17/runs/medium/read_erased_1k/truth.json"
+   "from": "v003-linke-2026-11-17/runs/medium/read_erased_1k/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/medium/read_flash_4k/c0001.wireskein": {
    "sha256": "ca7ed54cd4340a368e12925671d0e597cbfbd8526cc25cd2649f53439ae0db9e",
@@ -3520,7 +3617,7 @@
    "from": "v003-linke-2026-11-17/runs/medium/read_flash_4k/read.bin"
   },
   "runs/medium/read_flash_4k/reading.json": {
-   "sha256": "d0adfb5cdbc98d720cd32899e5e69877f3e060ef2f91ee86a8307d4134243d6c",
+   "sha256": "21d2532c2125833171292ae607938e5a3947f4b0b89801b6479b8587a24def6d",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/medium/read_flash_4k/run.json": {
@@ -3534,7 +3631,8 @@
   },
   "runs/medium/read_flash_4k/truth.json": {
    "sha256": "014d260c41f4567219be43ac1387526d3367c2da47b6640c49bf14fdba82ab1c",
-   "from": "v003-linke-2026-11-17/runs/medium/read_flash_4k/truth.json"
+   "from": "v003-linke-2026-11-17/runs/medium/read_flash_4k/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/medium/read_pattern4k/c0001.wireskein": {
    "sha256": "ba94ed3e1dbe74dd4ecd1ea087d1b8c280ed206001455a38da73f87c090a776e",
@@ -3559,7 +3657,7 @@
    "from": "v003-linke-2026-11-17/runs/medium/read_pattern4k/read.bin"
   },
   "runs/medium/read_pattern4k/reading.json": {
-   "sha256": "84a2027b4e809d2a41de3d368fc50c192bdd6ea70d04c23a352c76857447f492",
+   "sha256": "9020e5177aa8e366aff143be160169cd072d1123d2a455f4d2f5c8bf9c43447c",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/medium/read_pattern4k/run.json": {
@@ -3573,7 +3671,8 @@
   },
   "runs/medium/read_pattern4k/truth.json": {
    "sha256": "c370f4ac0dd0e47f9ffd616b7e76036638574e3b0a927b1125e12f34e5f7c480",
-   "from": "v003-linke-2026-11-17/runs/medium/read_pattern4k/truth.json"
+   "from": "v003-linke-2026-11-17/runs/medium/read_pattern4k/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/medium/read_ram_256/c0001.wireskein": {
    "sha256": "c1a926f6054da9ae7f81b99c6cd984a48e7836dd9dcb22ad976f235206426146",
@@ -3598,7 +3697,7 @@
    "from": "v003-linke-2026-11-17/runs/medium/read_ram_256/read.bin"
   },
   "runs/medium/read_ram_256/reading.json": {
-   "sha256": "27841974e59917af36112db5df6573faa94f68e1acdb9af6d91ffed69ee25339",
+   "sha256": "5fc447885adcba4da75b025bd0fc1d30d2993af7e79e0ae7c0f362c256b8b373",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/medium/read_ram_256/run.json": {
@@ -3612,7 +3711,8 @@
   },
   "runs/medium/read_ram_256/truth.json": {
    "sha256": "0363af295371550825c7199137a8371994e430ea7d7f5b256c9138094ac2c2b3",
-   "from": "v003-linke-2026-11-17/runs/medium/read_ram_256/truth.json"
+   "from": "v003-linke-2026-11-17/runs/medium/read_ram_256/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/medium/reset/c0001.wireskein": {
    "sha256": "dec66e9bbd5fb86585aa6a09439393f9716fa2b0e4f5daf6b7f05b631b80bc2b",
@@ -3633,7 +3733,7 @@
    "from": "v003-linke-2026-11-17/runs/medium/reset/ch32rv.stderr"
   },
   "runs/medium/reset/reading.json": {
-   "sha256": "70fb4f908e60af560ec622858cbd9c92233261fb0531cfdcc640dff0144d4ba7",
+   "sha256": "dab078b20d6706de279c15ae3ddd725750ae4a5b941cd970d0bf691719f62ce3",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/medium/reset/run.json": {
@@ -3646,8 +3746,9 @@
    "added": "excerpt_s"
   },
   "runs/medium/reset/truth.json": {
-   "sha256": "8c046fae631ba0f032c8fd26ac31f0a16c582863e15106dea7059ac7dd891740",
-   "from": "v003-linke-2026-11-17/runs/medium/reset/truth.json"
+   "sha256": "f614ec2a7708bf8bc613092048358f06dbd8526f04b7a18689a5a396b1d0cbfc",
+   "from": "v003-linke-2026-11-17/runs/medium/reset/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/medium/target_info/c0001.wireskein": {
    "sha256": "5268a74ad3b880b99872877fe776a517d33150e15a008c1fe8d1af878c6c0306",
@@ -3668,7 +3769,7 @@
    "from": "v003-linke-2026-11-17/runs/medium/target_info/ch32rv.stderr"
   },
   "runs/medium/target_info/reading.json": {
-   "sha256": "36bfefadcbfde888a5e79cbc253a08aab66e6f4a0e348e551578f72661b3feab",
+   "sha256": "788661543877e4f9a12d50dc8996628099ff994787ca9bdf507251da9b5ac4e3",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/medium/target_info/run.json": {
@@ -3681,8 +3782,9 @@
    "added": "excerpt_s"
   },
   "runs/medium/target_info/truth.json": {
-   "sha256": "b39db9ad36c8037592da9f6e85d955017b4e7659fe9168ae394690824c6d7181",
-   "from": "v003-linke-2026-11-17/runs/medium/target_info/truth.json"
+   "sha256": "e1dafc5166e22fd998ec771ab21fa54de8fd89518f8899e1fced4e5b25183a84",
+   "from": "v003-linke-2026-11-17/runs/medium/target_info/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/medium/verify_pattern4k/c0001.wireskein": {
    "sha256": "fe3cd27983384dadac1cfc2011993c022ed09f8533a080f69e5912b8b6d2a602",
@@ -3703,7 +3805,7 @@
    "from": "v003-linke-2026-11-17/runs/medium/verify_pattern4k/ch32rv.stderr"
   },
   "runs/medium/verify_pattern4k/reading.json": {
-   "sha256": "22bfd0827b7219c77edc43e52b9392adc04f56eb501e17a2a0d808403ce04e48",
+   "sha256": "3bb3f5f0e8e369a7384aa21d4f91463360e395478a205228939c669419d3f0b2",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/medium/verify_pattern4k/run.json": {
@@ -3717,7 +3819,8 @@
   },
   "runs/medium/verify_pattern4k/truth.json": {
    "sha256": "89874d27318501209fa308e4acac733c2aa605c70096c2f7f3798c21282c9385",
-   "from": "v003-linke-2026-11-17/runs/medium/verify_pattern4k/truth.json"
+   "from": "v003-linke-2026-11-17/runs/medium/verify_pattern4k/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/rate/10M/flash_pattern4k/c0001.wireskein": {
    "sha256": "f04e5875348d7edd5db75afde8d90a56efd37a199a7849cb6c4e46dc69f982c1",
@@ -3738,7 +3841,7 @@
    "from": "v003-linke-2026-11-17/runs/rate/10M/flash_pattern4k/ch32rv.stderr"
   },
   "runs/rate/10M/flash_pattern4k/reading.json": {
-   "sha256": "4768547e5d7efd25a22c11da8423e68697827378dfda89ed7e6c53bb2e57a948",
+   "sha256": "53a5a08b4a9726caf49217608b02b291f91a2d4bac9a6ec5feeb480b06645d28",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/rate/10M/flash_pattern4k/run.json": {
@@ -3752,7 +3855,8 @@
   },
   "runs/rate/10M/flash_pattern4k/truth.json": {
    "sha256": "d76c20a5d7fa8322b4ce8c72ea5bd613f25fe740809fae7873159ef6b758e531",
-   "from": "v003-linke-2026-11-17/runs/rate/10M/flash_pattern4k/truth.json"
+   "from": "v003-linke-2026-11-17/runs/rate/10M/flash_pattern4k/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/rate/10M/low_read_ram_256/c0001.wireskein": {
    "sha256": "fc1ccd35daa132feea1c41601508004ecffee6ffd0072a5e263976f5495e8443",
@@ -3777,7 +3881,7 @@
    "from": "v003-linke-2026-11-17/runs/rate/10M/low_read_ram_256/read.bin"
   },
   "runs/rate/10M/low_read_ram_256/reading.json": {
-   "sha256": "8f721f29e39dc82b0dfab40ade2cb1f9608c93fd9ab5ec25c18e2238f2581c77",
+   "sha256": "1778c28fea91756287697b84ba9db144a615576b734b8eda1ea87f0c45b4fc33",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/rate/10M/low_read_ram_256/run.json": {
@@ -3791,7 +3895,8 @@
   },
   "runs/rate/10M/low_read_ram_256/truth.json": {
    "sha256": "9f8deec21300319c8f3346aebf985a85ffce569698ec1e6ac12453bbe9658f48",
-   "from": "v003-linke-2026-11-17/runs/rate/10M/low_read_ram_256/truth.json"
+   "from": "v003-linke-2026-11-17/runs/rate/10M/low_read_ram_256/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/rate/10M/read_flash_4k/c0001.wireskein": {
    "sha256": "69a8e22fce38e8be7e751431828f7235591bde124b36e70c397490d1c21a6915",
@@ -3816,7 +3921,7 @@
    "from": "v003-linke-2026-11-17/runs/rate/10M/read_flash_4k/read.bin"
   },
   "runs/rate/10M/read_flash_4k/reading.json": {
-   "sha256": "d6097878345f836d06c18e49891f5bebf4dc07d0a903cea01f4a0264ef068656",
+   "sha256": "cda0a61115a92f0052b40639ee0881f1756bfc681c3b0b888ddfc110996da212",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/rate/10M/read_flash_4k/run.json": {
@@ -3830,7 +3935,8 @@
   },
   "runs/rate/10M/read_flash_4k/truth.json": {
    "sha256": "846a03b09038ebb10c1bb972b7534c6ee5faaaffb1b26a5119ceaaa6748029a7",
-   "from": "v003-linke-2026-11-17/runs/rate/10M/read_flash_4k/truth.json"
+   "from": "v003-linke-2026-11-17/runs/rate/10M/read_flash_4k/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/rate/10M/target_info/c0001.wireskein": {
    "sha256": "f7ce86cfd36b6cb9fb233a9a3af69023ef9b41606df77b857821858d08b33b6a",
@@ -3851,7 +3957,7 @@
    "from": "v003-linke-2026-11-17/runs/rate/10M/target_info/ch32rv.stderr"
   },
   "runs/rate/10M/target_info/reading.json": {
-   "sha256": "368275398f36221e5442c2e797bb8492c679bbd710bc093ea570a21db7625fd5",
+   "sha256": "a4cc4279e703df7678119486069137c2ac5a20da18db65bd5e685b249f3701ab",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/rate/10M/target_info/run.json": {
@@ -3864,8 +3970,9 @@
    "added": "excerpt_s"
   },
   "runs/rate/10M/target_info/truth.json": {
-   "sha256": "b39db9ad36c8037592da9f6e85d955017b4e7659fe9168ae394690824c6d7181",
-   "from": "v003-linke-2026-11-17/runs/rate/10M/target_info/truth.json"
+   "sha256": "539e1341677e820ddd0f33717b79f4d05c6aecf6b588c81518f437537d4443ca",
+   "from": "v003-linke-2026-11-17/runs/rate/10M/target_info/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/rate/133p333M/flash_pattern4k/c0001.wireskein": {
    "sha256": "e6b3f84db4a264930d2ad22965adce22c50ce0d55b0c5733cceb301e01b3ec0f",
@@ -3886,7 +3993,7 @@
    "from": "v003-linke-2026-11-17/runs/rate/133p333M/flash_pattern4k/ch32rv.stderr"
   },
   "runs/rate/133p333M/flash_pattern4k/reading.json": {
-   "sha256": "3d7d8b9fc0a64798f1b8412140cb050d699c3957c216da5d6820ecabf3a3cdcd",
+   "sha256": "789fd83a38c16ce0fed29cd659ed391ba184a23c2e6d4c1b88cde53cfb68dc8d",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/rate/133p333M/flash_pattern4k/run.json": {
@@ -3900,7 +4007,8 @@
   },
   "runs/rate/133p333M/flash_pattern4k/truth.json": {
    "sha256": "1831eb9042c2068b8a0fd6b8222fdbe29edf361bb8b2059f6e3149e624d57f4b",
-   "from": "v003-linke-2026-11-17/runs/rate/133p333M/flash_pattern4k/truth.json"
+   "from": "v003-linke-2026-11-17/runs/rate/133p333M/flash_pattern4k/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/rate/133p333M/low_read_ram_256/c0001.wireskein": {
    "sha256": "c588184a6f44f954712e82940e993151fbeba5352922fc8f1f0b006657d546ba",
@@ -3925,7 +4033,7 @@
    "from": "v003-linke-2026-11-17/runs/rate/133p333M/low_read_ram_256/read.bin"
   },
   "runs/rate/133p333M/low_read_ram_256/reading.json": {
-   "sha256": "cde3ef9baa9513f5101cda0354a056a51d3c9ebe675261572695ae3cbdfae758",
+   "sha256": "2e08ef49c2b6b80374f65ab6041b9dba64177c7d712942ae2479c72625b13d8f",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/rate/133p333M/low_read_ram_256/run.json": {
@@ -3939,7 +4047,8 @@
   },
   "runs/rate/133p333M/low_read_ram_256/truth.json": {
    "sha256": "d27542c9ed4c7d061a516fbc2c73a55c333150b15494d879e717a03c4abee2e5",
-   "from": "v003-linke-2026-11-17/runs/rate/133p333M/low_read_ram_256/truth.json"
+   "from": "v003-linke-2026-11-17/runs/rate/133p333M/low_read_ram_256/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/rate/133p333M/read_flash_4k/c0001.wireskein": {
    "sha256": "5369f0c67f6a7c7a8a0c072f199ba93dc47b5bad334299184e0d44e696c27c61",
@@ -3964,7 +4073,7 @@
    "from": "v003-linke-2026-11-17/runs/rate/133p333M/read_flash_4k/read.bin"
   },
   "runs/rate/133p333M/read_flash_4k/reading.json": {
-   "sha256": "cf8b03dbdaf348779012f7f2779a1c2c4f54cbe86a1676e20c4ed4dc30300815",
+   "sha256": "972808f032aa6055b7d64b447f09d5ce6d4cdc9143e9203b3f57031589a001f4",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/rate/133p333M/read_flash_4k/run.json": {
@@ -3978,7 +4087,8 @@
   },
   "runs/rate/133p333M/read_flash_4k/truth.json": {
    "sha256": "2e258b951cc579c4ac1fe574cc58aa844c97f483ef45ab541c22696152efb1c8",
-   "from": "v003-linke-2026-11-17/runs/rate/133p333M/read_flash_4k/truth.json"
+   "from": "v003-linke-2026-11-17/runs/rate/133p333M/read_flash_4k/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/rate/133p333M/target_info/c0001.wireskein": {
    "sha256": "2f147083187a0c87692ed8117c4cba04ac41ce2109028aeed84cb5b57eff3b8a",
@@ -3999,7 +4109,7 @@
    "from": "v003-linke-2026-11-17/runs/rate/133p333M/target_info/ch32rv.stderr"
   },
   "runs/rate/133p333M/target_info/reading.json": {
-   "sha256": "aaead821a7fbef137b62d0e44fa7afe510b451da2bae68a8b71404986accb3ce",
+   "sha256": "87c1a1f5774e10fbcd5c0bde72cc68217bcf3369b13d28f8d28655fa8cc8ed0f",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/rate/133p333M/target_info/run.json": {
@@ -4012,8 +4122,9 @@
    "added": "excerpt_s"
   },
   "runs/rate/133p333M/target_info/truth.json": {
-   "sha256": "b39db9ad36c8037592da9f6e85d955017b4e7659fe9168ae394690824c6d7181",
-   "from": "v003-linke-2026-11-17/runs/rate/133p333M/target_info/truth.json"
+   "sha256": "539e1341677e820ddd0f33717b79f4d05c6aecf6b588c81518f437537d4443ca",
+   "from": "v003-linke-2026-11-17/runs/rate/133p333M/target_info/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/rate/160M/flash_pattern4k/c0001.wireskein": {
    "sha256": "66de2787a8b2f96fa0ac71d4b4a941149cb956ed51430100f48ec5a0c55553a9",
@@ -4034,7 +4145,7 @@
    "from": "v003-linke-2026-11-17/runs/rate/160M/flash_pattern4k/ch32rv.stderr"
   },
   "runs/rate/160M/flash_pattern4k/reading.json": {
-   "sha256": "b43bcaef461de9e8a1ce84480fcc8553d2e754e80b9f26ccbf2372644b759cf8",
+   "sha256": "1a89a56db78aac4cd6b426e041247cc019d7ae3f5666394fc09871c8a1a6fcf2",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/rate/160M/flash_pattern4k/run.json": {
@@ -4048,7 +4159,8 @@
   },
   "runs/rate/160M/flash_pattern4k/truth.json": {
    "sha256": "f1f2839a141df78d44ca55e047d924efff1f597f6652f1e996bba0b79cd7d001",
-   "from": "v003-linke-2026-11-17/runs/rate/160M/flash_pattern4k/truth.json"
+   "from": "v003-linke-2026-11-17/runs/rate/160M/flash_pattern4k/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/rate/160M/low_read_ram_256/c0001.wireskein": {
    "sha256": "31e782c8932aafe529d41be5303de6acbaa59dcebc34808bf302a1262e9742ea",
@@ -4073,7 +4185,7 @@
    "from": "v003-linke-2026-11-17/runs/rate/160M/low_read_ram_256/read.bin"
   },
   "runs/rate/160M/low_read_ram_256/reading.json": {
-   "sha256": "a458182a68fddde60f257308e5e9df122c4fabaa84b7a144b4042e701c1e5702",
+   "sha256": "0b225927941879b46915950249badaaabeaf51765a17c02e3bf405bdbf81229d",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/rate/160M/low_read_ram_256/run.json": {
@@ -4087,7 +4199,8 @@
   },
   "runs/rate/160M/low_read_ram_256/truth.json": {
    "sha256": "d952bf4e9ccc8138d90fdf9b314e6068ad6875b2ef9b37a66bea185e2219be24",
-   "from": "v003-linke-2026-11-17/runs/rate/160M/low_read_ram_256/truth.json"
+   "from": "v003-linke-2026-11-17/runs/rate/160M/low_read_ram_256/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/rate/160M/read_flash_4k/c0001.wireskein": {
    "sha256": "9a63dabba359476aa722d8c4f1d75234a77c0fd9195ea7343262a100f0918a79",
@@ -4112,7 +4225,7 @@
    "from": "v003-linke-2026-11-17/runs/rate/160M/read_flash_4k/read.bin"
   },
   "runs/rate/160M/read_flash_4k/reading.json": {
-   "sha256": "d762c5882c982e8480b36166440a64257001de31aa81cc0077aba733ce6d45cd",
+   "sha256": "cac54bbc904e1b486e07f7b14f694899781ec5ea0b65fd26820ab12a75801164",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/rate/160M/read_flash_4k/run.json": {
@@ -4126,7 +4239,8 @@
   },
   "runs/rate/160M/read_flash_4k/truth.json": {
    "sha256": "1584a4fb9d1af23addfb6ed120ff52eee4ef718859eb50bdc378e941d304a15b",
-   "from": "v003-linke-2026-11-17/runs/rate/160M/read_flash_4k/truth.json"
+   "from": "v003-linke-2026-11-17/runs/rate/160M/read_flash_4k/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/rate/160M/target_info/c0001.wireskein": {
    "sha256": "7b9e36285f2de59c828a53d4ae480aea8e0ee3d768515c4544c19abb747848de",
@@ -4147,7 +4261,7 @@
    "from": "v003-linke-2026-11-17/runs/rate/160M/target_info/ch32rv.stderr"
   },
   "runs/rate/160M/target_info/reading.json": {
-   "sha256": "f7fe0c47dc88a81862013a6dee253f953f1d5f87e180e9aedc5efe240d1f2d90",
+   "sha256": "801ae8bf4292305541429be5b460e84fe8057e1e5f95c54358f984a2a8bc4e88",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/rate/160M/target_info/run.json": {
@@ -4160,8 +4274,9 @@
    "added": "excerpt_s"
   },
   "runs/rate/160M/target_info/truth.json": {
-   "sha256": "8680880a822eaef11bfa421872d8940a653e3738fb0a051902520b15893aadfc",
-   "from": "v003-linke-2026-11-17/runs/rate/160M/target_info/truth.json"
+   "sha256": "e1dafc5166e22fd998ec771ab21fa54de8fd89518f8899e1fced4e5b25183a84",
+   "from": "v003-linke-2026-11-17/runs/rate/160M/target_info/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/rate/50M/flash_pattern4k/c0001.wireskein": {
    "sha256": "86f53348fb2858deae1cdd78776c97c26638d6f7a471314af847b6ce3345f89c",
@@ -4182,7 +4297,7 @@
    "from": "v003-linke-2026-11-17/runs/rate/50M/flash_pattern4k/ch32rv.stderr"
   },
   "runs/rate/50M/flash_pattern4k/reading.json": {
-   "sha256": "9023f44a7079be3f7177287ef5efd2fe55d1d70b32ffec90ac4e9f54b96c27cb",
+   "sha256": "2fe6f67f03704cf2f4c59eb0ce3bdc79f31d3f72f866afce6deca701d387d0b8",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/rate/50M/flash_pattern4k/run.json": {
@@ -4196,7 +4311,8 @@
   },
   "runs/rate/50M/flash_pattern4k/truth.json": {
    "sha256": "e90f5a8179885dc989d415c04f0f39579e79864410b0117a549cf30a6a2ae16b",
-   "from": "v003-linke-2026-11-17/runs/rate/50M/flash_pattern4k/truth.json"
+   "from": "v003-linke-2026-11-17/runs/rate/50M/flash_pattern4k/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/rate/50M/low_read_ram_256/c0001.wireskein": {
    "sha256": "b34d80ddfab8b04fc47d3cfd5c465dfa02fcafa8fb8653e3733ffe4f2fa6be13",
@@ -4221,7 +4337,7 @@
    "from": "v003-linke-2026-11-17/runs/rate/50M/low_read_ram_256/read.bin"
   },
   "runs/rate/50M/low_read_ram_256/reading.json": {
-   "sha256": "39eec0ba21f64a4db6a5250b9de3219d7812108a359dcb35e7a658d997026d0e",
+   "sha256": "198de0bc31adce237495c348818000c9eb1f21a8bad3d182f1f7d9bef0b12de0",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/rate/50M/low_read_ram_256/run.json": {
@@ -4235,7 +4351,8 @@
   },
   "runs/rate/50M/low_read_ram_256/truth.json": {
    "sha256": "bf2d06d81366ba8c362e3fdd59f698df1f7fe68da45749b75416ee6bd11f0ebb",
-   "from": "v003-linke-2026-11-17/runs/rate/50M/low_read_ram_256/truth.json"
+   "from": "v003-linke-2026-11-17/runs/rate/50M/low_read_ram_256/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/rate/50M/read_flash_4k/c0001.wireskein": {
    "sha256": "0e5de76888a4259b331dedcc1e2bb2ffdfd47ab65f468d987ae1278d9f55c6e3",
@@ -4260,7 +4377,7 @@
    "from": "v003-linke-2026-11-17/runs/rate/50M/read_flash_4k/read.bin"
   },
   "runs/rate/50M/read_flash_4k/reading.json": {
-   "sha256": "d650acd85136c728f466849e9dfce6c4f53b4af89e941c2df8651aeb7c53e23a",
+   "sha256": "a18d12d697ac3b96c4fa59b3af40b5f7dcbfc5cf54665ef7a5f37945edbb9a65",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/rate/50M/read_flash_4k/run.json": {
@@ -4274,7 +4391,8 @@
   },
   "runs/rate/50M/read_flash_4k/truth.json": {
    "sha256": "0778289f081d140eb1417d9a30fe9e14fbd3e03d4c2cc3d43afaad2d7b25822c",
-   "from": "v003-linke-2026-11-17/runs/rate/50M/read_flash_4k/truth.json"
+   "from": "v003-linke-2026-11-17/runs/rate/50M/read_flash_4k/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/rate/50M/target_info/c0001.wireskein": {
    "sha256": "4686b32cd03f6f8832622346a068bc7ca9cf9e0805577aa12137619917b985aa",
@@ -4295,7 +4413,7 @@
    "from": "v003-linke-2026-11-17/runs/rate/50M/target_info/ch32rv.stderr"
   },
   "runs/rate/50M/target_info/reading.json": {
-   "sha256": "f273dafbcc46ef0b111e583f131b777ce207ce1ccdef157e5f1f5326d4ac7bc6",
+   "sha256": "f1fc53aa655df8c9f723ce963aff6e3f4473f62d53dd611064a1dbd9009685c9",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/rate/50M/target_info/run.json": {
@@ -4308,8 +4426,9 @@
    "added": "excerpt_s"
   },
   "runs/rate/50M/target_info/truth.json": {
-   "sha256": "b39db9ad36c8037592da9f6e85d955017b4e7659fe9168ae394690824c6d7181",
-   "from": "v003-linke-2026-11-17/runs/rate/50M/target_info/truth.json"
+   "sha256": "539e1341677e820ddd0f33717b79f4d05c6aecf6b588c81518f437537d4443ca",
+   "from": "v003-linke-2026-11-17/runs/rate/50M/target_info/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/rate/5M/flash_pattern4k/c0001.wireskein": {
    "sha256": "ef01af5c41f48ecd540cb25d4103ef49420bdde8ba389d33d03fa5b1a6deea29",
@@ -4330,7 +4449,7 @@
    "from": "v003-linke-2026-11-17/runs/rate/5M/flash_pattern4k/ch32rv.stderr"
   },
   "runs/rate/5M/flash_pattern4k/reading.json": {
-   "sha256": "420820d116fe626a6a1fc014dbbfd0a904e38116d96ed1ee36dc34d6fd35de03",
+   "sha256": "fbb214c2986dfda3a10a3bb93875738b1fbec7019ec11a9bfa198dabead9f02b",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/rate/5M/flash_pattern4k/run.json": {
@@ -4344,7 +4463,8 @@
   },
   "runs/rate/5M/flash_pattern4k/truth.json": {
    "sha256": "989f37dedd46eb4830032e8069d40f8f01d6e13d5ecc91a7dbf9d93a1f8888e8",
-   "from": "v003-linke-2026-11-17/runs/rate/5M/flash_pattern4k/truth.json"
+   "from": "v003-linke-2026-11-17/runs/rate/5M/flash_pattern4k/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/rate/5M/low_read_ram_256/c0001.wireskein": {
    "sha256": "8a95d9bc48ae88050a35f55fc0f631d45e97098f7965d93443ff06e06ecb05a3",
@@ -4369,7 +4489,7 @@
    "from": "v003-linke-2026-11-17/runs/rate/5M/low_read_ram_256/read.bin"
   },
   "runs/rate/5M/low_read_ram_256/reading.json": {
-   "sha256": "28146491acae872546f31d30adf54bc9633f7b620196afd0592913f402add28a",
+   "sha256": "7ffbbc936945f7fea62c54e834ab42ae0d82258da9eed33f15715077e044b824",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/rate/5M/low_read_ram_256/run.json": {
@@ -4383,7 +4503,8 @@
   },
   "runs/rate/5M/low_read_ram_256/truth.json": {
    "sha256": "f507d6e52d0dbbe9a568778aa51f367b78b1bf5ee42c9765b052a29242c2825c",
-   "from": "v003-linke-2026-11-17/runs/rate/5M/low_read_ram_256/truth.json"
+   "from": "v003-linke-2026-11-17/runs/rate/5M/low_read_ram_256/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/rate/5M/read_flash_4k/c0001.wireskein": {
    "sha256": "decf68d7a3867d1876a3d4c07d9310ba5e973d58cd1a5c7960061e7f05d97e7e",
@@ -4408,7 +4529,7 @@
    "from": "v003-linke-2026-11-17/runs/rate/5M/read_flash_4k/read.bin"
   },
   "runs/rate/5M/read_flash_4k/reading.json": {
-   "sha256": "de5da100de2c0fdce2498b1d6eecaa3ac0854b87ccf0b1792bcb3e7817c0594d",
+   "sha256": "f454cccadc9f43cdbde02cc4ce63764104e42ae76eec1d8be5ff04b5920500fd",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/rate/5M/read_flash_4k/run.json": {
@@ -4422,7 +4543,8 @@
   },
   "runs/rate/5M/read_flash_4k/truth.json": {
    "sha256": "8a7c5245374a857bc0d175c0bc9c2cdf6720d7b3495ab3cff575df8e84531b41",
-   "from": "v003-linke-2026-11-17/runs/rate/5M/read_flash_4k/truth.json"
+   "from": "v003-linke-2026-11-17/runs/rate/5M/read_flash_4k/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   },
   "runs/rate/5M/target_info/c0001.wireskein": {
    "sha256": "5f1b9009fb6cbc51f7634ed87596183a01d589038258eabb96db4456417fc690",
@@ -4443,7 +4565,7 @@
    "from": "v003-linke-2026-11-17/runs/rate/5M/target_info/ch32rv.stderr"
   },
   "runs/rate/5M/target_info/reading.json": {
-   "sha256": "15e87bf5f526488f8d81c75eaa657de61eafad074c405f223a418916526a98ce",
+   "sha256": "6aa31bff0207d77a39824b65fac650b1b37456a4319dbaa648acfd72ebf87174",
    "made": "tools/truth.py on the cut capture (WireSkein's reading, not truth)"
   },
   "runs/rate/5M/target_info/run.json": {
@@ -4456,8 +4578,9 @@
    "added": "excerpt_s"
   },
   "runs/rate/5M/target_info/truth.json": {
-   "sha256": "b39db9ad36c8037592da9f6e85d955017b4e7659fe9168ae394690824c6d7181",
-   "from": "v003-linke-2026-11-17/runs/rate/5M/target_info/truth.json"
+   "sha256": "539e1341677e820ddd0f33717b79f4d05c6aecf6b588c81518f437537d4443ca",
+   "from": "v003-linke-2026-11-17/runs/rate/5M/target_info/truth.json",
+   "remade": "agreement_160M with this WireSkein (bench/data/refresh_linke.py)"
   }
  }
 }

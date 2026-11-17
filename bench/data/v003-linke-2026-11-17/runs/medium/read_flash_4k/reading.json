@@ -1,4 +1,5 @@
 {
+ "wireskein": "0.0.28",
  "parts": [
   {
    "protocol": "swio",
@@ -15,8 +16,8 @@
     "restored": 0,
     "repaired": 0,
     "rate_ok": true,
-    "unread": 22,
-    "unread_edges": 5703,
+    "unread": 21,
+    "unread_edges": 5702,
     "line_changes": {
      "SWIO": {
       "changes": 100510,
@@ -27,7 +28,6 @@
    "clock_speeds": null
   }
  ],
- "wireskein": "0.0.28",
  "tick_hz": [
   160000000,
   1

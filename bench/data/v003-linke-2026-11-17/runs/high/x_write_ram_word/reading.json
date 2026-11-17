@@ -1,4 +1,5 @@
 {
+ "wireskein": "0.0.28",
  "parts": [
   {
    "protocol": "swio",
@@ -27,7 +28,6 @@
    "clock_speeds": null
   }
  ],
- "wireskein": "0.0.28",
  "tick_hz": [
   160000000,
   1

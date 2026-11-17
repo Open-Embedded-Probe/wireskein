@@ -27,7 +27,4 @@ LinkE が接続のときに 2 線で問い合わせる所（SWCLK も動く約 1
 
 ## 読みについて
 
-ch32rv の DMI の操作が 160 MS/s の読みの中に順にすべて見つかるのは 123 本中 101 本（`truth.json` の
-`agreement_160M`）。見つからない 22 本は短い操作で、接続のあとのフレームが「読めなかった区間」になります（LinkE の
-ファーム 2.23 は SWIO のフレームの間を詰めて送り、WireSkein の SWIO はそれを区切れない: bench/notes/2026-11-17-test-plan の
-穴 b）。その 22 本の正解は ch32rv の DMI の操作と読み出しの結果だけで、遅く取ったものにも 160 MS/s の読みを正解にしません。
+ch32rv の DMI の操作は、123 本すべてで 160 MS/s の読みの中に順にすべて見つかります（`truth.json` の `agreement_160M`。WireSkein の SWIO の直しの後に bench/data/refresh_linke.py で作り直した: bench/notes/2026-11-17-test-plan の穴 b。それまでは、短い操作 22 本で、接続のときの LinkE の 2 線の問い合わせのパルスが SWIO 自身のパルスより多く、フレームが読めなかった）。正解は ch32rv の DMI の操作と読み出しの結果、遅く取ったものには 160 MS/s の読みです。
