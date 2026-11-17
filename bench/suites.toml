@@ -148,3 +148,9 @@ role = "holdout"
 about = "the same, the cases set aside (all their bus rates)"
 sources = ["ebdd:embedbench-device-data-50m/holdout"]
 transforms = ["", "decimate:2", "decimate:5", "decimate:10", "decimate:25"]
+
+[suite.cost-real]
+role = "tune"
+about = "costs on real captures of spread sizes (a few changes to millions): the LinkE -> CH32L103 operations taken down 4 times (40 MS/s: ringing kept, the 64 KiB read 1.8 M changes) and the ENV III I2C at 50 MS/s, the tuning halves. Run before a run with a time limit (Bench workflow's gate): an algorithm that times out, or is far slower than the main one or grows faster with the data, is left out of the run (bench/gate.py)"
+sources = ["linke:l103-linke-2026-11-17/tune", "ebdd:embedbench-device-data-50m/tune"]
+transforms = ["decimate:4"]

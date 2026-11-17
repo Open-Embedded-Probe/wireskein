@@ -35,6 +35,13 @@ on:
         description: "Commit the results to the branch (off: the artifact only)"
         type: boolean
         default: true
+      gate:
+        description: "First run the cost-real suite with a time limit and leave out the algorithms that time out, or are far slower than the main one, or grow faster with the data (bench/gate.py)"
+        type: boolean
+        default: true
+      timeout:
+        description: "Seconds one algorithm may take on one case before it is stopped (recorded as timed out); 0: none"
+        default: "300"
 
 permissions:
   contents: read
@@ -60,8 +67,44 @@ jobs:
           echo "shards=$(python3 -c "print(list(range($n)))")" >> "$GITHUB_OUTPUT"
           echo "run_id=$(date -u +%Y%m%dT%H%M%SZ)-$(git rev-parse --short=7 HEAD)-gh${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
 
-  shard:
+  gate:
     needs: plan
+    if: ${{ inputs.gate }}
+    runs-on: ubuntu-latest
+    outputs:
+      skip: ${{ steps.gate.outputs.skip }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.3   # no floating major tag since v8: the full version
+
+      - name: Cost run and gate
+        id: gate
+        env:
+          STAGES: ${{ inputs.stages }}
+          ALGOS: ${{ inputs.algos }}
+          STATUS: ${{ inputs.status }}
+        run: |
+          args=()
+          for s in $STAGES; do args+=(--stage "$s"); done
+          for a in $ALGOS; do args+=(--algo "$a"); done
+          uv run --python 3.13 --with-requirements bench/requirements.txt python bench/run.py "${args[@]}" \
+            --suite cost-real --status "$STATUS" --timeout 120 --note "gate" -j "$(nproc)"
+          uv run --python 3.13 --with-requirements bench/requirements.txt python bench/gate.py --out skip.json
+          echo "skip=$(python3 -c 'import json; print(json.dumps(json.load(open("skip.json"))))')" >> "$GITHUB_OUTPUT"
+
+      - name: Keep the gate
+        uses: actions/upload-artifact@v7
+        with:
+          name: bench-gate
+          path: skip.json
+          retention-days: 7
+
+  shard:
+    needs: [plan, gate]
+    if: ${{ always() && needs.plan.result == 'success' && (needs.gate.result == 'success' || needs.gate.result == 'skipped') }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -83,6 +126,8 @@ jobs:
           NOTE: ${{ inputs.note }}
           MEMORY: ${{ inputs.memory }}
           SHARD: ${{ matrix.shard }}
+          SKIP: ${{ needs.gate.outputs.skip }}
+          TIMEOUT: ${{ inputs.timeout }}
           N: ${{ needs.plan.outputs.n }}
           RUN_ID: ${{ needs.plan.outputs.run_id }}
         run: |
@@ -91,8 +136,9 @@ jobs:
           for s in $SUITES; do args+=(--suite "$s"); done
           for a in $ALGOS; do args+=(--algo "$a"); done
           if [ "$MEMORY" = "true" ]; then args+=(--memory); fi
+          if [ -n "$SKIP" ]; then printf '%s' "$SKIP" > "$RUNNER_TEMP/skip.json"; args+=(--skip-from "$RUNNER_TEMP/skip.json"); fi
           uv run --python 3.13 --with-requirements bench/requirements.txt python bench/run.py "${args[@]}" \
-            --status "$STATUS" --note "$NOTE" --shard "$SHARD/$N" --run-id "$RUN_ID" -j "$(nproc)"
+            --status "$STATUS" --note "$NOTE" --shard "$SHARD/$N" --run-id "$RUN_ID" --timeout "$TIMEOUT" -j "$(nproc)"
 
       - name: Keep the shard's items
         uses: actions/upload-artifact@v7

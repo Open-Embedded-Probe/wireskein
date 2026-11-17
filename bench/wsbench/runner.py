@@ -16,6 +16,7 @@ import json
 import os
 import multiprocessing as mp
 import platform
+import signal
 import subprocess
 import sys
 import time
@@ -102,13 +103,36 @@ def git_state() -> dict:
 # ---------------- worker ----------------
 
 _EXTRA: list[str] = []
+TIMEOUT_S = 300.0       # one algorithm on one case: past this it is stopped and recorded as timed out
+_TIMEOUT = TIMEOUT_S
 
 
-def _init(extra):
-    global _EXTRA
-    _EXTRA = extra
+class TimedOut(Exception):
+    pass
+
+
+def _alarm(signum, frame):
+    raise TimedOut()
+
+
+def _init(extra, timeout=TIMEOUT_S):
+    global _EXTRA, _TIMEOUT
+    _EXTRA, _TIMEOUT = extra, timeout
     registry.load(extra)
     cost.reference()                    # warm: the first one pays for numpy's first calls
+
+
+def _limited(fn):
+    """fn() within _TIMEOUT seconds (a worker's main thread: SIGALRM), else TimedOut. 0: no limit."""
+    if not _TIMEOUT:
+        return fn()
+    old = signal.signal(signal.SIGALRM, _alarm)
+    signal.setitimer(signal.ITIMER_REAL, _TIMEOUT)
+    try:
+        return fn()
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, old)
 
 
 def _work(job):
@@ -119,6 +143,7 @@ def _work(job):
     except Exception as e:  # noqa: BLE001 - a case that cannot be made is reported, the run goes on
         return {"case": str(path).rsplit("/", 1)[-1], "source": source, "chain": chain, "error": f"load: {type(e).__name__}: {e}"}
     out = {"case": case.id, "dataset": case.dataset, "input_sha": case.input_sha, "results": [],
+           "from": [str(path).replace(str(data.REPO) + "/", ""), source, chain],   # within the repository: no local path
            "load_s": time.perf_counter() - t0, "ref": cost.reference(),
            "edges": sum(len(c.edges) for c in case.cap.channels), "rate": float(case.cap.rate),
            "obs": observe.observe(case.cap)}
@@ -132,10 +157,16 @@ def _work(job):
             r = {"stage": stage_name, "algo": name}
             c1, t1 = time.process_time(), time.perf_counter()
             try:
-                got, r["cpu"], r["seconds"], r["instr"], r["calls"] = cost.measure(lambda: st.run(a, case))
+                got, r["cpu"], r["seconds"], r["instr"], r["calls"] = _limited(
+                    lambda: cost.measure(lambda: st.run(a, case)))
                 if memory:
-                    r["mem"] = cost.peak_memory(lambda: st.run(a, case))
+                    r["mem"] = _limited(lambda: cost.peak_memory(lambda: st.run(a, case)))
                 r["rows"] = st.score(got, case)          # not part of the cost
+            except TimedOut:
+                r["cpu"], r["seconds"] = time.process_time() - c1, time.perf_counter() - t1
+                r["error"] = f"timeout: stopped after {_TIMEOUT:g} s"
+                r["timeout"] = True
+                r["rows"] = []
             except Exception as e:  # noqa: BLE001 - an algorithm's failure is a result
                 r["cpu"], r["seconds"] = time.process_time() - c1, time.perf_counter() - t1
                 r["error"] = f"{type(e).__name__}: {e}"
@@ -188,7 +219,7 @@ def machine() -> dict:
 
 def run(stage_names: list[str], algos_by_stage: dict[str, list], dsets: list[tuple[str, str, str, str]],
         jobs: int, note: str, extra: list[str], label: str = "", memory: bool = False,
-        shard: tuple[int, int] | None = None, run_id: str | None = None) -> str:
+        shard: tuple[int, int] | None = None, run_id: str | None = None, timeout: float = TIMEOUT_S) -> str:
     """Run the cases (of one shard: every n-th from the i-th, all algorithms of a case in the same worker, so that
     against-main costs pair up) and write their items; without a shard, add the results to the ledger too (with
     shards, merge.py does once all are in)."""
@@ -205,7 +236,7 @@ def run(stage_names: list[str], algos_by_stage: dict[str, list], dsets: list[tup
     runs_dir = RESULTS / "runs"
     runs_dir.mkdir(parents=True, exist_ok=True)
     algos = registry.load(extra)
-    meta = {"run": run_id, "shard": list(shard) if shard else None, "label": label, "note": note,
+    meta = {"run": run_id, "shard": list(shard) if shard else None, "label": label, "note": note, "timeout_s": timeout,
             "argv": sys.argv[1:], "git": git, "plan": plan, "datasets": meta_ds, "cases_total": total,
             "algos": {f"{s}/{n}": {"status": algos[(s, n)].status, "params": algos[(s, n)].params,
                                    "path": _rel(algos[(s, n)].path), "sha": algos[(s, n)].src_sha}
@@ -218,7 +249,7 @@ def run(stage_names: list[str], algos_by_stage: dict[str, list], dsets: list[tup
                     **machine(), "jobs": jobs, "load_before": os.getloadavg()[0]}}
     t0 = time.time()
     with (runs_dir / f"{stem}.jsonl").open("w") as fh, \
-            mp.get_context("fork").Pool(jobs, _init, (extra,)) as pool:
+            mp.get_context("fork").Pool(jobs, _init, (extra, timeout)) as pool:
         for k, out in enumerate(pool.imap_unordered(_work, work, chunksize=1), 1):
             fh.write(json.dumps(out, default=_json) + "\n")
             if "error" in out:
@@ -249,7 +280,7 @@ def aggregate(run_id: str, item_files: list[Path]) -> tuple[dict, list[str]]:
         got = sorted(m["shard"][0] for m in metas)
         if got != list(range(n)):
             raise ValueError(f"run {run_id}: shards {got} of {n}")
-    per = defaultdict(lambda: {"rows": [], "seconds": [], "errors": [], "cases": [], "cost": []})
+    per = defaultdict(lambda: {"rows": [], "seconds": [], "errors": [], "cases": [], "cost": [], "slowest": None})
     for f, m in zip(item_files, metas):
         for ln in f.read_text().splitlines():
             out = json.loads(ln)
@@ -259,6 +290,8 @@ def aggregate(run_id: str, item_files: list[Path]) -> tuple[dict, list[str]]:
                 p = per[(r["stage"], r["algo"], out["dataset"])]
                 p["rows"] += r["rows"]
                 p["seconds"].append(r["seconds"])
+                if out.get("from") and (p["slowest"] is None or r["seconds"] > p["slowest"][0]):
+                    p["slowest"] = (r["seconds"], out["case"], out["from"])
                 p["cost"].append({"case": out["case"], "cpu": r["cpu"], "wall": r["seconds"], "edges": out["edges"],
                                   "ref": out["ref"], "calls": r.get("calls", 1), "mem": r.get("mem"),
                                   "instr": r.get("instr")})
@@ -292,8 +325,13 @@ def aggregate(run_id: str, item_files: list[Path]) -> tuple[dict, list[str]]:
                # rounded: scores to 6 significant digits, costs to 4 (they vary more than that run to run)
                "summary": _round(STAGES[stage].summarize(p["rows"]), 6),
                "seconds_median": _round(float(np.median(p["seconds"])), 4) if p["seconds"] else None,
+               # the case that took longest (precheck.py runs it before a run: one case can hold a run up for hours)
+               **({"seconds_max": _round(p["slowest"][0], 4), "slowest": {"case": p["slowest"][1],
+                                                                          "from": p["slowest"][2]}}
+                  if p["slowest"] else {}),
                "cost": _round(cost.summarize(p["cost"], None if a["status"] == "main" else mains.get((stage, ds))), 4),
-               "errors": len(p["errors"]), "first_errors": p["errors"][:3]}
+               "errors": len(p["errors"]), "first_errors": p["errors"][:3],
+               "timeouts": sum(1 for x in p["errors"] if ": timeout:" in x)}
         lines.append(json.dumps(rec, default=_json))
     run_rec = {"run": run_id, "label": m0["label"], "time": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                "note": m0["note"], "git": m0["git"], "env": env, "argv": m0["argv"], "plan": m0["plan"],

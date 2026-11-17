@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import multiprocessing as mp
 import os
 import sys
@@ -40,6 +41,11 @@ def main() -> None:
     ap.add_argument("--memory", action="store_true", help="also each call's peak allocation (a call more, traced)")
     ap.add_argument("--shard", default=None, help="I/N: every N-th case from the I-th; items only (merge.py adds them)")
     ap.add_argument("--run-id", default=None, help="the run's id (the same for every shard of it)")
+    ap.add_argument("--skip-from", default=None,
+                    help="a gate.py output (skip.json): its algorithms (stage/algo) left out of this run")
+    ap.add_argument("--timeout", type=float, default=runner.TIMEOUT_S,
+                    help="seconds one algorithm may take on one case; past it it is stopped and recorded as timed out "
+                         "(an error of the ledger's line); 0: no limit")
     ap.add_argument("--list", action="store_true", help="stages, algorithms and suites")
     ap.add_argument("--dry-run", action="store_true", help="what would run")
     args = ap.parse_args()
@@ -70,6 +76,9 @@ def main() -> None:
     for s in stages:
         if s not in STAGES:
             ap.error(f"no stage {s!r}")
+    skip = set(json.loads(Path(args.skip_from).read_text())["skip"]) if args.skip_from else set()
+    if skip:
+        print(f"left out by the gate ({args.skip_from}): {', '.join(sorted(skip))}", file=sys.stderr)
     by_stage = {}
     for s in stages:
         names = [n for n in args.algo if any(a.stage == s and (a.name == n or a.name.startswith(n + "."))
@@ -77,6 +86,8 @@ def main() -> None:
         if args.algo and not names:
             continue
         by_stage[s] = registry.pick(s, names or None, args.status.split(","))
+        if skip:
+            by_stage[s] = [a for a in by_stage[s] if f"{s}/{a.name}" not in skip or a.status == "main"]
     stages = [s for s in stages if by_stage.get(s)]
     if not stages:
         ap.error("no algorithm to run")
@@ -96,7 +107,7 @@ def main() -> None:
             ap.error("--shard needs --run-id (the same for every shard)")
         shard = (i, n)
     runner.run(stages, by_stage, dsets, args.j, args.note, args.algos_dir, args.label, args.memory, shard,
-               args.run_id)
+               args.run_id, args.timeout)
 
 
 if __name__ == "__main__":
