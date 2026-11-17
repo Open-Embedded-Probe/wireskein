@@ -104,14 +104,31 @@ def deglitch(edges: np.ndarray, k: int, allow: np.ndarray | None = None) -> np.n
     """Drop pulses shorter than k samples: an edge within k samples of the
     previous kept edge cancels it (both edges of the short pulse go).
     allow: per edge, whether it may cancel (None: every edge)."""
-    out: list[int] = []
+    edges = np.asarray(edges, np.int64)
+    if len(edges) < 2:
+        return edges.copy()
+    near = np.diff(edges) < k
+    if not near.any():
+        return edges.copy()
+    # an edge k or more after the one before it is always kept, and nothing after it reaches back past it: only the
+    # runs of edges closer than k are read one by one, each on its own (the same as one pass over all)
+    keep = np.ones(len(edges), bool)
+    starts = np.concatenate(([0], np.flatnonzero(~near) + 1))
+    ends = np.concatenate((starts[1:], [len(edges)]))
+    multi = np.flatnonzero(ends - starts > 1)
+    if not len(multi):
+        return edges.copy()
+    el = edges.tolist()
     ok = allow.tolist() if allow is not None else None
-    for i, x in enumerate(edges.tolist()):
-        if out and x - out[-1] < k and (ok is None or ok[i]):
-            out.pop()
-        else:
-            out.append(x)
-    return np.asarray(out, dtype=np.int64)
+    for a, b in zip(starts[multi].tolist(), ends[multi].tolist()):
+        stack: list[int] = []
+        for i in range(a, b):
+            if stack and el[i] - el[stack[-1]] < k and (ok is None or ok[i]):
+                keep[stack.pop()] = False
+                keep[i] = False
+            else:
+                stack.append(i)
+    return edges[keep]
 
 
 def local_period(ticks: np.ndarray, at: np.ndarray, w: int = 8, q: float = 25) -> np.ndarray:
