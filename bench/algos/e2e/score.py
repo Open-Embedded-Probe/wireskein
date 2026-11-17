@@ -91,14 +91,19 @@ def bus_free(e, allow: int = 2) -> float | None:
     if cap is None or not any(k == "P" for k, _ in ev):
         return None
     ce = np.asarray(cap.channel(sb.clock).edges, np.int64)
-    free = n = 0
-    for i, (kind, t) in enumerate(ev):
-        if kind != "P":
-            continue
-        nxt = next((u for k, u in ev[i + 1:] if k in ("S", "Sr")), cap.n_samples)
-        n += 1
-        free += int(np.searchsorted(ce, nxt) - np.searchsorted(ce, t, side="right")) <= allow
-    return free / n if n else None
+    kinds = [k for k, _ in ev]
+    times = np.asarray([t for _, t in ev], np.int64)
+    m = len(ev)
+    # each event's next START / Sr after it in the list (one pass from the end, not a copy of the rest per STOP: a
+    # line tried as SDA can make hundreds of thousands of events)
+    own = np.where(np.isin(kinds, ("S", "Sr")), np.arange(m), m)
+    after = np.minimum.accumulate(np.concatenate((own[1:], [m]))[::-1])[::-1]
+    stops = np.flatnonzero(np.asarray(kinds) == "P")
+    if not len(stops):
+        return None
+    nxt = np.where(after[stops] < m, times[np.minimum(after[stops], m - 1)], cap.n_samples)
+    free = np.count_nonzero(np.searchsorted(ce, nxt) - np.searchsorted(ce, times[stops], side="right") <= allow)
+    return int(free) / len(stops)
 
 
 I2C_MAX_HZ = 5e6     # UM10204: Hs-mode 3.4 MHz, Ultra Fast-mode (one way) 5 MHz
