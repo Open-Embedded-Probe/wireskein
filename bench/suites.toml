@@ -206,3 +206,41 @@ trials_in_all = false
 about = "the same, the operations set aside (all their rates)"
 sources = ["linke:v003-linke-2026-11-17/rate/holdout"]
 transforms = [""]
+
+[suite.v203-core]
+role = "tune"
+trials_in_all = false
+about = "a LinkE's RVSWD to a CH32V203 at 160 MS/s on both lines (2026-11-17: the L103 set's operations at the LinkE's speeds high and low, long reads, steps, repeats; each cut to its operation), the tuning half, as taken and at 80 MHz (SWCLK's high of some 19 ns at the speed high: 1.5 samples), 50 MHz (fractional), 20 and 8 MHz; truth what ch32rv read and its DMI operations over USB, and taken down the 160 MS/s reading where every one of those is found in it"
+sources = ["linke:v203-linke-2026-11-17/tune"]
+transforms = ["", "decimate:2", "resample:50000000", "decimate:8", "decimate:20"]
+
+[suite.v203-core-holdout]
+role = "holdout"
+trials_in_all = false
+about = "the same, the half set aside"
+sources = ["linke:v203-linke-2026-11-17/holdout"]
+transforms = ["", "decimate:2", "resample:50000000", "decimate:8", "decimate:20"]
+
+[suite.spi-multi]
+role = "tune"
+about = "one SPI bus with 2 or 3 targets, each on its own CS, transfers interleaved (eval/synth.py's spimulti: one truth bus per target, the shared lines in each, told together by `bus`), alone and among a UART and an I2C (spimultimix): what the test plan's lines-and-time review (bench/notes/2026-11-17-lines-and-time-review.ja.md) measures first"
+sources = ["gen:spimulti[0:40]", "gen:spimultimix[0:40]"]
+transforms = [""]
+
+[suite.spi-multi-holdout]
+role = "holdout"
+about = "the same, other seeds"
+sources = ["gen:spimulti[1000:1040]", "gen:spimultimix[1000:1040]"]
+transforms = [""]
+
+[suite.spi-shapes]
+role = "tune"
+about = "SPI in each shape the spec allows (eval/synth.py's spivar, the shapes in turn by seed): a CS; none; active high; tied low (a captured line that never moves: no CS, nothing shows it selects); two tied low; selections holding several transfers; one selection around everything (its CS may be left out: cs_optional); a target on each of 2-3 CS; two targets with one CS captured (the other a target with no CS); selections with no clock"
+sources = ["gen:spivar[0:100]"]
+transforms = [""]
+
+[suite.spi-shapes-holdout]
+role = "holdout"
+about = "the same, other seeds"
+sources = ["gen:spivar[1000:1100]"]
+transforms = [""]

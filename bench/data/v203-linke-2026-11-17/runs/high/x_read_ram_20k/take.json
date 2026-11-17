@@ -1,0 +1,30 @@
+{
+ "scenario": "high/x_read_ram_20k",
+ "args": [
+  "read",
+  "--range",
+  "0x20000000+20480",
+  "-o",
+  "read.bin"
+ ],
+ "rc": 0,
+ "seconds": 0.486,
+ "t0_host_ns": 2884665463137038,
+ "t1_host_ns": 2884665949167297,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": true,
+ "rate_requested": "160M",
+ "lines": "SWCLK=GPIO21,SWDIO=GPIO16",
+ "capture_log": [
+  "runs/high__x_read_ram_20k.tmp/c.wireskein: 2 logic channels, 800151296 ticks at 1.6e+08 Hz (5.00095 s)",
+  "link: opened in 0.49 s, read 200037.8 KB in 5.11 s (39184.7 KB/s)",
+  "data rate: 40 MB/s",
+  "buffer: 8631515 B on the probe: this host may pause 216 ms before it drops",
+  "stream: 200037.8 KB in 10399 frames over 5.11 s (39184.7 KB/s)"
+ ],
+ "excerpt_s": [
+  2.27727,
+  2.883301
+ ]
+}

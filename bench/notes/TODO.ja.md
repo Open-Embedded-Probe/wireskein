@@ -1,0 +1,39 @@
+# TODO（質問・追加データ・あとでやること）
+
+測定台で今のデータから進められないもの、ユーザーや他のセッションの判断が要るものを置く。片付いたら消す。
+
+## 追加データ
+
+- **CH32V103（長い形のフレーム、85 クロック）**: 今のデータに長い形がほとんどない。台帳の `v103r8t6-sd`（LinkE
+  `FB868F068059`）は core のセッションも使う。P4X で LinkE の側の SWCLK / SWDIO を取る配線が要る。
+- **2 線と 1 線の両方に対応したチップ**: 切り替え方が分かっていない。どのチップかをユーザーに確かめる。
+- **V203 の残り**（medium、追加の操作）: 配線が不安定で取れなかった。速さが足りないデータは L103 の間引きで作れるので、
+  急がない。
+- **SPI / UART / CAN の実機の正解付きの記録**（data-requests §4〜）: 今は合成だけ。
+
+## 分析の題材（今のデータで進められる、順番待ち）
+
+- **線のグループと時間のグループ**（bench/notes/2026-11-17-lines-and-time-review.ja.md）: あるべき姿は §11 で決めた。どこまでできるかを §12 の順で測る（採るかどうかは測った後）。
+
+- 取引が 1 つだけの I2C（`i2cbench:h417_slow/noise`、326 本）: 本命は何も主張しない（SCL の変化 8〜20）。START・9 クロック
+  ずつ・STOP がそろう 1 取引を「有力」にできるか。短い記録での誤った主張とのかね合いを、生成データのノイズで測ってから。
+- bench の hardness（読めないはずのデータの印）: ebdd-50m の 1 MHz の I2C を 5 MS/s に間引くと（SCL の半周期 2.5 サンプル）、
+  本命は ambiguous / unknown-sync（誤りではない）なのに、印がなく「読めるはず」で数えられる（ok_readable 0.867）。I2C は
+  半周期あたりのサンプルで印を付けるべきか。
+- ノイズ（spike / xtalk / bounce）での誤った確定と見分けの落ち方（noise、noise-holdout）: 計画の「悪いデータで粘る」。
+
+## 最適化の題材（分析の追い込みの後）
+
+- `riscv_dm._learn_dataaddr`: データレジスタの番地の候補ごと（最大 25）に取引の列を最初から読み直す。長い RVSWD
+  （x_read_ram_20k: 10 回で 7.9 秒）。結果を変えずに速くするには、候補で変わる所だけを読み直す作りが要る。
+- `declarative._run_words` / `parse_sequence`（6.8 万回）、`riscv_dm.feed` / `_execute`（80 万回）、`typed.words`、
+  `rvswd.reframe`、`timing.clipped_clocks`（生成の 200 MS/s で 13 秒）、`pulsecode.rgb_led`（RVSWD の線でも 2〜3 秒）。
+- 長い取り込みのメモリ（解析 1 回で GB 単位）。
+
+## 判断が要るもの
+
+- SPI の相手のうち CS を取っていないもの（spivar の uncaptured）: analyze は全部を CS なしで読む。取った相手を CS 付きで、残りを CS なしで読むのが答え（残りの読み直し）。decode に CS なしのバスを CS 付きのバスと並べて書くと、CS なしの方がCS 付きの相手の転送まで読む（CS 付きの選択の外だけを読むべき）。
+
+- push: wireskein と wireskein-captures は、手元のコミットが push を待っている。
+- `real-ebdd`（確認用）は何度も結果を見たので価値が下がっている（data-requests §0）。新しい確認用は ebdd-50m-holdout、
+  linke の holdout で足りるか。

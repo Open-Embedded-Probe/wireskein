@@ -1,0 +1,28 @@
+{
+ "scenario": "high/reset",
+ "args": [
+  "--speed",
+  "high",
+  "reset"
+ ],
+ "rc": 0,
+ "seconds": 0.1396,
+ "t0_host_ns": 2884289884586124,
+ "t1_host_ns": 2884290024140750,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": true,
+ "rate_requested": "160M",
+ "lines": "SWCLK=GPIO21,SWDIO=GPIO16",
+ "capture_log": [
+  "runs/high__reset.tmp/c.wireskein: 2 logic channels, 800167424 ticks at 1.6e+08 Hz (5.00105 s)",
+  "link: opened in 0.69 s, read 200041.9 KB in 5.11 s (39177.8 KB/s)",
+  "data rate: 40 MB/s",
+  "buffer: 8631515 B on the probe: this host may pause 216 ms before it drops",
+  "stream: 200041.9 KB in 10399 frames over 5.11 s (39177.8 KB/s)"
+ ],
+ "excerpt_s": [
+  2.064979,
+  2.324534
+ ]
+}

@@ -1,0 +1,45 @@
+{
+ "format": "wireskein-run/1",
+ "meta": {
+  "target": "CH32V203C8T6",
+  "target_uid": "dbb1abcd43e8bc6a",
+  "linke": "FBC18F0680B0",
+  "tap": "LinkE side",
+  "probe": "oep:oep://e8f60ae84dd7",
+  "scenario": "low/dbg_resume",
+  "holdout": true
+ },
+ "log": [
+  {
+   "host_ns": 2884544206708439,
+   "src": "marker",
+   "text": "# low/dbg_resume"
+  },
+  {
+   "host_ns": 2884547207502241,
+   "src": "host",
+   "text": "ch32rv --probe serial:FBC18F0680B0 --json --non-interactive --progress none --capture ch32rv.ndjson --speed low dbg resume"
+  },
+  {
+   "host_ns": 2884547342533849,
+   "src": "dut",
+   "text": "exit 0 in 0.135 s"
+  },
+  {
+   "host_ns": 2884547342545933,
+   "src": "marker",
+   "text": "#"
+  }
+ ],
+ "captures": [
+  {
+   "file": "c0001.wireskein",
+   "host_ns": 2884544206715012,
+   "channels": [
+    "SWCLK",
+    "SWDIO"
+   ]
+  }
+ ],
+ "expect": {}
+}

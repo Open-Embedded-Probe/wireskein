@@ -1,0 +1,32 @@
+{
+ "scenario": "low/read_ram_256",
+ "args": [
+  "--speed",
+  "low",
+  "read",
+  "--range",
+  "0x20000000+256",
+  "-o",
+  "read.bin"
+ ],
+ "rc": 0,
+ "seconds": 0.1524,
+ "t0_host_ns": 2884386885268431,
+ "t1_host_ns": 2884387037635847,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": false,
+ "rate_requested": "160M",
+ "lines": "SWCLK=GPIO21,SWDIO=GPIO16",
+ "capture_log": [
+  "runs/low__read_ram_256.tmp/c.wireskein: 2 logic channels, 802602752 ticks at 1.6e+08 Hz (5.01627 s)",
+  "link: opened in 0.66 s, read 200650.7 KB in 5.16 s (38870.7 KB/s)",
+  "data rate: 40 MB/s",
+  "buffer: 8631515 B on the probe: this host may pause 216 ms before it drops",
+  "stream: 200650.7 KB in 10430 frames over 5.16 s (38870.7 KB/s)"
+ ],
+ "excerpt_s": [
+  2.100389,
+  2.372757
+ ]
+}

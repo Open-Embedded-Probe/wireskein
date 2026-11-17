@@ -1,0 +1,195 @@
+{
+ "source": "ch32rv.ndjson (DmiOp), read.bin",
+ "dmi_ops": [
+  {
+   "op": "R",
+   "addr": 17,
+   "data": 898,
+   "status": 0,
+   "t_us": 109362
+  },
+  {
+   "op": "W",
+   "addr": 16,
+   "data": 1,
+   "status": 0,
+   "t_us": 109619
+  },
+  {
+   "op": "R",
+   "addr": 17,
+   "data": 898,
+   "status": 0,
+   "t_us": 109811
+  },
+  {
+   "op": "W",
+   "addr": 22,
+   "data": 1792,
+   "status": 0,
+   "t_us": 110043
+  },
+  {
+   "op": "W",
+   "addr": 4,
+   "data": 0,
+   "status": 0,
+   "t_us": 110570
+  },
+  {
+   "op": "W",
+   "addr": 23,
+   "data": 2230192,
+   "status": 0,
+   "t_us": 111005
+  },
+  {
+   "op": "R",
+   "addr": 22,
+   "data": 134217730,
+   "status": 0,
+   "t_us": 111353
+  },
+  {
+   "op": "R",
+   "addr": 4,
+   "data": 1073742016,
+   "status": 0,
+   "t_us": 111615
+  },
+  {
+   "op": "W",
+   "addr": 22,
+   "data": 1792,
+   "status": 0,
+   "t_us": 111953
+  },
+  {
+   "op": "W",
+   "addr": 4,
+   "data": 1073742020,
+   "status": 0,
+   "t_us": 112114
+  },
+  {
+   "op": "W",
+   "addr": 23,
+   "data": 2295728,
+   "status": 0,
+   "t_us": 112313
+  },
+  {
+   "op": "R",
+   "addr": 22,
+   "data": 134217730,
+   "status": 0,
+   "t_us": 112531
+  },
+  {
+   "op": "W",
+   "addr": 16,
+   "data": 268435457,
+   "status": 0,
+   "t_us": 112793
+  },
+  {
+   "op": "W",
+   "addr": 16,
+   "data": 1073741825,
+   "status": 0,
+   "t_us": 112897
+  },
+  {
+   "op": "R",
+   "addr": 17,
+   "data": 197506,
+   "status": 0,
+   "t_us": 113065
+  },
+  {
+   "op": "W",
+   "addr": 16,
+   "data": 1,
+   "status": 0,
+   "t_us": 113336
+  },
+  {
+   "op": "R",
+   "addr": 17,
+   "data": 197506,
+   "status": 0,
+   "t_us": 113487
+  },
+  {
+   "op": "W",
+   "addr": 22,
+   "data": 1792,
+   "status": 0,
+   "t_us": 113694
+  },
+  {
+   "op": "W",
+   "addr": 4,
+   "data": 1073742016,
+   "status": 0,
+   "t_us": 113861
+  },
+  {
+   "op": "W",
+   "addr": 23,
+   "data": 2295728,
+   "status": 0,
+   "t_us": 114026
+  },
+  {
+   "op": "R",
+   "addr": 22,
+   "data": 134217730,
+   "status": 0,
+   "t_us": 114175
+  },
+  {
+   "op": "W",
+   "addr": 22,
+   "data": 1792,
+   "status": 0,
+   "t_us": 114437
+  },
+  {
+   "op": "W",
+   "addr": 4,
+   "data": 0,
+   "status": 0,
+   "t_us": 114597
+  },
+  {
+   "op": "W",
+   "addr": 23,
+   "data": 2230193,
+   "status": 0,
+   "t_us": 114783
+  },
+  {
+   "op": "R",
+   "addr": 22,
+   "data": 134217730,
+   "status": 0,
+   "t_us": 114937
+  },
+  {
+   "op": "R",
+   "addr": 4,
+   "data": 286,
+   "status": 0,
+   "t_us": 115301
+  }
+ ],
+ "agreement_160M": {
+  "dmi_ops": 26,
+  "found_in_order": 26,
+  "wire_frames": 354,
+  "wire_ok": 152,
+  "wire_answered": 152,
+  "usable": true
+ }
+}
