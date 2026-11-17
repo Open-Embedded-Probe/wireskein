@@ -306,7 +306,7 @@ def _ebdd(run: Path) -> tuple[Capture, dict]:
 
 
 def _linke(run: Path) -> tuple[Capture, dict]:
-    """A run of a 160 MS/s LinkE capture (bench/data/<dir>/tools/capture.py, truth by tools/truth.py)."""
+    """A run of a 160 MS/s LinkE capture (taken and cut by the tools of wireskein-captures' <dir>/tools: capture.py, truth.py, publish.py)."""
     doc = json.loads((run / "run.json").read_text())
     t = json.loads((run / "truth.json").read_text())
     cap = _capture.read(run / doc["captures"][0]["file"]).parts[0].view()

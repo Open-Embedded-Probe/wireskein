@@ -13,7 +13,7 @@ A WCH-LinkE's RVSWD to a CH32L103C8T6, taken by an OEP probe at the LinkE's pins
 | capture | OEP ESP32-P4X `e8f60ae84dd7` (firmware 0.0.56+dea9e3c), GPIO12 = SWCLK, GPIO15 = SWDIO, tapped at the LinkE, stream mode, no glitch filter |
 | rate | 160 MS/s (`runs/rate/`: whole and fractional dividers of 160 MHz) |
 
-One ch32rv operation a run (`tools/capture.py`): the stream is started, ch32rv runs 3 s later, the capture's clock
+One ch32rv operation a run (wireskein-captures' `l103-linke-2026-11-17/tools/capture.py`, with the tools that made the truth and the cut and the images written): the stream is started, ch32rv runs 3 s later, the capture's clock
 record must hold the whole command, and a run that missed it or lost data is taken again.
 
 ## Contents
