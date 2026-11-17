@@ -123,6 +123,44 @@ def pin_classes(sv: Survey, cap) -> dict[str, PinClass]:
 
 DATA_PAIR = 0.3
 SELECT_BOUNDARY = 0.25  # candidates only; plugins re-measure on the filtered view
+SELECT_SHARE = 0.05     # a select line framing this share of the bursts is a candidate when the select lines framing
+SELECTS_TOGETHER = 0.9  # ... this much together (one bus, a target on each select: staged.shared_buses)
+SELECT_SET_MAX = 8      # select-like lines on one clock tried in sets (3^n: out, or at either level)
+
+
+def _select_set(rels, pins) -> list[str]:
+    """A target on each select: each line frames only its share of the clock's bursts, the lines never the same
+    burst, and together nearly all of them. A line's share may be at either of its levels (the level framing more
+    bursts may be the other targets' transfers in its idle level). The lines of the set framing the most (then of the
+    fewest lines) that frame under SELECT_BOUNDARY each are returned (those over it are candidates anyway)."""
+    opts = []
+    for r in rels:
+        if r.selects is None or "sparse" not in pins[r.other].candidates:
+            continue
+        sets = [set(x.tolist()) for x in (r.selects, r.selects_idle) if x is not None and len(x)]
+        sets = [x for x in sets if len(x) >= SELECT_SHARE * max(1, r.n_real)]
+        if sets:
+            opts.append((r, sets))
+    if len(opts) < 2:
+        return []
+    opts.sort(key=lambda o: -max(len(x) for x in o[1]))
+    opts = opts[:SELECT_SET_MAX]
+    n = max(1, opts[0][0].n_real)
+    best: list = [0, 0, ()]
+
+    def dfs(i, used, chosen):
+        if i == len(opts):
+            if len(chosen) >= 2 and (len(used), -len(chosen)) > (best[0], best[1]):
+                best[:] = [len(used), -len(chosen), tuple(chosen)]
+            return
+        dfs(i + 1, used, chosen)
+        for x in opts[i][1]:
+            if not (x & used):
+                dfs(i + 1, used | x, chosen + [i])
+    dfs(0, frozenset(), [])
+    if best[0] < SELECTS_TOGETHER * n:
+        return []
+    return [opts[i][0].other for i in best[2] if opts[i][0].boundary < SELECT_BOUNDARY]
 
 
 def groups(sv: Survey, pins: dict[str, PinClass]) -> list[Group]:
@@ -133,6 +171,7 @@ def groups(sv: Survey, pins: dict[str, PinClass]) -> list[Group]:
         rels = [r for r in sv.partners(c)]
         data = tuple(sorted(r.other for r in rels if r.data_score >= DATA_PAIR))
         sel = [r.other for r in rels if r.boundary >= SELECT_BOUNDARY and "sparse" in pins[r.other].candidates]
+        sel += _select_set(rels, pins)
         clk_score = sv.clocks[c].clock_score
         for s in [None, *sel]:
             d_all = tuple(x for x in data if x != s)

@@ -185,20 +185,42 @@ def async_symbols(cap, sv: Survey, pin: str) -> AsyncSymbols | None:
     return AsyncSymbols(pin, u, f.idle_level, level.astype(np.int8), units, start)
 
 
-def frames_select(cap, sv: Survey, sb: SyncBits) -> Frames:
-    s = cap.channel(sb.select)
-    start, length, level = s.runs(cap.n_samples)
-    # The active level is the one whose windows hold the clock, decided from the
-    # pin relation rather than from the select line's own idle estimate (a
-    # sparse line with long selections looks "idle" at its active level).
+def select_level(start: np.ndarray, length: np.ndarray, level: np.ndarray, t: np.ndarray, n: int,
+                 shortest: float = 0.0):
+    """The select line's active level and its windows: (active, inside, k, windows). Decided from how the line frames
+    the clock, not from its own idle estimate (a sparse line with long selections looks "idle" at its active level).
+    A level's windows frame the clock when they hold it, each one (a selection is a transfer) and tightly (from just
+    before its first clock to just after its last): the share of its whole windows (not cut by the capture's ends)
+    holding clock edges, times how much of those windows the clocked span fills. Holding more of the clock alone is
+    not it: with two targets on one bus, the other's transfers fall in this select's idle level, often more of them.
+    Windows shorter than `shortest` (a spike on the line: no selection) count for neither."""
     best = None
     for active in (0, 1):
         act = level == active
         win = np.stack([start[act], start[act] + length[act]], 1)
-        inside, k = K.in_windows(win, sb.t)
-        if best is None or inside.sum() > best[0].sum():
-            best = (inside, k, win)
-    inside, k, win = best
+        inside, k = K.in_windows(win, t)
+        whole = (win[:, 0] > 0) & (win[:, 1] < n) & (win[:, 1] - win[:, 0] >= shortest)
+        held = np.zeros(len(win), bool)
+        lo = np.full(len(win), np.iinfo(np.int64).max)
+        hi = np.full(len(win), -1, np.int64)
+        if inside.any():
+            ki, ti = k[inside], np.asarray(t, np.int64)[inside]
+            held[ki] = True
+            np.minimum.at(lo, ki, ti)
+            np.maximum.at(hi, ki, ti)
+        hw = held & whole
+        share = float(hw.sum() / whole.sum()) if whole.any() else float(held.any())
+        span = (hi - lo)[hw].sum() / max(1, (win[hw, 1] - win[hw, 0]).sum()) if hw.any() else 0.0
+        score = (share * float(span), int(inside.sum()))
+        if best is None or score > best[0]:
+            best = (score, active, inside, k, win)
+    return best[1:]
+
+
+def frames_select(cap, sv: Survey, sb: SyncBits) -> Frames:
+    s = cap.channel(sb.select)
+    start, length, level = s.runs(cap.n_samples)
+    inside, k, win = select_level(start, length, level, sb.t, cap.n_samples)[1:]
     bounds = []
     if inside.any():
         ks = k[inside]

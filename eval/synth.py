@@ -159,6 +159,122 @@ class Builder:
         self.fastest = max(self.fastest, freq)
         self.t_end = max(self.t_end, t)
 
+    def add_spi_multi(self, idx: int) -> None:
+        """One SPI bus (CLK, MOSI, MISO shared) with 2 or 3 targets, each on its own CS, their transfers interleaved:
+        one bus per target in the truth, the shared lines in each, told together by `bus`."""
+        r = self.rng
+        freq = float(r.choice([100e3, 500e3, 1e6, 4e6, 8e6])) * (1 + r.uniform(-0.02, 0.02))
+        mode = int(r.integers(0, 4))
+        order = str(r.choice(["msb", "msb", "msb", "lsb"]))
+        n_cs = int(r.integers(2, 4))
+        clk = self.wave(f"spi{idx}_clk", mode >> 1)
+        mosi = self.wave(f"spi{idx}_mosi", 0)
+        miso = self.wave(f"spi{idx}_miso", 0)
+        css = [self.wave(f"spi{idx}_cs{k}", 1) for k in range(n_cs)]
+        sent: list[list] = [[] for _ in range(n_cs)]
+        t = r.uniform(0.1e-3, 0.5e-3)
+        for _ in range(int(r.integers(6, 24))):
+            k = int(r.integers(0, n_cs))
+            n = int(r.integers(1, 9))
+            fr = (bytes(r.integers(0, 256, n, dtype=np.uint8)), bytes(r.integers(0, 256, n, dtype=np.uint8)))
+            sent[k].append(fr)
+            t = gen.spi(clk, mosi, miso, css[k], t, [fr], freq, mode, order, gap=r.uniform(5, 200) / freq)
+        for k in range(n_cs):
+            if not sent[k]:
+                continue
+            self.buses.append({"protocol": "spi", "bus": f"spi{idx}",
+                               "roles": {"clk": clk_name(idx), "mosi": f"spi{idx}_mosi", "miso": f"spi{idx}_miso",
+                                         "cs": f"spi{idx}_cs{k}"},
+                               "params": {"clock_hz": freq, "mode": mode, "bit_order": order},
+                               "expect": {"mosi": [f[0].hex() for f in sent[k]], "miso": [f[1].hex() for f in sent[k]]}})
+        self.fastest = max(self.fastest, freq)
+        self.t_end = max(self.t_end, t)
+
+    def add_spi_variant(self, idx: int, variant: str) -> None:
+        """One SPI bus in one of the shapes the spec allows (SPI_VARIANTS), its truth as the evidence can tell it: a
+        line that never moves is no CS (nothing shows it selects), and a target whose CS is not captured is a
+        truth bus with no CS (the bus's transfers outside the captured selections); `variant` names the shape."""
+        r = self.rng
+        freq = float(r.choice([100e3, 500e3, 1e6, 4e6, 8e6])) * (1 + r.uniform(-0.02, 0.02))
+        mode = int(r.integers(0, 4))
+        order = str(r.choice(["msb", "msb", "msb", "lsb"]))
+        has_miso = bool(r.random() < 0.7)
+        clk = self.wave(f"spi{idx}_clk", mode >> 1)
+        mosi = self.wave(f"spi{idx}_mosi", 0)
+        miso = self.wave(f"spi{idx}_miso", 0) if has_miso else None
+        n_t = {"multi": int(r.integers(2, 4)), "uncaptured": 2}.get(variant, 1)
+        active = 1 if variant == "cs_high" else 0
+        cs = [None] * n_t
+        if variant in ("cs", "cs_high", "sessions", "session1", "empty", "multi", "uncaptured"):
+            cs = [self.wave(f"spi{idx}_cs{k}", 1 - active) for k in range(n_t)]
+            if variant == "uncaptured":
+                cs[1] = None                                   # the other target's CS is not on the probe
+                del self.waves[f"spi{idx}_cs1"]
+        for k in range({"cs_tied": 1, "cs_tied2": 2}.get(variant, 0)):
+            self.wave(f"spi{idx}_tied{k}", 0)                  # captured, held low (to GND): never moves
+        sent: list[list] = [[] for _ in range(n_t)]
+        t = r.uniform(0.1e-3, 0.5e-3)
+        n_frames = int(r.integers(4, 16))
+        k_of = [int(r.integers(0, n_t)) for _ in range(n_frames)]
+        # sessions: one selection holding several transfers with gaps between them (2 to 4 selections; session1: one)
+        session = variant in ("sessions", "session1")
+        cuts = set(r.choice(np.arange(1, n_frames), int(r.integers(1, 4)), replace=False).tolist()) \
+            if variant == "sessions" else set()
+        held: list[list] = []
+        for i in range(n_frames):
+            k = k_of[i]
+            if session and (i == 0 or i in cuts):
+                if i:
+                    cs[0].set(t, 1 - active)
+                    t += r.uniform(20, 200) / freq
+                cs[0].set(t, active)
+                t += r.uniform(1, 4) / freq
+                held.append([])
+            n = int(r.integers(1, 9))
+            fr = (bytes(r.integers(0, 256, n, dtype=np.uint8)), bytes(r.integers(0, 256, n, dtype=np.uint8)) if has_miso else b"")
+            sent[k].append(fr)
+            if session:
+                held[-1].append(fr)
+            gap = r.uniform(5, 200) / freq
+            if variant == "empty" and r.random() < 0.3:            # a selection with no clock in it
+                cs[k].set(t, active)
+                cs[k].set(t + r.uniform(2, 20) / freq, 1 - active)
+                t += r.uniform(25, 60) / freq
+            own = cs[k] if not session else None
+            if own is not None:
+                own.set(t, active)
+            t = gen.spi(clk, mosi, miso, None, t, [fr], freq, mode, order, gap=gap)
+            if own is not None:
+                own.set(t - gap, 1 - active)
+        if session:
+            cs[0].set(t, 1 - active)
+            t += r.uniform(5, 50) / freq
+        for k in range(n_t):
+            if not sent[k]:
+                continue
+            roles = {"clk": clk_name(idx), "mosi": f"spi{idx}_mosi"}
+            if has_miso:
+                roles["miso"] = f"spi{idx}_miso"
+            if cs[k] is not None:
+                roles["cs"] = f"spi{idx}_cs{k}"
+            params = {"clock_hz": freq, "mode": mode, "bit_order": order}
+            if active:
+                params["cs_active"] = 1
+            bus = {"protocol": "spi", "roles": roles, "params": params, "variant": variant,
+                   "expect": {"mosi": [f[0].hex() for f in sent[k]], "miso": [f[1].hex() for f in sent[k]]}}
+            if session:                                        # a selection's transfers are one frame
+                bus["expect"] = {"mosi": ["".join(f[0].hex() for f in h) for h in held],
+                                 "miso": ["".join(f[1].hex() for f in h) for h in held]}
+            if variant == "session1":
+                # one selection around all the traffic: nothing tells it from any line that changed once before and
+                # once after; the CS may be left out (the bytes then read as the clock's bursts frame them)
+                bus["cs_optional"] = True
+            if n_t > 1:
+                bus["bus"] = f"spi{idx}"
+            self.buses.append(bus)
+        self.fastest = max(self.fastest, freq)
+        self.t_end = max(self.t_end, t)
+
     def add_uart_upper(self, idx: int) -> None:
         """UART carrying a known upper protocol (or none), 8N1."""
         from .analyzers.upper import crc16_modbus
@@ -355,6 +471,9 @@ class Builder:
     _deferred: list
 
 
+SPI_VARIANTS = ("cs", "nocs", "cs_high", "cs_tied", "cs_tied2", "sessions", "session1", "multi", "uncaptured", "empty")
+
+
 def scl_name(i): return f"i2c{i}_scl"
 def sda_name(i): return f"i2c{i}_sda"
 def clk_name(i): return f"spi{i}_clk"
@@ -382,10 +501,13 @@ def scenario(seed: int, profile: str = "mixed", stress: str | None = None,
     kinds = {"mixed": ["uart", "i2c", "spi"], "uart": ["uart"], "i2c": ["i2c"], "spi": ["spi"],
              "uartlike": ["uart", "lin", "dmx"], "duplex": ["scpi", "scpi", "uart"],
              "upper": ["uart_upper"], "spinor": ["spinor", "spi"],
-             "swd": ["swd"], "can": ["can"], "swdcan": ["swd", "can", "spi", "uart"]}[profile]
-    n_bus = int(rng.integers(1, 4)) if profile in ("mixed", "swdcan") else 1
+             "swd": ["swd"], "can": ["can"], "swdcan": ["swd", "can", "spi", "uart"],
+             "spimulti": ["spi_multi"], "spimultimix": ["spi_multi", "uart", "i2c"], "spivar": []}[profile]
+    n_bus = int(rng.integers(1, 4)) if profile in ("mixed", "swdcan", "spimultimix") else 0 if profile == "spivar" else 1
     for i in range(n_bus):
         getattr(b, "add_" + str(rng.choice(kinds)))(i)
+    if profile == "spivar":                     # the shapes in turn, so that any run of seeds covers them all
+        b.add_spi_variant(1, SPI_VARIANTS[seed % len(SPI_VARIANTS)])
     for i in range(int(rng.integers(0, 4))):
         b.add_decoy(i)
     t_end = b.t_end + rng.uniform(0.2e-3, 2e-3)

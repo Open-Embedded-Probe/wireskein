@@ -49,6 +49,10 @@ class PairRelation:
     boundary: float       # share of clock bursts with an edge of other near both ends (CS-like)
     other_edges_per_burst: float
     n_bursts: int = 1
+    selects: np.ndarray | None = None   # the clock's bursts (of 2 bits or more, by index) the line frames at its active level
+    n_real: int = 0                     # the clock's bursts of 2 bits or more
+    selects_idle: np.ndarray | None = None   # those it frames at the other level (with other targets' transfers more
+                                             # numerous than its own, its own may be there: taxonomy._select_set)
 
     @property
     def data_score(self) -> float:
@@ -138,6 +142,7 @@ def async_info(cap: Capture, f: ChannelFeatures) -> AsyncInfo:
     return AsyncInfo(f.name, u, char_length(cap, f.name, f.idle_level, u), f.idle_level)
 
 
+USED_SELECTIONS = 0.8   # a select line's windows at its active level holding a transfer: this share or more
 RING = 3        # samples: at a clock slow enough, a data line's pulses this short are a reflection ringing
 
 
@@ -178,7 +183,18 @@ def pair_relation(cap: Capture, clk: ClockInfo, other: str) -> PairRelation:
     # the clocked span) and gaps between them like those between bytes (no
     # longer than twice the longest burst)
     w = np.where(framed, j0, -1)
-    for k in np.unique(w[w >= 0]):
+    lv0 = d.initial ^ (j0 & 1)
+    # a line every burst of which lies inside one of its windows at one level, two windows or more holding them, is
+    # a selection holding several transfers (a session), however far apart: a line unrelated to the bus has bursts
+    # at both its levels
+    whole = framed.all() and len(np.unique(lv0)) == 1 and len(np.unique(w)) >= 2
+    if whole:
+        # and its selections are used: nearly every whole window at that level holds a transfer (a PWM's low windows
+        # may each fall around a few bursts, most of them empty)
+        held = len(np.unique(w))
+        at = int(np.count_nonzero(np.diff(de) > 0)) // 2 if len(de) > 2 else 0     # windows at one level, about
+        whole = held >= USED_SELECTIONS * max(held, at)
+    for k in (() if whole else np.unique(w[w >= 0])):
         sel = w == k
         if sel.sum() > 1:
             f, l = first[sel], last[sel]
@@ -189,7 +205,9 @@ def pair_relation(cap: Capture, clk: ClockInfo, other: str) -> PairRelation:
     active = int(np.bincount(lv[framed], minlength=2).argmax()) if framed.any() else 0
     boundary = float(np.mean(framed & (lv == active)))
     return PairRelation(clk.name, other, float(inside.mean()), pr, pf, coincide, boundary,
-                        float(inside.sum() / max(1, len(clk.bursts))), int(len(clk.bursts)))
+                        float(inside.sum() / max(1, len(clk.bursts))), int(len(clk.bursts)),
+                        np.flatnonzero(framed & (lv == active)), int(len(framed)),
+                        np.flatnonzero(framed & (lv != active)))
 
 
 def survey(cap: Capture, fs: dict[str, ChannelFeatures] | None = None, asyncs: bool = True) -> Survey:

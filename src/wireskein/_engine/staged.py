@@ -53,6 +53,7 @@ class Claim:
     verdict: str            # confirmed / likely / ambiguous
     node: Node
     runner_up: Node | None
+    bus: str | None = None  # the bus a target's claim is on, when several targets share its lines (shared_buses)
 
 
 def channel_labels(nodes: list[Node]) -> dict[str, tuple]:
@@ -62,6 +63,10 @@ def channel_labels(nodes: list[Node]) -> dict[str, tuple]:
         key = ()
         if n.analyzer == "uart":
             key = (round(n.params["baud"] / 1000, 0), n.params["idle"])
+        elif n.analyzer == "spi" and getattr(n, "members", None):
+            for m, _ in n.members:                  # a bus of several targets: as its targets' claims label them
+                out.update(channel_labels([m]))
+            continue
         elif n.analyzer == "spi":
             key = (n.params["sample_edge"],)
         for role, ch in n.roles.items():
@@ -487,6 +492,72 @@ SYNC_ROLES = {"i2c": {"scl": "clock", "sda": "data"}, "spi": {"clk": "clock", "m
               "rvswd": {"clk": "clock", "dio": "data"}}
 
 
+SHARED_COVER = 0.95    # the targets' selections together hold this share of the clock's bursts or more
+
+
+def shared_buses(roots: list[Node], sv) -> list[Node]:
+    """One clocked bus with a target on each select line (SPI with a CS per device: CLK and the data lines shared).
+    Each select's own reading counts the other targets' transfers, which fall in its idle level, against it
+    (select_boundary); together, selections that never overlap and hold the clock's bursts between them are the
+    bus. A hypothesis of the whole (roles: the shared lines and every select) enters the packing; its targets'
+    claims come out of it (`members`: (node, score with the others' transfers not counted against it))."""
+    by: dict[tuple, dict[str, Node]] = {}
+    for n in roots:
+        if n.analyzer != "spi" or n.output is None or "cs" not in n.roles or "frames" not in getattr(n, "layers", {}):
+            continue
+        data = tuple(sorted(v for k, v in n.roles.items() if k.startswith("data")))
+        key = (n.roles["clk"], data)
+        cs = n.roles["cs"]
+        if cs not in by.setdefault(key, {}) or n.total > by[key][cs].total:
+            by[key][cs] = n
+    out = []
+    for (clk, data), per in by.items():
+        if len(per) < 2 or clk not in sv.clocks:
+            continue
+        ci = sv.clocks[clk]
+        real = ci.bits >= 2
+        mid = ((ci.bursts[real, 0] + ci.bursts[real, 1]) // 2) if real.any() else np.zeros(0, np.int64)
+        if not len(mid):
+            continue
+
+        def spans(n):
+            fr = n.layers["frames"]
+            t = np.asarray(fr.source.t, np.int64)
+            b = np.asarray(fr.bounds, np.int64).reshape(-1, 2)
+            b = b[b[:, 1] > b[:, 0]]
+            return np.stack([t[b[:, 0]], t[b[:, 1] - 1]], 1) if len(b) else np.zeros((0, 2), np.int64)
+
+        def adjusted(n):
+            sb = n.metrics.get("select_boundary")
+            return float(min(0.99, n.total / sb)) if sb else float(n.total)
+        chosen, taken = [], np.zeros((0, 2), np.int64)
+        for n in sorted(per.values(), key=lambda n: -adjusted(n)):
+            sp = spans(n)
+            if not len(sp):
+                continue
+            if len(taken) and any(((taken[:, 0] <= e) & (taken[:, 1] >= s)).any() for s, e in sp):
+                continue                                   # its selections overlap another target's: not one bus
+            chosen.append((n, adjusted(n)))
+            taken = np.concatenate([taken, sp])
+        if len(chosen) < 2:
+            continue
+        taken = taken[np.argsort(taken[:, 0])]
+        k = np.searchsorted(taken[:, 0], mid, side="right") - 1
+        held = (k >= 0) & (mid <= taken[np.maximum(k, 0), 1])
+        cover = float(held.mean())
+        if cover < SHARED_COVER:
+            continue
+        w = np.array([max(1, n.metrics.get("frames", 1)) for n, _ in chosen], float)
+        total = float(np.dot(w, [a for _, a in chosen]) / w.sum()) * cover
+        roles = {"clk": clk, **{f"data{i}": d for i, d in enumerate(data)},
+                 **{("cs" if i == 0 else f"cs{i}"): n.roles["cs"] for i, (n, _) in enumerate(chosen)}}
+        bus = Node("spi", {"bus": f"spi:{clk}"}, roles, None, {"targets": len(chosen), "cover": cover},
+                   layer_score=total, total=total)
+        bus.members = chosen
+        out.append(bus)
+    return out
+
+
 def _hinted(hints: dict | None):
     """Normalize hints: allowed protocols, per-pin protocol/role/baud, excluded pins."""
     h = hints or {}
@@ -498,16 +569,23 @@ def _hinted(hints: dict | None):
     return allowed, pins, set(h.get("exclude_pins") or [])
 
 
-def _hinted_groups(pin_hint: dict, sv, have: list) -> list:
+def _hinted_groups(pin_hint: dict, sv, have: list, buses: list | None = None) -> list:
     """A bus whose clock and data pins are all named by the hints is tried even
     when the survey did not group it (a few clocks only: one byte, a transfer cut
-    short). Nothing more is assumed; the plugins score it like any other group."""
+    short). Nothing more is assumed; the plugins score it like any other group.
+    buses: the hinted buses as given ({protocol, pins}), each tried as its own group: buses sharing lines (one SPI
+    bus, a target on each CS) are not merged by pin (a pin's hint names one role only)."""
     from .taxonomy import Group
     keys = {(g.clock, g.data, g.select) for g in have if g.kind == "sync"}
     out = []
-    for proto, roles in SYNC_ROLES.items():
+    given = [(b["protocol"], {p: {"protocol": b["protocol"], "role": r} for r, p in b["pins"].items()})
+             for b in buses or [] if b.get("protocol") in SYNC_ROLES]
+    if not given:
+        given = [(proto, pin_hint) for proto in SYNC_ROLES]
+    for proto, hint in given:
+        roles = SYNC_ROLES[proto]
         by = {}
-        for pn, i in pin_hint.items():
+        for pn, i in hint.items():
             if i.get("protocol") == proto and i.get("role") in roles and pn in sv.active:
                 by.setdefault(roles[i["role"]], []).append(pn)
         clk, data = by.get("clock", []), tuple(sorted(by.get("data", [])))
@@ -515,6 +593,7 @@ def _hinted_groups(pin_hint: dict, sv, have: list) -> list:
             continue
         sel = by.get("select", [None])[0]
         if (clk[0], data, sel) not in keys:
+            keys.add((clk[0], data, sel))
             out.append(Group("sync", clock=clk[0], data=data, select=sel))
     return out
 
@@ -537,7 +616,7 @@ def _device_packs_at(select: tuple[str, ...], extra: tuple[str, ...]):
 
 def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
     """hints (all optional): {"protocols": [...], "pins": {pin: {"protocol", "role", "baud"}},
-    "exclude_pins": [...], "devices": ["i2c/**", ...]} restrict what is tried; nothing is decided by a hint alone,
+    "buses": [{"protocol", "pins": {role: pin}}], "exclude_pins": [...], "devices": ["i2c/**", ...]} restrict what is tried; nothing is decided by a hint alone,
     the plugins' checks still score every hypothesis."""
     t = {}
     allowed, pin_hint, excluded = _hinted(hints)
@@ -582,7 +661,7 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
     t0 = time.perf_counter()
     seen = set()
     run_sync = not allowed or bool(allowed & SYNC)
-    for g in [*tx.groups, *_hinted_groups(pin_hint, c.sv, tx.groups)]:
+    for g in [*tx.groups, *_hinted_groups(pin_hint, c.sv, tx.groups, (hints or {}).get("buses"))]:
         if g.kind != "sync" or not run_sync or not group_ok(g):
             continue
         key = (g.clock, g.data, g.select)
@@ -750,11 +829,24 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
     known = [n for n in roots if n.analyzer != "sync_unknown" and n.output is not None]
     roots_pack = [n for n in roots if n.analyzer != "sync_unknown" or not any(
         k.total >= n.total and set(k.roles.values()) & set(n.roles.values()) for k in known)]
+    roots_pack += shared_buses(roots_pack, tx.survey)
     exps = explanations(roots_pack, value)
     claims = []
     if exps:
         best_score, best = exps[0]
         for n in best:
+            if getattr(n, "members", None):
+                # one bus of several targets: a claim per target, on the bus's lines and its own select
+                alt = explanations(roots_pack, value, top=1, exclude=lambda r, n=n: r is n)
+                alt_score, alt_set = alt[0] if alt else (0.0, [])
+                margin = (best_score - alt_score) / max(1, changed_channels(best, alt_set))
+                ru = max((r for r in alt_set if set(n.roles.values()) & set(r.roles.values())),
+                         key=lambda r: r.total, default=None)
+                for m, adj in n.members:
+                    v = methods.get("verdict", verdict)(adj, margin)
+                    claims.append(Claim(m.analyzer, dict(m.roles), dict(m.params), adj, margin, v, m, ru,
+                                        bus=n.params["bus"]))
+                continue
             alt = explanations(roots_pack, value, top=1, exclude=lambda r, n=n: equivalent(r, n))
             alt_score, alt_set = alt[0] if alt else (0.0, [])
             margin = (best_score - alt_score) / max(1, changed_channels(best, alt_set))

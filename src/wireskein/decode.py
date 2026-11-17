@@ -145,7 +145,8 @@ def _hints(spec: dict, strict: bool = False, names=()) -> dict:
     for b in spec["buses"]:
         for role, pin in b["pins"].items():
             pins[pin] = {"protocol": b["protocol"], "role": role, **b["params"]}
-    out = {"pins": pins, **({"devices": spec["devices"]} if spec.get("devices") else {})}
+    out = {"pins": pins, "buses": [{"protocol": b["protocol"], "pins": dict(b["pins"])} for b in spec["buses"]],
+           **({"devices": spec["devices"]} if spec.get("devices") else {})}
     if strict and spec["buses"]:
         out["protocols"] = sorted({b["protocol"] for b in spec["buses"]})
         out["exclude_pins"] = sorted(set(names) - set(pins))
@@ -351,6 +352,8 @@ def reading(out: dict, frames: list, cap: Capture, b: dict) -> dict:
     if "uninterpreted" in out:                   # decode's, and analyze's RVSWD and SWIO claims
         un = out["uninterpreted"]
         r.update(unread=len(un), unread_edges=int(sum(u.get("edges", 0) for u in un)))
+    if out.get("empty_selections"):
+        r["empty_selections"] = len(out["empty_selections"])
     clk = b["pins"].get("clk")
     if clk:
         r.update(noise(cap, clk, [p for k, p in b["pins"].items() if k != "clk"]))
@@ -457,9 +460,43 @@ def _note_undersampled(claims: list, cap: Capture, res) -> None:
             c["undersampled"] = us
 
 
-def unread(cap: Capture, pins: list[str], lay: dict, n, idle: int) -> list[dict]:
+def selections(cap: Capture, select: str, pins: list[str], items: list[tuple[int, int]]) -> tuple[np.ndarray, list]:
+    """A select line's changes that bound a selection (its windows at the active level: the level the line is at
+    when the items start): those of a window holding an item, which are where the frames were cut, not unread, and
+    those of an empty window (no change on the bus's other lines in it), told as `empty_selections` ({s, e})."""
+    e = np.asarray(cap.channel(select).edges, np.int64)
+    ch = cap.channel(select)
+    if len(e) == 0 or not items:
+        return np.zeros(len(e), bool), []
+    starts = np.array(sorted(s0 for s0, _ in items), np.int64)
+    lv = ch.level_at(starts)
+    active = int(np.bincount(lv, minlength=2).argmax())
+    after = (ch.initial ^ ((np.arange(len(e)) + 1) & 1)).astype(int)   # the level after each change
+    other = np.sort(np.concatenate([np.asarray(cap.channel(p).edges, np.int64) for p in pins if p != select]
+                                   or [np.zeros(0, np.int64)]))
+    seen = np.zeros(len(e), bool)
+    empty = []
+    for i in np.flatnonzero(after == active):
+        j = i + 1 if i + 1 < len(e) else None
+        a, b = int(e[i]), int(e[j]) if j is not None else cap.n_samples
+        k = np.searchsorted(starts, a)
+        held = k < len(starts) and starts[k] <= b
+        if held:
+            seen[i] = True
+            if j is not None:
+                seen[j] = True
+        elif j is not None and np.searchsorted(other, a, side="right") == np.searchsorted(other, b, side="left"):
+            seen[i] = seen[j] = True
+            empty.append({"s": a, "e": b})
+    return seen, empty
+
+
+def unread(cap: Capture, pins: list[str], lay: dict, n, idle: int, select: str | None = None,
+           empty: list | None = None) -> list[dict]:
     """The stretches of activity on a bus's pins that no item it read covers ({s, e, edges}): what a reading did not
-    read, told rather than left out (decode's uninterpreted; analyze's RVSWD and SWIO claims too)."""
+    read, told rather than left out (decode's uninterpreted; analyze's RVSWD and SWIO claims too). select: the bus's
+    select line, whose changes bounding a selection are not unread (`selections`); its empty selections are put in
+    `empty` when given."""
     # a clocked bus's bits and frames, SWIO's pulses, are where it was cut, not what was read: a frame no layout
     # read is unread
     skip = ()
@@ -477,7 +514,17 @@ def unread(cap: Capture, pins: list[str], lay: dict, n, idle: int) -> list[dict]
     spans = np.array(sorted((s, e) for s, e in items if e > s), np.int64).reshape(-1, 2)
     margin = max(1, idle // IDLE_BITS * 2)                 # a START or STOP a clock or two outside the sampled bits
     un = []
-    for x in _bursts(cap, pins, idle):
+    bursts = _bursts(cap, pins, idle)
+    if select and select in pins:
+        seen, emp = selections(cap, select, pins, [(a, z) for a, z in items if z > a] or items)
+        if empty is not None:
+            empty += emp
+        drop = np.asarray(cap.channel(select).edges, np.int64)[seen]
+        if len(drop):
+            e = np.sort(np.concatenate([np.asarray(cap.channel(p).edges, np.int64) for p in pins]))
+            e = e[~np.isin(e, drop)]
+            bursts = np.split(e, np.flatnonzero(np.diff(e) > idle) + 1) if len(e) else []
+    for x in bursts:
         s, e = int(x[0]), int(x[-1])
         if len(spans) and ((spans[:, 0] <= e) & (spans[:, 1] >= s)).any():
             left = _uncovered(x, spans, margin)
@@ -526,9 +573,15 @@ def _bus(res, cap: Capture, b: dict, depth: str, claimed: list) -> dict:
         for k in (lay if "*" in b.get("layers", ()) else b.get("layers", ())):
             if k in lay:                               # lower layers asked for by name (a pulse, a sampling edge)
                 out["result"][k] = lay[k]
+        if b["protocol"] == "spi" and b["params"].get("bit_order") == "lsb":
+            _lsb_first(out, b)
     idle = _idle(cap, b, n)
-    un = unread(cap, list(b["pins"].values()), lay, n, idle)
+    sel = {"spi": "cs"}.get(b["protocol"])
+    empty: list = []
+    un = unread(cap, list(b["pins"].values()), lay, n, idle, b["pins"].get(sel) if sel else None, empty)
     out["uninterpreted"] = un
+    if empty:
+        out["empty_selections"] = empty
     out["idle_ticks"] = idle
     clk = b["pins"].get("clk")
     speeds = []
@@ -544,7 +597,77 @@ def _bus(res, cap: Capture, b: dict, depth: str, claimed: list) -> dict:
         out["undersampled"] = us
     if n is not None:
         out["reading"] = reading(out, frames if clk else _frame_items(lay, n), cap, b)
+    out["_spans"] = [(int(x["s"]), int(x.get("e") if x.get("e") is not None else x["s"]))
+                     for x in (frames if clk else _frame_items(lay, n)) if isinstance(x, dict) and x.get("s") is not None]
     return out
+
+
+def _shared(buses: list[dict], cap: Capture) -> None:
+    """Buses of a spec that share lines (one SPI bus, a target on each CS): a stretch one bus did not read that
+    another sharing a line with it read is that one's (`shared`: s, e, edges and `bus`, the other's index in the
+    spec), not unread; and a line of one stopping while the others go on is no fault where the changes after it are
+    the other buses'. The reading's counts follow."""
+    for i, b in enumerate(buses):
+        pins = set(b["pins"].values())
+        others = [j for j, o in enumerate(buses) if j != i and pins & set(o["pins"].values()) and o.get("_spans")]
+        if not others:
+            continue
+        idle = b.get("idle_ticks", 0)
+        margin = max(1, idle // IDLE_BITS * 2)          # as unread(): a START or STOP a clock or two outside
+        spans = sorted((s0, e0, j) for j in others for s0, e0 in buses[j]["_spans"])
+        arr = np.array([(s0, e0) for s0, e0, _ in spans], np.int64).reshape(-1, 2)
+        e_all = np.sort(np.concatenate([np.asarray(cap.channel(p).edges, np.int64) for p in pins]))
+        keep, moved = [], []
+        for u in b.get("uninterpreted", []):
+            x = e_all[(e_all >= u["s"]) & (e_all <= u["e"])]
+            left = _uncovered(x, arr, margin)
+            if len(left) == len(x):
+                keep.append(u)
+                continue
+            # the changes another bus read are its; what is left is still unread, cut where it pauses
+            near = [j for s0, e0, j in spans if s0 <= u["e"] and e0 >= u["s"]]
+            moved.append({**u, "edges": int(len(x) - len(left)), "bus": max(set(near), key=near.count)})
+            for y in (np.split(left, np.flatnonzero(np.diff(left) > idle) + 1) if len(left) else []):
+                keep.append({"s": int(y[0]), "e": int(y[-1]), "edges": len(y)})
+        keep = [u for u in keep if u["edges"] >= 3] if b["protocol"] in ("rvswd", "swio") else keep
+        if not moved:
+            continue
+        b["uninterpreted"] = keep
+        b["shared"] = moved
+        r = b.get("reading")
+        if r is None:
+            continue
+        r.update(unread=len(keep), unread_edges=int(sum(u.get("edges", 0) for u in keep)),
+                 shared=len(moved), shared_edges=int(sum(u.get("edges", 0) for u in moved)))
+        if "stopped" in r:
+            lo = np.array([s0 for s0, _, _ in spans], np.int64)
+            hi = np.maximum.accumulate(np.array([e0 for _, e0, _ in spans], np.int64))
+            still = []
+            for x in r["stopped"]:
+                after = 0
+                for p in pins - {x["line"]}:
+                    e = np.asarray(cap.channel(p).edges, np.int64)
+                    e = e[e > x["tick"]]
+                    k = np.searchsorted(lo, e, side="right") - 1
+                    after += int(np.count_nonzero((k < 0) | (e > hi[np.maximum(k, 0)])))
+                if after >= STOPPED_AFTER:
+                    still.append({**x, "others_after": after})
+            if still:
+                r["stopped"] = still
+            else:
+                del r["stopped"]
+
+
+def _lsb_first(out: dict, b: dict) -> None:
+    """An SPI bus the spec says sends each byte least significant bit first: its transfers' bytes read so (the
+    analysis reads most significant first; nothing on the lines tells the order of random data)."""
+    rev = bytes(int(f"{v:08b}"[::-1], 2) for v in range(256))
+    pins = set(b["pins"].values())
+    for x in out["result"].get("transfers", []):
+        for k, v in list(x.items()):
+            if k in pins and isinstance(v, str):
+                x[k] = bytes(rev[c] for c in bytes.fromhex(v)).hex()
+    out["params"]["bit_order"] = "lsb"
 
 
 def _analyze_split(source, hints, opts, depth: str, head: dict, items=None) -> dict | None:
@@ -626,6 +749,9 @@ def _part(cap: Capture, spec: dict, head: dict, strict: bool = False) -> dict:
            "buses": [_bus(res, cap, b, spec["depth"], res.claims) for b in spec["buses"]],
            "lines": [{"pin": p, "initial": int(cap.channel(p).initial),
                       "edges": np.asarray(cap.channel(p).edges).tolist()} for p in spec["lines"]]}
+    _shared(out["buses"], cap)
+    for b in out["buses"]:
+        b.pop("_spans", None)
     named = {p for b in spec["buses"] for p in b["pins"].values()} | set(spec["lines"])
     rest = []
     for c in cap.channels:

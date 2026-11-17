@@ -244,6 +244,8 @@ def export(res, cap, mode: str = "final", select: list[str] | None = None, alter
         rec = {"protocol": c.protocol, "roles": c.roles, "verdict": c.verdict, "score": round(float(c.total), 4),
                "margin": round(float(c.margin), 4),
                "params": {k: (float(v) if isinstance(v, (np.floating, float)) else v) for k, v in c.params.items()}}
+        if getattr(c, "bus", None):
+            rec["bus"] = c.bus                  # a target's claim: the claims with the same bus share its lines
         lay = layers_of(n)
         if window:
             lay = _window(lay, *window)

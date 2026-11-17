@@ -24,7 +24,7 @@ the lines fit, whether analyze would have claimed it, and what was not read or n
 | --- | --- |
 | `buses[].protocol` | An analyzer's name (`i2c`, `spi`, `uart`, ...) |
 | `buses[].pins` | Role → channel name. Every pin must be in the capture (else an error). The decode used is the one on exactly these pins |
-| `buses[].params` | Optional. Passed as hints (`baud` for `uart`, ...). For `spi`, `mode` (0–3) picks the sampling edge; without it the mode is read from the lines (capture-test-guide §4.5), `cs_active` for an active-high CS. For `i2c`, `freq_hz` (SCL's rate) sets how far one slow edge's crossings may spread (a third of its half period, at most 1000 ns, t_r; measured from the clock around each edge without it; none below 5 MS/s). I2C is always read as an I2C input sees it: pulses shorter than 50 ns (t_SP) left out (but an SCL high where a clock is due, with a whole low on either side: a clock a slow rise clipped short, which the devices took as one), a slow edge crossing the threshold more than once read as one at its last change (`params.deglitch`: `i2c_input` when that changed anything) |
+| `buses[].params` | Optional. Passed as hints (`baud` for `uart`, ...). For `spi`, `mode` (0–3) picks the sampling edge; without it the mode is read from the lines (capture-test-guide §4.5), `cs_active` for an active-high CS, `bit_order` (`msb`, the default, or `lsb`: random data does not tell it). Buses may share lines: one SPI bus with a target on each CS is one bus each, CLK, MOSI and MISO in all (§3.3). For `i2c`, `freq_hz` (SCL's rate) sets how far one slow edge's crossings may spread (a third of its half period, at most 1000 ns, t_r; measured from the clock around each edge without it; none below 5 MS/s). I2C is always read as an I2C input sees it: pulses shorter than 50 ns (t_SP) left out (but an SCL high where a clock is due, with a whole low on either side: a clock a slow rise clipped short, which the devices took as one), a slow edge crossing the threshold more than once read as one at its last change (`params.deglitch`: `i2c_input` when that changed anything) |
 | `split` | Optional. How a long part is read in pieces ([long captures](long-captures.md) §3): a dict, `"key=value,..."` or `"off"` |
 | `buses[].layers` | Optional. Lower layers to give in `result` beside the final one, by name (`bits`: every sampling edge `t` and its value; `frames`; SWIO's `pulses`: each pulse's start, width and short/long; `*`: all) |
 | `buses[].idle_s` | Optional. Activity apart by more than this is two bursts (§3.3). Default: 16 bit times of the bus, or 1 ms when it has none |
@@ -155,6 +155,8 @@ its changes outside every item (a clock or two around it) are uninterpreted, cut
 (a frame no layout read, between two that were). A clocked bus's `bits` and `frames` are where it was cut, not what
 was read, and cover nothing here.
 
+On a bus sharing lines with others of the spec (one SPI bus, a target on each CS), changes another bus read are not uninterpreted but `shared`: `[{"s", "e", "edges", "bus"}]` (`bus` the other's index in the spec, `edges` the changes it read). `reading` counts them (`shared`, `shared_edges`) and `unread` only the rest. A line of the bus (its CS) still while the others go on for another target is not told as stopped (`reading.stopped`). A target left out of the spec leaves its time uninterpreted.
+
 With the parts and `capture.lost`, three cases are told apart:
 
 - **nothing happened**: no change on the pins, inside a part
@@ -170,7 +172,7 @@ tried, `--hint` / `--devices`) in place of `spec`, and in each part, in place of
 | Key | Meaning |
 | --- | --- |
 | `part`, `ticks`, `tick0`, `start_ns`, ... | As in §2.1 |
-| `claims[]` | What the evidence carries: `protocol`, `roles` (role → channel), `verdict` (`confirmed` / `likely` / `ambiguous` / `unknown-sync`), `score`, `margin`, `params`, and `result` (`--mode final`, at `--depth`), `layers` and `evidence` (`--mode all`) or the layers `--select` names, `devices` (`--depth device`), `runner_up` (`--alternatives`). Ticks from the part's tick 0 |
+| `claims[]` | What the evidence carries: `protocol`, `roles` (role → channel), `verdict` (`confirmed` / `likely` / `ambiguous` / `unknown-sync`), `score`, `margin`, `params`, and `result` (`--mode final`, at `--depth`), `layers` and `evidence` (`--mode all`) or the layers `--select` names, `devices` (`--depth device`), `runner_up` (`--alternatives`). On one SPI bus with a target on each CS, a claim per target, all with the same `bus` (the shared CLK and data lines in each). Ticks from the part's tick 0 |
 | `relations[]` | Pairs of claims read together (a command line and its answers): `scpi` with its `exchanges`, and protocols of others on a UART pair (`uart_pair`, [protocols](protocols.md) §3.1) with their `messages`, `checks_passed`, `checks_failed` |
 | `analysis_seconds` | At the top: how long the analysis took (differs every run) |
 | `window`, `segment`, `events` | With `--window` / `--segment` (a range inside one part: `--part` names it when there are several) |

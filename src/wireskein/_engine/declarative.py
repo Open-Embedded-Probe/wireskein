@@ -489,6 +489,7 @@ class DeclarativePlugin:
             ci = clock_info(view, c.sv.features[sb.clock])
             b = pair_relation(view, ci, sb.select).boundary if ci else 0.0
             score *= b
+            evidence["select_boundary"] = b
         if "degenerate" in terms:
             # a bus is suspicious only if every data pin is dominated by one value
             # (a flash MISO idles at 0xFF most of the time; that is normal)
@@ -508,7 +509,8 @@ class DeclarativePlugin:
         names = sp["roles"]["data"]
         for i, d in enumerate(sb.data):
             roles[names[i] if isinstance(names, list) and i < len(names) else f"{names}{i}"] = d
-        m = {"length_fit": fit, "check_rate": check_rate, "words": n_words, "frames": int(keep.sum()), "clk": clk, "pair": pair}
+        m = {"length_fit": fit, "check_rate": check_rate, "words": n_words, "frames": int(keep.sum()), "clk": clk, "pair": pair,
+             **({"select_boundary": evidence["select_boundary"]} if "select_boundary" in evidence else {})}
         return [Node(self.name, {"sample_edge": sb.sample_edge, "declared": self.path, **self._ext}, roles,
                      Stream("records", records), m, layer_score=score, total=score)]
 

@@ -159,7 +159,9 @@ def match(bus: dict, claim: dict) -> dict:
     elif bus["protocol"] == "spi":
         lines_true = {tr["mosi"], *([tr["miso"]] if "miso" in tr else [])}
         lines_got = {v for k, v in nr.items() if k.startswith("data")}
-        r["roles"] = nr["clk"] == tr["clk"] and nr.get("cs") == tr.get("cs") and lines_got == lines_true
+        # a CS the evidence cannot show (one selection around everything: cs_optional) may be left out
+        loose = bool(bus.get("cs_optional")) and "cs" not in nr
+        r["roles"] = nr["clk"] == tr["clk"] and (nr.get("cs") == tr.get("cs") or loose) and lines_got == lines_true
         r["params"] = claim["evidence"].get("mode") == bus["params"]["mode"]
         r["bit_order_ok"] = pm["bit_order"] == bus["params"]["bit_order"]
         got = decoded(claim)
@@ -174,7 +176,7 @@ def match(bus: dict, claim: dict) -> dict:
                 continue
             if not r["bit_order_ok"]:
                 g = [bytes(int(f"{b:08b}"[::-1], 2) for b in bytes.fromhex(x)).hex() for x in g]
-            scores.append(_ratio(frames, g))
+            scores.append(_ratio(["".join(frames)], ["".join(g)]) if loose else _ratio(frames, g))
         r["decode"] = float(np.mean(scores))
     return r
 

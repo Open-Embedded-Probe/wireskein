@@ -24,7 +24,7 @@ wireskein の中を知らない道具が後で読みます。
 | --- | --- |
 | `buses[].protocol` | 解析器の名前（`i2c`、`spi`、`uart` など） |
 | `buses[].pins` | 役割 → チャンネルの名前。どのピンもキャプチャに無ければならない（無ければエラー）。ちょうどこのピンの上の復号を使う |
-| `buses[].params` | 任意。指示として渡す（`uart` の `baud` など）。`spi` の `mode`（0〜3）は標本のエッジを決める。無ければ線からモードを読む（capture-test-guide §4.5）。active high の CS には `cs_active`。`i2c` の `freq_hz`（SCL の速さ）は、1 つの遅い縁のまたぎがどこまで広がってよいかを決める（その半周期の 3 分の 1、多くて 1000 ns（t_r）。無ければ縁ごとにその辺りのクロックから測る。5 MS/s 未満ではしない）。I2C は、いつも I2C の入力が見るとおりに読む: 50 ns（t_SP）より短いパルスを除き（ただし、クロックが来るはずの所にあり、前後にまるごとの Low がある SCL の High は除かない: 遅い立ち上がりで短く切られたクロックで、バスの機器はクロックとして扱う）、しきい値を何度もまたいだ遅い縁は、最後の変化で 1 つとして読む（それで何か変わったときは `params.deglitch` が `i2c_input`） |
+| `buses[].params` | 任意。指示として渡す（`uart` の `baud` など）。`spi` の `mode`（0〜3）は標本のエッジを決める。無ければ線からモードを読む（capture-test-guide §4.5）。active high の CS には `cs_active`。`bit_order`（既定の `msb` か `lsb`。でたらめなデータからは分からない）。バスは線を共有してよい: CS ごとに相手のいる 1 つの SPI のバスは、相手ごとに 1 つのバスとして書き、CLK、MOSI、MISO をどれにも書く（§3.3）。`i2c` の `freq_hz`（SCL の速さ）は、1 つの遅い縁のまたぎがどこまで広がってよいかを決める（その半周期の 3 分の 1、多くて 1000 ns（t_r）。無ければ縁ごとにその辺りのクロックから測る。5 MS/s 未満ではしない）。I2C は、いつも I2C の入力が見るとおりに読む: 50 ns（t_SP）より短いパルスを除き（ただし、クロックが来るはずの所にあり、前後にまるごとの Low がある SCL の High は除かない: 遅い立ち上がりで短く切られたクロックで、バスの機器はクロックとして扱う）、しきい値を何度もまたいだ遅い縁は、最後の変化で 1 つとして読む（それで何か変わったときは `params.deglitch` が `i2c_input`） |
 | `split` | 任意。長い区間を区切って読む方法（[長いキャプチャ](long-captures.ja.md) §3）: 辞書、`"key=value,..."`、`"off"` |
 | `buses[].layers` | 任意。最後の読みのほかに `result` に出す下の層の名前（`bits`: サンプルの縁 `t` とその値のすべて、`frames`、SWIO の `pulses`: パルスごとの始まり・幅・短い / 長い、`*`: すべて） |
 | `buses[].idle_s` | 任意。これより離れた活動は別のかたまり（§3.3）。既定はそのバスの 16 ビット分、ビットの無いバスは 1 ms |
@@ -151,6 +151,8 @@ analyze の書き出し（`--mode final`、`depth` まで）の層。刻みは�
 どのレイアウトでも読めなかったフレーム）。クロックのあるバスの `bits` と `frames` は、切った所であって読んだものではなく、
 ここでは何も覆わない。
 
+spec のほかのバスと線を共有するバス（1 つの SPI のバスの、CS ごとの相手）では、ほかのバスが読んだ変化は未解釈に入れず、`shared` に置く: `[{"s", "e", "edges", "bus"}]`（`bus` はそのバスの spec の中の番号、`edges` はそのバスが読んだ変化の数）。`reading` には `shared` と `shared_edges` の数が付き、`unread` は残りだけを数える。ほかのバスの転送が続くあいだに自分の線（CS）が動かないのは、止まった線（`reading.stopped`）にしない。相手を spec に書かなければ、その時間は未解釈のまま。
+
 区間と `capture.lost` と合わせて、3 つを区別する:
 
 - **何も起きなかった**: 区間の中で、ピンに変化が無い
@@ -166,7 +168,7 @@ analyze の書き出し（`--mode final`、`depth` まで）の層。刻みは�
 | キー | 意味 |
 | --- | --- |
 | `part`、`ticks`、`tick0`、`start_ns` など | §2.1 と同じ |
-| `claims[]` | 証拠が支えるもの: `protocol`、`roles`（役割 → チャンネル）、`verdict`（`confirmed` / `likely` / `ambiguous` / `unknown-sync`）、`score`、`margin`、`params`。さらに `result`（`--mode final`、`--depth` まで）、`layers` と `evidence`（`--mode all`）、または `--select` で選んだ層、`devices`（`--depth device`）、`runner_up`（`--alternatives`）。刻みは区間の刻み 0 から |
+| `claims[]` | 証拠が支えるもの: `protocol`、`roles`（役割 → チャンネル）、`verdict`（`confirmed` / `likely` / `ambiguous` / `unknown-sync`）、`score`、`margin`、`params`。さらに `result`（`--mode final`、`--depth` まで）、`layers` と `evidence`（`--mode all`）、または `--select` で選んだ層、`devices`（`--depth device`）、`runner_up`（`--alternatives`）。CS ごとに相手のいる 1 つの SPI のバスでは、主張は相手ごとで、同じ `bus` を持つ（共有の CLK とデータ線はどの主張にも入る）。刻みは区間の刻み 0 から |
 | `relations[]` | 一緒に読む主張の組（コマンドの行とその応答）。`scpi` とその `exchanges`、UART の組の上のほかの人のプロトコル（`uart_pair`、[独自のプロトコル](protocols.ja.md) §3.1）とその `messages`、`checks_passed`、`checks_failed` |
 | `analysis_seconds` | 文書の一番上: 解析にかかった秒（実行ごとに変わる） |
 | `window`、`segment`、`events` | `--window` / `--segment` のとき（1 つの区間の中の範囲。区間が 2 つ以上なら `--part` で選ぶ） |
