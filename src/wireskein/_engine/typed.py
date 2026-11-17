@@ -547,8 +547,52 @@ def block_chars(cap, sv: Survey, rb: RateBlocks) -> list[tuple[tuple[int, int, f
             continue
         best = cands[0][1]
         L = min(l for l, r in cands if r >= best - 0.02)
-        out.append((blk, cands, chars(cap, async_symbols_segment(cap, sv, rb.pin, s0, s1, u), L)))
+        ch = chars(cap, async_symbols_segment(cap, sv, rb.pin, s0, s1, u), L)
+        u2 = refit_unit(np.asarray(cap.channel(rb.pin).edges, np.int64), ch, u)
+        if u2 and abs(u2 / u - 1) > REFIT_MIN:
+            # the bit time fitted over the characters read: read again with it, kept when it reads as many
+            ch2 = chars(cap, async_symbols_segment(cap, sv, rb.pin, s0, s1, u2), L)
+            if int(ch2.ok.sum()) >= int(ch.ok.sum()):
+                blk, ch = (s0, s1, u2), ch2
+        out.append((blk, cands, ch))
     return out
+
+
+REFIT_MIN = 0.002      # a refitted bit time this close to the estimate reads the same: not read again
+
+
+def refit_unit(edges: np.ndarray, ch: "Chars", u: float, rounds: int = 2) -> float | None:
+    """A UART's bit time fitted over its well-formed characters: each edge inside one is the character's start plus a
+    whole number of bits; edges more than 0.3 bit off that grid (a spike, a bounce) are left out; least squares over
+    all characters (each its own offset). The estimate from run lengths (features.estimate_units) is pulled off by
+    runs a spike or a bounce cut in two; the edges' places in the characters are not."""
+    starts = np.sort(ch.start[ch.ok]).astype(np.int64)
+    if len(starts) < 2 or not len(edges):
+        return None
+    L = ch.bits
+    lo = np.searchsorted(edges, starts[0])
+    e = edges[lo:]
+    i = np.searchsorted(starts, e, side="right") - 1          # the character each edge may be in
+    for _ in range(rounds):
+        d = (e - starts[i]).astype(np.float64)
+        inside = d < (L - 0.5) * u
+        k = np.round(d / u)
+        keep = inside & (np.abs(d / u - k) < 0.3)
+        ci, d, k = i[keep], d[keep], k[keep]
+        m = len(starts)
+        n = np.bincount(ci, minlength=m).astype(np.float64)
+        sk, sd = np.bincount(ci, k, m), np.bincount(ci, d, m)
+        skd, skk = np.bincount(ci, k * d, m), np.bincount(ci, k * k, m)
+        use = n >= 2
+        if not use.any():
+            return None
+        # per character centred: sum (k - mean k)(d - mean d) = skd - sk sd / n, and the same for k k
+        num = float((skd[use] - sk[use] * sd[use] / n[use]).sum())
+        den = float((skk[use] - sk[use] ** 2 / n[use]).sum())
+        if den <= 0:
+            return None
+        u = num / den
+    return u if u > 0 else None
 
 
 @dataclass
