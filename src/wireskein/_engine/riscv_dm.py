@@ -374,7 +374,22 @@ def _skip(x: dict) -> bool:
     return x.get("ok", True) is False or (x.get("form") == "long" and bool(x.get("status")))
 
 
+_LEARNT: dict = {}     # _learn_dataaddr's answers by the accesses it read (an analysis reads the same in several views)
+LEARNT_KEEP = 8
+
+
 def _learn_dataaddr(tx: list[dict]) -> int | None:
+    """As _learnt, remembered for the same accesses (op, address, data and whether each happened)."""
+    key = tuple((x["op"], x["addr"], tuple(x["data"]) if isinstance(x["data"], list) else x["data"], _skip(x))
+                for x in tx)
+    if key not in _LEARNT:
+        if len(_LEARNT) >= LEARNT_KEEP:
+            _LEARNT.pop(next(iter(_LEARNT)))
+        _LEARNT[key] = _learnt(tx)
+    return _LEARNT[key]
+
+
+def _learnt(tx: list[dict]) -> int | None:
     """The data registers' address from the transfers: hartinfo when read; else the address a register is set to
     by a transfer and then used as a store's base by the program buffer, whose result the debugger reads (a debugger
     puts data0's address in a register). Tried on the values written to registers: the one the program's stores

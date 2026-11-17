@@ -197,6 +197,12 @@ class BitReader:
         return b
 
     def read(self, n: int) -> list[int]:
+        if not self.active:                    # no stuffing in effect: the bits as they are, at once
+            if self.pos + n > self.end:
+                raise IndexError
+            b = self.bits[self.pos:self.pos + n]
+            self.pos += n
+            return b if isinstance(b, list) else [int(x) for x in b]
         return [self.bit() for _ in range(n)]
 
 
@@ -284,7 +290,8 @@ def parse_sequence(seq: dict, bits: np.ndarray, pos: int, end: int, fail_fast: b
                 continue
             if st and f["name"] == st["from"]:
                 rd.active = True
-            w = expr(f.get("width", 1), env)
+            w = f.get("width", 1)
+            w = w if type(w) is int else expr(w, env)          # most widths are fixed: no evaluation
             b = rd.read(w) if w > 0 else []
             if st and f["name"] == st["to"]:
                 rd.active = False
@@ -681,6 +688,7 @@ class DeclarativePlugin:
         info = 0.0
         starts = prefix_positions(seqs, bits) if scan else None
         active = _active_bits_in(bits, [(a, b) for a, b in bounds if b > a])
+        bits = bits.tolist() if isinstance(bits, np.ndarray) else bits    # read bit by bit below: a list is faster
         for a, b in bounds:
             p = a
             while p < b:
