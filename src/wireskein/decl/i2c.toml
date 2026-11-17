@@ -28,5 +28,14 @@ first = [
 rest = { name = "bytes", from = "byte", role = "data" }
 
 [score]
-check_weight = 0.2      # NACKs are valid I2C, so the ACK check weighs lightly
+# counted by its transactions above chance (frame_score's binomial): an address no one answers is a whole transaction
+# of evidence (NACK is I2C as much as ACK is), and lines whose frames fit about as often as chance stay low
+count = "binomial"
+chance = 0.5            # a frame's chance to fit, for the tail
+above = 0.2222222222    # the rule's own chance (9n + 1: 2 in 9): the fit counted above it
+soft = 0.25             # the clock-likeness and pair terms weigh this much
+check_weight = 0.0
 evidence_scale = 8
+# START / STOP well inside SCL's high, the bus free between a STOP and the next START, no SCL over UM10204's fastest
+terms = ["startstop_clearance", "bus_free", "max_clock_hz"]
+max_clock_hz = 5e6

@@ -40,12 +40,98 @@ HERE = Path(__file__).resolve().parents[1] / "decl"
 
 
 def frame_score(e: dict) -> float:
-    """A framed protocol's score before the core's terms (select_boundary, degenerate, single_frame_penalty): the
+    """A framed protocol's score before the core's terms (select_boundary, degenerate, single_frame_penalty, ...): the
     frames' fit to the length rule (as evidence) x the checked fields x the quantity of words x how clock-like the
     clock is x how the weakest data pin keeps to it. e: the evidence (see _score_inputs); a swapped step
-    (methods "frame_score") is given the same."""
+    (methods "frame_score") is given the same.
+
+    A definition's `count = "binomial"` counts it by its frames instead: of n frames k fit the length rule, by chance
+    (`chance` a frame) at least k with probability P(X >= k); the score is the fit above the rule's own chance
+    (`above`) x (1 - P(X >= k)) x the clock and pair terms, softened (`soft`). A true bus comes near 1 with a few
+    frames whatever their length; lines whose frames fit about as often as chance stay near 0 however many."""
+    if e.get("count") == "binomial":
+        p, pa, soft = e["chance"], e["above"], e["soft"]
+        above = max(0.0, (e["fit"] - pa) / (1 - pa))
+        a = 1 - soft
+        return above * (1 - binomial_tail(e["frames"], e["fits"], p)) * (a + soft * e["clk"]) * (a + soft * e["pair"])
     return (e["fit_evidence"] * (1 - e["check_weight"] + e["check_weight"] * e["check_rate"])
             * q(e["words"], e["evidence_scale"]) * (0.5 + 0.5 * e["clk"]) * (0.5 + 0.5 * e["pair"]))
+
+
+def binomial_tail(n: int, k: int, p: float) -> float:
+    """P(X >= k) for X ~ Binomial(n, p): how likely k fits of n frames are by chance."""
+    if k <= 0:
+        return 1.0
+    if k > n:
+        return 0.0
+    i = np.arange(k, n + 1, dtype=np.float64)
+    lg = math.lgamma(n + 1) - np.array([math.lgamma(x + 1) + math.lgamma(n - x + 1) for x in i.tolist()])
+    t = lg + i * math.log(p) + (n - i) * math.log1p(-p)
+    m = float(t.max())
+    return min(1.0, math.exp(m) * float(np.exp(t - m).sum()))
+
+
+def _gated_clock(e: dict, cap, sb) -> np.ndarray:
+    """The clock's changes with those closer than a quarter of its period merged (survey.collapse): a spike on the
+    clock is no change of the bus (as the pair relations and the select framing read it)."""
+    from .survey import GATE, collapse
+    ce = np.asarray(cap.channel(sb.clock).edges, np.int64)
+    ci = e["survey"].clocks.get(sb.clock) if e.get("survey") is not None else None
+    return collapse(ce, ci.period / GATE) if ci is not None and ci.period else ce
+
+
+def startstop_clearance(e: dict, share: float = 0.15) -> float | None:
+    """Of the frames' START / Sr / STOP events (the data line changing while the clock is high), the share at least
+    `share` of the local clock half away from any clock change. I2C's are (t_SU;STA, t_HD;STA, t_SU;STO: well into the
+    high); a data line that changes with its clock (SPI mode 1 / 3) makes "events" on the clock's edges. None: not
+    known."""
+    fr, sb = e["frames_obj"], e["bits"]
+    cap = getattr(sb, "view", None)
+    events = [t for kind, t in (fr.events or []) if kind in ("S", "Sr", "P")]
+    if cap is None or not events:
+        return None
+    ce = _gated_clock(e, cap, sb)
+    if len(ce) < 3:
+        return None
+    t = np.asarray(events, np.int64)
+    j = np.clip(np.searchsorted(ce, t), 1, len(ce) - 1)
+    d = np.minimum(np.abs(t - ce[j - 1]), np.abs(ce[j] - t))
+    jj = np.clip(j, 2, len(ce) - 2)          # the local half: the shortest of the clock's runs around the event
+    half = np.minimum(ce[jj] - ce[jj - 1], np.minimum(ce[jj + 1] - ce[jj], ce[jj - 1] - ce[jj - 2])).astype(float)
+    step = max(1, cap.channel(sb.clock).step)
+    return float(np.mean(d >= np.maximum(step, share * half)))
+
+
+def bus_free(e: dict, allow: int = 2) -> float | None:
+    """Of the STOPs, the share after which the clock stays still (at most `allow` changes: a spike) until the next
+    START: an I2C bus is free between a STOP and a START; a free-running clock goes on. None: no STOP."""
+    fr, sb = e["frames_obj"], e["bits"]
+    cap = getattr(sb, "view", None)
+    ev = list(fr.events or [])
+    if cap is None or not any(k == "P" for k, _ in ev):
+        return None
+    ce = _gated_clock(e, cap, sb)
+    kinds = np.asarray([k for k, _ in ev])
+    times = np.asarray([t for _, t in ev], np.int64)
+    m = len(ev)
+    own = np.where(np.isin(kinds, ("S", "Sr")), np.arange(m), m)
+    after = np.minimum.accumulate(np.concatenate((own[1:], [m]))[::-1])[::-1]     # each event's next START
+    stops = np.flatnonzero(kinds == "P")
+    nxt = np.where(after[stops] < m, times[np.minimum(after[stops], m - 1)], cap.n_samples)
+    free = np.count_nonzero(np.searchsorted(ce, nxt) - np.searchsorted(ce, times[stops], side="right") <= allow)
+    return int(free) / len(stops)
+
+
+def clock_hz(e: dict) -> float | None:
+    """The clock's rate inside the frames: the median interval between its sampling edges there."""
+    fr, sb = e["frames_obj"], e["bits"]
+    cap = getattr(sb, "view", None)
+    t = np.asarray(sb.t, np.int64)
+    if cap is None or len(fr.bounds) == 0 or len(t) < 3:
+        return None
+    iv = [np.diff(t[a:b]) for a, b in fr.bounds.tolist() if b - a >= 3]
+    iv = np.concatenate(iv) if iv else np.array([], np.int64)
+    return float(cap.rate) / float(np.median(iv)) if len(iv) else None
 
 
 def q(n: float, scale: float = 8.0) -> float:
@@ -486,7 +572,8 @@ class DeclarativePlugin:
                     "evidence_scale": sc.get("evidence_scale", 8), "clk": clk, "pair": pair,
                     "delimiter": fr.delimiter,
                     # the material itself, for a swapped step that counts its evidence otherwise
-                    "frames_obj": fr, "bits": sb, "survey": c.sv, "spec": sp}
+                    "frames_obj": fr, "bits": sb, "survey": c.sv, "spec": sp,
+                    **{k: sc[k] for k in ("count", "chance", "above", "soft") if k in sc}}
         score = methods.get("frame_score", frame_score)(evidence)
         # evidence terms the core provides by name (not protocol code)
         terms = sc.get("terms", [])
@@ -510,6 +597,20 @@ class DeclarativePlugin:
             score *= best
         if "single_frame_penalty" in terms and fr.delimiter == "gap" and int(keep.sum()) <= 1:
             score *= 0.5
+        if "startstop_clearance" in terms:
+            cl = startstop_clearance(evidence)
+            if cl is not None:
+                score *= cl
+                evidence["startstop_clearance"] = cl
+        if "bus_free" in terms:
+            fb = bus_free(evidence)
+            if fb is not None:
+                score *= fb
+                evidence["bus_free"] = fb
+        if "max_clock_hz" in terms:
+            hz = clock_hz(evidence)
+            if hz is not None and hz > float(sc.get("max_clock_hz", 5e6)):
+                score = 0.0                       # no bus of this protocol runs this fast
         roles = {sp["roles"]["clock"]: sb.clock}
         if sb.select and "select" in sp["roles"]:
             roles[sp["roles"]["select"]] = sb.select
