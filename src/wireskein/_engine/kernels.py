@@ -130,8 +130,22 @@ def local_period(ticks: np.ndarray, at: np.ndarray, w: int = 8, q: float = 25) -
         idx = j0[:, None] + np.arange(m)[None, :]
         # q: the lower quartile by default - a frame's last bits may come slower than its clock (a LinkE at its
         # fastest)
-        out.append(np.percentile((ticks[idx + 1] - ticks[idx]).astype(np.float64), q, axis=1))
+        out.append(_percentile_rows((ticks[idx + 1] - ticks[idx]).astype(np.float64), q))
     return np.minimum(out[0], out[1])
+
+
+def _percentile_rows(x: np.ndarray, q: float) -> np.ndarray:
+    """np.percentile(x, q, axis=1) (its default, linear), by a sort of each short row and numpy's own interpolation
+    (numpy's _lerp, to the bit): np.percentile's general path took most of a long capture's I2C input view."""
+    m = x.shape[1]
+    s = np.sort(x, axis=1)
+    pos = q / 100 * (m - 1)
+    lo = int(np.floor(pos))
+    hi = min(lo + 1, m - 1)
+    t = pos - lo
+    a, b = s[:, lo], s[:, hi]
+    d = b - a
+    return b - d * (1 - t) if t >= 0.5 else a + d * t
 
 
 def deglitch_slow(edges: np.ndarray, k: int, clock: np.ndarray) -> np.ndarray:

@@ -491,25 +491,28 @@ def i2c_restore(cap: Capture, scl: str, sda: str) -> tuple[Capture, list[int]]:
     usual = float(np.median(lows))
     sl, dl = s.level_at(de), d.level_at(de)
     starts, stops = de[(sl == 1) & (dl == 0)], de[(sl == 1) & (dl == 1)]
-    add = []
-    for a in starts:
-        ends = [x for x in (stops[stops > a][:1].tolist() + starts[starts > a][:1].tolist())]
-        if not ends:
-            continue
-        b = min(ends)
-        inside = (e > a) & (e < b)
-        rises = int(np.count_nonzero(inside & (lv == 1)))
-        if rises < 9 or rises % 9:
-            continue
-        idx = np.flatnonzero(inside[:-1] & (lv[:-1] == 0))
-        long = [i for i in idx if e[i + 1] - e[i] > 1.5 * usual]
-        if len(long) != 1:
-            continue
-        i = long[0]
-        at = int(e[i] + 0.9 * usual)
-        if np.any((de > e[i] + 0.6 * usual) & (de <= at)):
-            continue
-        add.append(at)
+    # every START's transaction at once, by index ranges and running counts (not a scan over all edges per START: a
+    # line read as SDA can have hundreds of thousands of START-like changes)
+    gaps = np.diff(e)
+    rise_cum = np.concatenate(([0], np.cumsum(lv == 1)))                       # rises among e[:k]
+    long_low = (lv[:-1] == 0) & (gaps > 1.5 * usual)
+    long_cum = np.concatenate(([0], np.cumsum(long_low)))                      # long lows starting at e[:k]
+    big = np.iinfo(np.int64).max
+    ns, nt = np.searchsorted(stops, starts, "right"), np.searchsorted(starts, starts, "right")
+    nxt_stop = np.where(ns < len(stops), stops[np.minimum(ns, len(stops) - 1)] if len(stops) else big, big)
+    nxt_start = np.where(nt < len(starts), starts[np.minimum(nt, len(starts) - 1)], big)
+    end = np.minimum(nxt_stop, nxt_start)                                      # the transaction's STOP or rep. START
+    ia, ib = np.searchsorted(e, starts, "right"), np.searchsorted(e, end, "left")   # e[ia:ib]: inside it
+    rises = rise_cum[ib] - rise_cum[ia]
+    hi = np.minimum(ib, len(e) - 1)                                            # lows starting inside, with an end
+    longs = np.where(ia < hi, long_cum[hi] - long_cum[np.minimum(ia, hi)], 0)
+    ok = (end < big) & (rises >= 9) & (rises % 9 == 0) & (longs == 1)
+    where = np.flatnonzero(long_low)
+    i = where[np.searchsorted(where, ia[ok])]                                  # the one long low in each
+    at = (e[i] + 0.9 * usual).astype(np.int64)
+    lo_t = e[i] + 0.6 * usual
+    still = np.searchsorted(de, at, "right") == np.searchsorted(de, lo_t, "right")   # SDA not moving in (0.6, 0.9]
+    add = at[still].tolist()
     if not add:
         return cap, []
     ne = np.sort(np.concatenate([e, np.asarray(add, np.int64), np.asarray(add, np.int64) + 1]))
