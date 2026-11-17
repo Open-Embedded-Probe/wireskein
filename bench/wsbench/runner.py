@@ -184,11 +184,15 @@ def _work(job):
 # ---------------- run ----------------
 
 def plan_work(stage_names: list[str], algos_by_stage: dict[str, list], dsets: list[tuple[str, str, str, str]],
-              memory: bool):
+              memory: bool, named: set[str] | None = None):
     """(plan, the cases to run in a fixed order, each dataset's suite / role / source / chain / all its suites).
     A dataset two suites share (nack's clean cases are odslow's too) runs once; its line names its first suite and
-    lists all."""
+    lists all. A suite with trials_in_all = false that came in by "all" / "tune" (not in `named`) runs the main
+    algorithms only: trials run on it when it is named."""
     plan = [(s, [a.name for a in algos_by_stage[s]]) for s in stage_names]
+    mains = [(s, [a.name for a in algos_by_stage[s] if a.status == "main"]) for s in stage_names]
+    mains = [(s, n) for s, n in mains if n]
+    defs = suites()
     work, meta_ds = [], {}
     for suite, role, src, chain in dsets:
         ds = src + (f"+{chain}" if chain else "")
@@ -197,7 +201,8 @@ def plan_work(stage_names: list[str], algos_by_stage: dict[str, list], dsets: li
                 meta_ds[ds][4].append(suite)
             continue
         meta_ds[ds] = [suite, role, src, chain, [suite]]
-        work += [(ref, src, chain, plan, memory) for ref in data.source_items(src)]
+        only_main = named is not None and suite not in named and not defs.get(suite, {}).get("trials_in_all", True)
+        work += [(ref, src, chain, mains if only_main else plan, memory) for ref in data.source_items(src)]
     return plan, work, meta_ds
 
 
@@ -224,13 +229,14 @@ def machine() -> dict:
 
 def run(stage_names: list[str], algos_by_stage: dict[str, list], dsets: list[tuple[str, str, str, str]],
         jobs: int, note: str, extra: list[str], label: str = "", memory: bool = False,
-        shard: tuple[int, int] | None = None, run_id: str | None = None, timeout: float = TIMEOUT_S) -> str:
+        shard: tuple[int, int] | None = None, run_id: str | None = None, timeout: float = TIMEOUT_S,
+        named: set[str] | None = None) -> str:
     """Run the cases (of one shard: every n-th from the i-th, all algorithms of a case in the same worker, so that
     against-main costs pair up) and write their items; without a shard, add the results to the ledger too (with
     shards, merge.py does once all are in)."""
     git = git_state()
     run_id = run_id or new_run_id(git)
-    plan, work, meta_ds = plan_work(stage_names, algos_by_stage, dsets, memory)
+    plan, work, meta_ds = plan_work(stage_names, algos_by_stage, dsets, memory, named)
     total = len(work)
     if shard:
         i, n = shard

@@ -68,6 +68,7 @@ def main() -> None:
     stages = list(STAGES) if "all" in args.stage else args.stage
     if not stages or not args.suite:
         ap.error("--stage and --suite are needed (see --list)")
+    named = {n for n in args.suite if n not in ("all", "tune")}       # named suites run every algorithm asked for
     args.suite, skipped = runner.expand(args.suite)
     if skipped:
         print(f"suites without their data here, left out: {', '.join(skipped)}", file=sys.stderr)
@@ -107,7 +108,7 @@ def main() -> None:
             ap.error("--shard needs --run-id (the same for every shard)")
         shard = (i, n)
     runner.run(stages, by_stage, dsets, args.j, args.note, args.algos_dir, args.label, args.memory, shard,
-               args.run_id, args.timeout)
+               args.run_id, args.timeout, named)
 
 
 if __name__ == "__main__":
