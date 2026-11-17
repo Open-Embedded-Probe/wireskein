@@ -1,6 +1,6 @@
 # Suites: named sets of datasets. A dataset = a source x a chain of transforms (see wsbench/data.py).
 # A suite's definition is never changed once results exist for it: add a new suite (noise-v2 ...) instead, so the
-# ledger's numbers keep meaning what they meant.
+# ledger's numbers keep meaning what they meant. in_all = false keeps a suite out of "all" / "tune" (run it by name).
 #
 # role: tune     algorithms may be adjusted on what it shows
 #       holdout  looked at to confirm only; never adjusted on (the generated heldout seeds, the real records)
@@ -114,12 +114,14 @@ sources = ["wchfix:l103", "wchfix:v003", "wchfix:v203-100mhz"]
 transforms = ["", "decimate:2", "decimate:4", "decimate:8"]
 
 [suite.linke-l103]
+in_all = false     # its 9 rates read alike down to 8 MHz: linke-l103-core takes the ones that differ
 role = "tune"
 about = "a LinkE's RVSWD to a CH32L103 at 160 MS/s (2026-11-17: 103 ch32rv operations, LinkE speeds high / medium / low; each cut to its operation), the tuning half, and taken down to 133.3 and 50 MHz (fractional dividers, samples on the 160 MHz grid) and 80, 40, 20, 10, 8, 5 MHz (whole): where the DMI accesses stop being read; truth what ch32rv read and, taken down, the 160 MS/s reading checked against ch32rv's DMI operations. Real captures at those rates read as these do (tools/rate_compare.py)"
 sources = ["linke:l103-linke-2026-11-17/tune"]
 transforms = ["", "resample:133333333.3333", "decimate:2", "resample:50000000", "decimate:4", "decimate:8", "decimate:16", "decimate:20", "decimate:32"]
 
 [suite.linke-l103-holdout]
+in_all = false     # its 9 rates read alike down to 8 MHz: linke-l103-core takes the ones that differ
 role = "holdout"
 about = "the same, the half set aside by the scenario's name (never tuned on)"
 sources = ["linke:l103-linke-2026-11-17/holdout"]
@@ -154,3 +156,15 @@ role = "tune"
 about = "costs on real captures of spread sizes (a few changes to millions): the LinkE -> CH32L103 operations taken down 4 times (40 MS/s: ringing kept, the 64 KiB read 1.8 M changes) and the ENV III I2C at 50 MS/s, the tuning halves. Run before a run with a time limit (Bench workflow's gate): an algorithm that times out, or is far slower than the main one or grows faster with the data, is left out of the run (bench/gate.py)"
 sources = ["linke:l103-linke-2026-11-17/tune", "ebdd:embedbench-device-data-50m/tune"]
 transforms = ["decimate:4"]
+
+[suite.linke-l103-core]
+role = "tune"
+about = "linke-l103 at the rates that tell apart (run 20261117T051644Z: 160 down to 10 MHz all read alike): as taken, 50 MHz (a fractional divider), 20, 8 and 5 MHz (where the DMI accesses start to go)"
+sources = ["linke:l103-linke-2026-11-17/tune"]
+transforms = ["", "resample:50000000", "decimate:8", "decimate:20", "decimate:32"]
+
+[suite.linke-l103-core-holdout]
+role = "holdout"
+about = "the same, the half set aside"
+sources = ["linke:l103-linke-2026-11-17/holdout"]
+transforms = ["", "resample:50000000", "decimate:8", "decimate:20", "decimate:32"]

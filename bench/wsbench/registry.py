@@ -115,6 +115,22 @@ def get(stage: str, name: str) -> Algo:
     return _ALGOS[(stage, name)]
 
 
+# the outputs of the algorithms already run on the case a worker is on (runner.py sets and clears it per case), so
+# that one built on another (e2e/refit: the base's claims, then a UART refit) takes the base's output instead of
+# running it again; its own measured cost is then its own step only (the base's is the base's line)
+CASE_OUTPUTS: dict | None = None
+
+
+def output_of(stage: str, name: str, *args):
+    """The algorithm's output on these arguments: the one already made on this case when there is one (a deep
+    copy: the caller may change it), else made now."""
+    import copy
+    key = (stage, name, tuple(id(a) for a in args))
+    if CASE_OUTPUTS is not None and key in CASE_OUTPUTS:
+        return copy.deepcopy(CASE_OUTPUTS[key])
+    return _ALGOS[(stage, name)](*args)
+
+
 def pick(stage: str, names: list[str] | None, statuses: list[str]) -> list[Algo]:
     """By name (any status), else by status. main first."""
     have = [a for (s, _), a in _ALGOS.items() if s == stage]

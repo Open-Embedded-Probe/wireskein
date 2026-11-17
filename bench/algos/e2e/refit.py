@@ -9,7 +9,10 @@ Why (2026-11-16, the calibration run): main's other wrong confirmed claims (8 of
 few samples a bit one sample is a large share. Over a character the baseline is up to 9 bits. On the eight, the
 refit came within 0.2 % of the true baud (clean ones unchanged).
 
-Only the reported baud changes here (in the engine, the refit would come before the characters are read again)."""
+Only the reported baud changes here (in the engine, the refit would come before the characters are read again).
+
+In a run the base's claims are the ones its own line made on the case (wsbench.registry.output_of): this line's cost is
+the refit alone; in the engine it would be the base's and the refit's together."""
 
 import numpy as np
 
@@ -46,7 +49,7 @@ def refit_unit(cap, claim) -> float | None:
 @algorithm("e2e", "refit", status="trial", about="the base's claims, a UART's baud fitted again over its characters",
            variants={"uart": {"base": "wireskein"}, "uart_combo_select": {"base": "combo.clear_gated_select"}})
 def refit(cap, base):
-    claims = registry.get("e2e", base)(cap)
+    claims = registry.output_of("e2e", base, cap)     # the base's claims as the run made them on this case
     for c in claims:
         if c["protocol"] == "uart" and c["params"].get("baud"):
             u = refit_unit(cap, c)

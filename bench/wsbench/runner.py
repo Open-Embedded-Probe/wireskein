@@ -69,6 +69,8 @@ def expand(names: list[str]) -> tuple[list[str], list[str]]:
             for s, d in all_.items():
                 if n == "tune" and d.get("role", "tune") != "tune":
                     continue
+                if not d.get("in_all", True):        # kept for its results, named to run it
+                    continue
                 if s in want or s in skipped:
                     continue
                 (want if has_data(s) else skipped).append(s)
@@ -148,6 +150,7 @@ def _work(job):
            "edges": sum(len(c.edges) for c in case.cap.channels), "rate": float(case.cap.rate),
            "obs": observe.observe(case.cap)}
     algos = registry.load(_EXTRA)
+    registry.CASE_OUTPUTS = {}                   # this case's outputs, for an algorithm built on another (refit)
     for stage_name, names in plan:
         st = STAGES[stage_name]
         if not st.wants(case):
@@ -161,6 +164,7 @@ def _work(job):
                     lambda: cost.measure(lambda: st.run(a, case)))
                 if memory:
                     r["mem"] = _limited(lambda: cost.peak_memory(lambda: st.run(a, case)))
+                registry.CASE_OUTPUTS[(stage_name, name, (id(case.cap),))] = got
                 r["rows"] = st.score(got, case)          # not part of the cost
             except TimedOut:
                 r["cpu"], r["seconds"] = time.process_time() - c1, time.perf_counter() - t1
@@ -173,6 +177,7 @@ def _work(job):
                 r["trace"] = traceback.format_exc(limit=4)
                 r["rows"] = []
             out["results"].append(r)
+    registry.CASE_OUTPUTS = None
     return out
 
 
