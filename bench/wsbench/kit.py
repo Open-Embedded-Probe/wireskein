@@ -26,7 +26,9 @@ def comb_unit(iv: np.ndarray, max_mult: float, fractions=(1, 2, 3, 4), top: int 
     if len(iv) < 8:
         return None, 0.0
     vals, cnt = np.unique(np.round(iv), return_counts=True)
-    peaks = vals[np.argsort(cnt)[::-1][:top]]
+    # the most common first, ties by the shorter interval: a stable sort, the same on every CPU (numpy's default
+    # argsort orders ties by the CPU's SIMD path: GitHub's runners differ, and the same case scored differently)
+    peaks = vals[np.argsort(-cnt, kind="stable")[:top]]
     cands = sorted({float(p / k) for p in peaks for k in fractions if p / k >= 1.5})
     scored = []
     for T in cands:
