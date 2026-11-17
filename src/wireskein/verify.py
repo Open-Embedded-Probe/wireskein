@@ -592,6 +592,11 @@ def check_spi(cap, x):
             next((o["mode"] for o in opts if o["readable"]), None)
         if pick is not None:
             edge = "rise" if (pick >> 1) == (pick & 1) else "fall"
+    if x.get("cs") and x.get("mode") is not None:
+        # a mode asked for: read at its sampling edge, as a receiver in that mode does. The edge the lines' changes
+        # say (the measured mode) may be the other where a data line changes a sample before the launching edge (a
+        # probe's lines skewed by a sample): the receiver still reads it, and so does the check
+        edge = "rise" if (x["mode"] >> 1) == (x["mode"] & 1) else "fall"
     if x.get("cs") and edge is not None:
         # the roles and the mode are known: every line read at the sampling edges inside each CS window, as given,
         # not as the inference grouped them (a line that also moves outside CS stays a data line here)
