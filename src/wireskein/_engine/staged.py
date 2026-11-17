@@ -613,6 +613,13 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
         want = pin_hint.get(g.clock, {}).get("sample_edge")
         if want in ("rise", "fall") and want not in edges:
             edges.append(want)
+        # a clock given as a protocol (a check's or a spec's pins) is read on that protocol's own edge too, whatever
+        # the lines suggest: a device that moves SDA well before SCL's rise looks like data on the falling edge
+        given = pin_hint.get(g.clock, {}).get("protocol")
+        for p in (p for ps in by_type.values() for p in ps if p.name == given):
+            own = getattr(p, "edge", None)
+            if own in ("rise", "fall") and own not in edges:
+                edges.append(own)
         for view_cap, k in views:
             for edge in edges:
                 sb = typed.sync_bits(view_cap, c.sv, g.clock, g.data, g.select, edge)

@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) A clock given as a protocol (a check's or a decode spec's pins) is read on that protocol's own edge too, whatever the lines suggest: an I2C target that moves SDA well before SCL's rise (a SoftWire target, 1.5 us ahead at 100 kHz) looks like data on the falling edge, and an `i2c` check's window holding one read alone decoded nothing while the whole capture read it. The analysis without such a hint is unchanged.
+- (JA) プロトコルとして渡されたクロック（照合や decode の spec の pins）は、線の様子によらず、そのプロトコル自身の縁でも読む: SCL の立ち上がりよりかなり前に SDA を動かす I2C の target（SoftWire の target。100 kHz で 1.5 µs 前）は、データが立ち下がりで読まれるように見え、読み出し 1 つだけの `i2c` の照合の窓では、取り込み全体では読めるのに何も復号しなかった。そのヒントのない解析は変わらない。
 - (EN) `wireskein convert --from`: the excerpt's `start_ns` is the probe clock of its own first sample (the original's plus where it starts), so a run's markers still fall on the same changes; it kept the original's.
 - (JA) `wireskein convert --from`: 切り出したものの `start_ns` を、その最初のサンプルのプローブの時計（元の値に、切り出した位置の分を足したもの）にした。run の目印が同じ変化の所に来る。これまでは元の値のままだった。
 - (EN) The analysis has swappable steps (`_engine/methods.py`: preclean, pin classes, pair relation, a framed protocol's score `frame_score`, the verdict): the engine's own by default, another function within a `methods.use({...})` block only (contextvars; nothing changes unless a caller asks). The algorithm bench puts its trials in through it (e2e `inject`) to measure the whole analysis with one step swapped. Not a public interface.

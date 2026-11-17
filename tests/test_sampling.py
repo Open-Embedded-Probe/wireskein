@@ -86,6 +86,19 @@ def test_a_slow_edge_crossing_three_times_reads_as_one_and_is_told():
     assert len(slow) == 1 and slow[0]["line"] == "scl" and slow[0]["changes"] == 3 and slow[0]["to"] == 1
 
 
+def test_i2c_reads_on_scl_rising_whatever_the_lines_suggest():
+    # a target that moves SDA well before SCL's rise (0.7 into the low: 1.5 us ahead at 100 kHz, as a SoftWire
+    # target does) makes the data look sampled on the falling edge; one read alone in a check's window gave the
+    # lines no other say, and nothing was decoded. A clock given as I2C is read on I2C's own edge too
+    tx = [{"addr": 0x42, "rw": "read", "bytes": [0x94, 0xE0, 0xAC, 0x89]}]
+    scl, sda = gen.Wave(1), gen.Wave(1)
+    end = gen.i2c(scl, sda, 20e-6, tx, F, data_at=0.7)
+    cap = capture(100e6, scl, sda, end)
+    ok, got, why = CHECKS["i2c"](cap, i2c("SCL", "SDA", tx))
+    assert ok is True, why
+    assert [t["bytes"] for t in got["transactions"]] == [[0x94, 0xE0, 0xAC, 0x89]]
+
+
 def test_five_samples_a_half_reads_at_every_phase_of_the_sample_grid():
     # the data changing midway in SCL's low is 2 samples from one edge and 3 from the other, either way round by
     # where the grid falls: both edges are tried, and I2C reads on the rising one
