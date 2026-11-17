@@ -7,7 +7,7 @@
   "--range",
   "0x20000000+256",
   "-o",
-  "runs/rate__5M__low_read_ram_256.tmp/read.bin"
+  "read.bin"
  ],
  "rc": 0,
  "seconds": 0.11,

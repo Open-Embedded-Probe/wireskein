@@ -5,7 +5,7 @@
   "--range",
   "0x40021000+8",
   "-o",
-  "runs/high__x_clock_read_rcc_1.tmp/read.bin"
+  "read.bin"
  ],
  "rc": 0,
  "seconds": 0.1929,

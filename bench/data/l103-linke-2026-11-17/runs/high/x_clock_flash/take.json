@@ -2,7 +2,7 @@
  "scenario": "high/x_clock_flash",
  "args": [
   "flash",
-  "/home/mt/dev_oep/wireskein/bench/data/l103-linke-2026-11-17/tools/clock_l103.bin",
+  "tools/clock_l103.bin",
   "--yes"
  ],
  "rc": 0,

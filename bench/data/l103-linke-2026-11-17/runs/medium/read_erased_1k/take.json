@@ -7,7 +7,7 @@
   "--range",
   "0x08000000+1024",
   "-o",
-  "runs/medium__read_erased_1k.tmp/read.bin"
+  "read.bin"
  ],
  "rc": 0,
  "seconds": 0.1298,

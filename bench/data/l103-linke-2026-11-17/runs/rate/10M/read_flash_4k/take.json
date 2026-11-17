@@ -7,7 +7,7 @@
   "--range",
   "0x08000000+4096",
   "-o",
-  "runs/rate__10M__read_flash_4k.tmp/read.bin"
+  "read.bin"
  ],
  "rc": 0,
  "seconds": 0.1726,

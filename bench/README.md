@@ -92,7 +92,7 @@ def comb(cap, lines, max_mult):
     read and the DMI operations it sent over USB, and for the run taken down (`decimate`, `resample`) the 160 MS/s
     reading where every one of those operations is found in it; `/rate` the same operations taken by the probe at
     lower rates; the half set aside for checking chosen by the scenario's name when it was taken). The raw streams
-    are kept in a repository of their own (wireskein-bench-raw), named in the directory's `SOURCE.json`
+    are kept in a repository of their own (wireskein-captures), named in the directory's `SOURCE.json`
 - **The bench reads only this repository's files** (on GitHub's runners as here; `dir:` outside it is refused).
   Records of other repositories a suite needs are copied, only what it needs, under `bench/data/` by
   `bench/data/extract.py`, each with its source's `LICENSE` and a `SOURCE.json` (the repository, its commit, each

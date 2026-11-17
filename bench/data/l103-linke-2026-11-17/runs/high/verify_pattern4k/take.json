@@ -4,7 +4,7 @@
   "--speed",
   "high",
   "verify",
-  "/home/mt/dev_oep/wireskein/bench/data/l103-linke-2026-11-17/tools/pattern-4k.bin"
+  "tools/pattern-4k.bin"
  ],
  "rc": 0,
  "seconds": 0.2461,

@@ -24,7 +24,7 @@ from pathlib import Path
 from wireskein import _fileformat as fileformat
 from wireskein.runlog import Recorder
 
-CH32RV = os.environ.get("CH32RV", "/home/mt/dev_wch/ch32rv/target/release/ch32rv")
+CH32RV = os.environ.get("CH32RV", "ch32rv")     # the ch32rv to run (a build of ch32-riscv-ug/ch32rv)
 LINKE = "0E028F0692F1"
 PROBE = "oep:oep://e8f60ae84dd7"
 CHANNELS = "SWCLK=GPIO12,SWDIO=GPIO15"
@@ -218,7 +218,8 @@ def take(root: Path, name: str, args: list[str], log, rate: str = RATE) -> dict:
                 shutil.move(tmp / f, run / f)
         (run / "ch32rv.json").write_text(p.stdout)
         (run / "ch32rv.stderr").write_text(p.stderr)
-        info = {"scenario": name, "args": a, "rc": p.returncode, "seconds": round(took, 4),
+        shown_args = [x.replace(str(tmp) + "/", "").replace(str(TOOLS) + "/", "tools/") for x in a]
+        info = {"scenario": name, "args": shown_args, "rc": p.returncode, "seconds": round(took, 4),
                 "t0_host_ns": t0, "t1_host_ns": t1, "stream_s": duration, "attempts": attempt + 1,
                 "holdout": holdout(name), "rate_requested": rate, "capture_log": cap_out.strip().splitlines()}
         (run / "take.json").write_text(json.dumps(info, indent=1))

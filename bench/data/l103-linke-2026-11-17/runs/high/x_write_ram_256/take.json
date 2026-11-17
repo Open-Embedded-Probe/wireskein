@@ -4,7 +4,7 @@
   "write",
   "--at",
   "0x20000800",
-  "/home/mt/dev_oep/wireskein/bench/data/l103-linke-2026-11-17/tools/ram-256.bin"
+  "tools/ram-256.bin"
  ],
  "rc": 0,
  "seconds": 0.7392,

@@ -5,7 +5,7 @@
   "--range",
   "0x08000003+13",
   "-o",
-  "runs/high__x_read_unaligned_odd.tmp/read.bin"
+  "read.bin"
  ],
  "rc": 0,
  "seconds": 0.1545,

@@ -2,7 +2,7 @@
  "scenario": "high/x_flash_sketch_end",
  "args": [
   "flash",
-  "/home/mt/dev_oep/wireskein/bench/data/l103-linke-2026-11-17/tools/l103_image.bin",
+  "tools/l103_image.bin",
   "--yes"
  ],
  "rc": 0,

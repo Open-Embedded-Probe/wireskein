@@ -2,7 +2,7 @@
 
 A WCH-LinkE's RVSWD to a CH32L103C8T6, taken by an OEP probe at the LinkE's pins. The bench's `linke:` source
 (`bench/wsbench/data.py`) reads it. The raw streams, before the cut, are in a repository of their own
-(wireskein-bench-raw, `l103-linke-2026-11-17/`; its commit in `SOURCE.json`).
+(wireskein-captures, `l103-linke-2026-11-17/`; its commit in `SOURCE.json`).
 
 ## How it was taken
 

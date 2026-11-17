@@ -91,7 +91,7 @@ def comb(cap, lines, max_mult):
     切り出してある。正解は ch32rv が読んだ中身と、USB で送った DMI の操作。遅く取ったもの（`decimate`、`resample`）
     には、それらの操作がすべて見つかる 160 MS/s の読みも正解にする。`/rate` は同じ操作をプローブが遅い速さで
     取ったもの。確認用の半分は、取った時点でシナリオの名前から決めてある）。切り出す前の生の記録は、別の
-    リポジトリ（wireskein-bench-raw）に置き、ディレクトリの `SOURCE.json` が指す
+    リポジトリ（wireskein-captures）に置き、ディレクトリの `SOURCE.json` が指す
 - **測定台は、このリポジトリのファイルしか読まない**（Actions でも手元でも同じ。`dir:` でリポジトリの外を指すと
   拒否します）。スイートが使うほかのリポジトリの記録は、要るものだけを `bench/data/extract.py` で `bench/data/` に
   コピーし、元の `LICENSE` と `SOURCE.json`（リポジトリ、コミット、各ファイルの元と SHA-256）を付けます。記録は

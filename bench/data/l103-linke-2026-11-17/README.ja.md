@@ -1,7 +1,7 @@
 # l103-linke-2026-11-17
 
 WCH-LinkE → CH32L103C8T6 の RVSWD を、OEP のプローブで LinkE の側のピンから取り込んだ記録です。測定台の
-`linke:` の元（`bench/wsbench/data.py`）が読みます。切り出す前の生の記録は、別のリポジトリ（wireskein-bench-raw の
+`linke:` の元（`bench/wsbench/data.py`）が読みます。切り出す前の生の記録は、別のリポジトリ（wireskein-captures の
 `l103-linke-2026-11-17/`、`SOURCE.json` にコミット）にあります。
 
 ## 取り方
