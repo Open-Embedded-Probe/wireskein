@@ -8,7 +8,7 @@ rules consume these instead of re-deriving them.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 
@@ -144,6 +144,35 @@ def async_info(cap: Capture, f: ChannelFeatures) -> AsyncInfo:
 
 USED_SELECTIONS = 0.8   # a select line's windows at its active level holding a transfer: this share or more
 RING = 3        # samples: at a clock slow enough, a data line's pulses this short are a reflection ringing
+GATE = 4        # a line's changes closer than a quarter of a clock's period are one, when its pairs are measured
+
+
+def collapse(edges: np.ndarray, w: float) -> np.ndarray:
+    """Changes each within w ticks of the one before are one: an odd number of them a change at the last, an even
+    number none (a pulse)."""
+    e = np.asarray(edges, np.int64)
+    if len(e) < 2 or w < 2:
+        return e
+    first = np.concatenate(([True], np.diff(e) >= w))
+    cid = np.cumsum(first) - 1
+    last = np.flatnonzero(np.concatenate((first[1:], [True])))
+    return e[last[np.bincount(cid) % 2 == 1]]
+
+
+def gated_view(cap: Capture, clk: ClockInfo, w: float = GATE) -> tuple[Capture, ClockInfo]:
+    """The capture as a clock sees it: every line's changes closer than T / w merged (T: the clock's period), so a
+    bouncing edge crossing the threshold several times, or a spike near a clock edge, no longer scatters the phase a
+    data line keeps to the clock. Only for measuring pairs: the lines themselves are not changed (a real I2C bus's
+    clocks clipped short are real). The capture and the clock as they are where the view has no clock."""
+    if not clk.period or clk.period / w < 2:
+        return cap, clk
+    view = replace(cap, channels=[replace(x, edges=collapse(x.edges, clk.period / w)) for x in cap.channels])
+    vch = view.channel(clk.name)
+    if len(vch.edges) < 8:
+        return cap, clk
+    from .features import channel_features
+    vci = clock_info(view, channel_features(view, vch))
+    return (view, vci) if vci is not None else (cap, clk)
 
 
 def pair_relation(cap: Capture, clk: ClockInfo, other: str) -> PairRelation:
@@ -222,9 +251,20 @@ def survey(cap: Capture, fs: dict[str, ChannelFeatures] | None = None, asyncs: b
     asyncs = {n: async_info(cap, fs[n]) for n in active} if asyncs else {}
     s = Survey(fs, active, clocks, asyncs)
     from . import methods
-    relation = methods.get("pair_relation", pair_relation)
+    swapped = methods.get("pair_relation", None)
     for c in clocks.values():
+        # each pair measured on the lines as they are and on the clock's gated view (made once a clock), the better
+        # kept: the gate takes a noise's scatter out of a data line's phase; a clock's real short pulses (an I2C clock
+        # a slow rise clipped short, a clock running four times as fast in some frames) are kept where it would merge
+        # them; a swapped step on the capture as it is
+        view, vc = (cap, c) if swapped else gated_view(cap, c)
+        relation = swapped or pair_relation
         for o in active:
             if o != c.name:
-                s.pairs[(c.name, o)] = relation(cap, c, o)
+                r = relation(cap, c, o)
+                if view is not cap:
+                    g = relation(view, vc, o)
+                    if (g.data_score, g.boundary) > (r.data_score, r.boundary):
+                        r = g
+                s.pairs[(c.name, o)] = r
     return s
