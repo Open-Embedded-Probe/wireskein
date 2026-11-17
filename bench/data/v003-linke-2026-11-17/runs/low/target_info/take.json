@@ -1,0 +1,29 @@
+{
+ "scenario": "low/target_info",
+ "args": [
+  "--speed",
+  "low",
+  "target",
+  "info"
+ ],
+ "rc": 0,
+ "seconds": 0.2094,
+ "t0_host_ns": 2880098260537823,
+ "t1_host_ns": 2880098469982978,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": false,
+ "rate_requested": "160M",
+ "lines": "SWIO=GPIO16",
+ "capture_log": [
+  "runs/low__target_info.tmp/c.wireskein: 1 logic channels, 800167424 ticks at 1.6e+08 Hz (5.00105 s)",
+  "link: opened in 0.82 s, read 100020.9 KB in 5.11 s (19588.9 KB/s)",
+  "data rate: 20 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 433 ms before it drops",
+  "stream: 100020.9 KB in 5200 frames over 5.11 s (19588.9 KB/s)"
+ ],
+ "excerpt_s": [
+  1.690393,
+  2.019838
+ ]
+}

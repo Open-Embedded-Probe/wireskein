@@ -1,0 +1,1 @@
+{"contract":"5","ok":true,"cmd":"read","result":{"addr":"0x1ffff800","len":16,"out":"runs/high__x_read_optbytes.tmp/read.bin"}}

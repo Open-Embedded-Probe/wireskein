@@ -178,3 +178,31 @@ role = "holdout"
 about = "the same, the half set aside"
 sources = ["linke:l103-linke-2026-11-17/holdout"]
 transforms = ["", "resample:50000000", "decimate:8", "decimate:20", "decimate:32"]
+
+[suite.v003-core]
+role = "tune"
+trials_in_all = false
+about = "a LinkE's SWIO to a CH32V003 at 160 MS/s on its one line (2026-11-17: the L103 set's operations, LinkE speeds high / medium / low; each cut to its operation), the tuning half, as taken and at 50 MHz (fractional), 20, 8 and 5 MHz; truth what ch32rv read and its DMI operations over USB, and taken down the 160 MS/s reading where every one of those is found in it"
+sources = ["linke:v003-linke-2026-11-17/tune"]
+transforms = ["", "resample:50000000", "decimate:8", "decimate:20", "decimate:32"]
+
+[suite.v003-core-holdout]
+role = "holdout"
+trials_in_all = false
+about = "the same, the half set aside"
+sources = ["linke:v003-linke-2026-11-17/holdout"]
+transforms = ["", "resample:50000000", "decimate:8", "decimate:20", "decimate:32"]
+
+[suite.v003-rate]
+role = "tune"
+trials_in_all = false
+about = "the same CH32V003 operations taken by the probe itself at 160, 133.3 (fractional), 50, 10 and 5 MHz"
+sources = ["linke:v003-linke-2026-11-17/rate/tune"]
+transforms = [""]
+
+[suite.v003-rate-holdout]
+role = "holdout"
+trials_in_all = false
+about = "the same, the operations set aside (all their rates)"
+sources = ["linke:v003-linke-2026-11-17/rate/holdout"]
+transforms = [""]

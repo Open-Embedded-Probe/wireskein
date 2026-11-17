@@ -1,0 +1,30 @@
+{
+ "scenario": "rate/10M/flash_pattern4k",
+ "args": [
+  "--speed",
+  "high",
+  "flash",
+  "tools/pattern-4k.bin",
+  "--yes"
+ ],
+ "rc": 0,
+ "seconds": 1.2266,
+ "t0_host_ns": 2881025961751385,
+ "t1_host_ns": 2881027188356215,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": false,
+ "rate_requested": "10000000",
+ "lines": "SWIO=GPIO16",
+ "capture_log": [
+  "runs/rate__10M__flash_pattern4k.tmp/c.wireskein: 1 logic channels, 50064896 ticks at 1e+07 Hz (5.00649 s)",
+  "link: opened in 0.62 s, read 6258.1 KB in 5.11 s (1223.7 KB/s)",
+  "data rate: 1.25 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 6.93e+03 ms before it drops",
+  "stream: 6258.1 KB in 326 frames over 5.11 s (1223.7 KB/s)"
+ ],
+ "excerpt_s": [
+  2.155683,
+  3.502288
+ ]
+}

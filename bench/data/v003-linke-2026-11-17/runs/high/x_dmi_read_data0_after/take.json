@@ -1,0 +1,29 @@
+{
+ "scenario": "high/x_dmi_read_data0_after",
+ "args": [
+  "dbg",
+  "dmi",
+  "read",
+  "0x04"
+ ],
+ "rc": 0,
+ "seconds": 0.1566,
+ "t0_host_ns": 2880654870081705,
+ "t1_host_ns": 2880655026687705,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": true,
+ "rate_requested": "160M",
+ "lines": "SWIO=GPIO16",
+ "capture_log": [
+  "runs/high__x_dmi_read_data0_after.tmp/c.wireskein: 1 logic channels, 800360960 ticks at 1.6e+08 Hz (5.00226 s)",
+  "link: opened in 0.63 s, read 100045.1 KB in 5.11 s (19574.5 KB/s)",
+  "data rate: 20 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 433 ms before it drops",
+  "stream: 100045.1 KB in 5201 frames over 5.11 s (19574.5 KB/s)"
+ ],
+ "excerpt_s": [
+  2.131035,
+  2.407641
+ ]
+}

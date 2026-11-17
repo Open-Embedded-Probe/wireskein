@@ -1,0 +1,146 @@
+{
+ "source": "ch32rv.ndjson (DmiOp), read.bin",
+ "dmi_ops": [
+  {
+   "op": "R",
+   "addr": 17,
+   "data": 4195202,
+   "status": 0,
+   "t_us": 140242
+  },
+  {
+   "op": "W",
+   "addr": 32,
+   "data": 172803,
+   "status": 0,
+   "t_us": 140789
+  },
+  {
+   "op": "W",
+   "addr": 33,
+   "data": 1048691,
+   "status": 0,
+   "t_us": 141136
+  },
+  {
+   "op": "W",
+   "addr": 4,
+   "data": 1073881104,
+   "status": 0,
+   "t_us": 141557
+  },
+  {
+   "op": "W",
+   "addr": 22,
+   "data": 1792,
+   "status": 0,
+   "t_us": 141985
+  },
+  {
+   "op": "W",
+   "addr": 23,
+   "data": 2560005,
+   "status": 0,
+   "t_us": 142316
+  },
+  {
+   "op": "R",
+   "addr": 22,
+   "data": 134217730,
+   "status": 0,
+   "t_us": 142829
+  },
+  {
+   "op": "W",
+   "addr": 23,
+   "data": 2232326,
+   "status": 0,
+   "t_us": 143175
+  },
+  {
+   "op": "R",
+   "addr": 22,
+   "data": 134217730,
+   "status": 0,
+   "t_us": 143657
+  },
+  {
+   "op": "R",
+   "addr": 4,
+   "data": 32896,
+   "status": 0,
+   "t_us": 143887
+  },
+  {
+   "op": "R",
+   "addr": 17,
+   "data": 4391810,
+   "status": 0,
+   "t_us": 1125583
+  },
+  {
+   "op": "W",
+   "addr": 16,
+   "data": 1,
+   "status": 0,
+   "t_us": 1125802
+  },
+  {
+   "op": "R",
+   "addr": 17,
+   "data": 4391810,
+   "status": 0,
+   "t_us": 1125938
+  },
+  {
+   "op": "W",
+   "addr": 16,
+   "data": 268435457,
+   "status": 0,
+   "t_us": 1224990
+  },
+  {
+   "op": "R",
+   "addr": 17,
+   "data": 4195202,
+   "status": 0,
+   "t_us": 1225411
+  },
+  {
+   "op": "W",
+   "addr": 16,
+   "data": 268435457,
+   "status": 0,
+   "t_us": 1225779
+  },
+  {
+   "op": "W",
+   "addr": 16,
+   "data": 1073741825,
+   "status": 0,
+   "t_us": 1225916
+  },
+  {
+   "op": "R",
+   "addr": 17,
+   "data": 4983938,
+   "status": 0,
+   "t_us": 1226044
+  },
+  {
+   "op": "W",
+   "addr": 16,
+   "data": 1,
+   "status": 0,
+   "t_us": 1226564
+  }
+ ],
+ "agreement_160M": {
+  "dmi_ops": 19,
+  "found_in_order": 19,
+  "wire_frames": 14790,
+  "wire_ok": 14790,
+  "wire_answered": 14790,
+  "usable": true
+ }
+}

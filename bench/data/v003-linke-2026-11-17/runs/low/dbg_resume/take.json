@@ -1,0 +1,29 @@
+{
+ "scenario": "low/dbg_resume",
+ "args": [
+  "--speed",
+  "low",
+  "dbg",
+  "resume"
+ ],
+ "rc": 0,
+ "seconds": 0.2144,
+ "t0_host_ns": 2880214022053956,
+ "t1_host_ns": 2880214236436311,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": true,
+ "rate_requested": "160M",
+ "lines": "SWIO=GPIO16",
+ "capture_log": [
+  "runs/low__dbg_resume.tmp/c.wireskein: 1 logic channels, 800722944 ticks at 1.6e+08 Hz (5.00452 s)",
+  "link: opened in 0.65 s, read 100090.4 KB in 5.12 s (19568.0 KB/s)",
+  "data rate: 20 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 433 ms before it drops",
+  "stream: 100090.4 KB in 5203 frames over 5.12 s (19568.0 KB/s)"
+ ],
+ "excerpt_s": [
+  2.110482,
+  2.444865
+ ]
+}

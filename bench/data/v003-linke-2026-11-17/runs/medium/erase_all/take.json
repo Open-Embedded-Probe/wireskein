@@ -1,0 +1,30 @@
+{
+ "scenario": "medium/erase_all",
+ "args": [
+  "--speed",
+  "medium",
+  "erase",
+  "--all",
+  "--yes"
+ ],
+ "rc": 0,
+ "seconds": 0.2558,
+ "t0_host_ns": 2878694919590829,
+ "t1_host_ns": 2878695175370238,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": false,
+ "rate_requested": "160M",
+ "lines": "SWIO=GPIO16",
+ "capture_log": [
+  "runs/medium__erase_all.tmp/c.wireskein: 1 logic channels, 800167424 ticks at 1.6e+08 Hz (5.00105 s)",
+  "link: opened in 0.62 s, read 100020.9 KB in 5.10 s (19596.6 KB/s)",
+  "data rate: 20 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 433 ms before it drops",
+  "stream: 100020.9 KB in 5200 frames over 5.10 s (19596.6 KB/s)"
+ ],
+ "excerpt_s": [
+  1.927818,
+  2.303598
+ ]
+}

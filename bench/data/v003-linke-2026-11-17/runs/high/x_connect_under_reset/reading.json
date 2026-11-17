@@ -1,0 +1,72 @@
+{
+ "parts": [
+  {
+   "protocol": "swio",
+   "decoded": true,
+   "fit": {
+    "score": 0.3646,
+    "claimed": true,
+    "verdict": "ambiguous"
+   },
+   "reading": {
+    "frames": 7,
+    "ok": 7,
+    "unanswered": 0,
+    "restored": 0,
+    "repaired": 0,
+    "rate_ok": true,
+    "unread": 48,
+    "unread_edges": 15246,
+    "line_changes": {
+     "SWIO": {
+      "changes": 16084,
+      "last": 44772951
+     }
+    }
+   },
+   "clock_speeds": null
+  }
+ ],
+ "wireskein": "0.0.28",
+ "tick_hz": [
+  160000000,
+  1
+ ],
+ "dmi": [
+  [
+   "R",
+   "0x20",
+   34
+  ],
+  [
+   "R",
+   "0x78",
+   32770
+  ],
+  [
+   "W",
+   "0x7f",
+   4294967295
+  ],
+  [
+   "R",
+   "0x20",
+   2
+  ],
+  [
+   "W",
+   "0x7f",
+   4294967295
+  ],
+  [
+   "W",
+   "0x7f",
+   4294967295
+  ],
+  [
+   "W",
+   "0x7f",
+   4294967295
+  ]
+ ]
+}

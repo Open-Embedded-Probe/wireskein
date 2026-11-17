@@ -1,0 +1,1 @@
+{"contract":"5","ok":true,"cmd":"read","result":{"addr":"0x08000000","len":1024,"out":"runs/medium__read_erased_1k.tmp/read.bin"}}

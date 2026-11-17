@@ -1,0 +1,1 @@
+{"contract":"5","ok":true,"cmd":"flash","result":{"flash":{"bytes":636,"family":"CH32V003","programmer":"stub","running":null,"scope":"keep-store","skipped":false,"store":{"address":null,"bytes":0,"method":"none-present"},"verified":true}}}

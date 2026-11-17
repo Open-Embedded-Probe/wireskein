@@ -1,0 +1,44 @@
+{
+ "format": "wireskein-run/1",
+ "meta": {
+  "target": "CH32V003F4P6",
+  "target_uid": "ef17abcd5957be73",
+  "linke": "FBC18F0680B0",
+  "tap": "LinkE side",
+  "probe": "oep:oep://e8f60ae84dd7",
+  "scenario": "high/x_clock_flash",
+  "holdout": false
+ },
+ "log": [
+  {
+   "host_ns": 2880823681137491,
+   "src": "marker",
+   "text": "# high/x_clock_flash"
+  },
+  {
+   "host_ns": 2880826681910053,
+   "src": "host",
+   "text": "ch32rv --probe serial:FBC18F0680B0 --json --non-interactive --progress none --capture ch32rv.ndjson flash tools/clock_v003.bin --yes"
+  },
+  {
+   "host_ns": 2880827402839427,
+   "src": "dut",
+   "text": "exit 0 in 0.721 s"
+  },
+  {
+   "host_ns": 2880827402843845,
+   "src": "marker",
+   "text": "#"
+  }
+ ],
+ "captures": [
+  {
+   "file": "c0001.wireskein",
+   "host_ns": 2880823681144863,
+   "channels": [
+    "SWIO"
+   ]
+  }
+ ],
+ "expect": {}
+}

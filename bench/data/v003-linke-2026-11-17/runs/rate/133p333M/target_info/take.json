@@ -1,0 +1,29 @@
+{
+ "scenario": "rate/133p333M/target_info",
+ "args": [
+  "--speed",
+  "high",
+  "target",
+  "info"
+ ],
+ "rc": 0,
+ "seconds": 0.1389,
+ "t0_host_ns": 2881064556786381,
+ "t1_host_ns": 2881064695723494,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": false,
+ "rate_requested": "133333333",
+ "lines": "SWIO=GPIO16",
+ "capture_log": [
+  "runs/rate__133p333M__target_info.tmp/c.wireskein: 1 logic channels, 666928640 ticks at 1.33333e+08 Hz (5.00196 s)",
+  "link: opened in 0.62 s, read 83366.1 KB in 5.11 s (16311.1 KB/s)",
+  "data rate: 16.7 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 520 ms before it drops",
+  "stream: 83366.1 KB in 4334 frames over 5.11 s (16311.1 KB/s)"
+ ],
+ "excerpt_s": [
+  2.15283,
+  2.411767
+ ]
+}

@@ -1,0 +1,32 @@
+{
+ "scenario": "rate/10M/read_flash_4k",
+ "args": [
+  "--speed",
+  "high",
+  "read",
+  "--range",
+  "0x08000000+4096",
+  "-o",
+  "read.bin"
+ ],
+ "rc": 0,
+ "seconds": 0.2023,
+ "t0_host_ns": 2881019548543601,
+ "t1_host_ns": 2881019750804297,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": true,
+ "rate_requested": "10000000",
+ "lines": "SWIO=GPIO16",
+ "capture_log": [
+  "runs/rate__10M__read_flash_4k.tmp/c.wireskein: 1 logic channels, 50032640 ticks at 1e+07 Hz (5.00326 s)",
+  "link: opened in 0.62 s, read 6254.1 KB in 5.01 s (1248.1 KB/s)",
+  "data rate: 1.25 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 6.93e+03 ms before it drops",
+  "stream: 6254.1 KB in 325 frames over 5.01 s (1248.1 KB/s)"
+ ],
+ "excerpt_s": [
+  2.156109,
+  2.47837
+ ]
+}

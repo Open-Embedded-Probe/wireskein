@@ -1,0 +1,69 @@
+{
+ "source": "ch32rv.ndjson (DmiOp), read.bin",
+ "dmi_ops": [
+  {
+   "op": "R",
+   "addr": 17,
+   "data": 4195202,
+   "status": 0,
+   "t_us": 139901
+  },
+  {
+   "op": "W",
+   "addr": 16,
+   "data": 1,
+   "status": 0,
+   "t_us": 140061
+  },
+  {
+   "op": "R",
+   "addr": 17,
+   "data": 4195202,
+   "status": 0,
+   "t_us": 140211
+  },
+  {
+   "op": "W",
+   "addr": 22,
+   "data": 1792,
+   "status": 0,
+   "t_us": 140338
+  },
+  {
+   "op": "W",
+   "addr": 4,
+   "data": 0,
+   "status": 0,
+   "t_us": 140515
+  },
+  {
+   "op": "W",
+   "addr": 23,
+   "data": 2230193,
+   "status": 0,
+   "t_us": 140659
+  },
+  {
+   "op": "R",
+   "addr": 22,
+   "data": 134217730,
+   "status": 0,
+   "t_us": 140795
+  },
+  {
+   "op": "R",
+   "addr": 4,
+   "data": 298,
+   "status": 0,
+   "t_us": 140963
+  }
+ ],
+ "agreement_160M": {
+  "dmi_ops": 8,
+  "found_in_order": 8,
+  "wire_frames": 31,
+  "wire_ok": 31,
+  "wire_answered": 31,
+  "usable": true
+ }
+}

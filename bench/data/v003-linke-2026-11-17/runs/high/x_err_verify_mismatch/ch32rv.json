@@ -1,0 +1,1 @@
+{"contract":"5","ok":false,"cmd":"verify","error":{"code":30,"kind":"verify-mismatch","msg":"mismatch at 0x08000000"}}

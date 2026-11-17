@@ -1,0 +1,1 @@
+{"contract":"5","ok":true,"cmd":"target.option.set","result":{"after":"a55aff005aa5c33cff00ff00ff00ff00","before":"a55aff00ff00ff00ff00ff00ff00ff00","family":"CH32V003","note":"option bytes take effect after a power-on / system reset","verified":true}}

@@ -1,0 +1,17 @@
+{
+ "parts": [
+  {
+   "protocol": "swio",
+   "decoded": false,
+   "fit": null,
+   "reading": null,
+   "clock_speeds": null
+  }
+ ],
+ "wireskein": "0.0.28",
+ "tick_hz": [
+  160000000,
+  1
+ ],
+ "dmi": []
+}

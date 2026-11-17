@@ -1,0 +1,32 @@
+{
+ "scenario": "low/read_pattern4k",
+ "args": [
+  "--speed",
+  "low",
+  "read",
+  "--range",
+  "0x08000000+4096",
+  "-o",
+  "read.bin"
+ ],
+ "rc": 0,
+ "seconds": 0.2208,
+ "t0_host_ns": 2880164068669343,
+ "t1_host_ns": 2880164289467430,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": false,
+ "rate_requested": "160M",
+ "lines": "SWIO=GPIO16",
+ "capture_log": [
+  "runs/low__read_pattern4k.tmp/c.wireskein: 1 logic channels, 801149440 ticks at 1.6e+08 Hz (5.00718 s)",
+  "link: opened in 0.73 s, read 100143.7 KB in 5.11 s (19589.9 KB/s)",
+  "data rate: 20 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 433 ms before it drops",
+  "stream: 100143.7 KB in 5206 frames over 5.11 s (19589.9 KB/s)"
+ ],
+ "excerpt_s": [
+  1.793626,
+  2.134424
+ ]
+}

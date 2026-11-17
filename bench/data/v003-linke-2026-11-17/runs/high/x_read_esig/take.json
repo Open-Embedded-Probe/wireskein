@@ -1,0 +1,30 @@
+{
+ "scenario": "high/x_read_esig",
+ "args": [
+  "read",
+  "--range",
+  "0x1ffff7e0+16",
+  "-o",
+  "read.bin"
+ ],
+ "rc": 0,
+ "seconds": 0.1443,
+ "t0_host_ns": 2880367518229507,
+ "t1_host_ns": 2880367662505282,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": false,
+ "rate_requested": "160M",
+ "lines": "SWIO=GPIO16",
+ "capture_log": [
+  "runs/high__x_read_esig.tmp/c.wireskein: 1 logic channels, 800264192 ticks at 1.6e+08 Hz (5.00165 s)",
+  "link: opened in 0.66 s, read 100033.0 KB in 5.11 s (19583.6 KB/s)",
+  "data rate: 20 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 433 ms before it drops",
+  "stream: 100033.0 KB in 5200 frames over 5.11 s (19583.6 KB/s)"
+ ],
+ "excerpt_s": [
+  2.098162,
+  2.362438
+ ]
+}

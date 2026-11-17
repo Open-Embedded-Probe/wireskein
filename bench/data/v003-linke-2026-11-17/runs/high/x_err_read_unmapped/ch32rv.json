@@ -1,0 +1,1 @@
+{"contract":"5","ok":true,"cmd":"read","result":{"addr":"0x60000000","len":16,"out":"runs/high__x_err_read_unmapped.tmp/read.bin"},"warnings":[{"code":"read-outside-memory-map","msg":"0x60000000+16 is outside every memory region ch32rv knows for CH32V003; CH32 parts read unmapped addresses as 0 without reporting an error, so those bytes are not data"}]}

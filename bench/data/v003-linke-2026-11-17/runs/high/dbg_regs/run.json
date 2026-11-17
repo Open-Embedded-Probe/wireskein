@@ -1,0 +1,44 @@
+{
+ "format": "wireskein-run/1",
+ "meta": {
+  "target": "CH32V003F4P6",
+  "target_uid": "ef17abcd5957be73",
+  "linke": "FBC18F0680B0",
+  "tap": "LinkE side",
+  "probe": "oep:oep://e8f60ae84dd7",
+  "scenario": "high/dbg_regs",
+  "holdout": false
+ },
+ "log": [
+  {
+   "host_ns": 2877306540457647,
+   "src": "marker",
+   "text": "# high/dbg_regs"
+  },
+  {
+   "host_ns": 2877309541629502,
+   "src": "host",
+   "text": "ch32rv --probe serial:FBC18F0680B0 --json --non-interactive --progress none --capture ch32rv.ndjson --speed high dbg regs"
+  },
+  {
+   "host_ns": 2877309856225179,
+   "src": "dut",
+   "text": "exit 0 in 0.315 s"
+  },
+  {
+   "host_ns": 2877309856230328,
+   "src": "marker",
+   "text": "#"
+  }
+ ],
+ "captures": [
+  {
+   "file": "c0001.wireskein",
+   "host_ns": 2877306540465201,
+   "channels": [
+    "SWIO"
+   ]
+  }
+ ],
+ "expect": {}
+}

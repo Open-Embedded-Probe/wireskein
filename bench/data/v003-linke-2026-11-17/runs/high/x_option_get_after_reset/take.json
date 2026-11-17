@@ -1,0 +1,28 @@
+{
+ "scenario": "high/x_option_get_after_reset",
+ "args": [
+  "target",
+  "option",
+  "get"
+ ],
+ "rc": 0,
+ "seconds": 0.1654,
+ "t0_host_ns": 2880815435957031,
+ "t1_host_ns": 2880815601390812,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": false,
+ "rate_requested": "160M",
+ "lines": "SWIO=GPIO16",
+ "capture_log": [
+  "runs/high__x_option_get_after_reset.tmp/c.wireskein: 1 logic channels, 800360960 ticks at 1.6e+08 Hz (5.00226 s)",
+  "link: opened in 0.65 s, read 100045.1 KB in 5.11 s (19582.1 KB/s)",
+  "data rate: 20 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 433 ms before it drops",
+  "stream: 100045.1 KB in 5201 frames over 5.11 s (19582.1 KB/s)"
+ ],
+ "excerpt_s": [
+  2.05386,
+  2.339294
+ ]
+}

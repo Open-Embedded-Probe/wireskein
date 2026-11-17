@@ -111,7 +111,7 @@ def match(bus: dict, claim: dict) -> dict:
             r["decode"] = sum(b.size for b in blocks) / len(words) if words else None
         elif bus["protocol"] == "swio" and "expect" in bus and "dmi_addr" in bus["expect"]:
             r["decode"] = _ratio([tuple(x) for x in bus["expect"]["dmi_addr"]], got)
-        elif bus["protocol"] == "rvswd" and "expect" in bus and "dmi" in bus["expect"]:
+        elif bus["protocol"] in ("rvswd", "swio") and "expect" in bus and "dmi" in bus["expect"]:
             names = {x["reg"]: x["addr"] for x in lay["dmi"] if x.get("reg")}
             addr = lambda name: names.get(name, int(name, 16) if name.startswith("0x") else -1)  # noqa: E731
             want = [(op, addr(nm), d) for op, nm, d in bus["expect"]["dmi"]]
@@ -120,7 +120,7 @@ def match(bus: dict, claim: dict) -> dict:
                 # its values and addresses match, its R / W does not always): compared on address and data
                 want, got = [w[1:] for w in want], [g[1:] for g in got]
             r["decode"] = _ratio(want, got)
-        elif bus["protocol"] == "rvswd" and "expect" in bus and "dmi_ops" in bus["expect"]:
+        elif bus["protocol"] in ("rvswd", "swio") and "expect" in bus and "dmi_ops" in bus["expect"]:
             # the DMI operations the debugger sent over USB (ch32rv's record: one frame on the wire each), a part of
             # what the wire holds (the probe's own accesses are not on USB): the share of them found in order among
             # the accesses read, each matched on R / W, address and data

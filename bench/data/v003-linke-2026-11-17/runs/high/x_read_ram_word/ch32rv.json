@@ -1,0 +1,1 @@
+{"contract":"5","ok":true,"cmd":"read","result":{"addr":"0x20000500","len":4,"out":"runs/high__x_read_ram_word.tmp/read.bin"}}

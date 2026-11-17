@@ -1,0 +1,30 @@
+{
+ "scenario": "high/x_read_optbytes",
+ "args": [
+  "read",
+  "--range",
+  "0x1ffff800+16",
+  "-o",
+  "read.bin"
+ ],
+ "rc": 0,
+ "seconds": 0.1365,
+ "t0_host_ns": 2880379410843438,
+ "t1_host_ns": 2880379547388249,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": true,
+ "rate_requested": "160M",
+ "lines": "SWIO=GPIO16",
+ "capture_log": [
+  "runs/high__x_read_optbytes.tmp/c.wireskein: 1 logic channels, 800167424 ticks at 1.6e+08 Hz (5.00105 s)",
+  "link: opened in 0.67 s, read 100020.9 KB in 5.11 s (19573.6 KB/s)",
+  "data rate: 20 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 433 ms before it drops",
+  "stream: 100020.9 KB in 5200 frames over 5.11 s (19573.6 KB/s)"
+ ],
+ "excerpt_s": [
+  2.007676,
+  2.26422
+ ]
+}

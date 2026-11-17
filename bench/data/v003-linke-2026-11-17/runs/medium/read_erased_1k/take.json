@@ -1,0 +1,32 @@
+{
+ "scenario": "medium/read_erased_1k",
+ "args": [
+  "--speed",
+  "medium",
+  "read",
+  "--range",
+  "0x08000000+1024",
+  "-o",
+  "read.bin"
+ ],
+ "rc": 0,
+ "seconds": 0.1528,
+ "t0_host_ns": 2878706492431469,
+ "t1_host_ns": 2878706645279041,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": false,
+ "rate_requested": "160M",
+ "lines": "SWIO=GPIO16",
+ "capture_log": [
+  "runs/medium__read_erased_1k.tmp/c.wireskein: 1 logic channels, 800199680 ticks at 1.6e+08 Hz (5.00125 s)",
+  "link: opened in 0.62 s, read 100025.0 KB in 5.11 s (19585.9 KB/s)",
+  "data rate: 20 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 433 ms before it drops",
+  "stream: 100025.0 KB in 5200 frames over 5.11 s (19585.9 KB/s)"
+ ],
+ "excerpt_s": [
+  2.154448,
+  2.427296
+ ]
+}

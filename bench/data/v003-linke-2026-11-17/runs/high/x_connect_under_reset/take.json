@@ -1,0 +1,28 @@
+{
+ "scenario": "high/x_connect_under_reset",
+ "args": [
+  "--connect-under-reset",
+  "target",
+  "info"
+ ],
+ "rc": 0,
+ "seconds": 0.262,
+ "t0_host_ns": 2880713367774505,
+ "t1_host_ns": 2880713629734078,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": false,
+ "rate_requested": "160M",
+ "lines": "SWIO=GPIO16",
+ "capture_log": [
+  "runs/high__x_connect_under_reset.tmp/c.wireskein: 1 logic channels, 800199680 ticks at 1.6e+08 Hz (5.00125 s)",
+  "link: opened in 0.65 s, read 100025.0 KB in 5.11 s (19589.7 KB/s)",
+  "data rate: 20 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 433 ms before it drops",
+  "stream: 100025.0 KB in 5200 frames over 5.11 s (19589.7 KB/s)"
+ ],
+ "excerpt_s": [
+  2.108063,
+  2.490023
+ ]
+}

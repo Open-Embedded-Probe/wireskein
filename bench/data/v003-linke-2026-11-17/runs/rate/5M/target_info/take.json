@@ -1,0 +1,29 @@
+{
+ "scenario": "rate/5M/target_info",
+ "args": [
+  "--speed",
+  "high",
+  "target",
+  "info"
+ ],
+ "rc": 0,
+ "seconds": 0.147,
+ "t0_host_ns": 2881038945386053,
+ "t1_host_ns": 2881039092353517,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": false,
+ "rate_requested": "5000000",
+ "lines": "SWIO=GPIO16",
+ "capture_log": [
+  "runs/rate__5M__target_info.tmp/c.wireskein: 1 logic channels, 25077248 ticks at 5e+06 Hz (5.01545 s)",
+  "link: opened in 0.62 s, read 3134.7 KB in 5.13 s (611.3 KB/s)",
+  "data rate: 0.625 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 1.39e+04 ms before it drops",
+  "stream: 3134.7 KB in 203 frames over 5.13 s (611.3 KB/s)"
+ ],
+ "excerpt_s": [
+  2.144266,
+  2.411234
+ ]
+}

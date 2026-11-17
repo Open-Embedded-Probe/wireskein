@@ -1,0 +1,29 @@
+{
+ "scenario": "high/dbg_halt",
+ "args": [
+  "--speed",
+  "high",
+  "dbg",
+  "halt"
+ ],
+ "rc": 0,
+ "seconds": 0.1779,
+ "t0_host_ns": 2877277251189989,
+ "t1_host_ns": 2877277429131694,
+ "stream_s": 11.25,
+ "attempts": 3,
+ "holdout": false,
+ "rate_requested": "160M",
+ "lines": "SWIO=GPIO16",
+ "capture_log": [
+  "runs/high__dbg_halt.tmp/c.wireskein: 1 logic channels, 1800583680 ticks at 1.6e+08 Hz (11.2536 s)",
+  "link: opened in 0.72 s, read 225073.0 KB in 11.36 s (19812.8 KB/s)",
+  "data rate: 20 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 433 ms before it drops",
+  "stream: 225073.0 KB in 11700 frames over 11.36 s (19812.8 KB/s)"
+ ],
+ "excerpt_s": [
+  1.292328,
+  1.59027
+ ]
+}

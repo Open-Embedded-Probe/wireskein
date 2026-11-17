@@ -1,0 +1,30 @@
+{
+ "scenario": "high/x_dbg_reg_write_t0",
+ "args": [
+  "dbg",
+  "reg",
+  "write",
+  "x5",
+  "0x12345678"
+ ],
+ "rc": 0,
+ "seconds": 0.1455,
+ "t0_host_ns": 2880497180184500,
+ "t1_host_ns": 2880497325713730,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": false,
+ "rate_requested": "160M",
+ "lines": "SWIO=GPIO16",
+ "capture_log": [
+  "runs/high__x_dbg_reg_write_t0.tmp/c.wireskein: 1 logic channels, 800328704 ticks at 1.6e+08 Hz (5.00205 s)",
+  "link: opened in 0.66 s, read 100041.1 KB in 5.11 s (19585.2 KB/s)",
+  "data rate: 20 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 433 ms before it drops",
+  "stream: 100041.1 KB in 5201 frames over 5.11 s (19585.2 KB/s)"
+ ],
+ "excerpt_s": [
+  1.832767,
+  2.098296
+ ]
+}

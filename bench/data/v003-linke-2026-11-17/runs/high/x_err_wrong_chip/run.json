@@ -1,0 +1,44 @@
+{
+ "format": "wireskein-run/1",
+ "meta": {
+  "target": "CH32V003F4P6",
+  "target_uid": "ef17abcd5957be73",
+  "linke": "FBC18F0680B0",
+  "tap": "LinkE side",
+  "probe": "oep:oep://e8f60ae84dd7",
+  "scenario": "high/x_err_wrong_chip",
+  "holdout": true
+ },
+ "log": [
+  {
+   "host_ns": 2880733273321230,
+   "src": "marker",
+   "text": "# high/x_err_wrong_chip"
+  },
+  {
+   "host_ns": 2880736273941009,
+   "src": "host",
+   "text": "ch32rv --probe serial:FBC18F0680B0 --json --non-interactive --progress none --capture ch32rv.ndjson --chip CH32L103C8T6 target info"
+  },
+  {
+   "host_ns": 2880736406823431,
+   "src": "dut",
+   "text": "exit 23 in 0.133 s"
+  },
+  {
+   "host_ns": 2880736406831787,
+   "src": "marker",
+   "text": "#"
+  }
+ ],
+ "captures": [
+  {
+   "file": "c0001.wireskein",
+   "host_ns": 2880733273328284,
+   "channels": [
+    "SWIO"
+   ]
+  }
+ ],
+ "expect": {}
+}

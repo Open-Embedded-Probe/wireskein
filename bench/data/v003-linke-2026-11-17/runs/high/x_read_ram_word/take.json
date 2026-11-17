@@ -1,0 +1,30 @@
+{
+ "scenario": "high/x_read_ram_word",
+ "args": [
+  "read",
+  "--range",
+  "0x20000500+4",
+  "-o",
+  "read.bin"
+ ],
+ "rc": 0,
+ "seconds": 0.1365,
+ "t0_host_ns": 2880450805190090,
+ "t1_host_ns": 2880450941676033,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": true,
+ "rate_requested": "160M",
+ "lines": "SWIO=GPIO16",
+ "capture_log": [
+  "runs/high__x_read_ram_word.tmp/c.wireskein: 1 logic channels, 800360960 ticks at 1.6e+08 Hz (5.00226 s)",
+  "link: opened in 0.65 s, read 100045.1 KB in 5.11 s (19578.3 KB/s)",
+  "data rate: 20 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 433 ms before it drops",
+  "stream: 100045.1 KB in 5201 frames over 5.11 s (19578.3 KB/s)"
+ ],
+ "excerpt_s": [
+  2.07774,
+  2.334226
+ ]
+}

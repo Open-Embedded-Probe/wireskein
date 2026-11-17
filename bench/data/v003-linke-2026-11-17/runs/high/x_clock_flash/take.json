@@ -1,0 +1,28 @@
+{
+ "scenario": "high/x_clock_flash",
+ "args": [
+  "flash",
+  "tools/clock_v003.bin",
+  "--yes"
+ ],
+ "rc": 0,
+ "seconds": 0.7209,
+ "t0_host_ns": 2880826681915412,
+ "t1_host_ns": 2880827402827526,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": false,
+ "rate_requested": "160M",
+ "lines": "SWIO=GPIO16",
+ "capture_log": [
+  "runs/high__x_clock_flash.tmp/c.wireskein: 1 logic channels, 800296448 ticks at 1.6e+08 Hz (5.00185 s)",
+  "link: opened in 0.65 s, read 100037.1 KB in 5.11 s (19584.4 KB/s)",
+  "data rate: 20 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 433 ms before it drops",
+  "stream: 100037.1 KB in 5200 frames over 5.11 s (19584.4 KB/s)"
+ ],
+ "excerpt_s": [
+  2.103513,
+  2.944425
+ ]
+}

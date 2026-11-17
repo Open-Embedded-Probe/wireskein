@@ -255,7 +255,8 @@ def _wchfix(path: Path) -> tuple[Capture, dict]:
                 # addresses and data are
                 expect["dmi_ignore_op"] = True
                 source = source or "wch-protocols tools/dmi_decode.py (.dmi.txt)"
-        bus = {"protocol": "rvswd", "roles": {"clk": new["SWCLK"], "dio": new["SWDIO"]}, "params": {}}
+        bus = ({"protocol": "swio", "roles": {"dio": "D0"}, "params": {}} if names == {"SWIO"} else
+           {"protocol": "rvswd", "roles": {"clk": new["SWCLK"], "dio": new["SWDIO"]}, "params": {}})
     else:
         bus = {"protocol": "swio", "roles": {"dio": new["SWIO"]}, "params": {}}
     # what ch32rv itself read in this run (<op>.bin, a memory dump of 256 bytes or more: read_flash_4k, read_ram_256),
@@ -306,19 +307,20 @@ def _ebdd(run: Path) -> tuple[Capture, dict]:
 
 
 def _linke(run: Path) -> tuple[Capture, dict]:
-    """A run of a 160 MS/s LinkE capture (taken and cut by the tools of wireskein-captures' <dir>/tools: capture.py, truth.py, publish.py)."""
+    """A run of a 160 MS/s LinkE capture, RVSWD (SWCLK, SWDIO) or SWIO (its one line), taken and cut by the tools of
+    wireskein-captures' <dir>/tools (capture.py, truth.py, publish.py)."""
     doc = json.loads((run / "run.json").read_text())
     t = json.loads((run / "truth.json").read_text())
     cap = _capture.read(run / doc["captures"][0]["file"]).parts[0].view()
     names = {ch.name for ch in cap.channels}
-    if names != {"SWCLK", "SWDIO"}:
-        raise ValueError(f"{run}: channels {sorted(names)}, want SWCLK and SWDIO")
+    if names not in ({"SWCLK", "SWDIO"}, {"SWIO"}):
+        raise ValueError(f"{run}: channels {sorted(names)}, want SWCLK and SWDIO (RVSWD) or SWIO")
     root = run
     while root.name != "runs":
         root = root.parent
     rel = run.relative_to(root)
     flip = zlib.crc32(str(rel).encode()) & 1
-    new = {"SWCLK": "D1" if flip else "D0", "SWDIO": "D0" if flip else "D1"}
+    new = {"SWCLK": "D1" if flip else "D0", "SWDIO": "D0" if flip else "D1", "SWIO": "D0"}
     chans = sorted((replace(ch, name=new[ch.name]) for ch in cap.channels), key=lambda c: c.name)
     expect, src = {}, []
     if t.get("read_bytes") and len(t["read_bytes"]) >= 512:          # 256 bytes or more: a memory dump
@@ -332,13 +334,15 @@ def _linke(run: Path) -> tuple[Capture, dict]:
         expect["dmi"] = rd["dmi"]
         expect["dmi_same_run_160M"] = True                           # truth for the run decimated only
         src.append(f"the 160 MS/s reading, every one of ch32rv's {t['agreement_160M']['dmi_ops']} DMI operations found in it")
-    bus = {"protocol": "rvswd", "roles": {"clk": new["SWCLK"], "dio": new["SWDIO"]}, "params": {}}
+    bus = ({"protocol": "swio", "roles": {"dio": "D0"}, "params": {}} if names == {"SWIO"} else
+           {"protocol": "rvswd", "roles": {"clk": new["SWCLK"], "dio": new["SWDIO"]}, "params": {}})
     if expect:
         bus["expect"], bus["expect_source"] = expect, "; ".join(src)
     truth = {"id": f"linke-{root.parent.name}-" + str(rel).replace("/", "-"),
              "source": {"path": str(run.relative_to(REPO)), "scenario": doc["meta"].get("scenario")},
              "buses": [bus], "decoys": [],
-             "notes": "real LinkE -> CH32L103 RVSWD at 160 MS/s, tapped at the LinkE (one ch32rv operation)"}
+             "notes": f"real LinkE -> {doc['meta'].get('target', 'target')} {bus['protocol'].upper()} at 160 MS/s, tapped at "
+                      "the LinkE (one ch32rv operation)"}
     return Capture(cap.rate, cap.n_samples, chans), truth
 
 

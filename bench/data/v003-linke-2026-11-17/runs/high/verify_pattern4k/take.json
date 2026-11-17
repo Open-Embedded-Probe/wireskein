@@ -1,0 +1,29 @@
+{
+ "scenario": "high/verify_pattern4k",
+ "args": [
+  "--speed",
+  "high",
+  "verify",
+  "tools/pattern-4k.bin"
+ ],
+ "rc": 0,
+ "seconds": 0.3197,
+ "t0_host_ns": 2877209363035360,
+ "t1_host_ns": 2877209682717647,
+ "stream_s": 7.5,
+ "attempts": 2,
+ "holdout": false,
+ "rate_requested": "160M",
+ "lines": "SWIO=GPIO16",
+ "capture_log": [
+  "runs/high__verify_pattern4k.tmp/c.wireskein: 1 logic channels, 1200295936 ticks at 1.6e+08 Hz (7.50185 s)",
+  "link: opened in 1.00 s, read 150037.0 KB in 7.61 s (19728.7 KB/s)",
+  "data rate: 20 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 433 ms before it drops",
+  "stream: 150037.0 KB in 7799 frames over 7.61 s (19728.7 KB/s)"
+ ],
+ "excerpt_s": [
+  1.36444,
+  1.804122
+ ]
+}
