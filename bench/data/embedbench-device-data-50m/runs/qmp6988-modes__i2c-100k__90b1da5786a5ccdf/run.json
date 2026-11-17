@@ -1,0 +1,209 @@
+{
+ "format": "wireskein-run/1",
+ "meta": {
+  "case": "qmp6988-modes"
+ },
+ "captures": [
+  {
+   "file": "c0001.wireskein",
+   "channels": [
+    "SDA",
+    "SCL"
+   ]
+  }
+ ],
+ "log": [
+  {
+   "src": "marker",
+   "text": "# qmp6988-modes"
+  },
+  {
+   "src": "marker",
+   "text": "## chip-id"
+  },
+  {
+   "src": "dut",
+   "text": "got=1 chip_id=0x5c"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## reset"
+  },
+  {
+   "src": "dut",
+   "text": "end=0"
+  },
+  {
+   "src": "dut",
+   "text": "iir=ff"
+  },
+  {
+   "src": "dut",
+   "text": "f3_f5=000000"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## calibration"
+  },
+  {
+   "src": "dut",
+   "text": "got=25 bytes=52dc0da7f4820ddc0cd201e6fc86f9c9faa2f72b0cbb03d8bb"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## forced"
+  },
+  {
+   "src": "dut",
+   "text": "end=0"
+  },
+  {
+   "src": "marker",
+   "text": "### start conversion ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "### start status-delay ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "### after status-delay"
+  },
+  {
+   "src": "marker",
+   "text": "### after conversion"
+  },
+  {
+   "src": "dut",
+   "text": "polls=12 elapsed_us=10910 status=0x00"
+  },
+  {
+   "src": "dut",
+   "text": "got=6 data=a2952e6d12bc"
+  },
+  {
+   "src": "dut",
+   "text": "ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## normal"
+  },
+  {
+   "src": "dut",
+   "text": "end=0"
+  },
+  {
+   "src": "marker",
+   "text": "### start normal-period ctrl_meas=0x33 io_setup=0x00 from=forced"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=957 got=6 data=a2952e6d12bc"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=11845 got=6 data=a294c96d0f24"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=21869 got=6 data=a294c96d0f24"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=2"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=31847 got=6 data=a294dc6d0f1b"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=3"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=41847 got=6 data=a294dd6d0ef9"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=4"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=51884 got=6 data=a294da6d0ead"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=5"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=61847 got=6 data=a294f46d0e6c"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=6"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=71875 got=6 data=a294e96d0dfe"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=7"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=82847 got=6 data=a294fa6d0e11"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=8"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=92895 got=6 data=a294e96d0d97"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=102838 got=6 data=a294e96d0d97"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=9"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=112859 got=6 data=a294dd6d0d0f"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "#"
+  }
+ ]
+}

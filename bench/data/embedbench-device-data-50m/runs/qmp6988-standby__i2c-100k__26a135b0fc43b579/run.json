@@ -1,0 +1,177 @@
+{
+ "format": "wireskein-run/1",
+ "meta": {
+  "case": "qmp6988-standby"
+ },
+ "captures": [
+  {
+   "file": "c0001.wireskein",
+   "channels": [
+    "SDA",
+    "SCL"
+   ]
+  }
+ ],
+ "log": [
+  {
+   "src": "marker",
+   "text": "# qmp6988-standby"
+  },
+  {
+   "src": "marker",
+   "text": "## standby-5ms"
+  },
+  {
+   "src": "dut",
+   "text": "end=0"
+  },
+  {
+   "src": "marker",
+   "text": "### start normal-period ctrl_meas=0x33 io_setup=0x20 from=sleep"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=11000 data=a298266d1fc4"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=2"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=27000 data=a298126d218b"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=3"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=43001 data=a297d46d22c0"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=4"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=59000 data=a297aa6d227e"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=5"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=75001 data=a297536d21a5"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=6"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=91000 data=a297476d2010"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=7"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=107047 data=a2974b6d2065"
+  },
+  {
+   "src": "dut",
+   "text": "samples=7"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## standby-50ms"
+  },
+  {
+   "src": "dut",
+   "text": "end=0"
+  },
+  {
+   "src": "marker",
+   "text": "### start normal-period ctrl_meas=0x33 io_setup=0x40 from=sleep"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=15037 data=a296bf6d1d94"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=2"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=70000 data=a296be6d1e05"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=3"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=125001 data=a296c06d1eb7"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=4"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=180001 data=a296e36d1f5b"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=5"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=235000 data=a296f26d2025"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=6"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=295019 data=a297026d20b5"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=7"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=350001 data=a296fd6d2147"
+  },
+  {
+   "src": "dut",
+   "text": "samples=7"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "#"
+  }
+ ]
+}

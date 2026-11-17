@@ -1,0 +1,213 @@
+{
+ "format": "wireskein-run/1",
+ "meta": {
+  "case": "sht30-ready-idf"
+ },
+ "captures": [
+  {
+   "file": "c0001.wireskein",
+   "channels": [
+    "SDA",
+    "SCL"
+   ]
+  }
+ ],
+ "log": [
+  {
+   "src": "marker",
+   "text": "# sht30-ready-idf"
+  },
+  {
+   "src": "marker",
+   "text": "## reset-wait-0ms"
+  },
+  {
+   "src": "dut",
+   "text": "reset=0"
+  },
+  {
+   "src": "marker",
+   "text": "### start soft-reset"
+  },
+  {
+   "src": "marker",
+   "text": "### before soft-reset"
+  },
+  {
+   "src": "dut",
+   "text": "transmit=259 nacks=31 answers=0"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## reset-wait-2ms"
+  },
+  {
+   "src": "dut",
+   "text": "reset=0"
+  },
+  {
+   "src": "marker",
+   "text": "### start soft-reset"
+  },
+  {
+   "src": "marker",
+   "text": "### after soft-reset"
+  },
+  {
+   "src": "marker",
+   "text": "### start measure-high via=polling from=reset"
+  },
+  {
+   "src": "marker",
+   "text": "### after measure-high"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=12500 bytes=610e3fa9cc87 crc=1"
+  },
+  {
+   "src": "dut",
+   "text": "transmit=0 nacks=30 answers=1"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## reset-wait-10ms"
+  },
+  {
+   "src": "dut",
+   "text": "reset=0"
+  },
+  {
+   "src": "marker",
+   "text": "### start soft-reset"
+  },
+  {
+   "src": "marker",
+   "text": "### after soft-reset"
+  },
+  {
+   "src": "marker",
+   "text": "### start measure-high via=polling from=reset"
+  },
+  {
+   "src": "marker",
+   "text": "### after measure-high"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=12500 bytes=6109a8a9ca21 crc=1"
+  },
+  {
+   "src": "dut",
+   "text": "transmit=0 nacks=30 answers=1"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## reset-wait-100ms"
+  },
+  {
+   "src": "dut",
+   "text": "reset=0"
+  },
+  {
+   "src": "marker",
+   "text": "### start soft-reset"
+  },
+  {
+   "src": "marker",
+   "text": "### after soft-reset"
+  },
+  {
+   "src": "marker",
+   "text": "### start measure-high via=polling from=reset"
+  },
+  {
+   "src": "marker",
+   "text": "### after measure-high"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=12500 bytes=6109a8a9d0b9 crc=1"
+  },
+  {
+   "src": "dut",
+   "text": "transmit=0 nacks=30 answers=1"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## after-measurement"
+  },
+  {
+   "src": "marker",
+   "text": "### start measure-high via=polling from=read"
+  },
+  {
+   "src": "marker",
+   "text": "### after measure-high"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=12500 bytes=610e3fa9b795 crc=1"
+  },
+  {
+   "src": "dut",
+   "text": "transmit=0 nacks=30 answers=1"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## after-unread-measurement"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=2 bytes=610e3fa9d3ea crc=1"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=12502 bytes=611330a9c0fa crc=1"
+  },
+  {
+   "src": "dut",
+   "text": "transmit=0 nacks=29 answers=2"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## read-only"
+  },
+  {
+   "src": "dut",
+   "text": "transmit=0 nacks=31 answers=0"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "#"
+  }
+ ]
+}

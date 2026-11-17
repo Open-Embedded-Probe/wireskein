@@ -1,0 +1,541 @@
+{
+ "format": "wireskein-run/1",
+ "meta": {
+  "case": "sht30-unread-reset"
+ },
+ "captures": [
+  {
+   "file": "c0001.wireskein",
+   "channels": [
+    "SDA",
+    "SCL"
+   ]
+  }
+ ],
+ "log": [
+  {
+   "src": "marker",
+   "text": "# sht30-unread-reset"
+  },
+  {
+   "src": "dut",
+   "text": "reset=0"
+  },
+  {
+   "src": "marker",
+   "text": "## read-only-reset-wait-2ms"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=5 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=501 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1000 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1500 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=2000 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=2501 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=3001 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=3500 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=4000 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=4501 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=5001 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=5521 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=6000 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=6500 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=7000 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=7501 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=8001 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=8501 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=9001 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=9501 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=10000 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=10501 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=11000 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=11501 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=12001 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=12501 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=13027 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=13500 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=14001 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=14500 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=15017 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "transmit=0 nacks=0 answers=31"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "dut",
+   "text": "reset=0"
+  },
+  {
+   "src": "marker",
+   "text": "## read-only-reset-wait-10ms"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=2 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=501 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1033 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1501 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=2000 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=2500 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=3000 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=3501 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=4017 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=4501 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=5011 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=5500 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=6001 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=6501 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=7000 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=7500 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=8001 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=8501 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=9001 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=9500 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=10000 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=10530 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=11001 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=11501 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=12000 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=12553 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=13001 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=13504 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=14001 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=14500 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=15001 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "transmit=0 nacks=0 answers=31"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "dut",
+   "text": "reset=0"
+  },
+  {
+   "src": "marker",
+   "text": "## read-only-reset-wait-100ms"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=2 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=501 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1001 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1501 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=2001 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=2500 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=3011 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=3501 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=4001 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=4501 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=5018 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=5500 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=6002 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=6500 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=7001 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=7501 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=8001 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=8500 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=9001 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=9500 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=10001 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=10501 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=11001 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=11501 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=12000 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=12508 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=13000 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=13501 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=14000 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=14533 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=15001 bytes=000081ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "transmit=0 nacks=0 answers=31"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "dut",
+   "text": "reset=0"
+  },
+  {
+   "src": "marker",
+   "text": "## command-reset-wait-2ms"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=2 bytes=610e3fffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=12501 bytes=6118daa993d7 crc=1"
+  },
+  {
+   "src": "dut",
+   "text": "transmit=0 nacks=29 answers=2"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "dut",
+   "text": "reset=0"
+  },
+  {
+   "src": "marker",
+   "text": "## command-reset-wait-10ms"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=2 bytes=611330ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=12501 bytes=611e7ca99a5f crc=1"
+  },
+  {
+   "src": "dut",
+   "text": "transmit=0 nacks=29 answers=2"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "dut",
+   "text": "reset=0"
+  },
+  {
+   "src": "marker",
+   "text": "## command-reset-wait-100ms"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=2 bytes=611330ffffff crc=0"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=12501 bytes=611e7ca9b795 crc=1"
+  },
+  {
+   "src": "dut",
+   "text": "transmit=0 nacks=29 answers=2"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## after-measurement"
+  },
+  {
+   "src": "marker",
+   "text": "### start measure-high via=polling from=read"
+  },
+  {
+   "src": "marker",
+   "text": "### after measure-high"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=12500 bytes=611330a99faa crc=1"
+  },
+  {
+   "src": "dut",
+   "text": "transmit=0 nacks=30 answers=1"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "#"
+  }
+ ]
+}

@@ -10,7 +10,8 @@ reference decoder's output <op>.dmi.txt beside it as it is (the truth: wsbench/d
 operation what ch32rv read, <op>.bin (256 bytes or more). A v203-100mhz operation without its own .dmi.txt takes the
 50 MHz run's (v203/<op>.dmi.txt), copied too.
 
-EmbedBenchDeviceData (MIT, TANAKA Masayuki): every run of runs/, its capture as it is and its run.json cut to what
+EmbedBenchDeviceData (MIT, TANAKA Masayuki): every run of runs/ (those taken at 50 MS/s or more into
+embedbench-device-data-50m, the earlier ones into embedbench-device-data), its capture as it is and its run.json cut to what
 the truth is made of (the case, the capture's file and channels, the log's text lines by source); not the decodes
 beside it (WireSkein's) nor the probe's and host's clocks and ids.
 
@@ -33,6 +34,7 @@ WCH_SUBS = ["l103", "v203", "v003", "v203-100mhz", "extra/l103"]
 WCH_MAX_BYTES = 300_000
 WCH_OUT = HERE / "wch-linke-p4-2026-09-25"
 EBDD_OUT = HERE / "embedbench-device-data"
+EBDD_FAST_OUT = HERE / "embedbench-device-data-50m"   # the runs taken at 50 MS/s (2026-11-17)
 
 
 def _sha(p: Path) -> str:
@@ -56,6 +58,9 @@ def _prune(root: Path, keep: set) -> None:
     for p in sorted(root.rglob("*")):
         if p.is_file() and p.relative_to(root).as_posix() not in keep | {"LICENSE", "SOURCE.json"}:
             p.unlink()
+    for d in sorted((p for p in root.rglob("*") if p.is_dir()), key=lambda p: -len(p.parts)):
+        if not any(d.iterdir()):
+            d.rmdir()
 
 
 def wch(repo: Path) -> None:
@@ -98,28 +103,39 @@ def wch(repo: Path) -> None:
           f"{sum(f.endswith('.dmi.txt') for f in files)} .dmi.txt -> {WCH_OUT.relative_to(HERE.parent.parent)}")
 
 
+def _rate(cap: Path) -> float:
+    from wireskein import _fileformat
+    num, den = _fileformat.read_header(cap)["tick_hz"]
+    return num / den
+
+
 def ebdd(repo: Path) -> None:
-    files = {}
-    for rj in sorted((repo / "runs").glob("*/run.json")):
-        meta = json.loads(rj.read_text())
-        out = EBDD_OUT / "runs" / rj.parent.name
-        out.mkdir(parents=True, exist_ok=True)
-        caps = []
-        for c in meta["captures"][:1]:
-            shutil.copyfile(rj.parent / c["file"], out / c["file"])
-            files[str((out / c["file"]).relative_to(EBDD_OUT))] = {"from": str((rj.parent / c["file"]).relative_to(repo)),
-                                                                    "sha256": _sha(rj.parent / c["file"])}
-            caps.append({"file": c["file"], "channels": c.get("channels")})
-        slim = {"format": meta.get("format"), "meta": {"case": meta.get("meta", {}).get("case")}, "captures": caps,
-                "log": [{"src": x.get("src"), "text": x.get("text")} for x in meta.get("log", [])
-                        if x.get("src") in ("dut", "marker")]}
-        (out / "run.json").write_text(json.dumps(slim, indent=1, ensure_ascii=False) + "\n")
-        files[str((out / "run.json").relative_to(EBDD_OUT))] = {"from": str(rj.relative_to(repo)), "sha256": _sha(rj),
-                                                                 "cut": "case, captures (file, channels), log (src, text)"}
-    _prune(EBDD_OUT, set(files))
-    shutil.copyfile(repo / "LICENSE", EBDD_OUT / "LICENSE")
-    (EBDD_OUT / "SOURCE.json").write_text(json.dumps({"repository": _repo(repo), "files": files}, indent=1) + "\n")
-    print(f"ebdd: {len(list((EBDD_OUT / 'runs').iterdir()))} runs -> {EBDD_OUT.relative_to(HERE.parent.parent)}")
+    """Each run into the copy of its batch: the runs taken at 50 MS/s or more (2026-11-17, ENV III at 100 k / 400 k /
+    1 MHz) apart from the earlier ones (2 MS/s and below: the real-ebdd suite's 35), so that a suite's cases stay."""
+    for out_root, fast in ((EBDD_OUT, False), (EBDD_FAST_OUT, True)):
+        files = {}
+        for rj in sorted((repo / "runs").glob("*/run.json")):
+            meta = json.loads(rj.read_text())
+            if not meta["captures"] or (_rate(rj.parent / meta["captures"][0]["file"]) >= 50e6) != fast:
+                continue
+            out = out_root / "runs" / rj.parent.name
+            out.mkdir(parents=True, exist_ok=True)
+            caps = []
+            for c in meta["captures"][:1]:
+                shutil.copyfile(rj.parent / c["file"], out / c["file"])
+                files[str((out / c["file"]).relative_to(out_root))] = {
+                    "from": str((rj.parent / c["file"]).relative_to(repo)), "sha256": _sha(rj.parent / c["file"])}
+                caps.append({"file": c["file"], "channels": c.get("channels")})
+            slim = {"format": meta.get("format"), "meta": {"case": meta.get("meta", {}).get("case")}, "captures": caps,
+                    "log": [{"src": x.get("src"), "text": x.get("text")} for x in meta.get("log", [])
+                            if x.get("src") in ("dut", "marker")]}
+            (out / "run.json").write_text(json.dumps(slim, indent=1, ensure_ascii=False) + "\n")
+            files[str((out / "run.json").relative_to(out_root))] = {
+                "from": str(rj.relative_to(repo)), "sha256": _sha(rj), "cut": "case, captures (file, channels), log (src, text)"}
+        _prune(out_root, set(files))
+        shutil.copyfile(repo / "LICENSE", out_root / "LICENSE")
+        (out_root / "SOURCE.json").write_text(json.dumps({"repository": _repo(repo), "files": files}, indent=1) + "\n")
+        print(f"ebdd: {len(list((out_root / 'runs').iterdir()))} runs -> {out_root.relative_to(HERE.parent.parent)}")
 
 
 def main() -> None:

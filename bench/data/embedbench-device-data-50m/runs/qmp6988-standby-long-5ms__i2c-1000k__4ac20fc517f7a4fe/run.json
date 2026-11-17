@@ -1,0 +1,1045 @@
+{
+ "format": "wireskein-run/1",
+ "meta": {
+  "case": "qmp6988-standby-long-5ms"
+ },
+ "captures": [
+  {
+   "file": "c0001.wireskein",
+   "channels": [
+    "SDA",
+    "SCL"
+   ]
+  }
+ ],
+ "log": [
+  {
+   "src": "marker",
+   "text": "# qmp6988-standby-long-5ms"
+  },
+  {
+   "src": "marker",
+   "text": "## setup"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## normal"
+  },
+  {
+   "src": "dut",
+   "text": "end=0"
+  },
+  {
+   "src": "marker",
+   "text": "### start normal-period ctrl_meas=0x33 io_setup=0x20 from=sleep"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=15000 data=a296fd6d2d6c"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=2"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=30000 data=a296f36d2c9c"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=3"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=45001 data=a296e06d2ba5"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=4"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=60001 data=a296b66d2ab2"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=5"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=75001 data=a296aa6d298d"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=6"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=95000 data=a296686d2850"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=7"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=110001 data=a296616d2772"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=8"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=125001 data=a2965a6d2672"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=9"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=140000 data=a296266d258c"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=10"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=155037 data=a2961e6d2416"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=11"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=175001 data=a296196d2357"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=12"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=190001 data=a295e86d22c4"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=13"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=205000 data=a295cc6d221f"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=14"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=220000 data=a295c76d2182"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=15"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=235000 data=a295bb6d20f8"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=16"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=255001 data=a295b66d20b0"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=17"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=270001 data=a295a96d2066"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=18"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=285000 data=a295a06d201b"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=19"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=300000 data=a295bf6d2009"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=20"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=320001 data=a295c66d1f89"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=21"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=335001 data=a295bb6d1f00"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=22"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=350000 data=a295a36d1e75"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=23"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=365005 data=a295806d1e2a"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=24"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=380000 data=a2958b6d1df1"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=25"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=400003 data=a295766d1db1"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=26"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=415001 data=a2957a6d1d6f"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=27"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=430000 data=a2954d6d1cf5"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=28"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=445001 data=a2951c6d1c67"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=29"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=460000 data=a295166d1c8d"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=30"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=480000 data=a295226d1c4b"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=31"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=495000 data=a295446d1c2e"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=32"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=510001 data=a2954a6d1bee"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=33"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=525001 data=a2952f6d1b9d"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=34"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=540000 data=a295466d1b43"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=35"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=560001 data=a295406d1b05"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=36"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=575001 data=a295306d1b09"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=37"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=590001 data=a295286d1acc"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=38"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=605001 data=a2952f6d1a48"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=39"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=625025 data=a2952c6d1a36"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=40"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=640001 data=a2953a6d1a0b"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=41"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=655001 data=a295176d19e2"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=42"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=670001 data=a295266d19bb"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=43"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=685000 data=a2951e6d1980"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=44"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=705001 data=a295076d1964"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=45"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=720000 data=a294f56d1932"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=46"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=735000 data=a294e86d191e"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=47"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=750000 data=a295036d18e8"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=48"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=765015 data=a295106d1905"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=49"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=785001 data=a295206d18b3"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=50"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=800001 data=a295116d1887"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=51"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=815001 data=a295196d1823"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=52"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=830001 data=a295246d182e"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=53"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=845001 data=a295116d182b"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=54"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=865000 data=a294ea6d184c"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=55"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=880001 data=a294e96d181f"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=56"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=895001 data=a294da6d181b"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=57"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=910000 data=a294df6d17bf"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=58"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=930001 data=a2950a6d17d0"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=59"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=945001 data=a294fe6d17b2"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=60"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=960001 data=a294e56d1792"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=61"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=975000 data=a294df6d1789"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=62"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=990002 data=a294dd6d175b"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=63"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1010001 data=a294e96d1722"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=64"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1025001 data=a295026d1733"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=65"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1040001 data=a294e96d170f"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=66"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1055001 data=a294d96d16b5"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=67"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1070001 data=a294db6d16c2"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=68"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1090001 data=a294f16d16ce"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=69"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1105001 data=a294e56d16e8"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=70"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1120001 data=a294de6d16c2"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=71"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1135000 data=a294d26d1639"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=72"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1150001 data=a294c86d1664"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=73"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1170000 data=a294bf6d1609"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=74"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1185000 data=a294b96d15e5"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=75"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1200000 data=a294d06d15ec"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=76"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1215004 data=a294c36d15fb"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=77"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1230001 data=a294b76d15f2"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=78"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1250001 data=a2949d6d160c"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=79"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1265002 data=a294af6d15c7"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=80"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1280001 data=a294ae6d1592"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=81"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1295000 data=a294ab6d15b6"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=82"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1315001 data=a294a16d15af"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=83"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1330000 data=a294946d1590"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=84"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1345001 data=a294956d15c7"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=85"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1360001 data=a2949e6d15a5"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=86"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1375000 data=a294806d1521"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=87"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1395001 data=a294836d152a"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=88"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1410001 data=a2948b6d152e"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=89"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1425001 data=a294ae6d1548"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=90"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1440008 data=a2949a6d152f"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=91"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1455001 data=a2949a6d1514"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=92"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1475000 data=a294916d14ed"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=93"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1490023 data=a294866d14e3"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=94"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1505001 data=a2946a6d1521"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=95"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1520001 data=a2947c6d14d7"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=96"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1540001 data=a2948d6d14f0"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=97"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1555000 data=a294726d151d"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=98"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1570001 data=a294586d1514"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=99"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1585000 data=a294606d14fd"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=100"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1600001 data=a294586d14ad"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=101"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1620001 data=a294836d14b4"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=102"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1635001 data=a2948d6d1483"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=103"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1650001 data=a294836d1491"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=104"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1665013 data=a294896d149a"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=105"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1680000 data=a2949a6d1455"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=106"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1700000 data=a294996d1478"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=107"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1715011 data=a294876d1463"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=108"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1730001 data=a2947e6d145b"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=109"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1745000 data=a294906d1457"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=110"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1760001 data=a2946e6d1477"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=111"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1780001 data=a2946b6d1461"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=112"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1795001 data=a2946b6d1451"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=113"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1810001 data=a2946f6d142a"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=114"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1825000 data=a294626d1425"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=115"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1840001 data=a294646d13d7"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=116"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1860001 data=a294666d13d9"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=117"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1875001 data=a2944f6d13df"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=118"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1890032 data=a294416d1409"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=119"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1905001 data=a2942d6d142b"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=120"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1925001 data=a294296d13f0"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=121"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1940012 data=a2944f6d13c8"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=122"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1955000 data=a294336d139b"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=123"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1970001 data=a2942c6d13bf"
+  },
+  {
+   "src": "marker",
+   "text": "### after normal-period n=124"
+  },
+  {
+   "src": "dut",
+   "text": "t_us=1985001 data=a2943f6d13d2"
+  },
+  {
+   "src": "dut",
+   "text": "reads=401 changes=124"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "#"
+  }
+ ]
+}

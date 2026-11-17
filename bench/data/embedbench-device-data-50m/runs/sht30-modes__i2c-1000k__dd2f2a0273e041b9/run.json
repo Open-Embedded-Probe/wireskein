@@ -1,0 +1,165 @@
+{
+ "format": "wireskein-run/1",
+ "meta": {
+  "case": "sht30-modes"
+ },
+ "captures": [
+  {
+   "file": "c0001.wireskein",
+   "channels": [
+    "SDA",
+    "SCL"
+   ]
+  }
+ ],
+ "log": [
+  {
+   "src": "marker",
+   "text": "# sht30-modes"
+  },
+  {
+   "src": "marker",
+   "text": "## soft-reset"
+  },
+  {
+   "src": "dut",
+   "text": "end=0"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## status"
+  },
+  {
+   "src": "dut",
+   "text": "end=0 got=3 bytes=8010e1 crc=1"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## polling-high"
+  },
+  {
+   "src": "marker",
+   "text": "### start measure-high via=polling"
+  },
+  {
+   "src": "marker",
+   "text": "### after measure-high"
+  },
+  {
+   "src": "dut",
+   "text": "end=0 tries=23 elapsed_us=12624 got=6 bytes=610e3fa9b133 crc=1"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## stretch-high"
+  },
+  {
+   "src": "marker",
+   "text": "### start measure-high via=stretch"
+  },
+  {
+   "src": "dut",
+   "text": "end=0 elapsed_us=6627 got=0 bytes= crc=0"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## polling-medium"
+  },
+  {
+   "src": "marker",
+   "text": "### start measure-medium via=polling"
+  },
+  {
+   "src": "marker",
+   "text": "### after measure-medium"
+  },
+  {
+   "src": "dut",
+   "text": "end=0 tries=9 elapsed_us=4607 got=6 bytes=6109a8a9ca21 crc=1"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## stretch-medium"
+  },
+  {
+   "src": "marker",
+   "text": "### start measure-medium via=stretch"
+  },
+  {
+   "src": "marker",
+   "text": "### after measure-medium at=release"
+  },
+  {
+   "src": "dut",
+   "text": "end=0 elapsed_us=4434 got=6 bytes=6118daa9c76d crc=1"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## polling-low"
+  },
+  {
+   "src": "marker",
+   "text": "### start measure-low via=polling"
+  },
+  {
+   "src": "marker",
+   "text": "### after measure-low"
+  },
+  {
+   "src": "dut",
+   "text": "end=0 tries=6 elapsed_us=2922 got=6 bytes=6118daa9c1cb crc=1"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## stretch-low"
+  },
+  {
+   "src": "marker",
+   "text": "### start measure-low via=stretch"
+  },
+  {
+   "src": "marker",
+   "text": "### after measure-low at=release"
+  },
+  {
+   "src": "dut",
+   "text": "end=0 elapsed_us=2606 got=6 bytes=61427fa9dea6 crc=1"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "#"
+  }
+ ]
+}

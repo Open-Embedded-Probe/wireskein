@@ -83,8 +83,9 @@ def comb(cap, lines, max_mult):
     に「S, 0x13 書き込み, NACK, P」が 50 回。正解は読むときに作る。SCL と SDA は D0 と D1 に付け替える。アドレスの
     ACK / NACK まで比べる（正解の `expect.compare_ack`。eval の生成データは比べない）
   - ほかのリポジトリの記録（コピー）: `wchfix:<サブディレクトリ>[a:b]`（wch-protocols の LinkE の fixture。実機の
-    RVSWD / SWIO、正解は参照の復号器の `.dmi.txt`）、`ebdd:<名前>[a:b]`（EmbedBenchDeviceData の記録。実機の I2C、
-    正解はファームウェアの出力）
+    RVSWD / SWIO、正解は参照の復号器の `.dmi.txt`）、`ebdd:<名前>[/tune|/holdout][a:b]`（EmbedBenchDeviceData の記録。実機の I2C、
+    正解はファームウェアの出力。`embedbench-device-data` は 2 MS/s 以下で取ったもの、`embedbench-device-data-50m` は
+    ENV III を 50 MS/s で、バスは 100 k / 400 k / 1 MHz。`/tune`、`/holdout` はケースの名前で半分を確認用に取り分ける）
   - 測定台のために取った記録: `linke:<ディレクトリ>[/rate]/<tune|holdout>[a:b]`（`bench/data/<ディレクトリ>`。
     wireskein-run/1 に正解を添えたもの。WCH-LinkE の RVSWD を 160 MS/s で、1 回に ch32rv の操作 1 つ、その区間に
     切り出してある。正解は ch32rv が読んだ中身と、USB で送った DMI の操作。遅く取ったもの（`decimate`、`resample`）

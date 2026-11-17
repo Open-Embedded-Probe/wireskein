@@ -136,3 +136,15 @@ role = "holdout"
 about = "the same, the operations set aside (all their rates)"
 sources = ["linke:l103-linke-2026-11-17/rate/holdout"]
 transforms = [""]
+
+[suite.ebdd-50m]
+role = "tune"
+about = "EmbedBenchDeviceData's ENV III (SHT30 / QMP6988 on the Grove, an ESP32-P4X as controller) taken at 50 MS/s with the bus at 100 k / 400 k / 1 MHz (2026-11-17: 15 cases x 3 rates), the tuning half by the case's name, and taken down to 25, 10, 5, 2 MS/s; truth the firmware's own lines (wire-scan goes at 100 kHz whatever the bus's rate)"
+sources = ["ebdd:embedbench-device-data-50m/tune"]
+transforms = ["", "decimate:2", "decimate:5", "decimate:10", "decimate:25"]
+
+[suite.ebdd-50m-holdout]
+role = "holdout"
+about = "the same, the cases set aside (all their bus rates)"
+sources = ["ebdd:embedbench-device-data-50m/holdout"]
+transforms = ["", "decimate:2", "decimate:5", "decimate:10", "decimate:25"]

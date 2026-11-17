@@ -1,0 +1,145 @@
+{
+ "format": "wireskein-run/1",
+ "meta": {
+  "case": "esp32p4-i2c-nack-answers"
+ },
+ "captures": [
+  {
+   "file": "c0001.wireskein",
+   "channels": [
+    "SDA",
+    "SCL"
+   ]
+  }
+ ],
+ "log": [
+  {
+   "src": "marker",
+   "text": "# esp32p4-i2c-nack-answers"
+  },
+  {
+   "src": "marker",
+   "text": "## wire-read-gap-0us"
+  },
+  {
+   "src": "dut",
+   "text": "answers=ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## wire-probe-gap-0us"
+  },
+  {
+   "src": "dut",
+   "text": "answers=ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## wire-read-gap-500us"
+  },
+  {
+   "src": "dut",
+   "text": "answers=ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## wire-probe-gap-500us"
+  },
+  {
+   "src": "dut",
+   "text": "answers=ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## idf-read-wait-0-gap-0us"
+  },
+  {
+   "src": "dut",
+   "text": "answers=ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## idf-probe-gap-0us"
+  },
+  {
+   "src": "dut",
+   "text": "answers=ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## idf-read-wait-0-gap-500us"
+  },
+  {
+   "src": "dut",
+   "text": "answers=ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## idf-probe-gap-500us"
+  },
+  {
+   "src": "dut",
+   "text": "answers=ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## idf-read-wait-20000-gap-0us"
+  },
+  {
+   "src": "dut",
+   "text": "answers=ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## idf-read-wait-20000-gap-500us"
+  },
+  {
+   "src": "dut",
+   "text": "answers=ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "#"
+  }
+ ]
+}

@@ -84,8 +84,9 @@ def comb(cap, lines, max_mult):
     50 times "S, 0x13 write, NACK, P"; truth made on reading, SCL / SDA renamed D0 / D1, the address's ACK compared
     too: the truth's `expect.compare_ack`, which eval's generated cases do not set)
   - Other repositories' records, copied: `wchfix:<sub>[a:b]` (wch-protocols' LinkE fixture: real RVSWD / SWIO, truth
-    from its reference decoder's `.dmi.txt`), `ebdd:<name>[a:b]` (EmbedBenchDeviceData's runs: real I2C, truth the
-    firmware's own lines)
+    from its reference decoder's `.dmi.txt`), `ebdd:<name>[/tune|/holdout][a:b]` (EmbedBenchDeviceData's runs: real I2C, truth the
+    firmware's own lines; `embedbench-device-data` those taken at 2 MS/s and below, `embedbench-device-data-50m` the
+    ENV III at 50 MS/s with the bus at 100 k / 400 k / 1 MHz; `/tune`, `/holdout`: half set aside by the case's name)
   - Records taken for the bench: `linke:<dir>[/rate]/<tune|holdout>[a:b]` (`bench/data/<dir>`, wireskein-run/1 with
     the truth beside each: a WCH-LinkE's RVSWD at 160 MS/s, one ch32rv operation a run, cut to it; truth what ch32rv
     read and the DMI operations it sent over USB, and for the run taken down (`decimate`, `resample`) the 160 MS/s

@@ -1,0 +1,645 @@
+{
+ "format": "wireskein-run/1",
+ "meta": {
+  "case": "qmp6988-measure-bit"
+ },
+ "captures": [
+  {
+   "file": "c0001.wireskein",
+   "channels": [
+    "SDA",
+    "SCL"
+   ]
+  }
+ ],
+ "log": [
+  {
+   "src": "marker",
+   "text": "# qmp6988-measure-bit"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-0us"
+  },
+  {
+   "src": "marker",
+   "text": "### start status-delay ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "### before status-delay"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=125 status=0x00"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-20us"
+  },
+  {
+   "src": "marker",
+   "text": "### start status-delay ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "### before status-delay"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=118 status=0x00"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-40us"
+  },
+  {
+   "src": "marker",
+   "text": "### start status-delay ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "### before status-delay"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=137 status=0x00"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-60us"
+  },
+  {
+   "src": "marker",
+   "text": "### start status-delay ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "### after status-delay"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=159 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-80us"
+  },
+  {
+   "src": "marker",
+   "text": "### start status-delay ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "### after status-delay"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=183 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-100us"
+  },
+  {
+   "src": "marker",
+   "text": "### start status-delay ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "### after status-delay"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=235 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-120us"
+  },
+  {
+   "src": "marker",
+   "text": "### start status-delay ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "### after status-delay"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=232 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-140us"
+  },
+  {
+   "src": "marker",
+   "text": "### start status-delay ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "### after status-delay"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=237 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-160us"
+  },
+  {
+   "src": "marker",
+   "text": "### start status-delay ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "### after status-delay"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=289 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-180us"
+  },
+  {
+   "src": "marker",
+   "text": "### start status-delay ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "### after status-delay"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=315 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-200us"
+  },
+  {
+   "src": "marker",
+   "text": "### start status-delay ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "### after status-delay"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=339 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-220us"
+  },
+  {
+   "src": "marker",
+   "text": "### start status-delay ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "### after status-delay"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=317 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-240us"
+  },
+  {
+   "src": "marker",
+   "text": "### start status-delay ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "### after status-delay"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=337 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-260us"
+  },
+  {
+   "src": "marker",
+   "text": "### start status-delay ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "### after status-delay"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=357 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-280us"
+  },
+  {
+   "src": "marker",
+   "text": "### start status-delay ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "### after status-delay"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=378 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-300us"
+  },
+  {
+   "src": "marker",
+   "text": "### start status-delay ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "### after status-delay"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=398 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-320us"
+  },
+  {
+   "src": "marker",
+   "text": "### start status-delay ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "### after status-delay"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=428 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-340us"
+  },
+  {
+   "src": "marker",
+   "text": "### start status-delay ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "### after status-delay"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=439 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-360us"
+  },
+  {
+   "src": "marker",
+   "text": "### start status-delay ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "### after status-delay"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=459 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-380us"
+  },
+  {
+   "src": "marker",
+   "text": "### start status-delay ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "### after status-delay"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=505 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-400us"
+  },
+  {
+   "src": "marker",
+   "text": "### start status-delay ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "### after status-delay"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=535 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-420us"
+  },
+  {
+   "src": "marker",
+   "text": "### start status-delay ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "### after status-delay"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=533 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-440us"
+  },
+  {
+   "src": "marker",
+   "text": "### start status-delay ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "### after status-delay"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=561 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-460us"
+  },
+  {
+   "src": "marker",
+   "text": "### start status-delay ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "### after status-delay"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=558 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-480us"
+  },
+  {
+   "src": "marker",
+   "text": "### start status-delay ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "### after status-delay"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=581 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-500us"
+  },
+  {
+   "src": "marker",
+   "text": "### start status-delay ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "### after status-delay"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=624 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-520us"
+  },
+  {
+   "src": "marker",
+   "text": "### start status-delay ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "### after status-delay"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=618 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-540us"
+  },
+  {
+   "src": "marker",
+   "text": "### start status-delay ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "### after status-delay"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=637 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-560us"
+  },
+  {
+   "src": "marker",
+   "text": "### start status-delay ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "### after status-delay"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=658 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-580us"
+  },
+  {
+   "src": "marker",
+   "text": "### start status-delay ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "### after status-delay"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=678 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "## delay-600us"
+  },
+  {
+   "src": "marker",
+   "text": "### start status-delay ctrl_meas=0x31"
+  },
+  {
+   "src": "marker",
+   "text": "### after status-delay"
+  },
+  {
+   "src": "dut",
+   "text": "after_us=698 status=0x08"
+  },
+  {
+   "src": "marker",
+   "text": "##"
+  },
+  {
+   "src": "marker",
+   "text": "#"
+  }
+ ]
+}

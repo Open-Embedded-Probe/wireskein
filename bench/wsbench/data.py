@@ -13,7 +13,8 @@ was measured:
                 wchfix:<sub>[a:b]   wch-protocols' LinkE fixture, as copied to bench/data/wire-linke-p4-2026-09-25
                                   (<sub>: l103, v203, v203-100mhz, v003, extra/l103; the captures of 300 kB or less):
                                   real RVSWD / SWIO with truth from wch-protocols' own decoder (.dmi.txt)
-                ebdd:<name>[a:b]  EmbedBenchDeviceData's runs, as copied to bench/data/<name>/runs (real I2C taken by
+                ebdd:<name>[/tune|/holdout][a:b]  EmbedBenchDeviceData's runs, as copied to bench/data/<name>/runs
+                                  (/tune, /holdout: half set aside by the case's name) (real I2C taken by
                                   an OEP probe): truth the bus (SDA / SCL renamed D0 / D1), its rate (from the run's
                                   name) and the bytes the firmware said it read (its dut lines: bytes=.. crc=1, data=..)
                 linke:<dir>[/rate]/<tune|holdout>[a:b]   runs of bench/data/<dir> (/rate: the same operations taken at
@@ -127,10 +128,18 @@ def source_items(source: str) -> list[str]:
                 and json.loads((p.parent / "run.json").read_text())["meta"].get("holdout") == (split == "holdout")]
         return [f"linke:{r}" for r in _slice(runs, m["a"], m["b"])]
     if m and m["base"].startswith("ebdd:"):
-        d = _inside(DATA / m["base"][len("ebdd:"):]) / "runs"
+        sub = m["base"][len("ebdd:"):]
+        split = None
+        if sub.endswith(("/tune", "/holdout")):
+            sub, _, split = sub.rpartition("/")
+        d = _inside(DATA / sub) / "runs"
         if not d.is_dir():
             raise FileNotFoundError(d)
-        return [f"ebdd:{p.parent}" for p in _slice(sorted(d.glob("*/run.json")), m["a"], m["b"])]
+        runs = sorted(d.glob("*/run.json"))
+        if split:          # half set aside by the case's name: one case on one side at every bus rate
+            runs = [p for p in runs if (hashlib.sha256(p.parent.name.split("__")[0].encode()).digest()[0] & 1 == 1)
+                    == (split == "holdout")]
+        return [f"ebdd:{p.parent}" for p in _slice(runs, m["a"], m["b"])]
     if m and m["base"].startswith("i2cbench:"):
         d = I2C_BENCH / m["base"][len("i2cbench:"):]
         if not d.is_dir():
@@ -280,6 +289,9 @@ def _ebdd(run: Path) -> tuple[Capture, dict]:
     new = {"SCL": "D1" if flip else "D0", "SDA": "D0" if flip else "D1"}
     chans = sorted((replace(ch, name=new[ch.name]) for ch in cap.channels), key=lambda c: c.name)
     m = re.search(r"__i2c-(\d+)k__", run.name)
+    hz = float(m.group(1)) * 1e3 if m else None
+    if run.name.startswith("wire-scan__"):
+        hz = 100e3       # arduino-esp32's zero-length write (i2c_master_probe) goes at 100 kHz whatever the bus's rate
     reads = []
     for x in meta.get("log", []):
         if x.get("src") != "dut" or "crc=0" in x["text"]:
@@ -287,7 +299,7 @@ def _ebdd(run: Path) -> tuple[Capture, dict]:
         reads += [h.lower() for h in _DUT_READ.findall(x["text"])]
     truth = {"id": f"ebdd-{run.name}", "source": {"path": str(run.relative_to(REPO)), "repo": "EmbedBenchDeviceData"},
              "buses": [{"protocol": "i2c", "roles": {"scl": new["SCL"], "sda": new["SDA"]},
-                        "params": {"clock_hz": float(m.group(1)) * 1e3 if m else None},
+                        "params": {"clock_hz": hz},
                         "expect": {"dut_reads": reads}}],
              "decoys": [], "notes": "real capture; truth: the bus and what the firmware said it read"}
     return Capture(cap.rate, cap.n_samples, chans), truth
