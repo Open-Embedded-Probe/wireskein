@@ -540,6 +540,13 @@ class PulseSymbols:
         return int(np.ceil(len(self.short) / 8)) + 4 * len(self.bounds)
 
 
+def _int_bits(bits) -> int:
+    v = 0
+    for x in bits:
+        v = (v << 1) | int(x)
+    return v
+
+
 def pulse_symbols(cap, sv: Survey, pin: str) -> PulseSymbols | None:
     ch = cap.channel(pin)
     idle = sv.features[pin].idle_level
@@ -551,8 +558,9 @@ def pulse_symbols(cap, sv: Survey, pin: str) -> PulseSymbols | None:
     j = np.searchsorted(trail, lead, side="right")
     ok = j < len(trail)
     lead, width = lead[ok], trail[j[ok]] - lead[ok]
-    # the two most populated width clusters (log scale); outliers such as the
-    # long probing pulses before SWIO traffic must not move the split
+    # width clusters (log scale): SWIO's short and long pulses are two of them; other traffic on the pin (a debugger
+    # trying the 2-wire form first, its long probing pulses) makes others, and in a short operation may outnumber
+    # SWIO's own and move both the split and the pulse pitch frames are cut by
     lw = np.log(np.maximum(width, 1).astype(np.float64))
     bins = np.arange(lw.min(), lw.max() + 0.1, 0.08)
     if len(bins) < 3:
@@ -564,11 +572,52 @@ def pulse_symbols(cap, sv: Survey, pin: str) -> PulseSymbols | None:
     second = next((i for i in order[1:] if abs(centers[i] - centers[first]) >= np.log(1.6) and hist[i] >= 0.05 * hist[first]), None)
     if second is None:
         return None
-    split = float(np.exp((centers[first] + centers[second]) / 2))
     iv = np.diff(lead).astype(np.float64)
-    typical = float(np.median(iv)) if len(iv) else 1.0
-    cut = np.flatnonzero(iv > 3 * typical) + 1
-    b = np.concatenate(([0], cut, [len(lead)]))
+
+    def cut_by(split: float, near=None):
+        """Frames where the pitch between pulses is over 3 times the usual (of the pulses near the two clusters)."""
+        sel = iv if near is None else iv[near[:-1] & near[1:]]
+        typical = float(np.median(sel)) if len(sel) else (float(np.median(iv)) if len(iv) else 1.0)
+        cut = np.flatnonzero(iv > 3 * typical) + 1
+        return np.concatenate(([0], cut, [len(lead)]))
+
+    from .riscv_dm import NAMES
+
+    def framed(split: float, b) -> int:
+        """Pulses in frames that read as SWIO's: 41 opening with a short pulse (a 1) whose address is a Debug Module
+        register, or 33 not all ones (a data0 read going on); a run of short pulses alone is no frame."""
+        got = 0
+        short = width < split
+        for a, z in zip(b[:-1].tolist(), b[1:].tolist()):
+            n = z - a
+            if n not in (41, 33):
+                continue
+            f = short[a:z]
+            if f.all():
+                continue
+            if n == 41 and (not f[0] or _int_bits(f[1:8]) not in NAMES):
+                continue
+            got += n
+        return got
+
+    split = float(np.exp((centers[first] + centers[second]) / 2))
+    b = cut_by(split)
+    best = (framed(split, b), split, b)
+    # other pairs of the most populated clusters, each with the pitch of its own pulses: the one that frames the most
+    # pulses in SWIO's lengths (the default stays when none frames more)
+    top = [i for i in order[:6] if hist[i] > 0]
+    for x in range(len(top)):
+        for y in range(x + 1, len(top)):
+            i, j = top[x], top[y]
+            if abs(centers[i] - centers[j]) < np.log(1.6):
+                continue
+            sp = float(np.exp((centers[i] + centers[j]) / 2))
+            near = (np.abs(lw - centers[i]) < np.log(1.6)) | (np.abs(lw - centers[j]) < np.log(1.6))
+            bb = cut_by(sp, near)
+            got = framed(sp, bb)
+            if got > best[0]:
+                best = (got, sp, bb)
+    _, split, b = best
     return PulseSymbols(pin, idle, lead, width, width < split, split, np.stack([b[:-1], b[1:]], 1))
 
 
