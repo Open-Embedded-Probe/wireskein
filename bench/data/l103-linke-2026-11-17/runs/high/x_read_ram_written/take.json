@@ -1,0 +1,28 @@
+{
+ "scenario": "high/x_read_ram_written",
+ "args": [
+  "read",
+  "--range",
+  "0x20000800+256",
+  "-o",
+  "runs/high__x_read_ram_written.tmp/read.bin"
+ ],
+ "rc": 0,
+ "seconds": 0.2394,
+ "t0_host_ns": 2837381326031846,
+ "t1_host_ns": 2837381565452851,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": false,
+ "capture_log": [
+  "runs/high__x_read_ram_written.tmp/c.wireskein: 2 logic channels, 801230080 ticks at 1.6e+08 Hz (5.00769 s)",
+  "link: opened in 0.93 s, read 200307.5 KB in 5.11 s (39183.8 KB/s)",
+  "data rate: 40 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 216 ms before it drops",
+  "stream: 200307.5 KB in 10413 frames over 5.11 s (39183.8 KB/s)"
+ ],
+ "excerpt_s": [
+  1.630365,
+  1.989786
+ ]
+}

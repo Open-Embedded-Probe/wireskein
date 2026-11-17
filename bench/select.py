@@ -59,7 +59,7 @@ def item_value(stage: str, row: dict) -> tuple[float, float, float]:
 def groups(row: dict, out: dict) -> dict:
     ds = out["dataset"]
     chain = ds.split("+", 1)[1] if "+" in ds else ""
-    noise = "+".join(t for t in chain.split("+") if t and not t.startswith(("decimate", "crop"))) or "none"
+    noise = "+".join(t for t in chain.split("+") if t and not t.startswith(("decimate", "resample", "crop"))) or "none"
     from wsbench.observe import bucket_noise, bucket_os
     ob = out.get("obs") or {}
     bn, bo = bucket_noise(ob.get("short_rel", ob.get("short_share"))), bucket_os(ob.get("samples_bit"))

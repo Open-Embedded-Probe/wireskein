@@ -1,0 +1,29 @@
+{
+ "scenario": "rate/50M/flash_pattern4k",
+ "args": [
+  "--speed",
+  "high",
+  "flash",
+  "/home/mt/dev_oep/wireskein/bench/data/l103-linke-2026-11-17/tools/pattern-4k.bin",
+  "--yes"
+ ],
+ "rc": 0,
+ "seconds": 0.6879,
+ "t0_host_ns": 2840420425642702,
+ "t1_host_ns": 2840421113522441,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": false,
+ "rate_requested": "50000000",
+ "capture_log": [
+  "runs/rate__50M__flash_pattern4k.tmp/c.wireskein: 2 logic channels, 250052096 ticks at 5e+07 Hz (5.00104 s)",
+  "link: opened in 0.43 s, read 62513.0 KB in 5.11 s (12245.5 KB/s)",
+  "data rate: 12.5 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 693 ms before it drops",
+  "stream: 62513.0 KB in 3250 frames over 5.11 s (12245.5 KB/s)"
+ ],
+ "excerpt_s": [
+  2.3309,
+  3.13878
+ ]
+}

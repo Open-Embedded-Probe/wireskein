@@ -120,6 +120,20 @@ def match(bus: dict, claim: dict) -> dict:
                 # its values and addresses match, its R / W does not always): compared on address and data
                 want, got = [w[1:] for w in want], [g[1:] for g in got]
             r["decode"] = _ratio(want, got)
+        elif bus["protocol"] == "rvswd" and "expect" in bus and "dmi_ops" in bus["expect"]:
+            # the DMI operations the debugger sent over USB (ch32rv's record: one frame on the wire each), a part of
+            # what the wire holds (the probe's own accesses are not on USB): the share of them found in order among
+            # the accesses read, each matched on R / W, address and data
+            want = [(o["op"], o["addr"], o["data"]) for o in bus["expect"]["dmi_ops"]]
+            k = n = 0
+            for w in want:
+                while k < len(got) and got[k] != w:
+                    k += 1
+                if k == len(got):
+                    break
+                n += 1
+                k += 1
+            r["decode"] = n / len(want) if want else None
         else:
             r["decode"] = None
     elif bus["protocol"] in ("lin", "dmx512"):

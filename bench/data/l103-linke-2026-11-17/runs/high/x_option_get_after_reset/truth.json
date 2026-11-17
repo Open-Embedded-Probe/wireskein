@@ -1,0 +1,370 @@
+{
+ "source": "ch32rv.ndjson (DmiOp), read.bin",
+ "dmi_ops": [
+  {
+   "op": "R",
+   "addr": 17,
+   "data": 898,
+   "status": 0,
+   "t_us": 118231
+  },
+  {
+   "op": "W",
+   "addr": 16,
+   "data": 1,
+   "status": 0,
+   "t_us": 118705
+  },
+  {
+   "op": "R",
+   "addr": 17,
+   "data": 898,
+   "status": 0,
+   "t_us": 119330
+  },
+  {
+   "op": "W",
+   "addr": 22,
+   "data": 1792,
+   "status": 0,
+   "t_us": 119722
+  },
+  {
+   "op": "W",
+   "addr": 4,
+   "data": 0,
+   "status": 0,
+   "t_us": 120226
+  },
+  {
+   "op": "W",
+   "addr": 23,
+   "data": 2232325,
+   "status": 0,
+   "t_us": 120851
+  },
+  {
+   "op": "R",
+   "addr": 22,
+   "data": 134217730,
+   "status": 0,
+   "t_us": 121661
+  },
+  {
+   "op": "R",
+   "addr": 4,
+   "data": 466,
+   "status": 0,
+   "t_us": 122212
+  },
+  {
+   "op": "W",
+   "addr": 22,
+   "data": 1792,
+   "status": 0,
+   "t_us": 122910
+  },
+  {
+   "op": "W",
+   "addr": 4,
+   "data": 0,
+   "status": 0,
+   "t_us": 123207
+  },
+  {
+   "op": "W",
+   "addr": 23,
+   "data": 2232326,
+   "status": 0,
+   "t_us": 124653
+  },
+  {
+   "op": "R",
+   "addr": 22,
+   "data": 134217730,
+   "status": 0,
+   "t_us": 125136
+  },
+  {
+   "op": "R",
+   "addr": 4,
+   "data": 32,
+   "status": 0,
+   "t_us": 125576
+  },
+  {
+   "op": "W",
+   "addr": 22,
+   "data": 1792,
+   "status": 0,
+   "t_us": 125936
+  },
+  {
+   "op": "W",
+   "addr": 4,
+   "data": 0,
+   "status": 0,
+   "t_us": 126231
+  },
+  {
+   "op": "W",
+   "addr": 23,
+   "data": 2232327,
+   "status": 0,
+   "t_us": 126791
+  },
+  {
+   "op": "R",
+   "addr": 22,
+   "data": 134217730,
+   "status": 0,
+   "t_us": 127040
+  },
+  {
+   "op": "R",
+   "addr": 4,
+   "data": 0,
+   "status": 0,
+   "t_us": 127311
+  },
+  {
+   "op": "R",
+   "addr": 22,
+   "data": 134217730,
+   "status": 0,
+   "t_us": 127549
+  },
+  {
+   "op": "W",
+   "addr": 32,
+   "data": 172803,
+   "status": 0,
+   "t_us": 127790
+  },
+  {
+   "op": "W",
+   "addr": 33,
+   "data": 4358803,
+   "status": 0,
+   "t_us": 128259
+  },
+  {
+   "op": "W",
+   "addr": 34,
+   "data": 1048691,
+   "status": 0,
+   "t_us": 128616
+  },
+  {
+   "op": "W",
+   "addr": 22,
+   "data": 1792,
+   "status": 0,
+   "t_us": 129081
+  },
+  {
+   "op": "W",
+   "addr": 4,
+   "data": 536868864,
+   "status": 0,
+   "t_us": 129460
+  },
+  {
+   "op": "W",
+   "addr": 23,
+   "data": 2560005,
+   "status": 0,
+   "t_us": 129732
+  },
+  {
+   "op": "R",
+   "addr": 22,
+   "data": 134217730,
+   "status": 0,
+   "t_us": 130325
+  },
+  {
+   "op": "W",
+   "addr": 23,
+   "data": 2494470,
+   "status": 0,
+   "t_us": 130805
+  },
+  {
+   "op": "R",
+   "addr": 22,
+   "data": 134217730,
+   "status": 0,
+   "t_us": 131244
+  },
+  {
+   "op": "W",
+   "addr": 24,
+   "data": 1,
+   "status": 0,
+   "t_us": 131971
+  },
+  {
+   "op": "R",
+   "addr": 24,
+   "data": 1,
+   "status": 0,
+   "t_us": 132352
+  },
+  {
+   "op": "R",
+   "addr": 4,
+   "data": 16734885,
+   "status": 0,
+   "t_us": 133031
+  },
+  {
+   "op": "R",
+   "addr": 4,
+   "data": 16711935,
+   "status": 0,
+   "t_us": 133342
+  },
+  {
+   "op": "W",
+   "addr": 24,
+   "data": 0,
+   "status": 0,
+   "t_us": 133652
+  },
+  {
+   "op": "R",
+   "addr": 22,
+   "data": 134217730,
+   "status": 0,
+   "t_us": 134053
+  },
+  {
+   "op": "R",
+   "addr": 4,
+   "data": 16711935,
+   "status": 0,
+   "t_us": 134457
+  },
+  {
+   "op": "W",
+   "addr": 23,
+   "data": 2232326,
+   "status": 0,
+   "t_us": 134893
+  },
+  {
+   "op": "R",
+   "addr": 22,
+   "data": 134217730,
+   "status": 0,
+   "t_us": 135160
+  },
+  {
+   "op": "R",
+   "addr": 4,
+   "data": 16711935,
+   "status": 0,
+   "t_us": 135435
+  },
+  {
+   "op": "W",
+   "addr": 24,
+   "data": 0,
+   "status": 0,
+   "t_us": 135825
+  },
+  {
+   "op": "W",
+   "addr": 22,
+   "data": 1792,
+   "status": 0,
+   "t_us": 136174
+  },
+  {
+   "op": "W",
+   "addr": 4,
+   "data": 466,
+   "status": 0,
+   "t_us": 136627
+  },
+  {
+   "op": "W",
+   "addr": 23,
+   "data": 2297861,
+   "status": 0,
+   "t_us": 137290
+  },
+  {
+   "op": "R",
+   "addr": 22,
+   "data": 134217730,
+   "status": 0,
+   "t_us": 137727
+  },
+  {
+   "op": "W",
+   "addr": 22,
+   "data": 1792,
+   "status": 0,
+   "t_us": 138137
+  },
+  {
+   "op": "W",
+   "addr": 4,
+   "data": 32,
+   "status": 0,
+   "t_us": 138368
+  },
+  {
+   "op": "W",
+   "addr": 23,
+   "data": 2297862,
+   "status": 0,
+   "t_us": 138818
+  },
+  {
+   "op": "R",
+   "addr": 22,
+   "data": 134217730,
+   "status": 0,
+   "t_us": 139010
+  },
+  {
+   "op": "W",
+   "addr": 22,
+   "data": 1792,
+   "status": 0,
+   "t_us": 139378
+  },
+  {
+   "op": "W",
+   "addr": 4,
+   "data": 0,
+   "status": 0,
+   "t_us": 139817
+  },
+  {
+   "op": "W",
+   "addr": 23,
+   "data": 2297863,
+   "status": 0,
+   "t_us": 140122
+  },
+  {
+   "op": "R",
+   "addr": 22,
+   "data": 134217730,
+   "status": 0,
+   "t_us": 140293
+  }
+ ],
+ "agreement_160M": {
+  "dmi_ops": 51,
+  "found_in_order": 51,
+  "wire_frames": 397,
+  "wire_ok": 195,
+  "wire_answered": 195,
+  "usable": true
+ }
+}

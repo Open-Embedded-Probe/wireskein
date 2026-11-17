@@ -112,3 +112,27 @@ role = "tune"
 about = "the fixture's L103, V003 and V203-at-100-MS/s operations decimated 2, 4, 8 times: where a slower capture stops reading the DMI accesses"
 sources = ["wchfix:l103", "wchfix:v003", "wchfix:v203-100mhz"]
 transforms = ["", "decimate:2", "decimate:4", "decimate:8"]
+
+[suite.linke-l103]
+role = "tune"
+about = "a LinkE's RVSWD to a CH32L103 at 160 MS/s (2026-11-17: 103 ch32rv operations, LinkE speeds high / medium / low; each cut to its operation), the tuning half, and taken down to 133.3 and 50 MHz (fractional dividers, samples on the 160 MHz grid) and 80, 40, 20, 10, 8, 5 MHz (whole): where the DMI accesses stop being read; truth what ch32rv read and, taken down, the 160 MS/s reading checked against ch32rv's DMI operations. Real captures at those rates read as these do (tools/rate_compare.py)"
+sources = ["linke:l103-linke-2026-11-17/tune"]
+transforms = ["", "resample:133333333.3333", "decimate:2", "resample:50000000", "decimate:4", "decimate:8", "decimate:16", "decimate:20", "decimate:32"]
+
+[suite.linke-l103-holdout]
+role = "holdout"
+about = "the same, the half set aside by the scenario's name (never tuned on)"
+sources = ["linke:l103-linke-2026-11-17/holdout"]
+transforms = ["", "resample:133333333.3333", "decimate:2", "resample:50000000", "decimate:4", "decimate:8", "decimate:16", "decimate:20", "decimate:32"]
+
+[suite.linke-l103-rate]
+role = "tune"
+about = "the same LinkE -> CH32L103 operations taken by the probe itself at 160, 133.3 and 50 MHz (fractional dividers: unevenly spaced samples on the 160 MHz grid), 10, 8 and 5 MHz: that a capture taken at a lower rate reads as the 160 MS/s one taken down to it (resample / decimate); truth ch32rv's read and its DMI operations over USB"
+sources = ["linke:l103-linke-2026-11-17/rate/tune"]
+transforms = [""]
+
+[suite.linke-l103-rate-holdout]
+role = "holdout"
+about = "the same, the operations set aside (all their rates)"
+sources = ["linke:l103-linke-2026-11-17/rate/holdout"]
+transforms = [""]

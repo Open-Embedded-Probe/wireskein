@@ -1,0 +1,1 @@
+{"contract":"5","ok":false,"cmd":"target.info","error":{"code":23,"kind":"target-ambiguous","msg":"--chip CH32V203C8T6 (family CH32V20x) conflicts with the detected CH32L103 (chip_id 0x10310710)","hint":"pass the correct --chip, or omit it to use auto-detection"}}

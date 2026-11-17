@@ -1,0 +1,30 @@
+{
+ "scenario": "low/read_erased_1k",
+ "args": [
+  "--speed",
+  "low",
+  "read",
+  "--range",
+  "0x08000000+1024",
+  "-o",
+  "runs/low__read_erased_1k.tmp/read.bin"
+ ],
+ "rc": 0,
+ "seconds": 0.3727,
+ "t0_host_ns": 2836965812482999,
+ "t1_host_ns": 2836966185149907,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": true,
+ "capture_log": [
+  "runs/low__read_erased_1k.tmp/c.wireskein: 2 logic channels, 818155520 ticks at 1.6e+08 Hz (5.11347 s)",
+  "link: opened in 1.77 s, read 204538.9 KB in 5.19 s (39410.2 KB/s)",
+  "data rate: 40 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 216 ms before it drops",
+  "stream: 204538.9 KB in 10633 frames over 5.19 s (39410.2 KB/s)"
+ ],
+ "excerpt_s": [
+  0.608389,
+  1.101056
+ ]
+}

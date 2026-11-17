@@ -1,0 +1,26 @@
+{
+ "scenario": "medium/reset",
+ "args": [
+  "--speed",
+  "medium",
+  "reset"
+ ],
+ "rc": 0,
+ "seconds": 0.1539,
+ "t0_host_ns": 2836607651112657,
+ "t1_host_ns": 2836607805037402,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": true,
+ "capture_log": [
+  "runs/medium__reset.tmp/c.wireskein: 2 logic channels, 800412928 ticks at 1.6e+08 Hz (5.00258 s)",
+  "link: opened in 1.14 s, read 200103.2 KB in 5.11 s (39151.5 KB/s)",
+  "data rate: 40 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 216 ms before it drops",
+  "stream: 200103.2 KB in 10402 frames over 5.11 s (39151.5 KB/s)"
+ ],
+ "excerpt_s": [
+  1.171,
+  1.444924
+ ]
+}

@@ -1,0 +1,27 @@
+{
+ "scenario": "high/verify_pattern4k",
+ "args": [
+  "--speed",
+  "high",
+  "verify",
+  "/home/mt/dev_oep/wireskein/bench/data/l103-linke-2026-11-17/tools/pattern-4k.bin"
+ ],
+ "rc": 0,
+ "seconds": 0.2461,
+ "t0_host_ns": 2836094970063269,
+ "t1_host_ns": 2836095216194604,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": false,
+ "capture_log": [
+  "runs/high__verify_pattern4k.tmp/c.wireskein: 2 logic channels, 803846400 ticks at 1.6e+08 Hz (5.02404 s)",
+  "link: opened in 0.90 s, read 200961.6 KB in 5.16 s (38938.5 KB/s)",
+  "data rate: 40 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 216 ms before it drops",
+  "stream: 200961.6 KB in 10447 frames over 5.16 s (38938.5 KB/s)"
+ ],
+ "excerpt_s": [
+  1.612651,
+  1.978783
+ ]
+}

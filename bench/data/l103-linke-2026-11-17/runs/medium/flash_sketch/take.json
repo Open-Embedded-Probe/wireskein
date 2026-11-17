@@ -1,0 +1,28 @@
+{
+ "scenario": "medium/flash_sketch",
+ "args": [
+  "--speed",
+  "medium",
+  "flash",
+  "/home/mt/dev_oep/wireskein/bench/data/l103-linke-2026-11-17/tools/l103_image.bin",
+  "--yes"
+ ],
+ "rc": 0,
+ "seconds": 0.3423,
+ "t0_host_ns": 2836678411711964,
+ "t1_host_ns": 2836678754020233,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": true,
+ "capture_log": [
+  "runs/medium__flash_sketch.tmp/c.wireskein: 2 logic channels, 800135168 ticks at 1.6e+08 Hz (5.00084 s)",
+  "link: opened in 0.64 s, read 200033.8 KB in 5.11 s (39183.9 KB/s)",
+  "data rate: 40 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 216 ms before it drops",
+  "stream: 200033.8 KB in 10398 frames over 5.11 s (39183.9 KB/s)"
+ ],
+ "excerpt_s": [
+  2.102318,
+  2.564626
+ ]
+}

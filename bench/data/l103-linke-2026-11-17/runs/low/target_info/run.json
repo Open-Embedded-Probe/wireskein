@@ -1,0 +1,45 @@
+{
+ "format": "wireskein-run/1",
+ "meta": {
+  "target": "CH32L103C8T6",
+  "target_uid": "3a6dabcda282bc48",
+  "linke": "0E028F0692F1",
+  "tap": "LinkE side",
+  "probe": "oep:oep://e8f60ae84dd7",
+  "scenario": "low/target_info",
+  "holdout": false
+ },
+ "log": [
+  {
+   "host_ns": 2836696622824372,
+   "src": "marker",
+   "text": "# low/target_info"
+  },
+  {
+   "host_ns": 2836699623542591,
+   "src": "host",
+   "text": "ch32rv --probe serial:0E028F0692F1 --json --non-interactive --progress none --capture ch32rv.ndjson --speed low target info"
+  },
+  {
+   "host_ns": 2836699745822222,
+   "src": "dut",
+   "text": "exit 0 in 0.122 s"
+  },
+  {
+   "host_ns": 2836699745830311,
+   "src": "marker",
+   "text": "#"
+  }
+ ],
+ "captures": [
+  {
+   "file": "c0001.wireskein",
+   "host_ns": 2836696622833146,
+   "channels": [
+    "SWCLK",
+    "SWDIO"
+   ]
+  }
+ ],
+ "expect": {}
+}

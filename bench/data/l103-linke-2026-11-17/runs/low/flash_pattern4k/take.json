@@ -1,0 +1,28 @@
+{
+ "scenario": "low/flash_pattern4k",
+ "args": [
+  "--speed",
+  "low",
+  "flash",
+  "/home/mt/dev_oep/wireskein/bench/data/l103-linke-2026-11-17/tools/pattern-4k.bin",
+  "--yes"
+ ],
+ "rc": 0,
+ "seconds": 0.9115,
+ "t0_host_ns": 2836768815229426,
+ "t1_host_ns": 2836769726775569,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": false,
+ "capture_log": [
+  "runs/low__flash_pattern4k.tmp/c.wireskein: 2 logic channels, 800332288 ticks at 1.6e+08 Hz (5.00208 s)",
+  "link: opened in 0.66 s, read 200083.1 KB in 5.11 s (39170.5 KB/s)",
+  "data rate: 40 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 216 ms before it drops",
+  "stream: 200083.1 KB in 10401 frames over 5.11 s (39170.5 KB/s)"
+ ],
+ "excerpt_s": [
+  1.872745,
+  2.904291
+ ]
+}

@@ -1,0 +1,146 @@
+{
+ "source": "ch32rv.ndjson (DmiOp), read.bin",
+ "dmi_ops": [
+  {
+   "op": "R",
+   "addr": 17,
+   "data": 898,
+   "status": 0,
+   "t_us": 96945
+  },
+  {
+   "op": "W",
+   "addr": 32,
+   "data": 172803,
+   "status": 0,
+   "t_us": 97232
+  },
+  {
+   "op": "W",
+   "addr": 33,
+   "data": 1048691,
+   "status": 0,
+   "t_us": 97578
+  },
+  {
+   "op": "W",
+   "addr": 4,
+   "data": 1073881104,
+   "status": 0,
+   "t_us": 97844
+  },
+  {
+   "op": "W",
+   "addr": 22,
+   "data": 1792,
+   "status": 0,
+   "t_us": 98129
+  },
+  {
+   "op": "W",
+   "addr": 23,
+   "data": 2560005,
+   "status": 0,
+   "t_us": 98463
+  },
+  {
+   "op": "R",
+   "addr": 22,
+   "data": 134217730,
+   "status": 0,
+   "t_us": 98778
+  },
+  {
+   "op": "W",
+   "addr": 23,
+   "data": 2232326,
+   "status": 0,
+   "t_us": 99070
+  },
+  {
+   "op": "R",
+   "addr": 22,
+   "data": 134217730,
+   "status": 0,
+   "t_us": 99484
+  },
+  {
+   "op": "R",
+   "addr": 4,
+   "data": 32896,
+   "status": 0,
+   "t_us": 99714
+  },
+  {
+   "op": "R",
+   "addr": 17,
+   "data": 197506,
+   "status": 0,
+   "t_us": 799316
+  },
+  {
+   "op": "W",
+   "addr": 16,
+   "data": 1,
+   "status": 0,
+   "t_us": 799513
+  },
+  {
+   "op": "R",
+   "addr": 17,
+   "data": 197506,
+   "status": 0,
+   "t_us": 799684
+  },
+  {
+   "op": "W",
+   "addr": 16,
+   "data": 268435457,
+   "status": 0,
+   "t_us": 903467
+  },
+  {
+   "op": "R",
+   "addr": 17,
+   "data": 898,
+   "status": 0,
+   "t_us": 903775
+  },
+  {
+   "op": "W",
+   "addr": 16,
+   "data": 268435457,
+   "status": 0,
+   "t_us": 904187
+  },
+  {
+   "op": "W",
+   "addr": 16,
+   "data": 1073741825,
+   "status": 0,
+   "t_us": 904873
+  },
+  {
+   "op": "R",
+   "addr": 17,
+   "data": 3202,
+   "status": 0,
+   "t_us": 905080
+  },
+  {
+   "op": "W",
+   "addr": 16,
+   "data": 1,
+   "status": 0,
+   "t_us": 905377
+  }
+ ],
+ "agreement_160M": {
+  "dmi_ops": 19,
+  "found_in_order": 19,
+  "wire_frames": 6140,
+  "wire_ok": 5736,
+  "wire_answered": 5736,
+  "usable": true
+ }
+}

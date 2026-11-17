@@ -1,0 +1,24 @@
+{
+ "scenario": "high/x_clock_reset",
+ "args": [
+  "reset"
+ ],
+ "rc": 0,
+ "seconds": 0.1371,
+ "t0_host_ns": 2838763276034303,
+ "t1_host_ns": 2838763413156569,
+ "stream_s": 7.5,
+ "attempts": 2,
+ "holdout": true,
+ "capture_log": [
+  "runs/high__x_clock_reset.tmp/c.wireskein: 2 logic channels, 1200122112 ticks at 1.6e+08 Hz (7.50076 s)",
+  "link: opened in 0.65 s, read 300030.5 KB in 7.60 s (39456.9 KB/s)",
+  "data rate: 40 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 216 ms before it drops",
+  "stream: 300030.5 KB in 15596 frames over 7.60 s (39456.9 KB/s)"
+ ],
+ "excerpt_s": [
+  1.907033,
+  2.164155
+ ]
+}

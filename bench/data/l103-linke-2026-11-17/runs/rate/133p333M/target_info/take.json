@@ -1,0 +1,28 @@
+{
+ "scenario": "rate/133p333M/target_info",
+ "args": [
+  "--speed",
+  "high",
+  "target",
+  "info"
+ ],
+ "rc": 0,
+ "seconds": 0.1538,
+ "t0_host_ns": 2839998213160455,
+ "t1_host_ns": 2839998366971839,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": false,
+ "rate_requested": "133333333",
+ "capture_log": [
+  "runs/rate__133p333M__target_info.tmp/c.wireskein: 2 logic channels, 666848000 ticks at 1.33333e+08 Hz (5.00136 s)",
+  "link: opened in 0.81 s, read 166712.0 KB in 5.12 s (32560.9 KB/s)",
+  "data rate: 33.3 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 260 ms before it drops",
+  "stream: 166712.0 KB in 8666 frames over 5.12 s (32560.9 KB/s)"
+ ],
+ "excerpt_s": [
+  1.585116,
+  1.858927
+ ]
+}

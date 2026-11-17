@@ -1,0 +1,1 @@
+{"contract":"5","ok":true,"cmd":"read","result":{"addr":"0x08000000","len":4096,"out":"runs/low__read_pattern4k.tmp/read.bin"}}

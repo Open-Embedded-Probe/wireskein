@@ -1,0 +1,12 @@
+{
+ "source": "ch32rv.ndjson (DmiOp), read.bin",
+ "dmi_ops": [],
+ "agreement_160M": {
+  "dmi_ops": 0,
+  "found_in_order": 0,
+  "wire_frames": 302,
+  "wire_ok": 100,
+  "wire_answered": 100,
+  "usable": false
+ }
+}

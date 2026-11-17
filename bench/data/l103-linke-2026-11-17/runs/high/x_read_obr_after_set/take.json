@@ -1,0 +1,28 @@
+{
+ "scenario": "high/x_read_obr_after_set",
+ "args": [
+  "read",
+  "--range",
+  "0x4002201c+4",
+  "-o",
+  "runs/high__x_read_obr_after_set.tmp/read.bin"
+ ],
+ "rc": 0,
+ "seconds": 0.2213,
+ "t0_host_ns": 2838460821835802,
+ "t1_host_ns": 2838461043140376,
+ "stream_s": 7.5,
+ "attempts": 2,
+ "holdout": true,
+ "capture_log": [
+  "runs/high__x_read_obr_after_set.tmp/c.wireskein: 2 logic channels, 1200528896 ticks at 1.6e+08 Hz (7.50331 s)",
+  "link: opened in 1.29 s, read 300132.2 KB in 7.61 s (39439.2 KB/s)",
+  "data rate: 40 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 216 ms before it drops",
+  "stream: 300132.2 KB in 15602 frames over 7.61 s (39439.2 KB/s)"
+ ],
+ "excerpt_s": [
+  0.750336,
+  1.091641
+ ]
+}

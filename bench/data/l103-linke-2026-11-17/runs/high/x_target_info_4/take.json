@@ -1,0 +1,25 @@
+{
+ "scenario": "high/x_target_info_4",
+ "args": [
+  "target",
+  "info"
+ ],
+ "rc": 0,
+ "seconds": 0.1559,
+ "t0_host_ns": 2837077405181381,
+ "t1_host_ns": 2837077561094450,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": false,
+ "capture_log": [
+  "runs/high__x_target_info_4.tmp/c.wireskein: 2 logic channels, 800493568 ticks at 1.6e+08 Hz (5.00308 s)",
+  "link: opened in 0.72 s, read 200123.4 KB in 5.11 s (39178.4 KB/s)",
+  "data rate: 40 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 216 ms before it drops",
+  "stream: 200123.4 KB in 10403 frames over 5.11 s (39178.4 KB/s)"
+ ],
+ "excerpt_s": [
+  1.975278,
+  2.251191
+ ]
+}

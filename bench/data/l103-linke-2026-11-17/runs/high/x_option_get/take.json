@@ -1,0 +1,26 @@
+{
+ "scenario": "high/x_option_get",
+ "args": [
+  "target",
+  "option",
+  "get"
+ ],
+ "rc": 0,
+ "seconds": 0.2017,
+ "t0_host_ns": 2838305698214633,
+ "t1_host_ns": 2838305899958320,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": true,
+ "capture_log": [
+  "runs/high__x_option_get.tmp/c.wireskein: 2 logic channels, 800322560 ticks at 1.6e+08 Hz (5.00202 s)",
+  "link: opened in 1.17 s, read 200080.6 KB in 5.11 s (39154.7 KB/s)",
+  "data rate: 40 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 216 ms before it drops",
+  "stream: 200080.6 KB in 10401 frames over 5.11 s (39154.7 KB/s)"
+ ],
+ "excerpt_s": [
+  0.692929,
+  1.014673
+ ]
+}

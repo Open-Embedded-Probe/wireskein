@@ -1,0 +1,30 @@
+{
+ "scenario": "low/read_pattern4k",
+ "args": [
+  "--speed",
+  "low",
+  "read",
+  "--range",
+  "0x08000000+4096",
+  "-o",
+  "runs/low__read_pattern4k.tmp/read.bin"
+ ],
+ "rc": 0,
+ "seconds": 0.307,
+ "t0_host_ns": 2836809101823867,
+ "t1_host_ns": 2836809408867011,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": false,
+ "capture_log": [
+  "runs/low__read_pattern4k.tmp/c.wireskein: 2 logic channels, 800199680 ticks at 1.6e+08 Hz (5.00125 s)",
+  "link: opened in 0.65 s, read 200049.9 KB in 5.11 s (39148.7 KB/s)",
+  "data rate: 40 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 216 ms before it drops",
+  "stream: 200049.9 KB in 10399 frames over 5.11 s (39148.7 KB/s)"
+ ],
+ "excerpt_s": [
+  2.099102,
+  2.526145
+ ]
+}

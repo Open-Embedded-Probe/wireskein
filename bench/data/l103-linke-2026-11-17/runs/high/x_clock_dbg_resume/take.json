@@ -1,0 +1,25 @@
+{
+ "scenario": "high/x_clock_dbg_resume",
+ "args": [
+  "dbg",
+  "resume"
+ ],
+ "rc": 0,
+ "seconds": 0.1169,
+ "t0_host_ns": 2838685257517869,
+ "t1_host_ns": 2838685374377505,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": true,
+ "capture_log": [
+  "runs/high__x_clock_dbg_resume.tmp/c.wireskein: 2 logic channels, 800231936 ticks at 1.6e+08 Hz (5.00145 s)",
+  "link: opened in 0.63 s, read 200058.0 KB in 5.11 s (39165.6 KB/s)",
+  "data rate: 40 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 216 ms before it drops",
+  "stream: 200058.0 KB in 10400 frames over 5.11 s (39165.6 KB/s)"
+ ],
+ "excerpt_s": [
+  2.118217,
+  2.355077
+ ]
+}

@@ -86,6 +86,12 @@ def comb(cap, lines, max_mult):
   - Other repositories' records, copied: `wchfix:<sub>[a:b]` (wch-protocols' LinkE fixture: real RVSWD / SWIO, truth
     from its reference decoder's `.dmi.txt`), `ebdd:<name>[a:b]` (EmbedBenchDeviceData's runs: real I2C, truth the
     firmware's own lines)
+  - Records taken for the bench: `linke:<dir>[/rate]/<tune|holdout>[a:b]` (`bench/data/<dir>`, wireskein-run/1 with
+    the truth beside each: a WCH-LinkE's RVSWD at 160 MS/s, one ch32rv operation a run, cut to it; truth what ch32rv
+    read and the DMI operations it sent over USB, and for the run taken down (`decimate`, `resample`) the 160 MS/s
+    reading where every one of those operations is found in it; `/rate` the same operations taken by the probe at
+    lower rates; the half set aside for checking chosen by the scenario's name when it was taken). The raw streams
+    are kept in a repository of their own (wireskein-bench-raw), named in the directory's `SOURCE.json`
 - **The bench reads only this repository's files** (on GitHub's runners as here; `dir:` outside it is refused).
   Records of other repositories a suite needs are copied, only what it needs, under `bench/data/` by
   `bench/data/extract.py`, each with its source's `LICENSE` and a `SOURCE.json` (the repository, its commit, each
@@ -93,7 +99,9 @@ def comb(cap, lines, max_mult):
   `input_sha`, stay the same (checked when copying)
   - Transforms: `spike:L` (1-tick pulses at random, L per edge), `bounce:L` (a share L of the edges bounce just
     after), `xtalk:L` (a 1-tick pulse at a share L of the next channel's edges), `crop:A:B` (the part from A to B),
-    `decimate:K` (taken K times slower), joined with `+` (`crop:0:0.5+spike:0.1`)
+    `decimate:K` (taken K times slower), `resample:HZ` (taken at HZ from the capture's own grid, as a probe's
+    fractional divider takes it: samples on the source clock's ticks, unevenly spaced; a whole divider gives
+    `decimate`'s capture), joined with `+` (`crop:0:0.5+spike:0.1`)
   - Open-drain slow rises: `odslow:NS` (an I2C bus's rises NS nanoseconds late, a shorter high gone: the clipped
     clocks of a real bus through weak pull-ups)
   - Noise in time: `pspike:L:NS` (pulses NS nanoseconds wide, L per edge), `pbounce:L:NS` (a share L of the edges

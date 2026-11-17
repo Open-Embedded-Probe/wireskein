@@ -1,0 +1,27 @@
+{
+ "scenario": "high/x_write_ram_256",
+ "args": [
+  "write",
+  "--at",
+  "0x20000800",
+  "/home/mt/dev_oep/wireskein/bench/data/l103-linke-2026-11-17/tools/ram-256.bin"
+ ],
+ "rc": 0,
+ "seconds": 0.7392,
+ "t0_host_ns": 2837348751529701,
+ "t1_host_ns": 2837349490766338,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": false,
+ "capture_log": [
+  "runs/high__x_write_ram_256.tmp/c.wireskein: 2 logic channels, 800215808 ticks at 1.6e+08 Hz (5.00135 s)",
+  "link: opened in 1.10 s, read 200054.0 KB in 5.13 s (39027.3 KB/s)",
+  "data rate: 40 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 216 ms before it drops",
+  "stream: 200054.0 KB in 10399 frames over 5.13 s (39027.3 KB/s)"
+ ],
+ "excerpt_s": [
+  0.840613,
+  1.69985
+ ]
+}

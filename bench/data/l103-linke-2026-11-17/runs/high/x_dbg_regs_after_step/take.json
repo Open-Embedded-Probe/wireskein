@@ -1,0 +1,25 @@
+{
+ "scenario": "high/x_dbg_regs_after_step",
+ "args": [
+  "dbg",
+  "regs"
+ ],
+ "rc": 0,
+ "seconds": 0.274,
+ "t0_host_ns": 2837718080203015,
+ "t1_host_ns": 2837718354195706,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": false,
+ "capture_log": [
+  "runs/high__x_dbg_regs_after_step.tmp/c.wireskein: 2 logic channels, 801032960 ticks at 1.6e+08 Hz (5.00646 s)",
+  "link: opened in 0.85 s, read 200258.2 KB in 5.13 s (39051.9 KB/s)",
+  "data rate: 40 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 216 ms before it drops",
+  "stream: 200258.2 KB in 10410 frames over 5.13 s (39051.9 KB/s)"
+ ],
+ "excerpt_s": [
+  1.52087,
+  1.914862
+ ]
+}

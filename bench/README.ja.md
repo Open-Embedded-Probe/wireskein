@@ -85,13 +85,21 @@ def comb(cap, lines, max_mult):
   - ほかのリポジトリの記録（コピー）: `wchfix:<サブディレクトリ>[a:b]`（wch-protocols の LinkE の fixture。実機の
     RVSWD / SWIO、正解は参照の復号器の `.dmi.txt`）、`ebdd:<名前>[a:b]`（EmbedBenchDeviceData の記録。実機の I2C、
     正解はファームウェアの出力）
+  - 測定台のために取った記録: `linke:<ディレクトリ>[/rate]/<tune|holdout>[a:b]`（`bench/data/<ディレクトリ>`。
+    wireskein-run/1 に正解を添えたもの。WCH-LinkE の RVSWD を 160 MS/s で、1 回に ch32rv の操作 1 つ、その区間に
+    切り出してある。正解は ch32rv が読んだ中身と、USB で送った DMI の操作。遅く取ったもの（`decimate`、`resample`）
+    には、それらの操作がすべて見つかる 160 MS/s の読みも正解にする。`/rate` は同じ操作をプローブが遅い速さで
+    取ったもの。確認用の半分は、取った時点でシナリオの名前から決めてある）。切り出す前の生の記録は、別の
+    リポジトリ（wireskein-bench-raw）に置き、ディレクトリの `SOURCE.json` が指す
 - **測定台は、このリポジトリのファイルしか読まない**（Actions でも手元でも同じ。`dir:` でリポジトリの外を指すと
   拒否します）。スイートが使うほかのリポジトリの記録は、要るものだけを `bench/data/extract.py` で `bench/data/` に
   コピーし、元の `LICENSE` と `SOURCE.json`（リポジトリ、コミット、各ファイルの元と SHA-256）を付けます。記録は
   `.wireskein` に変換することがありますが、エッジは同じで、ケースの `input_sha` も変わりません（コピーのときに確認）
   - 変換: `spike:L`（ランダムな 1 刻みのパルス。エッジ 1 つあたり L 個）、`bounce:L`（エッジの L の割合で直後に
     跳ね返り）、`xtalk:L`（隣のチャンネルのエッジの L の割合で 1 刻みのパルス）、`crop:A:B`（A から B の部分）、
-    `decimate:K`（K 倍遅く取ったもの）。`+` でつなぎます（`crop:0:0.5+spike:0.1`）
+    `decimate:K`（K 倍遅く取ったもの）、`resample:HZ`（そのキャプチャの格子から HZ で取ったもの。プローブの
+    分数の分周と同じく、サンプルは元のクロックの刻みに乗り、間隔は揃わない。整数の分周なら `decimate` と同じ）。
+    `+` でつなぎます（`crop:0:0.5+spike:0.1`）
   - オープンドレインの遅い立ち上がり: `odslow:NS`（I2C の線の立ち上がりが NS ナノ秒ほど遅れ、それより短い High は
     消える。弱いプルアップの実機と同じ、切り詰められたクロック）
   - 時間で決めたノイズ: `pspike:L:NS`（NS ナノ秒のパルス。エッジ 1 つあたり L 個）、`pbounce:L:NS`（エッジの L の

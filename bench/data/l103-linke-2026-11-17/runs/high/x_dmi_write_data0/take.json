@@ -1,0 +1,28 @@
+{
+ "scenario": "high/x_dmi_write_data0",
+ "args": [
+  "dbg",
+  "dmi",
+  "write",
+  "0x04",
+  "0xdeadbeef"
+ ],
+ "rc": 0,
+ "seconds": 0.174,
+ "t0_host_ns": 2837953094130854,
+ "t1_host_ns": 2837953268110472,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": false,
+ "capture_log": [
+  "runs/high__x_dmi_write_data0.tmp/c.wireskein: 2 logic channels, 800280320 ticks at 1.6e+08 Hz (5.00175 s)",
+  "link: opened in 0.70 s, read 200070.1 KB in 5.11 s (39168.0 KB/s)",
+  "data rate: 40 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 216 ms before it drops",
+  "stream: 200070.1 KB in 10400 frames over 5.11 s (39168.0 KB/s)"
+ ],
+ "excerpt_s": [
+  2.038796,
+  2.332775
+ ]
+}

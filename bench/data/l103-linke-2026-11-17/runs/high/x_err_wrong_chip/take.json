@@ -1,0 +1,27 @@
+{
+ "scenario": "high/x_err_wrong_chip",
+ "args": [
+  "--chip",
+  "CH32V203C8T6",
+  "target",
+  "info"
+ ],
+ "rc": 23,
+ "seconds": 0.219,
+ "t0_host_ns": 2838193580731392,
+ "t1_host_ns": 2838193799776304,
+ "stream_s": 17.283076690499996,
+ "attempts": 4,
+ "holdout": true,
+ "capture_log": [
+  "runs/high__x_err_wrong_chip.tmp/c.wireskein: 2 logic channels, 2765514752 ticks at 1.6e+08 Hz (17.2845 s)",
+  "link: opened in 0.85 s, read 691378.7 KB in 17.39 s (39745.8 KB/s)",
+  "data rate: 40 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 216 ms before it drops",
+  "stream: 691378.7 KB in 35939 frames over 17.39 s (39745.8 KB/s)"
+ ],
+ "excerpt_s": [
+  1.732157,
+  2.071202
+ ]
+}

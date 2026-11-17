@@ -1,0 +1,28 @@
+{
+ "scenario": "high/x_read_flash_64k",
+ "args": [
+  "read",
+  "--range",
+  "0x08000000+65536",
+  "-o",
+  "runs/high__x_read_flash_64k.tmp/read.bin"
+ ],
+ "rc": 0,
+ "seconds": 1.2752,
+ "t0_host_ns": 2837182323767099,
+ "t1_host_ns": 2837183598981433,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": false,
+ "capture_log": [
+  "runs/high__x_read_flash_64k.tmp/c.wireskein: 2 logic channels, 800135168 ticks at 1.6e+08 Hz (5.00084 s)",
+  "link: opened in 0.69 s, read 200033.8 KB in 5.11 s (39168.6 KB/s)",
+  "data rate: 40 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 216 ms before it drops",
+  "stream: 200033.8 KB in 10398 frames over 5.11 s (39168.6 KB/s)"
+ ],
+ "excerpt_s": [
+  1.819018,
+  3.214233
+ ]
+}

@@ -16,6 +16,14 @@ was measured:
                 ebdd:<name>[a:b]  EmbedBenchDeviceData's runs, as copied to bench/data/<name>/runs (real I2C taken by
                                   an OEP probe): truth the bus (SDA / SCL renamed D0 / D1), its rate (from the run's
                                   name) and the bytes the firmware said it read (its dut lines: bytes=.. crc=1, data=..)
+                linke:<dir>[/rate]/<tune|holdout>[a:b]   runs of bench/data/<dir> (/rate: the same operations taken at
+                                  rates from 160 MHz to 627 kHz, whole and fractional dividers of 160 MHz) (wireskein-run/1 + truth.json: a LinkE's
+                                  RVSWD taken at 160 MS/s by an OEP probe, one ch32rv operation each), the half
+                                  set aside for checking or the other (run.json meta.holdout, from the scenario's
+                                  name). Truth: what ch32rv read (read.bin), and the DMI accesses as read at 160 MS/s
+                                  where they agree with every DMI operation ch32rv sent over USB (reading.json, truth.json; for
+                                  the run decimated: decimate:K, never for 160 MS/s itself). SWCLK / SWDIO renamed
+                                  D0 / D1
                 i2cbench:h417_slow/stream[a:b]   real captures of tests/data/i2c_bench: I2C through weak
                                   pull-ups, 50 times "S, 0x13 write, NACK, P" each (what the device answered: the
                                   summaries beside them), truth made on reading; SCL / SDA renamed D0 / D1
@@ -106,6 +114,18 @@ def source_items(source: str) -> list[str]:
         if not d.is_dir():
             raise FileNotFoundError(d)
         return [f"wchfix:{p}" for p in _slice(sorted(d.glob("*.wireskein")), m["a"], m["b"])]
+    if m and m["base"].startswith("linke:"):
+        sub, _, split = m["base"][len("linke:"):].rpartition("/")
+        if split not in ("tune", "holdout"):
+            raise ValueError(f"source {source!r}: linke:<dir>[/rate]/tune or linke:<dir>[/rate]/holdout")
+        rate = sub.endswith("/rate")
+        d = _inside(DATA / sub.removesuffix("/rate")) / "runs"
+        if not d.is_dir():
+            raise FileNotFoundError(d)
+        runs = [p.parent for p in sorted(d.rglob("truth.json"))
+                if (p.parent.relative_to(d).parts[0] == "rate") == rate
+                and json.loads((p.parent / "run.json").read_text())["meta"].get("holdout") == (split == "holdout")]
+        return [f"linke:{r}" for r in _slice(runs, m["a"], m["b"])]
     if m and m["base"].startswith("ebdd:"):
         d = _inside(DATA / m["base"][len("ebdd:"):]) / "runs"
         if not d.is_dir():
@@ -273,7 +293,46 @@ def _ebdd(run: Path) -> tuple[Capture, dict]:
     return Capture(cap.rate, cap.n_samples, chans), truth
 
 
+def _linke(run: Path) -> tuple[Capture, dict]:
+    """A run of a 160 MS/s LinkE capture (bench/data/<dir>/tools/capture.py, truth by tools/truth.py)."""
+    doc = json.loads((run / "run.json").read_text())
+    t = json.loads((run / "truth.json").read_text())
+    cap = _capture.read(run / doc["captures"][0]["file"]).parts[0].view()
+    names = {ch.name for ch in cap.channels}
+    if names != {"SWCLK", "SWDIO"}:
+        raise ValueError(f"{run}: channels {sorted(names)}, want SWCLK and SWDIO")
+    root = run
+    while root.name != "runs":
+        root = root.parent
+    rel = run.relative_to(root)
+    flip = zlib.crc32(str(rel).encode()) & 1
+    new = {"SWCLK": "D1" if flip else "D0", "SWDIO": "D0" if flip else "D1"}
+    chans = sorted((replace(ch, name=new[ch.name]) for ch in cap.channels), key=lambda c: c.name)
+    expect, src = {}, []
+    if t.get("read_bytes") and len(t["read_bytes"]) >= 512:          # 256 bytes or more: a memory dump
+        expect["read_bytes"] = t["read_bytes"]
+        src.append("ch32rv's read (read.bin)")
+    if t.get("dmi_ops"):
+        expect["dmi_ops"] = t["dmi_ops"]           # scored where neither read_bytes nor dmi is (eval/evaluate.py)
+        src.append(f"ch32rv's {len(t['dmi_ops'])} DMI operations over USB, in order")
+    rd = json.loads((run / "reading.json").read_text()) if (run / "reading.json").exists() else {}
+    if t["agreement_160M"].get("usable") and rd.get("dmi"):
+        expect["dmi"] = rd["dmi"]
+        expect["dmi_same_run_160M"] = True                           # truth for the run decimated only
+        src.append(f"the 160 MS/s reading, every one of ch32rv's {t['agreement_160M']['dmi_ops']} DMI operations found in it")
+    bus = {"protocol": "rvswd", "roles": {"clk": new["SWCLK"], "dio": new["SWDIO"]}, "params": {}}
+    if expect:
+        bus["expect"], bus["expect_source"] = expect, "; ".join(src)
+    truth = {"id": f"linke-{root.parent.name}-" + str(rel).replace("/", "-"),
+             "source": {"path": str(run.relative_to(REPO)), "scenario": doc["meta"].get("scenario")},
+             "buses": [bus], "decoys": [],
+             "notes": "real LinkE -> CH32L103 RVSWD at 160 MS/s, tapped at the LinkE (one ch32rv operation)"}
+    return Capture(cap.rate, cap.n_samples, chans), truth
+
+
 def read(ref: str) -> tuple[Capture, dict]:
+    if ref.startswith("linke:"):
+        return _linke(Path(ref[len("linke:"):]))
     if ref.startswith("wchfix:"):
         return _wchfix(Path(ref[len("wchfix:"):]))
     if ref.startswith("ebdd:"):
@@ -450,6 +509,25 @@ def decimate(cap: Capture, k: int) -> Capture:
     return Capture(cap.rate / k, cap.n_samples // k, out)
 
 
+def resample(cap: Capture, rate_hz: float) -> Capture:
+    """Taken at rate_hz from the capture's own grid, as a probe's fractional divider takes it (samples on the source
+    clock's ticks, unevenly spaced: oep-probe-arduino docs/guide/capture): sample j at tick floor(j * r0 / rate_hz).
+    An edge is counted as decimate counts it (floor). A whole divider gives decimate's capture exactly."""
+    from fractions import Fraction
+    # the ratio as a small fraction (a divider's: 133.3 / 160 = 5/6), so that edge x numerator stays in int64
+    q = (Fraction(rate_hz) / Fraction(cap.rate)).limit_denominator(1 << 12)
+    if q <= 0 or q > 1:
+        raise ValueError(f"resample:{rate_hz:g}: not a rate below the capture's {cap.rate:g} Hz")
+    out = []
+    for ch in cap.channels:
+        e = (np.asarray(ch.edges, np.int64) * q.numerator) // q.denominator
+        u, c = np.unique(e, return_counts=True)
+        e = u[c % 2 == 1]
+        initial = int(ch.initial ^ (int(np.sum(e == 0)) & 1))
+        out.append(replace(ch, initial=initial, edges=e[e > 0], step=1, phase=0))
+    return Capture(float(cap.rate * q), int(cap.n_samples * q), out)
+
+
 NOISE = {"spike": noise_spike, "bounce": noise_bounce, "xtalk": noise_xtalk}
 TIMED_NOISE = {"pspike": noise_pspike, "pbounce": noise_pbounce}
 
@@ -472,9 +550,12 @@ def apply(cap: Capture, clean: Capture | None, chain: str, case_id: str,
         elif kind == "decimate":
             cap = decimate(cap, int(args[0]))
             clean = decimate(clean, int(args[0])) if clean else None
+        elif kind == "resample":
+            cap = resample(cap, float(args[0]))
+            clean = resample(clean, float(args[0])) if clean else None
         else:
             raise ValueError(f"transform {spec!r}: spike:L, bounce:L, xtalk:L, pspike:L:NS, pbounce:L:NS, odslow:NS, "
-                             "crop:A:B or decimate:K")
+                             "crop:A:B, decimate:K or resample:HZ")
     return cap, clean
 
 
@@ -546,6 +627,8 @@ def noise_span_s(chain: str, rate0: float, open_drain: bool = False) -> float:
         kind, *a = spec.split(":")
         if kind == "decimate":
             rate /= int(a[0])
+        elif kind == "resample":
+            rate = float(a[0])
         elif kind in ("pbounce", "pspike"):
             span = max(span, float(a[1]) * 1e-9)
         elif kind == "bounce":
@@ -629,6 +712,14 @@ def hardness(truth: dict, cap: Capture, chain: str, rate0: float, orig: Capture 
 
 def load_case(ref: str, source: str, chain: str) -> Case:
     cap, truth = read(ref)
+    if "decimate" not in chain and "resample" not in chain:
+        # a reading of this very capture is truth only for the run decimated (linke:): left out at its own rate
+        for b in truth["buses"]:
+            if (b.get("expect") or {}).pop("dmi_same_run_160M", False):
+                b["expect"].pop("dmi", None)
+                b["expect_source"] = "; ".join(x for x in b["expect_source"].split("; ") if "160 MS/s" not in x)
+                if not b["expect"]:
+                    del b["expect"], b["expect_source"]
     rate0, orig = float(cap.rate), cap
     # a generated case is its own clean reference, unless its frozen set already holds noise
     gen = truth.get("generator")

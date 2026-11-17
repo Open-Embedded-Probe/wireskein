@@ -1,0 +1,28 @@
+{
+ "scenario": "high/x_err_read_unmapped",
+ "args": [
+  "read",
+  "--range",
+  "0x60000000+16",
+  "-o",
+  "runs/high__x_err_read_unmapped.tmp/read.bin"
+ ],
+ "rc": 0,
+ "seconds": 0.1237,
+ "t0_host_ns": 2838111354870321,
+ "t1_host_ns": 2838111478618578,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": true,
+ "capture_log": [
+  "runs/high__x_err_read_unmapped.tmp/c.wireskein: 2 logic channels, 800199680 ticks at 1.6e+08 Hz (5.00125 s)",
+  "link: opened in 0.63 s, read 200049.9 KB in 5.11 s (39141.1 KB/s)",
+  "data rate: 40 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 216 ms before it drops",
+  "stream: 200049.9 KB in 10399 frames over 5.11 s (39141.1 KB/s)"
+ ],
+ "excerpt_s": [
+  2.118787,
+  2.362535
+ ]
+}

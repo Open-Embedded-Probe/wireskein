@@ -1,0 +1,26 @@
+{
+ "scenario": "high/x_reset_confirm_pc",
+ "args": [
+  "reset",
+  "--confirm-run",
+  "pc"
+ ],
+ "rc": 0,
+ "seconds": 0.3647,
+ "t0_host_ns": 2838043402871942,
+ "t1_host_ns": 2838043767542342,
+ "stream_s": 5.0,
+ "attempts": 1,
+ "holdout": false,
+ "capture_log": [
+  "runs/high__x_reset_confirm_pc.tmp/c.wireskein: 2 logic channels, 800626176 ticks at 1.6e+08 Hz (5.00391 s)",
+  "link: opened in 0.64 s, read 200156.5 KB in 5.11 s (39138.9 KB/s)",
+  "data rate: 40 MB/s",
+  "buffer: 8658600 B on the probe: this host may pause 216 ms before it drops",
+  "stream: 200156.5 KB in 10405 frames over 5.11 s (39138.9 KB/s)"
+ ],
+ "excerpt_s": [
+  2.061126,
+  2.545796
+ ]
+}

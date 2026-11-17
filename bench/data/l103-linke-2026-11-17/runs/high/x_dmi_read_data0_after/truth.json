@@ -1,0 +1,20 @@
+{
+ "source": "ch32rv.ndjson (DmiOp), read.bin",
+ "dmi_ops": [
+  {
+   "op": "R",
+   "addr": 4,
+   "data": 4294967295,
+   "status": 0,
+   "t_us": 141049
+  }
+ ],
+ "agreement_160M": {
+  "dmi_ops": 1,
+  "found_in_order": 1,
+  "wire_frames": 347,
+  "wire_ok": 145,
+  "wire_answered": 145,
+  "usable": true
+ }
+}
