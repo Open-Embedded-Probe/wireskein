@@ -208,8 +208,12 @@ class UartPlugin:
         # only what is above chance counts: a UART whose rate changes mid-stream breaks into framing errors, and a
         # few of its "frames" fit by luck (up to a third on the evaluation corpus; LIN and DMX512 lines fit wholly)
         framed = max(0.0, (framed - 0.5) / 0.5)
+        # a bit needs about 3 samples to have a middle to read: under it a line's bounces or a clock's halves read
+        # as bits as well as a UART's (on the bench every UART claimed under 2.2 samples a bit was none)
+        m["samples_per_bit"] = u_main
+        resolvable = float(np.clip(u_main - 2, 0, 1))
         score = (framing * coverage * q(ok_n) * degenerate(v & 0xFF) * (1 - 0.5 * clock_like) * (1 - sync)
-                 * (1 - framed))
+                 * (1 - framed) * resolvable)
         params = {"baud": c.cap.rate / u_main, "idle": rb.idle, "L": m["L"], "blocks": len(units)}
         items = {"value": v, "start": np.concatenate(starts), "char_samples": u_main * (m["L"] or 10)}
         return [Node("uart", params, {"data": rb.pin}, Stream("bytes", items, meta={"char_samples": u_main * (m["L"] or 10)}),
