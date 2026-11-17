@@ -221,6 +221,8 @@ def judge(cap, truth: dict, claims: list[dict], seconds: float = 0.0) -> dict:
             if m["roles"] and m["params"]:
                 b["outcome"] = c["verdict"]
                 b["decode"] = m["decode"]
+                if isinstance(c.get("reading"), dict) and "unread" in c["reading"]:
+                    b["unread"] = c["reading"]["unread"]     # what the claim said it did not read (RVSWD, SWIO)
                 b["margin"] = c["margin"]
                 b["bit_order_ok"] = m.get("bit_order_ok")
                 claimed_correct.add(ci)

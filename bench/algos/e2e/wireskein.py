@@ -6,7 +6,12 @@ from wireskein._engine import methods
 
 
 def claims(cap):
-    return decode.export(decode.analyze(cap), cap, mode="all", alternatives=True)["claims"]
+    """analyze's claims as `wireskein analyze` gives them: with how a clocked or RVSWD / SWIO claim read (reading:
+    its unread stretches, a clock sampled too slowly)."""
+    res = decode.analyze(cap)
+    out = decode.export(res, cap, mode="all", alternatives=True)["claims"]
+    decode._note_undersampled(out, cap, res)
+    return out
 
 
 @algorithm("e2e", "wireskein", status="main", about="wireskein.decode.analyze as installed")

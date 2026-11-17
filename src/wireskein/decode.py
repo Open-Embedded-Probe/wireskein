@@ -348,7 +348,7 @@ def reading(out: dict, frames: list, cap: Capture, b: dict) -> dict:
          "unanswered": sum(1 for x in fr if x.get("answered") is False),
          "restored": sum(1 for x in fr if "restored" in x), "repaired": sum(1 for x in fr if "repaired" in x),
          "rate_ok": all(g["rate_ok"] for g in out.get("clock_speeds", []))}
-    if "uninterpreted" in out:                   # decode's (analyze's claims do not say what is unread)
+    if "uninterpreted" in out:                   # decode's, and analyze's RVSWD and SWIO claims
         un = out["uninterpreted"]
         r.update(unread=len(un), unread_edges=int(sum(u.get("edges", 0) for u in un)))
     clk = b["pins"].get("clk")
@@ -428,23 +428,73 @@ def _frame_items(lay: dict, n) -> list:
 
 def _note_undersampled(claims: list, cap: Capture, res) -> None:
     """analyze's claims on a clock sampled too slowly: told as `undersampled` (as decode's buses), judged on the
-    claim's frames (its lower layers, whatever the export gives)."""
+    claim's frames (its lower layers, whatever the export gives); and how an RVSWD or SWIO claim read (`reading`,
+    with what it did not read: unread, unread_edges)."""
     nodes = {(c.protocol, tuple(sorted(c.roles.items()))): c.node for c in res.claims}
     for c in claims:
         clk = (c.get("roles") or {}).get("clk")
         n = nodes.get((c["protocol"], tuple(sorted((c.get("roles") or {}).items()))))
+        if n is not None and c["protocol"] in ("rvswd", "swio"):
+            # what the claim did not read, told as decode tells it (RVSWD and SWIO: frame by frame)
+            pins = list((c.get("roles") or {}).values())
+            un = unread(cap, pins, _exp.layers_of(n), n, _idle(cap, {"pins": c.get("roles") or {}, "protocol": c["protocol"]}, n))
+            if not clk:
+                c["reading"] = reading({"uninterpreted": un}, _frame_items(_exp.layers_of(n), n), cap,
+                                       {"pins": c.get("roles") or {}, "protocol": c["protocol"]})
+        else:
+            un = None
         if not clk or n is None:
             continue
         frames = _frame_items(_exp.layers_of(n), n)
         frame_clocks(cap, clk, frames)
         speeds = clock_speeds(float(cap.rate), frames)
-        c["reading"] = reading({"clock_speeds": speeds}, frames, cap, {"pins": c.get("roles") or {},
-                                                                        "protocol": c["protocol"]})
+        c["reading"] = reading({"clock_speeds": speeds, **({"uninterpreted": un} if un is not None else {})}, frames,
+                               cap, {"pins": c.get("roles") or {}, "protocol": c["protocol"]})
         if speeds:
             c["clock_speeds"] = speeds
         us = undersampled(cap, speeds, clk)
         if us:
             c["undersampled"] = us
+
+
+def unread(cap: Capture, pins: list[str], lay: dict, n, idle: int) -> list[dict]:
+    """The stretches of activity on a bus's pins that no item it read covers ({s, e, edges}): what a reading did not
+    read, told rather than left out (decode's uninterpreted; analyze's RVSWD and SWIO claims too)."""
+    # a clocked bus's bits and frames, SWIO's pulses, are where it was cut, not what was read: a frame no layout
+    # read is unread
+    skip = ()
+    if n is not None and n.analyzer in staged.SYNC_PROTOCOLS:
+        skip = ("bits", "frames")
+    elif n is not None and n.analyzer == "swio":
+        skip = ("pulses",)
+    if n is not None and n.analyzer in ("rvswd", "swio"):
+        # read frame by frame: a Debug Module access (dm) spans several DMI frames, and would hide a frame between
+        # them that no layout read
+        skip += ("dm",)
+    items = _items(lay, skip)
+    starts = np.sort(np.array([s for s, _ in items], np.int64))
+    # items with an end (frames): what they cover is known, and activity between them inside a burst is not read
+    spans = np.array(sorted((s, e) for s, e in items if e > s), np.int64).reshape(-1, 2)
+    margin = max(1, idle // IDLE_BITS * 2)                 # a START or STOP a clock or two outside the sampled bits
+    un = []
+    for x in _bursts(cap, pins, idle):
+        s, e = int(x[0]), int(x[-1])
+        if len(spans) and ((spans[:, 0] <= e) & (spans[:, 1] >= s)).any():
+            left = _uncovered(x, spans, margin)
+            for y in (np.split(left, np.flatnonzero(np.diff(left) > idle) + 1) if len(left) else []):
+                un.append({"s": int(y[0]), "e": int(y[-1]), "edges": len(y)})
+            continue
+        j = np.searchsorted(starts, s - idle)
+        if j < len(starts) and starts[j] <= e:
+            continue
+        if any(a <= s and e <= z for a, z in items):
+            continue
+        un.append({"s": s, "e": e, "edges": len(x)})
+    if n is not None and n.analyzer in ("rvswd", "swio"):
+        # a change or two between frames (the data line's idle level moving before a START) carries no bit: a
+        # clocked bit takes the clock's edges with it, a SWIO bit a pulse
+        un = [u for u in un if u["edges"] >= 3]
+    return un
 
 
 def _bus(res, cap: Capture, b: dict, depth: str, claimed: list) -> dict:
@@ -477,32 +527,7 @@ def _bus(res, cap: Capture, b: dict, depth: str, claimed: list) -> dict:
             if k in lay:                               # lower layers asked for by name (a pulse, a sampling edge)
                 out["result"][k] = lay[k]
     idle = _idle(cap, b, n)
-    # a clocked bus's bits and frames, SWIO's pulses, are where it was cut, not what was read: a frame no layout
-    # read is unread
-    skip = ()
-    if n is not None and n.analyzer in staged.SYNC_PROTOCOLS:
-        skip = ("bits", "frames")
-    elif n is not None and n.analyzer == "swio":
-        skip = ("pulses",)
-    items = _items(lay, skip)
-    starts = np.sort(np.array([s for s, _ in items], np.int64))
-    # items with an end (frames): what they cover is known, and activity between them inside a burst is not read
-    spans = np.array(sorted((s, e) for s, e in items if e > s), np.int64).reshape(-1, 2)
-    margin = max(1, idle // IDLE_BITS * 2)                 # a START or STOP a clock or two outside the sampled bits
-    un = []
-    for x in _bursts(cap, list(b["pins"].values()), idle):
-        s, e = int(x[0]), int(x[-1])
-        if len(spans) and ((spans[:, 0] <= e) & (spans[:, 1] >= s)).any():
-            left = _uncovered(x, spans, margin)
-            for y in (np.split(left, np.flatnonzero(np.diff(left) > idle) + 1) if len(left) else []):
-                un.append({"s": int(y[0]), "e": int(y[-1]), "edges": len(y)})
-            continue
-        j = np.searchsorted(starts, s - idle)
-        if j < len(starts) and starts[j] <= e:
-            continue
-        if any(a <= s and e <= z for a, z in items):
-            continue
-        un.append({"s": s, "e": e, "edges": len(x)})
+    un = unread(cap, list(b["pins"].values()), lay, n, idle)
     out["uninterpreted"] = un
     out["idle_ticks"] = idle
     clk = b["pins"].get("clk")

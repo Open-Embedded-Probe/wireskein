@@ -107,9 +107,42 @@ def reframe_startstop(fr, cap, hold: float = 1.5, w: int = 16, hold_min_s: float
     a = np.searchsorted(sb.t, st[keep], side="right")
     b = np.searchsorted(sb.t, stop[keep], side="right")
     out = [(int(x), int(y)) for x, y in zip(a.tolist(), b.tolist()) if y > x]
+    bits0 = sb.bits[0]
+    out = _joined(out, lambda a: a + 7 <= len(bits0) and tuple(int(x) for x in bits0[a:a + 7]) == BURST_HEAD)
     if sb.sample_edge == "rise" and len(rises) == len(sb.t) and np.array_equal(rises, sb.t):
         out = [_repaired(x, y, highs) for x, y in out]
         out = _restored(out, sb.t, d.initial, de)
+    return out
+
+
+# clocks between two pieces of one frame split by a STOP misread: words of all ones after it hold DIO high, so the next
+# START (DIO falling) may come words later; frames apart have no clock between them but a stop clock or two
+JOIN_GAP = 160
+
+
+BURST_HEAD = (0, 0, 0, 0, 1, 0, 0)     # a burst reads data0 again and again: its header opens with data0's address
+
+
+def _burst_length(n: int) -> bool:
+    return n >= 91 and (n - 15) % 38 == 0
+
+
+def _joined(out: list, opens_burst=lambda a: True) -> list:
+    """Frames split in two by a STOP misread inside one (a burst read at the LinkE's low speed holds CLK high about
+    twice its usual high between words, and DIO may rise in it): two frames next to each other, neither of a length
+    any form has, at most JOIN_GAP clocks apart (the words after the misread STOP read no START until DIO falls), read
+    as one (the clocks between them taken in) where together they are of a known length; the layout's checks then
+    tell whether it reads. Only a burst splits so (its words between, read at the LinkE's low speed): together they
+    are a burst's length and the first piece opens as a burst does (opens_burst(a): data0's address first); two
+    broken frames of a fast clock (glitches) are not made one."""
+    out = list(out)
+    i = 0
+    while i + 1 < len(out):
+        (a1, b1), (a2, b2) = out[i], out[i + 1]
+        if (not known_length(b1 - a1) and not known_length(b2 - a2) and 0 <= a2 - b1 <= JOIN_GAP
+                and _burst_length(b2 - a1) and opens_burst(a1)):
+            out[i:i + 2] = [(a1, b2)]
+        i += 1
     return out
 
 

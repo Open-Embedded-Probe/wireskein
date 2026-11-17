@@ -221,7 +221,7 @@ class E2E(Stage):
     name = "e2e"
     about = "the whole analysis: buses found against the truth (eval/evaluate.py's judging)"
     headline = "ok"
-    LOWER = ("false_confirmed", "false_likely", "seconds", "false_confirmed_aliased", "false_confirmed_protocol",
+    LOWER = ("false_confirmed", "false_likely", "seconds", "silent", "false_confirmed_aliased", "false_confirmed_protocol",
              "false_confirmed_roles", "false_confirmed_params")
 
     def run(self, algo, case):
@@ -231,7 +231,8 @@ class E2E(Stage):
         import evaluate  # eval/evaluate.py
         rec = evaluate.judge(case.cap, case.truth, out)
         # each truth bus with its hardness tags (data.hardness: judge keeps the truth's order)
-        detail = [{"protocol": b["protocol"], "outcome": b["outcome"], "tags": t, "decode": b.get("decode")}
+        detail = [{"protocol": b["protocol"], "outcome": b["outcome"], "tags": t, "decode": b.get("decode"),
+                   **({"unread": b["unread"]} if "unread" in b else {})}
                   for b, t in zip(rec["buses"], case.bus_tags or [[]] * len(rec["buses"]))
                   if b["in_scope"] and b["outcome"] != "absent"]
         buses = [b for b in rec["buses"] if b["in_scope"] and b["outcome"] != "absent"]
@@ -270,6 +271,7 @@ class E2E(Stage):
                "false_confirmed": sum(r["false_confirmed"] for r in rows),
                "false_likely": sum(r["false_likely"] for r in rows),
                "decode_mean": float(np.mean(dec)) if dec else None,
+               "decode_min": float(min(dec)) if dec else None,
                "false_confirmed_aliased": sum(r.get("false_confirmed_aliased", 0) for r in rows)}
         # the wrong confirmed apart: a wrong protocol (incl. on an aliasing line) or a right one told incompletely
         kinds = Counter()
@@ -285,6 +287,12 @@ class E2E(Stage):
         easy, hard = [b for b in det if not b["tags"]], [b for b in det if b["tags"]]
         out.update({"buses_readable": len(easy), "ok_readable": good(easy), "confirmed_readable": conf(easy),
                     "buses_hard": len(hard), "ok_hard": good(hard), "confirmed_hard": conf(hard)})
+        # read short without saying so: a bus found (confirmed or likely) whose decoding fell short of the truth while
+        # its claim told nothing unread (RVSWD, SWIO: the claims that tell what they did not read)
+        told = [b for b in det if "unread" in b and b["outcome"] in ("confirmed", "likely") and b["decode"] is not None]
+        if told:
+            out["silent"] = sum(1 for b in told if b["decode"] < 1 and b["unread"] == 0)
+            out["short_told"] = sum(1 for b in told if b["decode"] < 1 and b["unread"] > 0)
         dh = [b["decode"] for b in hard if b["outcome"] in ("confirmed", "likely") and b["decode"] is not None]
         out["decode_hard"] = float(np.mean(dh)) if dh else None
         for tag in sorted({t for b in hard for t in b["tags"]}):

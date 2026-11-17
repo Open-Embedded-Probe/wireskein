@@ -15,7 +15,10 @@ from wireskein._engine.declarative import _chance, frame_score, q
 
 def _claims(cap):
     from wireskein import decode
-    return decode.export(decode.analyze(cap), cap, mode="all", alternatives=True)["claims"]
+    res = decode.analyze(cap)
+    out = decode.export(res, cap, mode="all", alternatives=True)["claims"]
+    decode._note_undersampled(out, cap, res)             # readings, as the main algorithm's (e2e/wireskein.py)
+    return out
 
 
 def _score(ack_neutral: bool, soft: float):

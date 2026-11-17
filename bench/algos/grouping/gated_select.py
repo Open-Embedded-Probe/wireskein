@@ -50,7 +50,10 @@ def engine(w, use):
 
 def _claims(cap):
     from wireskein import decode
-    return decode.export(decode.analyze(cap), cap, mode="all", alternatives=True)["claims"]
+    res = decode.analyze(cap)
+    out = decode.export(res, cap, mode="all", alternatives=True)["claims"]
+    decode._note_undersampled(out, cap, res)             # readings, as the main algorithm's (e2e/wireskein.py)
+    return out
 
 
 @algorithm("e2e", "select", status="trial", engine=engine,
