@@ -239,6 +239,20 @@ def pair_relation(cap: Capture, clk: ClockInfo, other: str) -> PairRelation:
                         np.flatnonzero(framed & (lv != active)))
 
 
+def better_relation(cap: Capture, clk: ClockInfo, other: str, gated: tuple | None = None) -> PairRelation:
+    """The pair measured on the lines as they are and on the clock's gated view (gated_view; given when made
+    already), the better kept: the gate takes a noise's scatter out of a data line's phase and a select's spikes out
+    of its framing; the lines as they are keep a clock's real short pulses (an I2C clock a slow rise clipped short,
+    a clock running four times as fast in some frames), which the gate would merge."""
+    r = pair_relation(cap, clk, other)
+    view, vc = gated or gated_view(cap, clk)
+    if view is not cap:
+        g = pair_relation(view, vc, other)
+        if (g.data_score, g.boundary) > (r.data_score, r.boundary):
+            return g
+    return r
+
+
 def survey(cap: Capture, fs: dict[str, ChannelFeatures] | None = None, asyncs: bool = True) -> Survey:
     """asyncs: False leaves the asynchronous reading out (character lengths, bit times): no protocol tried needs it."""
     fs = fs or features(cap)
@@ -258,13 +272,7 @@ def survey(cap: Capture, fs: dict[str, ChannelFeatures] | None = None, asyncs: b
         # a slow rise clipped short, a clock running four times as fast in some frames) are kept where it would merge
         # them; a swapped step on the capture as it is
         view, vc = (cap, c) if swapped else gated_view(cap, c)
-        relation = swapped or pair_relation
         for o in active:
             if o != c.name:
-                r = relation(cap, c, o)
-                if view is not cap:
-                    g = relation(view, vc, o)
-                    if (g.data_score, g.boundary) > (r.data_score, r.boundary):
-                        r = g
-                s.pairs[(c.name, o)] = r
+                s.pairs[(c.name, o)] = swapped(cap, c, o) if swapped else better_relation(cap, c, o, (view, vc))
     return s

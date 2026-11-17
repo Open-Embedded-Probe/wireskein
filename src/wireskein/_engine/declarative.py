@@ -491,10 +491,10 @@ class DeclarativePlugin:
         # evidence terms the core provides by name (not protocol code)
         terms = sc.get("terms", [])
         if "select_boundary" in terms and sb.select:
-            from .survey import clock_info, pair_relation
+            from .survey import better_relation, clock_info
             view = getattr(sb, "view", c.cap)
             ci = clock_info(view, c.sv.features[sb.clock])
-            b = pair_relation(view, ci, sb.select).boundary if ci else 0.0
+            b = better_relation(view, ci, sb.select).boundary if ci else 0.0
             score *= b
             evidence["select_boundary"] = b
         if "degenerate" in terms:

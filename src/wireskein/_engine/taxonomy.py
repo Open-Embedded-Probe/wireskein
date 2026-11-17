@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from . import kernels as K
-from .survey import Survey, survey
+from .survey import GATE, Survey, collapse, survey
 
 CLASSES = ("clock", "data", "sparse", "pulse")
 
@@ -94,6 +94,9 @@ def _constant(runs: np.ndarray) -> float:
 
 def pin_classes(sv: Survey, cap) -> dict[str, PinClass]:
     max_edges = max((f.n_edges for f in sv.features.values()), default=1)
+    periods = [ci.period for ci in sv.clocks.values() if ci.period]
+    gate = min(periods) / GATE if periods else 0.0
+    gated_max = max((len(collapse(cap.channel(n).edges, gate)) for n in sv.active), default=1) if gate else 1
     out = {}
     for n in sv.active:
         f = sv.features[n]
@@ -112,6 +115,11 @@ def pin_classes(sv: Survey, cap) -> dict[str, PinClass]:
             short_hi, short_lo = short_hi[short_hi < cap_len], short_lo[short_lo < cap_len]
             pulse = max(_two_valued(short_lo) * _constant(short_hi), _two_valued(short_hi) * _constant(short_lo))
             pulse *= 1 - clock  # a clock is two-valued trivially only if duty != 50%; keep them apart
+        if gate and ratio < 1:
+            # sparse counted on the changes the fastest clock's gate leaves too (a select's spikes or crosstalk add
+            # changes, and a select so busy is no candidate): the larger kept
+            g = len(collapse(ch.edges, gate)) / max(1, gated_max)
+            sparse = max(sparse, float(np.clip(1 - np.log10(max(g, 1e-6) / 0.01) / 2, 0, 1)) if g < 0.2 else 0.0)
         sc = {"clock": clock, "data": data, "sparse": sparse, "pulse": pulse}
         best = max(sc.values())
         cands = [k for k, v in sc.items() if v >= 0.2 and v >= 0.5 * best] or [max(sc, key=sc.get)]

@@ -219,6 +219,13 @@ def select_level(start: np.ndarray, length: np.ndarray, level: np.ndarray, t: np
 
 def frames_select(cap, sv: Survey, sb: SyncBits) -> Frames:
     s = cap.channel(sb.select)
+    ci = sv.clocks.get(sb.clock)
+    if ci is not None and ci.period:
+        # read with its changes closer than a quarter of the bus clock's period merged: a spike or a crosstalk
+        # pulse on the select no longer ends a frame mid-word (the line itself is not changed)
+        from dataclasses import replace
+        from .survey import GATE, collapse
+        s = replace(s, edges=collapse(s.edges, ci.period / GATE))
     start, length, level = s.runs(cap.n_samples)
     inside, k, win = select_level(start, length, level, sb.t, cap.n_samples)[1:]
     bounds = []
