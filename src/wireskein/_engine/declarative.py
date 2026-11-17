@@ -608,8 +608,13 @@ class DeclarativePlugin:
                 score *= fb
                 evidence["bus_free"] = fb
         if "max_clock_hz" in terms:
+            # the clock in the frames as read, and the line as captured (its dominant period: an input view, as
+            # I2C's spike filter, thins a clock too fast for the protocol into a slower-looking one)
             hz = clock_hz(evidence)
-            if hz is not None and hz > float(sc.get("max_clock_hz", 5e6)):
+            ci = c.sv.clocks.get(sb.clock)
+            raw = float(c.cap.rate) / ci.period if ci is not None and ci.period else None
+            fastest = max((h for h in (hz, raw) if h is not None), default=None)
+            if fastest is not None and fastest > float(sc.get("max_clock_hz", 5e6)):
                 score = 0.0                       # no bus of this protocol runs this fast
         roles = {sp["roles"]["clock"]: sb.clock}
         if sb.select and "select" in sp["roles"]:
