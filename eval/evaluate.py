@@ -139,10 +139,13 @@ def match(bus: dict, claim: dict) -> dict:
     elif bus["protocol"] in ("lin", "dmx512"):
         r["roles"] = nr.get("data") == tr["data"]
         r["params"] = abs(pm["baud"] / bus["params"]["baud"] - 1) <= 0.03
+        # the layers hold records ({"id", "data", ...} a frame, {"start_code", "data", ...} a packet)
         if bus["protocol"] == "lin":
-            r["decode"] = _ratio([tuple(f) for f in bus["expect"]["frames"]], [tuple(f) for f in lay["frames"]])
+            r["decode"] = _ratio([tuple(f) for f in bus["expect"]["frames"]],
+                                 [(f["id"], f["data"]) if isinstance(f, dict) else tuple(f) for f in lay.get("frames", [])])
         else:
-            r["decode"] = _ratio(bus["expect"]["packets"], lay["packets"])
+            r["decode"] = _ratio(bus["expect"]["packets"],
+                                 [p["data"] if isinstance(p, dict) else p for p in lay.get("packets", [])])
     elif bus["protocol"] == "swd":
         r["roles"] = nr == tr
         r["params"] = r["roles"]

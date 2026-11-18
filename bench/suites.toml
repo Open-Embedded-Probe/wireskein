@@ -245,6 +245,18 @@ about = "the same, other seeds"
 sources = ["gen:spivar[1000:1100]"]
 transforms = [""]
 
+[suite.uartlike]
+role = "tune"
+about = "UART, LIN and DMX512 side by side (eval/synth.py's uartlike: a LIN of 3-9 frames at 9600-19200 baud, a DMX512 of 2-5 packets), clean and with noise: the only LIN and DMX512 buses with a truth on the bench (before it, those protocols were only ever claimed wrongly here)"
+sources = ["gen:uartlike[0:60]"]
+transforms = ["", "spike:0.1", "spike:0.3", "xtalk:0.3", "bounce:0.1", "bounce:0.5"]
+
+[suite.uartlike-holdout]
+role = "holdout"
+about = "the same, other seeds"
+sources = ["gen:uartlike[1000:1060]"]
+transforms = ["", "spike:0.1", "spike:0.3", "xtalk:0.3", "bounce:0.1", "bounce:0.5"]
+
 # The quick set: a few of each kind, for checking a change locally in minutes (bench/notes/TODO.ja.md: the whole set
 # goes to CI). Not in "all". Run all four: --suite quick --suite quick-noise --suite quick-odslow --suite quick-rate
 [suite.quick]
