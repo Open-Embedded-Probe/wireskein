@@ -464,13 +464,27 @@ def single_views(cap, sv, pin):
     # is a bounce's, so the view is made on its own: the pulses under 4 ticks taken out, where the line left keeps
     # its runs (the shortest tenth) twice that long or more
     kb = BOUNCE_TICKS * ch.step
+    bounced = None
     if len(inner) >= 16 and kb not in ks and np.any(inner < kb):
         e = K.deglitch(ch.edges, kb)
         left = np.diff(np.asarray(e, np.int64))
         if len(left) >= 16 and np.quantile(left, 0.1) >= 2 * kb:
             ks = {kb}           # it takes out the spikes too (one view, not two: a long capture reads each)
+            # bounces come as two short runs side by side (a gap after the edge, the pulse back), a spike as one
+            # amid long runs: pairing a bounce with the edge before it moves the edge by the bounce, so bounces are
+            # merged at their first change instead (where the line crossed); spikes stay paired off
+            short = inner < kb
+            paired = short[1:] & short[:-1]
+            if short.any() and float(np.count_nonzero(paired)) * 2 >= 0.5 * np.count_nonzero(short):
+                d = K.debounce(ch.edges, 2 * kb)
+                dl = np.diff(np.asarray(d, np.int64))
+                steady = float(np.mean(np.abs(dl / np.median(dl) - 1) <= 0.15)) if len(dl) else 1.0
+                # (not on a clock with bounces: its cleaned edges read as 0x55 characters; UARTs keep 0.64 at most)
+                if len(dl) >= 16 and np.quantile(dl, 0.1) >= 3 * kb and steady < 0.7:
+                    bounced = d
     for k in sorted(ks):
-        chans = [replace(x, edges=K.deglitch(x.edges, k)) if x.name == pin else x for x in cap.channels]
+        edges = bounced if bounced is not None and k == kb else K.deglitch(ch.edges, k)
+        chans = [replace(x, edges=edges) if x.name == pin else x for x in cap.channels]
         yield Capture(cap.rate, cap.n_samples, chans), k
 
 
