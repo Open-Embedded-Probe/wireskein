@@ -240,6 +240,11 @@ def pair_relation(cap: Capture, clk: ClockInfo, other: str) -> PairRelation:
     cut = (j0 == j1) & (j0 == len(de)) & (j0 > 0) & (lv == active) & framed.any()
     if np.count_nonzero(cut) == 1 and len(de) and de[-1] < cap.n_samples:
         framed = framed | cut
+    # and so is the one burst before the line's first change, the line at the active level from the capture's start
+    # (a selection the capture's start cut: the capture began inside it)
+    cut = (j0 == j1) & (j0 == 0) & (lv == active) & framed.any()
+    if np.count_nonzero(cut) == 1 and len(de):
+        framed = framed | cut
     boundary = float(np.mean(framed & (lv == active)))
     return PairRelation(clk.name, other, float(inside.mean()), pr, pf, coincide, boundary,
                         float(inside.sum() / max(1, len(clk.bursts))), int(len(clk.bursts)),

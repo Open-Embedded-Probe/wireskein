@@ -22,3 +22,21 @@ def test_cut_selection_frames_its_transfer():
     claims = decode.export(decode.analyze(cap), cap, mode="all")["claims"]
     spi = [c for c in claims if c["protocol"] == "spi"]
     assert spi and spi[0]["roles"].get("cs") == "CS", [(c["protocol"], c["roles"], c["verdict"]) for c in claims]
+
+
+def test_selection_cut_by_the_start_frames_its_transfer():
+    """The capture begins inside a selection (its opening edge never recorded): the first transfer is framed too."""
+    clk, mosi, miso, cs = gen.Wave(0), gen.Wave(0), gen.Wave(0), gen.Wave(1)
+    r = np.random.default_rng(6)
+    frames = [(bytes(r.integers(0, 256, n).tolist()), bytes(r.integers(0, 256, n).tolist())) for n in (4, 2, 5, 3)]
+    t, starts = 1e-4, []
+    for f in frames:
+        starts.append(t)
+        t = gen.spi(clk, mosi, miso, cs, t, [f], 1e6) + 3e-4
+    start = starts[0] + 3e-6                                 # inside the first selection, before its first clock
+    cap = gen.quantize({"SCK": clk, "MOSI": mosi, "MISO": miso, "CS": cs}, 12e6, t, np.random.default_rng(0),
+                       t_start=start)
+    assert cap.channel("CS").initial == 0                   # the capture begins selected
+    claims = decode.export(decode.analyze(cap), cap, mode="all")["claims"]
+    spi = [c for c in claims if c["protocol"] == "spi"]
+    assert spi and spi[0]["roles"].get("cs") == "CS", [(c["protocol"], c["roles"], c["verdict"]) for c in claims]
