@@ -32,6 +32,7 @@ from . import timing, typed
 from .analyzers.pulse import NecPlugin, OneWirePlugin, RgbLedPlugin
 from .analyzers.upper import Lines, MarkerGrammar, ModbusRtu, Nmea
 from .model import Capture
+from . import survey as survey_mod
 from .scoring import DefaultScorer, degenerate
 from .stack import Node, Stream, explanations
 from .taxonomy import classify
@@ -258,7 +259,16 @@ class UartPlugin:
         # a pin that moves in step with some clock is synchronous data, not a UART line. A clock of under 4 samples a
         # period (one changing at every sample: a fast clock aliased) has every change of every line on its edges,
         # and says nothing of where a line's changes fall
-        sync = max((r.data_score * c.sv.clocks[k].clock_score for (k, o), r in c.sv.pairs.items()
+        # The keeping is taken where it holds on the clock's gated view as well: spikes on the clock spread its
+        # bursts over the capture and put a line's changes inside them as they are, not through the gate
+        def kept(k, r):
+            if r.data_score * c.sv.clocks[k].clock_score <= 0.1 or k not in c.sv.gated:
+                return r.data_score
+            view, vc = c.sv.gated[k]
+            if view is c.cap:
+                return r.data_score
+            return min(r.data_score, survey_mod.pair_relation(view, vc, rb.pin).data_score)
+        sync = max((kept(k, r) * c.sv.clocks[k].clock_score for (k, o), r in c.sv.pairs.items()
                     if o == rb.pin and k != rb.pin and k in c.sv.clocks
                     and (c.sv.clocks[k].period or 0) >= SYNC_MIN_PERIOD), default=0.0)
         m["sync_with_clock"] = sync
