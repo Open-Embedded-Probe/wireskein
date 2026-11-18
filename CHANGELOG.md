@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 0.0.29
 - (EN) SWIO's pulse-width clusters are the peaks of the counts summed with the neighbouring bins, peaks nearer than the pairs' least ratio merged, the 8 most populated tried in pairs (6 before): taken at a few samples a pulse, a width falls in two bins (12 and 13 samples at 50 MS/s) and either alone counted less than the attach traffic's clusters, so SWIO's short pulses were never tried. A CH32V003's operations taken down to 50 MS/s: 3 of 53 read none, now all.
 - (JA) SWIO のパルスの幅のかたまりを、隣のビンと足した数の山にし、組の最小の比より近い山は 1 つにまとめ、数の多い 8 つを組で試す（前は 6 つ）: 1 パルスが数サンプルの取り込みでは、幅が 2 つのビンに割れ（50 MS/s で 12 と 13 サンプル）、どちらも接続のときの通信のかたまりより少なく数えられて、SWIO の短いパルスが試されなかった。CH32V003 の操作を 50 MS/s に取り直したもので、53 本中 3 本が読めなかったのが、全部読める。
 - (EN) `spi(mode=...)` with a CS reads the bytes at the given mode's sampling edges (as a receiver in that mode does), not at the edge the lines' changes say: a CH32H417 taken at 40 MS/s showed MOSI changing a sample before every launching edge (the probe's lines skewed by a sample), so the changes said the other CPHA and every byte came out shifted by a bit ((x << 1) | 1), failing a transfer any receiver in the mode reads. The mode the changes say stays measured (`mode`, `cpha_votes`); a wrong mode still fails.
