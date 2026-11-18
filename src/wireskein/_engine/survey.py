@@ -312,7 +312,7 @@ def _debounced_clock(cap: Capture, name: str, f: ChannelFeatures):
     tries = []
     # a bounce's mark: a share of the line's changes come within BOUNCE_TICKS of the one before; each edge's
     # bounces merged at its first change, where the runs left are twice the window
-    k = 2 * BOUNCE_TICKS * ch.step
+    k = (BOUNCE_TICKS + 1) * ch.step     # consecutive changes of an edge and its bounce are under this apart
     if float(np.mean(gaps < BOUNCE_TICKS * ch.step)) >= BOUNCED_SHARE:
         d = K.debounce(e, k)
         if len(d) != len(e) and len(d) >= 16 and float(np.median(np.diff(d))) >= 2 * k:
