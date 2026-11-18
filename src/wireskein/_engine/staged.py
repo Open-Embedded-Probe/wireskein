@@ -418,22 +418,33 @@ def glitch_views(cap, sv, g):
             yield Capture(cap.rate, cap.n_samples, chans), k
 
 
+BOUNCE_TICKS = 4    # an async line's pulses under this many ticks are bounces, where its runs are much longer
+
+
 def single_views(cap, sv, pin):
     """An async pin as is, plus a sibling with single-sample spikes removed when
     such spikes are rare and the bit time is long enough to keep real bits."""
     yield cap, 0
-    f = sv.features[pin]
-    if not f.units:
-        return
-    unit = f.units[0].samples
     ch = cap.channel(pin)
     _, length, _ = ch.runs(cap.n_samples)
     inner = length[1:-1]
-    if len(inner) < 16 or unit < 4 * ch.step:
-        return
-    spikes = inner <= ch.step
-    if 0 < spikes.mean() < 0.1:
-        k = int(max(2 * ch.step, min(0.3 * unit, 3 * ch.step)))
+    f = sv.features[pin]
+    ks = set()
+    if f.units and len(inner) >= 16 and f.units[0].samples >= 4 * ch.step:
+        unit = f.units[0].samples
+        spikes = inner <= ch.step
+        if 0 < spikes.mean() < 0.1:
+            ks.add(int(max(2 * ch.step, min(0.3 * unit, 3 * ch.step))))
+    # bounces at the edges (pulses back of a tick to three): with many of them the bit time estimated from the line
+    # is a bounce's, so the view is made on its own: the pulses under 4 ticks taken out, where the line left keeps
+    # its runs (the shortest tenth) twice that long or more
+    kb = BOUNCE_TICKS * ch.step
+    if len(inner) >= 16 and kb not in ks and np.any(inner < kb):
+        e = K.deglitch(ch.edges, kb)
+        left = np.diff(np.asarray(e, np.int64))
+        if len(left) >= 16 and np.quantile(left, 0.1) >= 2 * kb:
+            ks = {kb}           # it takes out the spikes too (one view, not two: a long capture reads each)
+    for k in sorted(ks):
         chans = [replace(x, edges=K.deglitch(x.edges, k)) if x.name == pin else x for x in cap.channels]
         yield Capture(cap.rate, cap.n_samples, chans), k
 
