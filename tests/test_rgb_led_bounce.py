@@ -27,3 +27,16 @@ def test_bouncing_led_line_is_read():
     nodes = RgbLedPlugin().run(SimpleNamespace(cap=SimpleNamespace(n_samples=cap.n_samples, rate=RATE)), ch, None)
     assert nodes and nodes[0].total > 0.85 and nodes[0].params["deglitch"] >= 2
     assert [f["data"] for f in nodes[0].output.items["frames"]] == frames
+
+
+def test_a_clock_of_half_duty_is_no_led():
+    """A clock's highs are half its period: all one kind of bit, not split at half the period into varied bits (three
+    SPI clocks with bounces were confirmed as LED strings so)."""
+    w, t = gen.Wave(0), 1e-4
+    for _ in range(6):
+        gen.pwm(w, t, t + 40 / 0.5e6, 0.5e6, 0.5)
+        t += 40 / 0.5e6 + 200e-6
+    cap = gen.quantize({"D0": w}, RATE, t, np.random.default_rng(0), jitter_s=0.5 / RATE)   # highs 49-51 ticks
+    nodes = RgbLedPlugin().run(SimpleNamespace(cap=SimpleNamespace(n_samples=cap.n_samples, rate=RATE)),
+                               cap.channel("D0"), None)
+    assert not nodes or nodes[0].total < 0.6             # 0.66 when split at half the period

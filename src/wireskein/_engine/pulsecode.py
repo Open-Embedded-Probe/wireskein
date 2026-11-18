@@ -47,7 +47,7 @@ RGB_WIDTH_SHARE = 0.02    # a high width taken for the split when this share of 
 def rgb_led(ch: Channel, n: int, rate: float) -> dict:
     """A WS2812-like line (idle low, a bit = a high of T0H or T1H then a low, MSB first): frames between lows of
     more than 5 bit periods. The split between 0 and 1 is the widest gap between the highs' widths; when every high
-    is alike, a high under half the bit period is a 0."""
+    is alike, every bit is one kind: a 1 when the highs are over half the bit period."""
     st, w = pulses(ch, n, 1)
     out = {"frames": [], "t0h": [], "t1h": [], "period": [], "resets": [], "pauses": []}
     if len(st) < 2:
@@ -59,7 +59,9 @@ def rgb_led(ch: Channel, n: int, rate: float) -> dict:
     u, cnt = np.unique(w, return_counts=True)
     split = _split(u[cnt >= max(2, RGB_WIDTH_SHARE * len(w))])
     if split is None or split > bit:
-        split = bit / 2
+        # every high alike: all one kind of bit, a 1 when the highs are over half the period (not split at half: a
+        # clock's highs of half the period would fall either side of it, and read as varied bits)
+        split = 0.0 if len(w) and float(np.median(w)) > bit / 2 else float(bit)
     one = w > split
     cut = np.flatnonzero(per > 5 * bit) + 1
     bounds = np.concatenate(([0], cut, [len(st)]))
