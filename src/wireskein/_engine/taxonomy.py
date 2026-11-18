@@ -211,7 +211,7 @@ def groups(sv: Survey, pins: dict[str, PinClass]) -> list[Group]:
             # data-pin subsets: all partners, the strong ones, and each alone
             strong = tuple(x for x in d_all if sv.pairs[(c, x)].data_score >= 0.6)
             variants = {d_all, strong, *[(x,) for x in d_all]} - {()}
-            for d in variants:
+            for d in sorted(variants):          # (a set of tuples: its order is the hash seed's)
                 sc = clk_score * float(np.mean([sv.pairs[(c, x)].data_score for x in d]))
                 if s:
                     sc *= sv.pairs[(c, s)].boundary
