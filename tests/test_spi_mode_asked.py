@@ -51,3 +51,16 @@ def test_the_wrong_mode_still_fails():
     data = bytes.fromhex("d0144fdb9c")
     ok, got, why = check_spi(lines(data, 0), spi("SCK", "MOSI", None, "CS", mode=2, mosi_bytes=data.hex()))
     assert ok is False
+
+
+def test_a_window_starting_with_cs_already_active_reads_in_the_asked_mode():
+    # the section starts inside a selection: no whole CS window, so the lines do not say CPOL; the asked mode's is
+    # taken (v0.0.29 raised KeyError: 'cpol' here)
+    data = bytes.fromhex("0b4b9909")
+    c = lines(data, 0)
+    cs = c.channel("CS")
+    cut = Capture(c.rate, c.n_samples, [ch if ch.name != "CS" else Channel("CS", 0, np.asarray(cs.edges[1:]))
+                                        for ch in c.channels])
+    ok, got, why = check_spi(cut, spi("SCK", "MOSI", None, "CS", mode=0, mosi_bytes=data.hex()))
+    assert ok, why
+    assert got["bytes"]["MOSI"] == data.hex()

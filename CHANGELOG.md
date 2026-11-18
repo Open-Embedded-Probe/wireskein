@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) `spi(mode=...)` with a CS no longer raises `KeyError: 'cpol'` where the section starts inside a selection (no whole CS window, so the lines do not tell CPOL): the asked mode's CPOL is taken. A regression of 0.0.29 (a CH32V203's SPI slave test); 0.0.28 read it.
+- (JA) CS のある `spi(mode=...)` が、区間が選択の途中から始まる（まるごとの CS の窓がなく、線から CPOL が分からない）ときに `KeyError: 'cpol'` を出さない: 与えたモードの CPOL を使う。0.0.29 の退行（CH32V203 の SPI スレーブの試験）。0.0.28 は読めていた。
 
 ## 0.0.29
 - (EN) SWIO's pulse-width clusters are the peaks of the counts summed with the neighbouring bins, peaks nearer than the pairs' least ratio merged, the 8 most populated tried in pairs (6 before): taken at a few samples a pulse, a width falls in two bins (12 and 13 samples at 50 MS/s) and either alone counted less than the attach traffic's clusters, so SWIO's short pulses were never tried. A CH32V003's operations taken down to 50 MS/s: 3 of 53 read none, now all.

@@ -621,7 +621,10 @@ def check_spi(cap, x):
         got["cs_sample_s"] = cs_sample_s                # CS sampled coarser: its windows start a CS sample early
     if margins:
         got["margins"] = margins                          # per data line: setup / hold around the sampling edges
-        got["modes"] = timing.spi_modes(cap.channel(x["clk"]), lines_, m["cpol"], cap.rate, cap.n_samples, cs_ch, act,
+        # CPOL as the lines say it, else the asked mode's (no whole CS window in the window: CS already active as it
+        # starts)
+        cpol = m["cpol"] if m.get("cpol") is not None else x["mode"] >> 1
+        got["modes"] = timing.spi_modes(cap.channel(x["clk"]), lines_, cpol, cap.rate, cap.n_samples, cs_ch, act,
                                         lsb=x.get("bit_order", "msb") == "lsb", edge_sample=x.get("edge_sample"))
         for mg in margins.values():                   # a hold under a sample: told as such, with the sample's length
             if mg["hold_s"] is not None and mg["hold_s"] < 1 / cap.rate:
