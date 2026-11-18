@@ -9,6 +9,7 @@ import math
 import numpy as np
 
 from .. import pulsecode as pc
+from ..scoring import degenerate
 from ..stack import Node, Stream
 
 
@@ -44,6 +45,9 @@ class RgbLedPlugin:
                      layer_score=score, total=score)]
 
 
+ONEWIRE_PACE = 0.25   # a slot period within this of the median keeps the master's pace
+
+
 class OneWirePlugin:
     name = "onewire"
     consumes = ("line",)
@@ -63,14 +67,23 @@ class OneWirePlugin:
             if whole < 0.5:
                 continue
             bits = sum(z["bits"] for z in rs)
-            score = (0.6 + 0.4 * pres) * whole * q(bits / 8, 2) * q(len(rs), 1)
+            # a master starts its slots at one pace (the slot time), whatever the bits: the periods from one slot's
+            # start to the next keep to their median; a UART's lows read as slots come whole bits apart, scattered
+            per = np.array([p for _, p in r["slot"]], np.float64)
+            paced = float(np.mean(np.abs(per / np.median(per) - 1) <= ONEWIRE_PACE)) if len(per) else 0.0
+            # a clock's lows are all alike: its "bytes" are one value (0x00 or 0xff), a master's commands and data vary
+            data = np.frombuffer(bytes.fromhex("".join(z["data"] for z in rs)), np.uint8)
+            score = ((0.6 + 0.4 * pres) * whole * q(bits / 8, 2) * q(len(rs), 1) * float(np.clip((paced - 0.5) / 0.3, 0, 1))
+                     * degenerate(data))
             if score >= 0.2 and (best is None or score > best[0]):
                 best = (score, speed, r)
         if best is None:
             return []
         score, speed, r = best
         rs = r["resets"]
-        m = {"resets": len(rs), "presence": sum(z["presence"] for z in rs), "bits": sum(z["bits"] for z in rs)}
+        per = np.array([p for _, p in r["slot"]], np.float64)
+        m = {"resets": len(rs), "presence": sum(z["presence"] for z in rs), "bits": sum(z["bits"] for z in rs),
+             "paced": round(float(np.mean(np.abs(per / np.median(per) - 1) <= ONEWIRE_PACE)), 3) if len(per) else 0.0}
         return [Node("onewire", {"speed": speed}, {"dq": ch.name}, Stream("onewire.resets", rs), m,
                      layer_score=score, total=score)]
 

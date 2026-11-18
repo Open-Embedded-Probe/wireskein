@@ -5,7 +5,18 @@ the layers above. The line-level plugins score themselves (staged.py).
 
 from __future__ import annotations
 
+import numpy as np
+
 from .stack import Node
+
+
+def degenerate(values: np.ndarray) -> float:
+    """1 when no value is over half of them, down to 0.05 when one value is all of them (a line read as one value
+    again and again: a clock, a stuck line)."""
+    if len(values) < 4:
+        return 1.0
+    top = np.bincount(values.astype(np.int64)).max() / len(values)
+    return 1.0 if top <= 0.5 else max(0.05, 1 - (top - 0.5) / 0.5)
 
 
 class DefaultScorer:

@@ -32,7 +32,7 @@ from . import timing, typed
 from .analyzers.pulse import NecPlugin, OneWirePlugin, RgbLedPlugin
 from .analyzers.upper import Lines, MarkerGrammar, ModbusRtu, Nmea
 from .model import Capture
-from .scoring import DefaultScorer
+from .scoring import DefaultScorer, degenerate
 from .stack import Node, Stream, explanations
 from .taxonomy import classify
 from .declarative import load_all
@@ -89,13 +89,6 @@ def verdict(total: float, margin: float) -> str:
 
 def q(n: float, scale: float = 8.0) -> float:
     return 1.0 - math.exp(-n / scale)
-
-
-def degenerate(values: np.ndarray) -> float:
-    if len(values) < 4:
-        return 1.0
-    top = np.bincount(values.astype(np.int64)).max() / len(values)
-    return 1.0 if top <= 0.5 else max(0.05, 1 - (top - 0.5) / 0.5)
 
 
 @dataclass
