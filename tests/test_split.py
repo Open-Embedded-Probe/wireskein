@@ -1,6 +1,7 @@
 """Cutting a long capture into pieces (wireskein.split): where it cuts on lines made here, and that a capture read in
 pieces reads as it does whole (tests/data/rvswd_long_truth, real captures)."""
 
+import os
 from pathlib import Path
 
 import numpy as np
@@ -12,9 +13,10 @@ from wireskein.decode import analyze_file, decode_file
 
 D = Path(__file__).parent / "data" / "rvswd_long_truth"
 RVSWD = {"buses": [{"protocol": "rvswd", "pins": {"clk": "SWCLK", "dio": "SWDIO"}}]}
-# a WCH-LinkE polling a CH32L103's SDI, 2 s at 25 MHz (wch-protocols): used where it is here, skipped where not
-MONITOR = Path("/home/mt/dev_wch/wch-protocols/captures/fixtures/wire-linke-p4-2026-09-25/more/l103/"
-               "monitor_sdi.wireskein")
+# a WCH-LinkE polling a CH32L103's SDI, 2 s at 25 MHz (wch-protocols' captures/fixtures/wire-linke-p4-2026-09-25/more/
+# l103/monitor_sdi.wireskein): used where WIRESKEIN_LINKE_MONITOR names it, skipped where not
+MONITOR = Path(os.environ.get("WIRESKEIN_LINKE_MONITOR", "")) if os.environ.get("WIRESKEIN_LINKE_MONITOR") \
+    else Path("monitor_sdi.wireskein.missing")
 
 
 def bursts(n_bursts=40, clocks=200, per=10, gap=5000, t0=1000):
@@ -210,7 +212,7 @@ def test_a_data_line_ringing_at_a_slow_enough_clock_still_pairs_with_it(tmp_path
     from wireskein import cli
     src = MONITOR
     if not src.exists():
-        pytest.skip("wch-protocols' monitor_sdi.wireskein is not here")
+        pytest.skip("WIRESKEIN_LINKE_MONITOR (wch-protocols' monitor_sdi.wireskein) is not given")
     out = tmp_path / "m.wireskein"
     cli.convert(argparse.Namespace(input=src, output=out, part=None, from_s=1.0, to_s=1.05, pins=None))
     (c,) = [c for c in analyze_file(out)["parts"][0]["claims"] if c["protocol"] == "rvswd"]
@@ -311,7 +313,7 @@ def test_dio_ringing_inside_a_held_clock_is_no_stop(tmp_path):
     import argparse
     from wireskein import cli
     if not MONITOR.exists():
-        pytest.skip("wch-protocols' monitor_sdi.wireskein is not here")
+        pytest.skip("WIRESKEIN_LINKE_MONITOR (wch-protocols' monitor_sdi.wireskein) is not given")
     out = tmp_path / "m.wireskein"
     cli.convert(argparse.Namespace(input=MONITOR, output=out, part=None, from_s=0.354, to_s=0.356, pins=None))
     dmi = decode_file(out, RVSWD, split="off")["parts"][0]["buses"][0]["result"]["dmi"]
