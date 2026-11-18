@@ -235,6 +235,11 @@ def pair_relation(cap: Capture, clk: ClockInfo, other: str) -> PairRelation:
                 framed &= ~sel
     lv = d.initial ^ (j0 & 1)
     active = int(np.bincount(lv[framed], minlength=2).argmax()) if framed.any() else 0
+    # the one burst in the window after the line's last change, at the active level, is framed too when the capture
+    # ends in that window (a selection the capture's end cut: its closing edge was never recorded)
+    cut = (j0 == j1) & (j0 == len(de)) & (j0 > 0) & (lv == active) & framed.any()
+    if np.count_nonzero(cut) == 1 and len(de) and de[-1] < cap.n_samples:
+        framed = framed | cut
     boundary = float(np.mean(framed & (lv == active)))
     return PairRelation(clk.name, other, float(inside.mean()), pr, pf, coincide, boundary,
                         float(inside.sum() / max(1, len(clk.bursts))), int(len(clk.bursts)),
