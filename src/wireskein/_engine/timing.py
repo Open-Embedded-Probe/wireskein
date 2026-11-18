@@ -465,11 +465,11 @@ def clipped_clocks(e: np.ndarray, initial: int, k: int) -> np.ndarray:
     if len(lows) < 4:
         return allow
     usual_low = float(np.median(lows))
-    for i in np.flatnonzero(lv == 1):
-        if i == 0 or i + 2 >= len(e) or d[i] >= k:
-            continue
-        if min(d[i - 1], d[i + 1]) >= CLIPPED_LOW * usual_low:          # the lows around the short high
-            allow[i + 1] = False
+    i = np.flatnonzero(lv == 1)
+    i = i[(i > 0) & (i + 2 < len(e))]
+    i = i[d[i] < k]
+    i = i[np.minimum(d[i - 1], d[i + 1]) >= CLIPPED_LOW * usual_low]     # the lows around the short high
+    allow[i + 1] = False
     return allow
 
 

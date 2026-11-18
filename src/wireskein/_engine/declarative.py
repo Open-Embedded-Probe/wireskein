@@ -26,6 +26,7 @@ frames; that is the boundary to script plugins.
 from __future__ import annotations
 
 import ast
+import bisect
 import math
 import re
 import tomllib
@@ -178,6 +179,18 @@ def _bits(spec: str) -> tuple[int, int]:
 def _field(v: int, spec: str) -> int:
     hi, lo = _bits(spec)
     return (v >> lo) & ((1 << (hi - lo + 1)) - 1)
+
+
+def _field_arr(vals: np.ndarray, spec: str) -> np.ndarray:
+    """_field over an array of word values at once."""
+    hi, lo = _bits(spec)
+    return (np.asarray(vals, np.int64) >> lo) & ((1 << (hi - lo + 1)) - 1)
+
+
+def _lengths_ok(rule: str, lens: np.ndarray) -> np.ndarray:
+    """_length_ok for each of an array of lengths (each distinct length judged once)."""
+    u, inv = np.unique(np.asarray(lens, np.int64), return_inverse=True)
+    return np.array([_length_ok(rule, int(n)) for n in u], dtype=bool)[inv].reshape(len(lens))
 
 
 def _length_ok(rule: str, n: int) -> bool:
@@ -560,7 +573,7 @@ class DeclarativePlugin:
         if not keep.any() and not tail:
             return []
         rule = sp["frame"]["length"]
-        fits = np.array([_length_ok(rule, int(n)) for n in lens[keep]], dtype=bool)
+        fits = _lengths_ok(rule, lens[keep])
         fit = float(fits.mean()) if len(fits) else 0.0
         fit_evidence = fit
         if sp.get("score", {}).get("count_frames"):
@@ -576,7 +589,7 @@ class DeclarativePlugin:
             vals, fof = w.values, w.frame_of
             n_words += len(vals)
             for f in checks:
-                got = np.array([_field(int(v), f["bits"]) for v in vals])
+                got = _field_arr(vals, f["bits"])
                 check_hits += int(np.sum(got == int(f["expect"])))
                 check_total += len(got)
             per_pin[sb.data[row]] = (vals, fof)
@@ -593,7 +606,15 @@ class DeclarativePlugin:
                 return lambda i: vals[cut[i]:cut[i + 1]]
             return lambda i: vals[fof == i]
         of0 = by_frame(vals0, fof0)
-        of_pin = {pin: by_frame(vals, fof) for pin, (vals, fof) in per_pin.items()}
+        # the fields the records take, over all the words at once (a long capture has millions of words)
+        src_arr = lambda vals, name: _field_arr(vals, byte_field[name]) if name in byte_field else vals  # noqa: E731
+        if rest and sp["frame"].get("per_data_pin"):
+            rest_of = {pin: by_frame((src_arr(vals, rest["from"]) & 0xFF).astype(np.uint8), fof)
+                       for pin, (vals, fof) in per_pin.items()}
+        elif rest:
+            rest_of = by_frame(src_arr(vals0, rest["from"]), fof0)
+        recorded = [(f, by_frame(_field_arr(vals0, f["bits"]) == int(f["expect"]), fof0))
+                    for f in checks if f.get("record")]
         for i, (a, b) in enumerate(fr.bounds.tolist()):
             ws = of0(i)
             if len(ws) == 0:
@@ -609,12 +630,11 @@ class DeclarativePlugin:
                 start = 1 if first_fields else 0
                 if sp["frame"].get("per_data_pin"):
                     for pin in per_pin:
-                        rec[pin] = bytes(src(v, rest["from"]) & 0xFF for v in of_pin[pin](i)).hex()
+                        rec[pin] = rest_of[pin](i).tobytes().hex()
                 else:
-                    rec[rest["name"]] = [src(v, rest["from"]) for v in ws[start:]]
-            for f in checks:
-                if f.get("record"):
-                    rec[f["name"]] = [_field(int(v), f["bits"]) == int(f["expect"]) for v in ws]
+                    rec[rest["name"]] = rest_of(i)[start:].tolist()
+            for f, of in recorded:
+                rec[f["name"]] = of(i).tolist()
             records.append(rec)
         sc = sp.get("score", {})
         check_rate = check_hits / check_total if check_total else 1.0
@@ -856,13 +876,14 @@ class DeclarativePlugin:
         spans = []
         info = 0.0
         starts = prefix_positions(seqs, bits) if scan else None
+        starts = starts.tolist() if starts is not None else None     # looked up one position at a time: bisect
         active = _active_bits_in(bits, [(a, b) for a, b in bounds if b > a])
         bits = bits.tolist() if isinstance(bits, np.ndarray) else bits    # read bit by bit below: a list is faster
         for a, b in bounds:
             p = a
             while p < b:
                 if starts is not None:           # skip to the next position the fixed leading bits allow
-                    i = int(np.searchsorted(starts, p))
+                    i = bisect.bisect_left(starts, p)
                     if i >= len(starts) or starts[i] >= b:
                         break
                     p = int(starts[i])

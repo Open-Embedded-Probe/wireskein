@@ -131,6 +131,23 @@ def deglitch(edges: np.ndarray, k: int, allow: np.ndarray | None = None) -> np.n
     return edges[keep]
 
 
+def segment_medians(v: np.ndarray, starts: np.ndarray, ends: np.ndarray) -> np.ndarray:
+    """np.median(v[s:e]) for each segment (e > s), all at once: the values sorted within their segments, the middle
+    one or the mean of the middle two (the same float as np.median's)."""
+    v = np.asarray(v, np.float64)
+    starts, ends = np.asarray(starts, np.int64), np.asarray(ends, np.int64)
+    n = ends - starts
+    if len(n) == 0:
+        return np.zeros(0)
+    off = np.concatenate(([0], np.cumsum(n)))
+    idx = np.repeat(starts - off[:-1], n) + np.arange(off[-1])
+    seg = np.repeat(np.arange(len(n)), n)
+    x = v[idx]
+    x = x[np.lexsort((x, seg))]
+    lo, hi = x[off[:-1] + (n - 1) // 2], x[off[:-1] + n // 2]
+    return np.where(n % 2 == 1, lo, (lo + hi) / 2)
+
+
 def local_period(ticks: np.ndarray, at: np.ndarray, w: int = 8, q: float = 25) -> np.ndarray:
     """The clock's period around each tick of `at`, the shorter of the lower quartiles of the `w` intervals of `ticks` (a
     clock's sampling edges) before the one it falls in and the `w` after: a capture whose clock changes speed (slow while connecting,

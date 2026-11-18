@@ -291,6 +291,16 @@ def words(fr: Frames, size: int, row: int = 0, drop_tail: int = 0) -> Words:
     """Group each frame's bits into words of `size` bits (MSB first).
     drop_tail: bits at the end of each frame that are not data (e.g. none)."""
     bits = fr.source.bits[row]
+    bounds = np.asarray(fr.bounds, np.int64).reshape(-1, 2)
+    n = (bounds[:, 1] - bounds[:, 0] - drop_tail) // size
+    if (n >= 0).all():
+        # every frame's words at once: the word starts, then their bits read together
+        off = np.concatenate(([0], np.cumsum(n)))
+        start = np.repeat(bounds[:, 0], n) + (np.arange(off[-1]) - np.repeat(off[:-1], n)) * size
+        seg = bits[start[:, None] + np.arange(size)] if len(start) else np.zeros((0, size), np.uint8)
+        w = (seg.astype(np.int64) << np.arange(size - 1, -1, -1)).sum(1) if len(start) else np.zeros(0, np.int64)
+        return Words(fr, size, w.astype(np.int64), np.repeat(np.arange(len(n), dtype=np.int64), n),
+                     (bounds[:, 1] - bounds[:, 0] - n * size).astype(np.int64))
     vals, fof, left = [], [], []
     for i, (a, b) in enumerate(fr.bounds.tolist()):
         n = (b - a - drop_tail) // size

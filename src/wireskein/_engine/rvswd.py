@@ -38,12 +38,13 @@ def reframe_rolling(fr, mult: float = 3.0, w: int = 33) -> list[tuple[int, int]]
     med = np.median(sliding_window_view(np.pad(iv, (w // 2, w // 2), mode="edge"), w), axis=1)
     cut = np.flatnonzero(iv > mult * med) + 1
     b = np.concatenate(([0], cut, [len(t)]))
-    out = []
-    for x, y in zip(b[:-1].tolist(), b[1:].tolist()):
-        if y - x >= 3 and t[y - 1] - t[y - 2] > 1.8 * np.median(np.diff(t[x:y])):
-            y -= 1
-        out.append((x, y))
-    return out
+    x, y = b[:-1], b[1:]
+    # a piece of 3 or more ending in a long interval (over 1.8 of the piece's median) has a trailing stop clock
+    m = np.flatnonzero(y - x >= 3)
+    pm = K.segment_medians(iv, x[m], y[m] - 1)                 # the piece's intervals: iv[x:y - 1]
+    y = y.copy()
+    y[m[iv[y[m] - 2] > 1.8 * pm]] -= 1
+    return list(zip(x.tolist(), y.tolist()))
 
 
 def reframe_startstop(fr, cap, hold: float = 1.5, w: int = 16, hold_min_s: float = 1.5e-6,
@@ -305,13 +306,27 @@ def reframe(fr) -> list[tuple[int, int]]:
     drop a trailing stop clock that follows an interval > 1.8x the median."""
     t = fr.source.t
     out = []
-    for a, b in fr.bounds.tolist():
+    bounds = fr.bounds.reshape(-1, 2)
+    if len(t) < 2 or not len(bounds):
+        return [tuple(x) for x in bounds.tolist()]
+    iv_all = np.diff(t).astype(np.float64)
+    big = np.flatnonzero(bounds[:, 1] - bounds[:, 0] >= 8)
+    meds = np.zeros(len(bounds))
+    meds[big] = K.segment_medians(iv_all, bounds[big, 0], bounds[big, 1] - 1)   # each frame's intervals
+    # every frame's cuts at once: its intervals over 2.5 of its median
+    n = bounds[big, 1] - bounds[big, 0] - 1
+    off = np.concatenate(([0], np.cumsum(n)))
+    idx = np.repeat(bounds[big, 0] - off[:-1], n) + np.arange(off[-1])
+    seg = np.repeat(big, n)
+    hit = iv_all[idx] > 2.5 * meds[seg]
+    cpos, cseg = idx[hit] + 1, seg[hit]
+    lo, hi = np.searchsorted(cseg, np.arange(len(bounds)), "left"), np.searchsorted(cseg, np.arange(len(bounds)), "right")
+    for f, (a, b) in enumerate(bounds.tolist()):
         if b - a < 8:
             out.append((a, b))
             continue
-        iv = np.diff(t[a:b]).astype(np.float64)
-        med = float(np.median(iv))
-        cuts = [a, *(a + 1 + np.flatnonzero(iv > 2.5 * med)).tolist(), b]
+        med = float(meds[f])
+        cuts = [a, *cpos[lo[f]:hi[f]].tolist(), b]
         for x, y in zip(cuts[:-1], cuts[1:]):
             if y - x >= 3 and t[y - 1] - t[y - 2] > 1.8 * med:
                 y -= 1
