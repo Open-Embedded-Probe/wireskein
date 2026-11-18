@@ -242,12 +242,26 @@ def pair_relation(cap: Capture, clk: ClockInfo, other: str) -> PairRelation:
                         np.flatnonzero(framed & (lv != active)))
 
 
+def _despiked_select(cap: Capture, clk: ClockInfo, other: str, r: PairRelation) -> PairRelation:
+    """A select's pulses of a single sample (the shortest a line shows: a spike, crosstalk) cut none of its windows:
+    its framing measured with them taken out too, where that frames more (a clock too fast for the gate leaves them)."""
+    e = cap.channel(other).edges
+    d = collapse(e, 2)
+    if len(d) == len(e) or r.boundary >= 1.0:
+        return r
+    s = pair_relation(replace(cap, channels=[x if x.name != other else replace(x, edges=d) for x in cap.channels]),
+                      clk, other)
+    if s.boundary <= r.boundary:
+        return r
+    return replace(r, boundary=s.boundary, selects=s.selects, n_real=s.n_real, selects_idle=s.selects_idle)
+
+
 def better_relation(cap: Capture, clk: ClockInfo, other: str, gated: tuple | None = None) -> PairRelation:
     """The pair measured on the lines as they are and on the clock's gated view (gated_view; given when made
     already), the better kept: the gate takes a noise's scatter out of a data line's phase and a select's spikes out
     of its framing; the lines as they are keep a clock's real short pulses (an I2C clock a slow rise clipped short,
     a clock running four times as fast in some frames), which the gate would merge."""
-    r = pair_relation(cap, clk, other)
+    r = _despiked_select(cap, clk, other, pair_relation(cap, clk, other))
     view, vc = gated or gated_view(cap, clk)
     # a line the gate takes most of the changes out of moves faster than this clock (it is no data of it: the real
     # clock of a bus, seen from its data line tried as a clock): measured as it is only. Counted against its changes

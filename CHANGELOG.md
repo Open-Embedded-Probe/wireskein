@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) A select line's pulses of a single sample (the shortest a line shows: a spike, crosstalk) cut none of its selections, also where the bus clock is too fast for its gate (a quarter of the period under two samples: an 8 MHz SPI at 50 MS/s): both the select measure of a pair and the frames read by a select take them out. Two SPI buses with crosstalk 0.05 were claimed without their CS; now with it. The bench's quick set read the same.
+- (JA) 選択線の 1 サンプル幅のパルス（線が見せるいちばん短いもの: スパイク、クロストーク）は、選択の窓を割らない。バスのクロックが速すぎてゲートが効かない所（周期の 4 分の 1 が 2 サンプルに満たない: 50 MS/s で取った 8 MHz の SPI）でも同じ: 線の組の選択線としての測り方と、選択線でのフレームの区切りの両方で除く。クロストーク 0.05 の SPI のバス 2 つが CS なしで主張されていた。今は CS 付き。測定台の速い組は同じに読んだ。
 - (EN) Where several sets of select lines frame nearly all of a clock's bursts (which lines are the CSs is open: a bus of a few transfers with other buses' selects active meanwhile), an SPI claim on that clock without a CS is likely at most, not confirmed.
 - (JA) あるクロックのバーストのほとんどを囲む選択線の組が 2 通り以上ある（どの線が CS か決められない: 転送が少ないバスで、その間ほかのバスの選択線も動く）とき、そのクロックの CS なしの SPI の主張は、確定ではなく有力までにとどめる。
 - (EN) A scanning declared protocol (SWD) passes over the positions whose parity checks on its fixed leading fields fail before reading a frame there: a scan takes no frame whose checks fail, it only read it through first. The same output to the byte (SWD, SWD with CAN, real RVSWD tried as SWD), 14 % less CPU on that set.

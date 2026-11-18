@@ -222,10 +222,11 @@ def frames_select(cap, sv: Survey, sb: SyncBits) -> Frames:
     ci = sv.clocks.get(sb.clock)
     if ci is not None and ci.period:
         # read with its changes closer than a quarter of the bus clock's period merged: a spike or a crosstalk
-        # pulse on the select no longer ends a frame mid-word (the line itself is not changed)
+        # pulse on the select no longer ends a frame mid-word (the line itself is not changed); a pulse of a single
+        # sample at least, where the clock is too fast for a quarter of it to reach two
         from dataclasses import replace
         from .survey import GATE, collapse
-        s = replace(s, edges=collapse(s.edges, ci.period / GATE))
+        s = replace(s, edges=collapse(s.edges, max(2.0, ci.period / GATE)))
     start, length, level = s.runs(cap.n_samples)
     inside, k, win = select_level(start, length, level, sb.t, cap.n_samples)[1:]
     bounds = []
