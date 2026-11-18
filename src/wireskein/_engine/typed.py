@@ -130,7 +130,10 @@ class Chars:
 
 # ---------------- builders ----------------
 
-def sample_edge_for(cap, clock: str, data: tuple[str, ...]) -> list[str]:
+DEBOUNCE_TICKS = 4    # a bounce: changes within this many ticks of an edge
+
+
+def sample_edge_for(cap, clock: str, data: tuple[str, ...], _debounced: bool = False) -> list[str]:
     """Sample on the clock edge farther from where the data changes. When the
     data changes about midway between both edges there is no evidence here, and
     both edges are returned as sibling candidates for a later stage to resolve:
@@ -148,6 +151,16 @@ def sample_edge_for(cap, clock: str, data: tuple[str, ...]) -> list[str]:
             df.append(np.median(K.nearest_distance(de, fall)[0]))
     a, b = float(np.mean(dr or [1])), float(np.mean(df or [0]))
     if min(a, b) > 0 and (max(a, b) / min(a, b) < 1.3 or abs(a - b) <= 1):
+        if not _debounced:
+            # bounces at the clock's edges put a fall beside a rise, and the data's changes look near both: measured
+            # again with each edge's bounces merged at its first change, where that leaves the clock's runs long
+            k = 2 * DEBOUNCE_TICKS * c.step
+            ce = K.debounce(np.asarray(c.edges, np.int64), k)
+            if len(ce) != len(c.edges) and len(ce) > 16 and float(np.median(np.diff(ce))) >= 2 * k:
+                from dataclasses import replace
+                view = replace(cap, channels=[replace(x, edges=K.debounce(np.asarray(x.edges, np.int64), k))
+                                              if x.name in (clock, *data) else x for x in cap.channels])
+                return sample_edge_for(view, clock, data, _debounced=True)
         return ["rise", "fall"]
     return ["rise" if a >= b else "fall"]
 
