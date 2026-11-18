@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) A pair of lines is measured as data of the clock and as its select each on the better of the two views (the lines as they are, the clock's gated view), not both from the view better as data: a CS with spikes kept to the clock as well on the lines as they are, so its framing was taken from there, cut by the spikes (0.21 against 1.0 gated), and the SPI bus was confirmed without its CS. Three such false confirmations on the bench (spikes 0.1 and 0.3) read right now.
+- (JA) 線の組を、クロックのデータ線としてと、選択線としてとで、それぞれ良い方の見え方（取ったまま、クロックのゲートした見え方）で測る。データ線として良い方から両方を取らない: スパイクのある CS は、取ったままでもクロックへの寄り方は変わらないので、枠の測り方もそちらから取られ、スパイクで切られて（ゲートした方は 1.0 に対し 0.21）、SPI のバスが CS なしで確定していた。測定台のそういう誤確定 3 つ（スパイク 0.1 と 0.3）が、正しく読める。
 
 ## 0.0.31
 - (EN) The RGB LED reading (`pulsecode.rgb_led`) makes each pulse's high and period lists at once from arrays, not pulse by pulse: the same output (302 lines, real and random), 6.5x faster on a long RVSWD clock tried as an LED chain (1.76 -> 0.27 s).
