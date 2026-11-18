@@ -19,6 +19,21 @@ def q(n: float, scale: float) -> float:
     return 1.0 - math.exp(-n / scale)
 
 
+def _bounce_view(ch, rate: float):
+    """The line with each edge's bounces merged at its first change, when its short runs (under 4 samples) come in
+    pairs (a gap after the edge, the pulse back: a bounce; a spike is one), else None. The deglitched views pair a
+    bounce's pulse with the edge before it and move the edge by the bounce."""
+    e = np.asarray(ch.edges, np.int64)
+    if len(e) < 16:
+        return None
+    runs = np.diff(e)
+    short = runs < 4 * ch.step
+    if not short.any() or 2 * np.count_nonzero(short[1:] & short[:-1]) < 0.5 * np.count_nonzero(short):
+        return None
+    d = K.debounce(e, 5 * ch.step)
+    return replace(ch, edges=d) if len(d) != len(e) else None
+
+
 RGB_SHORTEST = 0.15e-6  # s: no pulse of a WS2812-like line is shorter (T0H 0.25 us or more)
 RGB_MIXED = 0.1         # the rarer kind of bit's share a string's data has at least
 
@@ -38,6 +53,9 @@ class RgbLedPlugin:
             d = K.deglitch(np.asarray(ch.edges, np.int64), k)
             if len(d) != len(ch.edges):
                 views.append((replace(ch, edges=d), k))
+        b = _bounce_view(ch, c.cap.rate)
+        if b is not None:
+            views.append((b, -4))
         nodes = [n for line, dg in views for n in self._read(c, line, dg, ch.name)]
         return [max(nodes, key=lambda n: n.total)] if nodes else []
 
@@ -88,6 +106,9 @@ class OneWirePlugin:
             d = K.deglitch(np.asarray(ch.edges, np.int64), k)
             if len(d) != len(ch.edges):
                 views.append((replace(ch, edges=d), k))
+        b = _bounce_view(ch, c.cap.rate)
+        if b is not None:
+            views.append((b, -4))
         for (line, dg), speed in ((v, s) for v in views for s in ("standard", "overdrive")):
             r = pc.onewire(line, c.cap.n_samples, c.cap.rate, speed)
             rs = r["resets"]
