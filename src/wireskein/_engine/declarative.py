@@ -152,13 +152,14 @@ def _field(v: int, spec: str) -> int:
 
 
 def _length_ok(rule: str, n: int) -> bool:
-    """Rules: "9n", "9n+1", "8n", "53|54", combinations with "|"."""
+    """Rules: "9n", "9n+1", "8n", "53|54", combinations with "|". A rule kn + r asks for a word at least: the r bits
+    alone (a 1-bit frame against 9n + 1) are no frame of it."""
     for part in str(rule).split("|"):
         part = part.strip()
         m = re.fullmatch(r"(\d+)n(?:\+(\d+))?", part)
         if m:
             k, r = int(m.group(1)), int(m.group(2) or 0)
-            if n > 0 and n >= r and (n - r) % k == 0:
+            if n - r >= k and (n - r) % k == 0:
                 return True
         elif part.isdigit() and n == int(part):
             return True

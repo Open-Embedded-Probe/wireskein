@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) A length rule kn + r asks for a word at least: I2C's 9n + 1 no longer fits a 1-bit frame. Hypotheses made of such slivers alone were confirmed: an I2C with a decoy clock of the same rate as SCL and the real SCL as SDA (a cropped capture), and slow-rising I2C buses on their right lines that read not one transaction (decode 0: a 2.5 us rise on a bus of about 1 MHz, longer than a bit, tagged unreadable on the bench). The bench's quick set: those empty confirmations gone (slow rises: buses found 0.873 -> 0.761, all of the lost tagged unreadable, the decoding of those found 0.87 -> 1.0), noise sets better.
+- (JA) 長さの規則 kn ＋ r は、語が少なくとも 1 つあることを求める: I2C の 9n ＋ 1 は、1 ビットのフレームには合わない。そういう切れはしだけの仮説が確定していた: SCL と同じ速さのおとりのクロックを SCL、本物の SCL を SDA にした I2C（記録の一部の切り出し）や、正しい線の上で取引を 1 つも読めていない遅い立ち上がりの I2C（decode 0: 約 1 MHz のバスに 2.5 µs の立ち上がり。1 ビットより長く、測定台では読めないはずの印が付く）。測定台の速い組で、その空の確定が消えた（遅い立ち上がり: 見つけたバス 0.873 → 0.761、消えたのはどれも読めないはずの印のもの。見つけたバスの読み 0.87 → 1.0）。ノイズの組は良くなった。
 
 ## 0.0.31
 - (EN) The RGB LED reading (`pulsecode.rgb_led`) makes each pulse's high and period lists at once from arrays, not pulse by pulse: the same output (302 lines, real and random), 6.5x faster on a long RVSWD clock tried as an LED chain (1.76 -> 0.27 s).
