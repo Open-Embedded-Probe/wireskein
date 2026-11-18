@@ -142,6 +142,7 @@ def async_info(cap: Capture, f: ChannelFeatures) -> AsyncInfo:
     return AsyncInfo(f.name, u, char_length(cap, f.name, f.idle_level, u), f.idle_level)
 
 
+GATE_KEEPS = 3          # a line keeping under a third of its changes through a clock's gate is measured without it
 USED_SELECTIONS = 0.8   # a select line's windows at its active level holding a transfer: this share or more
 RING = 3        # samples: at a clock slow enough, a data line's pulses this short are a reflection ringing
 GATE = 4        # a line's changes closer than a quarter of a clock's period are one, when its pairs are measured
@@ -246,7 +247,9 @@ def better_relation(cap: Capture, clk: ClockInfo, other: str, gated: tuple | Non
     a clock running four times as fast in some frames), which the gate would merge."""
     r = pair_relation(cap, clk, other)
     view, vc = gated or gated_view(cap, clk)
-    if view is not cap:
+    # a line the gate takes most of the changes out of moves faster than this clock (it is no data of it: the real
+    # clock of a bus, seen from its data line tried as a clock): measured as it is only
+    if view is not cap and len(view.channel(other).edges) * GATE_KEEPS >= len(cap.channel(other).edges):
         g = pair_relation(view, vc, other)
         if (g.data_score, g.boundary) > (r.data_score, r.boundary):
             return g
