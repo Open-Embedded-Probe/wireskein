@@ -95,8 +95,10 @@ def _constant(runs: np.ndarray) -> float:
 def pin_classes(sv: Survey, cap) -> dict[str, PinClass]:
     max_edges = max((f.n_edges for f in sv.features.values()), default=1)
     periods = [ci.period for ci in sv.clocks.values() if ci.period]
-    gate = min(periods) / GATE if periods else 0.0
-    gated_max = max((len(collapse(cap.channel(n).edges, gate)) for n in sv.active), default=1) if gate else 1
+    # the fastest clock's gate, at least the couple of ticks a spike or crosstalk lasts (a clock of a few samples a
+    # period gates nothing)
+    gate = max(min(periods) / GATE, 3.0) if periods else 3.0
+    gated_max = max((len(collapse(cap.channel(n).edges, gate)) for n in sv.active), default=1)
     out = {}
     for n in sv.active:
         f = sv.features[n]
@@ -115,7 +117,7 @@ def pin_classes(sv: Survey, cap) -> dict[str, PinClass]:
             short_hi, short_lo = short_hi[short_hi < cap_len], short_lo[short_lo < cap_len]
             pulse = max(_two_valued(short_lo) * _constant(short_hi), _two_valued(short_hi) * _constant(short_lo))
             pulse *= 1 - clock  # a clock is two-valued trivially only if duty != 50%; keep them apart
-        if gate and ratio < 1:
+        if ratio < 1:
             # sparse counted on the changes the fastest clock's gate leaves too (a select's spikes or crosstalk add
             # changes, and a select so busy is no candidate): the larger kept
             g = len(collapse(ch.edges, gate)) / max(1, gated_max)

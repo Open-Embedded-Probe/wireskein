@@ -248,11 +248,19 @@ def better_relation(cap: Capture, clk: ClockInfo, other: str, gated: tuple | Non
     r = pair_relation(cap, clk, other)
     view, vc = gated or gated_view(cap, clk)
     # a line the gate takes most of the changes out of moves faster than this clock (it is no data of it: the real
-    # clock of a bus, seen from its data line tried as a clock): measured as it is only
-    if view is not cap and len(view.channel(other).edges) * GATE_KEEPS >= len(cap.channel(other).edges):
+    # clock of a bus, seen from its data line tried as a clock): measured as it is only. Counted against its changes
+    # but pulses of a couple of ticks (a spike, crosstalk: what the gate is for, not a faster line)
+    if view is not cap and len(view.channel(other).edges) * GATE_KEEPS >= len(collapse(cap.channel(other).edges, 3)):
         g = pair_relation(view, vc, other)
-        if (g.data_score, g.boundary) > (r.data_score, r.boundary):
-            return g
+        # the line as data of the clock and as its select are two measures: each the better of the two views (a
+        # select's spikes cut its framing on the lines as they are, while its few changes may keep to the clock no
+        # worse there)
+        data = g if g.data_score > r.data_score else r
+        sel = g if g.boundary > r.boundary else r
+        if data is sel:
+            return data
+        return replace(data, boundary=sel.boundary, selects=sel.selects, n_real=sel.n_real,
+                       selects_idle=sel.selects_idle)
     return r
 
 
