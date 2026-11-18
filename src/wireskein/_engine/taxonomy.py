@@ -132,6 +132,7 @@ def pin_classes(sv: Survey, cap) -> dict[str, PinClass]:
 # ---------------- T2 ----------------
 
 DATA_PAIR = 0.3
+BEST_DATA = 0.15        # a data-line variant of the partners within this of the best
 SELECT_BOUNDARY = 0.25  # candidates only; plugins re-measure on the filtered view
 SELECT_SHARE = 0.05     # a select line framing this share of the bursts is a candidate when the select lines framing
 SELECTS_TOGETHER = 0.9  # ... this much together (one bus, a target on each select: staged.shared_buses)
@@ -210,7 +211,10 @@ def groups(sv: Survey, pins: dict[str, PinClass]) -> list[Group]:
                 continue
             # data-pin subsets: all partners, the strong ones, and each alone
             strong = tuple(x for x in d_all if sv.pairs[(c, x)].data_score >= 0.6)
-            variants = {d_all, strong, *[(x,) for x in d_all]} - {()}
+            # and the ones keeping to it as well as the best (another bus's lines a noise lifts over 0.6 stay out)
+            top = max(sv.pairs[(c, x)].data_score for x in d_all)
+            best = tuple(x for x in d_all if sv.pairs[(c, x)].data_score >= top - BEST_DATA)
+            variants = {d_all, strong, best, *[(x,) for x in d_all]} - {()}
             for d in sorted(variants):          # (a set of tuples: its order is the hash seed's)
                 sc = clk_score * float(np.mean([sv.pairs[(c, x)].data_score for x in d]))
                 if s:
