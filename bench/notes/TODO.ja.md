@@ -45,6 +45,6 @@
 - SPI の相手のうち CS を取っていないもの（spivar の uncaptured）: analyze は全部を CS なしで読む。取った相手を CS 付きで、残りを CS なしで読むのが答え（残りの読み直し）。decode に CS なしのバスを CS 付きのバスと並べて書くと、CS なしの方がCS 付きの相手の転送まで読む（CS 付きの選択の外だけを読むべき）。
 
 - push: wireskein と wireskein-captures は、手元のコミットが push を待っている。
-- リリース: v0.0.29 で spi(mode=...) の直しを出した（2026-11-18）。[core] に知らせた。
+- リリース: v0.0.29 で spi(mode=...) の直しを出した。その退行（区間が選択の途中から始まると KeyError: 'cpol'）を dc4f94a で直した。[core] が 0.0.30 を待っている（出たら V203 の spi を流し直す）。
 - `real-ebdd`（確認用）は何度も結果を見たので価値が下がっている（data-requests §0）。新しい確認用は ebdd-50m-holdout、
   linke の holdout で足りるか。
