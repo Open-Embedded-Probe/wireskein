@@ -1,5 +1,5 @@
 """A clock whose edges bounce at half of them (most of its runs a bounce's ticks) still gets the views with the
-pulses taken out, up to 5 ticks: its typical run is taken also with the bounces out, and where it is slow enough is
+pulses taken out, wide enough for every bounce: its typical run is taken also with the bounces out, and where it is slow enough is
 judged from its periods with them out. Lines made here."""
 
 from types import SimpleNamespace
@@ -23,8 +23,9 @@ def test_bouncing_clock_gets_its_views():
     ch = type(ch)(ch.name, ch.initial, np.unique(np.concatenate([e, sel + off, sel + off + r.integers(1, 4, len(sel))])))
     cap = Capture(cap.rate, cap.n_samples, [ch])
     views = list(glitch_views(cap, None, SimpleNamespace(clock="SCK", data=(), select=None)))
+    # (a width that takes out nothing more than a smaller one is one view, under the smaller width)
     ks = [k for _, k in views]
-    assert max(ks) >= 5
+    assert max(ks) >= 4
     cleaned = dict((k, v) for v, k in views)[max(ks)].channel("SCK").edges
     assert len(cleaned) == len(e)                        # every bounce gone, every edge of the clock kept
 
