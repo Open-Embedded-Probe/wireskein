@@ -48,6 +48,9 @@ def main() -> None:
                          "(an error of the ledger's line); 0: no limit")
     ap.add_argument("--list", action="store_true", help="stages, algorithms and suites")
     ap.add_argument("--dry-run", action="store_true", help="what would run")
+    ap.add_argument("--has-trials", action="store_true",
+                    help="exit 0 when the run would have an algorithm other than a stage's main one, 1 when not (the "
+                         "gate leaves out only those: with none, the Bench workflow skips its cost run)")
     args = ap.parse_args()
 
     algos = registry.load(args.algos_dir)
@@ -92,6 +95,8 @@ def main() -> None:
     stages = [s for s in stages if by_stage.get(s)]
     if not stages:
         ap.error("no algorithm to run")
+    if args.has_trials:
+        sys.exit(0 if any(a.status != "main" for s in stages for a in by_stage[s]) else 1)
     dsets = runner.datasets_of(args.suite)
     if args.dry_run:
         for s in stages:

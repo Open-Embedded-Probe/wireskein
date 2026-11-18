@@ -90,9 +90,20 @@ jobs:
           args=()
           for s in $STAGES; do args+=(--stage "$s"); done
           for a in $ALGOS; do args+=(--algo "$a"); done
+          # the gate leaves out only algorithms other than a stage's main one: a run of main ones alone (e2e of
+          # wireskein, the check of a commit on main) needs no cost run, which took 22 minutes before the shards
+          rc=0
           uv run --python 3.13 --with-requirements bench/requirements.txt python bench/run.py "${args[@]}" \
-            --suite cost-real --status "$STATUS" --timeout 120 --note "gate" -j "$(nproc)"
-          uv run --python 3.13 --with-requirements bench/requirements.txt python bench/gate.py --out skip.json
+            --suite cost-real --status "$STATUS" --has-trials || rc=$?
+          if [ "$rc" -gt 1 ]; then exit "$rc"; fi
+          if [ "$rc" -eq 0 ]; then
+            uv run --python 3.13 --with-requirements bench/requirements.txt python bench/run.py "${args[@]}" \
+              --suite cost-real --status "$STATUS" --timeout 120 --note "gate" -j "$(nproc)"
+            uv run --python 3.13 --with-requirements bench/requirements.txt python bench/gate.py --out skip.json
+          else
+            echo '{"run": null, "skip": [], "why": {}}' > skip.json
+            echo "no algorithm but the main ones: no cost run, nothing left out" >> "$GITHUB_STEP_SUMMARY"
+          fi
           echo "skip=$(python3 -c 'import json; print(json.dumps(json.load(open("skip.json"))))')" >> "$GITHUB_OUTPUT"
 
       - name: Keep the gate
