@@ -57,16 +57,20 @@ def rgb_led(ch: Channel, n: int, rate: float) -> dict:
     one = w > split
     cut = np.flatnonzero(per > 5 * bit) + 1
     bounds = np.concatenate(([0], cut, [len(st)]))
+    # each pulse's high, and the period to the next one inside its frame: made at once (in pulse order, as a walk
+    # over the frames gives them)
+    st_l, w_l = st.tolist(), w.tolist()
+    out["t1h"] = [(st_l[k], w_l[k]) for k in np.flatnonzero(one).tolist()]
+    out["t0h"] = [(st_l[k], w_l[k]) for k in np.flatnonzero(~one).tolist()]
+    inner = np.ones(len(st) - 1, bool)
+    inner[bounds[1:-1] - 1] = False                       # the last pulse of a frame has no period in it
+    per_l = per.tolist()
+    out["period"] = [(st_l[k], per_l[k]) for k in np.flatnonzero(inner).tolist()]
+    out["pauses"] = [(st_l[k], per_l[k]) for k in np.flatnonzero(inner & (per > 2 * bit)).tolist()]
     for a, b in zip(bounds[:-1], bounds[1:]):
         bits = one[a:b].astype(int).tolist()
         data, left = _bytes(bits, lsb_first=False)
         out["frames"].append({"t": int(st[a]), "bits": int(b - a), "data": data.hex(), "leftover_bits": left})
-        for k in range(a, b):
-            out["t1h" if one[k] else "t0h"].append((int(st[k]), int(w[k])))
-            if k + 1 < b:
-                out["period"].append((int(st[k]), int(st[k + 1] - st[k])))
-                if per[k] > 2 * bit:
-                    out["pauses"].append((int(st[k]), int(per[k])))
         end = int(st[b - 1] + w[b - 1])
         nxt = int(st[b]) if b < len(st) else None
         if nxt is not None:
