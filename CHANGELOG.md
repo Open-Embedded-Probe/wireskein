@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) `kernels.local_period` takes each interval's window once for all the ticks of `at` in it (on a spiky capture 11.8 M ticks fell in 0.66 M intervals): the same values (56 captures to the byte), the spiky 12 MHz clock about 7 % faster.
+- (JA) `kernels.local_period` は、区間ごとの窓を 1 度だけ求め、その区間に落ちる `at` のすべてに配る（スパイクのある記録で 1180 万の点が 66 万の区間に落ちた）: 値は同じ（56 の記録でバイトまで）。スパイクのある 12 MHz のクロックで 7 % ほど速い。
 - (EN) RVSWD's rolling framing takes its moving median (33 intervals) by counting each kind of interval (`kernels.rolling_median`; numpy over a sliding view when there are over 64 kinds): the same floats, no 33-wide copy of every interval sorted. 56 captures the same to the byte; a spiky 12 MHz clock at 24 MS/s 15-20 % faster.
 - (JA) RVSWD の移動による区切りの移動中央値（33 の区間）は、区間の種類ごとの数を数えて求める（`kernels.rolling_median`。種類が 64 を超えるときは、numpy でずらした見え方の上で）: 値は同じで、すべての区間の 33 幅の写しを並べ替えない。56 の記録でバイトまで同じ。24 MS/s で取ったスパイクのある 12 MHz のクロックで 15〜20 % 速い。
 - (EN) A WS2812-like claim needs 5 samples a bit (evidence `samples_per_bit`; the score x clip(bit - 4, 0, 1)): T0H and T1H differ by about a third of a bit, under that a spike's tick is as wide as the difference. A 500 kHz SPI clock at 2 MS/s with spikes read as an LED string is gone; the generated strings (12 samples a bit or more) read the same.

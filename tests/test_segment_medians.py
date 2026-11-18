@@ -29,3 +29,15 @@ def test_rolling_median_the_same_as_numpy():
         for w in (1, 3, 5, 33):
             if n >= w:
                 assert np.array_equal(K.rolling_median(x, w), np.median(sliding_window_view(x, w), axis=1))
+
+
+def test_local_period_shared_intervals():
+    """local_period computes each interval's window once and hands it to every tick of `at` in it: the same values
+    as a window per tick."""
+    rng = np.random.default_rng(2)
+    for _ in range(200):
+        t = np.cumsum(rng.integers(1, 30, int(rng.integers(2, 200))))
+        at = rng.integers(0, int(t[-1]) + 50, int(rng.integers(1, 400)))
+        got = K.local_period(t, at)
+        for a, g in zip(at[:20], got[:20]):
+            assert g == K.local_period(t, np.array([a]))[0]

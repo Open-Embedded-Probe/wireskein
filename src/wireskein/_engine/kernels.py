@@ -184,6 +184,7 @@ def local_period(ticks: np.ndarray, at: np.ndarray, w: int = 8, q: float = 25) -
     n = len(ticks) - 1                                       # intervals; interval j is ticks[j] .. ticks[j + 1]
     m = min(w, n)
     j = np.searchsorted(ticks, at, side="right") - 1         # the interval each falls in (-1: before the first)
+    j, back = np.unique(j, return_inverse=True)              # each interval once (many ticks of `at` share one)
     out = []
     # the w before the interval it falls in and the w after it (that one left out: a hold at a turnaround or a STOP)
     for j0 in (np.clip(j - m, 0, n - m), np.clip(j + 1, 0, n - m)):
@@ -191,7 +192,7 @@ def local_period(ticks: np.ndarray, at: np.ndarray, w: int = 8, q: float = 25) -
         # q: the lower quartile by default - a frame's last bits may come slower than its clock (a LinkE at its
         # fastest)
         out.append(_percentile_rows((ticks[idx + 1] - ticks[idx]).astype(np.float64), q))
-    return np.minimum(out[0], out[1])
+    return np.minimum(out[0], out[1])[back.reshape(-1)]
 
 
 def _percentile_rows(x: np.ndarray, q: float) -> np.ndarray:
