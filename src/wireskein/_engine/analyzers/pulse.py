@@ -5,9 +5,11 @@ periods, resets answered by presence pulses, 32 bits with their inverse."""
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 
 import numpy as np
 
+from .. import kernels as K
 from .. import pulsecode as pc
 from ..scoring import degenerate
 from ..stack import Node, Stream
@@ -56,8 +58,16 @@ class OneWirePlugin:
         if ch.initial != 1:
             return []
         best = None
-        for speed in ("standard", "overdrive"):
-            r = pc.onewire(ch, c.cap.n_samples, c.cap.rate, speed)
+        # the line as it is, and with pulses shorter than the shortest 1-Wire has (low_1's least, 1 us: a spike, a
+        # bounce) taken out: such a pulse is a slot of its own or splits a low or a reset
+        k = int(np.ceil(min(v["low_1"][0] for v in pc.ONEWIRE.values()) * float(c.cap.rate) - 1e-9))
+        views = [(ch, 0)]
+        if k >= 2:
+            d = K.deglitch(np.asarray(ch.edges, np.int64), k)
+            if len(d) != len(ch.edges):
+                views.append((replace(ch, edges=d), k))
+        for (line, dg), speed in ((v, s) for v in views for s in ("standard", "overdrive")):
+            r = pc.onewire(line, c.cap.n_samples, c.cap.rate, speed)
             rs = r["resets"]
             # slots of both kinds (a clock's lows are all alike), whole bytes after most resets
             if not rs or not r["low_0"] or not r["low_1"]:
@@ -76,15 +86,15 @@ class OneWirePlugin:
             score = ((0.6 + 0.4 * pres) * whole * q(bits / 8, 2) * q(len(rs), 1) * float(np.clip((paced - 0.5) / 0.3, 0, 1))
                      * degenerate(data))
             if score >= 0.2 and (best is None or score > best[0]):
-                best = (score, speed, r)
+                best = (score, speed, r, dg)
         if best is None:
             return []
-        score, speed, r = best
+        score, speed, r, dg = best
         rs = r["resets"]
         per = np.array([p for _, p in r["slot"]], np.float64)
         m = {"resets": len(rs), "presence": sum(z["presence"] for z in rs), "bits": sum(z["bits"] for z in rs),
              "paced": round(float(np.mean(np.abs(per / np.median(per) - 1) <= ONEWIRE_PACE)), 3) if len(per) else 0.0}
-        return [Node("onewire", {"speed": speed}, {"dq": ch.name}, Stream("onewire.resets", rs), m,
+        return [Node("onewire", {"speed": speed, "deglitch": dg}, {"dq": ch.name}, Stream("onewire.resets", rs), m,
                      layer_score=score, total=score)]
 
 

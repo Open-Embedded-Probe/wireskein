@@ -37,3 +37,18 @@ def test_real_onewire_keeps_its_pace():
     for _ in range(4):
         t = gen.onewire(w, t, bytes(r.integers(0, 256, 6).tolist())) + 5e-4
     assert score(w, t) > 0.85
+
+
+def test_spiked_onewire_is_read():
+    """Spikes of a tick (shorter than the shortest 1-Wire pulse, 1 us) read as slots of their own or split lows: the
+    line is read with them taken out too."""
+    r = np.random.default_rng(3)
+    w, t = gen.Wave(1), 2e-4
+    for _ in range(4):
+        t = gen.onewire(w, t, bytes(r.integers(0, 256, 6).tolist())) + 5e-4
+    cap = gen.quantize({"D0": w}, RATE, t, np.random.default_rng(0))
+    ch = cap.channel("D0")
+    s = np.sort(np.random.default_rng(5).integers(10, cap.n_samples - 10, 12))
+    ch = type(ch)(ch.name, ch.initial, np.sort(np.concatenate([np.asarray(ch.edges, np.int64), s, s + 1])))
+    nodes = OneWirePlugin().run(SimpleNamespace(cap=SimpleNamespace(n_samples=cap.n_samples, rate=RATE)), ch, None)
+    assert nodes and nodes[0].total > 0.85 and nodes[0].params["deglitch"] >= 2
