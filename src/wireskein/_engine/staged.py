@@ -174,6 +174,7 @@ def _on_grid(pin, blocks) -> float | None:
     return num / den if den else None
 
 
+SYNC_MIN_PERIOD = 4     # samples: a clock this slow at least, for a line keeping to it to mean anything
 CLOCKS_A_BUS = 0.8      # a clock this clock-like, with a partner keeping to it as data this well, is no UART line
 
 
@@ -254,9 +255,12 @@ class UartPlugin:
         u_main = max(units, key=lambda x: x[1])[0]
         m = {"framing_rate": framing, "coverage": coverage, "chars": ok_n, "blocks": len(units),
              "clock_like": clock_like, "L": blocks[0][2].bits if blocks[0][2] else None}
-        # a pin that moves in step with some clock is synchronous data, not a UART line
+        # a pin that moves in step with some clock is synchronous data, not a UART line. A clock of under 4 samples a
+        # period (one changing at every sample: a fast clock aliased) has every change of every line on its edges,
+        # and says nothing of where a line's changes fall
         sync = max((r.data_score * c.sv.clocks[k].clock_score for (k, o), r in c.sv.pairs.items()
-                    if o == rb.pin and k != rb.pin and k in c.sv.clocks), default=0.0)
+                    if o == rb.pin and k != rb.pin and k in c.sv.clocks
+                    and (c.sv.clocks[k].period or 0) >= SYNC_MIN_PERIOD), default=0.0)
         m["sync_with_clock"] = sync
         # a pin whose active windows each hold a clock's burst tightly is that bus's select, not a UART (a CS's low
         # windows read as characters); a UART's lows meet another bus's bursts only by chance, never snugly
