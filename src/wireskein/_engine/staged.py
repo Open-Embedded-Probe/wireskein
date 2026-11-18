@@ -156,6 +156,31 @@ class SyncUnknownPlugin:
 
 # ---------------- async plugins (on Chars) ----------------
 
+GRID_LOW, GRID_SPAN = 0.88, 0.04   # the share of in-character changes on the bit grid: 0.92 or more counts whole
+
+
+def _on_grid(pin, blocks) -> float | None:
+    """Of the changes inside the well-formed characters (changes closer than a quarter bit merged: a bounce is one),
+    the share within a quarter bit of the character's start plus a whole number of bits."""
+    from .survey import collapse
+    e_all = np.asarray(pin.edges, np.int64)
+    num = den = 0
+    for (s0, s1, u), _, ch in blocks:
+        if ch is None:
+            continue
+        e = collapse(e_all[(e_all >= s0) & (e_all < s1)], u / 4)
+        st = np.sort(ch.start[ch.ok]).astype(np.int64)
+        if not len(st) or not len(e):
+            continue
+        i = np.searchsorted(st, e, side="right") - 1
+        ok = i >= 0
+        d = (e[ok] - st[i[ok]]) / u
+        d = d[d < ch.bits - 0.5]
+        num += int((np.abs(d - np.round(d)) < 0.25).sum())
+        den += len(d)
+    return num / den if den else None
+
+
 class UartPlugin:
     name = "uart"
     consumes = ("chars",)
@@ -212,8 +237,13 @@ class UartPlugin:
         # as bits as well as a UART's (on the bench every UART claimed under 2.2 samples a bit was none)
         m["samples_per_bit"] = u_main
         resolvable = float(np.clip(u_main - 2, 0, 1))
+        # a UART's changes inside its characters sit on the bit grid (its start plus whole bits); a line that only
+        # toggles now and then (a slow random line) gives framed characters too, its changes off the grid
+        grid = _on_grid(pin, blocks)
+        m["on_grid"] = grid
+        gridded = float(np.clip((grid - GRID_LOW) / GRID_SPAN, 0, 1)) if grid is not None else 1.0
         score = (framing * coverage * q(ok_n) * degenerate(v & 0xFF) * (1 - 0.5 * clock_like) * (1 - sync)
-                 * (1 - framed) * resolvable)
+                 * (1 - framed) * resolvable * gridded)
         params = {"baud": c.cap.rate / u_main, "idle": rb.idle, "L": m["L"], "blocks": len(units)}
         items = {"value": v, "start": np.concatenate(starts), "char_samples": u_main * (m["L"] or 10)}
         return [Node("uart", params, {"data": rb.pin}, Stream("bytes", items, meta={"char_samples": u_main * (m["L"] or 10)}),
@@ -497,6 +527,7 @@ SYNC_ROLES = {"i2c": {"scl": "clock", "sda": "data"}, "spi": {"clk": "clock", "m
 
 
 SHARED_COVER = 0.95    # the targets' selections together hold this share of the clock's bursts or more
+SHARED_MAX = 8         # select lines on one clock tried in sets for one bus of targets (2^n sets)
 
 
 def shared_buses(roots: list[Node], sv) -> list[Node]:
@@ -534,23 +565,38 @@ def shared_buses(roots: list[Node], sv) -> list[Node]:
         def adjusted(n):
             sb = n.metrics.get("select_boundary")
             return float(min(0.99, n.total / sb)) if sb else float(n.total)
-        chosen, taken = [], np.zeros((0, 2), np.int64)
-        for n in sorted(per.values(), key=lambda n: -adjusted(n)):
-            sp = spans(n)
-            if not len(sp):
-                continue
-            if len(taken) and any(((taken[:, 0] <= e) & (taken[:, 1] >= s)).any() for s, e in sp):
-                continue                                   # its selections overlap another target's: not one bus
-            chosen.append((n, adjusted(n)))
-            taken = np.concatenate([taken, sp])
-        if len(chosen) < 2:
+        cands = [(n, spans(n), adjusted(n)) for n in sorted(per.values(), key=lambda n: -adjusted(n))]
+        cands = [x for x in cands if len(x[1])][:SHARED_MAX]
+
+        def holds(sp):
+            sp = sp[np.argsort(sp[:, 0])]
+            k = np.searchsorted(sp[:, 0], mid, side="right") - 1
+            return (k >= 0) & (mid <= sp[np.maximum(k, 0), 1])
+        held_by = [holds(sp) for _, sp, _ in cands]
+
+        def apart(a, b):
+            return not any(((a[:, 0] <= e) & (a[:, 1] >= s)).any() for s, e in b)
+        # every set of targets whose selections never overlap: the one holding the most bursts, then scoring best
+        # (a decoy select-like line taken first would keep the real ones out)
+        best: list = [(-1, -1.0), ()]
+
+        def dfs(i, chosen, held):
+            if i == len(cands):
+                if len(chosen) >= 2:
+                    key = (int(held.sum()), sum(cands[j][2] for j in chosen))
+                    if key > best[0]:
+                        best[:] = [key, tuple(chosen)]
+                return
+            dfs(i + 1, chosen, held)
+            if all(apart(cands[j][1], cands[i][1]) for j in chosen):
+                dfs(i + 1, chosen + [i], held | held_by[i])
+        dfs(0, [], np.zeros(len(mid), bool))
+        if not best[1]:
             continue
-        taken = taken[np.argsort(taken[:, 0])]
-        k = np.searchsorted(taken[:, 0], mid, side="right") - 1
-        held = (k >= 0) & (mid <= taken[np.maximum(k, 0), 1])
-        cover = float(held.mean())
+        cover = best[0][0] / len(mid)
         if cover < SHARED_COVER:
             continue
+        chosen = [(cands[j][0], cands[j][2]) for j in best[1]]
         w = np.array([max(1, n.metrics.get("frames", 1)) for n, _ in chosen], float)
         total = float(np.dot(w, [a for _, a in chosen]) / w.sum()) * cover
         roles = {"clk": clk, **{f"data{i}": d for i, d in enumerate(data)},
