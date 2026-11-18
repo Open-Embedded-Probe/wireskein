@@ -181,6 +181,17 @@ def _on_grid(pin, blocks) -> float | None:
     return num / den if den else None
 
 
+CLOCKS_A_BUS = 0.8      # a clock this clock-like, with a partner keeping to it as data this well, is no UART line
+
+
+def _clocks_a_bus(sv, pin: str) -> bool:
+    """The pin is a clock some other line keeps to as data (a bus's clock: RVSWD's SWCLK, SPI's SCK)."""
+    ci = sv.clocks.get(pin)
+    if ci is None or ci.clock_score < CLOCKS_A_BUS:
+        return False
+    return any(r.data_score >= CLOCKS_A_BUS for (k, o), r in sv.pairs.items() if k == pin and o != pin)
+
+
 def _tight_windows(pin, idle: int, sv, n: int) -> float:
     """Of the pin's whole windows away from its idle level (read through each clock's gate: a bounce is one change),
     the largest share holding one of a clock's bursts snugly (the margins before and after it together no longer than
@@ -844,6 +855,8 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
                     roots.append(n)
         if not run_async or hinted.get("protocol") in PULSE_PROTOCOLS:
             continue
+        if not hinted.get("protocol") and _clocks_a_bus(c.sv, g.pin):
+            continue            # a clock other lines keep to as data: a bus's clock, not a UART line (not tried)
         for view_cap, k in single_views(cap, c.sv, g.pin):
             if hinted.get("baud"):
                 # a given baud rate replaces rate segmentation and unit estimation

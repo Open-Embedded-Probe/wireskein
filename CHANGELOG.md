@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) A line that is a clock other lines keep to as data (clock-like 0.8 or more, a partner's data score 0.8 or more: RVSWD's SWCLK, SPI's SCK) is not tried as a UART, LIN or DMX512 line unless a hint names it: such a claim never won, and reading a bus clock as characters was the analysis' largest part on a long RVSWD capture (a 20 KiB RAM read: 28 -> 20 s CPU, the asynchronous pass 15 -> 4.5 s). The bench's quick set read the same.
+- (JA) ほかの線がデータとして従うクロックの線（クロックらしさ 0.8 以上、相手のデータ線としての点数 0.8 以上: RVSWD の SWCLK、SPI の SCK）は、ヒントで名指しされない限り、UART・LIN・DMX512 として試さない: そういう主張が選ばれたことはなく、バスのクロックを文字として読むのが、長い RVSWD の記録の解析でいちばん大きな部分だった（20 KiB の RAM の読み出し: CPU 28 → 20 秒、非同期の試し 15 → 4.5 秒）。測定台の速い組は同じに読んだ。
 - (EN) SPI and I2C claims are weighed by how often a data line changes per bit inside the frames (a bounce merged; core term `data_once_a_bit`, evidence `data_per_bit`; the score x clip(2 - r, 0, 1)): data on a clock edge changes at most once a bit, alternating bits included, a clock taken for data twice. Two free-running clocks of the same rate were confirmed as an SPI bus (a decimated capture with spikes); now not, the real buses unchanged.
 - (JA) SPI と I2C の主張を、フレームの中でデータ線が 1 ビットに何回変わるかで重み付けする（跳ねはまとめる。コアの項 `data_once_a_bit`、証拠 `data_per_bit`。点数 × clip(2 − r, 0, 1)）: クロックの縁で取るデータは、交互のビットでも 1 ビットに多くて 1 回しか変わらず、データと見立てたクロックは 2 回変わる。同じ速さで動き続ける 2 本のクロックが SPI のバスとして確定していた（間引いたスパイクのある記録）。今はしない。本物のバスは変わらない。
 - (EN) A pair whose two lines the clock's gate changes in nothing is measured once (the gated view holds the same two lines): the same relations on every pair (32 captures, generated and real), the survey about a tenth faster.
