@@ -122,6 +122,35 @@ def bus_free(e: dict, allow: int = 2) -> float | None:
     return int(free) / len(stops)
 
 
+def data_per_bit(e: dict) -> float | None:
+    """Inside the frames, the most changes a data line makes per bit sampled (changes closer than a quarter of the
+    clock's period merged: a bounce is one). Data on a clock edge changes at most once a bit, alternating bits
+    included; a clock taken for data changes twice. None: not known."""
+    from .survey import GATE, collapse
+    fr, sb = e["frames_obj"], e["bits"]
+    cap = getattr(sb, "view", None)
+    if cap is None or not len(fr.bounds) or not sb.data:
+        return None
+    t = np.asarray(sb.t, np.int64)
+    b = np.asarray(fr.bounds, np.int64).reshape(-1, 2)
+    b = b[b[:, 1] - b[:, 0] >= 2]
+    if not len(b):
+        return None
+    s0, s1 = t[b[:, 0]], t[b[:, 1] - 1]
+    bits = int((b[:, 1] - b[:, 0] - 1).sum())            # the intervals between the first and the last sample
+    if bits <= 0:
+        return None
+    ci = e["survey"].clocks.get(sb.clock) if e.get("survey") is not None else None
+    worst = 0.0
+    for d in sb.data:
+        de = np.asarray(cap.channel(d).edges, np.int64)
+        if ci is not None and ci.period:
+            de = collapse(de, ci.period / GATE)
+        changes = int((np.searchsorted(de, s1, side="left") - np.searchsorted(de, s0, side="right")).sum())
+        worst = max(worst, changes / bits)
+    return worst
+
+
 def clock_hz(e: dict) -> float | None:
     """The clock's rate inside the frames: the median interval between its sampling edges there."""
     fr, sb = e["frames_obj"], e["bits"]
@@ -608,6 +637,12 @@ class DeclarativePlugin:
             if fb is not None:
                 score *= fb
                 evidence["bus_free"] = fb
+        if "data_once_a_bit" in terms:
+            # a data line changing about twice a bit inside the frames is a clock, not data on this clock's edge
+            r = data_per_bit(evidence)
+            if r is not None:
+                evidence["data_per_bit"] = r
+                score *= float(np.clip(2 - r, 0, 1))
         if "max_clock_hz" in terms:
             # the clock in the frames as read, and the line as captured (its dominant period: an input view, as
             # I2C's spike filter, thins a clock too fast for the protocol into a slower-looking one)

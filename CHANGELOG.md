@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) SPI and I2C claims are weighed by how often a data line changes per bit inside the frames (a bounce merged; core term `data_once_a_bit`, evidence `data_per_bit`; the score x clip(2 - r, 0, 1)): data on a clock edge changes at most once a bit, alternating bits included, a clock taken for data twice. Two free-running clocks of the same rate were confirmed as an SPI bus (a decimated capture with spikes); now not, the real buses unchanged.
+- (JA) SPI と I2C の主張を、フレームの中でデータ線が 1 ビットに何回変わるかで重み付けする（跳ねはまとめる。コアの項 `data_once_a_bit`、証拠 `data_per_bit`。点数 × clip(2 − r, 0, 1)）: クロックの縁で取るデータは、交互のビットでも 1 ビットに多くて 1 回しか変わらず、データと見立てたクロックは 2 回変わる。同じ速さで動き続ける 2 本のクロックが SPI のバスとして確定していた（間引いたスパイクのある記録）。今はしない。本物のバスは変わらない。
 - (EN) A pair whose two lines the clock's gate changes in nothing is measured once (the gated view holds the same two lines): the same relations on every pair (32 captures, generated and real), the survey about a tenth faster.
 - (JA) クロックのゲートが 2 本の線のどちらも変えない組は、1 度だけ測る（ゲートした見え方の 2 本は同じ線）: 関係はどの組も同じ（生成と実機の 32 の記録）で、下調べが 1 割ほど速い。
 - (EN) A UART claim is weighed down on a line whose windows away from idle each hold a clock's burst snugly (the margins before and after no longer than the burst; the line and the clock read through the clock's gate): that is a bus's select (an SPI CS whose low windows read as characters), a UART's lows meet another bus's bursts only by chance (evidence `tight_windows`; the score x (1 - clip((s - 0.5) / 0.3, 0, 1))). A plain boundary penalty was tried and not taken: any line idling long frames bursts.
