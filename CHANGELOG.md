@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) A bus's glitch views share one analysis' work among a clock's groups (the clock's typical run, its rises per filter width, each pin's filtered edges): the same output (56 captures and 177 noisy cases to the byte), generated sets about 4-5 % faster (the views added for bounces had made them 12-16 % slower).
+- (JA) バスの glitch views は、1 回の解析の中で、同じクロックのグループの間で計算を分け合う（クロックの典型的な Run、除く幅ごとの立ち上がり、線ごとの除いた後の変化）: 出力は同じ（56 の記録と雑音のある 177 件でバイトまで）。生成の組で 4〜5 % 速い（跳ねのための見え方で 12〜16 % 遅くなっていた）。
 - (EN) Fixed: an analysis could differ from run to run. A clock's data-line variants were a set of tuples, iterated in the hash seed's order (it changes per process), and among groups scoring the same the first was kept: on noisy captures a sync_unknown claim took another data line from one run to the next (2 of 60 bounce cases). The variants are taken in sorted order: three hash seeds read 177 noisy cases the same to the byte.
 - (JA) 直した: 解析の結果が実行ごとに変わることがあった。クロックのデータ線の組み合わせの候補をタプルの set で持ち、ハッシュの seed の順（プロセスごとに変わる）で回していて、同じ点数のグループでは先のものが残った: 雑音のある記録で、sync_unknown の主張のデータ線が実行ごとに変わった（跳ねの 60 件中 2 件）。候補を並べた順に回す: 3 つのハッシュの seed で、雑音のある 177 件がバイトまで同じに読める。
 - (EN) A select's selection that the capture's end cut (the one transfer in the window after the line's last change, at the level its other selections are) frames that transfer: its closing edge was never recorded. An SPI bus whose last transfer ran into the end was confirmed without its CS (a quarter of its transfers unframed): the last false confirmation of the earlier CI runs (mixed 163, cropped) reads right. Cropped sets: false claims 4 -> 0, buses read +6; clean, noisy, SPI shapes and targets sets the same.

@@ -389,10 +389,12 @@ def _slow_at(edges: np.ndarray, k: int, rises: np.ndarray) -> np.ndarray:
 GLITCH_SHARE = 0.6    # a clock's runs this short a share or less: a view with them taken out
 
 
-def glitch_views(cap, sv, g):
+def glitch_views(cap, sv, g, memo: dict | None = None):
     """The capture as is, plus a sibling view with short pulses (reflections)
     removed from the clock and data pins when the clock shows such pulses:
-    runs of <= 4 samples that are rare compared with the clock's own half period."""
+    runs of <= 4 samples that are rare compared with the clock's own half period.
+    memo: one analysis' store (a clock's groups share its runs and each pin's filtered edges)."""
+    memo = {} if memo is None else memo
     yield cap, 0
     ch = cap.channel(g.clock)
     _, length, _ = ch.runs(cap.n_samples)
@@ -402,10 +404,14 @@ def glitch_views(cap, sv, g):
     step = max(x.step for x in cap.channels if x.name in {g.clock, *g.data, *([g.select] if g.select else [])})
     # the clock's typical run, also with its pulses under BOUNCE_TICKS taken out: a bounce makes two short runs, so
     # with bounces at half the edges most runs are short and their median is a bounce's
-    med = float(np.median(inner))
-    clean = np.diff(np.asarray(K.deglitch(ch.edges, BOUNCE_TICKS * step), np.int64))
-    if len(clean) >= 16:
-        med = max(med, float(np.median(clean)))
+    key = ("med", g.clock, step)
+    if key not in memo:
+        med = float(np.median(inner))
+        clean = np.diff(np.asarray(K.deglitch(ch.edges, BOUNCE_TICKS * step), np.int64))
+        if len(clean) >= 16:
+            med = max(med, float(np.median(clean)))
+        memo[key] = med
+    med = memo[key]
     # Short pulses relative to the clock's own runs (reflections last a few ns,
     # i.e. more samples at higher rates; single-sample spikes at any rate).
     short = inner <= max(float(step), 0.25 * med)
@@ -423,10 +429,17 @@ def glitch_views(cap, sv, g):
             # changes speed (a LinkE connecting slowly, then reading fast) keeps its fast clock's short highs. The
             # period from the clock with its pulses of k taken out: bounces at half its edges split its periods,
             # and the median of them was a bounce's
-            ce = K.deglitch(ch.edges, k)
-            rises = ce[K.edge_levels(ce, ch.initial) == 1]
-            chans = [replace(x, edges=K.deglitch(x.edges, k, _slow_at(x.edges, k, rises))) if x.name in pins else x
-                     for x in cap.channels]
+            if ("rises", g.clock, k) not in memo:
+                ce = K.deglitch(ch.edges, k)
+                memo[("rises", g.clock, k)] = ce[K.edge_levels(ce, ch.initial) == 1]
+            rises = memo[("rises", g.clock, k)]
+
+            def filtered(x):
+                kx = ("pin", g.clock, x.name, k)
+                if kx not in memo:
+                    memo[kx] = K.deglitch(x.edges, k, _slow_at(x.edges, k, rises))
+                return memo[kx]
+            chans = [replace(x, edges=filtered(x)) if x.name in pins else x for x in cap.channels]
             yield Capture(cap.rate, cap.n_samples, chans), k
 
 
@@ -779,6 +792,7 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
     runs = 0
     t0 = time.perf_counter()
     seen = set()
+    gv_memo: dict = {}          # the glitch views' shared work, this analysis only
     run_sync = not allowed or bool(allowed & SYNC)
     for g in [*tx.groups, *_hinted_groups(pin_hint, c.sv, tx.groups, (hints or {}).get("buses"))]:
         if g.kind != "sync" or not run_sync or not group_ok(g):
@@ -787,7 +801,7 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
         if key in seen:
             continue
         seen.add(key)
-        views = list(glitch_views(cap, c.sv, g))
+        views = list(glitch_views(cap, c.sv, g, gv_memo))
         # I2C reads the lines as an I2C input sees them (its spike filter, its hysteresis: timing.i2c_input), the
         # only reading such a device makes of them; the other plugins the views above
         i2c_view, i2c_only = None, False
