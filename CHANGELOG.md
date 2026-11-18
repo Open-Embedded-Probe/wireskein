@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Where several sets of select lines frame nearly all of a clock's bursts (which lines are the CSs is open: a bus of a few transfers with other buses' selects active meanwhile), an SPI claim on that clock without a CS is likely at most, not confirmed.
+- (JA) あるクロックのバーストのほとんどを囲む選択線の組が 2 通り以上ある（どの線が CS か決められない: 転送が少ないバスで、その間ほかのバスの選択線も動く）とき、そのクロックの CS なしの SPI の主張は、確定ではなく有力までにとどめる。
 - (EN) A scanning declared protocol (SWD) passes over the positions whose parity checks on its fixed leading fields fail before reading a frame there: a scan takes no frame whose checks fail, it only read it through first. The same output to the byte (SWD, SWD with CAN, real RVSWD tried as SWD), 14 % less CPU on that set.
 - (JA) 走査する宣言の方式（SWD）は、決まった位置の先頭の欄に対するパリティの検査が合わない位置を、フレームを読む前に飛ばす: 走査は検査の合わないフレームを採らず、これまでは読み切ってから外していた。出力はバイトまで同じ（SWD、SWD と CAN、SWD として試す実機の RVSWD）で、その組で CPU が 14 % 減る。
 - (EN) A line that is a clock other lines keep to as data (clock-like 0.8 or more, a partner's data score 0.8 or more: RVSWD's SWCLK, SPI's SCK) is not tried as a UART, LIN or DMX512 line unless a hint names it: such a claim never won, and reading a bus clock as characters was the analysis' largest part on a long RVSWD capture (a 20 KiB RAM read: 28 -> 20 s CPU, the asynchronous pass 15 -> 4.5 s). The bench's quick set read the same.

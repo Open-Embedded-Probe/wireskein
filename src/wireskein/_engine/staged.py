@@ -951,6 +951,9 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
             v = methods.get("verdict", verdict)(n.total, margin)
             if n.analyzer == "sync_unknown":
                 v = "unknown-sync"
+            if (v == "confirmed" and n.analyzer == "spi" and "cs" not in n.roles
+                    and n.roles.get("clk") in tx.survey.select_ambiguous):
+                v = "likely"            # selects are there but which lines are open: the bus without them is not sure
             claims.append(Claim(n.analyzer, dict(n.roles), dict(n.params), n.total, margin, v, n, ru))
     t["pack"] = time.perf_counter() - t0
     res = StagedResult(roots, exps, claims, t, tx.survey.features, tx, runs)

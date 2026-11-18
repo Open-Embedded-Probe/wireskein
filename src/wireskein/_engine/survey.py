@@ -74,6 +74,7 @@ class Survey:
     asyncs: dict[str, AsyncInfo]
     pairs: dict[tuple[str, str], PairRelation] = field(default_factory=dict)
     gated: dict[str, tuple] = field(default_factory=dict)   # clock -> (its gated view of the capture, the clock there)
+    select_ambiguous: set = field(default_factory=set)      # clocks several sets of select lines frame (taxonomy)
 
     def partners(self, clock: str) -> list[PairRelation]:
         return sorted((r for (c, _), r in self.pairs.items() if c == clock), key=lambda r: -r.data_score)

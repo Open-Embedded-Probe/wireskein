@@ -157,9 +157,12 @@ def _select_set(rels, pins) -> list[str]:
     opts = opts[:SELECT_SET_MAX]
     n = max(1, opts[0][0].n_real)
     best: list = [0, 0, ()]
+    covering: set = set()          # the line sets framing nearly all the bursts
 
     def dfs(i, used, chosen):
         if i == len(opts):
+            if len(chosen) >= 2 and len(used) >= SELECTS_TOGETHER * n:
+                covering.add(frozenset(opts[j][0].other for j in chosen))
             if len(chosen) >= 2 and (len(used), -len(chosen)) > (best[0], best[1]):
                 best[:] = [len(used), -len(chosen), tuple(chosen)]
             return
@@ -168,6 +171,7 @@ def _select_set(rels, pins) -> list[str]:
             if not (x & used):
                 dfs(i + 1, used | x, chosen + [i])
     dfs(0, frozenset(), [])
+    _select_set.ambiguous = len(covering) >= 2   # several sets of lines frame the bursts: which are the selects is open
     if best[0] < SELECTS_TOGETHER * n:
         return []
     return [opts[i][0].other for i in best[2] if opts[i][0].boundary < SELECT_BOUNDARY]
@@ -181,7 +185,10 @@ def groups(sv: Survey, pins: dict[str, PinClass]) -> list[Group]:
         rels = [r for r in sv.partners(c)]
         data = tuple(sorted(r.other for r in rels if r.data_score >= DATA_PAIR))
         sel = [r.other for r in rels if r.boundary >= SELECT_BOUNDARY and "sparse" in pins[r.other].candidates]
+        _select_set.ambiguous = False
         sel += _select_set(rels, pins)
+        if _select_set.ambiguous:
+            sv.select_ambiguous.add(c)
         clk_score = sv.clocks[c].clock_score
         for s in [None, *sel]:
             d_all = tuple(x for x in data if x != s)
