@@ -58,9 +58,12 @@ class RgbLedPlugin:
         # it; a string's colours have a tenth of the rarer kind or more
         minor = min(len(r["t0h"]), len(r["t1h"])) / max(1, len(r["t0h"]) + len(r["t1h"]))
         mixed = 0.3 + 0.7 * float(np.clip(minor / RGB_MIXED, 0, 1))
-        score = steady * whole * mixed * q(bits / 24, 2)
+        # T0H and T1H differ by about a third of the bit: under 5 samples a bit, a spike's tick is as wide as that
+        # difference (a clock at 2 MS/s with spikes read as varied bits)
+        resolvable = float(np.clip(r["bit"] - 4, 0, 1))
+        score = steady * whole * mixed * q(bits / 24, 2) * resolvable
         m = {"frames": len(fr), "bits": bits, "steady": steady, "whole_bytes": whole, "bit_s": bit_s,
-             "rarer_bits": round(minor, 3)}
+             "rarer_bits": round(minor, 3), "samples_per_bit": round(float(r["bit"]), 2)}
         return [Node("rgb_led", {"bit_s": bit_s, "deglitch": dg}, {"data": name},
                      Stream("led.frames", {"frames": fr, "split": r["split"], "bytes": data.hex()}), m,
                      layer_score=score, total=score)]
