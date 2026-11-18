@@ -152,14 +152,24 @@ def sample_edge_for(cap, clock: str, data: tuple[str, ...], _debounced: bool = F
     a, b = float(np.mean(dr or [1])), float(np.mean(df or [0]))
     if min(a, b) > 0 and (max(a, b) / min(a, b) < 1.3 or abs(a - b) <= 1):
         if not _debounced:
+            from dataclasses import replace
             # bounces at the clock's edges put a fall beside a rise, and the data's changes look near both: measured
             # again with each edge's bounces merged at its first change, where that leaves the clock's runs long
             k = 2 * DEBOUNCE_TICKS * c.step
             ce = K.debounce(np.asarray(c.edges, np.int64), k)
             if len(ce) != len(c.edges) and len(ce) > 16 and float(np.median(np.diff(ce))) >= 2 * k:
-                from dataclasses import replace
                 view = replace(cap, channels=[replace(x, edges=K.debounce(np.asarray(x.edges, np.int64), k))
                                               if x.name in (clock, *data) else x for x in cap.channels])
+                got = sample_edge_for(view, clock, data, _debounced=True)
+                if len(got) == 1:
+                    return got
+            # crosstalk's pulses of a sample (none of them an edge's bounce) do the same: measured again with those
+            # runs taken out, each with its own two edges
+            pins = (clock, *data)
+            cleaned = {x.name: K.shortest_first(x.edges, 2 * x.step) for x in cap.channels if x.name in pins}
+            if any(len(cleaned[n]) != len(cap.channel(n).edges) for n in pins):
+                view = replace(cap, channels=[replace(x, edges=cleaned[x.name]) if x.name in pins else x
+                                              for x in cap.channels])
                 return sample_edge_for(view, clock, data, _debounced=True)
         return ["rise", "fall"]
     return ["rise" if a >= b else "fall"]
