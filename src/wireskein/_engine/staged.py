@@ -874,11 +874,11 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
                     streams.append(("frames.startstop", typed.frames_startstop(view_cap, sb)))
                 for kind, fr in streams:
                     for p in by_type.get(kind, []):
-                        # I2C reads its input view (timing.i2c_input) or, when that changed nothing, the lines as
-                        # they are: never a view with short pulses dropped by width, which would drop clocks clipped
-                        # short and restored ones; the other plugins every view but I2C's
-                        if p.name == "i2c" and i2c_view is not None and k != "i2c_input":
-                            continue
+                        # where t_SP shows, I2C reads its input view (timing.i2c_input) or, when that changed
+                        # nothing, the lines as they are: never a view with short pulses dropped by width, which would
+                        # drop clocks clipped short and restored ones; slower, the views as for any clocked bus too
+                        # (a sample is longer than the spike filter: a pulse of one is crosstalk as much as a clipped
+                        # clock, and the input view keeps it). The other plugins every view but I2C's
                         if p.name == "i2c" and i2c_only and k != ("i2c_input" if i2c_view is not None else 0):
                             continue
                         if p.name != "i2c" and k == "i2c_input":
