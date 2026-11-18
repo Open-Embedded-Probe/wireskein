@@ -19,6 +19,10 @@ def q(n: float, scale: float) -> float:
     return 1.0 - math.exp(-n / scale)
 
 
+RGB_SHORTEST = 0.15e-6  # s: no pulse of a WS2812-like line is shorter (T0H 0.25 us or more)
+RGB_MIXED = 0.1         # the rarer kind of bit's share a string's data has at least
+
+
 class RgbLedPlugin:
     name = "rgb_led"
     consumes = ("line",)
@@ -26,6 +30,18 @@ class RgbLedPlugin:
     def run(self, c, ch, g):
         if ch.initial != 0:
             return []
+        # the line as it is, and with pulses shorter than any of a WS2812-like line (T0H from 0.25 us; RGB_SHORTEST)
+        # taken out: a bounce at an edge is a bit of its own
+        k = int(np.ceil(RGB_SHORTEST * float(c.cap.rate) - 1e-9))
+        views = [(ch, 0)]
+        if k >= 2:
+            d = K.deglitch(np.asarray(ch.edges, np.int64), k)
+            if len(d) != len(ch.edges):
+                views.append((replace(ch, edges=d), k))
+        nodes = [n for line, dg in views for n in self._read(c, line, dg, ch.name)]
+        return [max(nodes, key=lambda n: n.total)] if nodes else []
+
+    def _read(self, c, ch, dg, name):
         r = pc.rgb_led(ch, c.cap.n_samples, c.cap.rate)
         fr = [f for f in r["frames"] if f["bits"] >= 8]
         if not fr:
@@ -38,11 +54,14 @@ class RgbLedPlugin:
         whole = float(np.mean([f["leftover_bits"] == 0 for f in fr]))
         bits = sum(f["bits"] for f in fr)
         data = bytes.fromhex("".join(f["data"] for f in fr))
-        # both kinds of bit: a PWM of one duty reads as all 0s (or all 1s)
-        mixed = 1.0 if r["t0h"] and r["t1h"] else 0.3
+        # both kinds of bit: a PWM of one duty (a clock) reads as all 0s (or all 1s), but for what a noise leaves in
+        # it; a string's colours have a tenth of the rarer kind or more
+        minor = min(len(r["t0h"]), len(r["t1h"])) / max(1, len(r["t0h"]) + len(r["t1h"]))
+        mixed = 0.3 + 0.7 * float(np.clip(minor / RGB_MIXED, 0, 1))
         score = steady * whole * mixed * q(bits / 24, 2)
-        m = {"frames": len(fr), "bits": bits, "steady": steady, "whole_bytes": whole, "bit_s": bit_s}
-        return [Node("rgb_led", {"bit_s": bit_s}, {"data": ch.name},
+        m = {"frames": len(fr), "bits": bits, "steady": steady, "whole_bytes": whole, "bit_s": bit_s,
+             "rarer_bits": round(minor, 3)}
+        return [Node("rgb_led", {"bit_s": bit_s, "deglitch": dg}, {"data": name},
                      Stream("led.frames", {"frames": fr, "split": r["split"], "bytes": data.hex()}), m,
                      layer_score=score, total=score)]
 

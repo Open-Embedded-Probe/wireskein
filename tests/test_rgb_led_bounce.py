@@ -1,0 +1,29 @@
+"""A WS2812-like line whose edges bounce (a pulse back of a tick or two after an edge, shorter than any pulse of the
+line) is read with those pulses taken out: as it is, every bounce is a bit of its own and no byte is whole. Lines made
+here (gen.rgb_led)."""
+
+from types import SimpleNamespace
+
+import numpy as np
+
+from wireskein._engine import gen
+from wireskein._engine.analyzers.pulse import RgbLedPlugin
+
+RATE = 50e6
+
+
+def test_bouncing_led_line_is_read():
+    r = np.random.default_rng(4)
+    w, t, frames = gen.Wave(0), 1e-4, []
+    for _ in range(4):
+        data = bytes(r.integers(0, 256, 12).tolist())
+        frames.append(data.hex())
+        t = gen.rgb_led(w, t, data, reset=100e-6)
+    cap = gen.quantize({"D0": w}, RATE, t + 1e-4, np.random.default_rng(0))
+    ch = cap.channel("D0")
+    e = np.asarray(ch.edges, np.int64)
+    b = e[::4] + 2                                       # every fourth edge bounces
+    ch = type(ch)(ch.name, ch.initial, np.sort(np.concatenate([e, b, b + 1])))
+    nodes = RgbLedPlugin().run(SimpleNamespace(cap=SimpleNamespace(n_samples=cap.n_samples, rate=RATE)), ch, None)
+    assert nodes and nodes[0].total > 0.85 and nodes[0].params["deglitch"] >= 2
+    assert [f["data"] for f in nodes[0].output.items["frames"]] == frames

@@ -41,6 +41,9 @@ def _bytes(bits: list[int], lsb_first: bool) -> tuple[bytes, int]:
 
 # ---------------- RGB LEDs ----------------
 
+RGB_WIDTH_SHARE = 0.02    # a high width taken for the split when this share of the pulses has it
+
+
 def rgb_led(ch: Channel, n: int, rate: float) -> dict:
     """A WS2812-like line (idle low, a bit = a high of T0H or T1H then a low, MSB first): frames between lows of
     more than 5 bit periods. The split between 0 and 1 is the widest gap between the highs' widths; when every high
@@ -51,7 +54,10 @@ def rgb_led(ch: Channel, n: int, rate: float) -> dict:
         return out
     per = np.diff(st)
     bit = float(np.median(per))
-    split = _split(w)
+    # the split from the widths most pulses have: a few leftovers of a noise (a couple of ticks) would put the widest
+    # ratio below every real high, and every bit would read as a 1
+    u, cnt = np.unique(w, return_counts=True)
+    split = _split(u[cnt >= max(2, RGB_WIDTH_SHARE * len(w))])
     if split is None or split > bit:
         split = bit / 2
     one = w > split
