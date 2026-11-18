@@ -422,6 +422,7 @@ def glitch_views(cap, sv, g, memo: dict | None = None):
         # never exceeds half the clock's typical run.
         k_rel = int(max(2 * step, min(0.3 * med, np.quantile(inner[short], 0.95) + step)))
         pins = {g.clock, *g.data, *([g.select] if g.select else [])}
+        made = [[x.edges for x in cap.channels if x.name in pins]]      # the lines as they are: yielded above
         for k in sorted({2 * step, 3 * step, 5 * step, k_rel}):
             if k > 0.5 * med:
                 continue
@@ -440,6 +441,11 @@ def glitch_views(cap, sv, g, memo: dict | None = None):
                     memo[kx] = K.deglitch(x.edges, k, _slow_at(x.edges, k, rises))
                 return memo[kx]
             chans = [replace(x, edges=filtered(x)) if x.name in pins else x for x in cap.channels]
+            # a width that takes out nothing more than a smaller one gives the same lines: read once
+            lines = [x.edges for x in chans if x.name in pins]
+            if any(all(np.array_equal(p, q) for p, q in zip(m, lines)) for m in made):
+                continue
+            made.append(lines)
             yield Capture(cap.rate, cap.n_samples, chans), k
 
 
