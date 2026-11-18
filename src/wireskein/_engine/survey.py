@@ -73,6 +73,7 @@ class Survey:
     clocks: dict[str, ClockInfo]
     asyncs: dict[str, AsyncInfo]
     pairs: dict[tuple[str, str], PairRelation] = field(default_factory=dict)
+    gated: dict[str, tuple] = field(default_factory=dict)   # clock -> (its gated view of the capture, the clock there)
 
     def partners(self, clock: str) -> list[PairRelation]:
         return sorted((r for (c, _), r in self.pairs.items() if c == clock), key=lambda r: -r.data_score)
@@ -283,6 +284,7 @@ def survey(cap: Capture, fs: dict[str, ChannelFeatures] | None = None, asyncs: b
         # a slow rise clipped short, a clock running four times as fast in some frames) are kept where it would merge
         # them; a swapped step on the capture as it is
         view, vc = (cap, c) if swapped else gated_view(cap, c)
+        s.gated[c.name] = (view, vc)
         for o in active:
             if o != c.name:
                 s.pairs[(c.name, o)] = swapped(cap, c, o) if swapped else better_relation(cap, c, o, (view, vc))

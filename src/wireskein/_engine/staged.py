@@ -181,6 +181,35 @@ def _on_grid(pin, blocks) -> float | None:
     return num / den if den else None
 
 
+def _tight_windows(pin, idle: int, sv, n: int) -> float:
+    """Of the pin's whole windows away from its idle level (read through each clock's gate: a bounce is one change),
+    the largest share holding one of a clock's bursts snugly (the margins before and after it together no longer than
+    the burst), over the clocks."""
+    from .survey import GATE, collapse
+    best = 0.0
+    for k, ci in sv.clocks.items():
+        if k == pin.name or not len(ci.bursts):
+            continue
+        view, vc = sv.gated.get(k, (None, ci))
+        e = (np.asarray(view.channel(pin.name).edges, np.int64) if view is not None
+             else collapse(np.asarray(pin.edges, np.int64), max(3.0, (ci.period or 0) / GATE)))
+        if len(e) < 3:
+            continue
+        ci = vc                                                           # the clock's bursts as gated too
+        after = pin.initial ^ ((np.arange(len(e)) + 1) & 1)          # the level after each change
+        i = np.flatnonzero(after[:-1] != idle)                           # whole windows away from idle
+        if len(i) < 2:
+            continue
+        ws, we = e[i], e[i + 1]
+        bs, be = ci.bursts[:, 0].astype(np.int64), ci.bursts[:, 1].astype(np.int64)
+        j = np.searchsorted(ws, bs, side="right") - 1
+        jj = np.maximum(j, 0)
+        inside = (j >= 0) & (be <= we[jj])
+        snug = inside & ((bs - ws[jj]) + (we[jj] - be) <= (be - bs))
+        best = max(best, len(np.unique(j[snug])) / len(ws))
+    return best
+
+
 class UartPlugin:
     name = "uart"
     consumes = ("chars",)
@@ -217,6 +246,10 @@ class UartPlugin:
         sync = max((r.data_score * c.sv.clocks[k].clock_score for (k, o), r in c.sv.pairs.items()
                     if o == rb.pin and k != rb.pin and k in c.sv.clocks), default=0.0)
         m["sync_with_clock"] = sync
+        # a pin whose active windows each hold a clock's burst tightly is that bus's select, not a UART (a CS's low
+        # windows read as characters); a UART's lows meet another bus's bursts only by chance, never snugly
+        tight = _tight_windows(pin, rb.idle, c.sv, c.cap.n_samples)
+        m["tight_windows"] = tight
         # characters framed by breaks the way LIN (sync 0x55, PID parity, checksum) or DMX512 (250 kbaud, start code
         # 0) frames them are that protocol's, not a plain UART's: weigh that evidence against this claim
         framed = 0.0
@@ -243,7 +276,7 @@ class UartPlugin:
         m["on_grid"] = grid
         gridded = float(np.clip((grid - GRID_LOW) / GRID_SPAN, 0, 1)) if grid is not None else 1.0
         score = (framing * coverage * q(ok_n) * degenerate(v & 0xFF) * (1 - 0.5 * clock_like) * (1 - sync)
-                 * (1 - framed) * resolvable * gridded)
+                 * (1 - float(np.clip((tight - 0.5) / 0.3, 0, 1))) * (1 - framed) * resolvable * gridded)
         params = {"baud": c.cap.rate / u_main, "idle": rb.idle, "L": m["L"], "blocks": len(units)}
         items = {"value": v, "start": np.concatenate(starts), "char_samples": u_main * (m["L"] or 10)}
         return [Node("uart", params, {"data": rb.pin}, Stream("bytes", items, meta={"char_samples": u_main * (m["L"] or 10)}),
