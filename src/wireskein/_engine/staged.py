@@ -838,7 +838,9 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
             continue
         pc = tx.pins[g.pin]
         # the pulse-width protocols read any lone line (an LED chain or a carrier looks like a clock to the survey)
-        if run_pulse and pin_hint.get(g.pin, {}).get("protocol") not in ASYNC:
+        # but a bus's clock (another line keeps to it as data) is none of them, unless a hint names it
+        if (run_pulse and pin_hint.get(g.pin, {}).get("protocol") not in ASYNC
+                and (pin_hint.get(g.pin, {}).get("protocol") or not _clocks_a_bus(c.sv, g.pin))):
             for p in by_type.get("line", []):
                 runs += 1
                 roots += p.run(c, cap.channel(g.pin), g)

@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) The pulse-width protocols (1-Wire, WS2812-like, NEC) are not tried on a bus's clock (a line another keeps to as data, the rule that already keeps UART off it) unless a hint names it: an LED chain or a carrier may look like a clock, never one a data line keeps to. The same output on 56 captures and on the pulse and ir suites; the long RVSWD read 5-8 % faster.
+- (JA) パルスの幅で読む方式（1-Wire、WS2812 系、NEC）は、バスのクロック（ほかの線がデータとして従う線。UART を試さない決まりと同じ）では、ヒントで名指しされない限り試さない: LED の列やキャリアはクロックに見えることがあっても、データ線が従うクロックではない。56 の記録と pulse・ir の組で出力は同じ。長い RVSWD の読み出しで 5〜8 % 速い。
 - (EN) `kernels.local_period` takes each interval's window once for all the ticks of `at` in it (on a spiky capture 11.8 M ticks fell in 0.66 M intervals): the same values (56 captures to the byte), the spiky 12 MHz clock about 7 % faster.
 - (JA) `kernels.local_period` は、区間ごとの窓を 1 度だけ求め、その区間に落ちる `at` のすべてに配る（スパイクのある記録で 1180 万の点が 66 万の区間に落ちた）: 値は同じ（56 の記録でバイトまで）。スパイクのある 12 MHz のクロックで 7 % ほど速い。
 - (EN) RVSWD's rolling framing takes its moving median (33 intervals) by counting each kind of interval (`kernels.rolling_median`; numpy over a sliding view when there are over 64 kinds): the same floats, no 33-wide copy of every interval sorted. 56 captures the same to the byte; a spiky 12 MHz clock at 24 MS/s 15-20 % faster.
