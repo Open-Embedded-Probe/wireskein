@@ -177,13 +177,27 @@ def _select_set(rels, pins) -> list[str]:
     return [opts[i][0].other for i in best[2] if opts[i][0].boundary < SELECT_BOUNDARY]
 
 
+WHOLE_SELECT = 0.95    # a line framing this share of another clock's transfers is that bus's select
+WHOLE_TRANSFERS = 8    # over this many transfers at least
+
+
 def groups(sv: Survey, pins: dict[str, PinClass]) -> list[Group]:
     out = []
+    # a line that selects every transfer of one clock is that bus's select, no data of another clock (its few
+    # changes may fall in another bus's bursts and keep to that clock by chance)
+    whole = {}
+    for (k, o), r in sv.pairs.items():
+        # of a clear clock, over enough transfers that it is no chance, and no data of that clock (a select is not)
+        if (r.boundary >= WHOLE_SELECT and r.n_real >= WHOLE_TRANSFERS and r.data_score < DATA_PAIR
+                and sv.clocks[k].clock_score >= 0.8):
+            whole.setdefault(o, set()).add(k)
     for c in sv.active:
         if "clock" not in pins[c].candidates or c not in sv.clocks:
             continue
         rels = [r for r in sv.partners(c)]
-        data = tuple(sorted(r.other for r in rels if r.data_score >= DATA_PAIR))
+        # (a line that frames this clock's bursts too, as I2C's SDA does its SCL's, stays)
+        data = tuple(sorted(r.other for r in rels if r.data_score >= DATA_PAIR
+                            and not (whole.get(r.other, set()) - {c} and r.boundary < 0.5)))
         sel = [r.other for r in rels if r.boundary >= SELECT_BOUNDARY and "sparse" in pins[r.other].candidates]
         _select_set.ambiguous = False
         sel += _select_set(rels, pins)
