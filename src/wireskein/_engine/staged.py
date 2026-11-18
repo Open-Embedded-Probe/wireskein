@@ -205,11 +205,19 @@ def _tight_windows(pin, idle: int, sv, n: int) -> float:
         if len(i) < 2:
             continue
         ws, we = e[i], e[i + 1]
+        # a burst's span starts a little before its first clock edge, and a select may change within a clock period
+        # of it: a burst overlapping a window's ends by up to a period is inside; a window shorter than a period is a
+        # bounce's leftover, no selection
+        tol = float(ci.period or 0)
+        real = (we - ws) >= tol
+        ws, we = ws[real], we[real]
+        if len(ws) < 2:
+            continue
         bs, be = ci.bursts[:, 0].astype(np.int64), ci.bursts[:, 1].astype(np.int64)
-        j = np.searchsorted(ws, bs, side="right") - 1
+        j = np.searchsorted(ws, bs + tol, side="right") - 1
         jj = np.maximum(j, 0)
-        inside = (j >= 0) & (be <= we[jj])
-        snug = inside & ((bs - ws[jj]) + (we[jj] - be) <= (be - bs))
+        inside = (j >= 0) & (be - tol <= we[jj])
+        snug = inside & (np.maximum(bs - ws[jj], 0) + np.maximum(we[jj] - be, 0) <= (be - bs))
         best = max(best, len(np.unique(j[snug])) / len(ws))
     return best
 
