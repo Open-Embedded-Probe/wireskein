@@ -28,11 +28,14 @@ def _split_on_breaks(ch):
 
 def lin(ch) -> dict:
     """LIN: break, sync 0x55, PID with parity, data, enhanced checksum."""
-    frames, checks = [], {"sync": 0, "pid_parity": 0, "checksum": 0, "frames": 0}
+    frames, checks = [], {"sync": 0, "pid_parity": 0, "checksum": 0, "frames": 0, "alternating": 0}
     for t, v, ok in _split_on_breaks(ch):
         if len(v) < 3:
             continue
         checks["frames"] += 1
+        # every byte 0x55 (a run of alternating bits: a clock's burst between two gaps): the sync and the PID's
+        # parity hold on it (0x55 is a valid PID), and the checksum by its length's luck
+        checks["alternating"] += bool((v == 0x55).all())
         sync, pid, data, cs = int(v[0]), int(v[1]), bytes(int(x) for x in v[2:-1]), int(v[-1])
         good = (sync == 0x55, lin_pid(pid & 0x3F) == pid, lin_checksum(data, pid) == cs)
         checks["sync"] += good[0]

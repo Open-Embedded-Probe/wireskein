@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) A LIN frame whose every byte is 0x55 counts as no evidence of LIN: a clock's burst between two gaps reads so (the sync holds, 0x55 is a valid PID, the checksum by the burst's length's luck; evidence `alternating`; the score x (1 - its share of the frames)). Seven false LIN claims (likely) on the bench's burst-clock decoys with noise are gone; the LIN and DMX512 buses of the new uartlike suites read the same.
+- (JA) すべてのバイトが 0x55 の LIN のフレームは、LIN の証拠に数えない: 2 つのすき間の間のクロックのバーストがそう読める（同期は合い、0x55 は正しい PID で、チェックサムはバーストの長さの巡り合わせで合う。証拠 `alternating`。点数 ×（1 − そのフレームの割合））。測定台の、雑音のあるバースト状のおとりのクロックの上の誤った LIN（有力）7 つが消えた。新しい uartlike の組の LIN と DMX512 は同じに読んだ。
 - (EN) A select line's pulses of a single sample (the shortest a line shows: a spike, crosstalk) cut none of its selections, also where the bus clock is too fast for its gate (a quarter of the period under two samples: an 8 MHz SPI at 50 MS/s): both the select measure of a pair and the frames read by a select take them out. Two SPI buses with crosstalk 0.05 were claimed without their CS; now with it. The bench's quick set read the same.
 - (JA) 選択線の 1 サンプル幅のパルス（線が見せるいちばん短いもの: スパイク、クロストーク）は、選択の窓を割らない。バスのクロックが速すぎてゲートが効かない所（周期の 4 分の 1 が 2 サンプルに満たない: 50 MS/s で取った 8 MHz の SPI）でも同じ: 線の組の選択線としての測り方と、選択線でのフレームの区切りの両方で除く。クロストーク 0.05 の SPI のバス 2 つが CS なしで主張されていた。今は CS 付き。測定台の速い組は同じに読んだ。
 - (EN) Where several sets of select lines frame nearly all of a clock's bursts (which lines are the CSs is open: a bus of a few transfers with other buses' selects active meanwhile), an SPI claim on that clock without a CS is likely at most, not confirmed.

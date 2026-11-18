@@ -308,7 +308,8 @@ class LinPlugin:
             if ck["frames"] < 2:
                 continue
             passed = (ck["sync"] + ck["pid_parity"] + ck["checksum"]) / (3 * ck["frames"])
-            score = passed * q(ck["frames"], 3)
+            # frames of 0x55 alone are what a clock's bursts give as well: no evidence of LIN
+            score = passed * q(ck["frames"], 3) * (1 - ck["alternating"] / ck["frames"])
             out.append(Node("lin", {"baud": c.cap.rate / u, "idle": rb.idle}, {"data": rb.pin},
                             Stream("lin.frames", r["frames"]), dict(ck), layer_score=score, total=score))
         return out[:1]
