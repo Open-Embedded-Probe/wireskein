@@ -148,6 +148,17 @@ def segment_medians(v: np.ndarray, starts: np.ndarray, ends: np.ndarray) -> np.n
     return np.where(n % 2 == 1, lo, (lo + hi) / 2)
 
 
+def debounce(edges: np.ndarray, w: int) -> np.ndarray:
+    """Changes each within w ticks of the one before are one edge with its bounces: an odd number of them a change at
+    the first (where the line first crossed), an even number none (a pulse). survey.collapse keeps the last."""
+    e = np.asarray(edges, np.int64)
+    if len(e) < 2 or w < 2:
+        return e
+    first = np.concatenate(([True], np.diff(e) >= w))
+    cid = np.cumsum(first) - 1
+    return e[np.flatnonzero(first)[np.bincount(cid) % 2 == 1]]
+
+
 ROLLING_KINDS = 64     # rolling_median by counting when the values are this few kinds or fewer
 
 

@@ -285,13 +285,49 @@ def better_relation(cap: Capture, clk: ClockInfo, other: str, gated: tuple | Non
     return r
 
 
+BOUNCE_TICKS = 4          # a bounce: pulses under this many ticks, within as many of a slow clock's edge
+BOUNCED_CLOCK = 0.8       # a line this clock-like with its bounces out, and DEBOUNCE_GAIN more than as it is
+DEBOUNCE_GAIN = 0.2
+BOUNCED_SHARE = 0.05      # a line's changes this share or more within BOUNCE_TICKS of the one before: it bounces
+
+
+def _debounced_clock(cap: Capture, name: str, f: ChannelFeatures):
+    """(features, clock info) of the line with its bounces taken out, when that is a clear clock and as it is it was
+    not; else (None, None)."""
+    ch = cap.channel(name)
+    e = np.asarray(ch.edges, np.int64)
+    k = 2 * BOUNCE_TICKS * ch.step        # an edge with its bounces: changes this close to each other
+    if len(e) < 32 or f.scores.get("clock", 0) >= BOUNCED_CLOCK:
+        return None, None
+    # a bounce's mark: a share of the line's changes come within BOUNCE_TICKS of the one before
+    if float(np.mean(np.diff(e) < BOUNCE_TICKS * ch.step)) < BOUNCED_SHARE:
+        return None, None
+    d = K.debounce(e, k)
+    if len(d) == len(e) or len(d) < 16 or float(np.median(np.diff(d))) < 2 * k:     # its runs twice the window
+        return None, None
+    from .features import channel_features
+    view = replace(cap, channels=[x if x.name != name else replace(x, edges=d) for x in cap.channels])
+    fb = channel_features(view, view.channel(name))
+    if fb.scores.get("clock", 0) < BOUNCED_CLOCK or fb.scores.get("clock", 0) < f.scores.get("clock", 0) + DEBOUNCE_GAIN:
+        return None, None
+    return fb, clock_info(view, fb)
+
+
 def survey(cap: Capture, fs: dict[str, ChannelFeatures] | None = None, asyncs: bool = True) -> Survey:
     """asyncs: False leaves the asynchronous reading out (character lengths, bit times): no protocol tried needs it."""
+    given = fs is not None
     fs = fs or features(cap)
     active = [n for n, f in fs.items() if not f.static]
     clocks = {}
     for n in active:
         ci = clock_info(cap, fs[n])
+        if not given:
+            # a clock whose edges bounce (pulses back of a few ticks at half of them) reads as no clock: its runs
+            # and period are the bounces'. Its features from the line with the pulses under BOUNCE_TICKS taken out
+            # where that is a clear clock and the line's runs are long enough to keep
+            fb, cb = _debounced_clock(cap, n, fs[n])
+            if fb is not None:
+                fs[n], ci = fb, cb
         if ci is not None:
             clocks[n] = ci
     asyncs = {n: async_info(cap, fs[n]) for n in active} if asyncs else {}
