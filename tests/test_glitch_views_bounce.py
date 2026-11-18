@@ -46,3 +46,23 @@ def test_bouncing_clock_is_a_clock_in_the_survey():
     assert np.array_equal(K.debounce(bounced, 8), e)
     sv = survey(Capture(cap.rate, cap.n_samples, [type(ch)(ch.name, ch.initial, bounced)]))
     assert sv.features["SCK"].scores["clock"] > 0.9 and abs(sv.clocks["SCK"].period - 32) <= 1
+
+
+def test_crosstalk_on_a_clock_keeps_its_period():
+    """A clock of 5 ticks a half with crosstalk pulses of a tick between its edges (its period read as 53 as it is):
+    the survey's clock is measured with those single-tick runs taken out, each with its own two edges."""
+    from wireskein._engine import kernels as K
+    from wireskein._engine.survey import survey
+    clk = gen.Wave(0)
+    gen.pwm(clk, 1e-5, 1e-5 + 600 / 1e5, 1e5, 0.5)
+    cap = gen.quantize({"SCK": clk}, 1e6, 1e-5 + 600 / 1e5 + 1e-5, np.random.default_rng(0))
+    ch = cap.channel("SCK")
+    e = np.asarray(ch.edges, np.int64)
+    r = np.random.default_rng(4)
+    s = np.sort(r.integers(5, cap.n_samples - 5, 150))
+    s = s[np.min(np.abs(s[:, None] - e[None, :]), axis=1) >= 2]
+    s = s[np.concatenate(([True], np.diff(s) >= 3))]       # pulses apart from each other too
+    noisy = np.unique(np.concatenate([e, s, s + 1]))
+    assert np.array_equal(K.shortest_first(noisy, 2), e)
+    sv = survey(Capture(cap.rate, cap.n_samples, [type(ch)(ch.name, ch.initial, noisy)]))
+    assert abs(sv.clocks["SCK"].period - 10) <= 1

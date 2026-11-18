@@ -296,21 +296,31 @@ def _debounced_clock(cap: Capture, name: str, f: ChannelFeatures):
     not; else (None, None)."""
     ch = cap.channel(name)
     e = np.asarray(ch.edges, np.int64)
-    k = 2 * BOUNCE_TICKS * ch.step        # an edge with its bounces: changes this close to each other
     if len(e) < 32 or f.scores.get("clock", 0) >= BOUNCED_CLOCK:
         return None, None
-    # a bounce's mark: a share of the line's changes come within BOUNCE_TICKS of the one before
-    if float(np.mean(np.diff(e) < BOUNCE_TICKS * ch.step)) < BOUNCED_SHARE:
-        return None, None
-    d = K.debounce(e, k)
-    if len(d) == len(e) or len(d) < 16 or float(np.median(np.diff(d))) < 2 * k:     # its runs twice the window
-        return None, None
+    gaps = np.diff(e)
+    tries = []
+    # a bounce's mark: a share of the line's changes come within BOUNCE_TICKS of the one before; each edge's
+    # bounces merged at its first change, where the runs left are twice the window
+    k = 2 * BOUNCE_TICKS * ch.step
+    if float(np.mean(gaps < BOUNCE_TICKS * ch.step)) >= BOUNCED_SHARE:
+        d = K.debounce(e, k)
+        if len(d) != len(e) and len(d) >= 16 and float(np.median(np.diff(d))) >= 2 * k:
+            tries.append(d)
+    # crosstalk's or a spike's mark: pulses of a single sample; those runs taken out with their own two edges
+    if float(np.mean(gaps <= ch.step)) >= BOUNCED_SHARE:
+        d = K.shortest_first(e, 2 * ch.step)
+        if len(d) != len(e) and len(d) >= 16 and float(np.median(np.diff(d))) >= 3 * ch.step:
+            tries.append(d)
     from .features import channel_features
-    view = replace(cap, channels=[x if x.name != name else replace(x, edges=d) for x in cap.channels])
-    fb = channel_features(view, view.channel(name))
-    if fb.scores.get("clock", 0) < BOUNCED_CLOCK or fb.scores.get("clock", 0) < f.scores.get("clock", 0) + DEBOUNCE_GAIN:
-        return None, None
-    return fb, clock_info(view, fb)
+    best = None
+    for d in tries:
+        view = replace(cap, channels=[x if x.name != name else replace(x, edges=d) for x in cap.channels])
+        fb = channel_features(view, view.channel(name))
+        sc = fb.scores.get("clock", 0)
+        if sc >= BOUNCED_CLOCK and sc >= f.scores.get("clock", 0) + DEBOUNCE_GAIN and (best is None or sc > best[0]):
+            best = (sc, fb, clock_info(view, fb))
+    return (best[1], best[2]) if best else (None, None)
 
 
 def survey(cap: Capture, fs: dict[str, ChannelFeatures] | None = None, asyncs: bool = True) -> Survey:
