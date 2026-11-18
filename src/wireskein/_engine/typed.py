@@ -315,20 +315,26 @@ def chars(cap, sym: AsyncSymbols, L: int) -> Chars:
     if sym.idle == 0:
         lv = 1 - lv
     t_bit = np.repeat(sym.start, np.minimum(sym.units, L + 2).astype(np.int64))
-    vals, ok, st = [], [], []
+    # the walk only finds where each character starts; the bits of all of them are read at once
+    at = _char_starts(lv, L)
+    fr = lv[at[:, None] + np.arange(L)]
+    vals = (fr[:, 1:L - 1].astype(np.int64) << np.arange(L - 2)).sum(1)
+    ok = (fr[:, 0] == 0) & (fr[:, L - 1] == 1)
+    return Chars(sym.pin, L, vals, ok, t_bit[at].astype(np.int64), sym.start[brk].astype(np.int64))
+
+
+def _char_starts(lv: np.ndarray, L: int) -> np.ndarray:
+    """Where each character starts in a bit string (0: active): a character is the L bits from a 0, and the next
+    one is looked for after it."""
+    at = []
     i, n = 0, len(lv)
     while i < n:
         if lv[i] == 0 and i + L <= n:
-            fr = lv[i:i + L]
-            v = int((fr[1:L - 1].astype(np.int64) << np.arange(L - 2)).sum())
-            vals.append(v)
-            ok.append(bool(fr[0] == 0 and fr[L - 1] == 1))
-            st.append(int(t_bit[i]))
+            at.append(i)
             i += L
         else:
             i += 1
-    return Chars(sym.pin, L, np.asarray(vals, np.int64), np.asarray(ok, bool), np.asarray(st, np.int64),
-                 sym.start[brk].astype(np.int64))
+    return np.asarray(at, np.int64)
 
 
 # ---------------- protocol on words ----------------
@@ -493,9 +499,8 @@ def async_segments(cap, sv: Survey, pin: str, half: int = 10, change: float = 1.
         ca = np.concatenate(([0], np.cumsum(sa)))              # too short for A before j
         cb = np.concatenate((np.cumsum(sb[::-1])[::-1], [0]))  # too short for B from j on
         bad = ca[:-1] + cb[:-1]
-        cand = [j for j in range(len(idx)) if level[idx[j]] == f.idle_level]
-        if cand:
-            j = min(cand, key=lambda j: (bad[j], -length[idx[j]]))
+        j = _fewest_bad(bad, length[idx], level[idx] == f.idle_level)
+        if j >= 0:
             bounds[ci] = int(start[idx[j]] + length[idx[j]] // 2)
     out = []
     for s0, s1 in zip(bounds[:-1], bounds[1:]):
@@ -503,6 +508,14 @@ def async_segments(cap, sv: Survey, pin: str, half: int = 10, change: float = 1.
         if u:
             out.append((s0, s1, u))
     return out
+
+
+def _fewest_bad(bad: np.ndarray, length: np.ndarray, idle: np.ndarray) -> int:
+    """The idle run with the fewest bad runs around it, the longest of those, the first of those; -1: no idle run."""
+    if not idle.any():
+        return -1
+    cand = idle & (bad == bad[idle].min())
+    return int(np.flatnonzero(cand & (length == length[cand].max()))[0])
 
 
 def async_symbols_segment(cap, sv: Survey, pin: str, s0: int, s1: int, unit: float) -> AsyncSymbols:
