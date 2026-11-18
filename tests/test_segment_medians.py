@@ -18,3 +18,14 @@ def test_the_same_as_np_median():
 
 def test_none():
     assert len(K.segment_medians(np.arange(5.0), [], [])) == 0
+
+
+def test_rolling_median_the_same_as_numpy():
+    from numpy.lib.stride_tricks import sliding_window_view
+    rng = np.random.default_rng(1)
+    for _ in range(300):
+        n = int(rng.integers(1, 400))
+        x = rng.integers(0, int(rng.integers(1, 120)), n).astype(np.float64) * rng.choice([1.0, 0.5])
+        for w in (1, 3, 5, 33):
+            if n >= w:
+                assert np.array_equal(K.rolling_median(x, w), np.median(sliding_window_view(x, w), axis=1))

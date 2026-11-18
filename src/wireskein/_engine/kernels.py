@@ -148,6 +148,32 @@ def segment_medians(v: np.ndarray, starts: np.ndarray, ends: np.ndarray) -> np.n
     return np.where(n % 2 == 1, lo, (lo + hi) / 2)
 
 
+ROLLING_KINDS = 64     # rolling_median by counting when the values are this few kinds or fewer
+
+
+def rolling_median(x: np.ndarray, w: int) -> np.ndarray:
+    """np.median over each window of w (odd) values of x (len(x) - w + 1 of them): the same floats. With few kinds of
+    value (intervals in samples), by counting each kind's running total (the middle value is the least whose count
+    reaches w // 2 + 1); else by numpy over a sliding view."""
+    from numpy.lib.stride_tricks import sliding_window_view
+    x = np.asarray(x, np.float64)
+    u = np.unique(x)
+    if w % 2 == 0 or len(u) > ROLLING_KINDS or len(x) < w:
+        return np.median(sliding_window_view(x, w), axis=1)
+    k = np.searchsorted(u, x)
+    out = np.full(len(x) - w + 1, len(u) - 1, np.int64)
+    found = np.zeros(len(out), bool)
+    need = w // 2 + 1
+    for v in range(len(u) - 1):
+        c = np.concatenate(([0], np.cumsum(k <= v)))
+        hit = (c[w:] - c[:-w] >= need) & ~found
+        out[hit] = v
+        found |= hit
+        if found.all():
+            break
+    return u[out]
+
+
 def local_period(ticks: np.ndarray, at: np.ndarray, w: int = 8, q: float = 25) -> np.ndarray:
     """The clock's period around each tick of `at`, the shorter of the lower quartiles of the `w` intervals of `ticks` (a
     clock's sampling edges) before the one it falls in and the `w` after: a capture whose clock changes speed (slow while connecting,

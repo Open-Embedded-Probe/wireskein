@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) RVSWD's rolling framing takes its moving median (33 intervals) by counting each kind of interval (`kernels.rolling_median`; numpy over a sliding view when there are over 64 kinds): the same floats, no 33-wide copy of every interval sorted. 56 captures the same to the byte; a spiky 12 MHz clock at 24 MS/s 15-20 % faster.
+- (JA) RVSWD の移動による区切りの移動中央値（33 の区間）は、区間の種類ごとの数を数えて求める（`kernels.rolling_median`。種類が 64 を超えるときは、numpy でずらした見え方の上で）: 値は同じで、すべての区間の 33 幅の写しを並べ替えない。56 の記録でバイトまで同じ。24 MS/s で取ったスパイクのある 12 MHz のクロックで 15〜20 % 速い。
 - (EN) A WS2812-like claim needs 5 samples a bit (evidence `samples_per_bit`; the score x clip(bit - 4, 0, 1)): T0H and T1H differ by about a third of a bit, under that a spike's tick is as wide as the difference. A 500 kHz SPI clock at 2 MS/s with spikes read as an LED string is gone; the generated strings (12 samples a bit or more) read the same.
 - (JA) WS2812 系の主張には 1 ビット 5 サンプル以上が要る（証拠 `samples_per_bit`。点数 × clip(bit − 4, 0, 1)）: T0H と T1H の差はビットの約 3 分の 1 で、それより粗いとスパイクの 1 サンプルが差と同じ幅になる。2 MS/s で取ったスパイクのある 500 kHz の SPI のクロックが LED と読まれていたのが消えた。生成の LED（1 ビット 12 サンプル以上）は同じに読んだ。
 - (EN) A UART's `tight_windows` lets a clock's burst overlap a window's ends by up to a clock period (a burst's span starts a little before its first edge; a select may change within a period of it) and leaves out windows shorter than a period (a bounce's leftover): SPI CSs with bounces read as UARTs had 0.39-0.5 against their own clocks, under the penalty's start; three such false likely claims gone. Eight generated sets (clean, bounces, crosstalk, spikes, nack, uartlike, baud changes) read the same UARTs.

@@ -30,12 +30,11 @@ def reframe_rolling(fr, mult: float = 3.0, w: int = 33) -> list[tuple[int, int]]
     """Alternative framing for fast transfers: a gap is an interval over `mult`
     times the moving median of the surrounding w intervals (frames contain
     turnaround intervals that are long compared with their direct neighbours)."""
-    from numpy.lib.stride_tricks import sliding_window_view
     t = fr.source.t
     if len(t) < w + 2:
         return reframe(fr)
     iv = np.diff(t).astype(np.float64)
-    med = np.median(sliding_window_view(np.pad(iv, (w // 2, w // 2), mode="edge"), w), axis=1)
+    med = K.rolling_median(np.pad(iv, (w // 2, w // 2), mode="edge"), w)
     cut = np.flatnonzero(iv > mult * med) + 1
     b = np.concatenate(([0], cut, [len(t)]))
     x, y = b[:-1], b[1:]
