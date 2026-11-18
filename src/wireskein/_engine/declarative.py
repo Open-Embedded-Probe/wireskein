@@ -387,8 +387,35 @@ def prefix_positions(seqs: list[dict], bits: np.ndarray) -> np.ndarray | None:
                     m &= _shifted_eq(bits, off + i, b)
                 one |= m
             ok &= one
+        ok &= _prefix_parity(seq, bits)
         any_ok |= ok
     return np.flatnonzero(any_ok)
+
+
+def _prefix_parity(seq: dict, bits: np.ndarray) -> np.ndarray:
+    """Where the parity checks over the fixed leading fields hold (a scan's match needs every check to: one failing
+    would be passed over anyway, after reading the frame through)."""
+    n = len(bits)
+    at, off = {}, 0
+    for f in seq["fields"]:
+        w = f.get("width", 1)
+        if "when" in f or not isinstance(w, int):
+            break
+        at[f["name"]] = (off, w)
+        off += w
+    ok = np.ones(n, bool)
+    b = np.asarray(bits, np.int64)
+    for chk in seq.get("checks", []):
+        if chk.get("kind") != "parity" or chk["field"] not in at or at[chk["field"]][1] != 1 \
+                or not all(x in at for x in chk["over"]):
+            continue
+        ones = np.zeros(n, np.int64)
+        for x in chk["over"]:
+            o, w = at[x]
+            for i in range(w):
+                ones += _shifted_eq(b, o + i, 1)
+        ok &= _shifted_eq(b, at[chk["field"]][0], 1) == (((ones & 1) ^ int(chk.get("odd", 0))) == 1)
+    return ok
 
 
 def parse_sequence(seq: dict, bits: np.ndarray, pos: int, end: int, fail_fast: bool = False):
