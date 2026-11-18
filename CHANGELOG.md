@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 0.0.31
 - (EN) The RGB LED reading (`pulsecode.rgb_led`) makes each pulse's high and period lists at once from arrays, not pulse by pulse: the same output (302 lines, real and random), 6.5x faster on a long RVSWD clock tried as an LED chain (1.76 -> 0.27 s).
 - (JA) RGB LED の読み（`pulsecode.rgb_led`）は、パルスごとの High と周期の一覧を、パルス 1 つずつではなく配列からまとめて作る: 出力は同じ（実機と乱数の 302 本の線）で、LED の列として試す長い RVSWD のクロックで 6.5 倍速い（1.76 → 0.27 秒）。
 - (EN) A UART's characters are read all at once (the walk only finds where each starts; their bits are read together as arrays), and the rate blocks' cut is picked with numpy: the same output to the byte, a long RVSWD capture tried as a UART about a quarter faster (x_read_ram_20k 28.4 -> 20.6 s CPU).
