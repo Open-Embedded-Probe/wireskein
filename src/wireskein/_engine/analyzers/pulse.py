@@ -120,11 +120,26 @@ class OneWirePlugin:
                      layer_score=score, total=score)]
 
 
+NEC_SHORTEST = 4e-6     # s: a pulse this short on an IR line is a bounce (a 38 kHz carrier's pulses are 8.8 us)
+
+
 class NecPlugin:
     name = "ir_nec"
     consumes = ("line",)
 
     def run(self, c, ch, g):
+        # the line as it is, and with pulses shorter than NEC_SHORTEST taken out (a bounce: no carrier pulse is that
+        # short, 38 kHz at a third is 8.8 us)
+        k = int(np.ceil(NEC_SHORTEST * float(c.cap.rate) - 1e-9))
+        views = [(ch, 0)]
+        if k >= 2:
+            d = K.deglitch(np.asarray(ch.edges, np.int64), k)
+            if len(d) != len(ch.edges):
+                views.append((replace(ch, edges=d), k))
+        nodes = [n for line, dg in views for n in self._read(c, line, dg, ch.name)]
+        return [max(nodes, key=lambda n: n.total)] if nodes else []
+
+    def _read(self, c, ch, dg, name):
         r = pc.nec(ch, c.cap.n_samples, c.cap.rate)
         fr = r["frames"]
         data = [f for f in fr if not f["repeat"]]
@@ -134,5 +149,5 @@ class NecPlugin:
         score = len(good) / len(data) * q(2 * len(good) + 0.5 * (len(fr) - len(data)), 1)
         m = {"frames": len(data), "repeats": len(fr) - len(data), "cmd_ok": len(good),
              "carrier_hz": r.get("carrier_hz")}
-        return [Node("ir_nec", {"carrier_hz": r.get("carrier_hz"), "idle": r["idle"]}, {"data": ch.name},
+        return [Node("ir_nec", {"carrier_hz": r.get("carrier_hz"), "idle": r["idle"], "deglitch": dg}, {"data": name},
                      Stream("ir.frames", fr), m, layer_score=score, total=score)]

@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) An NEC line is read also with its pulses shorter than 4 us taken out (a bounce or a spike: a 38 kHz carrier's pulses are 8.8 us; param `deglitch`), the better reading kept: a receiver's output with bounces lost its marks and spaces and read as a UART at the mark's rate. On the generated ir suite: bounces 0.1 NEC read 19 -> 39 of 39, spikes 0.1 1 -> 39; false UART claims on IR lines 42 -> 0.
+- (JA) NEC の線は、4 µs より短いパルス（跳ねやスパイク: 38 kHz のキャリアのパルスは 8.8 µs。パラメータ `deglitch`）を除いた見え方でも読み、良い方を取る: 跳ねのある受信機の出力は、マークとスペースが崩れて、マークの速さの UART として読まれていた。生成の ir の組で、跳ね 0.1 の NEC が 39 本中 19 → 39 本、スパイク 0.1 で 1 → 39 本読めた。IR の線の上の誤った UART は 42 → 0。
 - (EN) The pulse-width protocols (1-Wire, WS2812-like, NEC) are not tried on a bus's clock (a line another keeps to as data, the rule that already keeps UART off it) unless a hint names it: an LED chain or a carrier may look like a clock, never one a data line keeps to. The same output on 56 captures and on the pulse and ir suites; the long RVSWD read 5-8 % faster.
 - (JA) パルスの幅で読む方式（1-Wire、WS2812 系、NEC）は、バスのクロック（ほかの線がデータとして従う線。UART を試さない決まりと同じ）では、ヒントで名指しされない限り試さない: LED の列やキャリアはクロックに見えることがあっても、データ線が従うクロックではない。56 の記録と pulse・ir の組で出力は同じ。長い RVSWD の読み出しで 5〜8 % 速い。
 - (EN) `kernels.local_period` takes each interval's window once for all the ticks of `at` in it (on a spiky capture 11.8 M ticks fell in 0.66 M intervals): the same values (56 captures to the byte), the spiky 12 MHz clock about 7 % faster.
