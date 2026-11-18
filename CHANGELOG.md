@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) A UART's characters are read all at once (the walk only finds where each starts; their bits are read together as arrays), and the rate blocks' cut is picked with numpy: the same output to the byte, a long RVSWD capture tried as a UART about a quarter faster (x_read_ram_20k 28.4 -> 20.6 s CPU).
+- (JA) UART の文字を、まとめて読む（歩きは各文字の始まりを探すだけ。ビットは全文字を配列でまとめて読む）。速さのブロックの区切りも numpy で選ぶ: 出力はバイトまで同じで、UART として試す長い RVSWD の記録の解析が 4 分の 1 ほど速い（x_read_ram_20k の CPU 28.4 → 20.6 秒）。
 - (EN) `spi(mode=...)` with a CS no longer raises `KeyError: 'cpol'` where the section starts inside a selection (no whole CS window, so the lines do not tell CPOL): the asked mode's CPOL is taken. A regression of 0.0.29 (a CH32V203's SPI slave test); 0.0.28 read it.
 - (JA) CS のある `spi(mode=...)` が、区間が選択の途中から始まる（まるごとの CS の窓がなく、線から CPOL が分からない）ときに `KeyError: 'cpol'` を出さない: 与えたモードの CPOL を使う。0.0.29 の退行（CH32V203 の SPI スレーブの試験）。0.0.28 は読めていた。
 
