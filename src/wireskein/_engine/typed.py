@@ -620,6 +620,9 @@ def _int_bits(bits) -> int:
     return v
 
 
+PULSE_CLUSTERS = 8     # the most populated width clusters tried in pairs as a pulse code's short and long
+
+
 def pulse_symbols(cap, sv: Survey, pin: str) -> PulseSymbols | None:
     ch = cap.channel(pin)
     idle = sv.features[pin].idle_level
@@ -638,9 +641,18 @@ def pulse_symbols(cap, sv: Survey, pin: str) -> PulseSymbols | None:
     bins = np.arange(lw.min(), lw.max() + 0.1, 0.08)
     if len(bins) < 3:
         return None
-    hist, edges_ = np.histogram(lw, bins)
+    raw, edges_ = np.histogram(lw, bins)
     centers = (edges_[:-1] + edges_[1:]) / 2
-    order = np.argsort(hist)[::-1]
+    # a cluster is a peak of the counts summed with the neighbouring bins: at a few samples a pulse a width falls in
+    # two bins (12 and 13 samples are a bin apart), and either alone may count less than other traffic's clusters
+    hist = raw + np.concatenate(([0], raw[:-1])) + np.concatenate((raw[1:], [0]))
+    peak = (hist >= np.concatenate(([0], hist[:-1]))) & (hist > np.concatenate((hist[1:], [0])))
+    order = []
+    for i in np.flatnonzero(peak)[np.argsort(hist[peak])[::-1]].tolist():
+        # peaks nearer than the pairs' least ratio are one cluster's (a broad one makes two)
+        if all(abs(centers[i] - centers[k]) >= np.log(1.6) for k in order):
+            order.append(i)
+    order = np.asarray(order, np.int64)
     first = order[0]
     second = next((i for i in order[1:] if abs(centers[i] - centers[first]) >= np.log(1.6) and hist[i] >= 0.05 * hist[first]), None)
     if second is None:
@@ -678,7 +690,7 @@ def pulse_symbols(cap, sv: Survey, pin: str) -> PulseSymbols | None:
     best = (framed(split, b), split, b)
     # other pairs of the most populated clusters, each with the pitch of its own pulses: the one that frames the most
     # pulses in SWIO's lengths (the default stays when none frames more)
-    top = [i for i in order[:6] if hist[i] > 0]
+    top = [i for i in order[:PULSE_CLUSTERS] if hist[i] > 0]
     for x in range(len(top)):
         for y in range(x + 1, len(top)):
             i, j = top[x], top[y]
