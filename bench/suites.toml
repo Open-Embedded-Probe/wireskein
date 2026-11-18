@@ -257,6 +257,30 @@ about = "the same, other seeds"
 sources = ["gen:uartlike[1000:1060]"]
 transforms = ["", "spike:0.1", "spike:0.3", "xtalk:0.3", "bounce:0.1", "bounce:0.5"]
 
+[suite.pulse]
+role = "tune"
+about = "1-Wire (standard speed: resets, presence now and then missing, bytes written), WS2812-like LED strings and UARTs, 1-3 buses with decoys (eval/synth.py's pulse), clean and with noise: before it, 1-Wire and the LED strings had no truth on the bench and were only ever claimed wrongly here"
+sources = ["gen:pulse[0:40]"]
+transforms = ["", "spike:0.02", "spike:0.1", "xtalk:0.3", "bounce:0.1", "bounce:0.5"]
+
+[suite.pulse-holdout]
+role = "holdout"
+about = "the same, other seeds"
+sources = ["gen:pulse[1000:1040]"]
+transforms = ["", "spike:0.02", "spike:0.1", "xtalk:0.3", "bounce:0.1", "bounce:0.5"]
+
+[suite.ir]
+role = "tune"
+about = "NEC remote codes alone (eval/synth.py's ir: an LED's drive with a 38 kHz carrier or a receiver's output, now and then a repeat code) with decoys, clean and with noise (NEC is experimental: memo)"
+sources = ["gen:ir[0:40]"]
+transforms = ["", "spike:0.1", "bounce:0.1"]
+
+[suite.ir-holdout]
+role = "holdout"
+about = "the same, other seeds"
+sources = ["gen:ir[1000:1040]"]
+transforms = ["", "spike:0.1", "bounce:0.1"]
+
 # The quick set: a few of each kind, for checking a change locally in minutes (bench/notes/TODO.ja.md: the whole set
 # goes to CI). Not in "all". Run all four: --suite quick --suite quick-noise --suite quick-odslow --suite quick-rate
 [suite.quick]

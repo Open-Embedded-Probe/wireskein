@@ -23,7 +23,7 @@ from wireskein import decode
 import corpus
 import synth
 
-IN_SCOPE = {"uart", "i2c", "spi", "lin", "dmx512", "rvswd", "swio", "swd", "can"}
+IN_SCOPE = {"uart", "i2c", "spi", "lin", "dmx512", "rvswd", "swio", "swd", "can", "onewire", "rgb_led", "ir_nec"}
 WORK = corpus.WORK
 
 
@@ -146,6 +146,19 @@ def match(bus: dict, claim: dict) -> dict:
         else:
             r["decode"] = _ratio(bus["expect"]["packets"],
                                  [p["data"] if isinstance(p, dict) else p for p in lay.get("packets", [])])
+    elif bus["protocol"] == "onewire":
+        r["roles"] = nr.get("dq") == tr["dq"]
+        r["params"] = pm.get("speed") == bus["params"]["speed"]
+        r["decode"] = _ratio([x["data"] for x in bus["expect"]["resets"]], [z["data"] for z in lay.get("resets", [])])
+    elif bus["protocol"] == "rgb_led":
+        r["roles"] = nr.get("data") == tr["data"]
+        r["params"] = True                       # the bit period is read from the line, not a parameter of the claim
+        r["decode"] = _ratio(bus["expect"]["frames"], [f["data"] for f in lay.get("frames", [])])
+    elif bus["protocol"] == "ir_nec":
+        r["roles"] = nr.get("data") == tr["data"]
+        r["params"] = (pm.get("carrier_hz") is None) == (bus["params"]["carrier_hz"] is None)
+        r["decode"] = _ratio([tuple(f) for f in bus["expect"]["frames"]],
+                             [(f["addr"], f["cmd"]) for f in lay.get("frames", []) if not f.get("repeat") and "addr" in f])
     elif bus["protocol"] == "swd":
         r["roles"] = nr == tr
         r["params"] = r["roles"]

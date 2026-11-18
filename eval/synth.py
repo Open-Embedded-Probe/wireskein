@@ -403,6 +403,63 @@ class Builder:
         self.fastest = max(self.fastest, 250000.0)
         self.t_end = max(self.t_end, t)
 
+    def add_onewire(self, idx: int) -> None:
+        """A 1-Wire master at standard speed: resets each with a presence pulse (now and then none: no slave
+        answered), then bytes written LSB first; slot, low times varied within the spec."""
+        r = self.rng
+        name = f"onewire{idx}"
+        w = self.wave(name, 1)
+        slot, low_0, low_1 = float(r.uniform(65e-6, 110e-6)), float(r.uniform(60e-6, 64e-6)), float(r.uniform(3e-6, 12e-6))
+        t = float(r.uniform(0.2e-3, 2e-3))
+        txs = []
+        for _ in range(int(r.integers(2, 7))):
+            data = bytes(r.integers(0, 256, int(r.integers(1, 10)), dtype=np.uint8))
+            presence = bool(r.random() < 0.9)
+            t = gen.onewire(w, t, data, presence=presence, reset=float(r.uniform(480e-6, 600e-6)), low_0=low_0,
+                            low_1=low_1, slot=slot)
+            t += float(r.uniform(0.1e-3, 2e-3))
+            txs.append({"presence": presence, "data": data.hex()})
+        self.buses.append({"protocol": "onewire", "roles": {"dq": name}, "params": {"speed": "standard"},
+                           "expect": {"resets": txs}})
+        self.fastest = max(self.fastest, 1 / (2 * low_1))
+        self.t_end = max(self.t_end, t)
+
+    def add_rgb(self, idx: int) -> None:
+        """A WS2812-like LED string: frames of 3-byte pixels, each followed by a reset low."""
+        r = self.rng
+        name = f"rgb{idx}"
+        w = self.wave(name, 0)
+        period = float(r.choice([1.25e-6, 2.5e-6]))
+        t = float(r.uniform(0.1e-3, 1e-3))
+        frames = []
+        for _ in range(int(r.integers(2, 6))):
+            data = bytes(r.integers(0, 256, 3 * int(r.integers(1, 9)), dtype=np.uint8))
+            t = gen.rgb_led(w, t, data, t0h=0.32 * period, t1h=0.64 * period, period=period,
+                            reset=float(r.uniform(60e-6, 300e-6)))
+            frames.append(data.hex())
+        self.buses.append({"protocol": "rgb_led", "roles": {"data": name}, "params": {"period": period},
+                           "expect": {"frames": frames}})
+        self.fastest = max(self.fastest, 1 / (0.32 * period))
+        self.t_end = max(self.t_end, t)
+
+    def add_nec(self, idx: int) -> None:
+        """An NEC remote code: the LED's drive with a 38 kHz carrier (idle low), or a receiver's output (idle
+        high); commands with their complements, now and then a repeat code."""
+        r = self.rng
+        carrier = 38e3 if r.random() < 0.5 else None
+        name = f"ir{idx}"
+        w = self.wave(name, 0 if carrier else 1)
+        frames = []
+        for _ in range(int(r.integers(2, 6))):
+            frames.append({"addr": int(r.integers(0, 256)), "cmd": int(r.integers(0, 256))})
+            if r.random() < 0.3:
+                frames.append({"repeat": True})
+        t = gen.nec(w, float(r.uniform(1e-3, 5e-3)), frames, carrier_hz=carrier)
+        self.buses.append({"protocol": "ir_nec", "roles": {"data": name}, "params": {"carrier_hz": carrier},
+                           "expect": {"frames": [[f["addr"], f["cmd"]] for f in frames if not f.get("repeat")]}})
+        self.fastest = max(self.fastest, 2 * (carrier or 1 / 562.5e-6))
+        self.t_end = max(self.t_end, t)
+
     def add_swd(self, idx: int) -> None:
         r = self.rng
         freq = float(r.choice([100e3, 1e6, 4e6, 10e6])) * (1 + r.uniform(-0.02, 0.02))
@@ -502,8 +559,9 @@ def scenario(seed: int, profile: str = "mixed", stress: str | None = None,
              "uartlike": ["uart", "lin", "dmx"], "duplex": ["scpi", "scpi", "uart"],
              "upper": ["uart_upper"], "spinor": ["spinor", "spi"],
              "swd": ["swd"], "can": ["can"], "swdcan": ["swd", "can", "spi", "uart"],
+             "pulse": ["onewire", "rgb", "uart"], "ir": ["nec"],
              "spimulti": ["spi_multi"], "spimultimix": ["spi_multi", "uart", "i2c"], "spivar": []}[profile]
-    n_bus = int(rng.integers(1, 4)) if profile in ("mixed", "swdcan", "spimultimix") else 0 if profile == "spivar" else 1
+    n_bus = int(rng.integers(1, 4)) if profile in ("mixed", "swdcan", "spimultimix", "pulse") else 0 if profile == "spivar" else 1
     for i in range(n_bus):
         getattr(b, "add_" + str(rng.choice(kinds)))(i)
     if profile == "spivar":                     # the shapes in turn, so that any run of seeds covers them all
