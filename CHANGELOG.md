@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) A pair whose two lines the clock's gate changes in nothing is measured once (the gated view holds the same two lines): the same relations on every pair (32 captures, generated and real), the survey about a tenth faster.
+- (JA) クロックのゲートが 2 本の線のどちらも変えない組は、1 度だけ測る（ゲートした見え方の 2 本は同じ線）: 関係はどの組も同じ（生成と実機の 32 の記録）で、下調べが 1 割ほど速い。
 - (EN) A UART claim is weighed down on a line whose windows away from idle each hold a clock's burst snugly (the margins before and after no longer than the burst; the line and the clock read through the clock's gate): that is a bus's select (an SPI CS whose low windows read as characters), a UART's lows meet another bus's bursts only by chance (evidence `tight_windows`; the score x (1 - clip((s - 0.5) / 0.3, 0, 1))). A plain boundary penalty was tried and not taken: any line idling long frames bursts.
 - (JA) 休みでない窓のどれもが、あるクロックのバーストをすき間なく囲む（前後の余白がバーストより短い。線もクロックも、そのクロックのゲートを通して読む）線の UART の主張を弱める: それはバスの選択線（Low の窓が文字に見える SPI の CS）で、UART の Low がほかのバスのバーストと重なるのはたまたまでしかない（証拠 `tight_windows`。点数 ×（1 − clip((s − 0.5) / 0.3, 0, 1))）。ただの選択線らしさ（boundary）での罰は試して入れなかった: 長く休む線ならたいていバーストを囲む。
 - (EN) A UART claim is weighed by how its changes sit on the bit grid: of the changes inside its well-formed characters (a bounce merged), the share within a quarter bit of the character's start plus whole bits (evidence `on_grid`; the score x clip((s - 0.88) / 0.04, 0, 1)). A line toggling now and then (a slow random line, a line of another protocol with bounces) frames characters too, its changes off the grid: on the bench every real UART had 0.92 or more, the wrong ones 0.77-0.91.
