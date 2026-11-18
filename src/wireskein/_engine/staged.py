@@ -386,6 +386,9 @@ def _slow_at(edges: np.ndarray, k: int, rises: np.ndarray) -> np.ndarray:
     return allow
 
 
+GLITCH_SHARE = 0.6    # a clock's runs this short a share or less: a view with them taken out
+
+
 def glitch_views(cap, sv, g):
     """The capture as is, plus a sibling view with short pulses (reflections)
     removed from the clock and data pins when the clock shows such pulses:
@@ -396,23 +399,32 @@ def glitch_views(cap, sv, g):
     inner = length[1:-1]
     if len(inner) < 16:
         return
+    step = max(x.step for x in cap.channels if x.name in {g.clock, *g.data, *([g.select] if g.select else [])})
+    # the clock's typical run, also with its pulses under BOUNCE_TICKS taken out: a bounce makes two short runs, so
+    # with bounces at half the edges most runs are short and their median is a bounce's
     med = float(np.median(inner))
+    clean = np.diff(np.asarray(K.deglitch(ch.edges, BOUNCE_TICKS * step), np.int64))
+    if len(clean) >= 16:
+        med = max(med, float(np.median(clean)))
     # Short pulses relative to the clock's own runs (reflections last a few ns,
     # i.e. more samples at higher rates; single-sample spikes at any rate).
-    step = max(x.step for x in cap.channels if x.name in {g.clock, *g.data, *([g.select] if g.select else [])})
     short = inner <= max(float(step), 0.25 * med)
-    if med >= 3 and 0 < short.mean() < 0.2:
+    # (bounces at half the edges make a third of the runs short: still a view; the widths stay under half a run)
+    if med >= 3 and 0 < short.mean() < GLITCH_SHARE:
         # the filter width is undecidable here: fixed small widths and one from
         # the observed short pulses are siblings; plugins' checks pick. A width
         # never exceeds half the clock's typical run.
         k_rel = int(max(2 * step, min(0.3 * med, np.quantile(inner[short], 0.95) + step)))
         pins = {g.clock, *g.data, *([g.select] if g.select else [])}
-        rises = ch.edges[K.edge_levels(ch.edges, ch.initial) == 1]
         for k in sorted({2 * step, 3 * step, 5 * step, k_rel}):
             if k > 0.5 * med:
                 continue
             # only where the clock around is slow enough for k (its period 4k or more): a capture whose clock
-            # changes speed (a LinkE connecting slowly, then reading fast) keeps its fast clock's short highs
+            # changes speed (a LinkE connecting slowly, then reading fast) keeps its fast clock's short highs. The
+            # period from the clock with its pulses of k taken out: bounces at half its edges split its periods,
+            # and the median of them was a bounce's
+            ce = K.deglitch(ch.edges, k)
+            rises = ce[K.edge_levels(ce, ch.initial) == 1]
             chans = [replace(x, edges=K.deglitch(x.edges, k, _slow_at(x.edges, k, rises))) if x.name in pins else x
                      for x in cap.channels]
             yield Capture(cap.rate, cap.n_samples, chans), k
