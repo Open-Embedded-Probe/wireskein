@@ -244,3 +244,35 @@ role = "holdout"
 about = "the same, other seeds"
 sources = ["gen:spivar[1000:1100]"]
 transforms = [""]
+
+# The quick set: a few of each kind, for checking a change locally in minutes (bench/notes/TODO.ja.md: the whole set
+# goes to CI). Not in "all". Run all four: --suite quick --suite quick-noise --suite quick-odslow --suite quick-rate
+[suite.quick]
+role = "tune"
+in_all = false
+about = "a few of each kind, clean: generated mixed, nack, SPI shapes and targets, rate changes, real I2C (weak pull-ups, EmbedBenchDeviceData), eval's real, the LinkE fixture's V003, LinkE V003 (SWIO) and V203 (RVSWD) at 160 MS/s"
+sources = ["set:tuning[0:30]", "gen:mixed/nack[0:30]", "gen:spivar[0:30]", "gen:spimulti[0:20]", "set:baudhop[0:15]",
+           "set:freqhop[0:15]", "i2cbench:h417_slow/stream[0:15]", "ebdd:embedbench-device-data-50m/tune", "real",
+           "wchfix:v003", "linke:v003-linke-2026-11-17/tune[0:6]", "linke:v203-linke-2026-11-17/tune[0:3]"]
+transforms = [""]
+
+[suite.quick-noise]
+role = "tune"
+in_all = false
+about = "the quick set's noise: the generated mixed buses with spikes, crosstalk and bounces"
+sources = ["set:tuning[0:30]"]
+transforms = ["spike:0.1", "xtalk:0.3", "bounce:0.1"]
+
+[suite.quick-odslow]
+role = "tune"
+in_all = false
+about = "the quick set's slow rises: I2C through a weak pull-up"
+sources = ["gen:mixed/nack[0:30]"]
+transforms = ["odslow:2500"]
+
+[suite.quick-rate]
+role = "tune"
+in_all = false
+about = "the quick set's rates: LinkE V003 taken down to 50 MHz (fractional) and a twentieth"
+sources = ["linke:v003-linke-2026-11-17/tune[0:6]"]
+transforms = ["resample:50000000", "decimate:20"]

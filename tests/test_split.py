@@ -129,6 +129,7 @@ def test_analyze_in_pieces_takes_the_roles_from_the_first():
     assert part["split"]["roles_from"][0] == 0
 
 
+@pytest.mark.slow
 def test_a_wireskein_file_is_read_from_the_file_as_the_pieces_go(tmp_path):
     # the .sr written as a WireSkein file, then decoded in pieces straight from it (split.FileSource): the same
     import argparse
@@ -149,6 +150,7 @@ def test_a_wireskein_file_is_read_from_the_file_as_the_pieces_go(tmp_path):
     assert c["result"]["dmi"] == whole["dmi"]
 
 
+@pytest.mark.slow
 def test_items_written_out_as_the_pieces_go(tmp_path):
     import json
     whole = decode_file(D / "linke_v203_read_flash_4k.sr", RVSWD, split="off")["parts"][0]["buses"][0]
@@ -187,6 +189,7 @@ def test_unread_stretches_summed_up():
                                                                             "9-16", "9-16", "17-32"]
 
 
+@pytest.mark.slow
 def test_workers_read_the_same():
     opts = "max_edges=20000,min_edges=2000,overlap_edges=500"
     one = decode_file(D / "linke_v203_read_flash_4k.sr", RVSWD, split=opts)["parts"][0]["buses"][0]["result"]
@@ -194,6 +197,7 @@ def test_workers_read_the_same():
     assert one == two
 
 
+@pytest.mark.slow
 def test_a_piece_the_roles_read_badly_is_told():
     # the stretch before a LinkE connects (frames of 15 clocks, no RVSWD frame) fills a piece RVSWD does not read:
     # that piece is doubtful, with where it is, to analyse on its own
@@ -219,6 +223,7 @@ def test_a_data_line_ringing_at_a_slow_enough_clock_still_pairs_with_it(tmp_path
     assert c["roles"] == {"clk": "SWCLK", "dio": "SWDIO"} and c["verdict"] == "confirmed"
 
 
+@pytest.mark.slow
 def test_doubtful_is_the_same_with_items_written_out(tmp_path):
     opts = "max_edges=20000,min_edges=2000,overlap_edges=500"
     a = decode_file(D / "linke_v203_read_flash_4k.sr", RVSWD, split=opts)["parts"][0]["split"].get("doubtful")

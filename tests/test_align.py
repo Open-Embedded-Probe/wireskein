@@ -146,6 +146,7 @@ def test_another_file_cli(tmp_path):
     assert align.load(b)["files"]["A.wireskein"]["via"] == "SYNC"
 
 
+@pytest.mark.slow
 def test_another_file_periodic_is_ambiguous(tmp_path):
     a, b = two_probes(tmp_path, periodic=True)
     with pytest.raises(ValueError, match="ambiguous"):

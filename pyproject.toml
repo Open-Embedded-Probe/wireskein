@@ -49,3 +49,4 @@ artifacts = ["src/wireskein/web/**"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["slow: a test over about 5 s (long captures): left out with -m \"not slow\" for a quick run; CI runs all"]

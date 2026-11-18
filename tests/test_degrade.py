@@ -5,6 +5,7 @@ import importlib.util
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from wireskein import _fileformat as ff
 from wireskein.decode import decode_file, load
@@ -22,6 +23,7 @@ def _edges(path):
     return {c.name: (c.initial, c.edges.tolist()) for c in cap.channels}, cap
 
 
+@pytest.mark.slow
 def test_the_seed_and_the_steps_are_in_the_file_and_make_it_again(tmp_path):
     src = D / "linke_l103_target_info.sr"
     argv = ["--pins", "SWCLK,SWDIO", "--glitch", "SWCLK:0.02", "--ring", "SWDIO:0.5", "--crosstalk",
@@ -54,6 +56,7 @@ def test_a_lower_rate_samples_the_line_at_every_nth_tick(tmp_path):
     assert meta["ops"] == [{"op": "every", "n": 5, "phase": 2}]
 
 
+@pytest.mark.slow
 def test_a_rate_too_low_for_the_clock_is_told(tmp_path):
     # 160 MS/s taken every 3rd sample: a LinkE's highs of 20-25 ns at 53 MS/s
     degrade.main([str(D / "linke_v203_160mhz_flash_pattern4k.sr"), str(tmp_path / "l.wireskein"), "--every", "3",

@@ -227,6 +227,7 @@ def test_rvswd_frames_carry_their_bits_and_clock_period():
     assert all(x["period_ns"] > 0 for x in dmi)
 
 
+@pytest.mark.slow
 def test_burst_reads_are_the_flash_ch32rv_read():
     # a CH32V203's 4 KiB read by a LinkE: 64 bursts of 15 reads of data0 (autoexec, Access Memory with
     # postincrement) after one Access Memory each; a burst's high now and then held twice its usual (1.1 us) is no
@@ -279,6 +280,7 @@ def test_a_glitch_clock_is_dropped_when_that_gives_a_known_length():
     assert known_length(585) and not known_length(586)
 
 
+@pytest.mark.slow
 def test_named_fields_layers_and_times():
     from wireskein.decode import decode_file
     doc = decode_file(D / "linke_v203_read_flash_4k.sr",
@@ -345,6 +347,7 @@ SPEC = {"buses": [{"protocol": "rvswd", "pins": {"clk": "SWCLK", "dio": "SWDIO"}
 
 @pytest.mark.parametrize("name,base,size,long_", [("linke_v203_speed_high_read_ram_256", 0x20000000, 256, 202),
                                                   ("linke_v203_speed_high_read_flash_4k", 0x08000000, 4096, 202)])
+@pytest.mark.slow
 def test_a_clock_slow_then_fast_keeps_the_fast_bits(name, base, size, long_):
     # a LinkE at its high speed on a CH32V203 at 50 MS/s: it connects slowly (a period of about 106 samples), then
     # reads fast (about 5): DIO's pulses of a sample or two are ringing only where the clock is slow; the fast clock's
@@ -358,6 +361,7 @@ def test_a_clock_slow_then_fast_keeps_the_fast_bits(name, base, size, long_):
     assert [mem.get(base + 4 * i) for i in range(size // 4)] == list(words)
 
 
+@pytest.mark.slow
 def test_the_first_frames_after_a_slow_connect_are_read():
     # where wireskein 0.0.26 lost them: the first long query after the connect, and a short read of dmstatus
     from wireskein.decode import decode_file
@@ -370,6 +374,7 @@ def test_the_first_frames_after_a_slow_connect_are_read():
     assert sum(1 for x in r["dmi"] if x["op"] == "BURST") == 4        # no burst read out of the connect's frames
 
 
+@pytest.mark.slow
 def test_pieces_read_on_the_edge_the_first_piece_reads():
     # a LinkE at its fastest at 160 MS/s: a piece on its own may read on the falling edge, every frame a clock early
     # (an extra 0 first, the last bit lost); every piece reads on the edge the first one decoded on, as read whole
@@ -385,6 +390,7 @@ def test_pieces_read_on_the_edge_the_first_piece_reads():
     assert sum(1 for x in b["result"]["dmi"] if x["op"] == "W" and x["addr"] == 0x17) > 1000
 
 
+@pytest.mark.slow
 def test_a_clock_too_fast_for_the_rate_is_told_with_its_speeds():
     # a LinkE connects at 0.33 MHz, then reads at 10 MHz with highs of 20 ns: at 50 MS/s a high may fall between two
     # samples. The speeds come from the frames read, each frame carrying its own clock
@@ -403,6 +409,7 @@ def test_a_clock_too_fast_for_the_rate_is_told_with_its_speeds():
     assert all(g["rate_ok"] for g in b["clock_speeds"] if g["freq_hz"] < 1e6)
 
 
+@pytest.mark.slow
 def test_a_frame_a_clock_short_is_read_only_where_one_reading_is_left():
     # the same 4 KiB flashed, taken at 50 MS/s (a 10 MHz clock's highs of 20 ns: clocks lost between samples) and at
     # 160 MS/s (none lost). A frame a clock short is read with the lost clock restored only where every place it may
@@ -418,6 +425,7 @@ def test_a_frame_a_clock_short_is_read_only_where_one_reading_is_left():
     assert slow["undersampled"]["restored"] == len(restored)
 
 
+@pytest.mark.slow
 def test_how_a_bus_read_is_told_in_counts():
     # a LinkE at its fastest at 50 MS/s: the frames read and how, the clock too fast, and the noise seen
     from wireskein.decode import decode_file

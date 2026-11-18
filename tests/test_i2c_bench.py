@@ -56,6 +56,7 @@ def test_a_line_a_glitch_filter_locked_is_told_stopped():
     assert r["glitch_filter_ns"] == 100 and r["line_changes"]["SCL"]["last"] == stopped[0]["tick"]
 
 
+@pytest.mark.slow
 def test_a_line_a_glitch_filter_set_swinging_is_told_oscillating():
     r = _bus("fexp2-50000000-g75")["reading"]
     osc = [o for o in r["oscillating"] if o["line"] == "SCL"]
