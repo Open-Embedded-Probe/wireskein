@@ -731,27 +731,36 @@ SYNC_ROLES = {"i2c": {"scl": "clock", "sda": "data"}, "spi": {"clk": "clock", "m
 
 
 SHARED_COVER = 0.95    # the targets' selections together hold this share of the clock's bursts or more
+SHARED_SNUG = 0.5       # a captured select's windows holding a burst snugly, this share or more, for the rest to be a target
+SHARED_FREE = 2        # transfers outside every captured select: a target of its own, read without its CS
 SHARED_MAX = 8         # select lines on one clock tried in sets for one bus of targets (2^n sets)
 
 
-def shared_buses(roots: list[Node], sv) -> list[Node]:
+def shared_buses(roots: list[Node], sv, cap=None) -> list[Node]:
     """One clocked bus with a target on each select line (SPI with a CS per device: CLK and the data lines shared).
     Each select's own reading counts the other targets' transfers, which fall in its idle level, against it
     (select_boundary); together, selections that never overlap and hold the clock's bursts between them are the
     bus. A hypothesis of the whole (roles: the shared lines and every select) enters the packing; its targets'
     claims come out of it (`members`: (node, score with the others' transfers not counted against it))."""
     by: dict[tuple, dict[str, Node]] = {}
+    nocs: dict[tuple, Node] = {}        # the lines read without a select: a target whose CS is not captured
     for n in roots:
-        if n.analyzer != "spi" or n.output is None or "cs" not in n.roles or "frames" not in getattr(n, "layers", {}):
+        if n.analyzer != "spi" or n.output is None or "frames" not in getattr(n, "layers", {}):
             continue
         data = tuple(sorted(v for k, v in n.roles.items() if k.startswith("data")))
+        if "cs" not in n.roles:
+            k0 = (n.roles["clk"], data)
+            if k0 not in nocs or n.total > nocs[k0].total:
+                nocs[k0] = n
+            continue
         key = (n.roles["clk"], data)
         cs = n.roles["cs"]
         if cs not in by.setdefault(key, {}) or n.total > by[key][cs].total:
             by[key][cs] = n
     out = []
     for (clk, data), per in by.items():
-        if len(per) < 2 or clk not in sv.clocks:
+        free = nocs.get((clk, data))
+        if len(per) < (1 if free is not None else 2) or clk not in sv.clocks:
             continue
         ci = sv.clocks[clk]
         real = ci.bits >= 2
@@ -786,7 +795,7 @@ def shared_buses(roots: list[Node], sv) -> list[Node]:
 
         def dfs(i, chosen, held):
             if i == len(cands):
-                if len(chosen) >= 2:
+                if len(chosen) >= (1 if free is not None else 2):
                     key = (int(held.sum()), sum(cands[j][2] for j in chosen))
                     if key > best[0]:
                         best[:] = [key, tuple(chosen)]
@@ -798,13 +807,29 @@ def shared_buses(roots: list[Node], sv) -> list[Node]:
         if not best[1]:
             continue
         cover = best[0][0] / len(mid)
-        if cover < SHARED_COVER:
-            continue
         chosen = [(cands[j][0], cands[j][2]) for j in best[1]]
+        # (each captured select snug round its bursts, as a CS is: a line toggling on its own - a decoy, a tied or
+        # slow line - frames some bursts by chance, and the rest read without it was a second target of no one)
+        snug = cap is not None and all(
+            _tight_windows(cap.channel(n.roles["cs"]), sv.features[n.roles["cs"]].idle_level, sv, cap.n_samples)
+            >= SHARED_SNUG for n, _ in chosen)
+        if cover < SHARED_COVER and free is not None and snug:
+            # the bursts no captured select holds, read by the lines without one: a target whose CS is not on the
+            # probe (two or more of its transfers, all of them framed by that reading)
+            held = np.zeros(len(mid), bool)
+            for j in best[1]:
+                held |= held_by[j]
+            rest = ~held & holds(spans(free)) if len(spans(free)) else np.zeros(len(mid), bool)
+            if int(rest.sum()) >= SHARED_FREE and (held | rest).mean() >= SHARED_COVER:
+                chosen.append((free, float(free.total)))
+                cover = float((held | rest).mean())
+        if cover < SHARED_COVER or len(chosen) < 2:
+            continue
         w = np.array([max(1, n.metrics.get("frames", 1)) for n, _ in chosen], float)
         total = float(np.dot(w, [a for _, a in chosen]) / w.sum()) * cover
+        sel = [n for n, _ in chosen if "cs" in n.roles]
         roles = {"clk": clk, **{f"data{i}": d for i, d in enumerate(data)},
-                 **{("cs" if i == 0 else f"cs{i}"): n.roles["cs"] for i, (n, _) in enumerate(chosen)}}
+                 **{("cs" if i == 0 else f"cs{i}"): n.roles["cs"] for i, n in enumerate(sel)}}
         bus = Node("spi", {"bus": f"spi:{clk}"}, roles, None, {"targets": len(chosen), "cover": cover},
                    layer_score=total, total=total)
         bus.members = chosen
@@ -1088,7 +1113,7 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
     known = [n for n in roots if n.analyzer != "sync_unknown" and n.output is not None]
     roots_pack = [n for n in roots if n.analyzer != "sync_unknown" or not any(
         k.total >= n.total and set(k.roles.values()) & set(n.roles.values()) for k in known)]
-    roots_pack += shared_buses(roots_pack, tx.survey)
+    roots_pack += shared_buses(roots_pack, tx.survey, cap)
     exps = explanations(roots_pack, value)
     claims = []
     if exps:
