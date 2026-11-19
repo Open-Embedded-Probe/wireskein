@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) 1-Wire: a reset no device answers is no evidence against (a master looking for devices); two presence pulses seen count as every reset answered. Three resets with two answers were held at 0.82. Pulse, UART-like, tuning, IR and glitch sets: confirmed 802 -> 832, read +2, false claims the same.
+- (JA) 1-Wire: どのデバイスも応答しないリセットは、1-Wire でない証拠にしない（マスターがデバイスを探している）。プレゼンスが 2 つ見えれば、すべてのリセットに応答があったとみる。リセット 3 つで応答 2 つのものが 0.82 に抑えられていた。pulse、UART 系、tuning、赤外線、glitch の組: 確定 802 → 832、読めた +2、誤った主張は同じ。
 - (EN) LIN and DMX512 count their evidence in bits, as the declared protocols do (1 - 0.5 ** (bits / 8)): LIN's sync byte 8, PID parity 2 and checksum 8 a frame, DMX512's start code of 0 8 a packet; not by the number of frames (three whole LIN frames, 54 bits, scored 0.63). UART-like and LIN/DMX tuning sets: confirmed 961 -> 1023, read +1, false claims the same.
 - (JA) LIN と DMX512 は証拠をビットで数える（宣言型の方式と同じ 1 - 0.5 ** (ビット / 8)）: LIN は 1 フレームで同期バイト 8、PID のパリティ 2、チェックサム 8、DMX512 は 1 パケットで開始コード 0 の 8。フレームの数では数えない（LIN のまるごとのフレーム 3 つ、54 ビットが 0.63 だった）。UART 系と LIN/DMX の調整用の組: 確定 961 → 1023、読めた +1、誤った主張は同じ。
 - (EN) SWIO (1-wire RVSWD): the pin's other traffic (a LinkE's connect, probing in the 2-wire form) thins the evidence only as far as the DMI transfers are few: the share of pulses in 41/33 frames counts as at least 1 - exp(-n / 16) for n transfers. A V003 behind a LinkE, 40-50 reads and writes of known DM registers in 2000 other frames, was held at 0.80 under confirmed. LinkE V003 sets and wchfix V003: confirmed 351 -> 433, read and false claims the same.

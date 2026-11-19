@@ -85,6 +85,7 @@ class RgbLedPlugin:
                      layer_score=score, total=score)]
 
 
+ONEWIRE_PRESENCE = 2     # presence pulses seen: this many count as every reset answered
 ONEWIRE_PACE = 0.25   # a slot period within this of the median keeps the master's pace
 
 
@@ -113,7 +114,10 @@ class OneWirePlugin:
             # slots of both kinds (a clock's lows are all alike), whole bytes after most resets
             if not rs or not r["low_0"] or not r["low_1"]:
                 continue
-            pres = float(np.mean([z["presence"] for z in rs]))
+            # a device's presence pulse is evidence; a reset none answers is no evidence against (a master looking
+            # for devices, one gone): two answers seen count as all
+            n_pres = sum(bool(z["presence"]) for z in rs)
+            pres = min(1.0, max(n_pres / len(rs), n_pres / ONEWIRE_PRESENCE))
             whole = float(np.mean([z["leftover_bits"] == 0 and z["bits"] > 0 for z in rs]))
             if whole < 0.5:
                 continue
