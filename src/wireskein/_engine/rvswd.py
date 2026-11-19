@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import warnings
 
+import math
+
 import numpy as np
 
 from . import kernels as K
@@ -334,6 +336,9 @@ def reframe(fr) -> list[tuple[int, int]]:
     return out
 
 
+SWIO_MANY = 16          # DMI transfers: this many make the pin's other traffic count for little against them
+
+
 class SwioPlugin:
     """WCH SWIO (1-wire SDI) on pulse symbols: short pulse = 1, long = 0.
     41 pulses: start(1) addr7 R/W(1 = write) data32; 33 pulses: 0 + data32
@@ -397,7 +402,11 @@ class SwioPlugin:
         known = float(np.mean([x["addr"] in NAMES for x in tx]))
         m = {"frames": int(len(lens)), "structured": structured, "pulse_share": pulses, "dmi": len(tx),
              "dm_addr": known, "split_ns": ps.split / c.cap.rate * 1e9}
-        score = known * (0.5 + 0.5 * pulses) * (1 - 0.5 ** (len(tx) / 4))
+        # other traffic on the pin (a LinkE's connect, probing in the 2-wire form) thins the share, but many reads
+        # and writes of known DM registers do not come by chance however much else the pin carries: the share counts
+        # as at least what their number says (40 of them: 0.92)
+        dilute = max(pulses, 1 - math.exp(-len(tx) / SWIO_MANY))
+        score = known * (0.5 + 0.5 * dilute) * (1 - 0.5 ** (len(tx) / 4))
         return [Node("swio", {"idle": ps.idle, "split_ns": round(float(ps.split) * ns, 1)}, {"dio": ps.pin}, Stream("dmi", tx), m, layer_score=score, total=score)]
 
 
