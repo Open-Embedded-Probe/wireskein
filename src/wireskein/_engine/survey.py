@@ -162,6 +162,7 @@ def async_info(cap: Capture, f: ChannelFeatures) -> AsyncInfo:
 
 
 SPIKE_PERIOD = 4        # samples: a clock's period this long or more has halves of two samples, longer than a spike
+SPIKE_BROKEN = 0.5      # a clock's pulses of a sample this share or more breaking its period: a noise's
 SPIKE_IDLE = 4          # a clock's run this many times its median or longer: idle (a sample's pulse between two: a spike)
 GATE_KEEPS = 3          # a line keeping under a third of its changes through a clock's gate is measured without it
 USED_SELECTIONS = 0.8   # a select line's windows at its active level holding a transfer: this share or more
@@ -177,8 +178,15 @@ def gated_view(cap: Capture, clk: ClockInfo, w: float = GATE) -> tuple[Capture, 
     if clk.period / w < 2:
         # a clock too fast for a quarter of it to reach two samples: the pulses of a single sample taken out (a spike,
         # crosstalk), each with its own two changes, where the clock's halves are two samples or more
-        step = cap.channel(clk.name).step
+        cch = cap.channel(clk.name)
+        step = cch.step
         if clk.period < SPIKE_PERIOD * step:
+            return cap, clk
+        # and where the clock's own pulses of a sample are a noise's: most of them break its period (a spike); a
+        # clock of uneven duty has highs of a sample that keep it (a LinkE's V203 at 50 MS/s: 0.24 of its runs)
+        ce = np.asarray(cch.edges, np.int64)
+        one = int(np.count_nonzero(np.diff(ce) <= step))
+        if one and V.broken_runs(ce, 2 * step)[-1] < SPIKE_BROKEN * one:
             return cap, clk
         chans = [replace(x, edges=V.pulses_out(x.edges, 2 * x.step)) for x in cap.channels]
         if all(len(a.edges) == len(b.edges) for a, b in zip(chans, cap.channels)):
