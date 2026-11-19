@@ -382,8 +382,10 @@ class DmxPlugin:
             rate_ok = 1.0 if abs(baud / 250000 - 1) < 0.03 else 0.3
             # the evidence in bits: a start code of 0 is 8 a packet
             info = 8 * ck["start_code_0"]
+            # and slots in them: a packet carries up to 512 (the bench's lines 30 or more a packet); breaks that
+            # spikes make on another line hold two or three characters each
             score = ((ck["start_code_0"] / ck["packets"]) * (ck["framing_ok"] / max(1, ck["chars"])) * rate_ok
-                     * (1 - 0.5 ** (info / EVIDENCE_BITS)))
+                     * (1 - 0.5 ** (info / EVIDENCE_BITS)) * q(ck["chars"], 4))
             out.append(Node("dmx512", {"baud": baud, "idle": rb.idle}, {"data": rb.pin},
                             Stream("dmx.packets", r["packets"]), dict(ck), layer_score=score, total=score))
         return out[:1]
