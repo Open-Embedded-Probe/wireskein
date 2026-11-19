@@ -393,7 +393,8 @@ def _upper(node: Node, scorer: DefaultScorer) -> None:
 
 
 def _slow_at(edges: np.ndarray, k: int, rises: np.ndarray, raw_rises: np.ndarray | None = None,
-             clock: np.ndarray | None = None, noise: np.ndarray | None = None) -> np.ndarray:
+             clock: np.ndarray | None = None, noise: np.ndarray | None = None,
+             broken: np.ndarray | None = None) -> np.ndarray:
     """Per edge, whether the clock around it is slow enough to filter pulses of k (its period 4k or more, the median
     of the periods before and after: a clock's own glitches do not make it look fast). With the clock as it is
     (raw_rises; its changes, and views.noise_runs of them): the cleaned clock's period counts where NOISY_RUNS of its runs
@@ -404,18 +405,23 @@ def _slow_at(edges: np.ndarray, k: int, rises: np.ndarray, raw_rises: np.ndarray
     near = np.flatnonzero(np.diff(edges) < k) + 1
     if len(near):
         t = edges[near]
-        slow = K.local_period(rises, t, q=50) >= 4 * k
+        slow = K.local_period(rises, t, q=50) >= SLOW_PERIODS * k
         if raw_rises is not None and clock is not None and noise is not None and len(clock) > 2:
             i = np.searchsorted(clock, t)
             a, b = np.maximum(i - NOISY_WINDOW, 0), np.minimum(i + NOISY_WINDOW, len(clock) - 1)
             noisy = (noise[b] - noise[a]) >= NOISY_RUNS * np.maximum(b - a, 1)
-            slow = np.where(noisy, slow, K.local_period(raw_rises, t, q=50) >= 4 * k)
+            if broken is not None:
+                a, b = np.maximum(i - NOISY_WIDE, 0), np.minimum(i + NOISY_WIDE, len(clock) - 1)
+                noisy |= (broken[b] - broken[a]) >= NOISY_RUNS * np.maximum(b - a, 1)
+            slow = np.where(noisy, slow, K.local_period(raw_rises, t, q=50) >= SLOW_PERIODS * k)
         allow[near] = slow
     return allow
 
 
+SLOW_PERIODS = 4     # a clock this many times k a period or more: slow enough to filter pulses of k
 NOISY_RUNS = 0.12    # a clock's runs around this share a noise's at least (views.noise_runs): its periods from it cleaned
 NOISY_WINDOW = 64    # runs each side of an edge, for that share
+NOISY_WIDE = 2048    # runs each side, for the share of runs breaking the clock's period (views.broken_runs)
 GLITCH_SHARE = 0.6    # a clock's runs this short a share or less: a view with them taken out
 
 
@@ -474,9 +480,10 @@ def glitch_views(cap, sv, g, memo: dict | None = None):
                 if kx not in memo:
                     if ("noise", g.clock) not in memo:
                         memo[("noise", g.clock)] = V.noise_runs(ch.edges, BOUNCE_TICKS * step)
+                        memo[("broken", g.clock)] = V.broken_runs(ch.edges, BOUNCE_TICKS * step)
                     memo[kx] = V.spikes_out(x.edges, k, _slow_at(x.edges, k, rises[0], rises[1],
                                                                 np.asarray(ch.edges, np.int64),
-                                                                memo[("noise", g.clock)]))
+                                                                memo[("noise", g.clock)], memo[("broken", g.clock)]))
                 return memo[kx]
             chans = [replace(x, edges=filtered(x)) if x.name in pins else x for x in cap.channels]
             # a width that takes out nothing more than a smaller one gives the same lines: read once

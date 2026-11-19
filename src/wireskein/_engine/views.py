@@ -83,3 +83,24 @@ def noise_runs(clock: np.ndarray, short: float) -> np.ndarray:
     beside[1:] |= long_[:-1]
     beside[:-1] |= long_[1:]
     return np.concatenate(([0], np.cumsum((runs < short) & beside)))
+
+
+def broken_runs(clock: np.ndarray, short: float, off: float = 0.25, median: int = 33) -> np.ndarray:
+    """The running count (from 0, one per run) of the clock's runs shorter than `short` that break its period: both
+    periods through one (rise to rise, or fall to fall) off the median of the periods around by `off`, and not like
+    the same period both before and after (two changes away: a clock changing speed keeps its frames). A clock's own
+    short highs keep its period (a LinkE at 10 MHz: a sample high in sixteen); a spike or bounce breaks it."""
+    ce = np.asarray(clock, np.int64)
+    runs = np.diff(ce)
+    per = (ce[2:] - ce[:-2]).astype(np.float64)
+    if len(per) >= median:
+        mid = K.rolling_median(per, median)
+        mid = np.concatenate((np.full(median // 2, mid[0]), mid, np.full(median // 2, mid[-1])))
+    else:
+        mid = np.full(len(per), np.median(per) if len(per) else 0.0)
+    pad = np.concatenate(([np.nan, np.nan], per, [np.nan, np.nan]))
+    same = (np.abs(per - pad[:-4]) <= off * per) & (np.abs(per - pad[4:]) <= off * per)
+    o = (np.abs(per - mid) > off * mid) & ~same
+    broken = np.zeros(len(runs), bool)
+    broken[1:-1] = o[:-1] & o[1:]
+    return np.concatenate(([0], np.cumsum((runs < short) & broken)))
