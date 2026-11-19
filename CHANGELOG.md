@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) LIN and DMX512 count their evidence in bits, as the declared protocols do (1 - 0.5 ** (bits / 8)): LIN's sync byte 8, PID parity 2 and checksum 8 a frame, DMX512's start code of 0 8 a packet; not by the number of frames (three whole LIN frames, 54 bits, scored 0.63). UART-like and LIN/DMX tuning sets: confirmed 961 -> 1023, read +1, false claims the same.
+- (JA) LIN と DMX512 は証拠をビットで数える（宣言型の方式と同じ 1 - 0.5 ** (ビット / 8)）: LIN は 1 フレームで同期バイト 8、PID のパリティ 2、チェックサム 8、DMX512 は 1 パケットで開始コード 0 の 8。フレームの数では数えない（LIN のまるごとのフレーム 3 つ、54 ビットが 0.63 だった）。UART 系と LIN/DMX の調整用の組: 確定 961 → 1023、読めた +1、誤った主張は同じ。
 - (EN) SWIO (1-wire RVSWD): the pin's other traffic (a LinkE's connect, probing in the 2-wire form) thins the evidence only as far as the DMI transfers are few: the share of pulses in 41/33 frames counts as at least 1 - exp(-n / 16) for n transfers. A V003 behind a LinkE, 40-50 reads and writes of known DM registers in 2000 other frames, was held at 0.80 under confirmed. LinkE V003 sets and wchfix V003: confirmed 351 -> 433, read and false claims the same.
 - (JA) SWIO（1 線の RVSWD）: その線のほかの通信（LinkE の接続、2 線の形での探り）が証拠を薄めるのは、DMI の取引が少ない間だけにする: 41/33 のフレームのパルスの割合を、取引 n 個で少なくとも 1 - exp(-n / 16) とみる。LinkE の向こうの V003（2000 のほかのフレームの中に、既知の DM レジスタの読み書き 40〜50）が 0.80 に抑えられ、確定に届かなかった。LinkE の V003 の組と wchfix の V003: 確定 351 → 433、読めたものと誤った主張は同じ。
 - (EN) SPI's quantity of words counts on a scale of 5 (was 8): the fitting frames count it as well (count_frames), and a right bus of 16 words was held at 0.86 of it, under confirmed. SPI-related tuning sets (12 sets): confirmed +28, read +9, a false likely more (two buses' selects swapped under crosstalk 0.3, a reading the crosstalk images give).

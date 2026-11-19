@@ -322,6 +322,9 @@ class UartPlugin:
                      m, layer_score=score, total=score)]
 
 
+EVIDENCE_BITS = 8         # a check's bits of evidence to a score: 1 - 0.5 ** (bits / 8), as the declared protocols
+
+
 class LinPlugin:
     name = "lin"
     consumes = ("chars",)
@@ -336,8 +339,11 @@ class LinPlugin:
             if ck["frames"] < 2:
                 continue
             passed = (ck["sync"] + ck["pid_parity"] + ck["checksum"]) / (3 * ck["frames"])
+            # the evidence in bits, as the declared protocols count it: what random characters pass by chance (the
+            # sync byte 8, the PID's parity 2, the checksum 8); three whole frames are 54 bits, not a count of 3
+            info = 8 * ck["sync"] + 2 * ck["pid_parity"] + 8 * ck["checksum"]
             # frames of 0x55 alone are what a clock's bursts give as well: no evidence of LIN
-            score = passed * q(ck["frames"], 3) * (1 - ck["alternating"] / ck["frames"])
+            score = passed * (1 - 0.5 ** (info / EVIDENCE_BITS)) * (1 - ck["alternating"] / ck["frames"])
             out.append(Node("lin", {"baud": c.cap.rate / u, "idle": rb.idle}, {"data": rb.pin},
                             Stream("lin.frames", r["frames"]), dict(ck), layer_score=score, total=score))
         return out[:1]
@@ -358,7 +364,10 @@ class DmxPlugin:
                 continue
             baud = c.cap.rate / u
             rate_ok = 1.0 if abs(baud / 250000 - 1) < 0.03 else 0.3
-            score = (ck["start_code_0"] / ck["packets"]) * (ck["framing_ok"] / max(1, ck["chars"])) * rate_ok * q(ck["packets"], 2)
+            # the evidence in bits: a start code of 0 is 8 a packet
+            info = 8 * ck["start_code_0"]
+            score = ((ck["start_code_0"] / ck["packets"]) * (ck["framing_ok"] / max(1, ck["chars"])) * rate_ok
+                     * (1 - 0.5 ** (info / EVIDENCE_BITS)))
             out.append(Node("dmx512", {"baud": baud, "idle": rb.idle}, {"data": rb.pin},
                             Stream("dmx.packets", r["packets"]), dict(ck), layer_score=score, total=score))
         return out[:1]
