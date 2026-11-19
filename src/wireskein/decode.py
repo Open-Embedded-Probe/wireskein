@@ -306,10 +306,10 @@ def noise(cap: Capture, clock: str, data: list[str], lo: int = 0, hi: int | None
     """Signs of noise on a clocked bus in ticks [lo, hi): `glitches`, the clock's pulses (high or low) of a sample
     where the clock around them is slow enough that no half of it is that short (its period 8 samples or more: a
     reflection, a neighbour's edge picked up, a ground far away); `ringing`, each data line's pulses under RING
-    samples where the clock is slow enough that no bit is that short (typed.RING: a reflection at the edges). What
+    samples where the clock is slow enough that no bit is that short (views.RING: a reflection at the edges). What
     the analysis does with them: glitch clocks dropped where that gives a frame a known length, ringing read as it
     settles. With `clock_edges` and `data_edges` (each line's changes there), for the shares (_shares)."""
-    from ._engine.typed import RING
+    from ._engine.views import RING
     hi = cap.n_samples if hi is None else hi
     ch = cap.channel(clock)
     out = {"glitches": 0, "clock_edges": 0, "ringing": {}, "data_edges": {}}

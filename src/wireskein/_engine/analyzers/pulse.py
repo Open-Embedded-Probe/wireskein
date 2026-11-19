@@ -9,7 +9,7 @@ from dataclasses import replace
 
 import numpy as np
 
-from .. import kernels as K
+from .. import views as V
 from .. import pulsecode as pc
 from ..scoring import degenerate
 from ..stack import Node, Stream
@@ -26,11 +26,9 @@ def _bounce_view(ch, rate: float):
     e = np.asarray(ch.edges, np.int64)
     if len(e) < 16:
         return None
-    runs = np.diff(e)
-    short = runs < 4 * ch.step
-    if not short.any() or 2 * np.count_nonzero(short[1:] & short[:-1]) < 0.5 * np.count_nonzero(short):
+    if not V.bounces_paired(np.diff(e), V.BOUNCE_TICKS * ch.step):
         return None
-    d = K.debounce(e, 5 * ch.step)
+    d = V.bounces_merged(e, V.BOUNCE_MERGE * ch.step)
     return replace(ch, edges=d) if len(d) != len(e) else None
 
 
@@ -50,7 +48,7 @@ class RgbLedPlugin:
         k = int(np.ceil(RGB_SHORTEST * float(c.cap.rate) - 1e-9))
         views = [(ch, 0)]
         if k >= 2:
-            d = K.deglitch(np.asarray(ch.edges, np.int64), k)
+            d = V.spikes_out(np.asarray(ch.edges, np.int64), k)
             if len(d) != len(ch.edges):
                 views.append((replace(ch, edges=d), k))
         b = _bounce_view(ch, c.cap.rate)
@@ -103,7 +101,7 @@ class OneWirePlugin:
         k = int(np.ceil(min(v["low_1"][0] for v in pc.ONEWIRE.values()) * float(c.cap.rate) - 1e-9))
         views = [(ch, 0)]
         if k >= 2:
-            d = K.deglitch(np.asarray(ch.edges, np.int64), k)
+            d = V.spikes_out(np.asarray(ch.edges, np.int64), k)
             if len(d) != len(ch.edges):
                 views.append((replace(ch, edges=d), k))
         b = _bounce_view(ch, c.cap.rate)
@@ -154,7 +152,7 @@ class NecPlugin:
         k = int(np.ceil(NEC_SHORTEST * float(c.cap.rate) - 1e-9))
         views = [(ch, 0)]
         if k >= 2:
-            d = K.deglitch(np.asarray(ch.edges, np.int64), k)
+            d = V.spikes_out(np.asarray(ch.edges, np.int64), k)
             if len(d) != len(ch.edges):
                 views.append((replace(ch, edges=d), k))
         nodes = [n for line, dg in views for n in self._read(c, line, dg, ch.name)]

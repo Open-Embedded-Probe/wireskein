@@ -118,7 +118,7 @@ def quiet(es, s: int, t: int, gap_min: float, noise_max: int = 1, noise_share: f
     Pulses of `noise_max` ticks or shorter (a reflection ringing at an edge, a floating input trembling) do not make
     a line busy. A line with more than `noise_share` of its intervals that short is told (its name and the share
     put in `noisy`), not left out: whether it is to be ignored or removed is the user's to see."""
-    from ._engine import kernels as K
+    from ._engine import views as V
     spans_s, spans_e, usual_all, periodic = [], [], [], False
     for k, e in enumerate(es):
         w = e[np.searchsorted(e, s):np.searchsorted(e, t)]
@@ -127,7 +127,7 @@ def quiet(es, s: int, t: int, gap_min: float, noise_max: int = 1, noise_share: f
             if share > noise_share and noisy is not None and names is not None:
                 noisy[names[k]] = max(noisy.get(names[k], 0.0), round(share, 3))
             if noise_max >= 1:
-                w = K.deglitch(w, noise_max + 1)
+                w = V.spikes_out(w, noise_max + 1)
         if len(w) < 3:
             spans_s.append(w)                  # a line that changes rarely: busy at its changes only
             spans_e.append(w)

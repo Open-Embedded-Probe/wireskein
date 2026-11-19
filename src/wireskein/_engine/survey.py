@@ -13,6 +13,8 @@ from dataclasses import dataclass, field, replace
 import numpy as np
 
 from . import kernels as K
+from . import views as V
+from .views import GATE, RING, gated as collapse   # (callers' names; the views are L1's)
 from .features import ChannelFeatures, features
 from .model import Capture
 
@@ -146,20 +148,6 @@ def async_info(cap: Capture, f: ChannelFeatures) -> AsyncInfo:
 
 GATE_KEEPS = 3          # a line keeping under a third of its changes through a clock's gate is measured without it
 USED_SELECTIONS = 0.8   # a select line's windows at its active level holding a transfer: this share or more
-RING = 3        # samples: at a clock slow enough, a data line's pulses this short are a reflection ringing
-GATE = 4        # a line's changes closer than a quarter of a clock's period are one, when its pairs are measured
-
-
-def collapse(edges: np.ndarray, w: float) -> np.ndarray:
-    """Changes each within w ticks of the one before are one: an odd number of them a change at the last, an even
-    number none (a pulse)."""
-    e = np.asarray(edges, np.int64)
-    if len(e) < 2 or w < 2:
-        return e
-    first = np.concatenate(([True], np.diff(e) >= w))
-    cid = np.cumsum(first) - 1
-    last = np.flatnonzero(np.concatenate((first[1:], [True])))
-    return e[last[np.bincount(cid) % 2 == 1]]
 
 
 def gated_view(cap: Capture, clk: ClockInfo, w: float = GATE) -> tuple[Capture, ClockInfo]:
@@ -184,7 +172,7 @@ def pair_relation(cap: Capture, clk: ClockInfo, other: str) -> PairRelation:
     if d.step == 1 and len(de):
         # a reflection ringing at the clock's edges scatters the line's changes over the period: read as it settles
         # where the clock is slow enough that no bit is that short
-        de = K.deglitch_slow(np.asarray(de), RING, _rising(c))
+        de = V.spikes_out_where_slow(np.asarray(de), RING, _rising(c))
     if len(de) == 0:
         return PairRelation(clk.name, other, 0, 0, 0, 0, 0, 0)
     inside, k = K.in_windows(clk.bursts.astype(np.int64), de)
@@ -295,7 +283,6 @@ def better_relation(cap: Capture, clk: ClockInfo, other: str, gated: tuple | Non
     return r
 
 
-BOUNCE_TICKS = 4          # a bounce: pulses under this many ticks, within as many of a slow clock's edge
 BOUNCED_CLOCK = 0.8       # a line this clock-like with its bounces out, and DEBOUNCE_GAIN more than as it is
 DEBOUNCE_GAIN = 0.2
 BOUNCED_SHARE = 0.05      # a line's changes this share or more within BOUNCE_TICKS of the one before: it bounces
@@ -312,14 +299,14 @@ def _debounced_clock(cap: Capture, name: str, f: ChannelFeatures):
     tries = []
     # a bounce's mark: a share of the line's changes come within BOUNCE_TICKS of the one before; each edge's
     # bounces merged at its first change, where the runs left are twice the window
-    k = (BOUNCE_TICKS + 1) * ch.step     # consecutive changes of an edge and its bounce are under this apart
-    if float(np.mean(gaps < BOUNCE_TICKS * ch.step)) >= BOUNCED_SHARE:
-        d = K.debounce(e, k)
+    k = V.BOUNCE_MERGE * ch.step
+    if float(np.mean(gaps < V.BOUNCE_TICKS * ch.step)) >= BOUNCED_SHARE:
+        d = V.bounces_merged(e, k)
         if len(d) != len(e) and len(d) >= 16 and float(np.median(np.diff(d))) >= 2 * k:
             tries.append(d)
     # crosstalk's or a spike's mark: pulses of a single sample; those runs taken out with their own two edges
     if float(np.mean(gaps <= ch.step)) >= BOUNCED_SHARE:
-        d = K.shortest_first(e, 2 * ch.step)
+        d = V.pulses_out(e, 2 * ch.step)
         if len(d) != len(e) and len(d) >= 16 and float(np.median(np.diff(d))) >= 3 * ch.step:
             tries.append(d)
     from .features import channel_features

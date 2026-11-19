@@ -59,7 +59,7 @@ def reframe_startstop(fr, cap, hold: float = 1.5, w: int = 16, hold_min_s: float
 
     A reflection ringing DIO for a sample or two (a 1-sample rise inside a CLK high held at a turnaround) is no
     START or STOP: where the clock is slow enough (9 samples a period or more around it) DIO's pulses under 3 samples
-    are left out first, as the bits are read (typed.RING); where it is fast (a LinkE reading at its high speed after
+    are left out first, as the bits are read (views.RING); where it is fast (a LinkE reading at its high speed after
     connecting slowly) they are bits."""
     sb = fr.source
     c, d = cap.channel(sb.clock), cap.channel(sb.data[0])
@@ -68,9 +68,9 @@ def reframe_startstop(fr, cap, hold: float = 1.5, w: int = 16, hold_min_s: float
         return []
     clv = K.edge_levels(ce, c.initial)
     rises = ce[clv == 1]
-    from .typed import RING
+    from .views import RING, spikes_out_where_slow
     if len(rises) > 1 and d.step == 1:
-        de = K.deglitch_slow(de, RING, rises)
+        de = spikes_out_where_slow(de, RING, rises)
         if len(de) < 2:
             return []
     falls = ce[clv == 0]

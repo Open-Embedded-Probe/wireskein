@@ -16,7 +16,9 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from . import kernels as K
+from . import views as V
 from .survey import Survey
+from .views import RING
 
 
 def _nb(*arrs) -> int:
@@ -130,9 +132,6 @@ class Chars:
 
 # ---------------- builders ----------------
 
-DEBOUNCE_TICKS = 4    # a bounce: changes within this many ticks of an edge
-
-
 def sample_edge_for(cap, clock: str, data: tuple[str, ...], _debounced: bool = False) -> list[str]:
     """Sample on the clock edge farther from where the data changes. When the
     data changes about midway between both edges there is no evidence here, and
@@ -155,10 +154,10 @@ def sample_edge_for(cap, clock: str, data: tuple[str, ...], _debounced: bool = F
             from dataclasses import replace
             # bounces at the clock's edges put a fall beside a rise, and the data's changes look near both: measured
             # again with each edge's bounces merged at its first change, where that leaves the clock's runs long
-            k = 2 * DEBOUNCE_TICKS * c.step
-            ce = K.debounce(np.asarray(c.edges, np.int64), k)
+            k = V.BOUNCE_MERGE_WIDE * c.step
+            ce = V.bounces_merged(np.asarray(c.edges, np.int64), k)
             if len(ce) != len(c.edges) and len(ce) > 16 and float(np.median(np.diff(ce))) >= 2 * k:
-                view = replace(cap, channels=[replace(x, edges=K.debounce(np.asarray(x.edges, np.int64), k))
+                view = replace(cap, channels=[replace(x, edges=V.bounces_merged(np.asarray(x.edges, np.int64), k))
                                               if x.name in (clock, *data) else x for x in cap.channels])
                 got = sample_edge_for(view, clock, data, _debounced=True)
                 if len(got) == 1:
@@ -166,16 +165,13 @@ def sample_edge_for(cap, clock: str, data: tuple[str, ...], _debounced: bool = F
             # crosstalk's pulses of a sample (none of them an edge's bounce) do the same: measured again with those
             # runs taken out, each with its own two edges
             pins = (clock, *data)
-            cleaned = {x.name: K.shortest_first(x.edges, 2 * x.step) for x in cap.channels if x.name in pins}
+            cleaned = {x.name: V.pulses_out(x.edges, 2 * x.step) for x in cap.channels if x.name in pins}
             if any(len(cleaned[n]) != len(cap.channel(n).edges) for n in pins):
                 view = replace(cap, channels=[replace(x, edges=cleaned[x.name]) if x.name in pins else x
                                               for x in cap.channels])
                 return sample_edge_for(view, clock, data, _debounced=True)
         return ["rise", "fall"]
     return ["rise" if a >= b else "fall"]
-
-
-RING = 3              # samples: a data line's pulse shorter than this at a slow clock is a reflection's ringing
 
 
 def sync_bits(cap, sv: Survey, clock: str, data: tuple[str, ...], select: str | None, edge: str | None = None) -> SyncBits:
@@ -190,7 +186,7 @@ def sync_bits(cap, sv: Survey, clock: str, data: tuple[str, ...], select: str | 
     for d in data:
         ch = cap.channel(d)
         if len(t) > 1 and ch.step == 1:
-            e = K.deglitch_slow(np.asarray(ch.edges), RING, t)
+            e = V.spikes_out_where_slow(np.asarray(ch.edges), RING, t)
             rows.append(((ch.initial + np.searchsorted(e, t, side="right")) & 1).astype(np.uint8))
         else:
             rows.append(ch.level_at(t))
@@ -248,8 +244,7 @@ def frames_select(cap, sv: Survey, sb: SyncBits) -> Frames:
         # pulse on the select no longer ends a frame mid-word (the line itself is not changed); a pulse of a single
         # sample at least, where the clock is too fast for a quarter of it to reach two
         from dataclasses import replace
-        from .survey import GATE, collapse
-        s = replace(s, edges=collapse(s.edges, max(2.0, ci.period / GATE)))
+        s = replace(s, edges=V.gated(s.edges, max(2.0, ci.period / V.GATE)))
     start, length, level = s.runs(cap.n_samples)
     inside, k, win = select_level(start, length, level, sb.t, cap.n_samples)[1:]
     bounds = []

@@ -453,7 +453,7 @@ def clipped_clocks(e: np.ndarray, initial: int, k: int) -> np.ndarray:
     it as a clock and move on. Such a high has a whole low on either side (CLIPPED_LOW of the usual low or more): a
     spike on a low splits it, and one at an edge sits beside a high. Where it comes is not a test: a controller
     waiting for the line it released clocks late, by up to a half. -> per edge, whether it may cancel the one before
-    (K.deglitch's allow): False for such a high's fall."""
+    (views.spikes_out's allow): False for such a high's fall."""
     allow = np.ones(len(e), bool)
     if len(e) < 6:
         return allow
@@ -529,7 +529,7 @@ def i2c_input(cap: Capture, scl: str, sda: str, spike_s: float = I2C_SPIKE_S,
     around it (i2c_burst_ticks) read as one at its last change (its hysteresis); then a clock clipped shorter than a
     sample restored where one reading is left (i2c_restore; its ticks in meta["i2c_restored"]). -> (the capture,
     whether anything changed)."""
-    from . import kernels as K
+    from . import views as V
     k = int(np.ceil(spike_s * float(cap.rate) - 1e-9))     # a pulse of fewer samples is shorter than spike_s
     changed = False
     chans = []
@@ -538,7 +538,7 @@ def i2c_input(cap: Capture, scl: str, sda: str, spike_s: float = I2C_SPIKE_S,
             e = np.asarray(c.edges, np.int64)
             if k >= 2:
                 keep = clipped_clocks(e, c.initial, k) if c.name == scl else None
-                e = K.deglitch(e, k, keep)
+                e = V.spikes_out(e, k, keep)
             c2 = Channel(c.name, c.initial, e, c.step, c.phase, c.acquisition)
             b = edge_bursts(c2, i2c_burst_ticks(cap, scl, freq_hz, e))
             if b:

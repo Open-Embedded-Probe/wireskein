@@ -150,7 +150,7 @@ def segment_medians(v: np.ndarray, starts: np.ndarray, ends: np.ndarray) -> np.n
 
 def debounce(edges: np.ndarray, w: int) -> np.ndarray:
     """Changes each within w ticks of the one before are one edge with its bounces: an odd number of them a change at
-    the first (where the line first crossed), an even number none (a pulse). survey.collapse keeps the last."""
+    the first (where the line first crossed), an even number none (a pulse). views.gated keeps the last."""
     e = np.asarray(edges, np.int64)
     if len(e) < 2 or w < 2:
         return e

@@ -19,7 +19,8 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from . import kernels as K
-from .survey import GATE, Survey, collapse, survey
+from .survey import Survey, survey
+from .views import GATE, gated as collapse
 
 CLASSES = ("clock", "data", "sparse", "pulse")
 

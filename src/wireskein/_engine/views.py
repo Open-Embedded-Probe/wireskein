@@ -1,0 +1,85 @@
+"""L1: a line's views - its changes with one kind of noise taken out. Stages and protocols pick a view here by name
+and take its widths from these constants; none makes its own (bench/notes/2026-11-19-structure-plan.ja.md, stage A).
+
+The kinds of view (each a function of the changes alone: no protocol, no state):
+
+- spikes_out: pulses shorter than k taken out, each change paired with the one before (kernels.deglitch). Only where
+  `allow` says (glitch views: where the clock is slow enough for k).
+- spikes_out_where_slow: the same where a clock's period around is 3 k or more (kernels.deglitch_slow): a reflection's
+  ringing at a slow clock, where no bit is that short.
+- pulses_out: the runs shorter than k taken out the shortest first, each with its own two changes
+  (kernels.shortest_first): crosstalk's or a spike's pulse never takes a real edge a few ticks off.
+- bounces_merged: changes within w of each other are one, at the first (kernels.debounce): where the line first
+  crossed, an edge's bounces after it gone.
+- gated: changes within w of each other are one, at the last (collapse): a clock's quarter period, for measuring
+  how lines keep to it.
+
+And what tells the kinds of noise apart on a line (bounces_paired, noise_runs).
+
+Widths in ticks. Two windows merge a bounce today, as the stages had them: BOUNCE_MERGE (5 ticks: the survey's and
+the pulse protocols') and BOUNCE_MERGE_WIDE (8: the async lines' views and the sample edge's second look); making
+them one changes outputs (stage B).
+"""
+from __future__ import annotations
+
+import numpy as np
+
+from . import kernels as K
+
+BOUNCE_TICKS = 4            # a bounce: pulses under this many ticks, within as many of an edge
+BOUNCE_MERGE = BOUNCE_TICKS + 1      # ticks: an edge's changes and its bounces' are under this apart
+BOUNCE_MERGE_WIDE = 2 * BOUNCE_TICKS  # the same, wider (async views, the sample edge's second look)
+BOUNCE_PAIRED = 0.5         # bounces come as two short runs side by side: this share of the short runs in pairs
+RING = 3                    # samples: at a clock slow enough, a data line's pulses this short are a reflection ringing
+GATE = 4                    # a line's changes closer than a quarter of a clock's period are one, when its pairs are measured
+
+
+def spikes_out(edges: np.ndarray, k: int, allow: np.ndarray | None = None) -> np.ndarray:
+    """Pulses shorter than k taken out (kernels.deglitch); allow: per change, whether it may go."""
+    return K.deglitch(edges, k, allow)
+
+
+def spikes_out_where_slow(edges: np.ndarray, k: int, clock: np.ndarray) -> np.ndarray:
+    """Pulses shorter than k taken out where the clock's period around is 3 k or more (kernels.deglitch_slow)."""
+    return K.deglitch_slow(edges, k, clock)
+
+
+def pulses_out(edges: np.ndarray, k: int) -> np.ndarray:
+    """The runs shorter than k taken out, the shortest first, each with its own two changes (kernels.shortest_first)."""
+    return K.shortest_first(edges, k)
+
+
+def bounces_merged(edges: np.ndarray, w: int) -> np.ndarray:
+    """Changes each within w ticks of the one before are one, at the first (kernels.debounce)."""
+    return K.debounce(edges, w)
+
+
+def gated(edges: np.ndarray, w: float) -> np.ndarray:
+    """Changes each within w ticks of the one before are one: an odd number of them a change at the last, an even
+    number none (a pulse)."""
+    e = np.asarray(edges, np.int64)
+    if len(e) < 2 or w < 2:
+        return e
+    first = np.concatenate(([True], np.diff(e) >= w))
+    cid = np.cumsum(first) - 1
+    last = np.flatnonzero(np.concatenate((first[1:], [True])))
+    return e[last[np.bincount(cid) % 2 == 1]]
+
+
+def bounces_paired(runs: np.ndarray, short: float) -> bool:
+    """Whether a line's short runs (under `short`) are a bounce's: BOUNCE_PAIRED of them side by side (a gap after
+    the edge, the pulse back), where a spike's stand alone amid long runs. False with none."""
+    s = np.asarray(runs) < short
+    return bool(s.any()) and float(np.count_nonzero(s[1:] & s[:-1])) * 2 >= BOUNCE_PAIRED * np.count_nonzero(s)
+
+
+def noise_runs(clock: np.ndarray, short: float) -> np.ndarray:
+    """The running count (from 0, one per run) of a clock's runs shorter than `short` beside one of 2 x `short` or
+    longer: a noise's (a spike or crosstalk inside a run, a bounce at an edge). A clock too fast for the rate has its
+    short highs between runs barely longer (a LinkE at 10 MHz: highs of a sample, lows of 2-3) - not counted."""
+    runs = np.diff(np.asarray(clock, np.int64))
+    long_ = runs >= 2 * short
+    beside = np.zeros(len(runs), bool)
+    beside[1:] |= long_[:-1]
+    beside[:-1] |= long_[1:]
+    return np.concatenate(([0], np.cumsum((runs < short) & beside)))

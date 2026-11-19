@@ -73,9 +73,9 @@ def binomial_tail(n: int, k: int, p: float) -> float:
 
 
 def _gated_clock(e: dict, cap, sb) -> np.ndarray:
-    """The clock's changes with those closer than a quarter of its period merged (survey.collapse): a spike on the
+    """The clock's changes with those closer than a quarter of its period merged (views.gated): a spike on the
     clock is no change of the bus (as the pair relations and the select framing read it)."""
-    from .survey import GATE, collapse
+    from .views import GATE, gated as collapse
     ce = np.asarray(cap.channel(sb.clock).edges, np.int64)
     ci = e["survey"].clocks.get(sb.clock) if e.get("survey") is not None else None
     return collapse(ce, ci.period / GATE) if ci is not None and ci.period else ce
@@ -127,7 +127,7 @@ def data_per_bit(e: dict) -> float | None:
     """Inside the frames, the most changes a data line makes per bit sampled (changes closer than a quarter of the
     clock's period merged: a bounce is one). Data on a clock edge changes at most once a bit, alternating bits
     included; a clock taken for data changes twice. None: not known."""
-    from .survey import GATE, collapse
+    from .views import GATE, gated as collapse
     fr, sb = e["frames_obj"], e["bits"]
     cap = getattr(sb, "view", None)
     if cap is None or not len(fr.bounds) or not sb.data:

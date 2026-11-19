@@ -26,6 +26,8 @@ from functools import lru_cache
 import numpy as np
 
 from . import kernels as K
+from . import views as V
+from .views import BOUNCE_TICKS
 from . import methods
 from . import plugins_uartlike as UL
 from . import timing, typed
@@ -156,7 +158,7 @@ GRID_LOW, GRID_SPAN = 0.88, 0.04   # the share of in-character changes on the bi
 def _on_grid(pin, blocks) -> float | None:
     """Of the changes inside the well-formed characters (changes closer than a quarter bit merged: a bounce is one),
     the share within a quarter bit of the character's start plus a whole number of bits."""
-    from .survey import collapse
+    from .views import gated as collapse
     e_all = np.asarray(pin.edges, np.int64)
     num = den = 0
     for (s0, s1, u), _, ch in blocks:
@@ -191,7 +193,7 @@ def _tight_windows(pin, idle: int, sv, n: int) -> float:
     """Of the pin's whole windows away from its idle level (read through each clock's gate: a bounce is one change),
     the largest share holding one of a clock's bursts snugly (the margins before and after it together no longer than
     the burst), over the clocks."""
-    from .survey import GATE, collapse
+    from .views import GATE, gated as collapse
     best = 0.0
     for k, ci in sv.clocks.items():
         if k == pin.name or not len(ci.bursts):
@@ -389,23 +391,11 @@ def _upper(node: Node, scorer: DefaultScorer) -> None:
     node.total = node.layer_score + 0.5 * (1 - node.layer_score) * support * node.layer_score
 
 
-def _noise_runs(clock: np.ndarray, short: float) -> np.ndarray:
-    """The running count (from 0, one per run) of the clock's runs shorter than `short` beside one of 2 x `short` or
-    longer: a noise's (a spike or crosstalk inside a run, a bounce at an edge). A clock too fast for the rate has its
-    short highs between runs barely longer (a LinkE at 10 MHz: highs of a sample, lows of 2-3) - not counted."""
-    runs = np.diff(np.asarray(clock, np.int64))
-    long_ = runs >= 2 * short
-    beside = np.zeros(len(runs), bool)
-    beside[1:] |= long_[:-1]
-    beside[:-1] |= long_[1:]
-    return np.concatenate(([0], np.cumsum((runs < short) & beside)))
-
-
 def _slow_at(edges: np.ndarray, k: int, rises: np.ndarray, raw_rises: np.ndarray | None = None,
              clock: np.ndarray | None = None, noise: np.ndarray | None = None) -> np.ndarray:
     """Per edge, whether the clock around it is slow enough to filter pulses of k (its period 4k or more, the median
     of the periods before and after: a clock's own glitches do not make it look fast). With the clock as it is
-    (raw_rises; its changes, and _noise_runs of them): the cleaned clock's period counts where NOISY_RUNS of its runs
+    (raw_rises; its changes, and views.noise_runs of them): the cleaned clock's period counts where NOISY_RUNS of its runs
     around (NOISY_WINDOW each side) are a noise's, the period as it is elsewhere - decided around each edge, so that
     a piece of a long capture decides as the whole does."""
     edges = np.asarray(edges, np.int64)
@@ -423,7 +413,7 @@ def _slow_at(edges: np.ndarray, k: int, rises: np.ndarray, raw_rises: np.ndarray
     return allow
 
 
-NOISY_RUNS = 0.12    # a clock's runs around this share a noise's at least (_noise_runs): its periods from it cleaned
+NOISY_RUNS = 0.12    # a clock's runs around this share a noise's at least (views.noise_runs): its periods from it cleaned
 NOISY_WINDOW = 64    # runs each side of an edge, for that share
 GLITCH_SHARE = 0.6    # a clock's runs this short a share or less: a view with them taken out
 
@@ -446,7 +436,7 @@ def glitch_views(cap, sv, g, memo: dict | None = None):
     key = ("med", g.clock, step)
     if key not in memo:
         med = float(np.median(inner))
-        clean = np.diff(np.asarray(K.deglitch(ch.edges, BOUNCE_TICKS * step), np.int64))
+        clean = np.diff(np.asarray(V.spikes_out(ch.edges, BOUNCE_TICKS * step), np.int64))
         if len(clean) >= 16:
             med = max(med, float(np.median(clean)))
         memo[key] = med
@@ -470,10 +460,10 @@ def glitch_views(cap, sv, g, memo: dict | None = None):
             # period from the clock with its pulses of k taken out where a share of its runs around are a noise's
             # (NOISY_RUNS or more, short beside a long one: bounces, spikes, crosstalk split its periods, and the
             # median of them was a noise's); else as it is (a LinkE's clock, its fast stretches' highs of a sample
-            # its own) - _slow_at, _noise_runs
+            # its own) - _slow_at, views.noise_runs
             if ("rises", g.clock, k) not in memo:
                 raw = np.asarray(ch.edges, np.int64)
-                ce = K.deglitch(raw, k)
+                ce = V.spikes_out(raw, k)
                 memo[("rises", g.clock, k)] = (ce[K.edge_levels(ce, ch.initial) == 1],
                                                raw[K.edge_levels(raw, ch.initial) == 1])
             rises = memo[("rises", g.clock, k)]
@@ -482,8 +472,8 @@ def glitch_views(cap, sv, g, memo: dict | None = None):
                 kx = ("pin", g.clock, x.name, k)
                 if kx not in memo:
                     if ("noise", g.clock) not in memo:
-                        memo[("noise", g.clock)] = _noise_runs(ch.edges, BOUNCE_TICKS * step)
-                    memo[kx] = K.deglitch(x.edges, k, _slow_at(x.edges, k, rises[0], rises[1],
+                        memo[("noise", g.clock)] = V.noise_runs(ch.edges, BOUNCE_TICKS * step)
+                    memo[kx] = V.spikes_out(x.edges, k, _slow_at(x.edges, k, rises[0], rises[1],
                                                                 np.asarray(ch.edges, np.int64),
                                                                 memo[("noise", g.clock)]))
                 return memo[kx]
@@ -494,9 +484,6 @@ def glitch_views(cap, sv, g, memo: dict | None = None):
                 continue
             made.append(lines)
             yield Capture(cap.rate, cap.n_samples, chans), k
-
-
-BOUNCE_TICKS = 4    # an async line's pulses under this many ticks are bounces, where its runs are much longer
 
 
 def single_views(cap, sv, pin):
@@ -519,24 +506,22 @@ def single_views(cap, sv, pin):
     kb = BOUNCE_TICKS * ch.step
     bounced = None
     if len(inner) >= 16 and kb not in ks and np.any(inner < kb):
-        e = K.deglitch(ch.edges, kb)
+        e = V.spikes_out(ch.edges, kb)
         left = np.diff(np.asarray(e, np.int64))
         if len(left) >= 16 and np.quantile(left, 0.1) >= 2 * kb:
             ks = {kb}           # it takes out the spikes too (one view, not two: a long capture reads each)
             # bounces come as two short runs side by side (a gap after the edge, the pulse back), a spike as one
             # amid long runs: pairing a bounce with the edge before it moves the edge by the bounce, so bounces are
             # merged at their first change instead (where the line crossed); spikes stay paired off
-            short = inner < kb
-            paired = short[1:] & short[:-1]
-            if short.any() and float(np.count_nonzero(paired)) * 2 >= 0.5 * np.count_nonzero(short):
-                d = K.debounce(ch.edges, 2 * kb)
+            if V.bounces_paired(inner, kb):
+                d = V.bounces_merged(ch.edges, V.BOUNCE_MERGE_WIDE * ch.step)
                 dl = np.diff(np.asarray(d, np.int64))
                 steady = float(np.mean(np.abs(dl / np.median(dl) - 1) <= 0.15)) if len(dl) else 1.0
                 # (not on a clock with bounces: its cleaned edges read as 0x55 characters; UARTs keep 0.64 at most)
                 if len(dl) >= 16 and np.quantile(dl, 0.1) >= 3 * kb and steady < 0.7:
                     bounced = d
     for k in sorted(ks):
-        edges = bounced if bounced is not None and k == kb else K.deglitch(ch.edges, k)
+        edges = bounced if bounced is not None and k == kb else V.spikes_out(ch.edges, k)
         chans = [replace(x, edges=edges) if x.name == pin else x for x in cap.channels]
         yield Capture(cap.rate, cap.n_samples, chans), k
 
