@@ -93,6 +93,21 @@ def clock_info(cap: Capture, f: ChannelFeatures) -> ClockInfo | None:
     r = _rising(ch)
     if len(r) < 4:
         return None
+    # the bursts from the clock with its spikes in the idle out: a run of a sample between two SPIKE_IDLE times its
+    # median run or longer (a select framing the bursts frames none of those: spikes in the gaps cut its framing in
+    # five). A clock's own short highs inside its frames stay (a LinkE at 10 MHz: lows of 2-3 beside them)
+    e = np.asarray(ch.edges, np.int64)
+    if len(e) > 4:
+        runs = np.diff(e)
+        idle = runs >= SPIKE_IDLE * float(np.median(runs))
+        spike = np.zeros(len(runs), bool)
+        spike[1:-1] = (runs[1:-1] <= ch.step) & idle[:-2] & idle[2:]
+        if spike.any():
+            k = np.flatnonzero(spike)
+            d = np.delete(e, np.concatenate((k, k + 1)))
+            rd = d[K.edge_levels(d, ch.initial) == 1]
+            if len(rd) >= 4:
+                r = rd
     starts = K.burst_split(r)
     ends = np.concatenate((starts[1:] - 1, [len(r) - 1]))
     bits = (ends - starts + 1).astype(np.int64)
@@ -146,6 +161,8 @@ def async_info(cap: Capture, f: ChannelFeatures) -> AsyncInfo:
     return AsyncInfo(f.name, u, char_length(cap, f.name, f.idle_level, u), f.idle_level)
 
 
+SPIKE_PERIOD = 4        # samples: a clock's period this long or more has halves of two samples, longer than a spike
+SPIKE_IDLE = 4          # a clock's run this many times its median or longer: idle (a sample's pulse between two: a spike)
 GATE_KEEPS = 3          # a line keeping under a third of its changes through a clock's gate is measured without it
 USED_SELECTIONS = 0.8   # a select line's windows at its active level holding a transfer: this share or more
 
@@ -155,9 +172,20 @@ def gated_view(cap: Capture, clk: ClockInfo, w: float = GATE) -> tuple[Capture, 
     bouncing edge crossing the threshold several times, or a spike near a clock edge, no longer scatters the phase a
     data line keeps to the clock. Only for measuring pairs: the lines themselves are not changed (a real I2C bus's
     clocks clipped short are real). The capture and the clock as they are where the view has no clock."""
-    if not clk.period or clk.period / w < 2:
+    if not clk.period:
         return cap, clk
-    view = replace(cap, channels=[replace(x, edges=collapse(x.edges, clk.period / w)) for x in cap.channels])
+    if clk.period / w < 2:
+        # a clock too fast for a quarter of it to reach two samples: the pulses of a single sample taken out (a spike,
+        # crosstalk), each with its own two changes, where the clock's halves are two samples or more
+        step = cap.channel(clk.name).step
+        if clk.period < SPIKE_PERIOD * step:
+            return cap, clk
+        chans = [replace(x, edges=V.pulses_out(x.edges, 2 * x.step)) for x in cap.channels]
+        if all(len(a.edges) == len(b.edges) for a, b in zip(chans, cap.channels)):
+            return cap, clk
+        view = replace(cap, channels=chans)
+    else:
+        view = replace(cap, channels=[replace(x, edges=collapse(x.edges, clk.period / w)) for x in cap.channels])
     vch = view.channel(clk.name)
     if len(vch.edges) < 8:
         return cap, clk
@@ -269,12 +297,14 @@ def better_relation(cap: Capture, clk: ClockInfo, other: str, gated: tuple | Non
     n_raw, n_view = len(cap.channel(other).edges), len(view.channel(other).edges)
     if n_view == n_raw and len(view.channel(clk.name).edges) == len(cap.channel(clk.name).edges):
         return r                    # the gate changed neither line: the same two lines, the same relation
-    if n_view * GATE_KEEPS >= len(collapse(cap.channel(other).edges, 3)):
+    spikes_out = clk.period / GATE < 2      # gated_view's view for a fast clock: its pulses of a sample out
+    if spikes_out or n_view * GATE_KEEPS >= len(collapse(cap.channel(other).edges, 3)):
         g = pair_relation(view, vc, other)
         # the line as data of the clock and as its select are two measures: each the better of the two views (a
         # select's spikes cut its framing on the lines as they are, while its few changes may keep to the clock no
-        # worse there)
-        data = g if g.data_score > r.data_score else r
+        # worse there). With the spikes out, as data that view's only: a line whose changes in the clock's bursts
+        # are pulses of a sample (crosstalk from the bus's data line) is no data of it
+        data = g if spikes_out or g.data_score > r.data_score else r
         sel = g if g.boundary > r.boundary else r
         if data is sel:
             return data
