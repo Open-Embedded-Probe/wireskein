@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) An SPI bus of several targets: each target's claim scores at least the strongest target's times its own frames' fit (whole words). The lines are the bus's whoever is selected, and the target's line was already taken as one of the selects that never overlap and hold the bursts between them; its own select_boundary counts the other targets' transfers against it, so a target of one short transfer was left to its few words (spimulti: targets of 3-6 bytes ambiguous beside one confirmed). Multi-target and SPI noise sets: read +6, confirmed +14, false claims the same.
+- (JA) 相手がいくつもいる SPI のバス: 相手ごとの主張の点数は、少なくとも、いちばん強い相手の点数 × 自身のフレームの合い方（まるごとの語）にする。線は誰が選ばれてもバスのもので、相手の線は、重ならずにバーストを分け合う選択線の 1 つとしてすでに選ばれている。自身の select_boundary はほかの相手の転送を不利に数えるので、短い転送 1 つの相手は自身の数語だけで判定されていた（spimulti: 3〜6 バイトの相手が、確定の相手の横であいまい）。複数の相手と SPI の雑音の組: 読めた +6、確定 +14、誤った主張は同じ。
 - (EN) 1-Wire: a reset no device answers is no evidence against (a master looking for devices); two presence pulses seen count as every reset answered. Three resets with two answers were held at 0.82. Pulse, UART-like, tuning, IR and glitch sets: confirmed 802 -> 832, read +2, false claims the same.
 - (JA) 1-Wire: どのデバイスも応答しないリセットは、1-Wire でない証拠にしない（マスターがデバイスを探している）。プレゼンスが 2 つ見えれば、すべてのリセットに応答があったとみる。リセット 3 つで応答 2 つのものが 0.82 に抑えられていた。pulse、UART 系、tuning、赤外線、glitch の組: 確定 802 → 832、読めた +2、誤った主張は同じ。
 - (EN) LIN and DMX512 count their evidence in bits, as the declared protocols do (1 - 0.5 ** (bits / 8)): LIN's sync byte 8, PID parity 2 and checksum 8 a frame, DMX512's start code of 0 8 a packet; not by the number of frames (three whole LIN frames, 54 bits, scored 0.63). UART-like and LIN/DMX tuning sets: confirmed 961 -> 1023, read +1, false claims the same.

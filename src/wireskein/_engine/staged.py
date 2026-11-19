@@ -1083,7 +1083,14 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
                 margin = (best_score - alt_score) / max(1, changed_channels(best, alt_set))
                 ru = max((r for r in alt_set if set(n.roles.values()) & set(r.roles.values())),
                          key=lambda r: r.total, default=None)
+                # the lines are the bus's whoever is selected: its strongest target says they are SPI, and what a
+                # target's own claim asks besides is whether its line is a select of that bus - chosen above as one
+                # of the selects that never overlap and hold the bursts between them (its own select_boundary counts
+                # the other targets' transfers against it), its frames whole words. A target of one short transfer
+                # is not left to its own few words (spimulti: a target of 3 bytes ambiguous beside one confirmed)
+                bus_sure = max(a for _, a in n.members)
                 for m, adj in n.members:
+                    adj = max(adj, bus_sure * float(m.metrics.get("length_fit", 0)))
                     v = methods.get("verdict", verdict)(adj, margin)
                     claims.append(Claim(m.analyzer, dict(m.roles), dict(m.params), adj, margin, v, m, ru,
                                         bus=n.params["bus"]))
