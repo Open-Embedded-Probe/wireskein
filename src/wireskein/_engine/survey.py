@@ -340,7 +340,7 @@ def _debounced_clock(cap: Capture, name: str, f: ChannelFeatures):
     # (wider windows too: a fast capture's bounces last more ticks, 200 MS/s sees 60 ns as 12; each window kept only
     # where the runs left are twice it)
     if float(np.mean(gaps < V.BOUNCE_TICKS * ch.step)) >= BOUNCED_SHARE:
-        for k in (w * ch.step for w in BOUNCE_WINDOWS):
+        for k in (w * ch.step for w in BOUNCE_WINDOWS if w == V.BOUNCE_MERGE or w * ch.step <= BOUNCE_MAX_S * cap.rate):
             d = V.bounces_merged(e, k)
             if len(d) != len(e) and len(d) >= 16 and float(np.median(np.diff(d))) >= 2 * k:
                 tries.append(d)
@@ -361,6 +361,8 @@ def _debounced_clock(cap: Capture, name: str, f: ChannelFeatures):
 
 
 BOUNCE_WINDOWS = (V.BOUNCE_MERGE, 8, 12)    # ticks: the windows a clock's bounces are merged in, tried in turn
+BOUNCE_MAX_S = 60e-9   # ... the wider ones only as long as a bounce lasts (200 MS/s: 12 ticks); slower, a fast clock's
+                       # half period is as short (a clock that changes speed lost its fast stretch's edges)
 
 
 def survey(cap: Capture, fs: dict[str, ChannelFeatures] | None = None, asyncs: bool = True) -> Survey:
