@@ -336,6 +336,7 @@ def reframe(fr) -> list[tuple[int, int]]:
     return out
 
 
+SWIO_SHARE = 0.25       # pulses in 41/33 frames: this share or more for their number to count past it
 SWIO_MANY = 16          # DMI transfers: this many make the pin's other traffic count for little against them
 
 
@@ -404,8 +405,9 @@ class SwioPlugin:
              "dm_addr": known, "split_ns": ps.split / c.cap.rate * 1e9}
         # other traffic on the pin (a LinkE's connect, probing in the 2-wire form) thins the share, but many reads
         # and writes of known DM registers do not come by chance however much else the pin carries: the share counts
-        # as at least what their number says (40 of them: 0.92)
-        dilute = max(pulses, 1 - math.exp(-len(tx) / SWIO_MANY))
+        # as at least what their number says (40 of them: 0.92) where the frames hold a fair share of the pulses
+        # (a LinkE's V003: 0.35 or more; a line of other pulses with a few 41-pulse frames by chance: 0.02)
+        dilute = max(pulses, 1 - math.exp(-len(tx) / SWIO_MANY)) if pulses >= SWIO_SHARE else pulses
         score = known * (0.5 + 0.5 * dilute) * (1 - 0.5 ** (len(tx) / 4))
         return [Node("swio", {"idle": ps.idle, "split_ns": round(float(ps.split) * ns, 1)}, {"dio": ps.pin}, Stream("dmi", tx), m, layer_score=score, total=score)]
 

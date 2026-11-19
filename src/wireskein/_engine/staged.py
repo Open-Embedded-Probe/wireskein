@@ -82,18 +82,27 @@ def changed_channels(a: list[Node], b: list[Node]) -> int:
     return sum(1 for ch in set(la) | set(lb) if la.get(ch) != lb.get(ch))
 
 
-# confirmed: a score and a margin over the next reading, any of these pairs. Measured on the full CI de2c3e0's
-# tuning-side claims (no held-out set): 0.85/0.15 right but 1 of 8653; under 0.85, 0.80/0.25 and 0.60/0.50 right in
-# all of 899 (a reading far ahead of every other one is sure though its own evidence is short of 0.85)
-CONFIRMED = ((0.85, 0.15), (0.80, 0.25), (0.60, 0.50))
+# confirmed: a score and a margin over the next reading. 0.85/0.15 always; under 0.85, 0.80/0.25 and 0.60/0.50 where
+# there is a next reading on those lines and this one is that far ahead of it (a reading far ahead of a real rival
+# is sure though its own evidence is short): on the tuning side all right. With no rival the margin is only the
+# score less the explanation's own floor and says nothing more: 0.85 holds (a UART of a wrong frame format at 0.83)
+CONFIRMED = ((0.85, 0.15),)
+CONFIRMED_OVER_RIVAL = ((0.80, 0.25), (0.60, 0.50))
 
 
-def verdict(total: float, margin: float) -> str:
-    if any(total >= s and margin >= m for s, m in CONFIRMED):
+def verdict(total: float, margin: float, rival: bool = False) -> str:
+    if any(total >= s and margin >= m for s, m in CONFIRMED + (CONFIRMED_OVER_RIVAL if rival else ())):
         return "confirmed"
     if total >= 0.6 and margin >= 0.05:
         return "likely"
     return "ambiguous"
+
+
+def _verdict(total: float, margin: float, rival: bool) -> str:
+    """The verdict step (methods "verdict": fn(total, margin)) when swapped; else the engine's own, which knows whether
+    the claim has a rival reading."""
+    f = methods.get("verdict", None)
+    return f(total, margin) if f is not None else verdict(total, margin, rival)
 
 
 def q(n: float, scale: float = 8.0) -> float:
@@ -232,8 +241,9 @@ def _tight_windows(pin, idle: int, sv, n: int) -> float:
     return best
 
 
-UART_CLOCK_LIKE = 0.4     # a UART's score falls from here (clock-like: a line of pulses), by up to a half at 0.7
+UART_CLOCK_LIKE = 0.2     # a UART's score falls from here (clock-like: a line of pulses), by up to a half at 0.7
 UART_SYNC = 0.2           # ... and from here (keeping to a clock: synchronous data), to nothing at 0.5
+UART_FRAMED = 0.35        # LIN / DMX512 framing past this share of the break-framed blocks counts against a plain UART
 
 
 class UartPlugin:
@@ -303,7 +313,7 @@ class UartPlugin:
         m["framed_by_breaks"] = framed
         # only what is above chance counts: a UART whose rate changes mid-stream breaks into framing errors, and a
         # few of its "frames" fit by luck (up to a third on the evaluation corpus; LIN and DMX512 lines fit wholly)
-        framed = max(0.0, (framed - 0.5) / 0.5)
+        framed = max(0.0, (framed - UART_FRAMED) / (1 - UART_FRAMED))
         # a bit needs about 3 samples to have a middle to read: under it a line's bounces or a clock's halves read
         # as bits as well as a UART's (on the bench every UART claimed under 2.2 samples a bit was none)
         m["samples_per_bit"] = u_main
@@ -318,7 +328,7 @@ class UartPlugin:
         # bench a real UART's clock_like is under 0.37 and its keeping under 0.21 (99%), lines of pulses (1-Wire, LED)
         # 0.7 or more and synchronous data 0.45 or more. Below that both are the competing readings' to decide (by
         # the margin), not a share off every UART (they held right UARTs at 0.8, under confirmed)
-        clock_off = 0.5 * float(np.clip((clock_like - UART_CLOCK_LIKE) / 0.3, 0, 1))
+        clock_off = 0.5 * float(np.clip((clock_like - UART_CLOCK_LIKE) / (0.7 - UART_CLOCK_LIKE), 0, 1))
         sync_off = float(np.clip((sync - UART_SYNC) / 0.3, 0, 1))
         score = (framing * coverage * q(ok_n) * degenerate(v & 0xFF) * m["two_values"] * (1 - clock_off) * (1 - sync_off)
                  * (1 - float(np.clip((tight - 0.5) / 0.3, 0, 1))) * (1 - framed) * resolvable * gridded)
@@ -1097,7 +1107,7 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
                 bus_sure = max(a for _, a in n.members)
                 for m, adj in n.members:
                     adj = max(adj, bus_sure * float(m.metrics.get("length_fit", 0)))
-                    v = methods.get("verdict", verdict)(adj, margin)
+                    v = _verdict(adj, margin, ru is not None)
                     claims.append(Claim(m.analyzer, dict(m.roles), dict(m.params), adj, margin, v, m, ru,
                                         bus=n.params["bus"]))
                 continue
@@ -1106,7 +1116,7 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
             margin = (best_score - alt_score) / max(1, changed_channels(best, alt_set))
             chans = set(n.roles.values())
             ru = max((r for r in alt_set if chans & set(r.roles.values())), key=lambda r: r.total, default=None)
-            v = methods.get("verdict", verdict)(n.total, margin)
+            v = _verdict(n.total, margin, ru is not None)
             if n.analyzer == "sync_unknown":
                 v = "unknown-sync"
             if (v == "confirmed" and n.analyzer == "spi" and "cs" not in n.roles
