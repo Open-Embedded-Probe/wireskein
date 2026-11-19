@@ -243,6 +243,7 @@ def _tight_windows(pin, idle: int, sv, n: int) -> float:
 
 UART_CLOCK_LIKE = 0.2     # a UART's score falls from here (clock-like: a line of pulses), by up to a half at 0.7
 UART_SYNC = 0.2           # ... and from here (keeping to a clock: synchronous data), to nothing at 0.5
+UART_VIEW_CLOCK = 0.4     # a line this clock-like or more read on a view: its clock-likeness as the view has it
 UART_FIXED_BITS = 0.25    # bit positions holding one value in 0.95 of the characters, this share or more ...
 UART_PACED = 0.5          # ... at a character length three divides: a line of pulse-width bits, the score so much
 UART_FRAMED = 0.35        # LIN / DMX512 framing past this share of the break-framed blocks counts against a plain UART
@@ -277,6 +278,13 @@ class UartPlugin:
         coverage = sum(a for a, _ in cover) / max(1, sum(b for _, b in cover))
         f = c.sv.features[rb.pin]
         clock_like = max(f.scores.get("clock", 0), f.scores.get("clock_local", 0))
+        if len(pin.edges) != f.n_edges and clock_like > UART_VIEW_CLOCK:
+            # read on a view with the line's bounces or spikes taken out, the line lifted past a UART's clock-likeness
+            # (a bounce at every edge makes a UART line regular: 0.43-0.6, held right UARTs at 0.7): as that view has
+            # it. Under it the line's own stands (a defective I2C capture's SDA, 0.30, read as a UART)
+            from .features import channel_features
+            fv = channel_features(c.cap, pin)
+            clock_like = min(clock_like, max(fv.scores.get("clock", 0), fv.scores.get("clock_local", 0)))
         u_main = max(units, key=lambda x: x[1])[0]
         m = {"framing_rate": framing, "coverage": coverage, "chars": ok_n, "blocks": len(units),
              "clock_like": clock_like, "L": blocks[0][2].bits if blocks[0][2] else None}
