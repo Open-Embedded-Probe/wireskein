@@ -337,11 +337,13 @@ def _debounced_clock(cap: Capture, name: str, f: ChannelFeatures):
     tries = []
     # a bounce's mark: a share of the line's changes come within BOUNCE_TICKS of the one before; each edge's
     # bounces merged at its first change, where the runs left are twice the window
-    k = V.BOUNCE_MERGE * ch.step
+    # (wider windows too: a fast capture's bounces last more ticks, 200 MS/s sees 60 ns as 12; each window kept only
+    # where the runs left are twice it)
     if float(np.mean(gaps < V.BOUNCE_TICKS * ch.step)) >= BOUNCED_SHARE:
-        d = V.bounces_merged(e, k)
-        if len(d) != len(e) and len(d) >= 16 and float(np.median(np.diff(d))) >= 2 * k:
-            tries.append(d)
+        for k in (w * ch.step for w in BOUNCE_WINDOWS):
+            d = V.bounces_merged(e, k)
+            if len(d) != len(e) and len(d) >= 16 and float(np.median(np.diff(d))) >= 2 * k:
+                tries.append(d)
     # crosstalk's or a spike's mark: pulses of a single sample; those runs taken out with their own two edges
     if float(np.mean(gaps <= ch.step)) >= BOUNCED_SHARE:
         d = V.pulses_out(e, 2 * ch.step)
@@ -356,6 +358,9 @@ def _debounced_clock(cap: Capture, name: str, f: ChannelFeatures):
         if sc >= BOUNCED_CLOCK and sc >= f.scores.get("clock", 0) + DEBOUNCE_GAIN and (best is None or sc > best[0]):
             best = (sc, fb, clock_info(view, fb))
     return (best[1], best[2]) if best else (None, None)
+
+
+BOUNCE_WINDOWS = (V.BOUNCE_MERGE, 8, 12)    # ticks: the windows a clock's bounces are merged in, tried in turn
 
 
 def survey(cap: Capture, fs: dict[str, ChannelFeatures] | None = None, asyncs: bool = True) -> Survey:
