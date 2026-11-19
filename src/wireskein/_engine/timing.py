@@ -445,14 +445,18 @@ def i2c_burst_ticks(cap: Capture, scl: str, freq_hz: float | None = None, at=Non
 
 
 CLIPPED_LOW = 0.7      # a clipped clock's lows: this much of the usual low on either side (a spike mid-low leaves half)
+CLIPPED_LOW_MAX = 4.0  # ... and the longer of them at most this much of it: a clock in a train of clocks (on the bench's
+                       # real slow rises 2.9 at most: a controller late by up to a half); crosstalk in a long low
+                       # between transactions is no clock
 
 
 def clipped_clocks(e: np.ndarray, initial: int, k: int) -> np.ndarray:
     """SCL's highs shorter than k samples that are clocks, not spikes: a controller counts its high from releasing
     SCL, so through a slow rise the line is high for only a moment (20-40 ns through 45 kOhm), and the devices take
     it as a clock and move on. Such a high has a whole low on either side (CLIPPED_LOW of the usual low or more): a
-    spike on a low splits it, and one at an edge sits beside a high. Where it comes is not a test: a controller
-    waiting for the line it released clocks late, by up to a half. -> per edge, whether it may cancel the one before
+    spike on a low splits it, and one at an edge sits beside a high; and it comes in a train of clocks (the longer
+    low CLIPPED_LOW_MAX of the usual or less): crosstalk in a long low between transactions is no clock. Where it
+    comes is not a test: a controller waiting for the line it released clocks late, by up to a half. -> per edge, whether it may cancel the one before
     (views.spikes_out's allow): False for such a high's fall."""
     allow = np.ones(len(e), bool)
     if len(e) < 6:
@@ -468,7 +472,8 @@ def clipped_clocks(e: np.ndarray, initial: int, k: int) -> np.ndarray:
     i = np.flatnonzero(lv == 1)
     i = i[(i > 0) & (i + 2 < len(e))]
     i = i[d[i] < k]
-    i = i[np.minimum(d[i - 1], d[i + 1]) >= CLIPPED_LOW * usual_low]     # the lows around the short high
+    lo_, hi_ = np.minimum(d[i - 1], d[i + 1]), np.maximum(d[i - 1], d[i + 1])     # the lows around the short high
+    i = i[(lo_ >= CLIPPED_LOW * usual_low) & (hi_ <= CLIPPED_LOW_MAX * usual_low)]
     allow[i + 1] = False
     return allow
 

@@ -44,9 +44,10 @@ def spikes_out_where_slow(edges: np.ndarray, k: int, clock: np.ndarray) -> np.nd
     return K.deglitch_slow(edges, k, clock)
 
 
-def pulses_out(edges: np.ndarray, k: int) -> np.ndarray:
-    """The runs shorter than k taken out, the shortest first, each with its own two changes (kernels.shortest_first)."""
-    return K.shortest_first(edges, k)
+def pulses_out(edges: np.ndarray, k: int, middle: bool = False) -> np.ndarray:
+    """The runs shorter than k taken out, the shortest first, each with its own two changes (kernels.shortest_first;
+    middle: a fast clock's line, three touching short runs a pulse inside one of its runs)."""
+    return K.shortest_first(edges, k, middle)
 
 
 def bounces_merged(edges: np.ndarray, w: int) -> np.ndarray:

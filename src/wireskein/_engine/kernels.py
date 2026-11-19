@@ -159,10 +159,13 @@ def debounce(edges: np.ndarray, w: int) -> np.ndarray:
     return e[np.flatnonzero(first)[np.bincount(cid) % 2 == 1]]
 
 
-def shortest_first(edges: np.ndarray, k: int) -> np.ndarray:
+def shortest_first(edges: np.ndarray, k: int, middle: bool = False) -> np.ndarray:
     """The runs shorter than k taken out, the shortest first: each pass removes the two changes around every run of
     the width (one of two that touch), so a pulse is removed with its own two edges, never paired with a real edge a
-    few ticks off (deglitch pairs a change with the one before it, and a pulse just after an edge takes the edge)."""
+    few ticks off (deglitch pairs a change with the one before it, and a pulse just after an edge takes the edge).
+    middle: of three touching runs of the width, the middle one (a clock whose runs are about 3 samples: a pulse
+    inside a run splits it in three of a sample, and the two at the ends hold the run's own edges); else every
+    other from the first (a train of crosstalk pulses on a quiet line)."""
     e = np.asarray(edges, np.int64)
     for w in range(1, k):
         while len(e) > 1:
@@ -170,13 +173,14 @@ def shortest_first(edges: np.ndarray, k: int) -> np.ndarray:
             if not len(i):
                 break
             # of touching runs (i, i + 1), every other: a run's removal joins its neighbours
-            keep_i = np.ones(len(i), bool)
-            touch = np.flatnonzero(np.diff(i) == 1)
-            if len(touch):
-                start = np.concatenate(([True], np.diff(touch) != 1))
-                grp = np.cumsum(start)
-                pos = np.arange(len(touch)) - np.flatnonzero(start)[grp - 1]
-                keep_i[touch[pos % 2 == 0] + 1] = False
+            start = np.concatenate(([True], np.diff(i) != 1))
+            grp = np.cumsum(start) - 1
+            first = np.flatnonzero(start)
+            pos = np.arange(len(i)) - first[grp]
+            keep_i = pos % 2 == 0
+            if middle:
+                three = np.diff(np.concatenate((first, [len(i)])))[grp] == 3
+                keep_i = np.where(three, pos == 1, keep_i)
             drop = np.zeros(len(e), bool)
             drop[i[keep_i]] = True
             drop[i[keep_i] + 1] = True

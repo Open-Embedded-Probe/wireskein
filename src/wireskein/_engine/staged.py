@@ -444,20 +444,32 @@ def glitch_views(cap, sv, g, memo: dict | None = None):
     if key not in memo:
         med = float(np.median(inner))
         clean = np.diff(np.asarray(V.spikes_out(ch.edges, BOUNCE_TICKS * step), np.int64))
-        if len(clean) >= 16:
+        # (where most runs are left: a clock with runs under BOUNCE_TICKS loses them all, and its bursts are no run)
+        if len(clean) >= 16 and len(clean) >= 0.25 * len(inner):
             med = max(med, float(np.median(clean)))
         memo[key] = med
     med = memo[key]
     # Short pulses relative to the clock's own runs (reflections last a few ns,
     # i.e. more samples at higher rates; single-sample spikes at any rate).
-    short = inner <= max(float(step), 0.25 * med)
+    lim = max(float(step), 0.25 * med)
+    short = inner <= lim
+    pins = {g.clock, *g.data, *([g.select] if g.select else [])}
+    seen = inner[short]
+    if not short.any():
+        # a clean clock, its data or select lines with short pulses (crosstalk onto SDA from a line beside it: a
+        # pulse while SCL is high reads as a START or STOP): those lines' rare short runs decide alike
+        for x in cap.channels:
+            if x.name in pins and x.name != g.clock and len(x.edges) > 2:
+                r = np.diff(np.asarray(x.edges, np.int64))
+                s = r <= lim
+                if 0 < s.mean() < GLITCH_SHARE:
+                    seen = np.concatenate((seen, r[s]))
     # (bounces at half the edges make a third of the runs short: still a view; the widths stay under half a run)
-    if med >= 3 and 0 < short.mean() < GLITCH_SHARE:
+    if med >= 3 and len(seen) and short.mean() < GLITCH_SHARE:
         # the filter width is undecidable here: fixed small widths and one from
         # the observed short pulses are siblings; plugins' checks pick. A width
         # never exceeds half the clock's typical run.
-        k_rel = int(max(2 * step, min(0.3 * med, np.quantile(inner[short], 0.95) + step)))
-        pins = {g.clock, *g.data, *([g.select] if g.select else [])}
+        k_rel = int(max(2 * step, min(0.3 * med, np.quantile(seen, 0.95) + step)))
         made = [[x.edges for x in cap.channels if x.name in pins]]      # the lines as they are: yielded above
         for k in sorted({2 * step, 3 * step, 5 * step, k_rel}):
             if k > 0.5 * med:
@@ -492,6 +504,19 @@ def glitch_views(cap, sv, g, memo: dict | None = None):
                 continue
             made.append(lines)
             yield Capture(cap.rate, cap.n_samples, chans), k
+    if 2 * med >= survey_mod.SPIKE_PERIOD * step and 2 * step > 0.5 * med and short.mean() < GLITCH_SHARE:
+        # a clock too fast for the widths above (its runs under 4 samples: 2 is over half of one) but with halves of
+        # two samples or more: its lines with their pulses of a sample taken out (spikes, crosstalk; each with its
+        # own two changes), as the survey's view of such a clock (survey.gated_view), where the clock's own pulses of
+        # a sample are a noise's (most break its period; a LinkE's V203 at 50 MS/s has highs of a sample, its own)
+        ce = np.asarray(ch.edges, np.int64)
+        one = int(np.count_nonzero(inner <= step))
+        if one and V.broken_runs(ce, 2 * step)[-1] < survey_mod.SPIKE_BROKEN * one:
+            return
+        chans = [replace(x, edges=V.pulses_out(x.edges, 2 * x.step, middle=x.name == g.clock)) if x.name in pins else x
+                 for x in cap.channels]
+        if any(len(a.edges) != len(b.edges) for a, b in zip(chans, cap.channels)):
+            yield Capture(cap.rate, cap.n_samples, chans), 2 * step
 
 
 def single_views(cap, sv, pin):
