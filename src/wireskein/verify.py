@@ -925,7 +925,9 @@ def check_dead_time(cap, x):
         parts.append((False, f"both on {len(r['overlaps'])} times, longest {_si(ln / cap.rate)} at {_si(t / cap.rate)}"))
     for side in ("hi_to_lo", "lo_to_hi"):
         if r[side]:
+            # both directions' limits and this direction's own (an asymmetric dead time) apply alike
             parts += _limit_of(side, r[side], res, x.get("dead_min_s"), x.get("dead_max_s"), cap.rate)
+            parts += _limit_of(side, r[side], res, x.get(f"{side}_min_s"), x.get(f"{side}_max_s"), cap.rate)
     if not parts:
         return MEASURED, got, ""
     ok, why = _verdicts(parts)

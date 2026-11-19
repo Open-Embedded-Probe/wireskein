@@ -500,14 +500,21 @@ def skew(a: str, b: str, delay_abs_s: float, delay_s: float = 0.0, edge: str = "
 
 
 def dead_time(hi: str, lo: str, dead_min_s: float | None = None, dead_max_s: float | None = None, active: int = 1,
-              allow_overlap: bool = False, threshold=None) -> dict:
+              allow_overlap: bool = False, threshold=None, *, hi_to_lo_min_s: float | None = None,
+              hi_to_lo_max_s: float | None = None, lo_to_hi_min_s: float | None = None,
+              lo_to_hi_max_s: float | None = None) -> dict:
     """The two outputs of a half bridge (on at `active`): from one turning off to the other turning on, each time
-    within [dead_min_s, dead_max_s]; both on at once (shoot-through) fails unless allow_overlap. Nothing expected
-    beyond that: measured."""
-    return _t({"kind": "dead_time", "hi": hi, "lo": lo, "dead_min_s": dead_min_s, "dead_max_s": dead_max_s,
-               "active": int(active),
-               "allow_overlap": allow_overlap}, threshold)
-
+    within [dead_min_s, dead_max_s]; both on at once (shoot-through) fails unless allow_overlap. An asymmetric dead
+    time has a limit for each direction as well: hi_to_lo_* from hi turning off to lo turning on (before lo is on),
+    lo_to_hi_* from lo turning off to hi turning on (before hi is on); they apply with dead_min_s / dead_max_s.
+    Nothing expected beyond that: measured."""
+    x = {"kind": "dead_time", "hi": hi, "lo": lo, "dead_min_s": dead_min_s, "dead_max_s": dead_max_s,
+         "active": int(active), "allow_overlap": allow_overlap}
+    for k, v in (("hi_to_lo_min_s", hi_to_lo_min_s), ("hi_to_lo_max_s", hi_to_lo_max_s),
+                 ("lo_to_hi_min_s", lo_to_hi_min_s), ("lo_to_hi_max_s", lo_to_hi_max_s)):
+        if v is not None:
+            x[k] = v
+    return _t(x, threshold)
 
 def i2c_timing(scl: str, sda: str, mode: str | None = "standard", limits: dict | None = None,
                threshold=None) -> dict:

@@ -88,6 +88,22 @@ def test_the_dead_time_of_a_half_bridge():
     assert _judge(cap, dead_time("HI", "LO"))[0] == verify.MEASURED
 
 
+def test_an_asymmetric_dead_time_has_a_limit_each_way():
+    cap = _cap(_bridge(500e-9, 1e-6), 1e-3)                          # hi off -> lo on 500 ns, lo off -> hi on 1 us
+    ok, got, why = _judge(cap, dead_time("HI", "LO", hi_to_lo_min_s=400e-9, hi_to_lo_max_s=600e-9,
+                                         lo_to_hi_min_s=900e-9, lo_to_hi_max_s=1.1e-6))
+    assert ok is True, why
+    assert abs(got["hi_to_lo"]["max_s"] - 500e-9) < 30e-9 and abs(got["lo_to_hi"]["max_s"] - 1e-6) < 30e-9
+    ok, _, why = _judge(cap, dead_time("HI", "LO", hi_to_lo_min_s=400e-9, lo_to_hi_max_s=800e-9))
+    assert ok is False and "lo_to_hi" in why and "hi_to_lo" not in why
+    ok, _, why = _judge(cap, dead_time("HI", "LO", hi_to_lo_min_s=600e-9))
+    assert ok is False and "hi_to_lo" in why
+    # the limit for both ways still applies beside one way's own
+    ok, _, why = _judge(cap, dead_time("HI", "LO", dead_min_s=700e-9, lo_to_hi_min_s=900e-9))
+    assert ok is False and "hi_to_lo" in why and "lo_to_hi" not in why
+    assert "lo_to_hi_min_s" not in dead_time("HI", "LO")
+
+
 def test_shoot_through_fails():
     cap = _cap(_bridge(-200e-9, 500e-9), 1e-3)                       # LO turns on before HI is off
     ok, got, why = _judge(cap, dead_time("HI", "LO", dead_min_s=0))
