@@ -19,6 +19,20 @@ def degenerate(values: np.ndarray) -> float:
     return 1.0 if top <= 0.5 else max(0.05, 1 - (top - 0.5) / 0.5)
 
 
+TWO_VALUES = 0.6    # characters this share or less in their two commonest values: no penalty
+
+
+def two_values(values: np.ndarray) -> float:
+    """1 when the two commonest values are TWO_VALUES of them or less, down to 0.05 when they are all of them: a
+    line of two kinds of pulse read as characters (a 1-Wire's write-0 and write-1 slots, each a character). Real
+    UART traffic on the bench keeps them at 0.30 at most; a 1-Wire read so, at 0.84 and up."""
+    if len(values) < 4:
+        return 1.0
+    c = np.sort(np.bincount(values.astype(np.int64)))[::-1]
+    top = float(c[:2].sum()) / len(values)
+    return 1.0 if top <= TWO_VALUES else max(0.05, 1 - (top - TWO_VALUES) / (1 - TWO_VALUES))
+
+
 class DefaultScorer:
     name = "default-v1"
     upper_weight = 0.5

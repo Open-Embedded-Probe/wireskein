@@ -35,7 +35,7 @@ from .analyzers.pulse import NecPlugin, OneWirePlugin, RgbLedPlugin
 from .analyzers.upper import Lines, MarkerGrammar, ModbusRtu, Nmea
 from .model import Capture
 from . import survey as survey_mod
-from .scoring import DefaultScorer, degenerate
+from .scoring import DefaultScorer, degenerate, two_values
 from .stack import Node, Stream, explanations
 from .taxonomy import classify
 from .declarative import load_all
@@ -303,7 +303,8 @@ class UartPlugin:
         grid = _on_grid(pin, blocks)
         m["on_grid"] = grid
         gridded = float(np.clip((grid - GRID_LOW) / GRID_SPAN, 0, 1)) if grid is not None else 1.0
-        score = (framing * coverage * q(ok_n) * degenerate(v & 0xFF) * (1 - 0.5 * clock_like) * (1 - sync)
+        m["two_values"] = two_values(v & 0xFF)
+        score = (framing * coverage * q(ok_n) * degenerate(v & 0xFF) * m["two_values"] * (1 - 0.5 * clock_like) * (1 - sync)
                  * (1 - float(np.clip((tight - 0.5) / 0.3, 0, 1))) * (1 - framed) * resolvable * gridded)
         params = {"baud": c.cap.rate / u_main, "idle": rb.idle, "L": m["L"], "blocks": len(units)}
         items = {"value": v, "start": np.concatenate(starts), "char_samples": u_main * (m["L"] or 10)}

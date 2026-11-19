@@ -45,7 +45,7 @@ class RgbLedPlugin:
             return []
         # the line as it is, and with pulses shorter than any of a WS2812-like line (T0H from 0.25 us; RGB_SHORTEST)
         # taken out: a bounce at an edge is a bit of its own
-        k = int(np.ceil(RGB_SHORTEST * float(c.cap.rate) - 1e-9))
+        k = max(2, int(np.ceil(RGB_SHORTEST * float(c.cap.rate) - 1e-9)))
         views = [(ch, 0)]
         if k >= 2:
             d = V.spikes_out(np.asarray(ch.edges, np.int64), k)
@@ -98,7 +98,7 @@ class OneWirePlugin:
         best = None
         # the line as it is, and with pulses shorter than the shortest 1-Wire has (low_1's least, 1 us: a spike, a
         # bounce) taken out: such a pulse is a slot of its own or splits a low or a reset
-        k = int(np.ceil(min(v["low_1"][0] for v in pc.ONEWIRE.values()) * float(c.cap.rate) - 1e-9))
+        k = max(2, int(np.ceil(min(v["low_1"][0] for v in pc.ONEWIRE.values()) * float(c.cap.rate) - 1e-9)))
         views = [(ch, 0)]
         if k >= 2:
             d = V.spikes_out(np.asarray(ch.edges, np.int64), k)
@@ -149,7 +149,7 @@ class NecPlugin:
     def run(self, c, ch, g):
         # the line as it is, and with pulses shorter than NEC_SHORTEST taken out (a bounce: no carrier pulse is that
         # short, 38 kHz at a third is 8.8 us)
-        k = int(np.ceil(NEC_SHORTEST * float(c.cap.rate) - 1e-9))
+        k = max(2, int(np.ceil(NEC_SHORTEST * float(c.cap.rate) - 1e-9)))
         views = [(ch, 0)]
         if k >= 2:
             d = V.spikes_out(np.asarray(ch.edges, np.int64), k)
