@@ -180,6 +180,7 @@ def _select_set(rels, pins) -> list[str]:
 
 
 WHOLE_SELECT = 0.95    # a line framing this share of another clock's transfers is that bus's select
+WHOLE_DATA = 0.9       # ... unless it keeps to the clock in hand as data this closely
 WHOLE_TRANSFERS = 8    # over this many transfers at least
 
 
@@ -198,8 +199,11 @@ def groups(sv: Survey, pins: dict[str, PinClass]) -> list[Group]:
             continue
         rels = [r for r in sv.partners(c)]
         # (a line that frames this clock's bursts too, as I2C's SDA does its SCL's, stays)
+        # (a line keeping to this clock as data as closely as WHOLE_DATA stays though it frames another clock's
+        # bursts: a line of short periodic pulses has bursts any quiet line frames)
         data = tuple(sorted(r.other for r in rels if r.data_score >= DATA_PAIR
-                            and not (whole.get(r.other, set()) - {c} and r.boundary < 0.5)))
+                            and not (whole.get(r.other, set()) - {c} and r.boundary < 0.5
+                                     and r.data_score < WHOLE_DATA)))
         sel = [r.other for r in rels if r.boundary >= SELECT_BOUNDARY and "sparse" in pins[r.other].candidates]
         _select_set.ambiguous = False
         sel += _select_set(rels, pins)
