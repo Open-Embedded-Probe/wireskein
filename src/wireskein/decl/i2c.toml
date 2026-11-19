@@ -31,7 +31,8 @@ rest = { name = "bytes", from = "byte", role = "data" }
 # counted by its transactions above chance (frame_score's binomial): an address no one answers is a whole transaction
 # of evidence (NACK is I2C as much as ACK is), and lines whose frames fit about as often as chance stay low
 count = "binomial"
-chance = 0.5            # a frame's chance to fit, for the tail
+chance = 0.3            # a frame's chance to fit, for the tail (was 0.5: one or two whole transactions of a cropped
+                        # capture stayed ambiguous; 0.25 lets I2C contend with SPI readings)
 above = 0.2222222222    # the rule's own chance (9n + 1: 2 in 9): the fit counted above it
 soft = 0.25             # the clock-likeness and pair terms weigh this much
 check_weight = 0.0

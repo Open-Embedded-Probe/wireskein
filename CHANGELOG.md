@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) I2C counts a transaction's chance to fit by chance as 0.3 (was 0.5) in its binomial evidence: one or two whole transactions (a cropped capture) stayed ambiguous; 0.25 lets I2C contend with SPI readings. I2C sets with crops, bounces, crosstalk, slow rises, mid-start and hops: read +26, confirmed +27, false claims the same; i2cbench's stream, spivar, spimultimix, glitch, jitter and lowrate the same.
+- (JA) I2C は、取引が偶然に合う確率を 0.3 とみる（これまで 0.5。二項分布の証拠）: まるごとの取引が 1 つか 2 つ（切り出した記録）だとあいまいのままだった。0.25 では I2C が SPI の読みと競う。切り出し、跳ね、クロストーク、遅い立ち上がり、途中からの開始、hop のある I2C の組: 読めた +26、確定 +27、誤った主張は同じ。i2cbench の stream、spivar、spimultimix、glitch、jitter、lowrate は同じ。
 - (EN) DMX512 weighs the slots in its packets as well (q(characters, 4)): breaks that spikes make on another line hold two or three characters each, and such a line was claimed likely as DMX512 (2 packets, 6 characters; the bench's real lines carry 30 or more a packet). UART-like and SPI noise sets: false likely 2 -> 0, none lost.
 - (JA) DMX512 はパケットの中のスロットも数える（q(文字数, 4)）: スパイクが別の線に作るブレークは 2〜3 文字ずつしか持たず、そういう線が DMX512 の有力として主張されていた（2 パケット、6 文字。測定台の本物は 1 パケット 30 以上）。UART 系と SPI の雑音の組: 誤有力 2 → 0、失ったものなし。
 - (EN) A line keeping to a clock as data at 0.9 or more stays that clock's data though it frames another clock's bursts whole (the rule that takes another bus's select out of the data): a line of short periodic pulses has bursts any quiet line frames, and a 200 MS/s SPI with spikes lost its MOSI that way (claimed without it, confirmed). Focus set (659 cases): read +3, false confirmed 1 -> 0, none lost.
