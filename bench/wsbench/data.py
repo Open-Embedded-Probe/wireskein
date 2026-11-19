@@ -628,6 +628,7 @@ def input_sha(cap: Capture) -> str:
 # Decided before looking at any algorithm's result on a case, and never from one: a bus tagged is still scored (how
 # far an algorithm gets is worth knowing), and apart.
 
+HARDNESS = 2          # the version of the rules below (kept with each run: counts of readable buses move with them)
 UNDER_PERIOD = 4      # a clocked bus under 4 samples a clock period (2 a half): each half seen as one sample or less
 UNDER_BIT = 3         # an asynchronous bit under 3 samples: its middle not sampled clear of its edges
 NOISE_REACH = 0.5     # noise lasting half a bit (half of a clock's half) or more reaches where a bit is sampled
@@ -710,6 +711,13 @@ def hardness(truth: dict, cap: Capture, chain: str, rate0: float, orig: Capture 
             if rate / fastest < UNDER_BIT:
                 t.add("undersampled")
             if span and span >= NOISE_REACH / fastest:
+                t.add("noise_over_bit")
+        elif pm.get("shortest_s"):
+            # a line of pulses (1-Wire, an LED string, an IR code): its shortest pulse, as a clock's shorter phase
+            phase = float(pm["shortest_s"])
+            if rate * phase < UNDER_PERIOD / 2:
+                t.add("undersampled")
+            if span and span >= NOISE_REACH * phase:
                 t.add("noise_over_bit")
         elif orig is not None and (clk := next((b["roles"][r] for r in CLOCK_ROLES if r in b.get("roles", {})), None)):
             phase = clock_phase_s(orig, clk)

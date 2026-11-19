@@ -419,7 +419,8 @@ class Builder:
                             low_1=low_1, slot=slot)
             t += float(r.uniform(0.1e-3, 2e-3))
             txs.append({"presence": presence, "data": data.hex()})
-        self.buses.append({"protocol": "onewire", "roles": {"dq": name}, "params": {"speed": "standard"},
+        # shortest_s: the shortest pulse the line has (what a noise must stay clear of: bench/wsbench/data.hardness)
+        self.buses.append({"protocol": "onewire", "roles": {"dq": name}, "params": {"speed": "standard", "shortest_s": low_1},
                            "expect": {"resets": txs}})
         self.fastest = max(self.fastest, 1 / (2 * low_1))
         self.t_end = max(self.t_end, t)
@@ -437,7 +438,7 @@ class Builder:
             t = gen.rgb_led(w, t, data, t0h=0.32 * period, t1h=0.64 * period, period=period,
                             reset=float(r.uniform(60e-6, 300e-6)))
             frames.append(data.hex())
-        self.buses.append({"protocol": "rgb_led", "roles": {"data": name}, "params": {"period": period},
+        self.buses.append({"protocol": "rgb_led", "roles": {"data": name}, "params": {"period": period, "shortest_s": 0.32 * period},
                            "expect": {"frames": frames}})
         self.fastest = max(self.fastest, 1 / (0.32 * period))
         self.t_end = max(self.t_end, t)
@@ -455,7 +456,8 @@ class Builder:
             if r.random() < 0.3:
                 frames.append({"repeat": True})
         t = gen.nec(w, float(r.uniform(1e-3, 5e-3)), frames, carrier_hz=carrier)
-        self.buses.append({"protocol": "ir_nec", "roles": {"data": name}, "params": {"carrier_hz": carrier},
+        self.buses.append({"protocol": "ir_nec", "roles": {"data": name}, "params": {"carrier_hz": carrier,
+                                                                    "shortest_s": 0.5 / carrier if carrier else 562.5e-6},
                            "expect": {"frames": [[f["addr"], f["cmd"]] for f in frames if not f.get("repeat")]}})
         self.fastest = max(self.fastest, 2 * (carrier or 1 / 562.5e-6))
         self.t_end = max(self.t_end, t)

@@ -253,7 +253,7 @@ def run(stage_names: list[str], algos_by_stage: dict[str, list], dsets: list[tup
                                    "path": _rel(algos[(s, n)].path), "sha": algos[(s, n)].src_sha}
                       for s, names in plan for n in names},
             "env": {"python": platform.python_version(), "numpy": np.__version__,
-                    "wireskein": _wireskein_version(),
+                    "wireskein": _wireskein_version(), "hardness": data.HARDNESS,
                     # what ran, even on a dirty tree: the package's sources and the bench's own (stages, data, suites)
                     "wireskein_src_sha": tree_sha(data.REPO / "src" / "wireskein", "*.py", "*.toml"),
                     "bench_sha": tree_sha(BENCH / "wsbench", "*.py") + tree_sha(BENCH, "suites.toml")[:4],
