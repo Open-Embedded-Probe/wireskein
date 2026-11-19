@@ -887,7 +887,7 @@ def check_skew(cap, x):
     a, b = _ch(cap, x["a"]), _ch(cap, x["b"])
     if a is None or b is None:
         return None, {}, "pins not captured"
-    r = timing.skew(a, b, cap.rate, x.get("edge", "both"))
+    r = timing.skew(a, b, cap.rate, x.get("edge", "both"), cap.n_samples)
     d = r["delays"].astype(np.float64)
     res = timing.res_of(a, b)
     got = {"pairs": int(len(d)), "unpaired_a": r["unpaired_a"], "unpaired_b": r["unpaired_b"],

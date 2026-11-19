@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Fixed: `skew` no longer counts an edge without a partner within its pairing window (half the closest spacing of a's edges) of either end of the section: a section's bound falling between the two edges of a pair (0.2 us apart, 10 MS/s) left one of them in, and the verdict hung on where the bound fell (ok on one section, ng on a section 100 ticks wider; a CH32V205 timer sync test). An edge without a partner inside the section still fails.
+- (JA) 直した: `skew` は、区間の両端から組を探す窓（a のエッジの最も近い間隔の半分）以内にある、相手のいないエッジを数えない: 組になる 2 本のエッジ（0.2 µs 差、10 MS/s）の間に区間の端が落ちると片方だけが入り、判定が端の位置しだいになっていた（ある区間で ok、100 刻み広い区間で ng。CH32V205 のタイマー同期の試験）。区間の中の相手のいないエッジは、これまでどおり NG。
 - (EN) DMX512 counts its fixed 250 kbaud met within 3% as 5 bits of evidence beside its start codes: a line of two packets stayed at 0.75. UART-like, tuning noise and baud-hop sets: confirmed +3, the rest the same.
 - (JA) DMX512 は、決まった 250 kbaud に 3% 以内で合うことも、開始コードと並べて 5 ビットの証拠に数える: 2 パケットの線が 0.75 のままだった。UART 系、tuning の雑音、baudhop の組: 確定 +3、ほかは同じ。
 - (EN) A UART read on a view with the line's bounces or spikes taken out takes how clock-like the line is from that view too (the lower kept), where the line as it is shows over 0.4: a bounce at every edge makes a UART line regular (0.43-0.6), and right UARTs with bounces 0.5 were held at 0.6-0.8. Under 0.4 the line's own stands (a defective I2C capture's SDA at 0.30, read as a UART, would be confirmed). Focus set: confirmed +18, read +1; pulse, UART-like and tuning sets with bounces: read +3, confirmed +53; false claims the same, none lost.

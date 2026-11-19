@@ -79,10 +79,12 @@ def circular_diff(x: float, y: float) -> float:
     return (x - y + 180.0) % 360.0 - 180.0
 
 
-def skew(a: Channel, b: Channel, rate: float, edge: str = "both") -> dict:
+def skew(a: Channel, b: Channel, rate: float, edge: str = "both", n: int | None = None) -> dict:
     """Each edge of a with b's nearest edge of the same direction (b - a, ticks); edge "rise" / "fall" pairs only
     those. An edge without one nearer than half the closest spacing of a's edges of that direction is unpaired (b
-    moved less often, or not with a)."""
+    moved less often, or not with a). n: the capture's length; an edge without a partner within that window of
+    either end is not counted (its partner may lie just outside: a section's bound falling between two edges of a
+    pair left one of them in, and the verdict hung on where the bound fell)."""
     out = {"delays": np.zeros(0, np.int64), "unpaired_a": 0, "unpaired_b": 0}
     for edge in (("rise", "fall") if edge == "both" else (edge,)):
         ea, eb = _dirs(a, edge), _dirs(b, edge)
@@ -91,6 +93,11 @@ def skew(a: Channel, b: Channel, rate: float, edge: str = "both") -> dict:
             out["unpaired_b"] += len(eb)
             continue
         gap = float(np.min(np.diff(ea))) / 2 if len(ea) > 1 else float("inf")
+
+        def inside(e):
+            if n is None or not np.isfinite(gap):
+                return np.ones(len(e), bool)
+            return (e >= gap) & (e <= n - gap)
         j = np.clip(np.searchsorted(eb, ea), 1, len(eb)) - 1
         k = np.minimum(j + 1, len(eb) - 1)
         near = np.where(np.abs(eb[k] - ea) < np.abs(eb[j] - ea), k, j)
@@ -99,8 +106,10 @@ def skew(a: Channel, b: Channel, rate: float, edge: str = "both") -> dict:
         # one edge of b answers one edge of a
         ok &= np.concatenate(([True], near[1:] != near[:-1]))
         out["delays"] = np.concatenate((out["delays"], d[ok]))
-        out["unpaired_a"] += int(np.count_nonzero(~ok))
-        out["unpaired_b"] += len(eb) - int(np.count_nonzero(ok))
+        out["unpaired_a"] += int(np.count_nonzero(~ok & inside(ea)))
+        taken = np.zeros(len(eb), bool)
+        taken[near[ok]] = True
+        out["unpaired_b"] += int(np.count_nonzero(~taken & inside(eb)))
     return out
 
 

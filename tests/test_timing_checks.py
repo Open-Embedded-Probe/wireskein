@@ -55,6 +55,24 @@ def test_skew_of_two_patterns():
     assert _judge(cap, skew("A", "B", delay_abs_s=40e-9))[0] is None
 
 
+def test_a_section_bound_between_the_two_edges_of_a_pair_does_not_decide_the_skew():
+    # two 20 kHz PWMs rising 100 ns apart; the capture starts between A's first rise (outside) and B's (inside)
+    a, b = gen.Wave(0), gen.Wave(0)
+    gen.pwm(a, 50e-6, 1e-3, 20e3, 0.5)
+    gen.pwm(b, 0.1e-6, 1e-3, 20e3, 0.5)
+    cap = _cap({"A": a, "B": b}, 1e-3)
+    ok, got, why = _judge(cap, skew("A", "B", delay_abs_s=0.2e-6, edge="rise"))
+    assert ok is True and got["unpaired_b"] == 0, why
+    # a stray rise mid-capture still fails (paired 12 us off, or left without a partner)
+    b2 = gen.Wave(0)
+    gen.pwm(b2, 50.1e-6, 500e-6, 20e3, 0.5)
+    b2.set(512e-6, 1)                                                # a rise of its own, mid-capture
+    b2.set(513e-6, 0)
+    gen.pwm(b2, 550.1e-6, 1e-3, 20e3, 0.5)
+    ok, got, why = _judge(_cap({"A": a, "B": b2}, 1e-3), skew("A", "B", delay_abs_s=0.2e-6, edge="rise"))
+    assert ok is False, why
+
+
 def test_a_missing_edge_fails_the_skew():
     a, b = gen.Wave(0), gen.Wave(0)
     for t in [1e-6, 2e-6, 3e-6, 4e-6]:
