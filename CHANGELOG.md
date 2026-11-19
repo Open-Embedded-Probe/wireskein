@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 0.0.32
 - (EN) `dead_time` takes a limit for each direction (an asymmetric dead time, as CH32H41x's and M030's TIM1 have): `hi_to_lo_min_s` / `hi_to_lo_max_s` from hi turning off to lo turning on, `lo_to_hi_min_s` / `lo_to_hi_max_s` from lo turning off to hi turning on, named as `got`'s two directions; `dead_min_s` / `dead_max_s` still apply to both. A record without them is written as before.
 - (JA) `dead_time` に向きごとの限度（非対称のデッドタイム。CH32H41x と M030 の TIM1 にある）: `hi_to_lo_min_s` / `hi_to_lo_max_s` は hi が off になってから lo が on になるまで、`lo_to_hi_min_s` / `lo_to_hi_max_s` は lo が off になってから hi が on になるまで。名前は `got` の 2 つの向きと同じ。`dead_min_s` / `dead_max_s` はこれまでどおり両方の向きに効く。使わない記録は前と同じに書く。
 - (EN) Fixed (from 5840143): the survey's view without pulses of a sample (a fast clock the gate merges nothing on) only where most of the clock's own pulses of a sample break its period (views.broken_runs: a spike's); a clock of uneven duty keeps highs of a sample (the LinkE fixture's V203 erase_all at 50 MS/s: 0.24 of its runs) and they were taken out, the RVSWD bus lost (the full-suite CI 64be534). Real captures (wchfix, LinkE, real, i2cbench) the same as at 8397dbb; the SPI noise sets and the quick set the same.
