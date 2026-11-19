@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) DMX512 counts its fixed 250 kbaud met within 3% as 5 bits of evidence beside its start codes: a line of two packets stayed at 0.75. UART-like, tuning noise and baud-hop sets: confirmed +3, the rest the same.
+- (JA) DMX512 は、決まった 250 kbaud に 3% 以内で合うことも、開始コードと並べて 5 ビットの証拠に数える: 2 パケットの線が 0.75 のままだった。UART 系、tuning の雑音、baudhop の組: 確定 +3、ほかは同じ。
 - (EN) A UART read on a view with the line's bounces or spikes taken out takes how clock-like the line is from that view too (the lower kept), where the line as it is shows over 0.4: a bounce at every edge makes a UART line regular (0.43-0.6), and right UARTs with bounces 0.5 were held at 0.6-0.8. Under 0.4 the line's own stands (a defective I2C capture's SDA at 0.30, read as a UART, would be confirmed). Focus set: confirmed +18, read +1; pulse, UART-like and tuning sets with bounces: read +3, confirmed +53; false claims the same, none lost.
 - (JA) 線の跳ねやスパイクを除いた見え方で読んだ UART は、線のクロックらしさもその見え方から取る（低い方）。取ったままの線で 0.4 を超える所だけ: 縁ごとの跳ねは UART の線を規則的に見せ（0.43〜0.6）、跳ね 0.5 の正しい UART が 0.6〜0.8 に抑えられていた。0.4 未満では取ったままの線の値を使う（壊れた I2C の記録の SDA、0.30 が UART として確定してしまう）。焦点の組: 確定 +18、読めた +1。跳ねのある pulse、UART 系、tuning の組: 読めた +3、確定 +53。誤った主張は同じ、失ったものなし。
 - (EN) Fixed (from e40b325): the survey's wider windows for a clock's bounces (8 and 12 ticks) only where they last no longer than a bounce does (60 ns: 12 ticks at 200 MS/s); slower, a clock that changes speed has half periods as short in its fast stretch, they were merged, and an SPI bus went missing (freqhop). The freqhop sets as before e40b325; the 200 MS/s bounce sets keep its gain (read +7, confirmed +9).

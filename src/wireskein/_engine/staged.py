@@ -356,6 +356,7 @@ class UartPlugin:
                      m, layer_score=score, total=score)]
 
 
+DMX_RATE_BITS = 5         # DMX512's fixed 250 kbaud met within 3%: evidence of its own (log2 of the rates a UART runs at)
 EVIDENCE_BITS = 8         # a check's bits of evidence to a score: 1 - 0.5 ** (bits / 8), as the declared protocols
 
 
@@ -399,7 +400,7 @@ class DmxPlugin:
             baud = c.cap.rate / u
             rate_ok = 1.0 if abs(baud / 250000 - 1) < 0.03 else 0.3
             # the evidence in bits: a start code of 0 is 8 a packet
-            info = 8 * ck["start_code_0"]
+            info = 8 * ck["start_code_0"] + (DMX_RATE_BITS if rate_ok == 1.0 else 0)
             # and slots in them: a packet carries up to 512 (the bench's lines 30 or more a packet); breaks that
             # spikes make on another line hold two or three characters each
             score = ((ck["start_code_0"] / ck["packets"]) * (ck["framing_ok"] / max(1, ck["chars"])) * rate_ok
