@@ -226,6 +226,10 @@ def _tight_windows(pin, idle: int, sv, n: int) -> float:
     return best
 
 
+UART_CLOCK_LIKE = 0.4     # a UART's score falls from here (clock-like: a line of pulses), by up to a half at 0.7
+UART_SYNC = 0.2           # ... and from here (keeping to a clock: synchronous data), to nothing at 0.5
+
+
 class UartPlugin:
     name = "uart"
     consumes = ("chars",)
@@ -304,7 +308,13 @@ class UartPlugin:
         m["on_grid"] = grid
         gridded = float(np.clip((grid - GRID_LOW) / GRID_SPAN, 0, 1)) if grid is not None else 1.0
         m["two_values"] = two_values(v & 0xFF)
-        score = (framing * coverage * q(ok_n) * degenerate(v & 0xFF) * m["two_values"] * (1 - 0.5 * clock_like) * (1 - sync)
+        # how clock-like the line is, and how it keeps to some clock, count only past what UART lines show: on the
+        # bench a real UART's clock_like is under 0.37 and its keeping under 0.21 (99%), lines of pulses (1-Wire, LED)
+        # 0.7 or more and synchronous data 0.45 or more. Below that both are the competing readings' to decide (by
+        # the margin), not a share off every UART (they held right UARTs at 0.8, under confirmed)
+        clock_off = 0.5 * float(np.clip((clock_like - UART_CLOCK_LIKE) / 0.3, 0, 1))
+        sync_off = float(np.clip((sync - UART_SYNC) / 0.3, 0, 1))
+        score = (framing * coverage * q(ok_n) * degenerate(v & 0xFF) * m["two_values"] * (1 - clock_off) * (1 - sync_off)
                  * (1 - float(np.clip((tight - 0.5) / 0.3, 0, 1))) * (1 - framed) * resolvable * gridded)
         params = {"baud": c.cap.rate / u_main, "idle": rb.idle, "L": m["L"], "blocks": len(units)}
         items = {"value": v, "start": np.concatenate(starts), "char_samples": u_main * (m["L"] or 10)}
