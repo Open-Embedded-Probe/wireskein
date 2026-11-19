@@ -10,14 +10,14 @@ on:
   workflow_dispatch:
     inputs:
       stages:
-        description: "Stages, space separated, or all"
-        default: "all"
+        description: "Stages, space separated, or all (default: e2e, the check of a commit on main)"
+        default: "e2e"
       suites:
         description: "Suites of bench/suites.toml, space separated; all: every suite (tune: those for tuning)"
         default: "all"
       algos:
-        description: "Algorithms by name, space separated (empty: by status)"
-        default: ""
+        description: "Algorithms by name, space separated (empty: by status). The default, wireskein alone, runs no gate (the cost run is for trials); empty it to measure trials"
+        default: "wireskein"
       status:
         description: "With no algorithm named: which statuses (main,trial,retired)"
         default: "main,trial"
