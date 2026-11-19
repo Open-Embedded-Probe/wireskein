@@ -243,6 +243,8 @@ def _tight_windows(pin, idle: int, sv, n: int) -> float:
 
 UART_CLOCK_LIKE = 0.2     # a UART's score falls from here (clock-like: a line of pulses), by up to a half at 0.7
 UART_SYNC = 0.2           # ... and from here (keeping to a clock: synchronous data), to nothing at 0.5
+UART_FIXED_BITS = 0.25    # bit positions holding one value in 0.95 of the characters, this share or more ...
+UART_PACED = 0.5          # ... at a character length three divides: a line of pulse-width bits, the score so much
 UART_FRAMED = 0.35        # LIN / DMX512 framing past this share of the break-framed blocks counts against a plain UART
 
 
@@ -324,6 +326,13 @@ class UartPlugin:
         m["on_grid"] = grid
         gridded = float(np.clip((grid - GRID_LOW) / GRID_SPAN, 0, 1)) if grid is not None else 1.0
         m["two_values"] = two_values(v & 0xFF)
+        # a line of pulse-width bits (an LED chain: each bit high a third or two thirds of it) reads as characters
+        # three UART bits a bit, back to back, of a length three divides: the same bit positions hold the same value
+        # in every character (0.3 to 0.57 of them through bounces; a real UART's 0 to 0.11 on the bench)
+        nb = max(1, int(v.max()).bit_length()) if len(v) else 1
+        fixed = float(np.mean([max(x, 1 - x) >= 0.95 for x in (((v >> b) & 1).mean() for b in range(nb))])) if len(v) else 0.0
+        m["fixed_bits"] = fixed
+        paced = (m["L"] or 0) % 3 == 0 and fixed >= UART_FIXED_BITS
         # how clock-like the line is, and how it keeps to some clock, count only past what UART lines show: on the
         # bench a real UART's clock_like is under 0.37 and its keeping under 0.21 (99%), lines of pulses (1-Wire, LED)
         # 0.7 or more and synchronous data 0.45 or more. Below that both are the competing readings' to decide (by
@@ -331,7 +340,8 @@ class UartPlugin:
         clock_off = 0.5 * float(np.clip((clock_like - UART_CLOCK_LIKE) / (0.7 - UART_CLOCK_LIKE), 0, 1))
         sync_off = float(np.clip((sync - UART_SYNC) / 0.3, 0, 1))
         score = (framing * coverage * q(ok_n) * degenerate(v & 0xFF) * m["two_values"] * (1 - clock_off) * (1 - sync_off)
-                 * (1 - float(np.clip((tight - 0.5) / 0.3, 0, 1))) * (1 - framed) * resolvable * gridded)
+                 * (1 - float(np.clip((tight - 0.5) / 0.3, 0, 1))) * (1 - framed) * resolvable * gridded
+                 * (UART_PACED if paced else 1.0))
         params = {"baud": c.cap.rate / u_main, "idle": rb.idle, "L": m["L"], "blocks": len(units)}
         items = {"value": v, "start": np.concatenate(starts), "char_samples": u_main * (m["L"] or 10)}
         return [Node("uart", params, {"data": rb.pin}, Stream("bytes", items, meta={"char_samples": u_main * (m["L"] or 10)}),
