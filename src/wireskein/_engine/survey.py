@@ -162,7 +162,7 @@ def async_info(cap: Capture, f: ChannelFeatures) -> AsyncInfo:
 
 
 SPIKE_PERIOD = 4        # samples: a clock's period this long or more has halves of two samples, longer than a spike
-SPIKE_BROKEN = 0.5      # a clock's pulses of a sample this share or more breaking its period: a noise's
+SPIKE_BROKEN = 0.35     # a clock's pulses of a sample this share or more breaking its period: a noise's
 SPIKE_IDLE = 4          # a clock's run this many times its median or longer: idle (a sample's pulse between two: a spike)
 GATE_KEEPS = 3          # a line keeping under a third of its changes through a clock's gate is measured without it
 USED_SELECTIONS = 0.8   # a select line's windows at its active level holding a transfer: this share or more
