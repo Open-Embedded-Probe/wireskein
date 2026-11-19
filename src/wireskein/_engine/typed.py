@@ -535,11 +535,24 @@ def async_segments(cap, sv: Survey, pin: str, half: int = 10, change: float = 1.
         j = _fewest_bad(bad, length[idx], level[idx] == f.idle_level, np.abs(start[idx] - bounds[ci]))
         if j >= 0:
             bounds[ci] = int(start[idx[j]] + length[idx[j]] // 2)
+    # a stretch of too few runs for a rate of its own (under two windows: a break and a character or two before the
+    # switch the refinement placed) goes with the next one
+    merged = [bounds[0]]
+    for x, y in zip(bounds[1:-1], bounds[2:]):
+        if np.count_nonzero((start >= merged[-1]) & (start < x)) >= 2 * w and np.count_nonzero((start >= x) & (start < y)) >= 2 * w:
+            merged.append(x)
+    bounds = merged + [bounds[-1]]
     out = []
     for s0, s1 in zip(bounds[:-1], bounds[1:]):
         u = unit_of(s0, s1)
         if u:
-            out.append((s0, s1, u))
+            # neighbours whose bit times differ by less than a switch are one stretch (a spike made the jump; split,
+            # each half held too few breaks for a DMX512 line to read as one): read again as one
+            if out and max(u, out[-1][2]) / min(u, out[-1][2]) < change and out[-1][1] == s0:
+                a0 = out[-1][0]
+                out[-1] = (a0, s1, unit_of(a0, s1) or out[-1][2])
+            else:
+                out.append((s0, s1, u))
     return out
 
 
