@@ -82,8 +82,14 @@ def changed_channels(a: list[Node], b: list[Node]) -> int:
     return sum(1 for ch in set(la) | set(lb) if la.get(ch) != lb.get(ch))
 
 
+# confirmed: a score and a margin over the next reading, any of these pairs. Measured on the full CI de2c3e0's
+# tuning-side claims (no held-out set): 0.85/0.15 right but 1 of 8653; under 0.85, 0.80/0.25 and 0.60/0.50 right in
+# all of 899 (a reading far ahead of every other one is sure though its own evidence is short of 0.85)
+CONFIRMED = ((0.85, 0.15), (0.80, 0.25), (0.60, 0.50))
+
+
 def verdict(total: float, margin: float) -> str:
-    if total >= 0.85 and margin >= 0.15:
+    if any(total >= s and margin >= m for s, m in CONFIRMED):
         return "confirmed"
     if total >= 0.6 and margin >= 0.05:
         return "likely"
