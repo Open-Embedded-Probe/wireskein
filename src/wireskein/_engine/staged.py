@@ -400,6 +400,7 @@ def _slow_at(edges: np.ndarray, k: int, rises: np.ndarray) -> np.ndarray:
     return allow
 
 
+NOISY_RUNS = 0.12    # a clock's runs this share short (under BOUNCE_TICKS) at least: its periods from it cleaned
 GLITCH_SHARE = 0.6    # a clock's runs this short a share or less: a view with them taken out
 
 
@@ -442,10 +443,13 @@ def glitch_views(cap, sv, g, memo: dict | None = None):
                 continue
             # only where the clock around is slow enough for k (its period 4k or more): a capture whose clock
             # changes speed (a LinkE connecting slowly, then reading fast) keeps its fast clock's short highs. The
-            # period from the clock with its pulses of k taken out: bounces at half its edges split its periods,
-            # and the median of them was a bounce's
+            # period from the clock with its pulses of k taken out, where a share of its runs are short (NOISY_RUNS
+            # or more: bounces, spikes, crosstalk split its periods, and the median of them was a noise's); else as
+            # it is (a LinkE's clock, its fast stretches' highs of a sample its own and few: 0.113 of its runs, where
+            # bounces 0.1 on the bench make 0.123 at the least)
             if ("rises", g.clock, k) not in memo:
-                ce = K.deglitch(ch.edges, k)
+                raw = np.asarray(ch.edges, np.int64)
+                ce = K.deglitch(raw, k) if float(np.mean(inner < BOUNCE_TICKS * step)) >= NOISY_RUNS else raw
                 memo[("rises", g.clock, k)] = ce[K.edge_levels(ce, ch.initial) == 1]
             rises = memo[("rises", g.clock, k)]
 
