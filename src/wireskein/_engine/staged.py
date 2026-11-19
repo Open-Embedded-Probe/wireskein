@@ -389,18 +389,42 @@ def _upper(node: Node, scorer: DefaultScorer) -> None:
     node.total = node.layer_score + 0.5 * (1 - node.layer_score) * support * node.layer_score
 
 
-def _slow_at(edges: np.ndarray, k: int, rises: np.ndarray) -> np.ndarray:
+def _noise_runs(clock: np.ndarray, short: float) -> np.ndarray:
+    """The running count (from 0, one per run) of the clock's runs shorter than `short` beside one of 2 x `short` or
+    longer: a noise's (a spike or crosstalk inside a run, a bounce at an edge). A clock too fast for the rate has its
+    short highs between runs barely longer (a LinkE at 10 MHz: highs of a sample, lows of 2-3) - not counted."""
+    runs = np.diff(np.asarray(clock, np.int64))
+    long_ = runs >= 2 * short
+    beside = np.zeros(len(runs), bool)
+    beside[1:] |= long_[:-1]
+    beside[:-1] |= long_[1:]
+    return np.concatenate(([0], np.cumsum((runs < short) & beside)))
+
+
+def _slow_at(edges: np.ndarray, k: int, rises: np.ndarray, raw_rises: np.ndarray | None = None,
+             clock: np.ndarray | None = None, noise: np.ndarray | None = None) -> np.ndarray:
     """Per edge, whether the clock around it is slow enough to filter pulses of k (its period 4k or more, the median
-    of the periods before and after: a clock's own glitches do not make it look fast)."""
+    of the periods before and after: a clock's own glitches do not make it look fast). With the clock as it is
+    (raw_rises; its changes, and _noise_runs of them): the cleaned clock's period counts where NOISY_RUNS of its runs
+    around (NOISY_WINDOW each side) are a noise's, the period as it is elsewhere - decided around each edge, so that
+    a piece of a long capture decides as the whole does."""
     edges = np.asarray(edges, np.int64)
     allow = np.zeros(len(edges), bool)
     near = np.flatnonzero(np.diff(edges) < k) + 1
     if len(near):
-        allow[near] = K.local_period(rises, edges[near], q=50) >= 4 * k
+        t = edges[near]
+        slow = K.local_period(rises, t, q=50) >= 4 * k
+        if raw_rises is not None and clock is not None and noise is not None and len(clock) > 2:
+            i = np.searchsorted(clock, t)
+            a, b = np.maximum(i - NOISY_WINDOW, 0), np.minimum(i + NOISY_WINDOW, len(clock) - 1)
+            noisy = (noise[b] - noise[a]) >= NOISY_RUNS * np.maximum(b - a, 1)
+            slow = np.where(noisy, slow, K.local_period(raw_rises, t, q=50) >= 4 * k)
+        allow[near] = slow
     return allow
 
 
-NOISY_RUNS = 0.12    # a clock's runs this share short (under BOUNCE_TICKS) at least: its periods from it cleaned
+NOISY_RUNS = 0.12    # a clock's runs around this share a noise's at least (_noise_runs): its periods from it cleaned
+NOISY_WINDOW = 64    # runs each side of an edge, for that share
 GLITCH_SHARE = 0.6    # a clock's runs this short a share or less: a view with them taken out
 
 
@@ -443,20 +467,25 @@ def glitch_views(cap, sv, g, memo: dict | None = None):
                 continue
             # only where the clock around is slow enough for k (its period 4k or more): a capture whose clock
             # changes speed (a LinkE connecting slowly, then reading fast) keeps its fast clock's short highs. The
-            # period from the clock with its pulses of k taken out, where a share of its runs are short (NOISY_RUNS
-            # or more: bounces, spikes, crosstalk split its periods, and the median of them was a noise's); else as
-            # it is (a LinkE's clock, its fast stretches' highs of a sample its own and few: 0.113 of its runs, where
-            # bounces 0.1 on the bench make 0.123 at the least)
+            # period from the clock with its pulses of k taken out where a share of its runs around are a noise's
+            # (NOISY_RUNS or more, short beside a long one: bounces, spikes, crosstalk split its periods, and the
+            # median of them was a noise's); else as it is (a LinkE's clock, its fast stretches' highs of a sample
+            # its own) - _slow_at, _noise_runs
             if ("rises", g.clock, k) not in memo:
                 raw = np.asarray(ch.edges, np.int64)
-                ce = K.deglitch(raw, k) if float(np.mean(inner < BOUNCE_TICKS * step)) >= NOISY_RUNS else raw
-                memo[("rises", g.clock, k)] = ce[K.edge_levels(ce, ch.initial) == 1]
+                ce = K.deglitch(raw, k)
+                memo[("rises", g.clock, k)] = (ce[K.edge_levels(ce, ch.initial) == 1],
+                                               raw[K.edge_levels(raw, ch.initial) == 1])
             rises = memo[("rises", g.clock, k)]
 
             def filtered(x):
                 kx = ("pin", g.clock, x.name, k)
                 if kx not in memo:
-                    memo[kx] = K.deglitch(x.edges, k, _slow_at(x.edges, k, rises))
+                    if ("noise", g.clock) not in memo:
+                        memo[("noise", g.clock)] = _noise_runs(ch.edges, BOUNCE_TICKS * step)
+                    memo[kx] = K.deglitch(x.edges, k, _slow_at(x.edges, k, rises[0], rises[1],
+                                                                np.asarray(ch.edges, np.int64),
+                                                                memo[("noise", g.clock)]))
                 return memo[kx]
             chans = [replace(x, edges=filtered(x)) if x.name in pins else x for x in cap.channels]
             # a width that takes out nothing more than a smaller one gives the same lines: read once
