@@ -487,6 +487,10 @@ def async_segments(cap, sv: Survey, pin: str, half: int = 10, change: float = 1.
             j = i + int(np.argmax(np.abs(med_next[i:i + w] - med_prev[i:i + w])))
             # the longest idle run around j is the boundary
             lo, hi = max(1, j - half), min(len(inner), j + half)
+            # (`cand` is taken over by the idle runs here, so the walk below goes on in them and ends near the first
+            # switches found: in effect the first switch only. Walking every jump instead splits a bouncing line, a
+            # decoy, or a DMX512 / LIN line at its breaks in tens of blocks each read at a rate of its own - tried,
+            # false UART claims and DMX512 / LIN lost; kept as it is)
             cand = [k for k in range(lo, hi) if level[k + 1] == f.idle_level]
             k = max(cand, key=lambda k: inner[k]) if cand else j
             cuts.append(int(start[k + 1] + length[k + 1] // 2))
@@ -528,7 +532,7 @@ def async_segments(cap, sv: Survey, pin: str, half: int = 10, change: float = 1.
         ca = np.concatenate(([0], np.cumsum(sa)))              # too short for A before j
         cb = np.concatenate((np.cumsum(sb[::-1])[::-1], [0]))  # too short for B from j on
         bad = ca[:-1] + cb[:-1]
-        j = _fewest_bad(bad, length[idx], level[idx] == f.idle_level)
+        j = _fewest_bad(bad, length[idx], level[idx] == f.idle_level, np.abs(start[idx] - bounds[ci]))
         if j >= 0:
             bounds[ci] = int(start[idx[j]] + length[idx[j]] // 2)
     out = []
@@ -539,11 +543,16 @@ def async_segments(cap, sv: Survey, pin: str, half: int = 10, change: float = 1.
     return out
 
 
-def _fewest_bad(bad: np.ndarray, length: np.ndarray, idle: np.ndarray) -> int:
-    """The idle run with the fewest bad runs around it, the longest of those, the first of those; -1: no idle run."""
+def _fewest_bad(bad: np.ndarray, length: np.ndarray, idle: np.ndarray, away: np.ndarray | None = None) -> int:
+    """The idle run with the fewest bad runs around it; of those the nearest the cut found (`away`: each run's distance
+    from it), then the longest, the first; -1: no idle run. (The slower side's runs are whole numbers of the faster
+    unit, so often many places tie at none bad: the longest of them was the capture's leading idle, and the switch
+    went missing.)"""
     if not idle.any():
         return -1
     cand = idle & (bad == bad[idle].min())
+    if away is not None:
+        cand &= away <= away[cand].min() + length[cand].max()
     return int(np.flatnonzero(cand & (length == length[cand].max()))[0])
 
 
