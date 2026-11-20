@@ -1,10 +1,11 @@
 # MDIO (IEEE 802.3, an Ethernet PHY's management). Clause 22: a preamble of 32 ones, start 01, op (01 write, 10
 # read), the PHY's address and the register's (5 bits each), a turnaround (the second bit 0; the first the
-# controller's 1 on a write, released on a read), 16 data bits. Clause 45 (start 00): op 00 sets the register's
+# controller's 1 on a write, released on a read: not always pulled up, a LAN8720's reads), 16 data bits. Clause 45 (start 00): op 00 sets the register's
 # address (the 16 bits), 01 writes, 11 reads, 10 reads and steps the address; the port's address and the device's
-# (MMD) in place of the PHY's and the register's. MSB first, sampled on MDC's rise. The clock may run
-# on between frames and a frame's preamble may be cut short, so frames are found by scanning for the preamble's
-# last 8 ones and the start.
+# (MMD) in place of the PHY's and the register's; its turnaround's first bit is taken as 1 (its start, 00 after the
+# ones, is what a select line's fall gives: a CS read by a free-running clock). MSB first, sampled on MDC's rise. The clock may run
+# on between frames, so frames are found by scanning for the preamble's 32 ones and the start (a PHY may take a
+# frame without its preamble, which is not read: a run of 8 ones, an SPI's 0xff byte, read MDIO frames in SPI data).
 [plugin]
 name = "mdio"
 input = "frames.gap"
@@ -20,7 +21,7 @@ scan = true
 [[sequence]]
 order = "msb"
 fields = [
-  { name = "pre",  width = 8, expect = 255, hide = true },
+  { name = "pre",  width = 32, expect = 4294967295, hide = true },
   { name = "st",   width = 2, expect = 1, hide = true },
   { name = "op",   width = 2, valid = [1, 2], enum = { "1" = "W", "2" = "R" } },
   { name = "phy",  width = 5 },
@@ -33,12 +34,12 @@ fields = [
 [[sequence]]
 order = "msb"
 fields = [
-  { name = "pre",  width = 8, expect = 255, hide = true },
+  { name = "pre",  width = 32, expect = 4294967295, hide = true },
   { name = "st",   width = 2, expect = 0, hide = true },
   { name = "op",   width = 2, enum = { "0" = "ADDR", "1" = "W", "2" = "RINC", "3" = "R" } },
   { name = "phy",  width = 5 },
   { name = "dev",  width = 5 },
-  { name = "ta1",  width = 1, hide = true },
+  { name = "ta1",  width = 1, expect = 1, hide = true },
   { name = "ta2",  width = 1, expect = 0, hide = true },
   { name = "data", width = 16 },
 ]

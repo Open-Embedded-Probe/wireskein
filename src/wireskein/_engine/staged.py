@@ -254,7 +254,8 @@ UART_FRAMED = 0.35        # LIN / DMX512 framing past this share of the break-fr
 
 
 USB_SE0_MIN = 3           # both lines of a pair low this many times, each 1-4 bits ...
-USB_OPPOSITE = 0.9        # ... the two lines opposite this share of the time otherwise: a USB pair
+USB_OPPOSITE = 0.9        # ... the two lines opposite this share of the time otherwise ...
+USB_TOGETHER = 0.8        # ... and this share of the line's changes within a sample of the other's: a USB pair
 
 
 def usb_se0(cap, pin: str, unit: float) -> int:
@@ -268,6 +269,12 @@ def usb_se0(cap, pin: str, unit: float) -> int:
     for b in cap.channels:
         eb = np.asarray(b.edges)
         if b.name == pin or b.step != a.step or not (0.5 * len(ea) <= len(eb) <= 2 * len(ea)):
+            continue
+        # a pair switches together: most of the line's changes within a sample of the other's (two lines idle at
+        # opposite levels, a UART's and a clock's, are opposite most of the time too, and both low now and then)
+        near = np.abs(eb[np.clip(np.searchsorted(eb, ea), 0, len(eb) - 1)] - ea) <= a.step
+        near |= np.abs(eb[np.clip(np.searchsorted(eb, ea) - 1, 0, len(eb) - 1)] - ea) <= a.step
+        if near.mean() < USB_TOGETHER:
             continue
         cuts = np.unique(np.concatenate([[0], ea, eb, [cap.n_samples]]))
         la, lb = a.level_at(cuts[:-1]), b.level_at(cuts[:-1])

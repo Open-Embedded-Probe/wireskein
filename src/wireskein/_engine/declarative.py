@@ -561,6 +561,9 @@ def _refined_bitrate(nb, spans) -> float:
     return nb.rate * bits_n / samples if samples else nb.bitrate()
 
 
+SCAN_MIN_PERIOD = 4       # samples: a clock this slow at least for a scan to read its lines' fields
+
+
 class DeclarativePlugin:
     @property
     def _ext(self) -> dict:
@@ -900,6 +903,13 @@ class DeclarativePlugin:
             bits, t, bounds = sb.bits[0], sb.t, src.bounds.tolist()
         else:
             bits, t, bounds = src.bits, src.t, src.bounds.tolist()
+        if scan and hasattr(src, "source"):
+            # a clock of under 4 samples a period (one changing at every sample: a fast clock aliased) samples any line
+            # at every sample, and a line's idles and edges read as fields: a UART's idle as MDIO's 32 ones, its
+            # start bits as the start
+            ck = c.sv.clocks.get(src.source.clock)
+            if ck is not None and (ck.period or 0) < SCAN_MIN_PERIOD:
+                return []
         recs, n_ok, n_tried, used, active = [], 0, 0, 0, 0
         spans = []
         info = 0.0

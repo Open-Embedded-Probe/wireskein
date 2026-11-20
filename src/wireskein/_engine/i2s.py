@@ -13,7 +13,8 @@ import numpy as np
 
 from .stack import Node, Stream
 
-I2S_SLOT_MIN = 8          # bits a slot at least
+I2S_SLOT_MIN = 8          # bits a slot at least ...
+I2S_SLOT_MAX = 64         # ... and at most (TDM's frames of 8 slots of 32 are not read here)
 I2S_REGULAR = 0.9         # of WS's runs, this share or more of one length (the slot)
 I2S_SLOTS = 8             # slots for full evidence (q)
 
@@ -42,7 +43,7 @@ def read_i2s(t: np.ndarray, ws: np.ndarray, sd: np.ndarray):
     vals, cnt = np.unique(runs, return_counts=True)
     slot = int(vals[np.argmax(cnt)])
     regular = float(cnt.max() / len(runs))
-    if slot < I2S_SLOT_MIN or regular < I2S_REGULAR:
+    if not I2S_SLOT_MIN <= slot <= I2S_SLOT_MAX or regular < I2S_REGULAR:
         return None
     # the slots as WS has them, each starting where WS changed: whole ones only
     starts = ch[:-1][runs == slot]

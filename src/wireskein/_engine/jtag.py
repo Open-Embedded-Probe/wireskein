@@ -20,6 +20,7 @@ NEXT = np.array([  # [state][tms]
     (RTI, SDS), (CIR, TLR), (SIR, E1IR), (SIR, E1IR), (PIR, UIR), (PIR, E2IR), (SIR, UIR), (RTI, SDS)], np.int8)
 
 JTAG_SCANS = 4            # scans for half the evidence of their count (q)
+JTAG_CAPTURES = 2         # IR scans with TDO's 1 0 seen, at least, for a claim
 JTAG_IN_SHIFT = 0.9       # TDI's / TDO's changes in the shift states, this share for full weight
 EVIDENCE_BITS = 8
 
@@ -97,8 +98,10 @@ class JtagPlugin:
                 sc = [s for s in scans(st, sb.t, None, sb.bits[i]) if s["type"] == "IR" and len(s["tdo"]) >= 2]
                 ir_tdo[i] = (sum(s["tdo"][:2] == [1, 0] for s in sc), len(sc))
             tdo = max(others, key=lambda i: (ir_tdo[i][0], conc[i]))
-            if ir_tdo[tdo][0] == 0:
-                tdo = None
+            if ir_tdo[tdo][0] < JTAG_CAPTURES:
+                # without TDO's IR capture the walk has IR scans of one length for evidence alone, which TMS taken
+                # from a line of pulses with another's changes in its "shifts" gives too
+                continue
             rest = [i for i in others if i != tdo]
             tdi = max(rest, key=lambda i: conc[i]) if rest else None
             sc = scans(st, sb.t, sb.bits[tdi] if tdi is not None else None, sb.bits[tdo] if tdo is not None else None)
