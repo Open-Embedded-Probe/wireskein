@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 0.0.33
 - (EN) Fixed (from the line below): the changes a clock period are measured over 32 of its periods or more: slow rises left an I2C's SCL a few clock-like pulses (6-10), its SDA glitching across the threshold changed more than 2.5 times each, and with the SCL no longer holding it the SDA was claimed as a UART, likely (the full CI f91be88: false likely +2 on mixed/nack with slow rises 4000).
 - (JA) 直した（下の項目から）: クロックの 1 周期あたりの変化は、32 周期以上で測る: 遅い立ち上がりで I2C の SCL にクロックらしいパルスが少し（6〜10）しか残らず、しきい値をまたいで揺れる SDA がそれぞれ 2.5 回より多く変わり、SCL に抑えられなくなった SDA が UART の有力として主張されていた（全スイートの CI f91be88 で、遅い立ち上がり 4000 の mixed/nack に誤有力 +2）。
 - (EN) Fixed: a UART beside a line pulsed once a character (a test bench's marker) was taken for synchronous data of that line as a clock, its bits keeping a phase to the pulses, and its claim held at 0.07 (sigrok-dumps' uart_count_19200_7n1/8n1/9n1, not read at all). Synchronous data changes once a clock period at most (twice on both edges); a line changing more than 2.5 times a period inside the clock's bursts is no data of it. Tuning-side broad set: the same but for two slow-rise I2C buses whose SDA is now also read as a UART, ambiguous (0.36; it was held at nothing); sigrok-dumps' UART: confirmed 111 -> 121, right and confirmed 37 -> 40.
