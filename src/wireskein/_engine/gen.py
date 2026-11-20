@@ -314,6 +314,43 @@ def mdio(mdc: Wave, md: Wave, t: float, frames: list[dict], freq: float, preambl
     return t
 
 
+def jtag(tck: Wave, tms: Wave, tdi: Wave, tdo: Wave, t: float, scans: list[dict], freq: float,
+         idle_clocks: int = 2, gap: float = 5e-6) -> float:
+    """JTAG scans (IEEE 1149.1) from Test-Logic-Reset: five TMS 1s, then each {"type": "IR" | "DR", "bits", "tdi",
+    "tdo"} (values shifted LSB first) from Run-Test/Idle to Update and back, `idle_clocks` in Run-Test/Idle after.
+    TMS, TDI and TDO change after TCK's falling edge and are read on the rising; TDO holds where nothing shifts."""
+    h = 0.5 / freq
+
+    def clock(m, i=None, o=None):
+        nonlocal t
+        tms.set(t + h * 0.1, m)
+        if i is not None:
+            tdi.set(t + h * 0.1, i)
+        if o is not None:
+            tdo.set(t + h * 0.15, o)
+        tck.set(t + h, 1)
+        tck.set(t + 2 * h, 0)
+        t += 2 * h
+
+    for _ in range(5):
+        clock(1)
+    clock(0)
+    for sc in scans:
+        clock(1)                                   # Select-DR-Scan
+        if sc["type"] == "IR":
+            clock(1)                               # Select-IR-Scan
+        clock(0)                                   # Capture
+        clock(0)                                   # Shift
+        n = sc["bits"]
+        for k in range(n):
+            clock(1 if k == n - 1 else 0, (sc["tdi"] >> k) & 1, (sc["tdo"] >> k) & 1)
+        clock(1)                                   # Update
+        for _ in range(idle_clocks):
+            clock(0)                               # Run-Test/Idle
+        t += gap
+    return t
+
+
 def can_crc15(bits) -> int:
     crc = 0
     for b in bits:
