@@ -88,6 +88,9 @@ the lines fit, whether analyze would have claimed it, and what was not read or n
 
 - `decoded`: `false` when nothing on these pins decodes as this protocol; `result` is then empty and every burst on
   the pins is uninterpreted. Said, not left out.
+- `roles_unknown`: `{"given": [...], "roles": [...]}` when a clocked protocol (I2C, SPI, RVSWD) is given a role it does
+  not have (`swdio` for RVSWD, whose roles are `clk`, `dio`): such a role hints nothing, and the bus is read only where
+  its lines alone show it. Buses that name one pin under two protocols are each read (analyzed apart).
 - `params`: what the decoder chose (the sampling edge, a UART's baud, ...).
 - `fit.score`: how well the lines fit, 0–1 (analyze's score). Low on a short case: it measures evidence, not
   correctness.
