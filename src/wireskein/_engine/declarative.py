@@ -1075,9 +1075,14 @@ def _adapt_swd(c, fr, n):
     return n
 
 
+def _adapt_mdio(c, fr, n):
+    n.output = Stream("mdio.frames", [r for r in n.output.items if r["ok"]])
+    return n
+
+
 def _adapt_can(c, fr, n):
     n.output = Stream("can.frames", n.output.items)
     return n
 
 
-ADAPTERS = {"i2c": _adapt_i2c, "spi": _adapt_spi, "rvswd": _adapt_rvswd, "swd": _adapt_swd, "can": _adapt_can}
+ADAPTERS = {"i2c": _adapt_i2c, "spi": _adapt_spi, "rvswd": _adapt_rvswd, "swd": _adapt_swd, "mdio": _adapt_mdio, "can": _adapt_can}

@@ -279,6 +279,41 @@ def swd(clk: Wave, dio: Wave, t: float, packets: list[dict], freq: float, idle_c
     return t
 
 
+def mdio(mdc: Wave, md: Wave, t: float, frames: list[dict], freq: float, preamble: int = 32, gap: float = 10e-6) -> float:
+    """MDIO frames (IEEE 802.3). Each {"clause": 22 | 45, "op", "phy", "reg" (clause 22) or "dev" (45), "data"}; op
+    as on the wire (22: 1 write, 2 read; 45: 0 address, 1 write, 3 read, 2 read and step). The controller changes MDIO
+    after MDC's falling edge, the PHY its data (a read) after the rising edge before; both are read on the rising
+    edge. The line
+    idles high (pulled up), the clock stops between frames."""
+    h = 0.5 / freq
+
+    def bit(v, by_phy=False):
+        nonlocal t
+        md.set(t - h * 0.8 if by_phy else t + h * 0.1, v)     # the PHY just after the rise before this bit's
+        mdc.set(t + h, 1)
+        mdc.set(t + 2 * h, 0)
+        t += 2 * h
+
+    def field(v, n, by_phy=False):
+        for i in range(n - 1, -1, -1):
+            bit((v >> i) & 1, by_phy)
+
+    for f in frames:
+        c45 = f.get("clause", 22) == 45
+        read = f["op"] in ((3, 2) if c45 else (2,))
+        field((1 << preamble) - 1, preamble)
+        field(0 if c45 else 1, 2)
+        field(f["op"], 2)
+        field(f["phy"], 5)
+        field(f["dev"] if c45 else f["reg"], 5)
+        bit(1)                                     # released on a read: the pull-up's 1
+        bit(0, read)
+        field(f["data"], 16, read)
+        md.set(t + h * 0.1, 1)
+        t += gap
+    return t
+
+
 def can_crc15(bits) -> int:
     crc = 0
     for b in bits:

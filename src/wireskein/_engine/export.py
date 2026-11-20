@@ -155,7 +155,7 @@ def layers_of(n) -> dict:
             out["frames"] = n.output.items
         else:
             out["packets"] = n.output.items
-    elif a in ("swd", "can") or getattr(getattr(n, "plugin", None), "external", False) or n.params.get("external"):
+    elif a in ("swd", "mdio", "can") or getattr(getattr(n, "plugin", None), "external", False) or n.params.get("external"):
         rows = [{("s" if k == "start" else k): (int(v) if isinstance(v, np.integer) else v) for k, v in x.items()}
                 for x in (n.output.items or [])]
         out["packets" if a == "swd" else "frames"] = rows
@@ -176,7 +176,8 @@ def layers_of(n) -> dict:
 
 FINAL = {"i2c": "transactions", "spi": ("sd", "transfers"), "uart": ("lines", "nmea", "modbus_rtu", "bytes"),
          "lin": "frames", "dmx512": "packets", "rvswd": ("dm", "dmi"), "swio": ("dm", "dmi"), "sync_unknown": "summary",
-         "swd": "packets", "can": "frames", "rgb_led": "frames", "onewire": "resets", "ir_nec": "frames"}
+         "swd": "packets", "mdio": "frames", "can": "frames", "rgb_led": "frames", "onewire": "resets",
+         "ir_nec": "frames"}
 
 
 def final_of(n, lay: dict) -> dict:
@@ -221,7 +222,7 @@ def _window(lay: dict, s0: int, s1: int) -> dict:
 
 DEPTHS = ("transport", "frames", "protocol", "device")
 LOWER = {"i2c": "transactions", "spi": "transfers", "uart": "bytes", "lin": "frames", "dmx512": "packets",
-         "rvswd": "dmi", "swio": "dmi", "swd": "packets", "can": "frames", "sync_unknown": "summary", "rgb_led": "frames", "onewire": "resets",
+         "rvswd": "dmi", "swio": "dmi", "swd": "packets", "mdio": "frames", "can": "frames", "sync_unknown": "summary", "rgb_led": "frames", "onewire": "resets",
          "ir_nec": "frames"}
 
 

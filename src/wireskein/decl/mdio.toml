@@ -1,0 +1,47 @@
+# MDIO (IEEE 802.3, an Ethernet PHY's management). Clause 22: a preamble of 32 ones, start 01, op (01 write, 10
+# read), the PHY's address and the register's (5 bits each), a turnaround (the second bit 0; the first the
+# controller's 1 on a write, released on a read), 16 data bits. Clause 45 (start 00): op 00 sets the register's
+# address (the 16 bits), 01 writes, 11 reads, 10 reads and steps the address; the port's address and the device's
+# (MMD) in place of the PHY's and the register's. MSB first, sampled on MDC's rise. The clock may run
+# on between frames and a frame's preamble may be cut short, so frames are found by scanning for the preamble's
+# last 8 ones and the start.
+[plugin]
+name = "mdio"
+input = "frames.gap"
+data_pins = 1
+
+[roles]
+clock = "mdc"
+data = "mdio"
+
+[frame]
+scan = true
+
+[[sequence]]
+order = "msb"
+fields = [
+  { name = "pre",  width = 8, expect = 255, hide = true },
+  { name = "st",   width = 2, expect = 1, hide = true },
+  { name = "op",   width = 2, valid = [1, 2], enum = { "1" = "W", "2" = "R" } },
+  { name = "phy",  width = 5 },
+  { name = "reg",  width = 5 },
+  { name = "ta1",  width = 1, hide = true },
+  { name = "ta2",  width = 1, expect = 0, hide = true },
+  { name = "data", width = 16 },
+]
+
+[[sequence]]
+order = "msb"
+fields = [
+  { name = "pre",  width = 8, expect = 255, hide = true },
+  { name = "st",   width = 2, expect = 0, hide = true },
+  { name = "op",   width = 2, enum = { "0" = "ADDR", "1" = "W", "2" = "RINC", "3" = "R" } },
+  { name = "phy",  width = 5 },
+  { name = "dev",  width = 5 },
+  { name = "ta1",  width = 1, hide = true },
+  { name = "ta2",  width = 1, expect = 0, hide = true },
+  { name = "data", width = 16 },
+]
+
+[score]
+terms = ["degenerate"]

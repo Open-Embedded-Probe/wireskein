@@ -490,7 +490,7 @@ class DmxPlugin:
 # declared in decl/*.toml (docs/design.ja.md §3.2)
 PLUGINS = ([SyncUnknownPlugin(), UartPlugin(), LinPlugin(), DmxPlugin(), SwioPlugin(), RgbLedPlugin(),
             OneWirePlugin(), NecPlugin()]
-           + load_all(["i2c", "spi", "rvswd"]) + load_all(["swd", "can"]))
+           + load_all(["i2c", "spi", "rvswd"]) + load_all(["swd", "can", "mdio"]))
 UPPER = [Lines(), Nmea(), ModbusRtu(), MarkerGrammar()]
 
 
@@ -858,7 +858,10 @@ class StagedResult:
     runs: int = 0
 
 
-SYNC_PROTOCOLS = {"i2c", "spi", "rvswd", "swd", "sync_unknown"}
+SCAN_COVER = 0.95         # a declared protocol's frames explaining this share of the bits ...
+SCAN_EVIDENCE = 32        # ... and these bits of fixed fields checked: the SPI reading of the same bits is no rival
+SCAN_BELOW = 0.1          # ... where it scores no more than this over the declared one (fewer frames, less evidence)
+SYNC_PROTOCOLS = {"i2c", "spi", "rvswd", "swd", "mdio", "sync_unknown"}
 ASYNC_PROTOCOLS = {"uart", "lin", "dmx512", "can"}
 PULSE_PROTOCOLS = {"swio", "rgb_led", "onewire", "ir_nec"}
 SYNC_ROLES = {"i2c": {"scl": "clock", "sda": "data"}, "spi": {"clk": "clock", "mosi": "data", "miso": "data", "cs": "select"},
@@ -1273,6 +1276,17 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
     known = [n for n in roots if n.analyzer != "sync_unknown" and n.output is not None]
     roots_pack = [n for n in roots if n.analyzer != "sync_unknown" or not any(
         k.total >= n.total and set(k.roles.values()) & set(n.roles.values()) for k in known)]
+    # an SPI reading of the very bits a declared protocol of fixed fields reads (the same clock, edge and data lines:
+    # MDIO's frames are 64 bits, 8 SPI words) is the same reading without its structure, no rival to it
+    framed = [n for n in roots_pack if n.output is not None and n.metrics.get("bit_coverage", 0) >= SCAN_COVER
+              and n.metrics.get("evidence_bits", 0) >= SCAN_EVIDENCE and "sample_edge" in n.params]
+    if framed:
+        def same_bits(sp, k):
+            r = list(k.roles.values())
+            return (sp.roles.get("clk") == r[0] and {v for kk, v in sp.roles.items() if kk.startswith("data")} == set(r[1:])
+                    and sp.params.get("sample_edge") == k.params["sample_edge"] and k.total >= sp.total - SCAN_BELOW)
+        roots_pack = [n for n in roots_pack if n.analyzer != "spi" or "cs" in n.roles
+                      or not any(same_bits(n, k) for k in framed)]
     roots_pack += shared_buses(roots_pack, tx.survey, cap)
     exps = explanations(roots_pack, value)
     claims = []
