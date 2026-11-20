@@ -59,6 +59,33 @@ def frame_score(e: dict) -> float:
             * q(e["words"], e["evidence_scale"]) * (0.5 + 0.5 * e["clk"]) * (0.5 + 0.5 * e["pair"]))
 
 
+REBUILT_TRUST = 0.5    # a clock as captured this clock-like or more: a reading on its rebuilt view scored as that view has it
+
+
+def view_clk_pair(c, sb, clk: float, pair: float) -> tuple[float, float]:
+    """How clock-like the clock is and how the weakest data pin keeps to it, as a rebuilt view (staged.rebuilt_views)
+    has them where it changed the bus's lines (the larger of both): a bounced clock read on its rebuilt view is held
+    to the lines as captured otherwise (0.7-0.8 each: a right SPI bus kept at 0.77, likely)."""
+    view = getattr(sb, "view", None)
+    if view is None or view is c.cap:
+        return clk, pair
+    if not str(getattr(sb, "deglitched", "")).startswith("rebuilt") or clk < REBUILT_TRUST:
+        # only a rebuilt view: a width view's reading of a word or two (a decimated I2C read on SDA's spike-free view,
+        # pair 0.51) is held to the lines as captured. And a clock rebuilt from its period is regular whatever was
+        # read on it: as captured, a clock this broken (a bounce at half its edges: 0.35-0.41) gives a reading on its
+        # rebuilt view no more than the lines do
+        return clk, pair
+    if all(np.array_equal(np.asarray(view.channel(p).edges), np.asarray(c.cap.channel(p).edges))
+           for p in (sb.clock, *sb.data)):
+        return clk, pair
+    from .features import channel_features
+    from .survey import clock_info, pair_relation
+    ci = clock_info(view, channel_features(view, view.channel(sb.clock)))
+    if ci is None:
+        return clk, pair
+    return max(clk, ci.clock_score), max(pair, min(pair_relation(view, ci, d).data_score for d in sb.data))
+
+
 def binomial_tail(n: int, k: int, p: float) -> float:
     """P(X >= k) for X ~ Binomial(n, p): how likely k fits of n frames are by chance."""
     if k <= 0:
@@ -642,6 +669,7 @@ class DeclarativePlugin:
         clk = c.sv.clocks[sb.clock].clock_score
         # a bus claim is only as strong as its weakest assigned data pin
         pair = float(np.min([c.sv.pairs[(sb.clock, d)].data_score for d in sb.data]))
+        clk, pair = view_clk_pair(c, sb, clk, pair)
         from . import methods
         evidence = {"protocol": self.name, "fit": fit, "fit_evidence": fit_evidence, "rule": rule,
                     "fits": int(fits.sum()), "frames": int(keep.sum()), "check_rate": check_rate,
@@ -938,6 +966,7 @@ class DeclarativePlugin:
             # same clock / pairing evidence as the word shape (weakest data pin)
             clk = c.sv.clocks[sb.clock].clock_score
             pair = float(min(c.sv.pairs[(sb.clock, d)].data_score for d in sb.data))
+            clk, pair = view_clk_pair(c, sb, clk, pair)
             score *= (0.5 + 0.5 * clk) * (0.5 + 0.5 * pair)
             m.update(clk=clk, pair=pair)
         if "degenerate" in sp.get("score", {}).get("terms", []):

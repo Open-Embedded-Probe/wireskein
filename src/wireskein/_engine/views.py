@@ -105,3 +105,135 @@ def broken_runs(clock: np.ndarray, short: float, off: float = 0.25, median: int 
     broken = np.zeros(len(runs), bool)
     broken[1:-1] = o[:-1] & o[1:]
     return np.concatenate(([0], np.cumsum((runs < short) & broken)))
+
+
+# ---- a clock rebuilt from its period (bounces as long as its half period: no width tells them from its own runs) ----
+
+REBUILD_REFUSE = 0.8     # refuse: after a change it keeps, nothing within this share of the half period
+REBUILD_TOL = 0.34       # follow: the next change within this share of a half period of where it is due
+REBUILD_GRID = 0.6       # grid: a change within this many ticks of a point of the grid is the change there
+REBUILD_BURST = 3        # half periods: a gap this long ends a burst (each burst is rebuilt on its own)
+
+
+def _half(e: np.ndarray) -> float:
+    """A clock's half period, from its longer runs (a bounce's are short)."""
+    d = np.diff(e)
+    big = d[d >= 0.5 * np.percentile(d, 75)] if len(d) > 4 else d
+    return float(np.median(big)) if len(big) else 0.0
+
+
+def _bursts(e: np.ndarray, h: float) -> list[np.ndarray]:
+    cut = np.flatnonzero(np.diff(e) > REBUILD_BURST * h)
+    return np.split(e, cut + 1)
+
+
+def _odd(out: list) -> np.ndarray:
+    """Changes in order, two at one tick cancelling (a pulse of no width)."""
+    u, c = np.unique(np.asarray(out, np.int64), return_counts=True)
+    return u[c % 2 == 1]
+
+
+def _ends_as_raw(out: list, lv: int, raw: int) -> int:
+    """A rebuilt burst ends on the level the line holds after it (the change too many or too few dropped)."""
+    if lv != raw and out:
+        out.pop()
+        lv ^= 1
+    return lv
+
+
+def clock_refused(edges: np.ndarray, initial: int, n: int) -> np.ndarray:
+    """In order: a change kept, nothing within REBUILD_REFUSE of a half period after it, and a change put back where a
+    gap of 1.5-2.5 half periods says the noise cancelled one; levels alternate; each burst ends on the raw level."""
+    e = np.asarray(edges, np.int64)
+    h = _half(e) if len(e) >= 8 else 0.0
+    if h < 2:
+        return e
+    out: list[int] = []
+    lv = raw = initial
+    for b in _bursts(e, h):
+        raw ^= len(b) & 1
+        last = -(1 << 62)
+        for t in b:
+            if t - last >= REBUILD_REFUSE * h:
+                if 1.5 * h <= t - last < 2.5 * h:
+                    out.append(int(last + round(h)))
+                    lv ^= 1
+                out.append(int(t))
+                lv ^= 1
+                last = t
+        lv = _ends_as_raw(out, lv, raw)
+    return _odd(out)
+
+
+def clock_followed(edges: np.ndarray, initial: int, n: int) -> np.ndarray:
+    """As a PLL: per burst, from its first change, each next the change nearest where a half period puts it (within
+    REBUILD_TOL of one), or that place itself when none is there; the half period per burst."""
+    e = np.asarray(edges, np.int64)
+    hg = _half(e) if len(e) >= 8 else 0.0
+    if hg < 2:
+        return e
+    out: list[int] = []
+    lv = raw = initial
+    for b in _bursts(e, hg):
+        raw ^= len(b) & 1
+        if len(b) < 4:
+            for t in b:
+                out.append(int(t))
+                lv ^= 1
+            lv = _ends_as_raw(out, lv, raw)
+            continue
+        bd = np.diff(b)
+        h = float(np.median(bd[bd >= 0.5 * hg])) if np.any(bd >= 0.5 * hg) else hg
+        t = int(b[0])
+        out.append(t)
+        lv ^= 1
+        while t + 0.5 * h < b[-1]:
+            due = t + h
+            lo, hi = np.searchsorted(b, due - REBUILD_TOL * h), np.searchsorted(b, due + REBUILD_TOL * h, side="right")
+            t = int(b[lo:hi][np.argmin(np.abs(b[lo:hi] - due))]) if hi > lo else int(round(due))
+            out.append(t)
+            lv ^= 1
+        lv = _ends_as_raw(out, lv, raw)
+    return _odd(out)
+
+
+def clock_gridded(edges: np.ndarray, initial: int, n: int) -> np.ndarray:
+    """As a grid: per burst, from its first change, points every h (the fractional half period within 0.6-1.4 of the
+    burst's that puts the most changes within REBUILD_GRID ticks of a point), each moved to the change there if any;
+    an error at one point does not carry to the next."""
+    e = np.asarray(edges, np.int64)
+    hg = _half(e) if len(e) >= 8 else 0.0
+    if hg < 2:
+        return e
+    out: list[int] = []
+    lv = raw = initial
+    for b in _bursts(e, hg):
+        raw ^= len(b) & 1
+        if len(b) < 6:
+            for t in b:
+                out.append(int(t))
+                lv ^= 1
+            lv = _ends_as_raw(out, lv, raw)
+            continue
+        bf = b.astype(np.float64)
+        bd = np.diff(bf)
+        h0 = float(np.median(bd[bd >= 0.5 * hg])) if np.any(bd >= 0.5 * hg) else hg
+        best = None
+        for h in np.arange(0.6 * h0, 1.4 * h0, max(0.01, 0.004 * h0)):
+            g = bf[0] + h * np.arange(int((bf[-1] - bf[0]) / h + 0.5) + 1)
+            i = np.clip(np.searchsorted(bf, g), 1, len(bf) - 1)
+            dist = np.minimum(np.abs(bf[i] - g), np.abs(bf[i - 1] - g))
+            sc = np.sum(dist <= REBUILD_GRID) - 0.5 * np.sum(dist > REBUILD_GRID)
+            if best is None or sc > best[0]:
+                best = (sc, g, i, dist)
+        _, g, i, dist = best
+        near = np.where(np.abs(bf[i] - g) <= np.abs(bf[i - 1] - g), bf[i], bf[i - 1])
+        for t in np.unique(np.where(dist <= REBUILD_GRID, near, np.round(g)).astype(np.int64)):
+            out.append(int(t))
+            lv ^= 1
+        lv = _ends_as_raw(out, lv, raw)
+    return _odd(out)
+
+
+REBUILDS = (("rebuilt_refused", clock_refused), ("rebuilt_followed", clock_followed),
+            ("rebuilt_gridded", clock_gridded))

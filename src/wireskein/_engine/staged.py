@@ -479,6 +479,40 @@ NOISY_RUNS = 0.12    # a clock's runs around this share a noise's at least (view
 NOISY_WINDOW = 64    # runs each side of an edge, for that share
 NOISY_WIDE = 2048    # runs each side, for the share of runs breaking the clock's period (views.broken_runs)
 GLITCH_SHARE = 0.6    # a clock's runs this short a share or less: a view with them taken out
+REBUILD_SHORT = 0.02  # a clock's runs half its median or less, this share or more: views with the clock rebuilt
+REBUILD_FEW = 4       # ... and this many of them at least (one short run of a few dozen is no bounce)
+REBUILD_DATA = 4      # ticks (of each line's step): the data and select lines' bounces merged in those views
+REBUILD_BELOW = 0.85  # a group read under this on the width views: its rebuilt views read too
+
+
+def rebuilt_views(cap, sv, g, memo: dict | None = None):
+    """Where the clock's runs hold short ones (REBUILD_SHORT of them half its median or less), the clock rebuilt from
+    its period each way of views.REBUILDS, its data and select lines' bounces merged (REBUILD_DATA ticks): a bounce as
+    long as the clock's half period (bouncing through it, or cancelling its next change) is no width a filter tells
+    from the clock's own runs. Read only where the width views (glitch_views) read the group under REBUILD_BELOW: a
+    rebuilt view that reads a bus as well as they do, with a word or two otherwise, would stand beside theirs as a
+    rival and leave it ambiguous."""
+    memo = {} if memo is None else memo
+    ch = cap.channel(g.clock)
+    r = np.diff(np.asarray(ch.edges, np.int64))
+    short = int(np.count_nonzero(r <= 0.5 * np.median(r))) if len(r) else 0
+    if len(r) < 16 or short < REBUILD_FEW or short < REBUILD_SHORT * len(r):
+        return
+    pins = {*g.data, *([g.select] if g.select else [])}
+    others = {x.name: K.debounce(np.asarray(x.edges, np.int64), REBUILD_DATA * max(1, x.step))
+              for x in cap.channels if x.name in pins}
+    made = []
+    for name, rebuild in V.REBUILDS:
+        key = ("rebuilt", g.clock, name)
+        if key not in memo:
+            memo[key] = rebuild(ch.edges, ch.initial, cap.n_samples)
+        ce = memo[key]
+        if len(ce) < 16 or any(np.array_equal(ce, m) for m in made):
+            continue
+        made.append(ce)
+        yield Capture(cap.rate, cap.n_samples, [replace(x, edges=ce) if x.name == g.clock else
+                                                replace(x, edges=others[x.name]) if x.name in others else x
+                                                for x in cap.channels]), name
 
 
 def glitch_views(cap, sv, g, memo: dict | None = None):
@@ -998,7 +1032,32 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
             own = getattr(p, "edge", None)
             if own in ("rise", "fall") and own not in edges:
                 edges.append(own)
-        for view_cap, k in views:
+        # the width views first; a group they read under REBUILD_BELOW is read on its rebuilt views as well
+        start, queue, qi, rebuilt = len(roots), list(views), 0, False
+        while True:
+            if qi >= len(queue):
+                if rebuilt:
+                    # a rebuilt view's reading is kept only where it reads the group better than the width views
+                    # did: one as good, a word or two otherwise, is a rival to theirs and leaves it ambiguous
+                    # (and of them the best one per set of roles: two edges read on one rebuilt clock tie, a bit apart)
+                    keep: dict = {}
+                    for n in roots[mid:]:
+                        r = (n.analyzer, tuple(sorted(n.roles.items())))
+                        if n.total > best and (r not in keep or n.total > keep[r].total):
+                            keep[r] = n
+                    roots[mid:] = list(keep.values())
+                    break
+                best = max((n.total for n in roots[start:]), default=0.0)
+                if best >= REBUILD_BELOW:
+                    break
+                rebuilt, mid = True, len(roots)
+                more = list(rebuilt_views(cap, c.sv, g, gv_memo))
+                for view_cap, _ in more:
+                    edges += [e for e in typed.sample_edge_for(view_cap, g.clock, g.data) if e not in edges]
+                queue += more
+                continue
+            view_cap, k = queue[qi]
+            qi += 1
             for edge in edges:
                 sb = typed.sync_bits(view_cap, c.sv, g.clock, g.data, g.select, edge)
                 sb.deglitched = k
