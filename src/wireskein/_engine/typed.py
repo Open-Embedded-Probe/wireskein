@@ -345,18 +345,52 @@ def chars(cap, sym: AsyncSymbols, L: int) -> Chars:
         lv = 1 - lv
     t_bit = np.repeat(sym.start, np.minimum(sym.units, L + 2).astype(np.int64))
     # the walk only finds where each character starts; the bits of all of them are read at once
-    at = _char_starts(lv, L)
+    at = _char_starts(lv, L, _first_start(lv, L))
     fr = lv[at[:, None] + np.arange(L)]
-    vals = (fr[:, 1:L - 1].astype(np.int64) << np.arange(L - 2)).sum(1)
     ok = (fr[:, 0] == 0) & (fr[:, L - 1] == 1)
+    vals = (fr[:, 1:L - 1].astype(np.int64) << np.arange(L - 2)).sum(1)
     return Chars(sym.pin, L, vals, ok, t_bit[at].astype(np.int64), sym.start[brk].astype(np.int64))
 
 
-def _char_starts(lv: np.ndarray, L: int) -> np.ndarray:
+START_PREFIX = 20000      # bits of a line with no idle as long as a character over which its first start is chosen
+
+
+def _first_start(lv: np.ndarray, L: int) -> int:
+    """Where the walk over a bit string begins. A capture may start inside a character, and among back-to-back
+    characters the first 0 is then a data bit: the walk from it stays a bit off until an idle as long as a character
+    (in ASCII the eighth bit is always 0 and the stop 1, so the shifted frames hold), and a GPS's NMEA was so read and
+    confirmed. Each of the first changes to active within two characters is tried, up to the first such idle (where
+    every walk is outside a character and starts again at the next 0), the most characters framed kept; at a tie,
+    the first (as the walk always began)."""
+    zeros = np.flatnonzero(lv == 0)
+    if not len(zeros):
+        return 0
+    first = int(zeros[0])
+    falls = np.flatnonzero((lv[1:] == 0) & (lv[:-1] == 1)) + 1
+    cands = [first] + [int(f) for f in falls if first < f < first + 2 * L]
+    if len(cands) == 1:
+        return first
+    # the first idle run of L bits or more after the first 0: every walk is past its characters there
+    d = np.diff(np.concatenate([[0], (lv[first:] == 1).astype(np.int8), [0]]))
+    up, down = np.flatnonzero(d == 1), np.flatnonzero(d == -1)
+    long_idle = np.flatnonzero(down - up >= L)
+    end = first + int(down[long_idle[0]]) if len(long_idle) else len(lv)
+    end = min(end, first + START_PREFIX)
+    head = lv[:end]
+    best, best_ok = first, -1
+    for c in cands:
+        at = _char_starts(head, L, c)
+        n_ok = int(((head[at] == 0) & (head[at + L - 1] == 1)).sum()) if len(at) else 0
+        if n_ok > best_ok:
+            best, best_ok = c, n_ok
+    return best
+
+
+def _char_starts(lv: np.ndarray, L: int, i0: int = 0) -> np.ndarray:
     """Where each character starts in a bit string (0: active): a character is the L bits from a 0, and the next
     one is looked for after it."""
     at = []
-    i, n = 0, len(lv)
+    i, n = i0, len(lv)
     while i < n:
         if lv[i] == 0 and i + L <= n:
             at.append(i)
