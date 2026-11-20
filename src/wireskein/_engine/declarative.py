@@ -982,7 +982,7 @@ class DeclarativePlugin:
             m.update(clk=clk, pair=pair)
         if "degenerate" in sp.get("score", {}).get("terms", []):
             # a periodic line read as frames repeats one frame; real traffic varies
-            keys = [tuple(v for k, v in r.items() if k not in ("start", "ok")) for r in recs if r["ok"]]
+            keys = [tuple(v for k, v in r.items() if k not in ("start", "end", "ok")) for r in recs if r["ok"]]
             top = max(keys.count(k) for k in set(keys)) / len(keys)
             m["top_share"] = top
             score *= 1.0 if top <= 0.5 else max(0.05, 1 - (top - 0.5) / 0.5)

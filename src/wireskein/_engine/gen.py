@@ -248,8 +248,9 @@ def swd(clk: Wave, dio: Wave, t: float, packets: list[dict], freq: float, idle_c
                 # driven on the rising edge before: stable through this bit's rising edge
                 dio.set(t - h, v)
             else:
-                # data changes just after the falling edge, is stable at the rising edge
-                dio.set(t + h * 0.1, v)
+                # data changes just after the falling edge, is stable at the rising edge (with the target's on the
+                # rise, a little later: a host's output delay, off the falling edge's sample)
+                dio.set(t + h * (0.4 if target else 0.1), v)
             clk.set(t + h, 1)
             clk.set(t + h * 2, 0)
             t += 2 * h
