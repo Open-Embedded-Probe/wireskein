@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Fixed: a 1-Wire capture triggered on a reset's fall starts low, and the bus was taken for no 1-Wire (its line claimed as a UART, likely: sigrok-dumps' DS1985 polling, a SoCkit master, a DS2432). A bus idle high is one high most of the time, however it starts.
+- (JA) 直した: リセットの立ち下がりでトリガーした 1-Wire の記録は Low から始まり、1-Wire とみなされていなかった（線が UART の有力として主張されていた: sigrok-dumps の DS1985 のポーリング、SoCkit のマスター、DS2432）。待機が High のバスは、どう始まっても時間の大半が High の線とする。
 - (EN) Fixed: a clock of about 7 samples a period, its highs 3 and 4 samples as the samples cut them, read as an LED chain's 0s and 1s (sigrok-dumps' MDIO: an MDC at 1.7 MHz at 12 MS/s claimed as WS2812 data, 0.98). A 1's high is about twice a 0's (WS2812 0.8 / 0.4 us, SK6812 0.6 / 0.3); a line whose 1s are under 1.5 times its 0s is no LED chain.
 - (JA) 直した: 1 周期 7 サンプルほどのクロックは、サンプルの切り方で High が 3 と 4 サンプルになり、LED の列の 0 と 1 と読まれていた（sigrok-dumps の MDIO: 12 MS/s の 1.7 MHz の MDC が WS2812 のデータとして 0.98）。1 の High は 0 の約 2 倍（WS2812 は 0.8 / 0.4 µs、SK6812 は 0.6 / 0.3）: 1 が 0 の 1.5 倍に届かない線は LED の列ではない。
 - (EN) Fixed: SWD's packets and MDIO's frames have an end (`e`, their last sampled bit): with a start alone, a burst holding several packets counted as read whole once one started in it, and `decode` said "nothing unread" of an STLink's SWD that read 47 of its 183 requests. The packets after the first in a burst are now unread where nothing read them.

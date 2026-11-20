@@ -101,8 +101,11 @@ class OneWirePlugin:
     consumes = ("line",)
 
     def run(self, c, ch, g):
+        # a bus idle high: high most of the time, though a capture triggered on a reset's fall starts low
         if ch.initial != 1:
-            return []
+            _, length, level = ch.runs(c.cap.n_samples)
+            if float(np.sum(np.asarray(length)[np.asarray(level) == 1])) < 0.5 * c.cap.n_samples:
+                return []
         best = None
         # the line as it is, and with pulses shorter than the shortest 1-Wire has (low_1's least, 1 us: a spike, a
         # bounce) taken out: such a pulse is a slot of its own or splits a low or a reset
