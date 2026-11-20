@@ -32,6 +32,7 @@ from . import methods
 from . import plugins_uartlike as UL
 from . import timing, typed
 from .analyzers.pulse import NecPlugin, OneWirePlugin, RgbLedPlugin
+from .i2s import I2sPlugin
 from .analyzers.upper import Lines, MarkerGrammar, ModbusRtu, Nmea
 from .model import Capture
 from . import survey as survey_mod
@@ -489,7 +490,7 @@ class DmxPlugin:
 # the plugins written in Python (state across frames, search, upper layers), then the frame-local protocols
 # declared in decl/*.toml (docs/design.ja.md §3.2)
 PLUGINS = ([SyncUnknownPlugin(), UartPlugin(), LinPlugin(), DmxPlugin(), SwioPlugin(), RgbLedPlugin(),
-            OneWirePlugin(), NecPlugin()]
+            OneWirePlugin(), NecPlugin(), I2sPlugin()]
            + load_all(["i2c", "spi", "rvswd"]) + load_all(["swd", "can", "mdio"]))
 UPPER = [Lines(), Nmea(), ModbusRtu(), MarkerGrammar()]
 
@@ -861,7 +862,7 @@ class StagedResult:
 SCAN_COVER = 0.95         # a declared protocol's frames explaining this share of the bits ...
 SCAN_EVIDENCE = 32        # ... and these bits of fixed fields checked: the SPI reading of the same bits is no rival
 SCAN_BELOW = 0.1          # ... where it scores no more than this over the declared one (fewer frames, less evidence)
-SYNC_PROTOCOLS = {"i2c", "spi", "rvswd", "swd", "mdio", "sync_unknown"}
+SYNC_PROTOCOLS = {"i2c", "spi", "rvswd", "swd", "mdio", "i2s", "sync_unknown"}
 ASYNC_PROTOCOLS = {"uart", "lin", "dmx512", "can"}
 PULSE_PROTOCOLS = {"swio", "rgb_led", "onewire", "ir_nec"}
 SYNC_ROLES = {"i2c": {"scl": "clock", "sda": "data"}, "spi": {"clk": "clock", "mosi": "data", "miso": "data", "cs": "select"},
