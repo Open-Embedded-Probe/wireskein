@@ -215,9 +215,15 @@ def _warn_undersampled(doc: dict, items: list) -> None:
     well: a clock too fast for the rate (capture faster), or noise (docs/capturing.md)."""
     for x in items:
         r = x.get("reading")
-        if not r:
-            continue
         name = f"{x['protocol']}({', '.join(f'{k}={v}' for k, v in (x.get('pins') or x.get('roles') or {}).items())})"
+        ru = x.get("roles_unknown")
+        if ru:
+            print(f"{name}: {', '.join(ru['given'])} not a role of {x['protocol']} (its roles: "
+                  f"{', '.join(ru['roles'])})", file=sys.stderr)
+        if not r:
+            if x.get("decoded") is False:
+                print(f"{name}: not read", file=sys.stderr)        # a bus the spec names: said, never left out
+            continue
         line = f"{name}: {r['frames']} frames read, {r['ok']} ok"
         line += "".join(f", {r[k]} {w}" for k, w in (("unanswered", "unanswered"),
                                                        ("restored", "with a lost clock restored"),

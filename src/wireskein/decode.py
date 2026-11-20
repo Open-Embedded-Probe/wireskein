@@ -25,6 +25,7 @@ from __future__ import annotations
 import functools
 import itertools
 import hashlib
+import re
 from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
@@ -575,6 +576,12 @@ def _bus(res, cap: Capture, b: dict, depth: str, claimed: list) -> dict:
                 out["result"][k] = lay[k]
         if b["protocol"] == "spi" and b["params"].get("bit_order") == "lsb":
             _lsb_first(out, b)
+    known = staged.SYNC_ROLES.get(b["protocol"])
+    odd = sorted(r for r in b["pins"] if known is not None and r not in known and not re.fullmatch(r"data\d+", r))
+    if odd:
+        # a clocked bus is grouped by its roles: a role it does not have names no clock or data (read only where the
+        # lines alone show the bus)
+        out["roles_unknown"] = {"given": odd, "roles": sorted(known)}
     idle = _idle(cap, b, n)
     sel = {"spi": "cs"}.get(b["protocol"])
     empty: list = []
@@ -733,6 +740,20 @@ def _analyze_split(source, hints, opts, depth: str, head: dict, items=None) -> d
                                                         if c not in keep]}}
 
 
+def _apart(buses: list[dict]) -> list[list[dict]]:
+    """The spec's buses in sets that name no pin under two protocols (at least one set, in the spec's order)."""
+    groups: list[list[dict]] = []
+    for b in buses:
+        for g in groups:
+            owner = {p: x["protocol"] for x in g for p in x["pins"].values()}
+            if all(owner.get(p, b["protocol"]) == b["protocol"] for p in b["pins"].values()):
+                g.append(b)
+                break
+        else:
+            groups.append([b])
+    return groups or [[]]
+
+
 def _part(cap: Capture, spec: dict, head: dict, strict: bool = False) -> dict:
     names = {c.name for c in cap.channels}
     for b in spec["buses"]:
@@ -742,11 +763,16 @@ def _part(cap: Capture, spec: dict, head: dict, strict: bool = False) -> dict:
     miss = [p for p in spec["lines"] if p not in names]
     if miss:
         raise ValueError(f"lines not in the capture: {', '.join(miss)}")
-    res = staged.analyze(cap, _hints(spec, strict, [c.name for c in cap.channels]))
+    # a pin named by buses of two protocols (one line read as RVSWD and as SWIO) is hinted once a reading: each set
+    # of buses that names no pin under two protocols is analyzed on its own
+    groups = _apart(spec["buses"])
+    reads = [staged.analyze(cap, _hints({**spec, "buses": g}, strict, [c.name for c in cap.channels])) for g in groups]
+    res_of = {id(b): r for g, r in zip(groups, reads) for b in g}
+    res = reads[0]
     out = {"part": head.get("part", 0), "ticks": cap.n_samples,
            **({"tick0": head["tick0"]} if "tick0" in head else {}),
            **{k: head["meta"][k] for k in ("start_ns", "start_uncertainty_ns", "boot_id") if k in head.get("meta", {})},
-           "buses": [_bus(res, cap, b, spec["depth"], res.claims) for b in spec["buses"]],
+           "buses": [_bus(res_of[id(b)], cap, b, spec["depth"], res_of[id(b)].claims) for b in spec["buses"]],
            "lines": [{"pin": p, "initial": int(cap.channel(p).initial),
                       "edges": np.asarray(cap.channel(p).edges).tolist()} for p in spec["lines"]]}
     _shared(out["buses"], cap)

@@ -69,6 +69,32 @@ def test_a_bus_that_is_not_there(tmp_path):
     assert b["decoded"] is False and b["result"] == {}
 
 
+def test_a_role_the_protocol_does_not_have_is_said(tmp_path):
+    # a clocked bus is grouped by its roles: names it does not have hint nothing (read here only because the lines
+    # alone show the bus), and the document says which roles it has
+    p = _file(tmp_path / "c.wireskein")
+    doc = decode_file(p, {"buses": [{"protocol": "i2c", "pins": {"clock": "SCL", "data": "SDA"}}]})
+    b = doc["parts"][1]["buses"][0]
+    assert b["roles_unknown"] == {"given": ["clock", "data"], "roles": ["scl", "sda"]}
+    assert "roles_unknown" not in decode_file(p, SPEC)["parts"][1]["buses"][0]
+    r = subprocess.run([sys.executable, "-m", "wireskein", "decode", str(p), "--spec",
+                        json.dumps({"buses": [{"protocol": "i2c", "pins": {"clock": "SCL", "data": "SDA"}}]}),
+                        "--out", str(tmp_path / "a.json")], capture_output=True, text=True, check=True)
+    assert "i2c(clock=SCL, data=SDA): clock, data not a role of i2c (its roles: scl, sda)" in r.stderr
+
+
+def test_a_pin_two_protocols_name_is_read_as_each(tmp_path):
+    # one line read as two protocols (a debug line that changes protocol: RVSWD, then SWIO): each bus is read, the
+    # one named first as well as the other (a pin's hint is one protocol's)
+    p = _file(tmp_path / "c.wireskein")
+    spec = {"buses": [{"protocol": "i2c", "pins": {"scl": "SCL", "sda": "SDA"}},
+                      {"protocol": "uart", "pins": {"data": "SDA"}}]}
+    doc = decode_file(p, spec)
+    b = doc["parts"][1]["buses"][0]
+    assert b["decoded"] and b["result"]["transactions"][0]["bytes"] == "6621"
+    assert [x["protocol"] for x in doc["parts"][1]["buses"]] == ["i2c", "uart"]
+
+
 def test_cli(tmp_path):
     p = _file(tmp_path / "c.wireskein")
     (tmp_path / "spec.json").write_text(json.dumps(SPEC))
