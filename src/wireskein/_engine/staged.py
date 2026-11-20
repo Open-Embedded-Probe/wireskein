@@ -31,7 +31,7 @@ from .views import BOUNCE_TICKS
 from . import methods
 from . import plugins_uartlike as UL
 from . import timing, typed
-from .analyzers.pulse import NecPlugin, OneWirePlugin, RgbLedPlugin
+from .analyzers.pulse import DhtPlugin, NecPlugin, OneWirePlugin, RgbLedPlugin
 from .i2s import I2sPlugin
 from .jtag import JtagPlugin
 from .analyzers.upper import Lines, MarkerGrammar, ModbusRtu, Nmea
@@ -491,7 +491,7 @@ class DmxPlugin:
 # the plugins written in Python (state across frames, search, upper layers), then the frame-local protocols
 # declared in decl/*.toml (docs/design.ja.md §3.2)
 PLUGINS = ([SyncUnknownPlugin(), UartPlugin(), LinPlugin(), DmxPlugin(), SwioPlugin(), RgbLedPlugin(),
-            OneWirePlugin(), NecPlugin(), I2sPlugin(), JtagPlugin()]
+            OneWirePlugin(), NecPlugin(), I2sPlugin(), JtagPlugin(), DhtPlugin()]
            + load_all(["i2c", "spi", "rvswd"]) + load_all(["swd", "can", "mdio"]))
 UPPER = [Lines(), Nmea(), ModbusRtu(), MarkerGrammar()]
 

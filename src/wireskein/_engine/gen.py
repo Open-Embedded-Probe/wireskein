@@ -351,6 +351,33 @@ def jtag(tck: Wave, tms: Wave, tdi: Wave, tdo: Wave, t: float, scans: list[dict]
     return t
 
 
+def dht(w: Wave, t: float, readings: list[bytes], start: float = 1e-3, period: float = 0.5) -> float:
+    """DHT11 / DHT22 readings (4 bytes each; the checksum, their sum, added): the host's low of `start`, its release
+    (30 us), the sensor's answer (80 us low, 80 us high), 40 bits (50 us low, then 27 us high for 0, 70 us for 1),
+    the line released after; `period` apart. The line idles high."""
+    for r in readings:
+        b = bytes(r) + bytes([sum(r) & 0xFF])
+        w.set(t, 0)
+        t += start
+        w.set(t, 1)
+        t += 30e-6
+        w.set(t, 0)
+        t += 80e-6
+        w.set(t, 1)
+        t += 80e-6
+        for x in b:
+            for k in range(7, -1, -1):
+                w.set(t, 0)
+                t += 50e-6
+                w.set(t, 1)
+                t += 70e-6 if (x >> k) & 1 else 27e-6
+        w.set(t, 0)
+        t += 50e-6
+        w.set(t, 1)
+        t += period
+    return t
+
+
 def can_crc15(bits) -> int:
     crc = 0
     for b in bits:

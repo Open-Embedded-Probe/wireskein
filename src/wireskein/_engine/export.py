@@ -163,6 +163,8 @@ def layers_of(n) -> dict:
         out["frames"] = list(n.output.items)
     elif a == "jtag":
         out["scans"] = list(n.output.items)
+    elif a == "dht":
+        out["readings"] = list(n.output.items)
     elif a == "rgb_led":
         out["frames"] = [{"s": f["t"], "bits": f["bits"], "data": f["data"]} for f in n.output.items["frames"]]
     elif a == "onewire":
@@ -180,7 +182,7 @@ def layers_of(n) -> dict:
 
 FINAL = {"i2c": "transactions", "spi": ("sd", "transfers"), "uart": ("lines", "nmea", "modbus_rtu", "bytes"),
          "lin": "frames", "dmx512": "packets", "rvswd": ("dm", "dmi"), "swio": ("dm", "dmi"), "sync_unknown": "summary",
-         "swd": "packets", "mdio": "frames", "i2s": "frames", "jtag": "scans", "can": "frames", "rgb_led": "frames", "onewire": "resets",
+         "swd": "packets", "mdio": "frames", "i2s": "frames", "jtag": "scans", "dht": "readings", "can": "frames", "rgb_led": "frames", "onewire": "resets",
          "ir_nec": "frames"}
 
 
@@ -226,7 +228,7 @@ def _window(lay: dict, s0: int, s1: int) -> dict:
 
 DEPTHS = ("transport", "frames", "protocol", "device")
 LOWER = {"i2c": "transactions", "spi": "transfers", "uart": "bytes", "lin": "frames", "dmx512": "packets",
-         "rvswd": "dmi", "swio": "dmi", "swd": "packets", "mdio": "frames", "i2s": "frames", "jtag": "scans", "can": "frames", "sync_unknown": "summary", "rgb_led": "frames", "onewire": "resets",
+         "rvswd": "dmi", "swio": "dmi", "swd": "packets", "mdio": "frames", "i2s": "frames", "jtag": "scans", "dht": "readings", "can": "frames", "sync_unknown": "summary", "rgb_led": "frames", "onewire": "resets",
          "ir_nec": "frames"}
 
 

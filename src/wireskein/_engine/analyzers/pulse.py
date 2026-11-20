@@ -174,3 +174,78 @@ class NecPlugin:
              "carrier_hz": r.get("carrier_hz")}
         return [Node("ir_nec", {"carrier_hz": r.get("carrier_hz"), "idle": r["idle"], "deglitch": dg}, {"data": name},
                      Stream("ir.frames", fr), m, layer_score=score, total=score)]
+
+
+DHT_START = 0.5e-3        # s: the host's start, a low this long or more (DHT22 1 ms, DHT11 18 ms)
+DHT_RESPONSE = (40e-6, 110e-6)   # s: the sensor's answer, a low and a high each about 80 us (58 us seen)
+DHT_BIT_LOW = (30e-6, 80e-6)     # s: each bit's low (50 us)
+DHT_BIT_SPLIT = 48e-6     # s: a bit's high under this is 0 (26-28 us), over it 1 (70 us)
+DHT_BIT_HIGH = 95e-6      # s: no bit's high is longer
+
+
+def dht_frames(ch, n: int, rate: float) -> list[dict]:
+    """The readings of a DHT11 / DHT22 (AM2302) line: after the host's long low and the sensor's 80 us low and
+    high, 40 bits told by each high's length; each {"s", "bytes" (hex), "checksum_ok"} (the fifth byte the sum of
+    the four)."""
+    start, length, level = ch.runs(n)
+    dur = np.asarray(length, np.float64) / rate
+    lv = np.asarray(level)
+    out = []
+    i, m = 0, len(dur)
+    while i < m:
+        if not (lv[i] == 0 and dur[i] >= DHT_START):
+            i += 1
+            continue
+        j = i + 2                                   # past the host's release (a high of 20-40 us)
+        if j + 1 >= m or not (DHT_RESPONSE[0] <= dur[j] <= DHT_RESPONSE[1] and DHT_RESPONSE[0] <= dur[j + 1] <= DHT_RESPONSE[1]):
+            i += 1
+            continue
+        k, bits = j + 2, []
+        while len(bits) < 40 and k + 1 < m and lv[k] == 0 and DHT_BIT_LOW[0] <= dur[k] <= DHT_BIT_LOW[1] \
+                and dur[k + 1] <= DHT_BIT_HIGH:
+            bits.append(1 if dur[k + 1] > DHT_BIT_SPLIT else 0)
+            k += 2
+        if len(bits) == 40:
+            b = [sum(bits[8 * x + y] << (7 - y) for y in range(8)) for x in range(5)]
+            out.append({"s": int(start[i]), "bytes": bytes(b).hex(), "checksum_ok": (sum(b[:4]) & 0xFF) == b[4]})
+        i = k
+    return out
+
+
+def dht_values(frames: list[dict]) -> str:
+    """The model the readings fit: DHT11 (whole humidity and temperature: its second byte 0, a tenth of a degree at
+    most) or DHT22 / AM2302 (tenths), and each reading's `rh` (%) and `t` (C) by it."""
+    bs = [bytes.fromhex(f["bytes"]) for f in frames if f["checksum_ok"]]
+    dht11 = bool(bs) and all(b[1] == 0 and b[0] <= 100 and b[3] < 10 for b in bs)
+    for f in frames:
+        b = bytes.fromhex(f["bytes"])
+        if dht11:
+            f["rh"], f["t"] = float(b[0]), b[2] + b[3] / 10 * (-1 if b[2] & 0x80 else 1)
+        else:
+            raw = ((b[2] & 0x7F) << 8) | b[3]
+            f["rh"], f["t"] = ((b[0] << 8) | b[1]) / 10, (-raw if b[2] & 0x80 else raw) / 10
+    return "dht11" if dht11 else "dht22"
+
+
+class DhtPlugin:
+    """A DHT11 / DHT22 (AM2302) humidity sensor's one line."""
+    name = "dht"
+    consumes = ("line",)
+
+    def run(self, c, ch, g):
+        rate = float(c.cap.rate)
+        if rate < 50e3:                             # a bit's high of 26 us needs a sample or two
+            return []
+        frames = dht_frames(ch, c.cap.n_samples, rate)
+        if not frames:
+            return []
+        ok = sum(f["checksum_ok"] for f in frames)
+        if not ok:
+            return []
+        model = dht_values(frames)
+        # evidence in bits: each reading's checksum held, 8, and its start and answer of their lengths, 8; the
+        # readings' share whose checksum holds
+        score = (ok / len(frames)) * (1 - 0.5 ** (16 * ok / 8))
+        m = {"readings": len(frames), "checksum_ok": ok}
+        return [Node("dht", {"model": model}, {"data": ch.name}, Stream("dht.readings", frames), m,
+                     layer_score=score, total=score)]
