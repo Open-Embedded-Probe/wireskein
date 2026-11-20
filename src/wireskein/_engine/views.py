@@ -184,13 +184,22 @@ def clock_followed(edges: np.ndarray, initial: int, n: int) -> np.ndarray:
             continue
         bd = np.diff(b)
         h = float(np.median(bd[bd >= 0.5 * hg])) if np.any(bd >= 0.5 * hg) else hg
-        t = int(b[0])
+        bl = b.tolist()                  # the due place only moves on: one pointer through the burst, not a search a step
+        t, i, end, tol = bl[0], 0, bl[-1], REBUILD_TOL * h
         out.append(t)
         lv ^= 1
-        while t + 0.5 * h < b[-1]:
+        steps = 2 * len(bl) + 16         # a clock has a change at every half period: no more than its own, twice over
+        while t + 0.5 * h < end and steps:
+            steps -= 1
             due = t + h
-            lo, hi = np.searchsorted(b, due - REBUILD_TOL * h), np.searchsorted(b, due + REBUILD_TOL * h, side="right")
-            t = int(b[lo:hi][np.argmin(np.abs(b[lo:hi] - due))]) if hi > lo else int(round(due))
+            while i < len(bl) and bl[i] < due - tol:
+                i += 1
+            j, best = i, None
+            while j < len(bl) and bl[j] <= due + tol:
+                if best is None or abs(bl[j] - due) < abs(best - due):
+                    best = bl[j]
+                j += 1
+            t = int(best) if best is not None else int(round(due))
             out.append(t)
             lv ^= 1
         lv = _ends_as_raw(out, lv, raw)

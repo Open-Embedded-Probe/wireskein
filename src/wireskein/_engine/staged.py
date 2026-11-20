@@ -481,6 +481,7 @@ NOISY_WIDE = 2048    # runs each side, for the share of runs breaking the clock'
 GLITCH_SHARE = 0.6    # a clock's runs this short a share or less: a view with them taken out
 REBUILD_SHORT = 0.02  # a clock's runs half its median or less, this share or more: views with the clock rebuilt
 REBUILD_FEW = 4       # ... and this many of them at least (one short run of a few dozen is no bounce)
+REBUILD_MAX = 200_000  # changes of the clock: more is a line of pulses (an LED chain), not a bus's clock to rebuild
 REBUILD_DATA = 4      # ticks (of each line's step): the data and select lines' bounces merged in those views
 REBUILD_BELOW = 0.85  # a group read under this on the width views: its rebuilt views read too
 
@@ -496,7 +497,12 @@ def rebuilt_views(cap, sv, g, memo: dict | None = None):
     ch = cap.channel(g.clock)
     r = np.diff(np.asarray(ch.edges, np.int64))
     short = int(np.count_nonzero(r <= 0.5 * np.median(r))) if len(r) else 0
-    if len(r) < 16 or short < REBUILD_FEW or short < REBUILD_SHORT * len(r):
+    if len(r) < 16 or len(r) > REBUILD_MAX or short < REBUILD_FEW or short < REBUILD_SHORT * len(r):
+        return
+    if not V.bounces_paired(r, 0.5 * float(np.median(r)) + 1):
+        # a spike's short runs stand alone amid long ones, a bounce's come side by side (the gap after the edge, the
+        # pulse back): spikes are the width views' (rebuilt for them, a capture of spikes and crosstalk took 30 times
+        # as long, nothing more read)
         return
     pins = {*g.data, *([g.select] if g.select else [])}
     others = {x.name: K.debounce(np.asarray(x.edges, np.int64), REBUILD_DATA * max(1, x.step))
