@@ -538,10 +538,9 @@ def convert(args) -> None:
     cap = None
     if fileformat.sniff(args.input) == "sr":
         from ._engine import srio
-        import zipfile, configparser
+        import zipfile
         with zipfile.ZipFile(args.input) as z:
-            cfg = configparser.ConfigParser()
-            cfg.read_string(z.read("metadata").decode())
+            cfg = srio.metadata(z)
             rate = srio._parse_rate(cfg["device 1"]["samplerate"])
         s0 = int(round((t0 or 0) * rate))
         s1 = int(round(t1 * rate)) if t1 is not None else None

@@ -173,6 +173,21 @@ def test_a_sr_read_a_chunk_at_a_time_and_an_excerpt(tmp_path, monkeypatch, block
         assert np.array_equal(e, y.edges)
 
 
+def test_a_sr_of_sigrok_0_2_keeps_its_names_without_the_triggers(tmp_path):
+    # sigrok 0.2 wrote each probe's trigger on an indented line; it is no part of the name
+    import zipfile
+    import numpy as np
+    from wireskein._engine.srio import read_sr, read_sr_changes
+    p = tmp_path / "old.sr"
+    with zipfile.ZipFile(p, "w") as z:
+        z.writestr("version", "1")
+        z.writestr("metadata", "[global]\nsigrok version = 0.2.1\n[device 1]\ndriver = ols\ncapturefile = logic-1\n"
+                               "unitsize = 1\ntotal probes = 8\nsamplerate = 200 kHz\nprobe1 = TX\n trigger1 = 0\n"
+                               "probe2 = RX\n trigger2 = 1\n")
+        z.writestr("logic-1", np.array([0, 1, 3, 2], np.uint8).tobytes())
+    assert [c.name for c in read_sr(p).channels] == [c.name for c in read_sr_changes(p).channels] == ["TX", "RX"]
+
+
 def test_convert_an_excerpt(tmp_path):
     import argparse
     from wireskein import capture, cli

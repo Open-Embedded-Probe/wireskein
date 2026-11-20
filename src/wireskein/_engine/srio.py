@@ -29,10 +29,17 @@ def _parse_rate(text: str) -> float:
     return float(m.group(1)) * _UNITS[m.group(2).lower()]
 
 
+def metadata(z: zipfile.ZipFile) -> configparser.ConfigParser:
+    """The session's metadata. Each line stands alone: sigrok 0.2 wrote a probe's trigger on an indented line
+    (" trigger1 = 0") that an ini reader would join to the probe's name."""
+    cfg = configparser.ConfigParser()
+    cfg.read_string("\n".join(line.strip() for line in z.read("metadata").decode().splitlines()))
+    return cfg
+
+
 def read_sr(path: Path) -> Capture:
     with zipfile.ZipFile(path) as z:
-        cfg = configparser.ConfigParser()
-        cfg.read_string(z.read("metadata").decode())
+        cfg = metadata(z)
         dev = cfg["device 1"]
         rate = _parse_rate(dev["samplerate"])
         unitsize = int(dev.get("unitsize", "1"))
@@ -233,8 +240,7 @@ def read_sr_changes(path: Path, start: int = 0, end: int | None = None) -> Captu
     at start (an excerpt). None when the file is not one this reads (analog channels, channels of their own step:
     read_sr reads those)."""
     with zipfile.ZipFile(path) as z:
-        cfg = configparser.ConfigParser()
-        cfg.read_string(z.read("metadata").decode())
+        cfg = metadata(z)
         dev = cfg["device 1"]
         if any(re.fullmatch(r"analog\d+", k) for k in dev):
             return None
@@ -290,8 +296,7 @@ def convert_sr(path: Path, out: Path, start: int = 0, end: int | None = None, ex
     import tempfile
     from .. import _fileformat as fileformat
     with zipfile.ZipFile(path) as z:
-        cfg = configparser.ConfigParser()
-        cfg.read_string(z.read("metadata").decode())
+        cfg = metadata(z)
         dev = cfg["device 1"]
         if any(re.fullmatch(r"analog\d+", k) for k in dev):
             return None

@@ -559,11 +559,9 @@ class SrSource(Source):
     piece being read held."""
 
     def __init__(self, path, pins: list[str] | None = None):
-        import configparser
         from ._engine import srio
         with zipfile.ZipFile(path) as z:
-            cfg = configparser.ConfigParser()
-            cfg.read_string(z.read("metadata").decode())
+            cfg = srio.metadata(z)
             dev = cfg["device 1"]
             if any(k.startswith("analog") and k[6:].isdigit() for k in dev):
                 raise ValueError("analog channels: read whole")
