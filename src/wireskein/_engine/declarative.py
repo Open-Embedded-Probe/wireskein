@@ -948,6 +948,7 @@ class DeclarativePlugin:
                     continue
                 rec, k, _, _, bits_i = got
                 rec["start"] = int(t[p])
+                rec["end"] = int(t[min(p + k, len(t)) - 1])    # its last bit: what it covers (decode's unread)
                 recs.append(rec)
                 n_ok += 1
                 info += bits_i

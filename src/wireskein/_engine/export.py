@@ -156,7 +156,7 @@ def layers_of(n) -> dict:
         else:
             out["packets"] = n.output.items
     elif a in ("swd", "mdio", "can") or getattr(getattr(n, "plugin", None), "external", False) or n.params.get("external"):
-        rows = [{("s" if k == "start" else k): (int(v) if isinstance(v, np.integer) else v) for k, v in x.items()}
+        rows = [{{"start": "s", "end": "e"}.get(k, k): (int(v) if isinstance(v, np.integer) else v) for k, v in x.items()}
                 for x in (n.output.items or [])]
         out["packets" if a == "swd" else "frames"] = rows
     elif a == "i2s":

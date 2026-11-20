@@ -144,7 +144,8 @@ The layers of analyze's export (`--mode final`, at `depth`), with ticks from the
 | `can` | `frames`: `s`, `id`, `ide` (1: an extended identifier), `dlc`, `data` (hex, the bytes the DLC carries), `ack`, `ok` |
 | `lin` | `frames`: `s` (the break), `id`, `data` (hex), `ok` (sync, identifier parity and checksum held) |
 | `dmx512` | `packets`: `s` (the break), `start_code`, `data` (hex, the slots) |
-| `mdio` | `frames`: `s`, `op` (clause 22: `W` / `R`; clause 45: `ADDR` / `W` / `R` / `RINC`), `phy`, `reg` (clause 22) or `dev` (clause 45, the MMD), `data`, `ok` |
+| `swd` | `packets`: `s`, `e` (the first and last sampled bit), `apndp` (`DP` / `AP`), `rnw` (`W` / `R`), `a` (A[3:2]), `ack` (`OK`, `WAIT`, `FAULT`), `data` (OK only), `ok` |
+| `mdio` | `frames`: `s`, `e` (the first and last sampled bit), `op` (clause 22: `W` / `R`; clause 45: `ADDR` / `W` / `R` / `RINC`), `phy`, `reg` (clause 22) or `dev` (clause 45, the MMD), `data`, `ok` |
 | `i2s` | `frames`: `s`, `left`, `right` (signed, `params.word_bits` of them); `params.format` (`i2s`, `left`, `right`: where the word sits in its slot, told by the padding; `format_assumed` when a word filling its slot tells none, I2S taken), `slot_bits`. The slot before WS first changes is not read |
 | `jtag` | `scans`: `s` (the Capture state), `type` (`IR` / `DR`), `bits`, `tdi`, `tdo` (hex, the bits as shifted, the first shifted the least significant); `params.ir_bits` (the IR scans' usual length). Scans before TMS has told the TAP's state are not read |
 | `dht` | `readings`: `s` (the host's start), `bytes` (hex, the five), `checksum_ok`, `rh` (%), `t` (C); `params.model` (`dht11`: whole values, its second byte 0; `dht22`: tenths, as the AM2301/AM2302/AM232x and RHT03) |

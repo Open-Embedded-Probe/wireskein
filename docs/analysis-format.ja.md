@@ -140,7 +140,8 @@ analyze の書き出し（`--mode final`、`depth` まで）の層。刻みは�
 | `can` | `frames`: `s`、`id`、`ide`（1: 拡張の識別子）、`dlc`、`data`（16 進。DLC が運ぶバイト）、`ack`、`ok` |
 | `lin` | `frames`: `s`（break）、`id`、`data`（16 進）、`ok`（sync、識別子のパリティ、チェックサムが合う） |
 | `dmx512` | `packets`: `s`（break）、`start_code`、`data`（16 進。スロット） |
-| `mdio` | `frames`: `s`、`op`（Clause 22: `W` / `R`。Clause 45: `ADDR` / `W` / `R` / `RINC`）、`phy`、`reg`（Clause 22）か `dev`（Clause 45 の MMD）、`data`、`ok` |
+| `swd` | `packets`: `s`、`e`（最初と最後の標本のビット）、`apndp`（`DP` / `AP`）、`rnw`（`W` / `R`）、`a`（A[3:2]）、`ack`（`OK`、`WAIT`、`FAULT`）、`data`（OK のときだけ）、`ok` |
+| `mdio` | `frames`: `s`、`e`（最初と最後の標本のビット）、`op`（Clause 22: `W` / `R`。Clause 45: `ADDR` / `W` / `R` / `RINC`）、`phy`、`reg`（Clause 22）か `dev`（Clause 45 の MMD）、`data`、`ok` |
 | `i2s` | `frames`: `s`、`left`、`right`（符号付き、`params.word_bits` ビット）。`params.format`（`i2s`、`left`、`right`: 語がスロットのどこにあるか。詰め物から決める。語がスロットを埋めて決め手がないときは I2S とし `format_assumed`）、`slot_bits`。WS が最初に変わる前のスロットは読まない |
 | `jtag` | `scans`: `s`（Capture の状態）、`type`（`IR` / `DR`）、`bits`、`tdi`、`tdo`（16 進。シフトしたビットで、最初にシフトしたものが最下位）。`params.ir_bits`（IR のスキャンのいつもの長さ）。TMS で TAP の状態が決まる前のスキャンは読まない |
 | `dht` | `readings`: `s`（ホストの開始）、`bytes`（16 進、5 バイト）、`checksum_ok`、`rh`（%）、`t`（℃）。`params.model`（`dht11`: 整数の値で 2 バイト目が 0。`dht22`: 0.1 刻み。AM2301/AM2302/AM232x、RHT03 も） |

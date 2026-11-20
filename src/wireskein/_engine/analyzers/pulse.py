@@ -33,6 +33,7 @@ def _bounce_view(ch, rate: float):
 
 
 RGB_SHORTEST = 0.15e-6  # s: no pulse of a WS2812-like line is shorter (T0H 0.25 us or more)
+RGB_ONE_OVER_ZERO = 1.5  # a 1's high over a 0's, this many times at least
 RGB_MIXED = 0.1         # the rarer kind of bit's share a string's data has at least
 
 
@@ -73,6 +74,12 @@ class RgbLedPlugin:
         # both kinds of bit: a PWM of one duty (a clock) reads as all 0s (or all 1s), but for what a noise leaves in
         # it; a string's colours have a tenth of the rarer kind or more
         minor = min(len(r["t0h"]), len(r["t1h"])) / max(1, len(r["t0h"]) + len(r["t1h"]))
+        # a 1's high is about twice a 0's (WS2812 0.8 / 0.4 us, SK6812 0.6 / 0.3): a clock's highs of 3 and 4 samples
+        # (7 a period, cut by the samples) are two kinds of width as well, a third apart (an MDIO's MDC at 1.7 MHz)
+        if r["t0h"] and r["t1h"]:
+            ratio = float(np.median([w for _, w in r["t1h"]]) / max(1e-9, np.median([w for _, w in r["t0h"]])))
+            if ratio < RGB_ONE_OVER_ZERO:
+                return []
         mixed = 0.3 + 0.7 * float(np.clip(minor / RGB_MIXED, 0, 1))
         # T0H and T1H differ by about a third of the bit: under 5 samples a bit, a spike's tick is as wide as that
         # difference (a clock at 2 MS/s with spikes read as varied bits)
