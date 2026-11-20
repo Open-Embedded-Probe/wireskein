@@ -91,7 +91,9 @@ the lines fit, whether analyze would have claimed it, and what was not read or n
 - `roles_unknown`: `{"given": [...], "roles": [...]}` when a clocked protocol (I2C, SPI, RVSWD) is given a role it does
   not have (`swdio` for RVSWD, whose roles are `clk`, `dio`): such a role hints nothing, and the bus is read only where
   its lines alone show it. Buses that name one pin under two protocols are each read (analyzed apart).
-- `params`: what the decoder chose (the sampling edge, a UART's baud, ...).
+- `params`: what the decoder chose (the sampling edge, a UART's baud, ...). A UART whose characters' last bit is the
+  parity of the others has `parity` (`even` or `odd`) and `data_bits`, its bytes without the parity (7 data bits and a
+  parity are as long as 8 without one; `L` is the character's length in bits, start and stop included).
 - `fit.score`: how well the lines fit, 0–1 (analyze's score). Low on a short case: it measures evidence, not
   correctness.
 - `fit.claimed`: whether analyze, finding things alone, would have claimed this very decode; `fit.verdict` then

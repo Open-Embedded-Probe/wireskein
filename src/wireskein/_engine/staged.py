@@ -249,6 +249,33 @@ UART_PACED = 0.5          # ... at a character length three divides: a line of p
 UART_FRAMED = 0.35        # LIN / DMX512 framing past this share of the break-framed blocks counts against a plain UART
 
 
+UART_PARITY_HOLDS = 0.98  # a character's last bit is its parity in this share of the characters or more ...
+UART_PARITY_MIN = 8       # ... of this many at least, the bit taking both values (a share of each)
+UART_PARITY_BOTH = 0.05
+
+
+def uart_parity(v: np.ndarray, nbits: int) -> tuple[str, int] | None:
+    """("even" | "odd", data bits) where a character's last bit is the parity of the ones before it: 7 data bits and
+    a parity are as long as 8 without one, and read as 8 the parity is taken for the eighth data bit (a 7E1 line's
+    "Hello" as c8 e5 ec ec ef). A last bit that never changes (0 in ASCII sent as 8N1) is no parity: it holds for
+    one of the two by the characters' luck."""
+    if nbits < 6 or len(v) < UART_PARITY_MIN:
+        return None
+    d = nbits - 1
+    last = (v >> d) & 1
+    if not UART_PARITY_BOTH <= float(last.mean()) <= 1 - UART_PARITY_BOTH:
+        return None
+    ones = np.zeros(len(v), np.int64)
+    for b in range(d):
+        ones ^= (v >> b) & 1
+    even = float(np.mean(last == ones))
+    if even >= UART_PARITY_HOLDS:
+        return "even", d
+    if 1 - even >= UART_PARITY_HOLDS:
+        return "odd", d
+    return None
+
+
 class UartPlugin:
     name = "uart"
     consumes = ("chars",)
@@ -274,6 +301,9 @@ class UartPlugin:
         if n < 2:
             return []
         v = np.concatenate(vals)
+        parity = uart_parity(v, (blocks[0][2].bits if blocks[0][2] else 10) - 2)
+        if parity:
+            v = v & ((1 << parity[1]) - 1)
         framing = ok_n / n
         coverage = sum(a for a, _ in cover) / max(1, sum(b for _, b in cover))
         f = c.sv.features[rb.pin]
@@ -351,6 +381,8 @@ class UartPlugin:
                  * (1 - float(np.clip((tight - 0.5) / 0.3, 0, 1))) * (1 - framed) * resolvable * gridded
                  * (UART_PACED if paced else 1.0))
         params = {"baud": c.cap.rate / u_main, "idle": rb.idle, "L": m["L"], "blocks": len(units)}
+        if parity:
+            params.update(parity=parity[0], data_bits=parity[1])
         items = {"value": v, "start": np.concatenate(starts), "char_samples": u_main * (m["L"] or 10)}
         return [Node("uart", params, {"data": rb.pin}, Stream("bytes", items, meta={"char_samples": u_main * (m["L"] or 10)}),
                      m, layer_score=score, total=score)]
