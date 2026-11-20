@@ -251,6 +251,32 @@ UART_PACED = 0.5          # ... at a character length three divides: a line of p
 UART_FRAMED = 0.35        # LIN / DMX512 framing past this share of the break-framed blocks counts against a plain UART
 
 
+USB_SE0_MIN = 3           # both lines of a pair low this many times, each 1-4 bits ...
+USB_OPPOSITE = 0.9        # ... the two lines opposite this share of the time otherwise: a USB pair
+
+
+def usb_se0(cap, pin: str, unit: float) -> int:
+    """How many times `pin` and the line opposite it are both low for 1-4 of `unit` (a USB pair's end of packet,
+    SE0), the pair otherwise opposite: 0 when no captured line is opposite to `pin`."""
+    a = cap.channel(pin)
+    ea = np.asarray(a.edges)
+    if not len(ea):
+        return 0
+    best = 0
+    for b in cap.channels:
+        eb = np.asarray(b.edges)
+        if b.name == pin or b.step != a.step or not (0.5 * len(ea) <= len(eb) <= 2 * len(ea)):
+            continue
+        cuts = np.unique(np.concatenate([[0], ea, eb, [cap.n_samples]]))
+        la, lb = a.level_at(cuts[:-1]), b.level_at(cuts[:-1])
+        dur = np.diff(cuts)
+        if dur[la != lb].sum() < USB_OPPOSITE * dur.sum():
+            continue
+        low = (la == 0) & (lb == 0) & (dur >= 0.8 * unit) & (dur <= 4.5 * unit)
+        best = max(best, int(low.sum()))
+    return best
+
+
 UART_PARITY_HOLDS = 0.98  # a character's last bit is its parity in this share of the characters or more ...
 UART_PARITY_MIN = 8       # ... of this many at least, the bit taking both values (a share of each)
 UART_PARITY_BOTH = 0.05
@@ -391,6 +417,13 @@ class UartPlugin:
         score = (framing * coverage * q(ok_n) * degenerate(v & 0xFF) * m["two_values"] * (1 - clock_off) * (1 - sync_off)
                  * (1 - float(np.clip((tight - 0.5) / 0.3, 0, 1))) * (1 - framed) * resolvable * gridded
                  * (UART_PACED if paced else 1.0))
+        # one line of a USB pair (D+ / D-, low or full speed: NRZI bits, stuffed, read as characters of 12-13 bits) is
+        # no UART: the pair ends each packet with both lines low (SE0) for two bits, which a UART on a differential
+        # pair (RS-485's A and B, always opposite) never does
+        se0 = usb_se0(c.cap, rb.pin, u_main)
+        m["usb_se0"] = se0
+        if se0 >= USB_SE0_MIN:
+            score = 0.0
         params = {"baud": c.cap.rate / u_main, "idle": rb.idle, "L": m["L"], "blocks": len(units)}
         if parity:
             params.update(parity=parity[0], data_bits=parity[1])
