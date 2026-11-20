@@ -174,6 +174,9 @@ def sample_edge_for(cap, clock: str, data: tuple[str, ...], _debounced: bool = F
     return ["rise" if a >= b else "fall"]
 
 
+ON_EDGE_SHARE = 0.1      # a data line's changes on the sampling edge's sample, this share: a driver clocked by it
+
+
 def sync_bits(cap, sv: Survey, clock: str, data: tuple[str, ...], select: str | None, edge: str | None = None) -> SyncBits:
     c = cap.channel(clock)
     edge = edge or sample_edge_for(cap, clock, data)[0]
@@ -182,15 +185,20 @@ def sync_bits(cap, sv: Survey, clock: str, data: tuple[str, ...], select: str | 
     # a data line ringing at the sampling edge (a reflection: pulses of a sample or two) is read as it settles, its
     # pulses shorter than RING samples dropped where the clock is slow enough that no bit is that short (the period
     # around each: a clock may change speed on the way)
-    # A data change on the sampling edge's own sample is that edge's doing (a target driving on the edge it is clocked
-    # by: SWD's ACK and read data on SWCLK's rise); the value latched is the one before it. A change a sample or more
-    # ahead is set up for the edge and read (an STLink's SWD lost 136 of 183 requests read at the edge itself)
+    # A data change on the sampling edge's own sample: where such changes are a share of the line's (a target driving
+    # on the edge it is clocked by does so every bit it drives: an STLink's SWD target its ACK and read data on
+    # SWCLK's rise, 28% of SWDIO's changes), the edge's doing, and the value latched is the one before it (read at
+    # the edge itself, 136 of 183 requests were lost); a few now and then (2%: a probe setting its data and clock in
+    # one write) are set up for the edge and read after
     rows = []
     for d in data:
         ch = cap.channel(d)
         if len(t) > 1 and ch.step == 1:
             e = V.spikes_out_where_slow(np.asarray(ch.edges), RING, t)
-            rows.append(((ch.initial + np.searchsorted(e, t, side="left")) & 1).astype(np.uint8))
+            at = np.isin(e, t)
+            inside = e[(e >= t[0]) & (e <= t[-1])]
+            side = "left" if len(inside) and at.sum() >= ON_EDGE_SHARE * len(inside) else "right"
+            rows.append(((ch.initial + np.searchsorted(e, t, side=side)) & 1).astype(np.uint8))
         else:
             rows.append(ch.level_at(t))
     bits = np.stack(rows).astype(np.uint8)
