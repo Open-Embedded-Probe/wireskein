@@ -182,12 +182,15 @@ def sync_bits(cap, sv: Survey, clock: str, data: tuple[str, ...], select: str | 
     # a data line ringing at the sampling edge (a reflection: pulses of a sample or two) is read as it settles, its
     # pulses shorter than RING samples dropped where the clock is slow enough that no bit is that short (the period
     # around each: a clock may change speed on the way)
+    # A data change on the sampling edge's own sample is that edge's doing (a target driving on the edge it is clocked
+    # by: SWD's ACK and read data on SWCLK's rise); the value latched is the one before it. A change a sample or more
+    # ahead is set up for the edge and read (an STLink's SWD lost 136 of 183 requests read at the edge itself)
     rows = []
     for d in data:
         ch = cap.channel(d)
         if len(t) > 1 and ch.step == 1:
             e = V.spikes_out_where_slow(np.asarray(ch.edges), RING, t)
-            rows.append(((ch.initial + np.searchsorted(e, t, side="right")) & 1).astype(np.uint8))
+            rows.append(((ch.initial + np.searchsorted(e, t, side="left")) & 1).astype(np.uint8))
         else:
             rows.append(ch.level_at(t))
     bits = np.stack(rows).astype(np.uint8)

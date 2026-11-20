@@ -229,21 +229,27 @@ def dmx(w: Wave, t: float, packets: list[bytes], baud: float = 250000.0) -> floa
 
 
 def swd(clk: Wave, dio: Wave, t: float, packets: list[dict], freq: float, idle_clocks: int = 0,
-        gap: float = 20e-6, line_reset: bool = True) -> float:
+        gap: float = 20e-6, line_reset: bool = True, target_on_rise: bool = False) -> float:
     """ARM SWD packets. Each packet: {"apndp", "rnw", "a" (0..3), "ack" (1 OK / 2 WAIT / 4 FAULT), "data"}.
 
     Bits change just after the falling edge and are sampled on the rising edge
     (both directions, as logic analyzers see them). Turnaround cycles float high
     (pull-up). idle_clocks > 0 keeps the clock running with SWDIO low between
-    packets (no gap in the clock), otherwise the clock stops for `gap`.
+    packets (no gap in the clock), otherwise the clock stops for `gap`. target_on_rise: the target's bits (ACK,
+    read data) change on the rising edge that clocks them out, the one before the edge they are read on (an
+    STLink's target as captured).
     """
     h = 0.5 / freq
 
-    def clock(bits):
+    def clock(bits, target=()):
         nonlocal t
-        for v in bits:
-            # data changes just after the falling edge, is stable at the rising edge
-            dio.set(t + h * 0.1, v)
+        for k, v in enumerate(bits):
+            if k in target:
+                # driven on the rising edge before: stable through this bit's rising edge
+                dio.set(t - h, v)
+            else:
+                # data changes just after the falling edge, is stable at the rising edge
+                dio.set(t + h * 0.1, v)
             clk.set(t + h, 1)
             clk.set(t + h * 2, 0)
             t += 2 * h
@@ -258,12 +264,15 @@ def swd(clk: Wave, dio: Wave, t: float, packets: list[dict], freq: float, idle_c
         hdr = [p["apndp"], p["rnw"], p["a"] & 1, p["a"] >> 1]
         req = [1] + hdr + [sum(hdr) & 1, 0, 1]
         bits = req + [1] + lsb(p["ack"], 3)
+        target = set(range(9, 12))
         if p["ack"] == 1:
             d = lsb(p["data"], 32) + [sum(lsb(p["data"], 32)) & 1]
+            if p["rnw"]:
+                target |= set(range(12, 45))
             bits += d + [1] if p["rnw"] else [1] + d
         else:
             bits += [1]
-        clock(bits + [0] * idle_clocks)
+        clock(bits + [0] * idle_clocks, target if target_on_rise else ())
         if not idle_clocks:
             dio.set(t, 0)
             t += gap

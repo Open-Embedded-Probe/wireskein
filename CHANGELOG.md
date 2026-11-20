@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Fixed: a clocked line changing on the sampling edge's own sample is read as it was before that edge (the value latched): a target driving on the edge it is clocked by changes there, as an SWD target its ACK and read data on SWCLK's rise. An STLink's SWD at 8 MS/s (sigrok-dumps' stm32f429zit6_core_halt, SWCLK high a sample) read 47 of sigrok's 183 requests, its ACKs and parities a bit off; all 183 now. A change a sample or more ahead of the edge is read as before.
+- (JA) 直した: クロックで読む線が、サンプリングのエッジと同じサンプルで変わるときは、そのエッジの前の値（ラッチされる値）として読む: 自分を動かすエッジで出力を変える相手は、そこで変わる（SWD のターゲットは ACK と読み出しデータを SWCLK の立ち上がりで変える）。8 MS/s の STLink の SWD（sigrok-dumps の stm32f429zit6_core_halt、SWCLK の High が 1 サンプル）は、sigrok の 183 のリクエストのうち 47 しか読めず、ACK とパリティが 1 ビットずれていた。今は 183 すべて。エッジの 1 サンプル以上前の変化は、これまでどおり読む。
 
 ## 0.0.33
 - (EN) Fixed (from the line below): the changes a clock period are measured over 32 of its periods or more: slow rises left an I2C's SCL a few clock-like pulses (6-10), its SDA glitching across the threshold changed more than 2.5 times each, and with the SCL no longer holding it the SDA was claimed as a UART, likely (the full CI f91be88: false likely +2 on mixed/nack with slow rises 4000).
