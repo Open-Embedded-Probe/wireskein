@@ -243,7 +243,8 @@ def _tight_windows(pin, idle: int, sv, n: int) -> float:
 
 UART_CLOCK_LIKE = 0.2     # a UART's score falls from here (clock-like: a line of pulses), by up to a half at 0.7
 UART_SYNC = 0.2           # ... and from here (keeping to a clock: synchronous data), to nothing at 0.5
-UART_SYNC_EDGES = 2.5     # changes a clock period past which a line is no synchronous data of that clock
+UART_SYNC_EDGES = 2.5     # changes a clock period past which a line is no synchronous data of that clock ...
+UART_SYNC_PERIODS = 32    # ... measured over this many of its periods or more
 UART_VIEW_CLOCK = 0.4     # a line this clock-like or more read on a view: its clock-likeness as the view has it
 UART_FIXED_BITS = 0.25    # bit positions holding one value in 0.95 of the characters, this share or more ...
 UART_PACED = 0.5          # ... at a character length three divides: a line of pulse-width bits, the score so much
@@ -328,8 +329,11 @@ class UartPlugin:
             # synchronous data changes once a clock period at most (twice on both edges): a line changing more often
             # inside the clock's bursts is no data of it, however its changes fall in phase (a UART beside a line
             # pulsed once a character: 9 changes a period, its bits on a grid the pulses share, held at 0.07)
+            # Measured over enough periods only: a clock slow rises leave a few pulses of (6-10 of an I2C's SCL) says
+            # nothing of how often its data changes, and its SDA, glitching across the threshold, would be a UART
             ck = c.sv.clocks[k]
-            if r.other_edges_per_burst * max(1, r.n_bursts) > UART_SYNC_EDGES * max(1, int(np.sum(ck.bits))):
+            periods = int(np.sum(ck.bits))
+            if periods >= UART_SYNC_PERIODS and r.other_edges_per_burst * max(1, r.n_bursts) > UART_SYNC_EDGES * periods:
                 return 0.0
             if r.data_score * c.sv.clocks[k].clock_score <= 0.1 or k not in c.sv.gated:
                 return r.data_score
