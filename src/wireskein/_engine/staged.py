@@ -449,6 +449,7 @@ DMX_BREAK_S = 88e-6       # a break at least this long (the standard's minimum f
 DMX_MIN_BITS = 3          # samples a bit at least for the rate given (a bit's middle to read)
 DMX_SLOT_ACTIVE = 9        # bits a slot is away from idle at most (its start bit and eight 0s)
 DMX_CHAR_BITS = 11        # a slot: start, 8 data bits, 2 stops
+DMX_MIN_SLOTS = 8         # slots a packet, by the median, at least
 DMX_ONE_PACKET = 24       # slots a packet, at least, for one packet alone to count (a short capture holds one)
 
 
@@ -583,6 +584,11 @@ class DmxPlugin:
                                  DMX_CHAR_BITS)
             r = UL.dmx512(ch)
             ck = r["checks"]
+            # packets of a slot or two (a USB line's keep-alives between its idle gaps read as breaks) are no DMX512:
+            # its controllers send a universe's channels, 24 and more a packet as a rule
+            slots = [len(pk["data"]) // 2 for pk in r["packets"]]
+            if not slots or float(np.median(slots)) < DMX_MIN_SLOTS:
+                continue
             baud = c.cap.rate / u
             rate_ok = 1.0 if abs(baud / DMX_BAUD - 1) < DMX_RATE_TOL else 0.3
             # two packets at least; one alone where the capture is short, at DMX512's rate and with the slots of a

@@ -73,3 +73,14 @@ def test_clock_bursts_between_lows_are_no_dmx():
         w.set(t, 1)
         t += half
     assert not any(c["protocol"] == "dmx512" for c in _claims({"CLK": w}, t))
+
+
+def test_packets_of_a_slot_are_no_dmx():
+    """A start code and one slot after each break, a millisecond apart (a USB line's keep-alives between idle gaps
+    read so): no universe of channels, no DMX512."""
+    w = gen.Wave(1)
+    t = 30e-6
+    for _ in range(20):
+        t = gen.dmx(w, t, [bytes([0xFF])])
+        t += 1e-3
+    assert not any(c["protocol"] == "dmx512" for c in _claims({"DM": w}, t))
