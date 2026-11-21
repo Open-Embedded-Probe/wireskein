@@ -35,6 +35,8 @@ def _bounce_view(ch, rate: float):
 RGB_SHORTEST = 0.15e-6  # s: no pulse of a WS2812-like line is shorter (T0H 0.25 us or more)
 RGB_ONE_OVER_ZERO = 1.5  # a 1's high over a 0's, this many times at least
 RGB_MIXED = 0.1         # the rarer kind of bit's share a string's data has at least
+RGB_T0H_MIN = 0.1         # a 0's high, this share of the bit at least
+RGB_CUT_HIGH_S = 2e-6     # a capture begun inside a bit: its first fall within this
 RGB_SAME_FRAMES = 4     # frames of one length (a whole number of LEDs) for a dark string's evidence
 
 
@@ -44,7 +46,13 @@ class RgbLedPlugin:
 
     def run(self, c, ch, g):
         if ch.initial != 0:
-            return []
+            # idle is low: a capture begun inside a high (a bit's) is read from its first fall, the cut pulse left out
+            # (sigrok-dumps' ws281x_4ch_5mhz begins so on all four lines)
+            # (a bit's high is 1 us at most: a line high for longer at the start rests high, no LED string's - a USB
+            # D+, an SPI line idle high)
+            if len(ch.edges) < 2 or ch.edges[0] > RGB_CUT_HIGH_S * float(c.cap.rate):
+                return []
+            ch = replace(ch, initial=0, edges=np.asarray(ch.edges)[1:])
         # the line as it is, and with pulses shorter than any of a WS2812-like line (T0H from 0.25 us; RGB_SHORTEST)
         # taken out: a bounce at an edge is a bit of its own
         k = max(2, int(np.ceil(RGB_SHORTEST * float(c.cap.rate) - 1e-9)))
@@ -83,6 +91,10 @@ class RgbLedPlugin:
         if r["t0h"] and r["t1h"]:
             ratio = float(np.median([w for _, w in r["t1h"]]) / max(1e-9, np.median([w for _, w in r["t0h"]])))
             if ratio < RGB_ONE_OVER_ZERO:
+                return []
+            # and a 0's high is a good part of the bit (T0H 0.2-0.4 us of 1.2): "0s" of a few ticks in a slow bit are
+            # a noise's pieces, a bounced clock's highs split (2026-11-22, a 1 MHz decoy at 200 MS/s with bounces)
+            if float(np.median([w for _, w in r["t0h"]])) < RGB_T0H_MIN * r["bit"]:
                 return []
         mixed = 0.3 + 0.7 * float(np.clip(minor / RGB_MIXED, 0, 1))
         # a string all dark (every bit 0) is one duty too: but its frames, between resets, are of one length, a whole

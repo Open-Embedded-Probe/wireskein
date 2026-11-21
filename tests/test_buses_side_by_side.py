@@ -42,3 +42,23 @@ def test_a_faster_bus_inside_one_period_is_no_data_of_the_slow_clock():
     sv = survey.survey(cap)
     assert sv.pairs[("KCLK", "KDAT")].data_score > 0.5
     assert sv.pairs[("KCLK", "SWCLK")].data_score < 0.2 and sv.pairs[("KCLK", "SWDIO")].data_score < 0.2
+
+
+def test_led_strings_driven_together_are_no_clock_and_data():
+    """Two WS2812 strings driven from one controller: each line rises with the other at every bit, so each looked like
+    the other's clock with its data at a phase; but a data line changes once a period at most, and each of these
+    twice (sigrok-dumps' ws281x_4ch_5mhz: every line tried as every other's bus, minutes on 2.4 million changes).
+    Each is read as a string of its own."""
+    from wireskein._engine import survey
+    rng = np.random.default_rng(3)
+    wa, wb = gen.Wave(0), gen.Wave(0)
+    t = 1e-4
+    for _ in range(3):
+        a, b = bytes(rng.integers(0, 256, 30).tolist()), bytes(rng.integers(0, 256, 30).tolist())
+        gen.rgb_led(wa, t, a, reset=80e-6)
+        t = gen.rgb_led(wb, t, b, reset=80e-6)
+    cap = gen.quantize({"A": wa, "B": wb}, 10e6, t + 1e-4, rng)
+    sv = survey.survey(cap)
+    assert all(r.data_score < 0.2 for r in sv.pairs.values()), {k: r.data_score for k, r in sv.pairs.items()}
+    ex = decode.export(decode.analyze(cap), cap)
+    assert sorted((c["protocol"], c["roles"]["data"]) for c in ex["claims"]) == [("rgb_led", "A"), ("rgb_led", "B")]

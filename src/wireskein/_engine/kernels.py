@@ -7,6 +7,8 @@ primitives a native engine would provide.
 
 from __future__ import annotations
 
+import hashlib
+
 import numpy as np
 
 
@@ -111,10 +113,12 @@ def relative_phase_concentration(x: np.ndarray, ref: np.ndarray, gap_ratio: floa
     if ok.sum() < 2:
         return 0.0
     ph = 2 * np.pi * (x[sel][ok] - ref[k[ok]]) / iv[k[ok]]
-    r1 = float(np.hypot(np.cos(ph).mean(), np.sin(ph).mean()))
+    c, s = np.cos(ph), np.sin(ph)
+    r1 = float(np.hypot(c.mean(), s.mean()))
     # Bidirectional lines (RVSWD/SWD DIO: host and target drive at different
-    # phases) give two clusters; the doubled angle captures two opposite ones.
-    r2 = float(np.hypot(np.cos(2 * ph).mean(), np.sin(2 * ph).mean()))
+    # phases) give two clusters; the doubled angle captures two opposite ones
+    # (its cosine and sine from the angle's: no second pass of trigonometry).
+    r2 = float(np.hypot((c * c - s * s).mean(), (2 * c * s).mean()))
     return max(r1, r2)
 
 
@@ -136,9 +140,25 @@ def deglitch(edges: np.ndarray, k: int, allow: np.ndarray | None = None) -> np.n
     multi = np.flatnonzero(ends - starts > 1)
     if not len(multi):
         return edges.copy()
+    a_, b_ = starts[multi], ends[multi]
+    if allow is not None:
+        # a run in which no edge after its first may cancel keeps all its edges
+        c = np.concatenate(([0], np.cumsum(np.asarray(allow, bool))))
+        some = c[b_] - c[a_ + 1] > 0
+        a_, b_ = a_[some], b_[some]
+    # a run of two (a single short pulse): its second edge cancels the first where it may
+    two = b_ - a_ == 2
+    if two.any():
+        a2 = a_[two]
+        gone = np.asarray(allow, bool)[a2 + 1] if allow is not None else np.ones(len(a2), bool)
+        keep[a2[gone]] = False
+        keep[a2[gone] + 1] = False
+        a_, b_ = a_[~two], b_[~two]
+    if not len(a_):
+        return edges[keep]
     el = edges.tolist()
     ok = allow.tolist() if allow is not None else None
-    for a, b in zip(starts[multi].tolist(), ends[multi].tolist()):
+    for a, b in zip(a_.tolist(), b_.tolist()):
         stack: list[int] = []
         for i in range(a, b):
             if stack and el[i] - el[stack[-1]] < k and (ok is None or ok[i]):
@@ -242,6 +262,25 @@ def local_period(ticks: np.ndarray, at: np.ndarray, w: int = 8, q: float = 25) -
     n = len(ticks) - 1                                       # intervals; interval j is ticks[j] .. ticks[j + 1]
     m = min(w, n)
     j = np.searchsorted(ticks, at, side="right") - 1         # the interval each falls in (-1: before the first)
+    if len(at) >= LOCAL_PERIOD_ALL * n:
+        # most intervals asked for (a long line of short pulses): every interval's once a clock, kept for the next
+        # line asked about on that clock
+        key = (len(ticks), w, q, hashlib.blake2b(ticks.tobytes(), digest_size=16).digest())
+        allp = _LOCAL_PERIOD.get(key)
+        if allp is None:
+            allp = _local_period_of(ticks, np.arange(-1, n + 1), m, q)
+            _LOCAL_PERIOD.clear()
+            _LOCAL_PERIOD[key] = allp
+        return allp[j + 1]
+    return _local_period_of(ticks, j, m, q)
+
+
+LOCAL_PERIOD_ALL = 0.25     # local_period asked at this share of a clock's intervals: every interval's at once, kept
+_LOCAL_PERIOD: dict = {}
+
+
+def _local_period_of(ticks: np.ndarray, j: np.ndarray, m: int, q: float) -> np.ndarray:
+    n = len(ticks) - 1
     j, back = np.unique(j, return_inverse=True)              # each interval once (many ticks of `at` share one)
     out = []
     # the w before the interval it falls in and the w after it (that one left out: a hold at a turnaround or a STOP)

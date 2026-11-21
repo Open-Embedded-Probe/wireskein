@@ -70,3 +70,24 @@ def test_a_dark_string_is_read():
                                cap.channel("D0"), None)
     assert nodes and nodes[0].total > 0.85
     assert [f["data"] for f in nodes[0].output.items["frames"]] == ["00" * 72] * 6
+
+
+def test_a_capture_begun_inside_a_bit_is_read():
+    """A capture begun inside a bit's high (the line high at its start: sigrok-dumps' ws281x_4ch_5mhz on all four
+    lines) is read from the first fall, that cut bit left out."""
+    r = np.random.default_rng(5)
+    w, t, frames = gen.Wave(0), 1e-4, []
+    for _ in range(4):
+        data = bytes(r.integers(0, 256, 12).tolist())
+        frames.append(data.hex())
+        t = gen.rgb_led(w, t, data, reset=100e-6)
+    cap = gen.quantize({"D0": w}, RATE, t + 1e-4, np.random.default_rng(0))
+    ch = cap.channel("D0")
+    e = np.asarray(ch.edges, np.int64)
+    ch = type(ch)(ch.name, 1, np.concatenate([[30], e]))      # a bit's high cut: it falls 0.6 us in
+    nodes = RgbLedPlugin().run(SimpleNamespace(cap=SimpleNamespace(n_samples=cap.n_samples, rate=RATE)), ch, None)
+    assert nodes and nodes[0].total > 0.85
+    assert [f["data"] for f in nodes[0].output.items["frames"]] == frames
+    # a line high for longer at the start rests high: no LED string's
+    ch = type(ch)(ch.name, 1, np.concatenate([[300], e]))
+    assert not RgbLedPlugin().run(SimpleNamespace(cap=SimpleNamespace(n_samples=cap.n_samples, rate=RATE)), ch, None)

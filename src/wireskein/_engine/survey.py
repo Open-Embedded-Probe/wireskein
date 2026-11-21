@@ -216,6 +216,8 @@ def despiked_relation(cap: Capture, clk_name: str, other: str, k: int) -> tuple[
 
 
 DATA_PER_PERIOD = 4        # a data line's changes in one clock period at most (its change, spikes): more, another bus's
+DATA_DENSE = 1.5           # and on average over the clock's periods: more, a pulse train of its own
+DATA_DENSE_PERIODS = 16    # periods of the clock's own length, at least, for that average
 
 
 def pair_relation(cap: Capture, clk: ClockInfo, other: str) -> PairRelation:
@@ -253,6 +255,12 @@ def pair_relation(cap: Capture, clk: ClockInfo, other: str) -> PairRelation:
         crowded = float(per[per > DATA_PER_PERIOD].sum()) / len(di)
         pr *= 1 - crowded
         pf *= 1 - crowded
+        # and a data line changes at most once a period (NRZ: half the periods for random bits); one changing twice a
+        # period on average is a pulse train of its own beside the clock (four WS281x lines driven together:
+        # sigrok-dumps' ws281x_4ch, each rising with the others at every bit, each tried as every other's data)
+        periods = int(np.count_nonzero(per_len <= 2 * float(np.median(per_len))))
+        if periods >= DATA_DENSE_PERIODS and np.count_nonzero(normal) > DATA_DENSE * periods:
+            pr = pf = 0.0
     dist, _ = K.nearest_distance(de, c.edges)
     coincide = float(np.mean(dist <= max(c.step, d.step)))   # within one sample of the coarser line
     # CS-like: every burst lies between two edges of `other`, with none inside it,
