@@ -1,6 +1,10 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Fixed: a CAN line of mostly classic frames with a few FD ones was not read (its runs gave a bit time between the two rates, 1.25 nominal bits): the shortest runs (an FD data phase's bit) are a base for the nominal bit time too.
+- (JA) 直した: 古典の CAN のフレームが多く FD のフレームが少しの線を読めなかった（Run から出したビットの時間が 2 つの速さの間、公称の 1.25 ビットになった）。いちばん短い Run（FD のデータ相の 1 ビット）も公称のビットの時間の元にする。
+- (EN) HDMI CEC's evidence counts each block's bits in CEC's timing windows and its ACK as the destination asks: a UART reading of the same line (each bit a 6-bit character) took short traffic from it.
+- (JA) HDMI CEC の根拠に、ブロックのビットが CEC のタイミングの窓に入ることと、宛先どおりの ACK を数える: 同じ線を UART と読んだもの（1 ビットを 6 ビットの文字 1 つに）に、短い通信を取られていた。
 - (EN) Fixed: `--hint` took JSON only, and a protocol's name alone (`--hint rvswd`) ended in a traceback. Names alone are taken now (`rvswd`, `uart,spi`: `{"protocols": [...]}`), and JSON that does not parse says so.
 - (JA) 直した: `--hint` は JSON しか受け付けず、プロトコルの名前だけ（`--hint rvswd`）だとトレースバックで落ちていた。名前だけでも受け付け（`rvswd`、`uart,spi`: `{"protocols": [...]}`）、読めない JSON にはその旨を出す。
 - (EN) SPI device definitions take masked commands (`mask`: the first byte's other bits an argument, `arg`, e.g. a register's number) and register reads that name the chip (`[[identify_read]]`: the answer's byte among `values`). A table that takes more than a quarter of the first byte's values (any traffic fits it) is "consistent" no more, only identified by such a read. New: TI CC1101 (named by its VERSION, 0x14 / 0x04).

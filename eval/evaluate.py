@@ -23,7 +23,9 @@ from wireskein import decode
 import corpus
 import synth
 
-IN_SCOPE = {"uart", "i2c", "spi", "lin", "dmx512", "rvswd", "swio", "swd", "can", "onewire", "rgb_led", "ir_nec"}
+IN_SCOPE = {"uart", "i2c", "spi", "lin", "dmx512", "rvswd", "swio", "swd", "can", "onewire", "rgb_led", "ir_nec",
+            "cec", "swim", "dali", "dcc", "sent", "j1850", "wiegand", "ps2", "usb", "usb_pd", "spdif", "sdmmc", "jtag",
+            "mdio", "i2s", "dht"}
 WORK = corpus.WORK
 
 
@@ -45,11 +47,36 @@ def decoded(claim: dict) -> object:
     return None
 
 
+def _tup(x):
+    """A value made comparable: lists as tuples (deeply), "" as None (a field left out or empty)."""
+    if isinstance(x, (list, tuple)):
+        return tuple(_tup(v) for v in x)
+    return None if x == "" else x
+
+
+def _match_fields(bus: dict, claim: dict) -> dict:
+    """A truth that names its layer and fields (eval/synth.py's protocols of 2026-11): the roles all as given, the
+    params in `check` equal, and the layer's items compared on those fields in order."""
+    ex, pm = bus["expect"], claim["params"]
+    r = {"roles": claim["roles"] == bus["roles"],
+         "params": all(pm.get(k) == v for k, v in bus["params"].get("check", {}).items())}
+    alias = ex.get("alias", {})
+    got = []
+    for x in claim["layers"].get(ex["layer"], []):
+        if bus["params"].get("ok_only") and not x.get("ok", True):
+            continue
+        got.append(tuple(_tup(x.get(f) if x.get(f) is not None else x.get(alias.get(f, ""))) for f in ex["fields"]))
+    r["decode"] = _ratio([_tup(i) for i in ex["items"]], got)
+    return r
+
+
 def match(bus: dict, claim: dict) -> dict:
     """Compare one true bus with one claim (analyze's export, mode "all"). Returns role/param/decode agreement."""
     r = {"roles": False, "params": False, "decode": 0.0}
     if claim["protocol"] != bus["protocol"]:
         return r
+    if "layer" in bus.get("expect", {}):
+        return _match_fields(bus, claim)
     tr, nr, lay, pm = bus["roles"], claim["roles"], claim["layers"], claim["params"]
     if bus["protocol"] == "uart":
         r["roles"] = nr["data"] == tr["data"]

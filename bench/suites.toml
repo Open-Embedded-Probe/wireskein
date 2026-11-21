@@ -293,6 +293,34 @@ transforms = ["", "spike:0.02", "spike:0.1", "xtalk:0.3", "bounce:0.1", "bounce:
 long_edges = 300000         # captures with more changes run on long_transforms only (minutes a case on the same
 long_transforms = [""]   # operations again otherwise)
 
+[suite.protocols]
+trials_in_all = false
+role = "tune"
+about = "Q1, one bus a case, the protocols added in 2026-11 in turn (eval/synth.py's protocols: CEC, SWIM, DALI, DCC, SENT, J1850 VPW, Wiegand, PS/2, USB low / full speed, USB PD, S/PDIF, SD's CMD line, JTAG, cJTAG OScan1, MDIO, I2S / TDM, DHT, CAN FD beside classic frames), 20 cases each, with decoys: before it, none of them had a truth on the bench (S/PDIF's and SD's false claims were found by chance)"
+sources = ["gen:protocols[0:360]"]
+transforms = [""]
+
+[suite.protocols-holdout]
+trials_in_all = false
+role = "holdout"
+about = "the same, other seeds"
+sources = ["gen:protocols[1000:1360]"]
+transforms = [""]
+
+[suite.protomix]
+trials_in_all = false
+role = "tune"
+about = "Q1 and Q2: two or three buses a case, of those protocols and the older ones (UART, I2C, SPI, CAN, SWD, 1-Wire, NEC), with decoys: each protocol's lines beside others' (a reader claiming another's line, lines of separate buses grouped under one clock)"
+sources = ["gen:protomix[0:120]"]
+transforms = [""]
+
+[suite.protomix-holdout]
+trials_in_all = false
+role = "holdout"
+about = "the same, other seeds"
+sources = ["gen:protomix[1000:1120]"]
+transforms = [""]
+
 [suite.ir]
 role = "tune"
 about = "NEC remote codes alone (eval/synth.py's ir: an LED's drive with a 38 kHz carrier or a receiver's output, now and then a repeat code) with decoys, clean and with noise (NEC is experimental: memo)"

@@ -84,9 +84,13 @@ class CecPlugin:
         done = [m for m in msgs if m["complete"]]
         if len(done) < 2:
             return []
-        # evidence in bits: each complete message's start bit of its length and its blocks' EOM in place (4 a
-        # message, 1 a block)
-        info = sum(4 + (2 if "opcode" in m else 1) for m in done)
+        # evidence in bits: each complete message's start bit of its length (4); a block's EOM in place (1), its ten
+        # bits each in CEC's windows (a low of 0.6 or 1.5 ms, 2.4 ms apart: a line of other pulses meets them a few
+        # times in ten at most; 1 a block), and, acknowledged as its destination asks (a directed message's ACK 0, a
+        # broadcast's 1), its ACK (1). A UART reading of the same line (each bit a 6-bit character, 2026-11-21) has
+        # its own framing: only these tell the two apart
+        blocks = lambda m: 1 + ("opcode" in m) + len(m.get("data", "")) // 2   # noqa: E731
+        info = sum(4 + (3 if m["acked"] else 2) * blocks(m) for m in done)
         score = (len(done) / len(msgs)) * (1 - 0.5 ** (info / EVIDENCE_BITS))
         return [Node("cec", {}, {"cec": ch.name}, Stream("cec.messages", msgs),
                      {"messages": len(msgs), "complete": len(done)}, layer_score=score, total=score)]

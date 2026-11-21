@@ -495,6 +495,313 @@ class Builder:
         self.fastest = max(self.fastest, rate)
         self.t_end = max(self.t_end, t)
 
+    # --- the protocols added in 2026-11: their truth compared field by field (eval/evaluate.py's generic match) ---
+
+    def _generic(self, protocol, roles, layer, fields, items, check=None, fastest=0.0, t=0.0, params=None):
+        self.buses.append({"protocol": protocol, "roles": roles, "params": {**(params or {}), "check": check or {}},
+                           "expect": {"layer": layer, "fields": fields, "items": items}})
+        self.fastest = max(self.fastest, fastest)
+        self.t_end = max(self.t_end, t)
+
+    def _t0(self):
+        return float(self.rng.uniform(0.05e-3, 0.5e-3))
+
+    def add_cec(self, idx: int) -> None:
+        r = self.rng
+        name = f"cec{idx}"
+        w = self.wave(name, 1)
+        msgs = []
+        for _ in range(int(r.integers(3, 7))):
+            ini, dst = int(r.integers(0, 15)), int(r.choice([0, 4, 5, 15]))
+            n = int(r.choice([0, 1, 1, 2, 3]))
+            msgs.append([ini << 4 | dst] + [int(x) for x in r.integers(0, 256, n)])
+        t = gen.cec(w, self._t0(), msgs, gap=float(r.uniform(5e-3, 20e-3)))
+        items = [[m[0] >> 4, m[0] & 0xF, m[1] if len(m) > 1 else None, bytes(m[2:]).hex() or None]
+                 for m in msgs]
+        self._generic("cec", {"cec": name}, "messages", ["initiator", "destination", "opcode", "data"], items,
+                      fastest=1 / 0.6e-3, t=t)
+
+    def add_swim(self, idx: int) -> None:
+        r = self.rng
+        name = f"swim{idx}"
+        w = self.wave(name, 1)
+        ops = []
+        for _ in range(int(r.integers(2, 6))):
+            cmd = "ROTF" if r.random() < 0.6 else "WOTF"
+            ops.append({"cmd": cmd, "addr": int(r.choice([0x7F80, 0x4800, 0x8000, 0x5000])) + int(r.integers(0, 64)),
+                        "data": [int(x) for x in r.integers(0, 256, int(r.integers(1, 9)))]})
+        t = gen.swim(w, self._t0(), ops, gap=float(r.uniform(20e-6, 200e-6)))
+        items = [[o["cmd"], len(o["data"]), o["addr"], bytes(o["data"]).hex()] for o in ops]
+        self._generic("swim", {"swim": name}, "transactions", ["cmd", "count", "addr", "data"], items,
+                      fastest=1 / (2 * gen.SWIM_CLK), t=t)
+
+    def add_dali(self, idx: int) -> None:
+        r = self.rng
+        name = f"dali{idx}"
+        w = self.wave(name, 1)
+        frames, items = [], []
+        for _ in range(int(r.integers(3, 8))):
+            a = int(r.integers(0, 64)) << 1 | 1
+            cmd = int(r.integers(144, 200))
+            frames.append((a << 8 | cmd, 16, float(r.uniform(2.5e-3, 8e-3))))
+            items.append(["forward", a, cmd])
+            if r.random() < 0.7:
+                ans = int(r.integers(0, 256))
+                frames.append((ans, 8, float(r.uniform(10e-3, 30e-3))))
+                items.append(["backward", None, ans])
+        t = gen.dali(w, self._t0(), frames)
+        self._generic("dali", {"dali": name}, "frames", ["kind", "addr_byte", "data"], items, fastest=2400, t=t)
+
+    def add_dcc(self, idx: int) -> None:
+        r = self.rng
+        name = f"dcc{idx}"
+        w = self.wave(name, 0)
+        pk = [[int(r.integers(1, 128)), int(r.integers(0x60, 0x80))] + ([int(r.integers(0, 256))] if r.random() < 0.3 else [])
+              for _ in range(int(r.integers(4, 12)))]
+        t = gen.dcc(w, self._t0(), pk, preamble=int(r.integers(14, 20)))
+        items = []
+        for d in pk:
+            x = 0
+            for v in d:
+                x ^= v
+            items.append([d[0], bytes(d + [x]).hex()])
+        self._generic("dcc", {"track": name}, "packets", ["address", "bytes"], items, fastest=1 / 58e-6, t=t,
+                      params={"ok_only": True})
+
+    def add_sent(self, idx: int) -> None:
+        r = self.rng
+        name = f"sent{idx}"
+        w = self.wave(name, 1)
+        tick = float(r.choice([3e-6, 3e-6, 6e-6, 12e-6])) * (1 + r.uniform(-0.05, 0.05))
+        n = int(r.choice([3, 4, 6, 6]))
+        msgs = [[int(x) for x in r.integers(0, 16, n)] for _ in range(int(r.integers(8, 20)))]
+        t = gen.sent(w, self._t0(), msgs, tick=tick)
+        self._generic("sent", {"data": name}, "messages", ["data"], [[m] for m in msgs], fastest=1 / tick, t=t,
+                      params={"ok_only": True})
+
+    def add_j1850(self, idx: int) -> None:
+        r = self.rng
+        name = f"j1850_{idx}"
+        w = self.wave(name, 0)
+        frames = [bytes(r.integers(0, 256, int(r.integers(3, 9))).tolist()) for _ in range(int(r.integers(3, 8)))]
+        t = gen.j1850(w, self._t0(), frames, offset=float(r.choice([0, 0, 10e-6, 20e-6])),
+                      gap=float(r.uniform(0.5e-3, 3e-3)))
+        items = [[(f + bytes([gen.j1850_crc8(f)])).hex()] for f in frames]
+        self._generic("j1850", {"data": name}, "frames", ["bytes"], items, fastest=1 / 34e-6, t=t,
+                      params={"ok_only": True})
+
+    def add_wiegand(self, idx: int) -> None:
+        r = self.rng
+        d0, d1 = f"wg{idx}_d0", f"wg{idx}_d1"
+        w0, w1 = self.wave(d0, 1), self.wave(d1, 1)
+        cards = [(int(r.integers(0, 256)), int(r.integers(0, 65536))) for _ in range(int(r.integers(2, 6)))]
+        width = float(r.choice([20e-6, 50e-6, 100e-6]))
+        t = gen.wiegand(w0, w1, self._t0(), [gen.wiegand26(*c) for c in cards], width=width,
+                        period=float(r.choice([0.5e-3, 1e-3, 2e-3])), gap=float(r.uniform(20e-3, 100e-3)))
+        self._generic("wiegand", {"d0": d0, "d1": d1}, "frames", ["facility", "card"], [list(c) for c in cards],
+                      fastest=1 / width, t=t)
+
+    def add_ps2(self, idx: int) -> None:
+        r = self.rng
+        c, d = f"ps2_{idx}_clk", f"ps2_{idx}_data"
+        wc, wd = self.wave(c, 1), self.wave(d, 1)
+        codes = []
+        for k in r.integers(1, 0x84, int(r.integers(3, 10))).tolist():
+            codes += [k, 0xF0, k]
+        f = float(r.uniform(10e3, 16.7e3))
+        t = gen.ps2(wc, wd, self._t0(), bytes(codes), freq=f, gaps=[float(x) for x in r.uniform(0.3e-3, 5e-3, len(codes))])
+        self._generic("ps2", {"clk": c, "data": d}, "frames", ["data"], [[x] for x in codes], fastest=2 * f, t=t)
+
+    def add_usb(self, idx: int) -> None:
+        r = self.rng
+        speed = "full" if r.random() < 0.6 else "low"
+        dp, dm = f"usb{idx}_dp", f"usb{idx}_dm"
+        wp, wm = self.wave(dp, int(speed == "full")), self.wave(dm, int(speed == "low"))     # idle J
+        pk = []
+        frame = int(r.integers(0, 2000))
+        for k in range(int(r.integers(3, 8))):
+            if speed == "full" and r.random() < 0.5:
+                pk.append({"pid": "SOF", "frame": (frame + k) & 0x7FF})
+            addr, ep = int(r.integers(0, 128)), int(r.integers(0, 16))
+            if r.random() < 0.5:
+                pk.append({"pid": "IN", "addr": addr, "endp": ep})
+                if r.random() < 0.3:
+                    pk.append({"pid": "NAK"})
+                    continue
+            else:
+                pk.append({"pid": "OUT", "addr": addr, "endp": ep})
+            pk.append({"pid": "DATA1" if k % 2 else "DATA0", "data": bytes(r.integers(0, 256, int(r.integers(0, 17))).tolist())})
+            pk.append({"pid": "ACK"})
+        t = gen.usb(wp, wm, self._t0(), pk, speed, gap_bits=float(r.uniform(10, 200)))
+        items = [[p["pid"], p.get("addr"), p.get("endp"), p.get("frame"),
+                  bytes(p["data"]).hex() if "data" in p else None] for p in pk]
+        self._generic("usb", {"dp": dp, "dm": dm}, "packets", ["pid", "addr", "endp", "frame", "data"], items,
+                      check={"speed": speed}, fastest=12e6 if speed == "full" else 1.5e6, t=t)
+
+    def add_usb_pd(self, idx: int) -> None:
+        r = self.rng
+        name = f"cc{idx}"
+        w = self.wave(name, 0)
+        msgs = []
+        for k in range(int(r.integers(3, 8))):
+            nobj = int(r.integers(0, 5))
+            hdr = (nobj << 12) | ((k & 7) << 9) | 0x40 | (int(r.integers(1, 16)) if nobj == 0 else int(r.integers(1, 5)))
+            msgs.append((hdr, [int(x) for x in r.integers(0, 2 ** 32, nobj, dtype=np.uint64)]))
+        ui = 1 / (300e3 * (1 + r.uniform(-0.1, 0.1)))
+        t = gen.usb_pd(w, self._t0(), msgs, ui=ui, skew=float(r.choice([0, 0, -0.2, -0.4])) * 1e-6,
+                       gap=float(r.uniform(100e-6, 1e-3)))
+        self._generic("usb_pd", {"cc": name}, "packets", ["header", "objects"], [[h, o] for h, o in msgs],
+                      fastest=2 / ui, t=t, params={"ok_only": True})
+
+    def add_spdif(self, idx: int) -> None:
+        r = self.rng
+        name = f"spdif{idx}"
+        w = self.wave(name, 0)
+        fs = float(r.choice([32000, 44100, 48000]))
+        n = int(r.integers(24, 60))
+        samples = [(int(a), int(b)) for a, b in r.integers(0, 1 << 24, (n, 2))]
+        f0 = int(r.integers(0, 192))
+        t = gen.spdif(w, self._t0(), samples, fs=fs, frame0=f0)
+        items = []
+        for f, (a, b) in enumerate(samples):
+            items += [["B" if (f0 + f) % 192 == 0 else "M", a], ["W", b]]
+        self._generic("spdif", {"data": name}, "subframes", ["preamble", "audio"], items, fastest=fs * 128, t=t,
+                      params={"ok_only": True})
+
+    def add_sdmmc(self, idx: int) -> None:
+        r = self.rng
+        c, d = f"sd{idx}_clk", f"sd{idx}_cmd"
+        wc, wd = self.wave(c, 0), self.wave(d, 1)
+        rca = int(r.integers(1, 0x10000))
+        cid = int.from_bytes(r.bytes(16), "big")
+        ocr = 0xC0FF8000
+        seq = [(1, 0, 0, None), (1, 8, 0x1AA, (8, 0x1AA)), (1, 55, 0, (55, 0x120)), (1, 41, 0x40FF8000, "R3"),
+               (1, 2, 0, "R2"), (1, 3, 0, (3, rca << 16 | 0x0500))]
+        for _ in range(int(r.integers(2, 8))):
+            k = int(r.choice([13, 16, 17, 7, 24]))
+            seq.append((1, k, int(r.integers(0, 2 ** 32)) if k in (17, 24) else rca << 16, (k, int(r.integers(0, 2 ** 32)))))
+        start = int(r.integers(0, 3))
+        frames, items = [], []
+        for dirn, k, arg, resp in seq[start:]:
+            frames.append(gen.sd_frame(dirn, k, arg))
+            items.append(["CMD", k, arg])
+            if resp == "R3":
+                frames.append(gen.sd_r3(ocr))
+                items.append(["R3", None, ocr])
+            elif resp == "R2":
+                frames.append(gen.sd_r2(cid))
+                items.append(["R2", None, None])
+            elif resp is not None:
+                frames.append(gen.sd_frame(0, *resp))
+                items.append(["RSP", *resp])
+        f = float(r.choice([400e3, 400e3, 1e6, 25e6]))
+        t = gen.sdmmc(wc, wd, self._t0(), frames, freq=f, idle=int(r.integers(2, 40)))
+        self._generic("sdmmc", {"clk": c, "cmd": d}, "frames", ["dir", "index", "arg"],
+                      [[a, b, c_] for a, b, c_ in items], fastest=2 * f, t=t)
+        # an R3's value is its OCR (the field "ocr"): the arg compared is that
+        self.buses[-1]["expect"]["alias"] = {"arg": "ocr"}
+
+    def _jtag_scans(self, ir_bits):
+        r = self.rng
+        scans = []
+        for _ in range(int(r.integers(4, 17))):    # a debugger's session: scans on and on
+            dr = int(r.choice([1, 8, 32, 32, 41]))
+            scans.append({"type": "IR", "bits": ir_bits, "tdi": int(r.integers(0, 1 << ir_bits)),
+                          "tdo": (int(r.integers(0, 1 << max(0, ir_bits - 2))) << 2) | 1})
+            scans.append({"type": "DR", "bits": dr, "tdi": int(r.integers(0, 2 ** dr)), "tdo": int(r.integers(0, 2 ** dr))})
+        return scans, [[s["type"], s["bits"], format(s["tdi"], "x"), format(s["tdo"], "x")] for s in scans]
+
+    def add_jtag(self, idx: int) -> None:
+        r = self.rng
+        names = {k: f"jtag{idx}_{k}" for k in ("tck", "tms", "tdi", "tdo")}
+        w = {k: self.wave(v, 0) for k, v in names.items()}
+        freq = float(r.choice([100e3, 1e6, 4e6, 10e6]))
+        scans, items = self._jtag_scans(int(r.choice([4, 5, 5, 9])))
+        t = gen.jtag(w["tck"], w["tms"], w["tdi"], w["tdo"], self._t0(), scans, freq,
+                     idle_clocks=int(r.integers(0, 8)), gap=float(r.uniform(1, 50)) / freq)
+        self._generic("jtag", names, "scans", ["type", "bits", "tdi", "tdo"], items, fastest=freq, t=t)
+
+    def add_cjtag(self, idx: int) -> None:
+        r = self.rng
+        k, m = f"cjtag{idx}_tckc", f"cjtag{idx}_tmsc"
+        wk, wm = self.wave(k, 1), self.wave(m, 1)
+        tck = 1 / float(r.choice([100e3, 1e6, 4e6]))
+        scans, items = self._jtag_scans(int(r.choice([4, 5, 5, 9])))
+        t = gen.cjtag(wk, wm, self._t0(), scans, tck=tck)
+        self._generic("jtag", {"tckc": k, "tmsc": m}, "scans", ["type", "bits", "tdi", "tdo"], items,
+                      check={"cjtag": "oscan1"}, fastest=5 / tck, t=t)
+
+    def add_mdio(self, idx: int) -> None:
+        r = self.rng
+        c, d = f"mdio{idx}_mdc", f"mdio{idx}_md"
+        wc, wd = self.wave(c, 0), self.wave(d, 1)
+        freq = float(r.choice([1e6, 2.5e6, 400e3]))
+        phy = int(r.integers(0, 32))
+        frames = [{"op": int(r.choice([1, 2])), "phy": phy, "reg": int(r.integers(0, 32)), "data": int(r.integers(0, 2 ** 16))}
+                  for _ in range(int(r.integers(4, 12)))]
+        t = gen.mdio(wc, wd, self._t0(), frames, freq,
+                     gap=float(r.uniform(2, 50)) / freq)
+        items = [["W" if f["op"] == 1 else "R", f["phy"], f["reg"], f["data"]] for f in frames]
+        # the PHY's data a tenth of a clock after the rise before the one that reads it: the rate resolves that
+        self._generic("mdio", {"mdc": c, "mdio": d}, "frames", ["op", "phy", "reg", "data"], items, fastest=10 * freq, t=t)
+
+    def add_i2s(self, idx: int) -> None:
+        r = self.rng
+        names = {"sck": f"i2s{idx}_bclk", "ws": f"i2s{idx}_ws", "sd": f"i2s{idx}_sd"}
+        w = {k: self.wave(v, 0) for k, v in names.items()}
+        fs = float(r.choice([8000, 16000, 44100, 48000]))
+        if r.random() < 0.5:
+            fmt, bits = str(r.choice(["i2s", "left", "right"])), int(r.choice([16, 24]))
+            lim = 1 << (bits - 1)
+            frames = [(int(a), int(b)) for a, b in r.integers(-lim, lim, (int(r.integers(30, 120)), 2))]
+            t = gen.i2s(w["sck"], w["ws"], w["sd"], self._t0(), frames, fs, slot=32, bits=bits, fmt=fmt)
+            self._generic("i2s", names, "frames", ["left", "right"], [list(f) for f in frames],
+                          check={"format": fmt, "word_bits": bits}, fastest=fs * 128, t=t)
+        else:
+            n = int(r.choice([4, 6, 8]))
+            slot, bits = [(32, 24), (32, 16), (16, 12)][int(r.integers(0, 3))]
+            offset, width = [(1, 1), (0, slot)][int(r.integers(0, 2))]
+            lim = 1 << (bits - 1)
+            frames = [[int(x) for x in row] for row in r.integers(-lim, lim, (int(r.integers(20, 60)), n))]
+            t = gen.tdm(w["sck"], w["ws"], w["sd"], self._t0(), frames, fs=fs, slot=slot, bits=bits, offset=offset,
+                        fs_width=width)
+            self._generic("i2s", names, "frames", ["slots"], [[f] for f in frames],
+                          check={"format": "tdm", "slots_per_frame": n, "word_bits": bits}, fastest=fs * n * slot * 2, t=t)
+
+    def add_dht(self, idx: int) -> None:
+        r = self.rng
+        name = f"dht{idx}"
+        w = self.wave(name, 1)
+        rd = []
+        for _ in range(int(r.integers(2, 5))):
+            if r.random() < 0.5:
+                rd.append(bytes([int(r.integers(20, 90)), 0, int(r.integers(0, 40)), int(r.integers(0, 10))]))
+            else:
+                h, tc = int(r.integers(200, 900)), int(r.integers(-100, 400))
+                rd.append(bytes([h >> 8, h & 0xFF, (abs(tc) >> 8) | (0x80 if tc < 0 else 0), abs(tc) & 0xFF]))
+        t = gen.dht(w, self._t0(), rd, period=float(r.uniform(0.02, 0.1)))
+        self._generic("dht", {"data": name}, "readings", ["bytes"], [[(b + bytes([sum(b) & 0xFF])).hex()] for b in rd],
+                      fastest=1 / 27e-6, t=t)
+
+    def add_can_fd(self, idx: int) -> None:
+        r = self.rng
+        nominal = float(r.choice([250e3, 500e3, 1e6]))
+        ratio = int(r.choice([2, 4, 5, 8]))
+        name = f"canfd{idx}"
+        w = self.wave(name, 1)
+        frames = []
+        for _ in range(int(r.integers(3, 10))):
+            fd = r.random() < 0.75
+            ext = bool(r.random() < 0.3) and fd
+            n = int(r.choice(gen.CAN_FD_LENGTHS[:13])) if fd else int(r.integers(0, 9))
+            frames.append({"id": int(r.integers(0x800 if ext else 0, 2 ** 29 if ext else 2 ** 11)), "fd": fd,
+                           "brs": bool(r.random() < 0.8), "data": [int(x) for x in r.integers(0, 256, n)]})
+        t = gen.can_fd(w, self._t0(), frames, nominal, nominal * ratio, ifs_bits=float(r.choice([10, 10, 30])))
+        self.buses.append({"protocol": "can", "roles": {"data": name}, "params": {"bitrate": nominal},
+                           "expect": {"frames": [[f["id"], f["id"] > 0x7FF, bytes(f["data"]).hex()] for f in frames]}})
+        self.fastest = max(self.fastest, nominal * ratio)
+        self.t_end = max(self.t_end, t)
+
     def add_decoy(self, idx: int) -> None:
         r = self.rng
         kind = str(r.choice(["static", "static", "pwm", "clock", "random", "burst_clock"]))
@@ -532,6 +839,10 @@ class Builder:
 
 DECOY_MAX = 20000      # a decoy's changes at most (see scenario)
 
+# the protocols each with a case of their own (profile "protocols"), and among other buses ("protomix")
+PROTOCOLS = ("cec", "swim", "dali", "dcc", "sent", "j1850", "wiegand", "ps2", "usb", "usb_pd", "spdif", "sdmmc", "jtag",
+             "cjtag", "mdio", "i2s", "dht", "can_fd")
+
 SPI_VARIANTS = ("cs", "nocs", "cs_high", "cs_tied", "cs_tied2", "sessions", "session1", "multi", "uncaptured", "empty")
 
 
@@ -564,12 +875,16 @@ def scenario(seed: int, profile: str = "mixed", stress: str | None = None,
              "upper": ["uart_upper"], "spinor": ["spinor", "spi"],
              "swd": ["swd"], "can": ["can"], "swdcan": ["swd", "can", "spi", "uart"],
              "pulse": ["onewire", "rgb", "uart"], "ir": ["nec"],
-             "spimulti": ["spi_multi"], "spimultimix": ["spi_multi", "uart", "i2c"], "spivar": []}[profile]
-    n_bus = int(rng.integers(1, 4)) if profile in ("mixed", "swdcan", "spimultimix", "pulse") else 0 if profile == "spivar" else 1
+             "spimulti": ["spi_multi"], "spimultimix": ["spi_multi", "uart", "i2c"], "spivar": [],
+             "protocols": [], "protomix": list(PROTOCOLS) + ["uart", "i2c", "spi", "can", "swd", "onewire", "nec"]}[profile]
+    n_bus = (int(rng.integers(1, 4)) if profile in ("mixed", "swdcan", "spimultimix", "pulse")
+             else int(rng.integers(2, 4)) if profile == "protomix" else 0 if profile in ("spivar", "protocols") else 1)
     for i in range(n_bus):
         getattr(b, "add_" + str(rng.choice(kinds)))(i)
     if profile == "spivar":                     # the shapes in turn, so that any run of seeds covers them all
         b.add_spi_variant(1, SPI_VARIANTS[seed % len(SPI_VARIANTS)])
+    if profile == "protocols":                  # one bus, the protocols in turn (any run of seeds covers them all)
+        getattr(b, "add_" + PROTOCOLS[seed % len(PROTOCOLS)])(0)
     for i in range(int(rng.integers(0, 4))):
         b.add_decoy(i)
     t_end = b.t_end + rng.uniform(0.2e-3, 2e-3)
