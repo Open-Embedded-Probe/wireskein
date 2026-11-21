@@ -3,6 +3,8 @@
 ## Unreleased
 - (EN) Fixed: a CAN line of mostly classic frames with a few FD ones was not read (its runs gave a bit time between the two rates, 1.25 nominal bits): the shortest runs (an FD data phase's bit) are a base for the nominal bit time too.
 - (JA) 直した: 古典の CAN のフレームが多く FD のフレームが少しの線を読めなかった（Run から出したビットの時間が 2 つの速さの間、公称の 1.25 ビットになった）。いちばん短い Run（FD のデータ相の 1 ビット）も公称のビットの時間の元にする。
+- (EN) Fixed: crosstalk from a clock puts a one-sample pulse on the line beside it at each of its edges, in phase with it by that alone: another bus's select and a PWM were taken as an SPI's data. A line's one-sample pulses are left out of how it keeps to a clock where the clock's period is 6 samples or more (RING's 3 needed 9).
+- (JA) 直した: クロックからのクロストークは、となりの線にクロックの辺ごとに 1 サンプルのパルスを置き、それだけで位相がそろって見える: 別のバスの選択の線や PWM を SPI のデータとしていた。クロックの周期が 6 サンプル以上の所では、線の 1 サンプルのパルスを、クロックへの従い方から除く（RING の 3 では 9 サンプル以上が要った）。
 - (EN) Fixed: an SPI clock under dense crosstalk from a fast clock beside it (three in four of its runs a spike's) got no filtered view: its typical run is taken from it cleaned where a tenth of its runs (64 or more) is left, and then a share of short runs up to 0.9 still gives the views.
 - (JA) 直した: 隣の速いクロックから密なクロストークを受けた SPI のクロック（Run の 4 つに 3 つがスパイク）に、フィルタをかけた見方が作られなかった: スパイクを除いても Run の 1 割（64 本以上）が残れば、普通の Run の長さをそこから取り、そのときは短い Run の割合が 0.9 まで見方を作る。
 - (EN) Fixed: an SPI select under crosstalk lost its select (its idle level cut into hundreds of windows by the pulses, a few reaching into transfers): the select's windows are counted at the level whose windows hold the clock most often. And I2S words of under 8 bits (three free clocks of related rates read as a 1-bit "word") are no audio.

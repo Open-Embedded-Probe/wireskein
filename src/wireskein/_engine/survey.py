@@ -225,6 +225,10 @@ def pair_relation(cap: Capture, clk: ClockInfo, other: str) -> PairRelation:
         # a reflection ringing at the clock's edges scatters the line's changes over the period: read as it settles
         # where the clock is slow enough that no bit is that short
         de = V.spikes_out_where_slow(np.asarray(de), RING, _rising(c))
+        # and a pulse of a single sample where the clock's period is 6 samples or more (too fast for RING's 9):
+        # crosstalk from the clock beside it puts one at each of its edges, in phase with it by that alone (2026-11-21,
+        # synth-mixed-171 with crosstalk at 8 samples a period: another bus's CS and a PWM taken as data)
+        de = V.spikes_out_where_slow(de, 2, _rising(c))
     if len(de) == 0:
         return PairRelation(clk.name, other, 0, 0, 0, 0, 0, 0)
     inside, k = K.in_windows(clk.bursts.astype(np.int64), de)
