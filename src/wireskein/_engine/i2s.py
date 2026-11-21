@@ -54,6 +54,7 @@ def _square_words(frames: list[dict], bits: int) -> float:
     return 1.0 if share <= 0.9 else max(0.05, 1 - (share - 0.9) / 0.1)
 
 
+I2S_BURSTS = 4            # a bit clock's bursts this many at most, or no more than its frames: it runs on
 I2S_MIN_WORD = 8          # audio words this many bits at least (8-bit PCM and up)
 I2S_OTHER_CLOCK = 0.1     # a share off for each line whose changes meet another clock's edges, not this one's
 
@@ -243,8 +244,12 @@ class I2sPlugin:
                 # a line whose changes fall on another clock's edges, not on this one's, is that bus's (two audio
                 # buses whose bit clocks are 1 : 2 each read the other's WS as their own in step: protomix-145)
                 own = _own_clock(c.sv, sb.clock, (w, d))
-                score = m["regular"] * q * (0.5 + 0.5 * clk) * (0.5 + 0.5 * pair) * tv * own
-                m.update(clk=clk, pair=pair, square_words=tv, own_clock=own)
+                # and a bit clock runs on: one that stops more often than once a frame is another bus's (an I2C's
+                # SCL, 97 bursts for 11 "frames" of a GPIO counter's outputs: sigrok-dumps' mcp23017 captures)
+                nb = len(sb.burst_start)
+                runs_on = 1.0 if nb <= max(I2S_BURSTS, len(frames)) else len(frames) / nb
+                score = m["regular"] * q * (0.5 + 0.5 * clk) * (0.5 + 0.5 * pair) * tv * own * runs_on
+                m.update(clk=clk, pair=pair, square_words=tv, own_clock=own, runs_on=runs_on)
                 out.append(Node("i2s", {"sample_edge": sb.sample_edge, **params}, {"sck": sb.clock, "ws": w, "sd": d},
                                 Stream("i2s.frames", frames), m, layer_score=score, total=score))
         return sorted(out, key=lambda n: -n.total)[:1]

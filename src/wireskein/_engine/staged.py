@@ -130,6 +130,7 @@ class Ctx:
 
 # ---------------- sync plugins ----------------
 
+SYNC_UNKNOWN_CHANGES = 0.1  # data changes a bit, the quietest line's, for a whole score
 SYNC_UNKNOWN_BITS = 8      # the commonest frame this many bits or more for a whole score
 SYNC_UNKNOWN_PAIR = 0.6     # data lines keeping to the clock this closely (survey's data_score) for a whole score
 
@@ -184,8 +185,15 @@ class SyncUnknownPlugin:
         # 0.3 by chance (2026-11-21, synth-uartlike-30 with spikes: 0.70 unknown beside the UART's 0.67)
         # and frames of a few bits are a noise's pieces (a clock's bursts cut by spikes: hundreds of 3-bit "frames",
         # 2026-11-21, protomix-12 with crosstalk), no bus's words: whole from 8 bits on
+        # and every data line carries something: one changing about once a transfer (a GPIO expander's output, set
+        # once an I2C write: a change in 37 bits, sigrok-dumps' mcp23017) is no bus's data - the changes a bit of the
+        # quietest line, whole from SYNC_UNKNOWN_CHANGES
+        nbits = max(1, sb.bits.shape[1] - 1)
+        ch_bit = min(float(np.count_nonzero(np.diff(row.astype(np.int8)))) for row in sb.bits) / nbits
+        m["changes_a_bit"] = ch_bit
         score = (0.9 * share * q(len(lens), 4) * (0.5 + 0.5 * clk) * (1 - known)
-                 * min(1.0, pair / SYNC_UNKNOWN_PAIR) * min(1.0, top[0][0] / SYNC_UNKNOWN_BITS))
+                 * min(1.0, pair / SYNC_UNKNOWN_PAIR) * min(1.0, top[0][0] / SYNC_UNKNOWN_BITS)
+                 * min(1.0, ch_bit / SYNC_UNKNOWN_CHANGES))
         roles = {"clk": sb.clock, **({"cs": sb.select} if sb.select else {})}
         for i, d in enumerate(sb.data):
             roles[f"data{i}"] = d
@@ -1221,6 +1229,8 @@ class StagedResult:
 SCAN_COVER = 0.95         # a declared protocol's frames explaining this share of the bits ...
 SCAN_EVIDENCE = 32        # ... and these bits of fixed fields checked: the SPI reading of the same bits is no rival
 SCAN_BELOW = 0.1          # ... where it scores no more than this over the declared one (fewer frames, less evidence)
+UNKNOWN_FIT = 0.9         # a known word reading's length fit and check rate this high: its frames are no unknown's
+UNKNOWN_KNOWN_MIN = 0.5   # ... scoring this at least
 UNKNOWN_EVIDENCE = 16     # ... and against the unknown reading (frames of one length, nothing checked) these
 SYNC_PROTOCOLS = {"i2c", "spi", "rvswd", "swd", "mdio", "i2s", "jtag", "sync_unknown", "ps2", "sdmmc"}
 ASYNC_PROTOCOLS = {"uart", "lin", "dmx512", "can", "usb", "wiegand"}
@@ -1679,9 +1689,19 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
     # (both held by the same pair's keeping: 2026-11-21, synth-protocols-187 at 0.884 beside 0.895)
     sure = [k for k in known if k.metrics.get("bit_coverage", 0) >= SCAN_COVER
             and k.metrics.get("evidence_bits", 0) >= UNKNOWN_EVIDENCE]
+    # and an unknown reading of more lines, a known one's among them on its clock, whose frames that one reads with
+    # its lengths and checks holding (an I2C's 37-clock transactions, a GPIO expander's outputs that change once a
+    # write taken as more data lines: sigrok-dumps' mcp23017 captures, unknown 0.9 beside I2C 0.72)
+    words_sure = [k for k in known if k.metrics.get("length_fit", 0) >= UNKNOWN_FIT and k.metrics.get("check_rate", 0)
+                  >= UNKNOWN_FIT and k.metrics.get("frames", 0) >= 4 and k.total >= UNKNOWN_KNOWN_MIN]
+
+    def _clock_of(x):
+        return x.roles.get("clk") or next(iter(x.roles.values()), None)
     roots_pack = [n for n in roots if n.analyzer != "sync_unknown" or not (
         any(k.total >= n.total and set(k.roles.values()) & set(n.roles.values()) for k in known)
-        or any(k.total >= n.total - SCAN_BELOW and set(k.roles.values()) == set(n.roles.values()) for k in sure))]
+        or any(k.total >= n.total - SCAN_BELOW and set(k.roles.values()) == set(n.roles.values()) for k in sure)
+        or any(_clock_of(k) == n.roles.get("clk") and set(k.roles.values()) <= set(n.roles.values())
+               for k in words_sure))]
     # an SPI reading of the very bits a declared protocol of fixed fields reads (the same clock, edge and data lines:
     # MDIO's frames are 64 bits, 8 SPI words) is the same reading without its structure, no rival to it
     framed = [n for n in roots_pack if n.output is not None and n.metrics.get("bit_coverage", 0) >= SCAN_COVER
