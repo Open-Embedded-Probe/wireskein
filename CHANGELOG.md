@@ -3,6 +3,8 @@
 ## Unreleased
 - (EN) Fixed: a CAN line of mostly classic frames with a few FD ones was not read (its runs gave a bit time between the two rates, 1.25 nominal bits): the shortest runs (an FD data phase's bit) are a base for the nominal bit time too.
 - (JA) 直した: 古典の CAN のフレームが多く FD のフレームが少しの線を読めなかった（Run から出したビットの時間が 2 つの速さの間、公称の 1.25 ビットになった）。いちばん短い Run（FD のデータ相の 1 ビット）も公称のビットの時間の元にする。
+- (EN) Fixed: an LED string's "both kinds of bit" was counted over every high, pieces of a few bits included: a fast clock taken too slowly (12 MHz at 10 MS/s) with spikes had 14 % of its highs of the other kind but 3 % of the frames' bits, and was confirmed as an LED string. It is counted in the frames read.
+- (JA) 直した: LED の列の「両方の種類のビットがある」を、数ビットの切れ端も含むすべての High で数えていた: 遅すぎるサンプルで取った速いクロック（12 MHz を 10 MS/s）にスパイクが乗ると、High の 14 % がもう一方の種類でも、フレームのビットでは 3 % で、LED の列と確定していた。読んだフレームのビットで数える。
 - (EN) Fixed: the unknown clocked reading scored as much on lines that barely keep to the clock: it is weighed by how closely they do (whole at 0.6). A UART at a third of a free-running clock's rate, with spikes, was taken by it.
 - (JA) 直した: 「不明な同期のバス」の読みは、クロックにほとんど従わない線でも同じ点数だった: 従い方で重みを付ける（0.6 で満点）。止まらないクロックのちょうど 1/3 の速さの UART が、スパイクが乗ると、それに取られていた。
 - (EN) Fixed (in this release's own change): a line's changes crowded in one clock period are counted only in periods of the clock's own length; RVSWD's DIO moves several times while SWCLK is held (start, stop, waits) and the V203's erase_all was missed.

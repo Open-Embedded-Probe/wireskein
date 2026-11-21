@@ -74,7 +74,10 @@ class RgbLedPlugin:
         data = bytes.fromhex("".join(f["data"] for f in fr))
         # both kinds of bit: a PWM of one duty (a clock) reads as all 0s (or all 1s), but for what a noise leaves in
         # it; a string's colours have a tenth of the rarer kind or more
-        minor = min(len(r["t0h"]), len(r["t1h"])) / max(1, len(r["t0h"]) + len(r["t1h"]))
+        # (counted in the frames read: a clock's spikes make pieces of a few bits whose highs are of the other kind,
+        # 14 % of all the highs beside 3 % of the frames' bits; 2026-11-21, synth-mixed-nack-99 with spikes)
+        ones = int(np.unpackbits(np.frombuffer(data, np.uint8)).sum()) if data else 0
+        minor = min(ones, 8 * len(data) - ones) / max(1, 8 * len(data))
         # a 1's high is about twice a 0's (WS2812 0.8 / 0.4 us, SK6812 0.6 / 0.3): a clock's highs of 3 and 4 samples
         # (7 a period, cut by the samples) are two kinds of width as well, a third apart (an MDIO's MDC at 1.7 MHz)
         if r["t0h"] and r["t1h"]:
