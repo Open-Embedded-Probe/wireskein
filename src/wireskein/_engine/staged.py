@@ -298,6 +298,7 @@ def _tight_windows(pin, idle: int, sv, n: int) -> float:
 
 UART_CLOCK_LIKE = 0.2     # a UART's score falls from here (clock-like: a line of pulses), by up to a half at 0.7
 UART_SYNC = 0.2           # ... and from here (keeping to a clock: synchronous data), to nothing at 0.5
+UART_GATE_KEEPS = 0.5     # a clock's gate keeping under this share of a line's changes: the line as it is
 UART_SYNC_EDGES = 2.5     # changes a clock period past which a line is no synchronous data of that clock ...
 UART_SYNC_PERIODS = 32    # ... measured over this many of its periods or more
 UART_VIEW_CLOCK = 0.4     # a line this clock-like or more read on a view: its clock-likeness as the view has it
@@ -434,6 +435,11 @@ class UartPlugin:
                 return r.data_score
             view, vc = c.sv.gated[k]
             if view is c.cap:
+                return r.data_score
+            # (a gate that takes most of the line's changes out reads no line: as survey.better_relation, the line
+            # as it is then - an SPI's SDO went from 216 changes to 34 there, kept 0.89 raw, 0 through it, and was
+            # read as a UART: sigrok-dumps' ltc2422)
+            if len(view.channel(rb.pin).edges) < UART_GATE_KEEPS * len(c.cap.channel(rb.pin).edges):
                 return r.data_score
             return min(r.data_score, survey_mod.pair_relation(view, vc, rb.pin).data_score)
         sync = max((kept(k, r) * c.sv.clocks[k].clock_score for (k, o), r in c.sv.pairs.items()
