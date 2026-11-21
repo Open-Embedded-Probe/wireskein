@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Fixed: an LED string all dark (every bit 0) was held at 0.3 of its score as a clock's one duty might be: frames between resets of one length, a whole number of LEDs (24 or 32 bits each), now count as its evidence. sigrok-dumps' NeoPixel captures at 6 and 24 MHz (a string of 24 dark, 435 and 858 frames) read, confirmed.
+- (JA) 直した: すべて消灯の LED の列（全ビット 0）は、1 つのデューティのクロックと同じく点数を 0.3 倍にしていた: リセットの間のフレームが毎回同じ長さで、LED の数の整数倍（1 個 24 か 32 ビット）なら根拠に数える。sigrok-dumps の NeoPixel の 6 MHz と 24 MHz の記録（24 個すべて消灯、435 と 858 フレーム）を確定で読む。
 - (EN) S/PDIF is read (`spdif`): biphase mark subframes, the B / M / W preambles, 24-bit samples (aux and audio), V U C and the even parity; the half cell is the length the runs are whole multiples of most nearly (at 16 MS/s it is 2.8 samples). sigrok-dumps' 6 captures: confirmed, every subframe's parity holding; the samples are sigrok's (each one subframe more at the start).
 - (JA) S/PDIF を読む（`spdif`）: バイフェーズマークのサブフレーム、B / M / W のプリアンブル、24 ビットの値（補助と音声）、V・U・C、偶数パリティ。半セルの長さは、Run がいちばん整数倍に近くなる長さ（16 MS/s では 2.8 サンプル）。sigrok-dumps の 6 本: 確定で、すべてのサブフレームのパリティが通り、値は sigrok と同じ（どれも頭のサブフレームを 1 つ多く読む）。
 - (EN) A UART of 9 data bits gives each character's ninth bit as `bytes.bit8` ("0" / "1" in order) beside `hex`'s low eight bits (in multidrop use the address flag); it was dropped. Nine data bits where the parity check says so, or 11-bit characters without parity whose ninth bit varies (an 8N2's second stop bit is always 1).

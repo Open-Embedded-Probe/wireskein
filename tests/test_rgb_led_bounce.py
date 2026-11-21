@@ -57,3 +57,16 @@ def test_under_five_samples_a_bit_is_no_led():
     ch = type(ch)(ch.name, ch.initial, np.unique(np.concatenate([np.asarray(ch.edges, np.int64), s, s + 1])))
     nodes = RgbLedPlugin().run(SimpleNamespace(cap=SimpleNamespace(n_samples=cap.n_samples, rate=rate)), ch, None)
     assert not nodes or nodes[0].total < 0.1             # 0.35 without the 5 samples a bit
+
+
+def test_a_dark_string_is_read():
+    """Every LED off (all bits 0): one duty like a clock's, but frames between resets of one length, a whole number
+    of LEDs (sigrok-dumps' NeoPixel captures, a string of 24 dark)."""
+    w, t = gen.Wave(0), 1e-4
+    for _ in range(6):
+        t = gen.rgb_led(w, t, bytes(24 * 3), reset=100e-6)
+    cap = gen.quantize({"D0": w}, RATE, t + 1e-4, np.random.default_rng(0))
+    nodes = RgbLedPlugin().run(SimpleNamespace(cap=SimpleNamespace(n_samples=cap.n_samples, rate=RATE)),
+                               cap.channel("D0"), None)
+    assert nodes and nodes[0].total > 0.85
+    assert [f["data"] for f in nodes[0].output.items["frames"]] == ["00" * 72] * 6

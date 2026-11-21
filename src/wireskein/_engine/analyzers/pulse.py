@@ -35,6 +35,7 @@ def _bounce_view(ch, rate: float):
 RGB_SHORTEST = 0.15e-6  # s: no pulse of a WS2812-like line is shorter (T0H 0.25 us or more)
 RGB_ONE_OVER_ZERO = 1.5  # a 1's high over a 0's, this many times at least
 RGB_MIXED = 0.1         # the rarer kind of bit's share a string's data has at least
+RGB_SAME_FRAMES = 4     # frames of one length (a whole number of LEDs) for a dark string's evidence
 
 
 class RgbLedPlugin:
@@ -81,6 +82,12 @@ class RgbLedPlugin:
             if ratio < RGB_ONE_OVER_ZERO:
                 return []
         mixed = 0.3 + 0.7 * float(np.clip(minor / RGB_MIXED, 0, 1))
+        # a string all dark (every bit 0) is one duty too: but its frames, between resets, are of one length, a whole
+        # number of LEDs (24 or 32 bits each) every time, which a clock's bursts are not by chance
+        lens = [f["bits"] for f in fr]
+        mode = max(set(lens), key=lens.count)
+        if len(fr) >= RGB_SAME_FRAMES and (mode % 24 == 0 or mode % 32 == 0):
+            mixed = max(mixed, 0.3 + 0.7 * lens.count(mode) / len(fr))
         # T0H and T1H differ by about a third of the bit: under 5 samples a bit, a spike's tick is as wide as that
         # difference (a clock at 2 MS/s with spikes read as varied bits)
         resolvable = float(np.clip(r["bit"] - 4, 0, 1))
