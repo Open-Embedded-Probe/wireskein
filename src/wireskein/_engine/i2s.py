@@ -14,6 +14,7 @@ import numpy as np
 from .stack import Node, Stream
 
 I2S_SLOT_MIN = 8          # bits a slot at least ...
+I2S_WORD_MAX = 32         # bits a word at most
 I2S_SLOT_MAX = 64         # ... and at most (a longer one is a TDM frame: read_tdm)
 I2S_REGULAR = 0.9         # of WS's runs, this share or more of one length (the slot)
 I2S_SLOTS = 8             # slots for full evidence (q)
@@ -102,6 +103,8 @@ def read_i2s(t: np.ndarray, ws: np.ndarray, sd: np.ndarray):
     else:
         fmt, s_, r_, bits = "i2s", s1, r1, slot - tail1
     bits = max(1, bits)
+    if bits > I2S_WORD_MAX:
+        return None           # (audio words are 32 bits at most; a 64-bit one overflowed: sigrok-dumps' signature/7791)
     assumed = tail0 == tail1 == head1 == 0
     if fmt == "right":
         r_ = r_[:, slot - bits:]
