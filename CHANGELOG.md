@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) SENT (SAE J2716) is read (`sent`): the tick from the 56-tick sync, the status and data nibbles, CRC4 checked both the 2010 way and the legacy one. sigrok-dumps' capture: every message's CRC holds (2010).
+- (JA) SENT（SAE J2716）を読む（`sent`）: 56 ティックの同期からティックを出し、状態とデータのニブル、CRC4 を 2010 年版と旧来の両方で確かめる。sigrok-dumps の記録: すべてのメッセージの CRC が通る（2010 年版）。
 - (EN) DCC (model railway control) is read on the track signal (`dcc`): bits as full cycles of 1 (58 us halves) or 0 (100 us and more), preambles, bytes led by 0s, the error detection byte (XOR) checked, the decoder's address. sigrok-dumps' DCC captures (no sigrok truth): every packet's error detection byte holds.
 - (JA) DCC（鉄道模型の制御）を線路の信号で読む（`dcc`）: 1 周期で 1 ビット（半周期 58 µs で 1、100 µs 以上で 0）、プリアンブル、0 で始まるバイト、誤り検出のバイト（XOR）の確かめ、デコーダのアドレス。sigrok-dumps の DCC の記録（sigrok の正解はなし）: すべてのパケットの誤り検出のバイトが合う。
 - (EN) DALI is read (`dali`): Manchester at 1200 b/s, forward frames (address byte read as short / group / broadcast and command or arc power) and backward frames (answers). sigrok-dumps' capture: every frame sigrok's (18).
