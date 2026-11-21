@@ -514,6 +514,57 @@ class LinPlugin:
         return out[:1]
 
 
+CAN_FD_CHECK_BITS = 4     # a CAN FD frame's stuff count (three bits Gray-coded and a parity) checked, beside its CRC
+
+
+class CanFdPlugin:
+    """CAN FD (ISO 11898-1:2015) on one line: its frames read as a receiving node does (canbus.read), each FD frame's
+    data phase at the first data rate its stuff count and CRC hold at. Classic CAN alone is the declared plugin's
+    (decl/can.toml): this one claims a line only where an FD frame is read, and then reads its classic frames too."""
+    name = "can"
+    consumes = ("nrzbits",)
+
+    def run(self, c: Ctx, nb, g):
+        from . import canbus
+        if not nb.units:
+            return []
+        ch = c.cap.channel(nb.pin)
+        u0 = float(np.median(nb.units))
+        # the bit time the line's runs give is the data phase's where its bits are the most (a switched rate): the
+        # nominal one is a whole multiple of it, tried in turn; a line read as classic CAN at the first is no FD's
+        for m in canbus.FD_RATIOS:
+            u = canbus.bit_time(ch, u0 * m, nb.idle) or u0 * m
+            r = canbus.read(ch, c.cap.n_samples, u, nb.idle, fd_ratios=canbus.FD_RATIOS)
+            frames = r["frames"]
+            if any(f.get("fd") for f in frames):
+                break
+            if m == 1 and len(frames) >= 2 and len(frames) >= 4 * len(r["errors"]):
+                return []
+        else:
+            return []
+        # the evidence in bits, each distinct frame once (a frame sent again tells nothing new): its CRC, and an FD
+        # frame's stuff count
+        seen, info = set(), 0.0
+        for f in frames:
+            key = (f["id"], f["ext"], f["dlc"], f["data"], f.get("fd", False), f.get("brs", False))
+            if key in seen:
+                continue
+            seen.add(key)
+            info += ((17 if canbus.FD_LENGTHS[f["dlc"]] <= 16 else 21) + CAN_FD_CHECK_BITS) if f.get("fd") else 15
+        rate = len(frames) / (len(frames) + len(r["errors"]))
+        score = rate ** 2 * (1 - 0.5 ** (info / EVIDENCE_BITS))
+        items = [{"start": f["tick"], "id": f["id"], "ide": int(f["ext"]), "dlc": f["dlc"], "data": f["data"],
+                  "ack": f["ack"], "ok": True,
+                  **({"fd": True, "brs": f["brs"], "esi": f["esi"]} if f.get("fd") else {}),
+                  **({"data_ratio": f["data_ratio"]} if "data_ratio" in f else {})} for f in frames]
+        ratios = sorted({f["data_ratio"] for f in frames if "data_ratio" in f})
+        params = {"bitrate": c.cap.rate / u, "fd": True, "idle": nb.idle,
+                  **({"data_bitrate": c.cap.rate / u * ratios[0]} if len(ratios) == 1 else {})}
+        m = {"frames": len(frames), "fd_frames": sum(bool(f.get("fd")) for f in frames), "errors": len(r["errors"]),
+             "ok_rate": rate, "evidence_bits": info}
+        return [Node("can", params, {"data": nb.pin}, Stream("can.frames", items), m, layer_score=score, total=score)]
+
+
 class DmxPlugin:
     name = "dmx512"
     consumes = ("chars",)
@@ -556,7 +607,7 @@ class DmxPlugin:
 
 # the plugins written in Python (state across frames, search, upper layers), then the frame-local protocols
 # declared in decl/*.toml (docs/design.ja.md §3.2)
-PLUGINS = ([SyncUnknownPlugin(), UartPlugin(), LinPlugin(), DmxPlugin(), SwioPlugin(), RgbLedPlugin(),
+PLUGINS = ([SyncUnknownPlugin(), UartPlugin(), LinPlugin(), DmxPlugin(), CanFdPlugin(), SwioPlugin(), RgbLedPlugin(),
             OneWirePlugin(), NecPlugin(), I2sPlugin(), JtagPlugin(), DhtPlugin()]
            + load_all(["i2c", "spi", "rvswd"]) + load_all(["swd", "can", "mdio"]))
 UPPER = [Lines(), Nmea(), ModbusRtu(), MarkerGrammar()]
