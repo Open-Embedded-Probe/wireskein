@@ -535,6 +535,27 @@ def _line_views(ch, n: int) -> list:
     return [(ch, 0), (replace(ch, edges=d), k)]
 
 
+def _pair_views(cap, a: str, b: str) -> list:
+    """Two lines as they are and, where either has pulses far shorter than its shorter level's usual runs (bounces,
+    spikes), both with those taken out (Wiegand's pulses, a USB pair's bits: what _line_views does for one line)."""
+    out = [(cap, 0)]
+    chans, ks = [], []
+    for name in (a, b):
+        ch = cap.channel(name)
+        st, ln, lv = ch.runs(cap.n_samples)
+        ln, lv = ln[1:-1], lv[1:-1]
+        if len(ln) < 8:
+            return out
+        med = min(float(np.median(ln[lv == L])) for L in (0, 1) if (lv == L).any())
+        k = int(np.clip(LINE_DEGLITCH_OF_MEDIAN * med, 2, LINE_DEGLITCH_MAX))
+        ks.append(k)
+        chans.append(replace(ch, edges=V.pulses_out(np.asarray(ch.edges, np.int64), k)))
+    if all(len(x.edges) == len(cap.channel(n).edges) for x, n in zip(chans, (a, b))):
+        return out
+    view = replace(cap, channels=[chans[0] if x.name == a else chans[1] if x.name == b else x for x in cap.channels])
+    return out + [(view, max(ks))]
+
+
 def _async_at(c, view_cap, g, k: int, rb, by_type, roots) -> int:
     """The async plugins (nrzbits, chars) on one line's view under one rate segmentation and idle level: the nodes go
     to roots, the plugin runs are returned."""
@@ -1547,12 +1568,20 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
         names = [ch.name for ch in cap.channels if len(ch.edges) >= 16]
         for i, a in enumerate(names):
             for b in names[i + 1:]:
-                if usb_pair(cap.channel(a), cap.channel(b), cap.n_samples, cap.rate):
-                    runs += 1
-                    roots += usb.run(c, a, b)
-                elif cap.channel(a).initial == 1 and cap.channel(b).initial == 1:
-                    runs += 1
-                    roots += wiegand.run(c, a, b)
+                for vcap, k in _pair_views(cap, a, b):
+                    vc = c if vcap is cap else Ctx(vcap, c.tx, c.sv)
+                    if usb_pair(vcap.channel(a), vcap.channel(b), vcap.n_samples, vcap.rate):
+                        runs += 1
+                        got = usb.run(vc, a, b)
+                    elif vcap.channel(a).initial == 1 and vcap.channel(b).initial == 1:
+                        runs += 1
+                        got = wiegand.run(vc, a, b)
+                    else:
+                        got = []
+                    for n in got:
+                        if k:
+                            n.params["deglitch"] = k
+                        roots.append(n)
     t0 = time.perf_counter()
     scorer = DefaultScorer()
     for n in roots:
