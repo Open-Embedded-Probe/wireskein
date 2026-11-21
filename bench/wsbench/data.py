@@ -89,6 +89,7 @@ class Case:
     input_sha: str = ""
     bus_tags: list = field(default_factory=list)   # per truth bus: why it is hard to read (see hardness), [] if not
     aliased: set = field(default_factory=set)     # lines that alias at this rate (a decoy clock too fast for it)
+    orig_edges: int = 0                           # the capture's changes before the transforms
 
 
 # ---------------- sources ----------------
@@ -628,7 +629,9 @@ def input_sha(cap: Capture) -> str:
 # Decided before looking at any algorithm's result on a case, and never from one: a bus tagged is still scored (how
 # far an algorithm gets is worth knowing), and apart.
 
-HARDNESS = 2          # the version of the rules below (kept with each run: counts of readable buses move with them)
+HARDNESS = 3          # the version of the rules below (kept with each run: counts of readable buses move with them)
+TOO_SHORT = 20        # a bus whose lines change fewer times than this in the capture: no frame of any protocol fits
+                      # (an I2C byte and its acknowledge take 18 clock edges): too short to read
 UNDER_PERIOD = 4      # a clocked bus under 4 samples a clock period (2 a half): each half seen as one sample or less
 UNDER_BIT = 3         # an asynchronous bit under 3 samples: its middle not sampled clear of its edges
 NOISE_REACH = 0.5     # noise lasting half a bit (half of a clock's half) or more reaches where a bit is sampled
@@ -728,6 +731,10 @@ def hardness(truth: dict, cap: Capture, chain: str, rate0: float, orig: Capture 
                     t.add("noise_over_bit")
         if defective:
             t.add("defective_capture")
+        pins = [p for p in (b.get("roles") or b.get("pins") or {}).values() if isinstance(p, str)]
+        changes = sum(len(cap.channel(p).edges) for p in pins if p in {c.name for c in cap.channels})
+        if pins and changes < TOO_SHORT:
+            t.add("too_short")
         tags.append(sorted(t))
     aliased = {d["channel"] for d in truth.get("decoys") or []
                if d.get("kind") in ("clock", "pwm", "burst_clock") and d.get("freq") and d["freq"] * ALIAS > rate}
@@ -745,6 +752,7 @@ def load_case(ref: str, source: str, chain: str) -> Case:
                 if not b["expect"]:
                     del b["expect"], b["expect_source"]
     rate0, orig = float(cap.rate), cap
+    orig_edges = sum(len(c.edges) for c in cap.channels)
     # a generated case is its own clean reference, unless its frozen set already holds noise
     gen = truth.get("generator")
     clean = cap if gen and gen.get("stress") != "glitch" else None
@@ -752,4 +760,4 @@ def load_case(ref: str, source: str, chain: str) -> Case:
     dataset = source + (f"+{chain}" if chain else "")
     tags, aliased = hardness(truth, cap, chain, rate0, orig)
     return Case(truth["id"] + (f"+{chain}" if chain else ""), dataset, cap, clean, truth,
-                line_truth(truth, cap, clean or cap), input_sha(cap), tags, aliased)
+                line_truth(truth, cap, clean or cap), input_sha(cap), tags, aliased, orig_edges)

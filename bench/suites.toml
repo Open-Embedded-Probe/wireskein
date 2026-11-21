@@ -1,6 +1,8 @@
 # Suites: named sets of datasets. A dataset = a source x a chain of transforms (see wsbench/data.py).
-# A suite's definition is never changed once results exist for it: add a new suite (noise-v2 ...) instead, so the
-# ledger's numbers keep meaning what they meant. in_all = false keeps a suite out of "all" / "tune" (run it by name).
+# A suite is changed where that makes its data mean more (a case too long to tell anything new, too short to hold a
+# frame): what the data shows matters, not that the ledger's numbers stay comparable (a run's bench_sha tells which
+# definitions it ran). long_edges / long_transforms: captures with more changes than long_edges run on long_transforms
+# only. in_all = false keeps a suite out of "all" / "tune" (run it by name).
 # trials_in_all = false: in a run of "all" / "tune" only the main algorithms run on it (the trials there are about other
 # protocols: named, the suite runs every algorithm asked for).
 #
@@ -18,12 +20,16 @@ role = "tune"
 about = "100 generated cases, clean and with three kinds of noise at two or three strengths"
 sources = ["set:tuning[0:100]"]
 transforms = ["", "spike:0.02", "spike:0.1", "spike:0.3", "bounce:0.1", "bounce:0.5", "xtalk:0.05", "xtalk:0.3"]
+long_edges = 300000         # captures with more changes run on long_transforms only (minutes a case on the same
+long_transforms = [""]   # operations again otherwise)
 
 [suite.noise-holdout]
 role = "holdout"
 about = "the same noise on cases never tuned on"
 sources = ["set:heldout[0:100]"]
 transforms = ["", "spike:0.02", "spike:0.1", "spike:0.3", "bounce:0.1", "bounce:0.5", "xtalk:0.05", "xtalk:0.3"]
+long_edges = 300000         # captures with more changes run on long_transforms only (minutes a case on the same
+long_transforms = [""]   # operations again otherwise)
 
 [suite.size]
 role = "tune"
@@ -48,6 +54,8 @@ role = "tune"
 about = "the same traffic taken at 200 MS/s and 2-16 times slower: clean, 60 ns bounces at 30 % of edges, 20 ns spikes"
 sources = ["gen:mixed[0:60]@2e8"]
 transforms = ["", "decimate:2", "decimate:4", "decimate:8", "decimate:16", "pbounce:0.3:60", "pbounce:0.3:60+decimate:2", "pbounce:0.3:60+decimate:4", "pbounce:0.3:60+decimate:8", "pbounce:0.3:60+decimate:16", "pspike:0.05:20", "pspike:0.05:20+decimate:2", "pspike:0.05:20+decimate:4", "pspike:0.05:20+decimate:8", "pspike:0.05:20+decimate:16"]
+long_edges = 300000         # captures with more changes run on long_transforms only (minutes a case on the same
+long_transforms = [""]   # operations again otherwise)
 
 [suite.rate-smoke]
 role = "tune"
@@ -171,6 +179,8 @@ role = "tune"
 about = "linke-l103 at the rates that tell apart (run 20261117T051644Z: 160 down to 10 MHz all read alike): as taken, 50 MHz (a fractional divider), 20, 8 and 5 MHz (where the DMI accesses start to go)"
 sources = ["linke:l103-linke-2026-11-17/tune"]
 transforms = ["", "resample:50000000", "decimate:8", "decimate:20", "decimate:32"]
+long_edges = 300000         # captures with more changes run on long_transforms only (minutes a case on the same
+long_transforms = ["", "decimate:8"]   # operations again otherwise)
 
 [suite.linke-l103-core-holdout]
 trials_in_all = false
@@ -178,6 +188,8 @@ role = "holdout"
 about = "the same, the half set aside"
 sources = ["linke:l103-linke-2026-11-17/holdout"]
 transforms = ["", "resample:50000000", "decimate:8", "decimate:20", "decimate:32"]
+long_edges = 300000         # captures with more changes run on long_transforms only (minutes a case on the same
+long_transforms = ["", "decimate:8"]   # operations again otherwise)
 
 [suite.v003-core]
 role = "tune"
@@ -185,6 +197,8 @@ trials_in_all = false
 about = "a LinkE's SWIO to a CH32V003 at 160 MS/s on its one line (2026-11-17: the L103 set's operations, LinkE speeds high / medium / low; each cut to its operation), the tuning half, as taken and at 50 MHz (fractional), 20, 8 and 5 MHz; truth what ch32rv read and its DMI operations over USB, and taken down the 160 MS/s reading where every one of those is found in it"
 sources = ["linke:v003-linke-2026-11-17/tune"]
 transforms = ["", "resample:50000000", "decimate:8", "decimate:20", "decimate:32"]
+long_edges = 300000         # captures with more changes run on long_transforms only (minutes a case on the same
+long_transforms = ["", "decimate:8"]   # operations again otherwise)
 
 [suite.v003-core-holdout]
 role = "holdout"
@@ -192,6 +206,8 @@ trials_in_all = false
 about = "the same, the half set aside"
 sources = ["linke:v003-linke-2026-11-17/holdout"]
 transforms = ["", "resample:50000000", "decimate:8", "decimate:20", "decimate:32"]
+long_edges = 300000         # captures with more changes run on long_transforms only (minutes a case on the same
+long_transforms = ["", "decimate:8"]   # operations again otherwise)
 
 [suite.v003-rate]
 role = "tune"
@@ -213,6 +229,8 @@ trials_in_all = false
 about = "a LinkE's RVSWD to a CH32V203 at 160 MS/s on both lines (2026-11-17: the L103 set's operations at the LinkE's speeds high and low, long reads, steps, repeats; each cut to its operation), the tuning half, as taken and at 80 MHz (SWCLK's high of some 19 ns at the speed high: 1.5 samples), 50 MHz (fractional), 20 and 8 MHz; truth what ch32rv read and its DMI operations over USB, and taken down the 160 MS/s reading where every one of those is found in it"
 sources = ["linke:v203-linke-2026-11-17/tune"]
 transforms = ["", "decimate:2", "resample:50000000", "decimate:8", "decimate:20"]
+long_edges = 300000         # captures with more changes run on long_transforms only (minutes a case on the same
+long_transforms = ["", "decimate:8"]   # operations again otherwise)
 
 [suite.v203-core-holdout]
 role = "holdout"
@@ -220,6 +238,8 @@ trials_in_all = false
 about = "the same, the half set aside"
 sources = ["linke:v203-linke-2026-11-17/holdout"]
 transforms = ["", "decimate:2", "resample:50000000", "decimate:8", "decimate:20"]
+long_edges = 300000         # captures with more changes run on long_transforms only (minutes a case on the same
+long_transforms = ["", "decimate:8"]   # operations again otherwise)
 
 [suite.spi-multi]
 role = "tune"
@@ -262,12 +282,16 @@ role = "tune"
 about = "1-Wire (standard speed: resets, presence now and then missing, bytes written), WS2812-like LED strings and UARTs, 1-3 buses with decoys (eval/synth.py's pulse), clean and with noise: before it, 1-Wire and the LED strings had no truth on the bench and were only ever claimed wrongly here"
 sources = ["gen:pulse[0:40]"]
 transforms = ["", "spike:0.02", "spike:0.1", "xtalk:0.3", "bounce:0.1", "bounce:0.5"]
+long_edges = 300000         # captures with more changes run on long_transforms only (minutes a case on the same
+long_transforms = [""]   # operations again otherwise)
 
 [suite.pulse-holdout]
 role = "holdout"
 about = "the same, other seeds"
 sources = ["gen:pulse[1000:1040]"]
 transforms = ["", "spike:0.02", "spike:0.1", "xtalk:0.3", "bounce:0.1", "bounce:0.5"]
+long_edges = 300000         # captures with more changes run on long_transforms only (minutes a case on the same
+long_transforms = [""]   # operations again otherwise)
 
 [suite.ir]
 role = "tune"

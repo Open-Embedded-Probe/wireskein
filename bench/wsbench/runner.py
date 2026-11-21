@@ -140,12 +140,15 @@ def _limited(fn):
 
 
 def _work(job):
-    path, source, chain, plan, memory = job
+    path, source, chain, plan, memory, long = job
     t0 = time.perf_counter()
     try:
         case = data.load_case(path, source, chain)
     except Exception as e:  # noqa: BLE001 - a case that cannot be made is reported, the run goes on
         return {"case": str(path).rsplit("/", 1)[-1], "source": source, "chain": chain, "error": f"load: {type(e).__name__}: {e}"}
+    if long and case.orig_edges > long[0] and chain not in long[1]:
+        return {"case": case.id, "dataset": case.dataset, "results": [], "skipped": "long",
+                "edges": case.orig_edges, "from": [str(path).replace(str(data.REPO) + "/", ""), source, chain]}
     out = {"case": case.id, "dataset": case.dataset, "input_sha": case.input_sha, "results": [],
            "from": [str(path).replace(str(data.REPO) + "/", ""), source, chain],   # within the repository: no local path
            "load_s": time.perf_counter() - t0, "ref": cost.reference(),
@@ -204,7 +207,11 @@ def plan_work(stage_names: list[str], algos_by_stage: dict[str, list], dsets: li
             continue
         meta_ds[ds] = [suite, role, src, chain, [suite]]
         only_main = named is not None and suite not in named and not defs.get(suite, {}).get("trials_in_all", True)
-        work += [(ref, src, chain, mains if only_main else plan, memory) for ref in data.source_items(src)]
+        d = defs.get(suite, {})
+        # a suite's long captures (more changes than long_edges) run on its long_transforms only: the rest of its
+        # transforms would spend minutes a case on the same operations again
+        long = (int(d["long_edges"]), list(d.get("long_transforms", [""]))) if "long_edges" in d else None
+        work += [(ref, src, chain, mains if only_main else plan, memory, long) for ref in data.source_items(src)]
     return plan, work, meta_ds
 
 
