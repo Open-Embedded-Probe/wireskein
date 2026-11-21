@@ -467,6 +467,33 @@ def _square(hi: np.ndarray, lo: np.ndarray) -> bool:
             and float(np.mean(np.abs(lo - ml) < 0.5)) >= DMX_SQUARE)
 
 
+
+def _async_at(c, view_cap, g, k: int, rb, by_type, roots) -> int:
+    """The async plugins (nrzbits, chars) on one line's view under one rate segmentation and idle level: the nodes go
+    to roots, the plugin runs are returned."""
+    runs = 0
+    if by_type.get("nrzbits"):
+        nb = typed.nrz_bits(view_cap, c.sv, rb)
+        for p in by_type["nrzbits"] if nb is not None else []:
+            runs += 1
+            for n in p.run(Ctx(view_cap, c.tx, c.sv), nb, g):
+                n.params["deglitch"] = k
+                n.layers = {"blocks": rb, "bits": nb}
+                roots.append(n)
+    blocks = typed.block_chars(view_cap, c.sv, rb)
+    for p in by_type.get("chars", []):
+        runs += 1
+        got = p.run(Ctx(view_cap, c.tx, c.sv), rb, blocks)
+        for n in got:
+            n.params["deglitch"] = k
+            n.layers = {"blocks": rb, "chars": blocks}
+            roots.append(n)
+    return runs
+
+
+UART_OTHER_IDLE = 0.9     # characters framed under the survey's idle level below this share: the other tried too
+
+
 def dmx_idles(cap, pin: str) -> list[int]:
     """The idle levels under which the line has a DMX512 break: a run at the other level DMX_BREAK_S long or more
     (up to a second, the standard's limit), where a bit is DMX_MIN_BITS samples or more at 250 kbaud. Both levels
@@ -1379,22 +1406,16 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
                 rb = typed.rate_blocks(view_cap, c.sv, g.pin)
             if not rb.blocks:
                 continue
-            if by_type.get("nrzbits"):
-                nb = typed.nrz_bits(view_cap, c.sv, rb)
-                for p in by_type["nrzbits"] if nb is not None else []:
-                    runs += 1
-                    for n in p.run(Ctx(view_cap, c.tx, c.sv), nb, g):
-                        n.params["deglitch"] = k
-                        n.layers = {"blocks": rb, "bits": nb}
-                        roots.append(n)
-            blocks = typed.block_chars(view_cap, c.sv, rb)
-            for p in by_type.get("chars", []):
-                runs += 1
-                got = p.run(Ctx(view_cap, c.tx, c.sv), rb, blocks)
-                for n in got:
-                    n.params["deglitch"] = k
-                    n.layers = {"blocks": rb, "chars": blocks}
-                    roots.append(n)
+            n0 = len(roots)
+            runs += _async_at(c, view_cap, g, k, rb, by_type, roots)
+            framing = [float(n.metrics.get("framing_rate", 0.0)) for n in roots[n0:] if n.analyzer == "uart"]
+            if not hinted.get("baud") and max(framing, default=0.0) < UART_OTHER_IDLE:
+                # the idle level the survey took is the line's level most of the time: a line undriven between
+                # transmissions (RS-485 floating low, sigrok-dumps' wizmodbus) rests at the other between its
+                # characters; where its characters frame poorly, read under the other too (the checks choose)
+                rb2 = typed.rate_blocks(view_cap, c.sv, g.pin, idle=1 - rb.idle)
+                if rb2.blocks:
+                    runs += _async_at(c, view_cap, g, k, rb2, by_type, roots)
             if not hinted.get("baud"):
                 runs += dmx_at_rate(c, view_cap, g.pin, k, rb, by_type, roots)
     t["async"] = time.perf_counter() - t0

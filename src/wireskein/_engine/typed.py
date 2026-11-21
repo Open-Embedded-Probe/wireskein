@@ -635,8 +635,9 @@ def async_symbols_segment(cap, sv: Survey, pin: str, s0: int, s1: int, unit: flo
     return AsyncSymbols(pin, unit, idle, level[sel].astype(np.int8), units, start[sel])
 
 
-def rate_blocks(cap, sv: Survey, pin: str) -> RateBlocks:
-    return RateBlocks(pin, sv.features[pin].idle_level, async_segments(cap, sv, pin))
+def rate_blocks(cap, sv: Survey, pin: str, idle: int | None = None) -> RateBlocks:
+    """The line's rate segments under its idle level (the survey's, or the one given)."""
+    return RateBlocks(pin, sv.features[pin].idle_level if idle is None else idle, async_segments(cap, sv, pin))
 
 
 def clock_rate_segments(sb: SyncBits, change: float = 1.5) -> RateSegments:

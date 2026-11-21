@@ -85,6 +85,10 @@ def crc16_modbus(data: bytes) -> int:
     return crc
 
 
+MODBUS_T15, MODBUS_T35 = 1.5, 3.5    # silences in characters: inside a message at most, between messages at least
+MODBUS_JUNK = 2                      # bytes after a message's CRC left as junk (a driver turning off)
+
+
 class ModbusRtu:
     """Frames split on >= 3.5 character times of silence, CRC-16 checked."""
     name = "modbus_rtu"
@@ -100,20 +104,41 @@ class ModbusRtu:
         v, st = np.asarray(it["value"]), np.asarray(it["start"])
         if len(v) < 4:
             return parent.roles, None, {"checks_passed": 0}
-        gap = np.diff(st) > 4.5 * parent.output.meta["char_samples"]  # 3.5 idle chars + the char itself
-        cut = np.flatnonzero(gap) + 1
+        cs = parent.output.meta["char_samples"]
+        # a message's characters follow with 1.5 characters of silence at most: split there (a slave may answer
+        # before the 3.5 the standard asks for: sigrok-dumps' wizmodbus answers after 2.8); pieces failing their CRC
+        # are joined to the next where the silence is under 3.5, and a byte or two after a CRC that holds (an RS-485
+        # driver's turn-off) are left as junk
+        cut = np.flatnonzero(np.diff(st) > (1 + MODBUS_T15) * cs) + 1
+        pieces = list(zip(np.concatenate(([0], cut)).tolist(), np.concatenate((cut, [len(v)])).tolist()))
         ok = bad = covered = 0
         msgs = []
-        for fr in np.split(v, cut):
-            if len(fr) < 4:
-                continue
-            b = bytes(int(x) & 0xFF for x in fr)
-            if crc16_modbus(b[:-2]) == int.from_bytes(b[-2:], "little"):
+        i = 0
+        while i < len(pieces):
+            found = None
+            for j in range(i, len(pieces)):
+                if j > i and st[pieces[j][0]] - st[pieces[j - 1][1] - 1] > (1 + MODBUS_T35) * cs:
+                    break
+                lo, hi = pieces[i][0], pieces[j][1]
+                for junk in range(MODBUS_JUNK + 1):
+                    if hi - junk - lo < 4:
+                        break
+                    m = bytes(int(x) & 0xFF for x in v[lo:hi - junk])
+                    if crc16_modbus(m[:-2]) == int.from_bytes(m[-2:], "little"):
+                        found = (j, m)
+                        break
+                if found:
+                    break
+            if found:
+                j, m = found
                 ok += 1
-                covered += len(b)
-                msgs.append(b.hex())
+                covered += len(m)
+                msgs.append(m.hex())
+                i = j + 1
             else:
-                bad += 1
+                if pieces[i][1] - pieces[i][0] >= 4:
+                    bad += 1
+                i += 1
         return parent.roles, Stream("messages", msgs), {
             "checks_passed": ok, "checks_failed": bad, "coverage": covered / len(v)}
 
