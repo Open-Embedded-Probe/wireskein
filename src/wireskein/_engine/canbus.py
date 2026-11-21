@@ -383,9 +383,11 @@ def bit_time(ch: Channel, u0: float, idle: int = 1) -> float | None:
     if not len(d):
         return None
     u = u0
-    for _ in range(3):
+    # the last pass closer to whole bits: an FD frame's data phase gives intervals of 1.25, 1.5 nominal bits (five,
+    # six bits at four times the rate) that 0.3 takes as whole ones (2026-11-21, synth-protocols-665: 4 % off)
+    for tol in (0.3, 0.3, 0.3, 0.15):
         k = np.round(d / u)
-        keep = (k >= 1) & (k <= 10) & (np.abs(d / u - k) < 0.3)
+        keep = (k >= 1) & (k <= 10) & (np.abs(d / u - k) < tol)
         if not keep.any():
             return None
         u = float(d[keep].sum() / k[keep].sum())

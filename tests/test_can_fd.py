@@ -184,3 +184,20 @@ def test_few_fd_frames_among_classic_ones():
     (c,) = _claims(cap)
     assert c["protocol"] == "can"
     assert [(f["id"], f["data"]) for f in c["result"]["frames"]] == [(f["id"], bytes(f["data"]).hex()) for f in frames]
+
+
+def test_nominal_bit_from_the_commonest_run():
+    """1 Mb/s nominal, the data phase at 5 Mb/s, at 20 MS/s (4 samples a data bit): the median run gave 24 samples a
+    bit and the shortest 8, the nominal 20 never tried (2026-11-21, synth-protocols-593); and the nominal rate read
+    within 3 % (an FD frame's data phase took bit_time 4 % off, synth-protocols-665)."""
+    from wireskein._engine import gen
+    frames = [{"id": 1739, "fd": False, "data": list(bytes.fromhex("7e0843f6c2c439"))},
+              {"id": 1540, "fd": True, "brs": False, "data": list(bytes.fromhex("fafde7df"))},
+              {"id": 173, "fd": True, "brs": True, "data": [0xAC]},
+              {"id": 858, "fd": False, "data": list(bytes.fromhex("4a2abed1"))}]
+    w = gen.Wave(1)
+    t = gen.can_fd(w, 100e-6, frames, 1e6, 5e6)
+    cap = gen.quantize({"CAN": w}, 20e6, t + 200e-6, np.random.default_rng(0))
+    (c,) = _claims(cap)
+    assert [(f["id"], f["data"]) for f in c["result"]["frames"]] == [(f["id"], bytes(f["data"]).hex()) for f in frames]
+    assert abs(c["params"]["bitrate"] / 1e6 - 1) < 0.03

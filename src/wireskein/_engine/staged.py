@@ -654,6 +654,13 @@ class CanFdPlugin:
             short = float(np.percentile(inner, CAN_SHORT_PCT))
             if abs(short / u0 - 1) > 0.1:
                 bases.append(short)
+            # and the commonest run (a nominal bit, where most bits are nominal ones: 2026-11-21, synth-protocols-593
+            # at 20 MS/s, 20 samples a bit, the median giving 24 and the shortest runs 8 where the data phase's are 4)
+            r = np.round(inner[inner < 64 * u0]).astype(np.int64)
+            if len(r):
+                mode = float(np.argmax(np.bincount(r)))
+                if mode >= 2 and all(abs(mode / b - 1) > 0.1 for b in bases):
+                    bases.append(mode)
         tried = []
         for b0, m in [(b, m) for b in bases for m in canbus.FD_RATIOS]:
             # a CAN bus's nominal rate is 1 Mb/s at most (FD's data phase alone goes faster)
