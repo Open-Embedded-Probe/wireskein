@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Fixed: a select line's window holding a single sampling edge was a frame: where the select toggled with the clock (lines floating as a board powers down, sigrok-dumps' AT25SF041 at its end) 16 one-bit "transfers" took the length fit of the bus read with its select to 0.4, and the bus was read without it (likely, each byte a transfer). Such windows are no frames now: read with its CS, confirmed, its transfers sigrok's.
+- (JA) 直した: 選択線の窓にサンプリングのエッジが 1 つしかないものもフレームにしていた: 選択線がクロックと一緒に切り替わる所（基板の電源が落ちて線が浮く。sigrok-dumps の AT25SF041 の終わり）で 1 ビットの「転送」が 16 できて、選択線で読んだバスの長さの合う割合が 0.4 になり、選択線なし（有力、1 バイトずつの転送）で読まれていた。そうした窓はフレームにしない: CS 付きで確定、転送は sigrok と同じ。
 - (EN) Fixed: a 1-Wire capture triggered on a reset's fall starts low, and the bus was taken for no 1-Wire (its line claimed as a UART, likely: sigrok-dumps' DS1985 polling, a SoCkit master, a DS2432). A bus idle high is one high most of the time, however it starts.
 - (JA) 直した: リセットの立ち下がりでトリガーした 1-Wire の記録は Low から始まり、1-Wire とみなされていなかった（線が UART の有力として主張されていた: sigrok-dumps の DS1985 のポーリング、SoCkit のマスター、DS2432）。待機が High のバスは、どう始まっても時間の大半が High の線とする。
 - (EN) Fixed: a clock of about 7 samples a period, its highs 3 and 4 samples as the samples cut them, read as an LED chain's 0s and 1s (sigrok-dumps' MDIO: an MDC at 1.7 MHz at 12 MS/s claimed as WS2812 data, 0.98). A 1's high is about twice a 0's (WS2812 0.8 / 0.4 us, SK6812 0.6 / 0.3); a line whose 1s are under 1.5 times its 0s is no LED chain.

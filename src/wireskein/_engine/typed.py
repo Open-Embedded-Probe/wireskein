@@ -270,8 +270,14 @@ def frames_select(cap, sv: Survey, sb: SyncBits) -> Frames:
         idx = np.flatnonzero(inside)
         cut = np.flatnonzero(np.diff(ks)) + 1
         for seg in np.split(idx, cut):
-            bounds.append((seg[0], seg[-1] + 1))
+            # a window around a single sampling edge is no transfer: a select toggling with the clock (sigrok-dumps'
+            # AT25SF041 at its end: 16 such "frames" took its length fit to 0.4)
+            if seg[-1] + 1 - seg[0] >= SELECT_MIN_BITS:
+                bounds.append((seg[0], seg[-1] + 1))
     return Frames(sb, "select", np.asarray(bounds, dtype=np.int64).reshape(-1, 2))
+
+
+SELECT_MIN_BITS = 2     # bits a select's window holds at least for a frame
 
 
 def frames_gap(sb: SyncBits, ratio: float | None = None) -> Frames:
