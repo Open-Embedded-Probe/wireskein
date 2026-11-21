@@ -12,6 +12,10 @@ WIEGAND_GAP = 10          # a gap this many pulse intervals long ends a frame
 WIEGAND_MIN_BITS = 8      # bits a frame at least
 WIEGAND_MAX_WIDTH = 0.5   # a pulse at most this share of the interval between pulses
 EVIDENCE_BITS = 8
+WIEGAND_WIDTH_S = (10e-6, 500e-6)   # a pulse's width (50 us typical)
+WIEGAND_SAME = 0.3        # widths and spacings within this share of their medians ...
+WIEGAND_REGULAR = 0.9     # ... this share of them at least
+WIEGAND_MIN_FRAME = 24    # bits a frame at least (26 the common format)
 PARITY_FORMATS = (26, 34)  # an even parity over the first half, an odd one over the second
 
 
@@ -23,7 +27,7 @@ def _pulses(ch, n: int):
     return st[sel], length[sel]
 
 
-def read_pair(d0, d1, n: int) -> list[dict] | None:
+def read_pair(d0, d1, n: int, rate: float) -> list[dict] | None:
     """The frames on D0 / D1 as given, or None where they are no Wiegand pair (pulses overlapping, of no steady
     width)."""
     if d0.initial != 1 or d1.initial != 1:
@@ -44,7 +48,15 @@ def read_pair(d0, d1, n: int) -> list[dict] | None:
     pace = float(np.median(gaps)) if len(gaps) else 0.0
     if pace <= 0 or float(np.median(w)) > WIEGAND_MAX_WIDTH * pace:
         return None
+    # a reader's pulses are of one width (tens of microseconds) at one pace: a UART's or a bus's lows are not
+    wm = float(np.median(w))
+    if not WIEGAND_WIDTH_S[0] * rate <= wm <= WIEGAND_WIDTH_S[1] * rate \
+            or float(np.mean(np.abs(w / wm - 1) < WIEGAND_SAME)) < WIEGAND_REGULAR:
+        return None
     cut = np.flatnonzero(gaps > WIEGAND_GAP * pace) + 1
+    inner = np.delete(gaps, cut - 1)
+    if len(inner) and float(np.mean(np.abs(inner / pace - 1) < WIEGAND_SAME)) < WIEGAND_REGULAR:
+        return None
     frames = []
     for a, z in zip(np.concatenate([[0], cut]), np.concatenate([cut, [len(s)]])):
         bits = b[a:z].tolist()
@@ -60,7 +72,10 @@ def read_pair(d0, d1, n: int) -> list[dict] | None:
             if len(bits) == 26:
                 f.update(facility=int("".join(map(str, bits[1:9])), 2), card=int("".join(map(str, bits[9:25])), 2))
         frames.append(f)
-    return frames or None
+    # a reader sends frames of its one format (26 bits and more)
+    if not frames or len({f["bits"] for f in frames}) != 1 or frames[0]["bits"] < WIEGAND_MIN_FRAME:
+        return None
+    return frames
 
 
 class WiegandPlugin:
@@ -71,7 +86,7 @@ class WiegandPlugin:
         cap = c.cap
         best = None
         for d0, d1 in ((a, b), (b, a)):
-            fr = read_pair(cap.channel(d0), cap.channel(d1), cap.n_samples)
+            fr = read_pair(cap.channel(d0), cap.channel(d1), cap.n_samples, cap.rate)
             if fr:
                 best = (fr, d0, d1)
                 break
@@ -80,7 +95,7 @@ class WiegandPlugin:
         fr, d0, d1 = best
         # which line is D1 is not on the wire save through a format's parity: the 26- and 34-bit ones tell it
         if any(f["bits"] in PARITY_FORMATS for f in fr):
-            alt = read_pair(cap.channel(d1), cap.channel(d0), cap.n_samples) or []
+            alt = read_pair(cap.channel(d1), cap.channel(d0), cap.n_samples, cap.rate) or []
             if sum(bool(f.get("ok")) for f in alt) > sum(bool(f.get("ok")) for f in fr):
                 fr, d0, d1 = alt, d1, d0
         nbits = sum(f["bits"] for f in fr)
