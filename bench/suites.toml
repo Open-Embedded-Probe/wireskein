@@ -3,6 +3,8 @@
 # frame): what the data shows matters, not that the ledger's numbers stay comparable (a run's bench_sha tells which
 # definitions it ran). long_edges / long_transforms: captures with more changes than long_edges run on long_transforms
 # only. in_all = false keeps a suite out of "all" / "tune" (run it by name).
+# cycle = [[...], ...]: transforms asking one question at several strengths run one to a case, by turns over the cases
+# (fixed by the case's name): the suite covers every strength, not every case at each.
 # trials_in_all = false: in a run of "all" / "tune" only the main algorithms run on it (the trials there are about other
 # protocols: named, the suite runs every algorithm asked for).
 #
@@ -20,12 +22,14 @@ role = "tune"
 about = "100 generated cases, clean and with three kinds of noise at two or three strengths"
 sources = ["set:tuning[0:100]"]
 transforms = ["", "spike:0.02", "spike:0.1", "spike:0.3", "bounce:0.1", "bounce:0.5", "xtalk:0.05", "xtalk:0.3"]
+cycle = [["spike:0.02", "spike:0.1", "spike:0.3"], ["bounce:0.1", "bounce:0.5"], ["xtalk:0.05", "xtalk:0.3"]]
 
 [suite.noise-holdout]
 role = "holdout"
 about = "the same noise on cases never tuned on"
 sources = ["set:heldout[0:100]"]
 transforms = ["", "spike:0.02", "spike:0.1", "spike:0.3", "bounce:0.1", "bounce:0.5", "xtalk:0.05", "xtalk:0.3"]
+cycle = [["spike:0.02", "spike:0.1", "spike:0.3"], ["bounce:0.1", "bounce:0.5"], ["xtalk:0.05", "xtalk:0.3"]]
 
 [suite.size]
 role = "tune"
@@ -50,6 +54,7 @@ role = "tune"
 about = "the same traffic taken at 200 MS/s and 2-16 times slower: clean, 60 ns bounces at 30 % of edges, 20 ns spikes"
 sources = ["gen:mixed[0:60]@2e8"]
 transforms = ["", "decimate:2", "decimate:4", "decimate:8", "decimate:16", "pbounce:0.3:60", "pbounce:0.3:60+decimate:2", "pbounce:0.3:60+decimate:4", "pbounce:0.3:60+decimate:8", "pbounce:0.3:60+decimate:16", "pspike:0.05:20", "pspike:0.05:20+decimate:2", "pspike:0.05:20+decimate:4", "pspike:0.05:20+decimate:8", "pspike:0.05:20+decimate:16"]
+cycle = [["pbounce:0.3:60", "pbounce:0.3:60+decimate:2", "pbounce:0.3:60+decimate:4", "pbounce:0.3:60+decimate:8", "pbounce:0.3:60+decimate:16"], ["pspike:0.05:20", "pspike:0.05:20+decimate:2", "pspike:0.05:20+decimate:4", "pspike:0.05:20+decimate:8", "pspike:0.05:20+decimate:16"]]
 
 [suite.rate-smoke]
 role = "tune"
@@ -306,24 +311,28 @@ role = "tune"
 about = "UART, LIN and DMX512 side by side (eval/synth.py's uartlike: a LIN of 3-9 frames at 9600-19200 baud, a DMX512 of 2-5 packets), clean and with noise: the only LIN and DMX512 buses with a truth on the bench (before it, those protocols were only ever claimed wrongly here)"
 sources = ["gen:uartlike[0:60]"]
 transforms = ["", "spike:0.1", "spike:0.3", "xtalk:0.3", "bounce:0.1", "bounce:0.5"]
+cycle = [["spike:0.1", "spike:0.3"], ["bounce:0.1", "bounce:0.5"]]
 
 [suite.uartlike-holdout]
 role = "holdout"
 about = "the same, other seeds"
 sources = ["gen:uartlike[1000:1060]"]
 transforms = ["", "spike:0.1", "spike:0.3", "xtalk:0.3", "bounce:0.1", "bounce:0.5"]
+cycle = [["spike:0.1", "spike:0.3"], ["bounce:0.1", "bounce:0.5"]]
 
 [suite.pulse]
 role = "tune"
 about = "1-Wire (standard speed: resets, presence now and then missing, bytes written), WS2812-like LED strings and UARTs, 1-3 buses with decoys (eval/synth.py's pulse), clean and with noise: before it, 1-Wire and the LED strings had no truth on the bench and were only ever claimed wrongly here"
 sources = ["gen:pulse[0:40]"]
 transforms = ["", "spike:0.02", "spike:0.1", "xtalk:0.3", "bounce:0.1", "bounce:0.5"]
+cycle = [["spike:0.02", "spike:0.1"], ["bounce:0.1", "bounce:0.5"]]
 
 [suite.pulse-holdout]
 role = "holdout"
 about = "the same, other seeds"
 sources = ["gen:pulse[1000:1040]"]
 transforms = ["", "spike:0.02", "spike:0.1", "xtalk:0.3", "bounce:0.1", "bounce:0.5"]
+cycle = [["spike:0.02", "spike:0.1"], ["bounce:0.1", "bounce:0.5"]]
 
 [suite.protocols]
 trials_in_all = false

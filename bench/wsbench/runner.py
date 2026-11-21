@@ -188,6 +188,11 @@ def _work(job):
 
 # ---------------- run ----------------
 
+def cycle_pick(ref: str, n: int) -> int:
+    """Which of a cycle's n transforms a case runs: fixed by its name (the same on every machine and run)."""
+    return int(hashlib.sha1(Path(str(ref)).name.encode()).hexdigest()[:8], 16) % n
+
+
 def plan_work(stage_names: list[str], algos_by_stage: dict[str, list], dsets: list[tuple[str, str, str, str]],
               memory: bool, named: set[str] | None = None):
     """(plan, the cases to run in a fixed order, each dataset's suite / role / source / chain / all its suites).
@@ -211,7 +216,14 @@ def plan_work(stage_names: list[str], algos_by_stage: dict[str, list], dsets: li
         # a suite's long captures (more changes than long_edges) run on its long_transforms only: the rest of its
         # transforms would spend minutes a case on the same operations again
         long = (int(d["long_edges"]), list(d.get("long_transforms", [""]))) if "long_edges" in d else None
-        work += [(ref, src, chain, mains if only_main else plan, memory, long) for ref in data.source_items(src)]
+        refs = data.source_items(src)
+        # a cycle: transforms asking one question at several strengths (spikes at 2, 10, 30 %) run one to a case, by
+        # turns over the cases (a fixed pick by the case's name): the suite covers every strength, not every case at
+        # each (the product spent its time on the same question again)
+        group = next((g for g in d.get("cycle", []) if chain in g), None)
+        if group:
+            refs = [r for r in refs if group[cycle_pick(r, len(group))] == chain]
+        work += [(ref, src, chain, mains if only_main else plan, memory, long) for ref in refs]
     return plan, work, meta_ds
 
 
