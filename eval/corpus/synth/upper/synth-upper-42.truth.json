@@ -55,13 +55,15 @@
   {
    "kind": "random",
    "channel": "D1",
-   "toggle_rate": 48537.83141730567
+   "toggle_rate": 48537.83141730567,
+   "changes_kept": 20000
   },
   {
    "kind": "pwm",
    "channel": "D0",
    "freq": 44709.49550544879,
-   "duty": 0.7505451473663857
+   "duty": 0.7505451473663857,
+   "changes_kept": 20000
   }
  ]
 }

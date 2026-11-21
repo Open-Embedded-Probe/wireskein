@@ -52,17 +52,20 @@
    "kind": "pwm",
    "channel": "D3",
    "freq": 22376.51961716323,
-   "duty": 0.6537140169290441
+   "duty": 0.6537140169290441,
+   "changes_kept": 20000
   },
   {
    "kind": "random",
    "channel": "D2",
-   "toggle_rate": 48716.11810489941
+   "toggle_rate": 48716.11810489941,
+   "changes_kept": 20000
   },
   {
    "kind": "random",
    "channel": "D1",
-   "toggle_rate": 31592.644269925582
+   "toggle_rate": 31592.644269925582,
+   "changes_kept": 20000
   }
  ]
 }

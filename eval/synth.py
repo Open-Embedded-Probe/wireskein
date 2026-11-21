@@ -277,7 +277,7 @@ class Builder:
 
     def add_uart_upper(self, idx: int) -> None:
         """UART carrying a known upper protocol (or none), 8N1."""
-        from .analyzers.upper import crc16_modbus
+        from wireskein._engine.analyzers.upper import crc16_modbus
         r = self.rng
         baud = float(r.choice([4800, 9600, 19200, 38400, 115200])) * (1 + r.uniform(-0.01, 0.01))
         kind = str(r.choice(["nmea", "modbus", "text", "binary"]))
@@ -530,6 +530,8 @@ class Builder:
     _deferred: list
 
 
+DECOY_MAX = 20000      # a decoy's changes at most (see scenario)
+
 SPI_VARIANTS = ("cs", "nocs", "cs_high", "cs_tied", "cs_tied2", "sessions", "session1", "multi", "uncaptured", "empty")
 
 
@@ -573,6 +575,19 @@ def scenario(seed: int, profile: str = "mixed", stress: str | None = None,
     t_end = b.t_end + rng.uniform(0.2e-3, 2e-3)
     for f in b._deferred:
         f(t_end)
+    # a decoy's question (a free-running clock, a PWM, noise: no bus) is answered by DECOY_MAX changes; a fast clock
+    # over the whole capture (12 MHz for 150 ms: 3.6 M changes) is length by chance, all of the case's time spent on
+    # it. Past that, the decoy runs in one stretch of DECOY_MAX changes and holds its level elsewhere (its own
+    # generator, so that the rest of the case is the same)
+    wr = np.random.default_rng(seed + 7_000_000)
+    for info in b.decoys:
+        w = b.waves[info["channel"]]
+        if len(w.times) > DECOY_MAX:
+            k = int(wr.integers(0, len(w.times) - DECOY_MAX + 1))
+            w.initial = w.initial ^ (k & 1)
+            w.times = w.times[k:k + DECOY_MAX]
+            w.level = w.initial ^ (len(w.times) & 1)
+            info["changes_kept"] = DECOY_MAX
     st = STRESS.get(stress or "", {})
     oversample = float(rng.choice(st.get("oversample", [4, 6, 8, 10, 16, 25, 50, 100])))
     rate = min(max(b.fastest * oversample, 1e6), 200e6)

@@ -122,7 +122,8 @@
   {
    "kind": "clock",
    "channel": "D4",
-   "freq": 100000.0
+   "freq": 100000.0,
+   "changes_kept": 20000
   },
   {
    "kind": "static",

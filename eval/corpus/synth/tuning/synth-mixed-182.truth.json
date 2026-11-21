@@ -285,7 +285,8 @@
   {
    "kind": "random",
    "channel": "D6",
-   "toggle_rate": 38382.786425467195
+   "toggle_rate": 38382.786425467195,
+   "changes_kept": 20000
   },
   {
    "kind": "static",

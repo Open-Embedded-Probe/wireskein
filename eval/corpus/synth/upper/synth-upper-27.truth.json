@@ -43,7 +43,8 @@
   {
    "kind": "random",
    "channel": "D1",
-   "toggle_rate": 13490.271452441857
+   "toggle_rate": 13490.271452441857,
+   "changes_kept": 20000
   }
  ]
 }

@@ -216,7 +216,8 @@
   {
    "kind": "burst_clock",
    "channel": "D5",
-   "freq": 930548.0291159278
+   "freq": 930548.0291159278,
+   "changes_kept": 20000
   },
   {
    "kind": "pwm",

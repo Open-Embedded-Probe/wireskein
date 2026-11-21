@@ -150,7 +150,8 @@
   {
    "kind": "burst_clock",
    "channel": "D2",
-   "freq": 521939.07899833
+   "freq": 521939.07899833,
+   "changes_kept": 20000
   }
  ]
 }

@@ -20,7 +20,7 @@
   },
   "D2": {
    "original": "decoy2_clock",
-   "static": false
+   "static": true
   },
   "D3": {
    "original": "decoy1_clock",
@@ -51,17 +51,20 @@
   {
    "kind": "burst_clock",
    "channel": "D1",
-   "freq": 899427.5238346604
+   "freq": 899427.5238346604,
+   "changes_kept": 20000
   },
   {
    "kind": "clock",
    "channel": "D3",
-   "freq": 115200.0
+   "freq": 115200.0,
+   "changes_kept": 20000
   },
   {
    "kind": "clock",
    "channel": "D2",
-   "freq": 1000000.0
+   "freq": 1000000.0,
+   "changes_kept": 20000
   }
  ]
 }

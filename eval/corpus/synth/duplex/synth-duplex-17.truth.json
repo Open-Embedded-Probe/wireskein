@@ -16,7 +16,7 @@
   },
   "D1": {
    "original": "decoy1_clock",
-   "static": false
+   "static": true
   },
   "D2": {
    "original": "decoy0_static",
@@ -54,7 +54,8 @@
   {
    "kind": "clock",
    "channel": "D1",
-   "freq": 12000000.0
+   "freq": 12000000.0,
+   "changes_kept": 20000
   },
   {
    "kind": "static",

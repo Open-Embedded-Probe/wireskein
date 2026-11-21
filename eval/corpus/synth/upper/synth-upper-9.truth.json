@@ -20,7 +20,7 @@
   },
   "D2": {
    "original": "decoy0_clock",
-   "static": false
+   "static": true
   }
  },
  "buses": [
@@ -47,13 +47,15 @@
   {
    "kind": "clock",
    "channel": "D2",
-   "freq": 12000000.0
+   "freq": 12000000.0,
+   "changes_kept": 20000
   },
   {
    "kind": "pwm",
    "channel": "D0",
    "freq": 39746.4650846128,
-   "duty": 0.2255777541311419
+   "duty": 0.2255777541311419,
+   "changes_kept": 20000
   }
  ]
 }

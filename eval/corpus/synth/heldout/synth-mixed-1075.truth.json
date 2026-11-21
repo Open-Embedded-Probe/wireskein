@@ -147,7 +147,8 @@
   {
    "kind": "clock",
    "channel": "D3",
-   "freq": 12000000.0
+   "freq": 12000000.0,
+   "changes_kept": 20000
   },
   {
    "kind": "random",

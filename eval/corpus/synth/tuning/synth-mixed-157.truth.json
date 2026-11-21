@@ -55,7 +55,8 @@
   {
    "kind": "clock",
    "channel": "D2",
-   "freq": 1000000.0
+   "freq": 1000000.0,
+   "changes_kept": 20000
   },
   {
    "kind": "random",

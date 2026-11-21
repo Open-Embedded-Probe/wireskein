@@ -20,7 +20,7 @@
   },
   "D2": {
    "original": "decoy2_clock",
-   "static": false
+   "static": true
   },
   "D3": {
    "original": "decoy1_pwm",
@@ -51,18 +51,21 @@
   {
    "kind": "random",
    "channel": "D1",
-   "toggle_rate": 23898.795843517775
+   "toggle_rate": 23898.795843517775,
+   "changes_kept": 20000
   },
   {
    "kind": "pwm",
    "channel": "D3",
    "freq": 15075.95460590074,
-   "duty": 0.34456562989020345
+   "duty": 0.34456562989020345,
+   "changes_kept": 20000
   },
   {
    "kind": "clock",
    "channel": "D2",
-   "freq": 1000000.0
+   "freq": 1000000.0,
+   "changes_kept": 20000
   }
  ]
 }

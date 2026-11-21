@@ -43,7 +43,8 @@
   {
    "kind": "clock",
    "channel": "D1",
-   "freq": 115200.0
+   "freq": 115200.0,
+   "changes_kept": 20000
   }
  ]
 }

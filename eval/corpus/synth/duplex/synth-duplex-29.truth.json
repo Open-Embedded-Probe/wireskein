@@ -47,12 +47,14 @@
    "kind": "pwm",
    "channel": "D2",
    "freq": 26927.62987730134,
-   "duty": 0.4854752533317389
+   "duty": 0.4854752533317389,
+   "changes_kept": 20000
   },
   {
    "kind": "burst_clock",
    "channel": "D0",
-   "freq": 146234.76329898665
+   "freq": 146234.76329898665,
+   "changes_kept": 20000
   }
  ]
 }

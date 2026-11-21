@@ -46,7 +46,8 @@
   {
    "kind": "burst_clock",
    "channel": "D1",
-   "freq": 878453.1708734278
+   "freq": 878453.1708734278,
+   "changes_kept": 20000
   },
   {
    "kind": "static",
