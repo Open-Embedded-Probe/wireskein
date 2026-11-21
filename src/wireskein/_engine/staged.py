@@ -1419,6 +1419,16 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
             if not hinted.get("baud"):
                 runs += dmx_at_rate(c, view_cap, g.pin, k, rb, by_type, roots)
     t["async"] = time.perf_counter() - t0
+    # USB low / full speed: two lines changing together, opposite at rest (a differential pair)
+    if run_async:
+        from .usb import UsbPlugin, usb_pair
+        usb = UsbPlugin()
+        names = [ch.name for ch in cap.channels if len(ch.edges) >= 16]
+        for i, a in enumerate(names):
+            for b in names[i + 1:]:
+                if usb_pair(cap.channel(a), cap.channel(b), cap.n_samples, cap.rate):
+                    runs += 1
+                    roots += usb.run(c, a, b)
     t0 = time.perf_counter()
     scorer = DefaultScorer()
     for n in roots:
