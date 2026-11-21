@@ -46,42 +46,50 @@ def read_cjtag(ckc, msc, n: int) -> dict | None:
     if not np.any((toggles >= ESC_SELECT) & (toggles < ESC_RESET)):
         return None
     bit = msc.level_at(rise).astype(np.int8)
-    t, tms, tdi, tdo, osc = [], [], [], [], []
+    k = len(rise)
+    esc = np.flatnonzero(toggles >= ESC_DESELECT)
+    parts = []                                  # (t, tms, tdi, tdo, oscan1) arrays, in order
     escapes, acts = [], []
-    mode, i, k = "standard", 0, len(rise)
-    while i < k:
-        tg = int(toggles[i])
-        if tg >= ESC_DESELECT:
-            escapes.append((int(rise[i]), tg))
-            if tg >= ESC_RESET:
-                mode = "standard"
-            elif tg >= ESC_SELECT:
-                if i + OAC_BITS < k and not np.any(toggles[i + 1:i + 1 + OAC_BITS] >= ESC_DESELECT):
-                    b = bit[i + 1:i + 1 + OAC_BITS].tolist()
-                    oac, ec, cp = (sum(x << j for j, x in enumerate(b[q:q + 4])) for q in (0, 4, 8))
-                    acts.append((int(rise[i + 1]), oac, ec, cp))
-                    mode = "oscan1" if oac == OAC_OSCAN1 else "other"
-                    i += 1 + OAC_BITS
-                    continue
-            else:
-                mode = "offline"
-            i += 1
-            continue
+    mode, i = "standard", 0
+
+    def run_to(stop):
+        """The JTAG cycles of the rises i .. stop - 1 (no escape among them) in the current mode."""
+        if stop <= i:
+            return
         if mode == "standard":
-            t.append(int(rise[i])); tms.append(int(bit[i])); tdi.append(0); tdo.append(0); osc.append(False)
-            i += 1
+            sl = slice(i, stop)
+            z = np.zeros(stop - i, np.int8)
+            parts.append((rise[sl], bit[sl], z, z, np.zeros(stop - i, bool)))
         elif mode == "oscan1":
-            # a JTAG cycle is three TCKC cycles with no escape among them
-            if i + 2 >= k or np.any(toggles[i + 1:i + 3] >= ESC_DESELECT):
-                i += 1
-                continue
-            t.append(int(rise[i])); tdi.append(1 - int(bit[i])); tms.append(int(bit[i + 1])); tdo.append(int(bit[i + 2]))
-            osc.append(True)
-            i += 3
+            m3 = (stop - i) // 3 * 3              # whole JTAG cycles of three TCKC cycles
+            if m3:
+                tri = bit[i:i + m3].reshape(-1, 3)
+                parts.append((rise[i:i + m3:3], tri[:, 1], (1 - tri[:, 0]).astype(np.int8), tri[:, 2],
+                              np.ones(m3 // 3, bool)))
+
+    for e in esc.tolist() + [k]:
+        if e < i:
+            continue
+        run_to(e)
+        if e == k:
+            break
+        tg = int(toggles[e])
+        escapes.append((int(rise[e]), tg))
+        i = e + 1
+        if tg >= ESC_RESET:
+            mode = "standard"
+        elif tg >= ESC_SELECT:
+            if e + OAC_BITS < k and not np.any(toggles[e + 1:e + 1 + OAC_BITS] >= ESC_DESELECT):
+                bb = bit[e + 1:e + 1 + OAC_BITS].tolist()
+                oac, ec, cp = (sum(x << j for j, x in enumerate(bb[q:q + 4])) for q in (0, 4, 8))
+                acts.append((int(rise[e + 1]), oac, ec, cp))
+                mode = "oscan1" if oac == OAC_OSCAN1 else "other"
+                i = e + 1 + OAC_BITS
         else:
-            i += 1
-    return {"t": np.asarray(t, np.int64), "tms": np.asarray(tms, np.int8), "tdi": np.asarray(tdi, np.int8),
-            "tdo": np.asarray(tdo, np.int8), "oscan1": np.asarray(osc, bool), "escapes": escapes, "activations": acts}
+            mode = "offline"
+    cat = (lambda j, dt: np.concatenate([p[j] for p in parts]).astype(dt) if parts else np.zeros(0, dt))
+    t, tms, tdi, tdo, osc = cat(0, np.int64), cat(1, np.int8), cat(2, np.int8), cat(3, np.int8), cat(4, bool)
+    return {"t": t, "tms": tms, "tdi": tdi, "tdo": tdo, "oscan1": osc, "escapes": escapes, "activations": acts}
 
 
 class CjtagPlugin:
