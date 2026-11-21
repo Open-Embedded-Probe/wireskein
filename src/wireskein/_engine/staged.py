@@ -227,15 +227,28 @@ def _on_grid(pin, blocks) -> float | None:
 
 
 SYNC_MIN_PERIOD = 4     # samples: a clock this slow at least, for a line keeping to it to mean anything
+DATA_OF_BUS_ONE_SAMPLE = 0.1   # a line this share of whose runs are a sample is no bus's data line (crosstalk)
+CLOCKS_A_BUS_ASYNC = 0.6  # ... the partner's keeping enough to skip the async readings (an RVSWD DIO keeps to SWCLK at 0.66)
 CLOCKS_A_BUS = 0.8      # a clock this clock-like, with a partner keeping to it as data this well, is no UART line
 
 
-def _clocks_a_bus(sv, pin: str) -> bool:
+def _clocks_a_bus(sv, pin: str, data: float = CLOCKS_A_BUS) -> bool:
     """The pin is a clock some other line keeps to as data (a bus's clock: RVSWD's SWCLK, SPI's SCK)."""
     ci = sv.clocks.get(pin)
     if ci is None or ci.clock_score < CLOCKS_A_BUS:
         return False
-    return any(r.data_score >= CLOCKS_A_BUS for (k, o), r in sv.pairs.items() if k == pin and o != pin)
+    return any(r.data_score >= data for (k, o), r in sv.pairs.items() if k == pin and o != pin)
+
+
+def _data_of_a_bus(sv, ch, data: float = CLOCKS_A_BUS_ASYNC) -> bool:
+    """The line keeps to some clock as its data (an RVSWD's DIO, an SPI's MOSI): no lone line of pulse widths. Not a
+    line a tenth of whose runs are a sample (crosstalk's pulses at a fast clock's edges keep it so: a 1-Wire line at
+    0.69 to a 12 MHz clock beside it, protomix-71; a LinkE's DIO has 0.1 %)."""
+    r = np.diff(np.asarray(ch.edges, np.int64))
+    if len(r) and float(np.mean(r <= ch.step)) >= DATA_OF_BUS_ONE_SAMPLE:
+        return False
+    return any(o == ch.name and k != ch.name and rel.data_score >= data and k in sv.clocks
+               and sv.clocks[k].clock_score >= CLOCKS_A_BUS for (k, o), rel in sv.pairs.items())
 
 
 def _tight_windows(pin, idle: int, sv, n: int) -> float:
@@ -1544,8 +1557,10 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
         pc = tx.pins[g.pin]
         # the pulse-width protocols read any lone line (an LED chain or a carrier looks like a clock to the survey)
         # but a bus's clock (another line keeps to it as data) is none of them, unless a hint names it
+        # (nor a bus's data line: an RVSWD's DIO tried as CEC, S/PDIF, USB PD ... took 2.4 s of a LinkE write)
         if (run_pulse and pin_hint.get(g.pin, {}).get("protocol") not in ASYNC
-                and (pin_hint.get(g.pin, {}).get("protocol") or not _clocks_a_bus(c.sv, g.pin))):
+                and (pin_hint.get(g.pin, {}).get("protocol")
+                     or not (_clocks_a_bus(c.sv, g.pin) or _data_of_a_bus(c.sv, cap.channel(g.pin))))):
             ch0 = cap.channel(g.pin)
             for ch, k in _line_views(ch0, cap.n_samples):
                 for p in by_type.get("line", []):
@@ -1572,7 +1587,7 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
                     roots.append(n)
         if not run_async or hinted.get("protocol") in PULSE_PROTOCOLS:
             continue
-        if not hinted.get("protocol") and _clocks_a_bus(c.sv, g.pin):
+        if not hinted.get("protocol") and _clocks_a_bus(c.sv, g.pin, CLOCKS_A_BUS_ASYNC):
             continue            # a clock other lines keep to as data: a bus's clock, not a UART line (not tried)
         for view_cap, k in single_views(cap, c.sv, g.pin):
             if hinted.get("baud"):
