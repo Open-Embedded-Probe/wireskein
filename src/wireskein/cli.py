@@ -731,7 +731,9 @@ def main() -> None:
     cp.add_argument("--duration", default=None, help="stream: how long, e.g. 2s, 500ms")
     cp.add_argument("--glitch-filter", type=int, default=None, metavar="NS",
                     help="oep: the probe drops pulses shorter than NS on every logic line (steadier reading; spikes "
-                         "under it are not seen, so not judged: the width used goes to meta.probe.glitch_filter_ns)")
+                         "under it are not seen, so not judged: the width used goes to meta.probe.glitch_filter_ns); "
+                         "a probe takes only the widths it has (a P4 / P4X: 25), another is refused when the "
+                         "acquisition is configured")
     cp.add_argument("--on-loss", choices=("stop", "continue"), default="stop",
                     help="stream: when the probe drops data, stop there (default) or go on to the end; either way "
                          "what was taken is kept and the capture fails (exit 1)")
