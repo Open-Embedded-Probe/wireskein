@@ -3,6 +3,8 @@
 ## Unreleased
 - (EN) Fixed: a CAN line of mostly classic frames with a few FD ones was not read (its runs gave a bit time between the two rates, 1.25 nominal bits): the shortest runs (an FD data phase's bit) are a base for the nominal bit time too.
 - (JA) 直した: 古典の CAN のフレームが多く FD のフレームが少しの線を読めなかった（Run から出したビットの時間が 2 つの速さの間、公称の 1.25 ビットになった）。いちばん短い Run（FD のデータ相の 1 ビット）も公称のビットの時間の元にする。
+- (EN) Faster: a line's async segments whose bits are under two samples are not read as characters or NRZ bits at all (no async protocol reads them; an RVSWD's DIO taken as a 105 MBd UART cost 3.6 s of a LinkE write's 14).
+- (JA) 速く: 1 ビットが 2 サンプルに満たない非同期の区分は、文字にも NRZ のビットにも読まない（どの非同期のプロトコルも読めない。RVSWD の DIO を 105 MBd の UART として試すのに、LinkE の書き込み 14 秒のうち 3.6 秒かかっていた）。
 - (EN) Fixed: two audio buses whose bit clocks are 1 : 2 each read the other's WS as their own (in step with them), or as SD (a square wave in step with the frame): I2S words nearly all steps (0x00, 0xff, 0x07, 0xf8) of two values or more carry nothing, and a WS or SD whose changes meet another clock's edges, not this one's, is that bus's. A .sr without a samplerate says so instead of a KeyError.
 - (JA) 直した: ビットクロックが 1 : 2 の 2 つの音声バスが、相手の WS を自分の WS（歩調が合う）や SD（フレームに合った方形波）と読んでいた: I2S の語がほとんど段の形（0x00、0xff、0x07、0xf8）で 2 種類以上なら中身がない。WS や SD の変化が、このクロックでなく別のクロックの辺に合うなら、それは別のバスのもの。samplerate のない .sr は、KeyError でなくその旨を出す。
 - (EN) Fixed: a line toggling at random, one of whose windows held all of a JTAG's scans, was taken as an SPI's select and the JTAG claimed as SPI: a select's windows mostly hold the clock's changes (a line with four windows or more, under half of them holding any, has its score cut by that share).

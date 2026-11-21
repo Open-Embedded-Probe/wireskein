@@ -510,10 +510,17 @@ def _square(hi: np.ndarray, lo: np.ndarray) -> bool:
 
 
 
+ASYNC_MIN_UNIT = 2.0      # samples a bit at least for the async plugins to run on a line's blocks
+
+
 def _async_at(c, view_cap, g, k: int, rb, by_type, roots) -> int:
     """The async plugins (nrzbits, chars) on one line's view under one rate segmentation and idle level: the nodes go
     to roots, the plugin runs are returned."""
     runs = 0
+    # bits under two samples have no middle to read: no async protocol reads them (a UART's score is 0 there), and a
+    # fast synchronous line taken so costs seconds (an RVSWD DIO at 1.5 samples a "bit": 3.6 s of a LinkE write)
+    if rb.blocks and max(u for _, _, u in rb.blocks) < ASYNC_MIN_UNIT:
+        return 0
     if by_type.get("nrzbits"):
         nb = typed.nrz_bits(view_cap, c.sv, rb)
         for p in by_type["nrzbits"] if nb is not None else []:
