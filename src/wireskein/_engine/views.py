@@ -227,15 +227,21 @@ def clock_gridded(edges: np.ndarray, initial: int, n: int) -> np.ndarray:
         bf = b.astype(np.float64)
         bd = np.diff(bf)
         h0 = float(np.median(bd[bd >= 0.5 * hg])) if np.any(bd >= 0.5 * hg) else hg
-        best = None
-        for h in np.arange(0.6 * h0, 1.4 * h0, max(0.01, 0.004 * h0)):
-            g = bf[0] + h * np.arange(int((bf[-1] - bf[0]) / h + 0.5) + 1)
-            i = np.clip(np.searchsorted(bf, g), 1, len(bf) - 1)
-            dist = np.minimum(np.abs(bf[i] - g), np.abs(bf[i - 1] - g))
-            sc = np.sum(dist <= REBUILD_GRID) - 0.5 * np.sum(dist > REBUILD_GRID)
-            if best is None or sc > best[0]:
-                best = (sc, g, i, dist)
-        _, g, i, dist = best
+        # every candidate half period at once (one row each; the points past a row's own count masked out): the
+        # same pick as one at a time, the first best (a USB pair's line rebuilt so took 60 s in a loop: vc820)
+        hs = np.arange(0.6 * h0, 1.4 * h0, max(0.01, 0.004 * h0))
+        counts = (np.floor((bf[-1] - bf[0]) / hs + 0.5) + 1).astype(np.int64)
+        kk = np.arange(int(counts.max()))
+        valid = kk[None, :] < counts[:, None]
+        gg = bf[0] + hs[:, None] * kk[None, :]
+        ii = np.clip(np.searchsorted(bf, gg.ravel()).reshape(gg.shape), 1, len(bf) - 1)
+        dd = np.minimum(np.abs(bf[ii] - gg), np.abs(bf[ii - 1] - gg))
+        near_ = (dd <= REBUILD_GRID) & valid
+        far_ = (dd > REBUILD_GRID) & valid
+        scores = near_.sum(1) - 0.5 * far_.sum(1)
+        r = int(np.argmax(scores))
+        n_r = int(counts[r])
+        g, i, dist = gg[r, :n_r], ii[r, :n_r], dd[r, :n_r]
         near = np.where(np.abs(bf[i] - g) <= np.abs(bf[i - 1] - g), bf[i], bf[i - 1])
         for t in np.unique(np.where(dist <= REBUILD_GRID, near, np.round(g)).astype(np.int64)):
             out.append(int(t))

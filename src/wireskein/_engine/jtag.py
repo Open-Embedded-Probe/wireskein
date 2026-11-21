@@ -19,6 +19,7 @@ NEXT = np.array([  # [state][tms]
     (RTI, TLR), (RTI, SDS), (CDR, SIS), (SDR, E1DR), (SDR, E1DR), (PDR, UDR), (PDR, E2DR), (SDR, UDR),
     (RTI, SDS), (CIR, TLR), (SIR, E1IR), (SIR, E1IR), (PIR, UIR), (PIR, E2IR), (SIR, UIR), (RTI, SDS)], np.int8)
 
+JTAG_LINES_MAX = 6        # data lines a group has at most for JTAG to be tried on it
 JTAG_SCANS = 4            # scans for half the evidence of their count (q)
 JTAG_CAPTURES = 2         # IR scans with TDO's 1 0 seen, at least, for a claim
 JTAG_IN_SHIFT = 0.9       # TDI's / TDO's changes in the shift states, this share for full weight
@@ -91,8 +92,8 @@ class JtagPlugin:
 
     def run(self, c, fr, g):
         sb = fr.source
-        if len(sb.data) < 2 or sb.sample_edge != "rise":
-            return []
+        if len(sb.data) < 2 or len(sb.data) > JTAG_LINES_MAX or sb.sample_edge != "rise":
+            return []         # (TMS, TDI, TDO and maybe TRST: 22 lines of a Z80's bus tried in pairs took 6 s)
         clk = c.sv.clocks[sb.clock].clock_score
         best = None
         for mi, m in enumerate(sb.data):

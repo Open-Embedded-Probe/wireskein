@@ -179,6 +179,9 @@ def _select_set(rels, pins) -> list[str]:
     return [opts[i][0].other for i in best[2] if opts[i][0].boundary < SELECT_BOUNDARY]
 
 
+GROUP_SELECTS = 6      # select candidates a clock's groups take at most (the best framing)
+GROUP_SINGLES_SELECTED = 3   # ... and with a select (an SPI's MOSI or MISO alone)
+GROUP_SINGLES = 8      # data lines a clock's groups take alone at most (the best keeping)
 WHOLE_SELECT = 0.95    # a line framing this share of another clock's transfers is that bus's select
 WHOLE_DATA = 0.9       # ... unless it keeps to the clock in hand as data this closely
 WHOLE_TRANSFERS = 8    # over this many transfers at least
@@ -209,6 +212,11 @@ def groups(sv: Survey, pins: dict[str, PinClass]) -> list[Group]:
         sel += _select_set(rels, pins)
         if _select_set.ambiguous:
             sv.select_ambiguous.add(c)
+        # (a parallel bus - 30 lines keeping to one clock, eight framing its bursts: a Z80's - made 200 groups of one
+        # clock and minutes of reading: the selects that frame best and the lines that keep best, a few each)
+        if len(sel) > GROUP_SELECTS:
+            bnd = {r.other: r.boundary for r in rels}
+            sel = sorted(dict.fromkeys(sel), key=lambda x: -bnd.get(x, 0.0))[:GROUP_SELECTS]
         clk_score = sv.clocks[c].clock_score
         for s in [None, *sel]:
             d_all = tuple(x for x in data if x != s)
@@ -219,7 +227,9 @@ def groups(sv: Survey, pins: dict[str, PinClass]) -> list[Group]:
             # and the ones keeping to it as well as the best (another bus's lines a noise lifts over 0.6 stay out)
             top = max(sv.pairs[(c, x)].data_score for x in d_all)
             best = tuple(x for x in d_all if sv.pairs[(c, x)].data_score >= top - BEST_DATA)
-            variants = {d_all, strong, best, *[(x,) for x in d_all]} - {()}
+            singles = sorted(d_all, key=lambda x: -sv.pairs[(c, x)].data_score)[:GROUP_SINGLES if s is None
+                                                                                 else GROUP_SINGLES_SELECTED]
+            variants = {d_all, strong, best, *[(x,) for x in singles]} - {()}
             for d in sorted(variants):          # (a set of tuples: its order is the hash seed's)
                 sc = clk_score * float(np.mean([sv.pairs[(c, x)].data_score for x in d]))
                 if s:

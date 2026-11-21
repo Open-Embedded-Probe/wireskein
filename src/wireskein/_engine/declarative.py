@@ -81,10 +81,31 @@ def view_clk_pair(c, sb, clk: float, pair: float) -> tuple[float, float]:
         return clk, pair
     from .features import channel_features
     from .survey import clock_info, pair_relation
-    ci = clock_info(view, channel_features(view, view.channel(sb.clock)))
+    memo = _memo(c)
+    key = ("view_clk", id(view), sb.clock)
+    if key not in memo:
+        memo[key] = clock_info(view, channel_features(view, view.channel(sb.clock)))
+    ci = memo[key]
     if ci is None:
         return clk, pair
-    return max(clk, ci.clock_score), max(pair, min(pair_relation(view, ci, d).data_score for d in sb.data))
+    def rel(d):
+        k2 = ("view_pair", id(view), sb.clock, d)
+        if k2 not in memo:
+            memo[k2] = pair_relation(view, ci, d).data_score
+        return memo[k2]
+    return max(clk, ci.clock_score), max(pair, min(rel(d) for d in sb.data))
+
+
+def _memo(c) -> dict:
+    """One analysis' store of what its groups ask again and again (kept on its survey, which lives as long)."""
+    m = getattr(c.sv, "_declarative_memo", None)
+    if m is None:
+        m = {}
+        try:
+            c.sv._declarative_memo = m
+        except AttributeError:
+            pass
+    return m
 
 
 def binomial_tail(n: int, k: int, p: float) -> float:
@@ -695,8 +716,13 @@ class DeclarativePlugin:
         if "select_boundary" in terms and sb.select:
             from .survey import better_relation, clock_info
             view = getattr(sb, "view", c.cap)
-            ci = clock_info(view, c.sv.features[sb.clock])
-            b = better_relation(view, ci, sb.select).boundary if ci else 0.0
+            # (once a view, clock and select: a parallel bus's groups asked it hundreds of times - a Z80's capture)
+            memo = _memo(c)
+            key = ("select_boundary", id(view), sb.clock, sb.select)
+            if key not in memo:
+                ci = clock_info(view, c.sv.features[sb.clock])
+                memo[key] = better_relation(view, ci, sb.select).boundary if ci else 0.0
+            b = memo[key]
             score *= b
             evidence["select_boundary"] = b
             # a select moves for its transfers: a line with many selections holding none (a random line, one of

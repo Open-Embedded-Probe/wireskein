@@ -14,6 +14,7 @@ import numpy as np
 from .stack import Node, Stream
 
 I2S_SLOT_MIN = 8          # bits a slot at least ...
+I2S_LINES_MAX = 8         # data lines a group has at most for I2S to be tried on it
 I2S_WORD_MAX = 32         # bits a word at most
 I2S_SLOT_MAX = 64         # ... and at most (a longer one is a TDM frame: read_tdm)
 I2S_REGULAR = 0.9         # of WS's runs, this share or more of one length (the slot)
@@ -224,8 +225,8 @@ class I2sPlugin:
 
     def run(self, c, fr, g):
         sb = fr.source
-        if len(sb.data) < 2:
-            return []
+        if len(sb.data) < 2 or len(sb.data) > I2S_LINES_MAX:
+            return []         # (an audio bus is a WS and an SD or a few: 22 lines of a Z80's bus tried in pairs took 22 s)
         clk = c.sv.clocks[sb.clock].clock_score
         out = []
         for wi, w in enumerate(sb.data):
