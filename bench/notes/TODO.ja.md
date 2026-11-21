@@ -153,3 +153,9 @@
   - I2C の入力の見方を変化がなくなるまで（最大 3 回）。sync_unknown は 8 ビット未満のフレームで下げる。UART の格子は 1/3 ビット未満のパルスを除いて数える。
   - xtalk 0.3 の見落とし: 28 → 18 前後。バウンス 0.5 の I2C: 5 件中 4 件が読めるように。
   - sigrok-dumps の小さい記録（400 KB 未満、973 本）を今の版で回し、ディレクトリと合わない主張を洗い出す（結果は別に）。
+- 2026-11-22 sigrok-dumps（400 KB 未満の 973 本）を今の版で回して、ディレクトリと合わない主張・エラーを洗い出した:
+  - 直した: mcp23017 の GPIO を I2S / 不明に、EM4100 を RVSWD に、GPIB と MRF24J40 の CS・INT を I2C に（止まった線の static_data）、
+    nRF24L01 の MISO を UART に、マウスの回転エンコーダを LIN に、signature/7791 の OverflowError、Z80 の 34 本と vc820 の計算の爆発。
+  - 正しかった: voltcraft の I2C（24LC515）、max3420e の USB、LED ストリップの I2C と NEC、am230x の DHT、マウス・AVR ISP・表示器・DAC・NFC の SPI。
+  - 残り: JTAG の実機（glyn_tonga2_*）の読みが弱い（idle は SPI と有力、init / reset は ambiguous、irscan_drscan は何も出ない）。
+    100 万〜1000 万の変化の記録（LED、signature、USB、SPI flash）が 60 秒を超える。Z80 の cpuclk はまだ約 40 秒。
