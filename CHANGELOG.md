@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Wiegand is read (`wiegand`, roles `d0` / `d1`): two lines idle high whose low pulses take turns at a steady pace, frames between long gaps; 26- and 34-bit frames' parities checked (and which line is D1 by them), a 26-bit one's facility and card numbers. sigrok-dumps' capture: both 34-bit frames sigrok's (8a640910).
+- (JA) Wiegand を読む（`wiegand`、役割は `d0` / `d1`）: 待機 High の 2 本に、決まった間隔で交互に出る Low のパルス、長い間で区切ったフレーム。26 と 34 ビットのフレームはパリティを確かめ（どちらが D1 かもそれで決める）、26 ビットは施設番号とカード番号も。sigrok-dumps の記録: 34 ビットの 2 フレームとも sigrok と同じ（8a640910）。
 - (EN) SD mode's CMD line is read (`sdmmc`, declared in decl/sdmmc.toml): commands and 48-bit responses with their CRC7, R3 (the OCR, no CRC), R2 (CID / CSD, 136 bits, its CRC7). sigrok-dumps' SD mode: the commands of 11 of 12 captures are sigrok's (the 12th, a 25 MHz clock at 50 MS/s, two samples a period, is not read). And .sr files of 33 to 64 channels (samples of 5 to 8 bytes) are read: those captures (40 channels) failed to load.
 - (JA) SD モードの CMD 線を読む（`sdmmc`、decl/sdmmc.toml で宣言）: コマンドと 48 ビットの応答（CRC7）、R3（OCR、CRC なし）、R2（CID / CSD、136 ビット、CRC7）。sigrok-dumps の SD モード: 12 本中 11 本でコマンドが sigrok と同じ（残り 1 本は 50 MS/s で 25 MHz のクロック、1 周期 2 サンプルで読まない）。また、33〜64 チャネル（1 サンプル 5〜8 バイト）の .sr を読む: その記録（40 チャネル）は読み込みで失敗していた。
 - (EN) PS/2 is read (`ps2`, declared in decl/ps2.toml): 11 clocks a byte, start, 8 data bits LSB first, odd parity, stop; host to device with the device's acknowledge. sigrok-dumps' two keyboard captures: every byte sigrok's (18 and 18).

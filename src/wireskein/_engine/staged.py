@@ -1422,13 +1422,17 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
     # USB low / full speed: two lines changing together, opposite at rest (a differential pair)
     if run_async:
         from .usb import UsbPlugin, usb_pair
-        usb = UsbPlugin()
+        from .wiegand import WiegandPlugin
+        usb, wiegand = UsbPlugin(), WiegandPlugin()
         names = [ch.name for ch in cap.channels if len(ch.edges) >= 16]
         for i, a in enumerate(names):
             for b in names[i + 1:]:
                 if usb_pair(cap.channel(a), cap.channel(b), cap.n_samples, cap.rate):
                     runs += 1
                     roots += usb.run(c, a, b)
+                elif cap.channel(a).initial == 1 and cap.channel(b).initial == 1:
+                    runs += 1
+                    roots += wiegand.run(c, a, b)
     t0 = time.perf_counter()
     scorer = DefaultScorer()
     for n in roots:
