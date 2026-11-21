@@ -514,6 +514,27 @@ def _rests_at(cap, pin: str, level: int, rb) -> bool:
     return int(inner.sum()) >= UART_RESTS
 
 
+SD_ANSWERED = 0.3         # SD commands answered (by the response that follows), this share of them at least
+
+
+def _sd_answered(n) -> bool:
+    """SD mode: commands followed soon by their response (R1-type with the same index, or an R2 / R3); a CRC7 of
+    7 bits holds by chance one place in 128 when every bit is scanned, an answered command does not."""
+    fr = [f for f in (n.output.items if n.output else []) if isinstance(f, dict)]
+    cmds = [i for i, f in enumerate(fr) if f.get("dir") == "CMD"]
+    ans = 0
+    for i in cmds:
+        if i + 1 >= len(fr):
+            continue
+        a, b = fr[i], fr[i + 1]
+        a0, a1 = a.get("start", a.get("s", 0)), a.get("end", a.get("e", 0))
+        b0 = b.get("start", b.get("s", 0))
+        soon = b0 - a1 < 2 * max(1, a1 - a0)
+        same = b.get("dir") in ("R2", "R3") or (b.get("dir") == "RSP" and b.get("index") == a.get("index"))
+        ans += bool(soon and same)
+    return ans >= 1 and ans >= SD_ANSWERED * len(cmds)
+
+
 def dmx_idles(cap, pin: str) -> list[int]:
     """The idle levels under which the line has a DMX512 break: a run at the other level DMX_BREAK_S long or more
     (up to a second, the standard's limit), where a bit is DMX_MIN_BITS samples or more at 250 kbaud. Both levels
@@ -1444,6 +1465,7 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
             if not hinted.get("baud"):
                 runs += dmx_at_rate(c, view_cap, g.pin, k, rb, by_type, roots)
     t["async"] = time.perf_counter() - t0
+    roots = [n for n in roots if n.analyzer != "sdmmc" or _sd_answered(n)]
     # USB low / full speed: two lines changing together, opposite at rest (a differential pair)
     if run_async:
         from .usb import UsbPlugin, usb_pair

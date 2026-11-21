@@ -10,6 +10,8 @@ from .stack import Node, Stream
 
 PREAMBLES = {(3, 1, 1, 3): "B", (3, 3, 1, 1): "M", (3, 2, 1, 2): "W"}   # in half cells
 EVIDENCE_BITS = 8
+SPDIF_MIN = 16            # subframes whose parity holds, at least
+SPDIF_CHAIN = 0.9         # of them, this share in A / B turns a subframe apart
 SPDIF_SHARE = 0.01        # a run length this share of the runs at least to count as half a cell
 
 
@@ -76,7 +78,14 @@ class SpdifPlugin:
     def run(self, c, ch, g):
         sf = subframes(np.asarray(ch.edges, np.int64))
         good = [x for x in sf if x["ok"]]
-        if len(good) < 8:
+        if len(good) < SPDIF_MIN:
+            return []
+        # subframes in their order: channel A (B / M) and B (W) by turns, one subframe's time apart (32 cells);
+        # preambles a line of other pulses shows by chance come in no such chain
+        span = float(np.median([x["e"] - x["s"] for x in good]))
+        chain = sum(1 for a, b in zip(good, good[1:])
+                    if ((a["preamble"] == "W") != (b["preamble"] == "W")) and abs((b["s"] - a["s"]) / span - 1) < 0.1)
+        if chain < SPDIF_CHAIN * (len(good) - 1):
             return []
         # evidence: each subframe's preamble (a coding violation of its own pattern: 3) and parity (1)
         info = 4 * len(good)
