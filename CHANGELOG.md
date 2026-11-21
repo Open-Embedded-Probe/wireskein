@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) DALI is read (`dali`): Manchester at 1200 b/s, forward frames (address byte read as short / group / broadcast and command or arc power) and backward frames (answers). sigrok-dumps' capture: every frame sigrok's (18).
+- (JA) DALI を読む（`dali`）: 1200 b/s のマンチェスタ符号、前向きのフレーム（アドレスのバイトを個別 / グループ / 全体と読み、コマンドか明るさ）と後ろ向きのフレーム（応答）。sigrok-dumps の記録: すべてのフレームが sigrok と同じ（18）。
 - (EN) Fixed: an LED string all dark (every bit 0) was held at 0.3 of its score as a clock's one duty might be: frames between resets of one length, a whole number of LEDs (24 or 32 bits each), now count as its evidence. sigrok-dumps' NeoPixel captures at 6 and 24 MHz (a string of 24 dark, 435 and 858 frames) read, confirmed.
 - (JA) 直した: すべて消灯の LED の列（全ビット 0）は、1 つのデューティのクロックと同じく点数を 0.3 倍にしていた: リセットの間のフレームが毎回同じ長さで、LED の数の整数倍（1 個 24 か 32 ビット）なら根拠に数える。sigrok-dumps の NeoPixel の 6 MHz と 24 MHz の記録（24 個すべて消灯、435 と 858 フレーム）を確定で読む。
 - (EN) S/PDIF is read (`spdif`): biphase mark subframes, the B / M / W preambles, 24-bit samples (aux and audio), V U C and the even parity; the half cell is the length the runs are whole multiples of most nearly (at 16 MS/s it is 2.8 samples). sigrok-dumps' 6 captures: confirmed, every subframe's parity holding; the samples are sigrok's (each one subframe more at the start).

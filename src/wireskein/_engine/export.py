@@ -175,6 +175,8 @@ def layers_of(n) -> dict:
             out["frames"] = n.output.items
         else:
             out["packets"] = n.output.items
+    elif a == "dali":
+        out["frames"] = list(n.output.items)
     elif a == "spdif":
         out["subframes"] = list(n.output.items)
     elif a == "usb_pd":
@@ -235,7 +237,7 @@ def _mdio_addresses(rows: list) -> None:
 
 FINAL = {"i2c": "transactions", "spi": ("sd", "transfers"), "uart": ("nmea", "modbus_rtu", "lines", "bytes"),
          "lin": "frames", "dmx512": "packets", "rvswd": ("dm", "dmi"), "swio": ("dm", "dmi"), "sync_unknown": "summary",
-         "swd": "packets", "mdio": "frames", "ps2": "frames", "sdmmc": "frames", "wiegand": "frames", "swim": "transactions", "cec": "messages", "usb_pd": "packets", "spdif": "subframes", "i2s": "frames", "jtag": "scans", "dht": "readings", "can": "frames", "rgb_led": "frames", "onewire": "resets",
+         "swd": "packets", "mdio": "frames", "ps2": "frames", "sdmmc": "frames", "wiegand": "frames", "swim": "transactions", "cec": "messages", "usb_pd": "packets", "spdif": "subframes", "dali": "frames", "i2s": "frames", "jtag": "scans", "dht": "readings", "can": "frames", "rgb_led": "frames", "onewire": "resets",
          "ir_nec": "frames", "usb": ("transactions", "packets")}
 
 
@@ -281,7 +283,7 @@ def _window(lay: dict, s0: int, s1: int) -> dict:
 
 DEPTHS = ("transport", "frames", "protocol", "device")
 LOWER = {"i2c": "transactions", "spi": "transfers", "uart": "bytes", "lin": "frames", "dmx512": "packets",
-         "rvswd": "dmi", "swio": "dmi", "swd": "packets", "mdio": "frames", "ps2": "frames", "sdmmc": "frames", "wiegand": "frames", "swim": "transactions", "cec": "messages", "usb_pd": "packets", "spdif": "subframes", "i2s": "frames", "jtag": "scans", "dht": "readings", "can": "frames", "sync_unknown": "summary", "rgb_led": "frames", "onewire": "resets",
+         "rvswd": "dmi", "swio": "dmi", "swd": "packets", "mdio": "frames", "ps2": "frames", "sdmmc": "frames", "wiegand": "frames", "swim": "transactions", "cec": "messages", "usb_pd": "packets", "spdif": "subframes", "dali": "frames", "i2s": "frames", "jtag": "scans", "dht": "readings", "can": "frames", "sync_unknown": "summary", "rgb_led": "frames", "onewire": "resets",
          "ir_nec": "frames", "usb": "packets"}
 
 
