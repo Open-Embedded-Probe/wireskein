@@ -35,6 +35,7 @@ from .analyzers.pulse import DhtPlugin, NecPlugin, OneWirePlugin, RgbLedPlugin
 from .swim import SwimPlugin
 from .cec import CecPlugin
 from .usbpd import UsbPdPlugin
+from .spdif import SpdifPlugin
 from .i2s import I2sPlugin
 from .jtag import JtagPlugin
 from .cjtag import CjtagPlugin
@@ -679,7 +680,7 @@ class DmxPlugin:
 # the plugins written in Python (state across frames, search, upper layers), then the frame-local protocols
 # declared in decl/*.toml (docs/design.ja.md §3.2)
 PLUGINS = ([SyncUnknownPlugin(), UartPlugin(), LinPlugin(), DmxPlugin(), CanFdPlugin(), SwioPlugin(), RgbLedPlugin(),
-            OneWirePlugin(), NecPlugin(), I2sPlugin(), JtagPlugin(), CjtagPlugin(), DhtPlugin(), SwimPlugin(), CecPlugin(), UsbPdPlugin()]
+            OneWirePlugin(), NecPlugin(), I2sPlugin(), JtagPlugin(), CjtagPlugin(), DhtPlugin(), SwimPlugin(), CecPlugin(), UsbPdPlugin(), SpdifPlugin()]
            + load_all(["i2c", "spi", "rvswd"]) + load_all(["swd", "can", "mdio", "ps2", "sdmmc"]))
 UPPER = [Lines(), Nmea(), ModbusRtu(), MarkerGrammar()]
 
@@ -1053,7 +1054,7 @@ SCAN_EVIDENCE = 32        # ... and these bits of fixed fields checked: the SPI 
 SCAN_BELOW = 0.1          # ... where it scores no more than this over the declared one (fewer frames, less evidence)
 SYNC_PROTOCOLS = {"i2c", "spi", "rvswd", "swd", "mdio", "i2s", "jtag", "sync_unknown", "ps2", "sdmmc"}
 ASYNC_PROTOCOLS = {"uart", "lin", "dmx512", "can", "usb", "wiegand"}
-PULSE_PROTOCOLS = {"swio", "rgb_led", "onewire", "ir_nec", "dht", "swim", "cec", "usb_pd"}
+PULSE_PROTOCOLS = {"swio", "rgb_led", "onewire", "ir_nec", "dht", "swim", "cec", "usb_pd", "spdif"}
 SYNC_ROLES = {"i2c": {"scl": "clock", "sda": "data"}, "spi": {"clk": "clock", "mosi": "data", "miso": "data", "cs": "select"},
               "rvswd": {"clk": "clock", "dio": "data"}}
 

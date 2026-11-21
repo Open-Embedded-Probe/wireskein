@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) S/PDIF is read (`spdif`): biphase mark subframes, the B / M / W preambles, 24-bit samples (aux and audio), V U C and the even parity; the half cell is the length the runs are whole multiples of most nearly (at 16 MS/s it is 2.8 samples). sigrok-dumps' 6 captures: confirmed, every subframe's parity holding; the samples are sigrok's (each one subframe more at the start).
+- (JA) S/PDIF を読む（`spdif`）: バイフェーズマークのサブフレーム、B / M / W のプリアンブル、24 ビットの値（補助と音声）、V・U・C、偶数パリティ。半セルの長さは、Run がいちばん整数倍に近くなる長さ（16 MS/s では 2.8 サンプル）。sigrok-dumps の 6 本: 確定で、すべてのサブフレームのパリティが通り、値は sigrok と同じ（どれも頭のサブフレームを 1 つ多く読む）。
 - (EN) A UART of 9 data bits gives each character's ninth bit as `bytes.bit8` ("0" / "1" in order) beside `hex`'s low eight bits (in multidrop use the address flag); it was dropped. Nine data bits where the parity check says so, or 11-bit characters without parity whose ninth bit varies (an 8N2's second stop bit is always 1).
 - (JA) 9 データビットの UART は、`hex` の下位 8 ビットに加えて、文字ごとの 9 ビット目を `bytes.bit8`（`"0"` / `"1"` を順に）で出す（マルチドロップではアドレスの印）。これまでは落としていた。9 データビットとするのは、パリティの確かめでそう分かるときか、パリティのない 11 ビットの文字で 9 ビット目が変わるとき（8N2 の 2 つ目のストップビットは常に 1）。
 - (EN) USB Power Delivery is read on a CC line (`usb_pd`): BMC at about 300 kb/s (a duty bias, highs shorter than lows from a threshold off the middle, taken out first), the preamble, 4b5b symbols, the ordered set (SOP / SOP' / SOP'' / resets), the header (message type named, roles, revision, ID), data objects, CRC32 and EOP. sigrok-dumps' 9 captures: every packet's CRC holding, as many as sigrok's.
