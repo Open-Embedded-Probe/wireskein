@@ -159,3 +159,6 @@
   - 正しかった: voltcraft の I2C（24LC515）、max3420e の USB、LED ストリップの I2C と NEC、am230x の DHT、マウス・AVR ISP・表示器・DAC・NFC の SPI。
   - 残り: JTAG の実機（glyn_tonga2_*）の読みが弱い（idle は SPI と有力、init / reset は ambiguous、irscan_drscan は何も出ない）。
     100 万〜1000 万の変化の記録（LED、signature、USB、SPI flash）が 60 秒を超える。Z80 の cpuclk はまだ約 40 秒。
+- JTAG の DR だけのセッション（glyn_tonga2_idle: IR スキャンなし、38 ビットの DR を 58 回）: IR の取り込みがないので JTAG を主張しない。
+  DR だけの道（同じ長さ 8 割、TDI / TDO がシフトに収まる）を試したが、JTAG（TCK、TMS、TDI）と SPI（RTCK、TDO）に分けた方が全体の点が
+  高くなり、SPI の誤った確定が出たので戻した。双子のクロック（RTCK）を別のバスのクロックにする読みを、説明の側で除く必要がある。
