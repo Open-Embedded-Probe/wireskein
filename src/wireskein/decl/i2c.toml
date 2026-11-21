@@ -38,5 +38,5 @@ soft = 0.25             # the clock-likeness and pair terms weigh this much
 check_weight = 0.0
 evidence_scale = 8
 # START / STOP well inside SCL's high, the bus free between a STOP and the next START, no SCL over UM10204's fastest
-terms = ["startstop_clearance", "bus_free", "data_once_a_bit", "max_clock_hz"]
+terms = ["startstop_clearance", "bus_free", "data_once_a_bit", "max_clock_hz", "static_data"]
 max_clock_hz = 5e6

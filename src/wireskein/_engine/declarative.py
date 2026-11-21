@@ -180,6 +180,8 @@ def data_per_bit(e: dict) -> float | None:
     return worst
 
 
+STATIC_SHARE = 0.95        # ... one value this share of every data pin's words at least
+STATIC_DATA = 0.1          # a reading whose words are all one value keeps this share of its score
 SELECT_WINDOWS_MIN = 4     # a select's windows at least for the share holding transfers to count
 SELECT_USED = 0.5          # ... and the share of them holding one, at least, for a whole score
 
@@ -727,6 +729,20 @@ class DeclarativePlugin:
                 else:
                     best = max(best, 1.0)
             score *= best
+        if "static_data" in terms:
+            # every word one value on every data pin (an I2C "general call writing 0x00", or reads of 0xff from 127
+            # NACKed, over and over: a data line held low or high while a clock runs - sigrok-dumps' hp53131a, a GPIB
+            # handshake; mrf24j40, an SPI's CS and an interrupt line): nothing read
+            vals = [v for v, _ in per_pin.values() if len(v)]
+            def one(v):
+                # (that value all 0s or all 1s: a line held low or high. A device polled for one register gives one
+                # value too, and is read: the h417 captures)
+                vals_, cnt = np.unique(v, return_counts=True)
+                top = int(vals_[np.argmax(cnt)])
+                return cnt.max() >= STATIC_SHARE * len(v) and top in (0, 0xFF, 0x1FF)
+            if vals and all(one(v) for v in vals) and sum(len(v) for v in vals) >= 4:
+                score *= STATIC_DATA
+                evidence["static_data"] = True
         if "single_frame_penalty" in terms and fr.delimiter == "gap" and int(keep.sum()) <= 1:
             score *= 0.5
         if "startstop_clearance" in terms:

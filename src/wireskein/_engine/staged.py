@@ -306,6 +306,8 @@ UART_PACED = 0.5          # ... at a character length three divides: a line of p
 UART_FRAMED = 0.35        # LIN / DMX512 framing past this share of the break-framed blocks counts against a plain UART
 
 
+UART_SAME_CLOCK_PAIR = 0.5   # a line keeping to a clock this well ...
+UART_SAME_CLOCK_RATE = 0.05  # ... read as a UART whose bit is that clock's period within this: the clock's data
 UART_RAW_CLOCK = 0.9      # the line as it is this clock-like or more: a clock, whatever a view of it shows
 UART_BOUNCED_PAIR = 0.3   # a clock's keeping of the line, as it is, this at least to look again with bounces out
 UART_CEC = 0.5            # a line's low pulses inside CEC's messages past this share: no UART's (full at all)
@@ -448,6 +450,15 @@ class UartPlugin:
                 rd = survey_mod.despiked_relation(c.cap, k, rb.pin, k_b)
                 if rd is not None:
                     sync = max(sync, rd[0].data_score * rd[1].clock_score)
+        # and a bit that is one period of a clock the line keeps to (an SPI's MISO at 3 samples a bit, its clock too
+        # fast for the keeping above to count: sigrok-dumps' nrf24l01, read as a UART at the SPI's rate) is that
+        # clock's data
+        for (k, o), r in c.sv.pairs.items():
+            ck = c.sv.clocks.get(k)
+            if (o == rb.pin and k != rb.pin and ck is not None and ck.period and r.data_score >= UART_SAME_CLOCK_PAIR
+                    and abs(u_main / ck.period - 1) < UART_SAME_CLOCK_RATE):
+                sync = max(sync, 1.0)
+                m["bit_of_clock"] = k
         m["sync_with_clock"] = sync
         # a pin whose active windows each hold a clock's burst tightly is that bus's select, not a UART (a CS's low
         # windows read as characters); a UART's lows meet another bus's bursts only by chance, never snugly
@@ -675,6 +686,7 @@ DMX_RATE_BITS = 5         # DMX512's fixed 250 kbaud met within 3%: evidence of 
 EVIDENCE_BITS = 8         # a check's bits of evidence to a score: 1 - 0.5 ** (bits / 8), as the declared protocols
 
 
+LIN_MIN_BAUD = 900        # LIN's rate at least (1 kbit/s and a margin)
 LIN_MAX_BAUD = 21000      # LIN's rate at most (20 kbit/s and a margin)
 
 
@@ -693,8 +705,8 @@ class LinPlugin:
                 continue
             # LIN runs at 1 to 20 kbit/s (ISO 17987): a clock's bursts read as frames at 330 kbaud are none
             # (2026-11-21, synth-protocols-151)
-            if c.cap.rate / u > LIN_MAX_BAUD:
-                continue
+            if not LIN_MIN_BAUD <= c.cap.rate / u <= LIN_MAX_BAUD:
+                continue          # (and 1 kbit/s at least: a mouse's quadrature line read at 189 baud, sigrok-dumps' adns_2051)
             passed = (ck["sync"] + ck["pid_parity"] + ck["checksum"]) / (3 * ck["frames"])
             # the evidence in bits, as the declared protocols count it: what random characters pass by chance (the
             # sync byte 8, the PID's parity 2, the checksum 8); three whole frames are 54 bits, not a count of 3
