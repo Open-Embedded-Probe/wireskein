@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) A UART of 9 data bits gives each character's ninth bit as `bytes.bit8` ("0" / "1" in order) beside `hex`'s low eight bits (in multidrop use the address flag); it was dropped. Nine data bits where the parity check says so, or 11-bit characters without parity whose ninth bit varies (an 8N2's second stop bit is always 1).
+- (JA) 9 データビットの UART は、`hex` の下位 8 ビットに加えて、文字ごとの 9 ビット目を `bytes.bit8`（`"0"` / `"1"` を順に）で出す（マルチドロップではアドレスの印）。これまでは落としていた。9 データビットとするのは、パリティの確かめでそう分かるときか、パリティのない 11 ビットの文字で 9 ビット目が変わるとき（8N2 の 2 つ目のストップビットは常に 1）。
 - (EN) USB Power Delivery is read on a CC line (`usb_pd`): BMC at about 300 kb/s (a duty bias, highs shorter than lows from a threshold off the middle, taken out first), the preamble, 4b5b symbols, the ordered set (SOP / SOP' / SOP'' / resets), the header (message type named, roles, revision, ID), data objects, CRC32 and EOP. sigrok-dumps' 9 captures: every packet's CRC holding, as many as sigrok's.
 - (JA) USB Power Delivery を CC 線で読む（`usb_pd`）: 約 300 kb/s の BMC（しきい値のずれによる High と Low の偏りを先に戻す）、プリアンブル、4b5b の記号、オーダードセット（SOP / SOP' / SOP'' / リセット）、ヘッダ（メッセージの種類の名前、役割、版、ID）、データオブジェクト、CRC32、EOP。sigrok-dumps の 9 本: すべてのパケットの CRC が通り、数も sigrok と同じ。
 - (EN) HDMI CEC is read (`cec`): start bits (3.7 ms low), blocks of 8 data bits MSB first, EOM and ACK by pulse widths; the header's initiator and destination, the opcode and operands, each message acknowledged or not. sigrok-dumps' CEC: every message of the captures compared is sigrok's (120 and 31).

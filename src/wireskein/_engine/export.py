@@ -24,6 +24,23 @@ def _hex(vals) -> str:
     return bytes(int(v) & 0xFF for v in vals).hex()
 
 
+def _ninth_bits(n, vals) -> str | None:
+    """A UART of 9 data bits: each character's ninth bit ("0" / "1", in order) beside `hex`'s low eight (in
+    multidrop use the address flag). 9 data bits where the parity check says so, or characters of 11 bits without
+    parity whose ninth bit varies (one always 1 is an 8N2's second stop bit); None otherwise."""
+    p = getattr(n, "params", {}) or {}
+    v = np.asarray(vals, np.int64)
+    if not len(v):
+        return None
+    if p.get("data_bits") == 9:
+        pass
+    elif p.get("data_bits") is None and p.get("L") == 11 and len(set(((v >> 8) & 1).tolist())) > 1:
+        pass
+    else:
+        return None
+    return "".join(str(int(x)) for x in ((v >> 8) & 1))
+
+
 # ---------------- layer serializers (claim node -> {layer: data}) ----------------
 
 def _sync_layers(n) -> dict:
@@ -144,6 +161,9 @@ def layers_of(n) -> dict:
         if a == "uart":
             it = n.output.items
             out["bytes"] = {"s": np.asarray(it["start"]).tolist(), "hex": _hex(it["value"])}
+            ninth = _ninth_bits(n, it["value"])
+            if ninth is not None:
+                out["bytes"]["bit8"] = ninth
             for ch in n.children:
                 if ch.output is None or ch.total < 0.3:
                     continue

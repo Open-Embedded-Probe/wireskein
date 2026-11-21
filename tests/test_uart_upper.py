@@ -93,3 +93,26 @@ def test_nmea_sentences_are_the_final_reading():
     ex = decode.export(decode.analyze(cap), cap)
     (c,) = [c for c in ex["claims"] if c["protocol"] == "uart"]
     assert c["result"] == {"nmea": want}
+
+
+def test_nine_data_bits():
+    """9N1 (multidrop: the ninth bit flags an address): `hex` keeps the low eight bits, `bit8` each character's
+    ninth, in order."""
+    rng = np.random.default_rng(12)
+    vals = []
+    for _ in range(10):
+        vals += [0x100 | int(rng.integers(0, 256))] + [int(x) for x in rng.integers(0, 256, 6)]
+    w = gen.Wave(1)
+    t = 100e-6
+    for v in vals:
+        bits = [0] + [(v >> i) & 1 for i in range(9)] + [1]
+        for b in bits:
+            w.set(t, b)
+            t += 1 / 19200
+        t += 3 / 19200
+    cap = gen.quantize({"TX": w}, 1e6, t + 1e-3, rng)
+    ex = decode.export(decode.analyze(cap), cap)
+    (c,) = [c for c in ex["claims"] if c["protocol"] == "uart"]
+    b = c["result"]["bytes"]
+    assert b["hex"] == bytes(v & 0xFF for v in vals).hex()
+    assert b["bit8"] == "".join(str(v >> 8) for v in vals)
