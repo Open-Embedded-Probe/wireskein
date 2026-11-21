@@ -500,6 +500,18 @@ def _async_at(c, view_cap, g, k: int, rb, by_type, roots) -> int:
 
 
 UART_OTHER_IDLE = 0.9     # characters framed under the survey's idle level below this share: the other tried too
+UART_REST_BITS = 11       # a rest between characters: a run at the idle level this many bits long or more ...
+UART_RESTS = 2            # ... this many of them inside the capture, for a level to be tried as the idle one
+
+
+def _rests_at(cap, pin: str, level: int, rb) -> bool:
+    """The line rests at `level` between characters now and then: runs at it a character long or more inside the
+    capture. A UART's idle level has them; a CAN line read inverted has none at the dominant level (stuffing keeps
+    its runs to 5 bits), so it is not tried as a UART idling there."""
+    u = float(np.median([b[2] for b in rb.blocks]))
+    _, length, lv = cap.channel(pin).runs(cap.n_samples)
+    inner = (lv[1:-1] == level) & (length[1:-1] >= UART_REST_BITS * u)
+    return int(inner.sum()) >= UART_RESTS
 
 
 def dmx_idles(cap, pin: str) -> list[int]:
@@ -1417,7 +1429,8 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
             n0 = len(roots)
             runs += _async_at(c, view_cap, g, k, rb, by_type, roots)
             framing = [float(n.metrics.get("framing_rate", 0.0)) for n in roots[n0:] if n.analyzer == "uart"]
-            if not hinted.get("baud") and max(framing, default=0.0) < UART_OTHER_IDLE:
+            if (not hinted.get("baud") and max(framing, default=0.0) < UART_OTHER_IDLE
+                    and _rests_at(view_cap, g.pin, 1 - rb.idle, rb)):
                 # the idle level the survey took is the line's level most of the time: a line undriven between
                 # transmissions (RS-485 floating low, sigrok-dumps' wizmodbus) rests at the other between its
                 # characters; where its characters frame poorly, read under the other too (the checks choose)

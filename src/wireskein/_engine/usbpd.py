@@ -72,7 +72,10 @@ def _unbias(edges: np.ndarray, initial: int) -> np.ndarray:
         return edges
     # keep to runs inside packets (a half or a whole bit): the long idles out
     cap_ = 3 * float(np.median(d))
-    bias = (float(np.mean(lo[lo < cap_])) - float(np.mean(hi[hi < cap_]))) / 2
+    lo, hi = lo[lo < cap_], hi[hi < cap_]
+    if not len(lo) or not len(hi):
+        return edges                               # (one level's runs all long: no BMC to balance)
+    bias = (float(np.mean(lo)) - float(np.mean(hi))) / 2
     out = edges.astype(float)
     out[lv == 0] += bias                                          # a fall: a high's end
     return out
