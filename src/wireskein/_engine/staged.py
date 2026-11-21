@@ -207,7 +207,13 @@ def _on_grid(pin, blocks) -> float | None:
     for (s0, s1, u), _, ch in blocks:
         if ch is None:
             continue
-        e = collapse(e_all[(e_all >= s0) & (e_all < s1)], u / 4)
+        e = e_all[(e_all >= s0) & (e_all < s1)]
+        # (pulses under a third of a bit taken out first: a spike is no bit, and its two changes off the grid held a
+        # UART at 4 samples a bit under spikes at 0.82, 2026-11-21, synth-mixed-149 spike:0.3)
+        kp = max(2, int(u / 3)) if u >= 3.5 else 0
+        if kp and len(e) > 2:
+            e = V.pulses_out(e, kp)
+        e = collapse(e, u / 4)
         st = np.sort(ch.start[ch.ok]).astype(np.int64)
         if not len(st) or not len(e):
             continue

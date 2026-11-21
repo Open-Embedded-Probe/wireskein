@@ -3,6 +3,8 @@
 ## Unreleased
 - (EN) Fixed: a CAN line of mostly classic frames with a few FD ones was not read (its runs gave a bit time between the two rates, 1.25 nominal bits): the shortest runs (an FD data phase's bit) are a base for the nominal bit time too.
 - (JA) 直した: 古典の CAN のフレームが多く FD のフレームが少しの線を読めなかった（Run から出したビットの時間が 2 つの速さの間、公称の 1.25 ビットになった）。いちばん短い Run（FD のデータ相の 1 ビット）も公称のビットの時間の元にする。
+- (EN) A UART's on-grid share counts its changes with pulses under a third of a bit (one sample at least, from 3.5 samples a bit) taken out first: a spike is no bit, and its two changes off the grid held a UART under spikes below the line.
+- (JA) UART のビットの格子に乗る割合は、1 ビットの 3 分の 1 より短いパルス（1 ビット 3.5 サンプル以上で、少なくとも 1 サンプル）を先に除いて数える: スパイクはビットでなく、その 2 つの格子外の変化が、スパイクのある UART を基準の下に押さえていた。
 - (EN) Fixed: a clock under crosstalk from a free clock over a mostly idle bus (12000 spikes beside an SWD clock's 482 changes) got no filtered view: where three in ten of its runs are a noise's pulses, its typical run comes from it cleaned. And the unknown clocked reading of frames of a few bits (a noise's pieces: hundreds of 3-bit "frames") is weighed by its commonest frame's length over 8 bits.
 - (JA) 直した: ほとんど止まっているバスに、止まらないクロックからクロストークが乗ったクロック（SWD のクロックの 482 の変化の横に 12000 のスパイク）に、フィルタをかけた見方が作られなかった: Run の 3 割が雑音のパルスなら、普通の Run の長さを除いた線から取る。また、数ビットのフレーム（雑音の切れ端: 3 ビットの「フレーム」が数百）の不明な同期の読みは、いちばん多いフレームの長さ ÷ 8 ビットで重みを付ける。
 - (EN) Fixed: I2C at about 1 MHz with bounces at half the edges (50 MS/s) was not read: two bounces at an edge left a pulse the input view's spike filter took only once the burst beside it was one change. The input view is taken again on its own output while that changes something (three passes at most).
