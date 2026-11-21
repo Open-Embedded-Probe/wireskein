@@ -9,6 +9,8 @@
 - (JA) JTAG の根拠に、TDI と TDO の変化がシフトの状態に収まること（スキャン 1 つに 1 ビット）を数える: 短いセッション（スキャン 8 つ）が、同じ線の「不明な同期のバス」の読みに負けていた。
 - (EN) A UART reading of an HDMI CEC line (each CEC bit a 6-bit character of about 2000 baud) yields where CEC's complete messages hold the line's pulses.
 - (JA) HDMI CEC の線を UART と読んだもの（CEC の 1 ビットを約 2000 ボーの 6 ビットの文字に）は、CEC の完結したメッセージが線のパルスを覆うとき退く。
+- (EN) Fixed: JTAG's last scan was dropped where the capture ended (or the clock stopped) right after the edge entering Update-DR / -IR: a scan now ends on that edge (Exit1 / Exit2 with TMS 1), not on the next one.
+- (JA) 直した: Update-DR / -IR に入る辺の直後で記録が終わる（クロックが止まる）と、JTAG の最後のスキャンを落としていた: スキャンはその辺（TMS 1 の Exit1 / Exit2）で閉じる。次の辺を待たない。
 - (EN) Fixed: a short PS/2 capture (nine bytes) was claimed as an unknown clocked bus of 11-bit frames, a little above PS/2: a known protocol reading the very lines, every frame's fixed fields holding (16 bits checked or more), is that bus with its structure and the unknown reading yields to it.
 - (JA) 直した: 短い PS/2 の記録（9 バイト）を「11 ビットのフレームの不明な同期のバス」と主張し、PS/2 をわずかに上回っていた: 同じ線を読む既知のプロトコルで、すべてのフレームの決まった欄が通る（確かめたビットが 16 以上）なら、それがそのバスの構造つきの読みで、不明の読みは退く。
 - (EN) Fixed: LIN was claimed on a clock's bursts read as frames at 330 kbaud: LIN runs at 20 kbit/s at most.

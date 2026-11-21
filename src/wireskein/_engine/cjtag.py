@@ -105,7 +105,7 @@ class CjtagPlugin:
             if r is None or not r["oscan1"].any():
                 continue
             st = walk(r["tms"])
-            sc = [s for s in scans(st, r["t"], r["tdi"], r["tdo"])
+            sc = [s for s in scans(st, r["t"], r["tdi"], r["tdo"], r["tms"])
                   if r["oscan1"][min(np.searchsorted(r["t"], s["s"]), len(r["t"]) - 1)]]
             if not sc:
                 continue

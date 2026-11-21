@@ -72,7 +72,8 @@ holdout は protocols、mixed、robust、rate、real を、別の種・別の操
      - CEC を UART と読む → CEC の根拠（タイミングの窓、ACK）を数え、CEC のメッセージが覆う線では UART が退く。
      - 別々のバスの線を 1 つのクロックにまとめる（protomix-12: PS/2 のクロックに SWD の 2 本、どちらも読めない）→ 1 周期に 4 回より多く変わる線はそのクロックのデータにしない（survey）。
      - 短い JTAG（スキャン 8 つ）が sync_unknown に負ける（protomix-1）→ TDI / TDO の変化がシフトに収まることを根拠に。
-     - 残り: 最後のスキャンの Update の前で記録が終わるとそのスキャンを落とす（JTAG、小さい）。
+     - JTAG の最後のスキャンを、Update に入った直後で記録が終わると落とす → Update に入る辺で閉じる。
+     - 全件（protocols 360、protomix 120）で残った件: PS/2 が sync_unknown に負ける（既知の読みの欄が通れば不明は退く）、おとりのクロックを 330 kbaud の LIN と読む（LIN の上限）。どちらも直した。
 3. **LinkE の組を分ける**: 長い操作は real（そのまま 1 回）と scale に、間引きの段は短い操作だけに。26 日の長い記録の決まり（long_edges）は、これで要らなくなる。
 4. **変換を問いごとにする**: noise の直積をやめ、robust に、件ごとの変換を書く。
 5. **scale を作る**: 長さの段を決めて、時間の伸び方を見る組にする。cost-real の役（gate）はこちらに移す。

@@ -42,11 +42,21 @@ def walk(tms: np.ndarray) -> np.ndarray:
     return out
 
 
-def scans(st: np.ndarray, t: np.ndarray, tdi: np.ndarray | None, tdo: np.ndarray | None) -> list[dict]:
+def scans(st: np.ndarray, t: np.ndarray, tdi: np.ndarray | None, tdo: np.ndarray | None,
+          tms: np.ndarray | None = None) -> list[dict]:
     """The IR and DR scans: the bits shifted (on the edges whose state is Shift-IR / Shift-DR) from Capture to
-    Update, LSB first as shifted, with TDI's and TDO's values."""
+    Update, LSB first as shifted, with TDI's and TDO's values. With TMS a scan ends on the edge that enters Update
+    (Exit1 / Exit2 with TMS 1): a capture ending there, the clock stopped, keeps its last scan."""
     out, cur = [], None
+    ends = set()
+    if tms is not None:
+        ex = np.isin(st, (E1DR, E2DR, E1IR, E2IR)) & (np.asarray(tms) == 1)
+        ends = set(np.flatnonzero(ex).tolist())
     for i, s in enumerate(st.tolist()):
+        if i in ends and cur is not None:
+            out.append(cur)
+            cur = None
+            continue
         if s in (CDR, CIR):
             cur = {"s": int(t[i]), "type": "DR" if s == CDR else "IR", "tdi": [], "tdo": []}
         elif s in (SDR, SIR) and cur is not None:
@@ -95,7 +105,7 @@ class JtagPlugin:
             for i in others:
                 inn, tot = _changes_in_shift(sb.bits[i], st)
                 conc[i] = inn / tot if tot else 0.0
-                sc = [s for s in scans(st, sb.t, None, sb.bits[i]) if s["type"] == "IR" and len(s["tdo"]) >= 2]
+                sc = [s for s in scans(st, sb.t, None, sb.bits[i], sb.bits[mi]) if s["type"] == "IR" and len(s["tdo"]) >= 2]
                 ir_tdo[i] = (sum(s["tdo"][:2] == [1, 0] for s in sc), len(sc))
             tdo = max(others, key=lambda i: (ir_tdo[i][0], conc[i]))
             if ir_tdo[tdo][0] < JTAG_CAPTURES:
@@ -104,7 +114,8 @@ class JtagPlugin:
                 continue
             rest = [i for i in others if i != tdo]
             tdi = max(rest, key=lambda i: conc[i]) if rest else None
-            sc = scans(st, sb.t, sb.bits[tdi] if tdi is not None else None, sb.bits[tdo] if tdo is not None else None)
+            sc = scans(st, sb.t, sb.bits[tdi] if tdi is not None else None, sb.bits[tdo] if tdo is not None else None,
+                       sb.bits[mi])
             if not sc:
                 continue
             ir = [len(s["tdi"] or s["tdo"]) for s in sc if s["type"] == "IR"]
