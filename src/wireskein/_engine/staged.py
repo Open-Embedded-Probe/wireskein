@@ -34,6 +34,7 @@ from . import timing, typed
 from .analyzers.pulse import DhtPlugin, NecPlugin, OneWirePlugin, RgbLedPlugin
 from .i2s import I2sPlugin
 from .jtag import JtagPlugin
+from .cjtag import CjtagPlugin
 from .analyzers.upper import Lines, MarkerGrammar, ModbusRtu, Nmea
 from .model import Capture
 from . import survey as survey_mod
@@ -609,7 +610,7 @@ class DmxPlugin:
 # the plugins written in Python (state across frames, search, upper layers), then the frame-local protocols
 # declared in decl/*.toml (docs/design.ja.md §3.2)
 PLUGINS = ([SyncUnknownPlugin(), UartPlugin(), LinPlugin(), DmxPlugin(), CanFdPlugin(), SwioPlugin(), RgbLedPlugin(),
-            OneWirePlugin(), NecPlugin(), I2sPlugin(), JtagPlugin(), DhtPlugin()]
+            OneWirePlugin(), NecPlugin(), I2sPlugin(), JtagPlugin(), CjtagPlugin(), DhtPlugin()]
            + load_all(["i2c", "spi", "rvswd"]) + load_all(["swd", "can", "mdio"]))
 UPPER = [Lines(), Nmea(), ModbusRtu(), MarkerGrammar()]
 
