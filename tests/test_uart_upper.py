@@ -1,7 +1,8 @@
-"""Modbus RTU over a UART (the upper layer `modbus_rtu`): messages split on silence and checked by their CRC-16. A
+"""The upper layers of a UART: Modbus RTU (`modbus_rtu`): messages split on silence and checked by their CRC-16. A
 request and its answer on one line (RS-485's bus), the answer after less than the 3.5 characters the standard asks
 for, a byte of junk as the driver turns off, the line undriven (low) between transmissions. The CRC is computed
-here (a register of bits, apart from the reader's), the waveforms made here."""
+here (a register of bits, apart from the reader's), the waveforms made here. And NMEA's sentences (`nmea`) as the
+final reading."""
 import numpy as np
 import pytest
 
@@ -75,3 +76,20 @@ def test_requests_and_answers_on_one_line(answer_after, junk, undriven):
     c, msgs = _messages(w, t)
     assert c["params"]["idle"] == 1                          # the level the line rests at between characters
     assert msgs == [m.hex() for pair in pairs for m in pair]
+
+
+def test_nmea_sentences_are_the_final_reading():
+    """A GPS's sentences, every checksum holding: the final reading is `nmea` (the checked layer), not text lines."""
+    w = gen.Wave(1)
+    t, want = 100e-6, []
+    for k in range(8):
+        body = f"GPGGA,{120000 + k:06d},4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,"
+        cs = 0
+        for ch in body.encode():
+            cs ^= ch
+        t = gen.uart(w, t, f"${body}*{cs:02X}\r\n".encode(), 9600) + 2e-3
+        want.append(body)
+    cap = gen.quantize({"TX": w}, 1e6, t, np.random.default_rng(0))
+    ex = decode.export(decode.analyze(cap), cap)
+    (c,) = [c for c in ex["claims"] if c["protocol"] == "uart"]
+    assert c["result"] == {"nmea": want}

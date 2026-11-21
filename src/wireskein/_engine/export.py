@@ -181,7 +181,7 @@ def layers_of(n) -> dict:
     return out
 
 
-FINAL = {"i2c": "transactions", "spi": ("sd", "transfers"), "uart": ("lines", "nmea", "modbus_rtu", "bytes"),
+FINAL = {"i2c": "transactions", "spi": ("sd", "transfers"), "uart": ("nmea", "modbus_rtu", "lines", "bytes"),
          "lin": "frames", "dmx512": "packets", "rvswd": ("dm", "dmi"), "swio": ("dm", "dmi"), "sync_unknown": "summary",
          "swd": "packets", "mdio": "frames", "i2s": "frames", "jtag": "scans", "dht": "readings", "can": "frames", "rgb_led": "frames", "onewire": "resets",
          "ir_nec": "frames"}
