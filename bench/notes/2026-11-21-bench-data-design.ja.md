@@ -74,6 +74,10 @@ holdout は protocols、mixed、robust、rate、real を、別の種・別の操
      - 短い JTAG（スキャン 8 つ）が sync_unknown に負ける（protomix-1）→ TDI / TDO の変化がシフトに収まることを根拠に。
      - JTAG の最後のスキャンを、Update に入った直後で記録が終わると落とす → Update に入る辺で閉じる。
      - 全件（protocols 360、protomix 120）で残った件: PS/2 が sync_unknown に負ける（既知の読みの欄が通れば不明は退く）、おとりのクロックを 330 kbaud の LIN と読む（LIN の上限）。どちらも直した。
+   - 追記（2026-11-21）: protocols の組にノイズを足した（件ごとに spike:0.02 か bounce:0.1）。新しいプロトコルの正解に、hardness が使う
+     速さか最短の幅（clock_hz、baud、shortest_s。CAN FD はデータ相の速さも baud_segments に）を書いた。それまでは、ノイズが 1 ビットより
+     長い読めないはずの件も見落としと数えていた。手元（protocols 360 件 × きれい / spike / bounce と protomix 120 件 × bounce）で、印のない件の
+     見落とし 6、誤った有力 2。
 3. **LinkE の組を分ける**（済み、2026-11-21）:
    - `linke-l103-real`、`v003-real`、`v203-real`（と holdout）: すべての操作をそのまま 1 回（Q4）。長い操作（4 KiB の書き込み、64 KiB の読み出し）も、その長さが操作のものなのでここで。
    - `*-core`（と holdout）: 30 万エッジ以下の操作だけを間引きの段で（Q3）。「そのまま」は real と重なるので外した。長い操作は `long_transforms = []` でどの段でも回さない。

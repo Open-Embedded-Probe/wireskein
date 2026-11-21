@@ -519,7 +519,7 @@ class Builder:
         items = [[m[0] >> 4, m[0] & 0xF, m[1] if len(m) > 1 else None, bytes(m[2:]).hex() or None]
                  for m in msgs]
         self._generic("cec", {"cec": name}, "messages", ["initiator", "destination", "opcode", "data"], items,
-                      fastest=1 / 0.6e-3, t=t)
+                      fastest=1 / 0.6e-3, t=t, params={"shortest_s": 0.6e-3})
 
     def add_swim(self, idx: int) -> None:
         r = self.rng
@@ -533,7 +533,7 @@ class Builder:
         t = gen.swim(w, self._t0(), ops, gap=float(r.uniform(20e-6, 200e-6)))
         items = [[o["cmd"], len(o["data"]), o["addr"], bytes(o["data"]).hex()] for o in ops]
         self._generic("swim", {"swim": name}, "transactions", ["cmd", "count", "addr", "data"], items,
-                      fastest=1 / (2 * gen.SWIM_CLK), t=t)
+                      fastest=1 / (2 * gen.SWIM_CLK), t=t, params={"shortest_s": 2 * gen.SWIM_CLK})
 
     def add_dali(self, idx: int) -> None:
         r = self.rng
@@ -550,7 +550,8 @@ class Builder:
                 frames.append((ans, 8, float(r.uniform(10e-3, 30e-3))))
                 items.append(["backward", None, ans])
         t = gen.dali(w, self._t0(), frames)
-        self._generic("dali", {"dali": name}, "frames", ["kind", "addr_byte", "data"], items, fastest=2400, t=t)
+        self._generic("dali", {"dali": name}, "frames", ["kind", "addr_byte", "data"], items, fastest=2400, t=t,
+                      params={"shortest_s": 1 / 2400})
 
     def add_dcc(self, idx: int) -> None:
         r = self.rng
@@ -566,7 +567,7 @@ class Builder:
                 x ^= v
             items.append([d[0], bytes(d + [x]).hex()])
         self._generic("dcc", {"track": name}, "packets", ["address", "bytes"], items, fastest=1 / 58e-6, t=t,
-                      params={"ok_only": True})
+                      params={"ok_only": True, "shortest_s": 58e-6})
 
     def add_sent(self, idx: int) -> None:
         r = self.rng
@@ -577,7 +578,7 @@ class Builder:
         msgs = [[int(x) for x in r.integers(0, 16, n)] for _ in range(int(r.integers(8, 20)))]
         t = gen.sent(w, self._t0(), msgs, tick=tick)
         self._generic("sent", {"data": name}, "messages", ["data"], [[m] for m in msgs], fastest=1 / tick, t=t,
-                      params={"ok_only": True})
+                      params={"ok_only": True, "shortest_s": tick})
 
     def add_j1850(self, idx: int) -> None:
         r = self.rng
@@ -588,7 +589,7 @@ class Builder:
                       gap=float(r.uniform(0.5e-3, 3e-3)))
         items = [[(f + bytes([gen.j1850_crc8(f)])).hex()] for f in frames]
         self._generic("j1850", {"data": name}, "frames", ["bytes"], items, fastest=1 / 34e-6, t=t,
-                      params={"ok_only": True})
+                      params={"ok_only": True, "shortest_s": 44e-6})
 
     def add_wiegand(self, idx: int) -> None:
         r = self.rng
@@ -599,7 +600,7 @@ class Builder:
         t = gen.wiegand(w0, w1, self._t0(), [gen.wiegand26(*c) for c in cards], width=width,
                         period=float(r.choice([0.5e-3, 1e-3, 2e-3])), gap=float(r.uniform(20e-3, 100e-3)))
         self._generic("wiegand", {"d0": d0, "d1": d1}, "frames", ["facility", "card"], [list(c) for c in cards],
-                      fastest=1 / width, t=t)
+                      fastest=1 / width, t=t, params={"shortest_s": width})
 
     def add_ps2(self, idx: int) -> None:
         r = self.rng
@@ -610,7 +611,8 @@ class Builder:
             codes += [k, 0xF0, k]
         f = float(r.uniform(10e3, 16.7e3))
         t = gen.ps2(wc, wd, self._t0(), bytes(codes), freq=f, gaps=[float(x) for x in r.uniform(0.3e-3, 5e-3, len(codes))])
-        self._generic("ps2", {"clk": c, "data": d}, "frames", ["data"], [[x] for x in codes], fastest=2 * f, t=t)
+        self._generic("ps2", {"clk": c, "data": d}, "frames", ["data"], [[x] for x in codes], fastest=2 * f, t=t,
+                      params={"clock_hz": f})
 
     def add_usb(self, idx: int) -> None:
         r = self.rng
@@ -636,7 +638,8 @@ class Builder:
         items = [[p["pid"], p.get("addr"), p.get("endp"), p.get("frame"),
                   bytes(p["data"]).hex() if "data" in p else None] for p in pk]
         self._generic("usb", {"dp": dp, "dm": dm}, "packets", ["pid", "addr", "endp", "frame", "data"], items,
-                      check={"speed": speed}, fastest=12e6 if speed == "full" else 1.5e6, t=t)
+                      check={"speed": speed}, fastest=12e6 if speed == "full" else 1.5e6, t=t,
+                      params={"baud": 12e6 if speed == "full" else 1.5e6})
 
     def add_usb_pd(self, idx: int) -> None:
         r = self.rng
@@ -651,7 +654,7 @@ class Builder:
         t = gen.usb_pd(w, self._t0(), msgs, ui=ui, skew=float(r.choice([0, 0, -0.2, -0.4])) * 1e-6,
                        gap=float(r.uniform(100e-6, 1e-3)))
         self._generic("usb_pd", {"cc": name}, "packets", ["header", "objects"], [[h, o] for h, o in msgs],
-                      fastest=2 / ui, t=t, params={"ok_only": True})
+                      fastest=2 / ui, t=t, params={"ok_only": True, "shortest_s": ui / 2})
 
     def add_spdif(self, idx: int) -> None:
         r = self.rng
@@ -666,7 +669,7 @@ class Builder:
         for f, (a, b) in enumerate(samples):
             items += [["B" if (f0 + f) % 192 == 0 else "M", a], ["W", b]]
         self._generic("spdif", {"data": name}, "subframes", ["preamble", "audio"], items, fastest=fs * 128, t=t,
-                      params={"ok_only": True})
+                      params={"ok_only": True, "shortest_s": 1 / (fs * 128)})
 
     def add_sdmmc(self, idx: int) -> None:
         r = self.rng
@@ -697,7 +700,7 @@ class Builder:
         f = float(r.choice([400e3, 400e3, 1e6, 25e6]))
         t = gen.sdmmc(wc, wd, self._t0(), frames, freq=f, idle=int(r.integers(2, 40)))
         self._generic("sdmmc", {"clk": c, "cmd": d}, "frames", ["dir", "index", "arg"],
-                      [[a, b, c_] for a, b, c_ in items], fastest=2 * f, t=t)
+                      [[a, b, c_] for a, b, c_ in items], fastest=2 * f, t=t, params={"clock_hz": f})
         # an R3's value is its OCR (the field "ocr"): the arg compared is that
         self.buses[-1]["expect"]["alias"] = {"arg": "ocr"}
 
@@ -719,7 +722,8 @@ class Builder:
         scans, items = self._jtag_scans(int(r.choice([4, 5, 5, 9])))
         t = gen.jtag(w["tck"], w["tms"], w["tdi"], w["tdo"], self._t0(), scans, freq,
                      idle_clocks=int(r.integers(0, 8)), gap=float(r.uniform(1, 50)) / freq)
-        self._generic("jtag", names, "scans", ["type", "bits", "tdi", "tdo"], items, fastest=freq, t=t)
+        self._generic("jtag", names, "scans", ["type", "bits", "tdi", "tdo"], items, fastest=freq, t=t,
+                      params={"clock_hz": freq})
 
     def add_cjtag(self, idx: int) -> None:
         r = self.rng
@@ -729,7 +733,7 @@ class Builder:
         scans, items = self._jtag_scans(int(r.choice([4, 5, 5, 9])))
         t = gen.cjtag(wk, wm, self._t0(), scans, tck=tck)
         self._generic("jtag", {"tckc": k, "tmsc": m}, "scans", ["type", "bits", "tdi", "tdo"], items,
-                      check={"cjtag": "oscan1"}, fastest=5 / tck, t=t)
+                      check={"cjtag": "oscan1"}, fastest=5 / tck, t=t, params={"shortest_s": 0.2 * tck})
 
     def add_mdio(self, idx: int) -> None:
         r = self.rng
@@ -743,7 +747,8 @@ class Builder:
                      gap=float(r.uniform(2, 50)) / freq)
         items = [["W" if f["op"] == 1 else "R", f["phy"], f["reg"], f["data"]] for f in frames]
         # the PHY's data a tenth of a clock after the rise before the one that reads it: the rate resolves that
-        self._generic("mdio", {"mdc": c, "mdio": d}, "frames", ["op", "phy", "reg", "data"], items, fastest=10 * freq, t=t)
+        self._generic("mdio", {"mdc": c, "mdio": d}, "frames", ["op", "phy", "reg", "data"], items, fastest=10 * freq, t=t,
+                      params={"clock_hz": freq})
 
     def add_i2s(self, idx: int) -> None:
         r = self.rng
@@ -756,7 +761,7 @@ class Builder:
             frames = [(int(a), int(b)) for a, b in r.integers(-lim, lim, (int(r.integers(30, 120)), 2))]
             t = gen.i2s(w["sck"], w["ws"], w["sd"], self._t0(), frames, fs, slot=32, bits=bits, fmt=fmt)
             self._generic("i2s", names, "frames", ["left", "right"], [list(f) for f in frames],
-                          check={"format": fmt, "word_bits": bits}, fastest=fs * 128, t=t)
+                          check={"format": fmt, "word_bits": bits}, fastest=fs * 128, t=t, params={"clock_hz": fs * 64})
         else:
             n = int(r.choice([4, 6, 8]))
             slot, bits = [(32, 24), (32, 16), (16, 12)][int(r.integers(0, 3))]
@@ -766,7 +771,8 @@ class Builder:
             t = gen.tdm(w["sck"], w["ws"], w["sd"], self._t0(), frames, fs=fs, slot=slot, bits=bits, offset=offset,
                         fs_width=width)
             self._generic("i2s", names, "frames", ["slots"], [[f] for f in frames],
-                          check={"format": "tdm", "slots_per_frame": n, "word_bits": bits}, fastest=fs * n * slot * 2, t=t)
+                          check={"format": "tdm", "slots_per_frame": n, "word_bits": bits}, fastest=fs * n * slot * 2, t=t,
+                          params={"clock_hz": fs * n * slot})
 
     def add_dht(self, idx: int) -> None:
         r = self.rng
@@ -781,7 +787,7 @@ class Builder:
                 rd.append(bytes([h >> 8, h & 0xFF, (abs(tc) >> 8) | (0x80 if tc < 0 else 0), abs(tc) & 0xFF]))
         t = gen.dht(w, self._t0(), rd, period=float(r.uniform(0.02, 0.1)))
         self._generic("dht", {"data": name}, "readings", ["bytes"], [[(b + bytes([sum(b) & 0xFF])).hex()] for b in rd],
-                      fastest=1 / 27e-6, t=t)
+                      fastest=1 / 27e-6, t=t, params={"shortest_s": 27e-6})
 
     def add_can_fd(self, idx: int) -> None:
         r = self.rng
@@ -797,7 +803,8 @@ class Builder:
             frames.append({"id": int(r.integers(0x800 if ext else 0, 2 ** 29 if ext else 2 ** 11)), "fd": fd,
                            "brs": bool(r.random() < 0.8), "data": [int(x) for x in r.integers(0, 256, n)]})
         t = gen.can_fd(w, self._t0(), frames, nominal, nominal * ratio, ifs_bits=float(r.choice([10, 10, 30])))
-        self.buses.append({"protocol": "can", "roles": {"data": name}, "params": {"bitrate": nominal},
+        self.buses.append({"protocol": "can", "roles": {"data": name},
+                           "params": {"bitrate": nominal, "baud_segments": [{"baud": nominal}, {"baud": nominal * ratio}]},
                            "expect": {"frames": [[f["id"], f["id"] > 0x7FF, bytes(f["data"]).hex()] for f in frames]}})
         self.fastest = max(self.fastest, nominal * ratio)
         self.t_end = max(self.t_end, t)
