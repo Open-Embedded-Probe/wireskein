@@ -9,6 +9,10 @@
 - (JA) JTAG の根拠に、TDI と TDO の変化がシフトの状態に収まること（スキャン 1 つに 1 ビット）を数える: 短いセッション（スキャン 8 つ）が、同じ線の「不明な同期のバス」の読みに負けていた。
 - (EN) A UART reading of an HDMI CEC line (each CEC bit a 6-bit character of about 2000 baud) yields where CEC's complete messages hold the line's pulses.
 - (JA) HDMI CEC の線を UART と読んだもの（CEC の 1 ビットを約 2000 ボーの 6 ビットの文字に）は、CEC の完結したメッセージが線のパルスを覆うとき退く。
+- (EN) Fixed: a short PS/2 capture (nine bytes) was claimed as an unknown clocked bus of 11-bit frames, a little above PS/2: a known protocol reading the very lines, every frame's fixed fields holding (16 bits checked or more), is that bus with its structure and the unknown reading yields to it.
+- (JA) 直した: 短い PS/2 の記録（9 バイト）を「11 ビットのフレームの不明な同期のバス」と主張し、PS/2 をわずかに上回っていた: 同じ線を読む既知のプロトコルで、すべてのフレームの決まった欄が通る（確かめたビットが 16 以上）なら、それがそのバスの構造つきの読みで、不明の読みは退く。
+- (EN) Fixed: LIN was claimed on a clock's bursts read as frames at 330 kbaud: LIN runs at 20 kbit/s at most.
+- (JA) 直した: クロックのバーストを 330 kbaud のフレームと読んで LIN と主張していた: LIN は 20 kbit/s まで。
 - (EN) HDMI CEC's evidence counts each block's bits in CEC's timing windows and its ACK as the destination asks: a UART reading of the same line (each bit a 6-bit character) took short traffic from it.
 - (JA) HDMI CEC の根拠に、ブロックのビットが CEC のタイミングの窓に入ることと、宛先どおりの ACK を数える: 同じ線を UART と読んだもの（1 ビットを 6 ビットの文字 1 つに）に、短い通信を取られていた。
 - (EN) Fixed: `--hint` took JSON only, and a protocol's name alone (`--hint rvswd`) ended in a traceback. Names alone are taken now (`rvswd`, `uart,spi`: `{"protocols": [...]}`), and JSON that does not parse says so.

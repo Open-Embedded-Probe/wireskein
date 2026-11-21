@@ -567,6 +567,9 @@ DMX_RATE_BITS = 5         # DMX512's fixed 250 kbaud met within 3%: evidence of 
 EVIDENCE_BITS = 8         # a check's bits of evidence to a score: 1 - 0.5 ** (bits / 8), as the declared protocols
 
 
+LIN_MAX_BAUD = 21000      # LIN's rate at most (20 kbit/s and a margin)
+
+
 class LinPlugin:
     name = "lin"
     consumes = ("chars",)
@@ -579,6 +582,10 @@ class LinPlugin:
             r = UL.lin(ch)
             ck = r["checks"]
             if ck["frames"] < 2:
+                continue
+            # LIN runs at 1 to 20 kbit/s (ISO 17987): a clock's bursts read as frames at 330 kbaud are none
+            # (2026-11-21, synth-protocols-151)
+            if c.cap.rate / u > LIN_MAX_BAUD:
                 continue
             passed = (ck["sync"] + ck["pid_parity"] + ck["checksum"]) / (3 * ck["frames"])
             # the evidence in bits, as the declared protocols count it: what random characters pass by chance (the
@@ -593,8 +600,8 @@ class LinPlugin:
 
 CAN_FORBIDDEN_RUNS = 0.05  # runs of 6 to 10 bits, this share of a line's at most for CAN at a bit time
 CAN_MAX_NOMINAL = 1.05e6  # a nominal bit rate above this is no CAN's
-CAN_FD_GIVE_UP = 2
-CAN_SHORT_PCT = 5          # the shortest runs' percentile: a data phase's bit, a base for the nominal one        # errors with no frame read, at a nominal rate tried, before the next (a line of no CAN)
+CAN_FD_GIVE_UP = 2        # errors with no frame read, at a nominal rate tried, before the next (a line of no CAN)
+CAN_SHORT_PCT = 5         # the shortest runs' percentile: a data phase's bit, a base for the nominal one
 CAN_FD_CHECK_BITS = 4     # a CAN FD frame's stuff count (three bits Gray-coded and a parity) checked, beside its CRC
 
 
@@ -1093,6 +1100,7 @@ class StagedResult:
 SCAN_COVER = 0.95         # a declared protocol's frames explaining this share of the bits ...
 SCAN_EVIDENCE = 32        # ... and these bits of fixed fields checked: the SPI reading of the same bits is no rival
 SCAN_BELOW = 0.1          # ... where it scores no more than this over the declared one (fewer frames, less evidence)
+UNKNOWN_EVIDENCE = 16     # ... and against the unknown reading (frames of one length, nothing checked) these
 SYNC_PROTOCOLS = {"i2c", "spi", "rvswd", "swd", "mdio", "i2s", "jtag", "sync_unknown", "ps2", "sdmmc"}
 ASYNC_PROTOCOLS = {"uart", "lin", "dmx512", "can", "usb", "wiegand"}
 PULSE_PROTOCOLS = {"swio", "rgb_led", "onewire", "ir_nec", "dht", "swim", "cec", "usb_pd", "spdif", "dali", "dcc", "sent", "j1850"}
@@ -1520,8 +1528,14 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
     # unknown-sync only explains what no known protocol explains better: a
     # free-running clock "sampling" a known bus's pins must not win by pin count
     known = [n for n in roots if n.analyzer != "sync_unknown" and n.output is not None]
-    roots_pack = [n for n in roots if n.analyzer != "sync_unknown" or not any(
-        k.total >= n.total and set(k.roles.values()) & set(n.roles.values()) for k in known)]
+    # and a known protocol reading the very lines in frames whose fixed fields hold (PS/2's start, parity and stop:
+    # 9 frames of 11 bits, 27 bits checked) is that unknown bus with its structure, no rival to it however near
+    # (both held by the same pair's keeping: 2026-11-21, synth-protocols-187 at 0.884 beside 0.895)
+    sure = [k for k in known if k.metrics.get("bit_coverage", 0) >= SCAN_COVER
+            and k.metrics.get("evidence_bits", 0) >= UNKNOWN_EVIDENCE]
+    roots_pack = [n for n in roots if n.analyzer != "sync_unknown" or not (
+        any(k.total >= n.total and set(k.roles.values()) & set(n.roles.values()) for k in known)
+        or any(k.total >= n.total - SCAN_BELOW and set(k.roles.values()) == set(n.roles.values()) for k in sure))]
     # an SPI reading of the very bits a declared protocol of fixed fields reads (the same clock, edge and data lines:
     # MDIO's frames are 64 bits, 8 SPI words) is the same reading without its structure, no rival to it
     framed = [n for n in roots_pack if n.output is not None and n.metrics.get("bit_coverage", 0) >= SCAN_COVER

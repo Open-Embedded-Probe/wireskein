@@ -33,3 +33,19 @@ def test_scan_codes():
     (c,) = [c for c in ex["claims"] if c["verdict"] in ("confirmed", "likely")]
     assert c["protocol"] == "ps2" and c["roles"] == {"clk": "CLK", "data": "DATA"}
     assert [f["data"] for f in c["result"]["frames"]] == codes
+
+
+def test_a_few_scan_codes_beat_the_unknown_reading():
+    """Nine bytes (three keys): the same lines read as an unknown clocked bus of 11-bit frames scored a little above
+    PS/2, whose start, parity and stop hold in every frame (2026-11-21, synth-protocols-277)."""
+    rng = np.random.default_rng(9)
+    codes = []
+    for k in rng.integers(1, 0x84, 3).tolist():
+        codes += [k, 0xF0, k]
+    clk, dat = gen.Wave(1), gen.Wave(1)
+    f = float(rng.uniform(10e3, 16.7e3))
+    t = gen.ps2(clk, dat, 100e-6, bytes(codes), freq=f, gaps=[float(x) for x in rng.uniform(0.3e-3, 5e-3, 9)])
+    cap = gen.quantize({"CLK": clk, "DATA": dat}, 1e6, t + 1e-3, rng, jitter_s=0.1e-6)
+    ex = decode.export(decode.analyze(cap), cap)
+    (c,) = ex["claims"]
+    assert c["protocol"] == "ps2" and [f["data"] for f in c["result"]["frames"]] == codes
