@@ -90,6 +90,8 @@ def read_i2s(t: np.ndarray, ws: np.ndarray, sd: np.ndarray):
 
 TDM_SLOTS = (32, 24, 16, 8)   # slot widths tried in a TDM frame (one dividing it); 32 taken where no padding tells
 TDM_FRAME_MAX = 1024         # bits a TDM frame at most (16 slots of 64)
+TDM_DISTINCT = 4             # distinct slots, at least, for their padding to tell the slot and the word's place
+TDM_WORD_BITS = (8, 12, 16, 20, 24, 32)   # word lengths a TDM slot carries
 
 
 def _frame_starts(fs: np.ndarray):
@@ -149,7 +151,9 @@ def read_tdm(t: np.ndarray, fs: np.ndarray, sd: np.ndarray):
     if best is None:
         return None
     (pad, _, _, _), off, slot, s, rows, tail, head = best
-    assumed = pad == 0
+    # slots of a few values (a test pattern, silence) leave their own leading zeros "padding": no evidence
+    few = len(np.unique(rows.reshape(-1, slot), axis=0)) < TDM_DISTINCT
+    assumed = pad == 0 or few
     if assumed:
         # no padding tells the slot or the offset: 32 bits where the frame holds three or more, a bit after FS
         slot = 32 if frame % 32 == 0 and frame // 32 >= 3 else slot
@@ -160,7 +164,9 @@ def read_tdm(t: np.ndarray, fs: np.ndarray, sd: np.ndarray):
     n_slots = frame // slot
     cells = rows.reshape(len(s), n_slots, slot)
     right = head > tail
-    bits = max(1, slot - (head if right else tail))
+    # a word's length is one of the usual ones: padding of a bit or two is a test pattern's even values more often
+    # than a word of 15 bits
+    bits = min([b for b in TDM_WORD_BITS if b >= slot - (head if right else tail)] + [slot])
     cells = cells[:, :, slot - bits:] if right else cells[:, :, :bits]
     words = (cells.astype(np.int64) << np.arange(bits - 1, -1, -1)).sum(2)
     words = np.where(words >= 1 << (bits - 1), words - (1 << bits), words)
