@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) USB Power Delivery is read on a CC line (`usb_pd`): BMC at about 300 kb/s (a duty bias, highs shorter than lows from a threshold off the middle, taken out first), the preamble, 4b5b symbols, the ordered set (SOP / SOP' / SOP'' / resets), the header (message type named, roles, revision, ID), data objects, CRC32 and EOP. sigrok-dumps' 9 captures: every packet's CRC holding, as many as sigrok's.
+- (JA) USB Power Delivery を CC 線で読む（`usb_pd`）: 約 300 kb/s の BMC（しきい値のずれによる High と Low の偏りを先に戻す）、プリアンブル、4b5b の記号、オーダードセット（SOP / SOP' / SOP'' / リセット）、ヘッダ（メッセージの種類の名前、役割、版、ID）、データオブジェクト、CRC32、EOP。sigrok-dumps の 9 本: すべてのパケットの CRC が通り、数も sigrok と同じ。
 - (EN) HDMI CEC is read (`cec`): start bits (3.7 ms low), blocks of 8 data bits MSB first, EOM and ACK by pulse widths; the header's initiator and destination, the opcode and operands, each message acknowledged or not. sigrok-dumps' CEC: every message of the captures compared is sigrok's (120 and 31).
 - (JA) HDMI CEC を読む（`cec`）: スタートビット（Low 3.7 ms）、8 データビット（MSB から）、EOM、ACK をパルスの幅で。ヘッダの送り手と宛先、オペコードとオペランド、メッセージごとの ACK。sigrok-dumps の CEC: 比べた記録のすべてのメッセージが sigrok と同じ（120 と 31）。
 - (EN) SWIM (STM8's single wire debug) is read (`swim`): each bit a low pulse (short 1, long 0), frames of a start bit (host 0, target 1), 3 command or 8 data bits, even parity and the receiver's acknowledge; ROTF / WOTF with their count, 24-bit address and bytes. sigrok-dumps' 5 SWIM captures: confirmed, every frame's parity holding (sample1: 564 of sigrok's 568 frames).
