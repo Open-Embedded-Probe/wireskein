@@ -4,6 +4,7 @@
 name = "rvswd"
 input = "frames.gap"
 data_pins = 1
+clock_hz = [10000, 1000000000]   # SWCLK as the survey finds it: a LinkE's 80 kHz-1 MHz (an EM4100's 2 kHz line is none)
 
 [roles]
 clock = "clk"
