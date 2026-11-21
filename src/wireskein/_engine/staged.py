@@ -451,8 +451,20 @@ DMX_SLOT_ACTIVE = 9        # bits a slot is away from idle at most (its start bi
 DMX_CHAR_BITS = 10        # a slot read as a receiver does: start, 8 data bits, the first stop (a spike in the
                           # second, part of the mark between slots, is no framing error)
 DMX_SHORT_RUNS = 0.1      # runs shorter than half a bit at 250 kbaud, this share of a DMX512 line's at most
+DMX_SQUARE = 0.9          # share of each level's runs at one length (the same at both) for a square wave
 DMX_MIN_SLOTS = 8         # slots a packet, by the median, at least
 DMX_ONE_PACKET = 24       # slots a packet, at least, for one packet alone to count (a short capture holds one)
+
+
+def _square(hi: np.ndarray, lo: np.ndarray) -> bool:
+    """Runs (in bits) of a square wave: DMX_SQUARE of each level's within half a bit of its median, the two medians
+    within half a bit of each other. Runs shorter than half a bit (spikes, bounces) left out."""
+    hi, lo = hi[hi >= 0.5], lo[lo >= 0.5]
+    if len(hi) < 8 or len(lo) < 8:
+        return False
+    mh, ml = float(np.median(hi)), float(np.median(lo))
+    return (abs(mh - ml) < 0.5 and float(np.mean(np.abs(hi - mh) < 0.5)) >= DMX_SQUARE
+            and float(np.mean(np.abs(lo - ml) < 0.5)) >= DMX_SQUARE)
 
 
 def dmx_idles(cap, pin: str) -> list[int]:
@@ -613,6 +625,13 @@ class DmxPlugin:
             # DMX512 (the character reader takes any run of a character or more for a break: a DHT sensor's 50 us lows
             # read as slots of 0, every one framed)
             _, length, level = c.cap.channel(rb.pin).runs(c.cap.n_samples)
+            # a square wave between the breaks (every run at both levels one length: a clock's bursts, gen's
+            # burst_clock at 13.9 kHz is 9 bits a half period at 250 kbaud) reads as slots of 0 with a mark of 7 bits
+            # between; DMX512's slots of 0 are 9 bits low and their stops 2 high
+            inner_l, inner_v = length[1:-1] / u, level[1:-1]
+            keep = inner_l < DMX_BREAK_S * DMX_BAUD * 0.97
+            if _square(inner_l[keep & (inner_v == 1)], inner_l[keep & (inner_v == 0)]):
+                continue
             act = length[1:-1][level[1:-1] != rb.idle] / u
             between = int(np.sum((act > DMX_SLOT_ACTIVE + 0.5) & (act < DMX_BREAK_S * DMX_BAUD * 0.97)))
             ck["between"] = between

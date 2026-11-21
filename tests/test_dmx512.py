@@ -84,3 +84,20 @@ def test_packets_of_a_slot_are_no_dmx():
         t = gen.dmx(w, t, [bytes([0xFF])])
         t += 1e-3
     assert not any(c["protocol"] == "dmx512" for c in _claims({"DM": w}, t))
+
+
+def test_square_bursts_of_nine_bits_are_no_dmx():
+    """A clock's bursts at 13.9 kHz between long lows: half a period is 9 bits at 250 kbaud, so its lows read as
+    slots of 0 (start and eight 0s) with a mark between: a square wave, not DMX512's 9 low and 2 high."""
+    w = gen.Wave(1)
+    t, half = 30e-6, 0.5 / 13.9e3
+    for k in range(12):
+        w.set(t, 0)
+        t += 200e-6 + 37e-6 * k                       # a break
+        w.set(t, 1)
+        t += half
+        for _ in range(40):
+            w.set(t, 0)
+            w.set(t + half, 1)
+            t += 2 * half
+    assert not any(c["protocol"] == "dmx512" for c in _claims({"CLK": w}, t + 100e-6))
