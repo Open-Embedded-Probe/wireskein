@@ -448,7 +448,8 @@ DMX_RATE_TOL = 0.03       # DMX512's rate met within this
 DMX_BREAK_S = 88e-6       # a break at least this long (the standard's minimum for a transmitter)
 DMX_MIN_BITS = 3          # samples a bit at least for the rate given (a bit's middle to read)
 DMX_SLOT_ACTIVE = 9        # bits a slot is away from idle at most (its start bit and eight 0s)
-DMX_CHAR_BITS = 11        # a slot: start, 8 data bits, 2 stops
+DMX_CHAR_BITS = 10        # a slot read as a receiver does: start, 8 data bits, the first stop (a spike in the
+                          # second, part of the mark between slots, is no framing error)
 DMX_SHORT_RUNS = 0.1      # runs shorter than half a bit at 250 kbaud, this share of a DMX512 line's at most
 DMX_MIN_SLOTS = 8         # slots a packet, by the median, at least
 DMX_ONE_PACKET = 24       # slots a packet, at least, for one packet alone to count (a short capture holds one)
@@ -591,7 +592,7 @@ class DmxPlugin:
             if ch is None or len(ch.breaks) < 1:
                 continue
             if ch.bits != DMX_CHAR_BITS:
-                # a slot is 8 data bits and 2 stops: the shortest length the line's runs fit (a clock's burst of
+                # a slot is 8 data bits and its stop: the shortest length the line's runs fit (a clock's burst of
                 # lows 7 bits long fits 6 data bits, every slot 0) is no slot
                 ch = typed.chars(c.cap, typed.async_symbols_segment(c.cap, c.sv, rb.pin, s0, s1, u, rb.idle),
                                  DMX_CHAR_BITS)

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from .jtag import EVIDENCE_BITS, JTAG_SCANS, _value, scans, walk
+from .jtag import EVIDENCE_BITS, JTAG_CAPTURES, JTAG_SCANS, _value, scans, walk
 from .stack import Node, Stream
 
 ESC_DESELECT, ESC_SELECT, ESC_RESET = 4, 6, 8     # TMSC's toggles in one TCKC high: at least this many
@@ -106,10 +106,16 @@ class CjtagPlugin:
             same = sum(x == ir_len for x in ir)
             ok01 = sum(s["tdo"][:2] == [1, 0] for s in sc if s["type"] == "IR" and len(s["tdo"]) >= 2)
             n_osc = sum(oac == OAC_OSCAN1 for _, oac, _, _ in r["activations"])
+            if ok01 < JTAG_CAPTURES:
+                # as JTAG: without TDO's IR capture the walk explains little (another pair's start and stop
+                # conditions read as escapes: RVSWD's, its "activations" of every code)
+                continue
             # evidence in bits: an OAC of OScan1 after a selection escape (4), each IR capture's 1 0 (2), an IR
             # scan of the same length again (3)
             info = 4 * n_osc + 2 * ok01 + 3 * max(0, same - 1)
-            score = (1 - 0.5 ** (info / EVIDENCE_BITS)) * (1 - 0.5 ** (len(sc) / JTAG_SCANS))
+            # a probe activates OScan1 each time: activations of other codes are the line's own noise
+            share = n_osc / max(1, len(r["activations"]))
+            score = (1 - 0.5 ** (info / EVIDENCE_BITS)) * (1 - 0.5 ** (len(sc) / JTAG_SCANS)) * share
             items = [{"s": s["s"], "type": s["type"], "bits": len(s["tdi"]), "tdi": _value(s["tdi"]),
                       "tdo": _value(s["tdo"])} for s in sc]
             mets = {"scans": len(sc), "ir_scans": len(ir), "ir_bits": ir_len, "ir_same": same, "ir_capture_ok": ok01,
