@@ -13,6 +13,7 @@ TICK_S = (2.5e-6, 100e-6)
 NIBBLE = (11.5, 27.5)          # a nibble's ticks (12 to 27)
 EVIDENCE_BITS = 8
 SENT_TICK_TOL = 0.05       # a message's tick within this share of the median: the same sensor's
+SENT_MIN = 6               # messages checking, at least (a sensor sends on and on)
 SENT_GOOD = 0.8            # messages of one tick and length whose CRC holds, this share of all at least
 
 
@@ -86,7 +87,7 @@ class SentPlugin:
         mode = max(set(lens), key=lens.count)
         same = [m for m in msgs if abs(m["tick_s"] / tick - 1) < SENT_TICK_TOL and len(m["data"]) == mode]
         good = [m for m in same if m["ok"]]
-        if len(good) < 3 or len(good) < SENT_GOOD * len(msgs):
+        if len(good) < SENT_MIN or len(good) < SENT_GOOD * len(msgs):
             return []
         # evidence in bits: each message's CRC (4) and its sync of 56 ticks with nibbles in range (2)
         info = 6 * len(good)

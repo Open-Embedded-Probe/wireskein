@@ -12,6 +12,9 @@ from .stack import Node, Stream
 COMMANDS = {0: "SRST", 1: "ROTF", 2: "WOTF"}
 SWIM_GAP = 1.6            # a gap of this many bit times between pulses ends a frame
 SWIM_SHORT = 0.5          # a low shorter than this share of a bit: 1
+SWIM_SHORT_MAX = 0.35     # a 1's low at most this share of a bit (2 of 22 clocks, 2 of 10)
+SWIM_LONG_MIN = 0.65      # a 0's low at least (20 of 22, 8 of 10)
+SWIM_PACE = 0.15          # a frame's pulses within this share of a bit of its pace
 EVIDENCE_BITS = 8
 SWIM_GOOD = 0.8           # frames whose parity and acknowledge hold, this share of all at least
 
@@ -41,6 +44,12 @@ def frames(ch, n: int, rate: float) -> list[dict]:
     out = []
     for g in merged:
         if len(g) not in (6, 11):
+            continue
+        # a SWIM frame's pulses at its bit's pace, each low clearly short (2 of the 22 or 10 clocks) or long (20 of
+        # 22, 8 of 10): a frame of other pulses has some in between
+        sp = np.diff(s[g[:-1]]) / bit                     # (the acknowledge may come after a pause)
+        rel = w[g] / bit
+        if np.any(np.abs(sp - 1) > SWIM_PACE) or np.any((rel > SWIM_SHORT_MAX) & (rel < SWIM_LONG_MIN)):
             continue
         b = [int(w[i] < SWIM_SHORT * bit) for i in g]
         payload = b[1:-2]
@@ -95,6 +104,9 @@ class SwimPlugin:
         if len(good) < 3 or len(good) < SWIM_GOOD * len(fr):
             return []
         tr = transactions(fr)
+        # a host reads or writes: a ROTF / WOTF with its count and address
+        if not any("addr" in t and t["ok"] for t in tr):
+            return []
         # evidence in bits: each frame's parity and acknowledge (2), the frames' lengths (3 or 8 bits: 1)
         info = 3 * len(good)
         score = (len(good) / len(fr)) * (1 - 0.5 ** (info / EVIDENCE_BITS))

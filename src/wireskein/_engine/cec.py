@@ -11,7 +11,10 @@ from .stack import Node, Stream
 START_LOW = (3.5e-3, 3.9e-3)      # a start bit's low (3.7 ms nominal)
 BIT_SPLIT = 1.05e-3               # a data bit's low shorter than this: 1 (0.6 ms), longer: 0 (1.5 ms)
 BIT_LOW_MAX = 2.0e-3              # a data bit's low at most
-BIT_PERIOD_MAX = 5.0e-3           # a pulse this soon after the one before goes on the message (a start bit is 4.5 ms)
+LOW_1 = (0.4e-3, 0.8e-3)          # a 1's low (0.6 ms)
+LOW_0 = (1.3e-3, 1.7e-3)          # a 0's low (1.5 ms)
+BIT_GAP = (2.05e-3, 2.75e-3)      # a bit's start after the one before (2.4 ms)
+START_GAP = (4.3e-3, 4.7e-3)      # the first bit's start after the start bit's (4.5 ms)
 EVIDENCE_BITS = 8
 
 
@@ -28,8 +31,19 @@ def messages(ch, n: int, rate: float) -> list[dict]:
         msg = {"s": int(round(s[i] * rate)), "blocks": [], "acks": []}
         i += 1
         bits = []
-        while i < len(s) and w[i] < BIT_LOW_MAX and s[i] - s[i - 1] < BIT_PERIOD_MAX:
-            bits.append(int(w[i] < BIT_SPLIT))
+        first = True
+        while i < len(s):
+            # each bit as CEC times it: a low of 0.6 or 1.5 ms, 2.4 ms after the bit before (4.5 after the start)
+            gap = s[i] - s[i - 1]
+            if not ((START_GAP if first else BIT_GAP)[0] <= gap <= (START_GAP if first else BIT_GAP)[1]):
+                break
+            if LOW_1[0] <= w[i] <= LOW_1[1]:
+                bits.append(1)
+            elif LOW_0[0] <= w[i] <= LOW_0[1]:
+                bits.append(0)
+            else:
+                break
+            first = False
             i += 1
             if len(bits) == 10:
                 msg["blocks"].append(int("".join(map(str, bits[:8])), 2))
