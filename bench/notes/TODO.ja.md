@@ -118,3 +118,12 @@
 - リリース: v0.0.29 で spi(mode=...) の直しを出した。その退行（区間が選択の途中から始まると KeyError: 'cpol'）を dc4f94a で直した。v0.0.31 で出して [core] に知らせた。
 - `real-ebdd`（確認用）は何度も結果を見たので価値が下がっている（data-requests §0）。新しい確認用は ebdd-50m-holdout、
   linke の holdout で足りるか。
+
+- 2026-11-21 CI bbc22ff の調べ（後退に見えた件の多くは、段 1 でおとりを切ってデータが変わったため。0fa1965 でも同じ結果）:
+  - 直した: v203 erase_all の見落とし（survey の混み具合を普通の長さの周期だけで）、uartlike-30 spike（sync_unknown に従い方を掛ける）、
+    nack-99 spike の rgb_led の誤確定（エイリアスのクロック: 少ない方のビットを読んだフレームで数える）、mixed-156 bounce と rate-51 pbounce の
+    MISO を UART と読む誤り（バウンスを除いた見方で従い方を測る）。
+  - 残り: nack-17 odslow:4000 で I2C の SDA を UART と誤った有力（412 kHz に 4 µs の立ち上がり、SCL が崩れる。SDA だけでは UART と見分けにくい）。
+    mixed-138 bounce:0.5 と nack-32 bounce:0.1（1 MS/s）の I2C は、読みがもともと弱い（ノイズの強さと低いサンプルレート）。
+  - 速さ: x_read_flash_64k の 30 % で 41 → 30 秒。残りの大きいもの: UART のレートの試し（_async_at、約 10 秒）、宣言のプラグイン（約 5 秒）、
+    RVSWD の線での CAN FD の試し（約 3 秒、底の候補を 2 つにしてから倍）。

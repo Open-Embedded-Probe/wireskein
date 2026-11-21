@@ -3,6 +3,8 @@
 ## Unreleased
 - (EN) Fixed: a CAN line of mostly classic frames with a few FD ones was not read (its runs gave a bit time between the two rates, 1.25 nominal bits): the shortest runs (an FD data phase's bit) are a base for the nominal bit time too.
 - (JA) 直した: 古典の CAN のフレームが多く FD のフレームが少しの線を読めなかった（Run から出したビットの時間が 2 つの速さの間、公称の 1.25 ビットになった）。いちばん短い Run（FD のデータ相の 1 ビット）も公称のビットの時間の元にする。
+- (EN) Fixed: under bounces an SPI's MISO, read through them as characters at the SPI's clock rate, was claimed as a UART: how a line keeps to a clock is measured again with pulses under a quarter of the UART's bit taken out of both (a bounce at each change had taken the keeping from 0.99 to 0.14).
+- (JA) 直した: バウンスが乗ると、SPI の MISO を、SPI のクロックの速さの文字と読んで UART と主張していた: 線がクロックに従うかを、UART の 1 ビットの 4 分の 1 より短いパルスを両方の線から除いた見方でも測る（変化ごとのバウンスで、従い方が 0.99 から 0.14 に落ちていた）。
 - (EN) Faster on long captures (a 64 KiB read's 551k changes: 41 -> 30 s), the results the same: unit candidates computed over the distinct run lengths weighed by their counts; SD's CRC7 of every window in one convolution (seven sums in digits of one integer); numpy's hashing np.unique and np.isin replaced where the input is sorted (a sort, a binary search).
 - (JA) 長い記録で速く（64 KiB の読み出しの 55 万の変化: 41 → 30 秒）、結果は同じ: ビットの単位の候補を、Run の長さの種類ごとに数で重みを付けて計算する。SD の全部の窓の CRC7 を 1 回の畳み込みで（7 つの和を 1 つの整数の桁に）。整列済みの入力では、numpy のハッシュの np.unique と np.isin を、並べ替えと二分探索に置き換える。
 - (EN) Fixed: an LED string's "both kinds of bit" was counted over every high, pieces of a few bits included: a fast clock taken too slowly (12 MHz at 10 MS/s) with spikes had 14 % of its highs of the other kind but 3 % of the frames' bits, and was confirmed as an LED string. It is counted in the frames read.

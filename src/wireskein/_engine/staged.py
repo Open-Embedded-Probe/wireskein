@@ -269,6 +269,7 @@ UART_PACED = 0.5          # ... at a character length three divides: a line of p
 UART_FRAMED = 0.35        # LIN / DMX512 framing past this share of the break-framed blocks counts against a plain UART
 
 
+UART_BOUNCED_PAIR = 0.3   # a clock's keeping of the line, as it is, this at least to look again with bounces out
 UART_CEC = 0.5            # a line's low pulses inside CEC's messages past this share: no UART's (full at all)
 USB_SE0_MIN = 3           # both lines of a pair low this many times, each 1-4 bits ...
 USB_OPPOSITE = 0.9        # ... the two lines opposite this share of the time otherwise ...
@@ -396,6 +397,17 @@ class UartPlugin:
         sync = max((kept(k, r) * c.sv.clocks[k].clock_score for (k, o), r in c.sv.pairs.items()
                     if o == rb.pin and k != rb.pin and k in c.sv.clocks
                     and (c.sv.clocks[k].period or 0) >= SYNC_MIN_PERIOD), default=0.0)
+        # and as it is with bounces taken out of both lines (pulses under a quarter of the UART's bit): a bounce at
+        # each change of an SPI's MISO and clock takes its keeping from 0.99 to 0.14, and the line, read through the
+        # same bounces as characters at the SPI's rate, would be a UART (2026-11-21, synth-mixed-156 with bounces)
+        k_b = int(u_main / 4)
+        if sync < UART_SYNC + 0.3 and k_b >= 2:
+            for (k, o), r in c.sv.pairs.items():
+                if o != rb.pin or k == rb.pin or k not in c.sv.clocks or r.data_score < UART_BOUNCED_PAIR:
+                    continue
+                rd = survey_mod.despiked_relation(c.cap, k, rb.pin, k_b)
+                if rd is not None:
+                    sync = max(sync, rd[0].data_score * rd[1].clock_score)
         m["sync_with_clock"] = sync
         # a pin whose active windows each hold a clock's burst tightly is that bus's select, not a UART (a CS's low
         # windows read as characters); a UART's lows meet another bus's bursts only by chance, never snugly

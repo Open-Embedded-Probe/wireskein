@@ -202,6 +202,19 @@ def gated_view(cap: Capture, clk: ClockInfo, w: float = GATE) -> tuple[Capture, 
     return (view, vci) if vci is not None else (cap, clk)
 
 
+def despiked_relation(cap: Capture, clk_name: str, other: str, k: int) -> tuple[PairRelation, ClockInfo] | None:
+    """The relation of a clock and a line with both lines' pulses shorter than k samples taken out (bounces at their
+    edges), and the clock there: how the line keeps to the clock under that noise. None where it is no clock there."""
+    from .features import channel_features
+    chans = [replace(x, edges=V.pulses_out(x.edges, k)) if x.name in (clk_name, other) else x for x in cap.channels]
+    view = replace(cap, channels=chans)
+    vch = view.channel(clk_name)
+    if len(vch.edges) < 8:
+        return None
+    vci = clock_info(view, channel_features(view, vch))
+    return (pair_relation(view, vci, other), vci) if vci is not None else None
+
+
 DATA_PER_PERIOD = 4        # a data line's changes in one clock period at most (its change, spikes): more, another bus's
 
 
