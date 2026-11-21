@@ -54,6 +54,7 @@ def _square_words(frames: list[dict], bits: int) -> float:
     return 1.0 if share <= 0.9 else max(0.05, 1 - (share - 0.9) / 0.1)
 
 
+I2S_MIN_WORD = 8          # audio words this many bits at least (8-bit PCM and up)
 I2S_OTHER_CLOCK = 0.1     # a share off for each line whose changes meet another clock's edges, not this one's
 
 
@@ -231,6 +232,8 @@ class I2sPlugin:
                 if r is None:
                     continue
                 frames, m, params = r
+                if (params.get("word_bits") or m.get("bits") or 0) < I2S_MIN_WORD:
+                    continue          # a word of a bit or two: three free clocks of related rates, no audio (spivar-19)
                 pair = float(c.sv.pairs[(sb.clock, d)].data_score)
                 q = 1 - 0.5 ** (m["slots"] / I2S_SLOTS)
                 # words all 0s or all 1s, both kinds (another bus's WS, a square wave in step with the frame, read as

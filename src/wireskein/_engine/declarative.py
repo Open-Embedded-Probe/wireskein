@@ -708,8 +708,10 @@ class DeclarativePlugin:
             # (windows shorter than a clock period holding none are the line's bounces or spikes, not selections)
             ck = c.sv.clocks.get(sb.clock)
             real = held | (ln >= (ck.period if ck is not None and ck.period else 0))
+            # (the level whose windows hold the clock the most often: the active one; crosstalk's pulses cut the idle
+            # level into hundreds of windows, a few of them reaching into transfers: 2026-11-21, protomix-14 xtalk)
             best = max(((int(held[lv == L].sum()), int(((lv == L) & real).sum())) for L in (0, 1)),
-                       key=lambda x: x[0])
+                       key=lambda x: (x[0] / max(1, x[1]), x[0]))
             used, windows = best
             if windows >= SELECT_WINDOWS_MIN and used < SELECT_USED * windows:
                 score *= used / (SELECT_USED * windows)
