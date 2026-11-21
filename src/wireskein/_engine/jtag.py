@@ -113,9 +113,11 @@ class JtagPlugin:
             ok01, n_ir = ir_tdo[tdo] if tdo is not None else (0, len(ir))
             # evidence in bits: the IR capture's 1 0 on TDO (2 a scan), an IR scan of the same length again (log2 of
             # the lengths it might have been, 3); the lines' changes kept to the shift states weigh it
-            info = 2 * ok01 + 3 * max(0, same - 1)
             lines = [conc[i] for i in (tdi, tdo) if i is not None]
             kept = float(np.clip(min(lines) / JTAG_IN_SHIFT, 0, 1)) if lines else 0.0
+            # and TDI's / TDO's changes kept to the shift states the walk gives (a line of another bus changes in the
+            # others too): 1 a scan
+            info = 2 * ok01 + 3 * max(0, same - 1) + len(sc) * kept
             known = float((st >= 0).mean())
             score = (1 - 0.5 ** (info / EVIDENCE_BITS)) * kept * (1 - 0.5 ** (len(sc) / JTAG_SCANS)) * (0.5 + 0.5 * clk)
             roles = {"tck": sb.clock, "tms": sb.data[mi]}

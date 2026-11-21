@@ -166,3 +166,21 @@ def test_classic_alone_is_the_declared_reading():
         ln.classic(int(rng.integers(0, 0x7FF)), bytes(rng.integers(0, 256, 6).tolist()))
     (c,) = _claims(ln.capture())
     assert c["protocol"] == "can" and not c["params"].get("fd")
+
+
+def test_few_fd_frames_among_classic_ones():
+    """Six classic frames and two FD ones (the data phase at 4x): the line's bit time from its runs fell between the
+    rates (1.25 nominal bits) and nothing was read (2026-11-21, synth-protocols-35)."""
+    from wireskein._engine import gen
+    frames = [{"id": 47, "fd": False, "data": [0x18, 0x57, 0x74, 0x54]},
+              {"id": 1372, "fd": False, "data": list(bytes.fromhex("d07ffabf5ba900e0"))},
+              {"id": 813, "fd": True, "brs": True, "data": []},
+              {"id": 182554820, "fd": True, "brs": True, "data": list(bytes.fromhex("6832dabf42a2f7"))},
+              {"id": 159, "fd": False, "data": [0xCA]}, {"id": 1537, "fd": False, "data": [0x1C]},
+              {"id": 233, "fd": False, "data": [0xAE, 0x46]}, {"id": 1238, "fd": False, "data": []}]
+    w = gen.Wave(1)
+    t = gen.can_fd(w, 100e-6, frames, 250e3, 1e6)
+    cap = gen.quantize({"CAN": w}, 40e6, t + 200e-6, np.random.default_rng(0))
+    (c,) = _claims(cap)
+    assert c["protocol"] == "can"
+    assert [(f["id"], f["data"]) for f in c["result"]["frames"]] == [(f["id"], bytes(f["data"]).hex()) for f in frames]

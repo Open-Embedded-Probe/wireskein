@@ -202,6 +202,9 @@ def gated_view(cap: Capture, clk: ClockInfo, w: float = GATE) -> tuple[Capture, 
     return (view, vci) if vci is not None else (cap, clk)
 
 
+DATA_PER_PERIOD = 4        # a data line's changes in one clock period at most (its change, spikes): more, another bus's
+
+
 def pair_relation(cap: Capture, clk: ClockInfo, other: str) -> PairRelation:
     c, d = cap.channel(clk.name), cap.channel(other)
     de = d.edges
@@ -218,6 +221,14 @@ def pair_relation(cap: Capture, clk: ClockInfo, other: str) -> PairRelation:
     # phase inside the surrounding clock interval (frequency independent)
     pr = K.relative_phase_concentration(di, rise) if len(di) >= 2 and len(rise) > 2 else 0.0
     pf = K.relative_phase_concentration(di, fall) if len(di) >= 2 and len(fall) > 2 else 0.0
+    # a data line changes about once a clock period (a spike adds two): changes crowded in one period are another,
+    # faster bus's (an SWD packet at 10 MHz inside a PS/2 clock's 80 us: its edges all at about one phase of it,
+    # concentrated by that alone, 2026-11-21 synth-protomix-12)
+    if len(di) and len(rise) > 2:
+        per = np.bincount(np.searchsorted(rise, di))
+        crowded = float(per[per > DATA_PER_PERIOD].sum()) / len(di)
+        pr *= 1 - crowded
+        pf *= 1 - crowded
     dist, _ = K.nearest_distance(de, c.edges)
     coincide = float(np.mean(dist <= max(c.step, d.step)))   # within one sample of the coarser line
     # CS-like: every burst lies between two edges of `other`, with none inside it,

@@ -263,6 +263,7 @@ UART_PACED = 0.5          # ... at a character length three divides: a line of p
 UART_FRAMED = 0.35        # LIN / DMX512 framing past this share of the break-framed blocks counts against a plain UART
 
 
+UART_CEC = 0.5            # a line's low pulses inside CEC's messages past this share: no UART's (full at all)
 USB_SE0_MIN = 3           # both lines of a pair low this many times, each 1-4 bits ...
 USB_OPPOSITE = 0.9        # ... the two lines opposite this share of the time otherwise ...
 USB_TOGETHER = 0.8        # ... and this share of the line's changes within a sample of the other's: a USB pair
@@ -444,6 +445,13 @@ class UartPlugin:
         m["usb_se0"] = se0
         if se0 >= USB_SE0_MIN:
             score = 0.0
+        # an HDMI CEC line reads as characters too (each of its bits, a low of 0.6 or 1.5 ms every 2.4 ms, a 6-bit
+        # character of about 2000 baud: 2026-11-21, synth-protomix-53 at 0.997): where CEC's messages, start bits
+        # and all, hold the line's pulses, those are no UART's
+        if rb.idle == 1 and 1500 < c.cap.rate / u_main < 3000:
+            from . import cec
+            m["cec"] = cec.covered(c.cap.channel(rb.pin), c.cap.n_samples, float(c.cap.rate))
+            score *= 1 - float(np.clip((m["cec"] - UART_CEC) / (1 - UART_CEC), 0, 1))
         params = {"baud": c.cap.rate / u_main, "idle": rb.idle, "L": m["L"], "blocks": len(units)}
         if parity:
             params.update(parity=parity[0], data_bits=parity[1])

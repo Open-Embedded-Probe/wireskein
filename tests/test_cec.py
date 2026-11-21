@@ -37,3 +37,15 @@ def test_messages():
     got = [[m["initiator"] << 4 | m["destination"]] + ([m["opcode"]] if "opcode" in m else [])
            + list(bytes.fromhex(m.get("data", ""))) for m in c["result"]["messages"]]
     assert got == msgs and all(m["acked"] and m["complete"] for m in c["result"]["messages"])
+
+
+def test_short_traffic_is_no_uart():
+    """Four short messages (a poll among them): read as a UART each bit is a 6-bit character of about 2000 baud;
+    CEC's start bits and timing tell (2026-11-21, synth-protocols-54)."""
+    msgs = [[0x34, 0x81], [0x1F, 0xC2], [0x15, 0x4D], [0xA4]]
+    w = gen.Wave(1)
+    t = gen.cec(w, 0.4e-3, msgs)
+    cap = gen.quantize({"CEC": w}, 1e6, t + 1e-3, np.random.default_rng(1))
+    ex = decode.export(decode.analyze(cap), cap)
+    (c,) = [c for c in ex["claims"] if c["verdict"] in ("confirmed", "likely")]
+    assert c["protocol"] == "cec" and c["verdict"] == "confirmed"

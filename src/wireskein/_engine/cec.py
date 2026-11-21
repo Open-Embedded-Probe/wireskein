@@ -71,6 +71,22 @@ def messages(ch, n: int, rate: float) -> list[dict]:
     return out
 
 
+def covered(ch, n: int, rate: float) -> float:
+    """The share of the line's low pulses inside complete CEC messages (0 where it has no start bit's low)."""
+    st, length, level = ch.runs(n)
+    lows = length[level == 0] / rate
+    if not np.any((lows >= START_LOW[0]) & (lows <= START_LOW[1])):
+        return 0.0
+    msgs = [m for m in messages(ch, n, rate) if m["complete"]]
+    if not msgs:
+        return 0.0
+    s = st[level == 0]
+    inside = np.zeros(len(s), bool)
+    for m in msgs:
+        inside |= (s >= m["s"]) & (s < m["e"])
+    return float(inside.mean())
+
+
 class CecPlugin:
     """HDMI CEC on one line."""
     name = "cec"

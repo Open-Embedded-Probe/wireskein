@@ -3,6 +3,12 @@
 ## Unreleased
 - (EN) Fixed: a CAN line of mostly classic frames with a few FD ones was not read (its runs gave a bit time between the two rates, 1.25 nominal bits): the shortest runs (an FD data phase's bit) are a base for the nominal bit time too.
 - (JA) 直した: 古典の CAN のフレームが多く FD のフレームが少しの線を読めなかった（Run から出したビットの時間が 2 つの速さの間、公称の 1.25 ビットになった）。いちばん短い Run（FD のデータ相の 1 ビット）も公称のビットの時間の元にする。
+- (EN) Fixed: a slow clock took another, faster bus's lines as its data where that bus's few packets fell inside one of its periods (their edges all at about one phase of it): a line's changes crowded more than four in one clock period are no data of that clock. A PS/2 keyboard's clock had grouped an SWD probe's two lines with its own and neither bus was read.
+- (JA) 直した: 遅いクロックが、別の速いバスの線を、そのバスの少ないパケットが自分の 1 周期の中に入るとき（エッジがみな同じくらいの位相になる）自分のデータとしていた: 1 周期に 4 回より多く変わる線は、そのクロックのデータにしない。PS/2 のキーボードのクロックが SWD のプローブの 2 本を自分の線とまとめ、どちらのバスも読めていなかった。
+- (EN) JTAG's evidence counts TDI's and TDO's changes kept to the shift states (1 bit a scan): a short session (8 scans) lost to the unknown clocked reading of the same lines.
+- (JA) JTAG の根拠に、TDI と TDO の変化がシフトの状態に収まること（スキャン 1 つに 1 ビット）を数える: 短いセッション（スキャン 8 つ）が、同じ線の「不明な同期のバス」の読みに負けていた。
+- (EN) A UART reading of an HDMI CEC line (each CEC bit a 6-bit character of about 2000 baud) yields where CEC's complete messages hold the line's pulses.
+- (JA) HDMI CEC の線を UART と読んだもの（CEC の 1 ビットを約 2000 ボーの 6 ビットの文字に）は、CEC の完結したメッセージが線のパルスを覆うとき退く。
 - (EN) HDMI CEC's evidence counts each block's bits in CEC's timing windows and its ACK as the destination asks: a UART reading of the same line (each bit a 6-bit character) took short traffic from it.
 - (JA) HDMI CEC の根拠に、ブロックのビットが CEC のタイミングの窓に入ることと、宛先どおりの ACK を数える: 同じ線を UART と読んだもの（1 ビットを 6 ビットの文字 1 つに）に、短い通信を取られていた。
 - (EN) Fixed: `--hint` took JSON only, and a protocol's name alone (`--hint rvswd`) ended in a traceback. Names alone are taken now (`rvswd`, `uart,spi`: `{"protocols": [...]}`), and JSON that does not parse says so.
