@@ -224,8 +224,15 @@ def pair_relation(cap: Capture, clk: ClockInfo, other: str) -> PairRelation:
     # a data line changes about once a clock period (a spike adds two): changes crowded in one period are another,
     # faster bus's (an SWD packet at 10 MHz inside a PS/2 clock's 80 us: its edges all at about one phase of it,
     # concentrated by that alone, 2026-11-21 synth-protomix-12)
+    # Only in periods of the clock's own length: one held long (RVSWD's start and stop, DIO moving while CLK
+    # stays high; a wait) holds several changes of its own data
     if len(di) and len(rise) > 2:
-        per = np.bincount(np.searchsorted(rise, di))
+        j = np.searchsorted(rise, di)
+        per_len = np.diff(rise)
+        ok = (j > 0) & (j < len(rise))
+        jj = j[ok]
+        normal = per_len[jj - 1] <= 2 * float(np.median(per_len))
+        per = np.bincount(jj[normal], minlength=len(rise) + 1)
         crowded = float(per[per > DATA_PER_PERIOD].sum()) / len(di)
         pr *= 1 - crowded
         pf *= 1 - crowded

@@ -3,6 +3,8 @@
 ## Unreleased
 - (EN) Fixed: a CAN line of mostly classic frames with a few FD ones was not read (its runs gave a bit time between the two rates, 1.25 nominal bits): the shortest runs (an FD data phase's bit) are a base for the nominal bit time too.
 - (JA) 直した: 古典の CAN のフレームが多く FD のフレームが少しの線を読めなかった（Run から出したビットの時間が 2 つの速さの間、公称の 1.25 ビットになった）。いちばん短い Run（FD のデータ相の 1 ビット）も公称のビットの時間の元にする。
+- (EN) Fixed (in this release's own change): a line's changes crowded in one clock period are counted only in periods of the clock's own length; RVSWD's DIO moves several times while SWCLK is held (start, stop, waits) and the V203's erase_all was missed.
+- (JA) 直した（このリリースの中の変更で）: 1 周期に混む変化は、クロックの普通の長さの周期の中だけで数える。RVSWD の DIO は SWCLK が止まっている間に何度も動き（START、STOP、待ち）、V203 の erase_all を見落としていた。
 - (EN) Fixed: a slow clock took another, faster bus's lines as its data where that bus's few packets fell inside one of its periods (their edges all at about one phase of it): a line's changes crowded more than four in one clock period are no data of that clock. A PS/2 keyboard's clock had grouped an SWD probe's two lines with its own and neither bus was read.
 - (JA) 直した: 遅いクロックが、別の速いバスの線を、そのバスの少ないパケットが自分の 1 周期の中に入るとき（エッジがみな同じくらいの位相になる）自分のデータとしていた: 1 周期に 4 回より多く変わる線は、そのクロックのデータにしない。PS/2 のキーボードのクロックが SWD のプローブの 2 本を自分の線とまとめ、どちらのバスも読めていなかった。
 - (EN) JTAG's evidence counts TDI's and TDO's changes kept to the shift states (1 bit a scan): a short session (8 scans) lost to the unknown clocked reading of the same lines.

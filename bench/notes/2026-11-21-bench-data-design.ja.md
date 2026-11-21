@@ -74,7 +74,11 @@ holdout は protocols、mixed、robust、rate、real を、別の種・別の操
      - 短い JTAG（スキャン 8 つ）が sync_unknown に負ける（protomix-1）→ TDI / TDO の変化がシフトに収まることを根拠に。
      - JTAG の最後のスキャンを、Update に入った直後で記録が終わると落とす → Update に入る辺で閉じる。
      - 全件（protocols 360、protomix 120）で残った件: PS/2 が sync_unknown に負ける（既知の読みの欄が通れば不明は退く）、おとりのクロックを 330 kbaud の LIN と読む（LIN の上限）。どちらも直した。
-3. **LinkE の組を分ける**: 長い操作は real（そのまま 1 回）と scale に、間引きの段は短い操作だけに。26 日の長い記録の決まり（long_edges）は、これで要らなくなる。
+3. **LinkE の組を分ける**（済み、2026-11-21）:
+   - `linke-l103-real`、`v003-real`、`v203-real`（と holdout）: すべての操作をそのまま 1 回（Q4）。長い操作（4 KiB の書き込み、64 KiB の読み出し）も、その長さが操作のものなのでここで。
+   - `*-core`（と holdout）: 30 万エッジ以下の操作だけを間引きの段で（Q3）。「そのまま」は real と重なるので外した。長い操作は `long_transforms = []` でどの段でも回さない。
+   - 合成の組の long_edges は外した（段 1 のおとりの上限のあと、CI bbc22ff で省かれたのは LinkE だけ）。
+   - 残り: cost-real（LinkE の全部を間引き 4 で）は、段 5 の scale に置き換える。x_read_flash_64k は、そのままでも 59 秒かかる（時間切れの際）。
 4. **変換を問いごとにする**: noise の直積をやめ、robust に、件ごとの変換を書く。
 5. **scale を作る**: 長さの段を決めて、時間の伸び方を見る組にする。cost-real の役（gate）はこちらに移す。
 
