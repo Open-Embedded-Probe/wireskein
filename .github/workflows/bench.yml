@@ -36,7 +36,7 @@ on:
         type: boolean
         default: true
       gate:
-        description: "First run the cost-real suite with a time limit and leave out the algorithms that time out, or are far slower than the main one, or grow faster with the data (bench/gate.py)"
+        description: "First run the scale suite with a time limit and leave out the algorithms that time out, or are far slower than the main one, or grow faster with the data (bench/gate.py)"
         type: boolean
         default: true
       timeout:
@@ -94,11 +94,11 @@ jobs:
           # wireskein, the check of a commit on main) needs no cost run, which took 22 minutes before the shards
           rc=0
           uv run --python 3.13 --with-requirements bench/requirements.txt python bench/run.py "${args[@]}" \
-            --suite cost-real --status "$STATUS" --has-trials || rc=$?
+            --suite scale --status "$STATUS" --has-trials || rc=$?
           if [ "$rc" -gt 1 ]; then exit "$rc"; fi
           if [ "$rc" -eq 0 ]; then
             uv run --python 3.13 --with-requirements bench/requirements.txt python bench/run.py "${args[@]}" \
-              --suite cost-real --status "$STATUS" --timeout 120 --note "gate" -j "$(nproc)"
+              --suite scale --status "$STATUS" --timeout 120 --note "gate" -j "$(nproc)"
             uv run --python 3.13 --with-requirements bench/requirements.txt python bench/gate.py --out skip.json
           else
             echo '{"run": null, "skip": [], "why": {}}' > skip.json

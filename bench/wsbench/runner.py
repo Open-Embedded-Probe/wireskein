@@ -146,8 +146,11 @@ def _work(job):
         case = data.load_case(path, source, chain)
     except Exception as e:  # noqa: BLE001 - a case that cannot be made is reported, the run goes on
         return {"case": str(path).rsplit("/", 1)[-1], "source": source, "chain": chain, "error": f"load: {type(e).__name__}: {e}"}
-    if long and case.orig_edges > long[0] and chain not in long[1]:
+    if long and long[0] is not None and case.orig_edges > long[0] and chain not in long[1]:
         return {"case": case.id, "dataset": case.dataset, "results": [], "skipped": "long",
+                "edges": case.orig_edges, "from": [str(path).replace(str(data.REPO) + "/", ""), source, chain]}
+    if long and len(long) > 2 and long[2] and case.orig_edges < long[2]:
+        return {"case": case.id, "dataset": case.dataset, "results": [], "skipped": "short",
                 "edges": case.orig_edges, "from": [str(path).replace(str(data.REPO) + "/", ""), source, chain]}
     out = {"case": case.id, "dataset": case.dataset, "input_sha": case.input_sha, "results": [],
            "from": [str(path).replace(str(data.REPO) + "/", ""), source, chain],   # within the repository: no local path
@@ -215,7 +218,9 @@ def plan_work(stage_names: list[str], algos_by_stage: dict[str, list], dsets: li
         d = defs.get(suite, {})
         # a suite's long captures (more changes than long_edges) run on its long_transforms only: the rest of its
         # transforms would spend minutes a case on the same operations again
-        long = (int(d["long_edges"]), list(d.get("long_transforms", [""]))) if "long_edges" in d else None
+        # and its short ones (fewer than min_edges: the scale suite's crops of long operations) none
+        long = ((int(d["long_edges"]) if "long_edges" in d else None, list(d.get("long_transforms", [""])),
+                 int(d.get("min_edges", 0))) if "long_edges" in d or "min_edges" in d else None)
         refs = data.source_items(src)
         # a cycle: transforms asking one question at several strengths (spikes at 2, 10, 30 %) run one to a case, by
         # turns over the cases (a fixed pick by the case's name): the suite covers every strength, not every case at

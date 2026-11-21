@@ -1,7 +1,7 @@
-"""Which algorithms to leave out of a run, from a cost run before it (the cost-real suite, with a time limit): the
+"""Which algorithms to leave out of a run, from a cost run before it (the scale suite, with a time limit): the
 ledger's lines of that run, read with what cost.summarize already gives.
 
-    uv run python bench/run.py --stage all --suite cost-real --timeout 120     # adds a run to the ledger
+    uv run python bench/run.py --stage all --suite scale --timeout 120     # adds a run to the ledger
     uv run python bench/gate.py --out skip.json                                 # its last run
     uv run python bench/run.py --stage all --suite all --skip-from skip.json
 

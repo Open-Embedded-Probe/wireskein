@@ -2,7 +2,7 @@
 # A suite is changed where that makes its data mean more (a case too long to tell anything new, too short to hold a
 # frame): what the data shows matters, not that the ledger's numbers stay comparable (a run's bench_sha tells which
 # definitions it ran). long_edges / long_transforms: captures with more changes than long_edges run on long_transforms
-# only. in_all = false keeps a suite out of "all" / "tune" (run it by name).
+# only; min_edges: captures with fewer changes do not run. in_all = false keeps a suite out of "all" / "tune" (run it by name).
 # cycle = [[...], ...]: transforms asking one question at several strengths run one to a case, by turns over the cases
 # (fixed by the case's name): the suite covers every strength, not every case at each.
 # trials_in_all = false: in a run of "all" / "tune" only the main algorithms run on it (the trials there are about other
@@ -165,12 +165,13 @@ about = "the same, the cases set aside (all their bus rates)"
 sources = ["ebdd:embedbench-device-data-50m/holdout"]
 transforms = ["", "decimate:2", "decimate:5", "decimate:10", "decimate:25"]
 
-[suite.cost-real]
+[suite.scale]
 trials_in_all = false
 role = "tune"
-about = "costs on real captures of spread sizes (a few changes to millions): the LinkE -> CH32L103 operations taken down 4 times (40 MS/s: ringing kept, the 64 KiB read 1.8 M changes) and the ENV III I2C at 50 MS/s, the tuning halves. Run before a run with a time limit (Bench workflow's gate): an algorithm that times out, or is far slower than the main one or grows faster with the data, is left out of the run (bench/gate.py)"
-sources = ["linke:l103-linke-2026-11-17/tune", "ebdd:embedbench-device-data-50m/tune"]
-transforms = ["decimate:4"]
+about = "Q5: how the analysis' time grows with the capture's length: the LinkE runs' long operations (more than 300k changes: 4 KiB writes, 16 / 20 / 64 KiB reads, the tuning halves of the three chips), from their start, 1, 3, 10 and 30 % of them (some 10k to 650k changes; whole, they are the *-real suites'). Run before a run with a time limit (Bench workflow's gate): an algorithm that times out, or is far slower than the main one or grows faster with the data, is left out of the run (bench/gate.py)"
+sources = ["linke:l103-linke-2026-11-17/tune", "linke:v003-linke-2026-11-17/tune", "linke:v203-linke-2026-11-17/tune"]
+transforms = ["crop:0:0.01", "crop:0:0.03", "crop:0:0.1", "crop:0:0.3"]
+min_edges = 300000          # the long operations only: a short one cropped holds little
 
 [suite.linke-l103-real]
 trials_in_all = false
