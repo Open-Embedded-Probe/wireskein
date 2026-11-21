@@ -514,6 +514,7 @@ class LinPlugin:
         return out[:1]
 
 
+CAN_FD_GIVE_UP = 8        # errors with no frame read, at a nominal rate tried, before the next (a line of no CAN)
 CAN_FD_CHECK_BITS = 4     # a CAN FD frame's stuff count (three bits Gray-coded and a parity) checked, beside its CRC
 
 
@@ -534,7 +535,7 @@ class CanFdPlugin:
         # nominal one is a whole multiple of it, tried in turn; a line read as classic CAN at the first is no FD's
         for m in canbus.FD_RATIOS:
             u = canbus.bit_time(ch, u0 * m, nb.idle) or u0 * m
-            r = canbus.read(ch, c.cap.n_samples, u, nb.idle, fd_ratios=canbus.FD_RATIOS)
+            r = canbus.read(ch, c.cap.n_samples, u, nb.idle, fd_ratios=canbus.FD_RATIOS, give_up=CAN_FD_GIVE_UP)
             frames = r["frames"]
             if any(f.get("fd") for f in frames):
                 break

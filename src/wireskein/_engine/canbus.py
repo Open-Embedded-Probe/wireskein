@@ -66,7 +66,7 @@ class _Cut(Exception):
 
 
 def _read_frame(line: _Line, sof: int, u: float, sp: float, n: int, fd_ratio: float | None = None,
-                sp_data: float = 0.75, boundary_stuff: bool = False) -> tuple[dict, float]:
+                sp_data: float = 0.75, boundary_stuff: bool = False, seen: dict | None = None) -> tuple[dict, float]:
     """One frame from its start of frame: (the frame, the tick its end of frame ends). fd_ratio: CAN FD's frames are
     read too (FDF recessive), their data phase (BRS recessive) at u / fd_ratio with its sample point at sp_data;
     None: the bit after IDE (RTR in an extended frame) is r0 / r1 whatever its value (classic CAN alone)."""
@@ -142,6 +142,8 @@ def _read_frame(line: _Line, sof: int, u: float, sp: float, n: int, fd_ratio: fl
         if not ide:
             fdf = bits(1, "fdf")            # r0's place in a classic frame
         if fdf:
+            if seen is not None:
+                seen["fd"] = True           # (what follows depends on the data rate tried)
             fr = _read_fd(sof, u, sp, fd_ratio, sp_data, raw, switch, bits, fixed, run, sent, int(ident), bool(ide),
                           boundary_stuff)
             return fr, st["edge"]
@@ -268,11 +270,12 @@ FD_RATIOS = (1, 2, 4, 5, 8, 10)     # CAN FD's data bit rate over its nominal on
 
 
 def read(ch: Channel, n: int, u: float, idle: int = 1, sp: float = 0.75, fd_ratios: tuple | None = None,
-         sp_data: float = 0.75) -> dict:
+         sp_data: float = 0.75, give_up: int | None = None) -> dict:
     """The frames and errors a node at bit time u (ticks) reads: {"frames", "errors" [{"kind", "tick", "field"}],
     "lead_in" (ticks before the first frame it could start), "cut_at_end", "error_flags", "overloads"}. fd_ratios:
     CAN FD's frames read too, each at the first of these data rates (u / ratio) its stuff count and CRC hold at
-    (`data_ratio`); None: classic CAN alone."""
+    (`data_ratio`); None: classic CAN alone. give_up: stop after this many errors with no frame read yet (a line
+    that is no CAN, or CAN at another bit time: "gave_up")."""
     line = _Line(ch, idle)
     frames, errors, overloads = [], [], []
     need, after, pos = 11, float("-inf"), 0.0    # recessive bits before a start of frame, counted from `after`
@@ -298,6 +301,8 @@ def read(ch: Channel, n: int, u: float, idle: int = 1, sp: float = 0.75, fd_rati
         except _Error as x:
             errors.append({"kind": x.kind, "tick": int(x.tick), "field": x.field})
             need, after, pos = 11, 0.0, x.tick
+            if give_up is not None and not frames and len(errors) >= give_up:
+                break
             continue
         if "overload" in fr:
             overloads.append({"tick": fr.pop("overload")})
@@ -308,6 +313,7 @@ def read(ch: Channel, n: int, u: float, idle: int = 1, sp: float = 0.75, fd_rati
     start, length, level = ch.runs(n)
     flags = int(np.sum((level != idle) & (length >= 5.5 * u * 1)))   # dominant six bits or more: error / overload flags
     return {"frames": frames, "errors": errors, "lead_in": lead_in or 0, "cut_at_end": cut,
+            **({"gave_up": True} if give_up is not None and not frames and len(errors) >= give_up else {}),
             "error_flags": flags, "overloads": overloads}
 
 
@@ -318,13 +324,18 @@ def _read_any(line, sof, u, sp, n, fd_ratios, sp_data):
         return _read_frame(line, sof, u, sp, n)
     worst, cut = None, False
     for r, bs in ((r, bs) for r in fd_ratios for bs in (False, True)):
+        seen = {}
         try:
-            fr, end = _read_frame(line, sof, u, sp, n, fd_ratio=r, sp_data=sp_data, boundary_stuff=bs)
+            fr, end = _read_frame(line, sof, u, sp, n, fd_ratio=r, sp_data=sp_data, boundary_stuff=bs, seen=seen)
         except _Error as x:
+            if not seen:
+                raise               # a classic frame's error, or one before FDF: the same at every data rate
             if worst is None or x.tick > worst.tick:
                 worst = x
             continue
         except _Cut:
+            if not seen:
+                raise
             cut = True              # (a data rate too slow runs past the capture's end)
             continue
         if fr.get("fd") and fr.get("brs"):
