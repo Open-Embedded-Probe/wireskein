@@ -340,14 +340,16 @@ trials_in_all = false
 role = "tune"
 about = "Q1, one bus a case, the protocols added in 2026-11 in turn (eval/synth.py's protocols: CEC, SWIM, DALI, DCC, SENT, J1850 VPW, Wiegand, PS/2, USB low / full speed, USB PD, S/PDIF, SD's CMD line, JTAG, cJTAG OScan1, MDIO, I2S / TDM, DHT, CAN FD beside classic frames), 20 cases each, with decoys: before it, none of them had a truth on the bench (S/PDIF's and SD's false claims were found by chance)"
 sources = ["gen:protocols[0:360]"]
-transforms = [""]
+transforms = ["", "spike:0.02", "bounce:0.1"]
+cycle = [["spike:0.02", "bounce:0.1"]]   # Q3: each case clean and with one kind of noise
 
 [suite.protocols-holdout]
 trials_in_all = false
 role = "holdout"
 about = "the same, other seeds"
 sources = ["gen:protocols[1000:1360]"]
-transforms = [""]
+transforms = ["", "spike:0.02", "bounce:0.1"]
+cycle = [["spike:0.02", "bounce:0.1"]]   # Q3: each case clean and with one kind of noise
 
 [suite.protomix]
 trials_in_all = false

@@ -513,6 +513,28 @@ def _square(hi: np.ndarray, lo: np.ndarray) -> bool:
 ASYNC_MIN_UNIT = 2.0      # samples a bit at least for the async plugins to run on a line's blocks
 
 
+LINE_DEGLITCH_OF_MEDIAN = 0.25   # a lone line's pulses shorter than this share of its median run taken out ...
+LINE_DEGLITCH_MAX = 64            # ... up to this many samples, at least 2
+
+
+def _line_views(ch, n: int) -> list:
+    """A lone line as it is and, where it has pulses far shorter than its usual runs (spikes, bounces at its edges),
+    with those taken out: the pulse-width readers (CEC, S/PDIF, DALI, DCC, SENT, ...) read the line's own widths,
+    which a pulse of a few samples splits (2026-11-21: with bounces at a tenth of the edges, most of them read
+    nothing)."""
+    e = np.asarray(ch.edges, np.int64)
+    if len(e) < 8:
+        return [(ch, 0)]
+    runs = np.diff(e)
+    k = int(np.clip(LINE_DEGLITCH_OF_MEDIAN * float(np.median(runs)), 2, LINE_DEGLITCH_MAX))
+    if not (runs < k).any():
+        return [(ch, 0)]
+    d = V.pulses_out(e, k)
+    if len(d) == len(e) or len(d) < 8:
+        return [(ch, 0)]
+    return [(ch, 0), (replace(ch, edges=d), k)]
+
+
 def _async_at(c, view_cap, g, k: int, rb, by_type, roots) -> int:
     """The async plugins (nrzbits, chars) on one line's view under one rate segmentation and idle level: the nodes go
     to roots, the plugin runs are returned."""
@@ -1467,9 +1489,14 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
         # but a bus's clock (another line keeps to it as data) is none of them, unless a hint names it
         if (run_pulse and pin_hint.get(g.pin, {}).get("protocol") not in ASYNC
                 and (pin_hint.get(g.pin, {}).get("protocol") or not _clocks_a_bus(c.sv, g.pin))):
-            for p in by_type.get("line", []):
-                runs += 1
-                roots += p.run(c, cap.channel(g.pin), g)
+            ch0 = cap.channel(g.pin)
+            for ch, k in _line_views(ch0, cap.n_samples):
+                for p in by_type.get("line", []):
+                    runs += 1
+                    for n in p.run(c, ch, g):
+                        if k:
+                            n.params["deglitch"] = k
+                        roots.append(n)
         if not ({"data", "sparse"} & set(pc.candidates)) and g.pin not in async_pins:
             # (a DMX512 line of slots of one value is a train of like pulses to the survey: a "clock")
             if run_async and not _clocks_a_bus(c.sv, g.pin):

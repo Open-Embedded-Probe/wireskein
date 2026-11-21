@@ -49,3 +49,30 @@ def test_short_traffic_is_no_uart():
     ex = decode.export(decode.analyze(cap), cap)
     (c,) = [c for c in ex["claims"] if c["verdict"] in ("confirmed", "likely")]
     assert c["protocol"] == "cec" and c["verdict"] == "confirmed"
+
+
+def test_bounces_at_the_edges():
+    """A tenth of the edges followed by a pulse of 1-3 samples back (a slow edge crossing the threshold again): the
+    lone line is read with pulses far shorter than its runs taken out too (2026-11-21: CEC, DALI, DCC, S/PDIF and the
+    other pulse-width readers read nothing under such bounces)."""
+    rng = np.random.default_rng(3)
+    msgs = [[0x05, 0x70, 0x30, 0x00], [0x5F, 0x72, 0x01], [0x05, 0x71], [0x0F, 0x36], [0x40]]
+    w = gen.Wave(1)
+    t = gen.cec(w, 1e-3, msgs)
+    cap = gen.quantize({"CEC": w}, 200e3, t + 2e-3, rng)
+    ch = cap.channels[0]
+    e = np.asarray(ch.edges, np.int64)
+    sel = e[rng.random(len(e)) < 0.1]
+    a = sel + rng.integers(1, 3, len(sel))
+    extra = np.concatenate([a, a + rng.integers(1, 3, len(sel))])
+    allx = np.concatenate([e, extra])
+    vals, cnt = np.unique(allx, return_counts=True)
+    from dataclasses import replace
+    from wireskein._engine.model import Capture
+    cap = Capture(cap.rate, cap.n_samples, [replace(ch, edges=vals[cnt % 2 == 1])])
+    ex = decode.export(decode.analyze(cap), cap)
+    (c,) = [c for c in ex["claims"] if c["verdict"] in ("confirmed", "likely")]
+    assert c["protocol"] == "cec"
+    got = [[m["initiator"] << 4 | m["destination"]] + ([m["opcode"]] if "opcode" in m else [])
+           + list(bytes.fromhex(m.get("data", ""))) for m in c["result"]["messages"]]
+    assert got == msgs
