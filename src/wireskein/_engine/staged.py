@@ -388,13 +388,14 @@ class UartPlugin:
         # 0) frames them are that protocol's, not a plain UART's: weigh that evidence against this claim
         framed = 0.0
         for (s0, s1, u), cands, ch in blocks:
-            if ch is None or len(ch.breaks) < 2:
+            if ch is None or len(ch.breaks) < 1:
                 continue
             lk = UL.lin(ch)["checks"]
-            if lk["frames"] >= 2:
+            if lk["frames"] >= 2 and len(ch.breaks) >= 2:
                 framed = max(framed, (lk["sync"] + lk["pid_parity"] + lk["checksum"]) / (3 * lk["frames"]))
             dk = UL.dmx512(ch)["checks"]
-            if dk["packets"] >= 2 and abs(c.cap.rate / u / 250000 - 1) < 0.03:
+            if (abs(c.cap.rate / u / DMX_BAUD - 1) < DMX_RATE_TOL
+                    and (dk["packets"] >= 2 or (dk["packets"] == 1 and dk["chars"] >= DMX_ONE_PACKET))):
                 framed = max(framed, dk["start_code_0"] / dk["packets"])
         m["framed_by_breaks"] = framed
         # only what is above chance counts: a UART whose rate changes mid-stream breaks into framing errors, and a
@@ -441,6 +442,50 @@ class UartPlugin:
                      m, layer_score=score, total=score)]
 
 
+DMX_BAUD = 250000
+DMX_RATE_TOL = 0.03       # DMX512's rate met within this
+DMX_BREAK_S = 88e-6       # a break at least this long (the standard's minimum for a transmitter)
+DMX_MIN_BITS = 3          # samples a bit at least for the rate given (a bit's middle to read)
+DMX_SLOT_ACTIVE = 9        # bits a slot is away from idle at most (its start bit and eight 0s)
+DMX_CHAR_BITS = 11        # a slot: start, 8 data bits, 2 stops
+DMX_ONE_PACKET = 24       # slots a packet, at least, for one packet alone to count (a short capture holds one)
+
+
+def dmx_idles(cap, pin: str) -> list[int]:
+    """The idle levels under which the line has a DMX512 break: a run at the other level DMX_BREAK_S long or more
+    (up to a second, the standard's limit), where a bit is DMX_MIN_BITS samples or more at 250 kbaud. Both levels
+    may: the line's idle level is not told by its time at each (slots of 0 keep a DMX line low most of the time, and
+    the mark between packets may be as long as a break), the characters read under each tell it."""
+    if cap.rate / DMX_BAUD < DMX_MIN_BITS:
+        return []
+    _, length, level = cap.channel(pin).runs(cap.n_samples)
+    inner, lev = length[1:-1], level[1:-1]
+    long_ = (inner >= DMX_BREAK_S * cap.rate) & (inner <= cap.rate)
+    return [idle for idle in (1, 0) if np.any(long_ & (lev != idle))]
+
+
+def dmx_at_rate(c, view_cap, pin: str, k: int, rb, by_type, roots) -> int:
+    """DMX512 runs at 250 kbaud by the standard: a line with its break read at that rate too, where the rate the
+    line's runs give (rb) is another or none (slots of one value, all 0 or all 255, give no bit time of their own).
+    The nodes go to roots; the plugin runs are returned."""
+    dmx = [p for p in by_type.get("chars", []) if p.name == "dmx512"]
+    u_dmx = view_cap.rate / DMX_BAUD
+    n_runs = 0
+    for idle in (dmx_idles(view_cap, pin) if dmx else []):
+        if rb is not None and idle == rb.idle and any(abs(u / u_dmx - 1) < DMX_RATE_TOL for _, _, u in rb.blocks):
+            continue            # read so already
+        rb_d = typed.RateBlocks(pin, idle, [(0, view_cap.n_samples, u_dmx)])
+        blocks_d = typed.block_chars(view_cap, c.sv, rb_d)
+        for p in dmx:
+            n_runs += 1
+            for n in p.run(Ctx(view_cap, c.tx, c.sv), rb_d, blocks_d):
+                n.params["deglitch"] = k
+                n.params["rate_given"] = "dmx512"
+                n.layers = {"blocks": rb_d, "chars": blocks_d}
+                roots.append(n)
+    return n_runs
+
+
 DMX_RATE_BITS = 5         # DMX512's fixed 250 kbaud met within 3%: evidence of its own (log2 of the rates a UART runs at)
 EVIDENCE_BITS = 8         # a check's bits of evidence to a score: 1 - 0.5 ** (bits / 8), as the declared protocols
 
@@ -476,19 +521,33 @@ class DmxPlugin:
     def run(self, c: Ctx, rb, blocks):
         out = []
         for (s0, s1, u), cands, ch in blocks:
-            if ch is None or len(ch.breaks) < 2:
+            if ch is None or len(ch.breaks) < 1:
                 continue
+            if ch.bits != DMX_CHAR_BITS:
+                # a slot is 8 data bits and 2 stops: the shortest length the line's runs fit (a clock's burst of
+                # lows 7 bits long fits 6 data bits, every slot 0) is no slot
+                ch = typed.chars(c.cap, typed.async_symbols_segment(c.cap, c.sv, rb.pin, s0, s1, u, rb.idle),
+                                 DMX_CHAR_BITS)
             r = UL.dmx512(ch)
             ck = r["checks"]
-            if ck["packets"] < 2:
-                continue
             baud = c.cap.rate / u
-            rate_ok = 1.0 if abs(baud / 250000 - 1) < 0.03 else 0.3
+            rate_ok = 1.0 if abs(baud / DMX_BAUD - 1) < DMX_RATE_TOL else 0.3
+            # two packets at least; one alone where the capture is short, at DMX512's rate and with the slots of a
+            # packet (a break a spike makes on another line holds two or three characters)
+            if ck["packets"] < 2 and not (ck["packets"] == 1 and rate_ok == 1.0 and ck["chars"] >= DMX_ONE_PACKET):
+                continue
+            # a slot is active 9 bits at most (its start and eight 0s), a break 22 or more (88 us): a run between is no
+            # DMX512 (the character reader takes any run of a character or more for a break: a DHT sensor's 50 us lows
+            # read as slots of 0, every one framed)
+            _, length, level = c.cap.channel(rb.pin).runs(c.cap.n_samples)
+            act = length[1:-1][level[1:-1] != rb.idle] / u
+            between = int(np.sum((act > DMX_SLOT_ACTIVE + 0.5) & (act < DMX_BREAK_S * DMX_BAUD * 0.97)))
+            ck["between"] = between
             # the evidence in bits: a start code of 0 is 8 a packet
             info = 8 * ck["start_code_0"] + (DMX_RATE_BITS if rate_ok == 1.0 else 0)
             # and slots in them: a packet carries up to 512 (the bench's lines 30 or more a packet); breaks that
             # spikes make on another line hold two or three characters each
-            score = ((ck["start_code_0"] / ck["packets"]) * (ck["framing_ok"] / max(1, ck["chars"])) * rate_ok
+            score = ((ck["start_code_0"] / ck["packets"]) * (max(0, ck["framing_ok"] - between) / max(1, ck["chars"])) * rate_ok
                      * (1 - 0.5 ** (info / EVIDENCE_BITS)) * q(ck["chars"], 4))
             out.append(Node("dmx512", {"baud": baud, "idle": rb.idle}, {"data": rb.pin},
                             Stream("dmx.packets", r["packets"]), dict(ck), layer_score=score, total=score))
@@ -1201,6 +1260,9 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
                 runs += 1
                 roots += p.run(c, cap.channel(g.pin), g)
         if not ({"data", "sparse"} & set(pc.candidates)) and g.pin not in async_pins:
+            # (a DMX512 line of slots of one value is a train of like pulses to the survey: a "clock")
+            if run_async and not _clocks_a_bus(c.sv, g.pin):
+                runs += dmx_at_rate(c, cap, g.pin, 0, None, by_type, roots)
             continue
         hinted = pin_hint.get(g.pin, {})
         if hinted.get("protocol") in ASYNC and not run_pulse:
@@ -1241,6 +1303,8 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
                     n.params["deglitch"] = k
                     n.layers = {"blocks": rb, "chars": blocks}
                     roots.append(n)
+            if not hinted.get("baud"):
+                runs += dmx_at_rate(c, view_cap, g.pin, k, rb, by_type, roots)
     t["async"] = time.perf_counter() - t0
     t0 = time.perf_counter()
     scorer = DefaultScorer()

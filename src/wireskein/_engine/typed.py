@@ -626,11 +626,13 @@ def _fewest_bad(bad: np.ndarray, length: np.ndarray, idle: np.ndarray, away: np.
     return int(np.flatnonzero(cand & (length == length[cand].max()))[0])
 
 
-def async_symbols_segment(cap, sv: Survey, pin: str, s0: int, s1: int, unit: float) -> AsyncSymbols:
+def async_symbols_segment(cap, sv: Survey, pin: str, s0: int, s1: int, unit: float,
+                          idle: int | None = None) -> AsyncSymbols:
     start, length, level = cap.channel(pin).runs(cap.n_samples)
     sel = (start >= s0) & (start < s1)
     units = np.clip(np.round(length[sel] / unit), 0, 32767).astype(np.int16)
-    return AsyncSymbols(pin, unit, sv.features[pin].idle_level, level[sel].astype(np.int8), units, start[sel])
+    idle = sv.features[pin].idle_level if idle is None else idle
+    return AsyncSymbols(pin, unit, idle, level[sel].astype(np.int8), units, start[sel])
 
 
 def rate_blocks(cap, sv: Survey, pin: str) -> RateBlocks:
@@ -668,11 +670,11 @@ def block_chars(cap, sv: Survey, rb: RateBlocks) -> list[tuple[tuple[int, int, f
             continue
         best = cands[0][1]
         L = min(l for l, r in cands if r >= best - 0.02)
-        ch = chars(cap, async_symbols_segment(cap, sv, rb.pin, s0, s1, u), L)
+        ch = chars(cap, async_symbols_segment(cap, sv, rb.pin, s0, s1, u, rb.idle), L)
         u2 = refit_unit(np.asarray(cap.channel(rb.pin).edges, np.int64), ch, u)
         if u2 and abs(u2 / u - 1) > REFIT_MIN:
             # the bit time fitted over the characters read: read again with it, kept when it reads as many
-            ch2 = chars(cap, async_symbols_segment(cap, sv, rb.pin, s0, s1, u2), L)
+            ch2 = chars(cap, async_symbols_segment(cap, sv, rb.pin, s0, s1, u2, rb.idle), L)
             if int(ch2.ok.sum()) >= int(ch.ok.sum()):
                 blk, ch = (s0, s1, u2), ch2
         out.append((blk, cands, ch))

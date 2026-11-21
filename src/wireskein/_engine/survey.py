@@ -394,6 +394,25 @@ def survey(cap: Capture, fs: dict[str, ChannelFeatures] | None = None, asyncs: b
         view, vc = (cap, c) if swapped else gated_view(cap, c)
         s.gated[c.name] = (view, vc)
         for o in active:
-            if o != c.name:
+            if o != c.name and not same_changes(cap, c.name, o):
                 s.pairs[(c.name, o)] = swapped(cap, c, o) if swapped else better_relation(cap, c, o, (view, vc))
     return s
+
+
+SAME_CHANGES = 0.95     # of each line's changes, this share at the other's (within a tick): one signal on two lines
+
+
+def same_changes(cap: Capture, a: str, b: str) -> bool:
+    """Two lines changing together, change for change: a differential pair (RS-485's A and B: DMX512, a UART over
+    it; USB's D+ and D-) or one net probed twice. Neither is a clock and its data (the "data" carries nothing the
+    clock does not), whatever the clock's regularity makes of it."""
+    ea = np.asarray(cap.channel(a).edges, np.int64)
+    eb = np.asarray(cap.channel(b).edges, np.int64)
+    if len(ea) < 8 or len(eb) < 8 or not 0.9 <= len(ea) / len(eb) <= 1.1:
+        return False
+    tick = max(cap.channel(a).step, cap.channel(b).step, 1)
+
+    def near(x, y):
+        i = np.clip(np.searchsorted(y, x), 1, len(y) - 1)
+        return float(np.mean(np.minimum(np.abs(x - y[i - 1]), np.abs(y[i] - x)) <= tick))
+    return near(ea, eb) >= SAME_CHANGES and near(eb, ea) >= SAME_CHANGES
