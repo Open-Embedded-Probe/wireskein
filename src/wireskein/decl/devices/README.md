@@ -16,3 +16,5 @@ The chips' knowledge is kept in EmbedBenchDeviceData (`knowledge/<chip>.yaml`, t
 - Definitions that only match an address, without evidence, are gathered into one candidate list per address.
 
 There are three types. `register_map` and `command_table` live in this folder; message frames (NMEA, Modbus, SCPI, ...) are in `_engine/analyzers/`. A match has one of three strengths: `identified` (an identifier value or a check such as a CRC matches), `consistent` (fits the table, nothing to check), `address_only` (no claim, only the candidate list). Why: [design decisions](../../../../docs/design.md) §3.4.
+
+An SPI `command_table` command may take a `mask` (the first byte matches where `byte & mask == code`; its other bits are given as `arg`, e.g. `register`), and a definition may name its chip by `[[identify_read]]` (`byte`: the first byte of the read, `values`: the answer's byte at `at`, 1 by default). A table taking more than a quarter of the first byte's values is identified only by such a read, never "consistent" (any SPI traffic fits it).

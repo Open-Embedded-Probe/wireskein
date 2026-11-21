@@ -302,15 +302,30 @@ def _merge_indistinguishable(ms: list[Match]) -> list[Match]:
 
 # ---------------- SPI ----------------
 
+SPI_TABLE_SELECTIVE = 0.25   # a command table fitting by chance (its share of the first byte's values) at most for
+                             # "consistent"
+
+
 def match_spi(lines: dict, packs: PackSet) -> list[Match]:
     """lines: {pin: [frame bytes arrays]} of one SPI bus. Tries each pin as the command line."""
     out = []
     for p in packs.bus("spi"):
         d = p["device"]
-        table = {int(c["code"]): c for c in p.get("command", [])}
+        cmds = p.get("command", [])
         makers = {int(k, 16): v for k, v in p.get("jedec_manufacturers", {}).items()}
+
+        def lookup(b0):
+            """The command a first byte is: an exact code, or a code under its mask (the rest of the byte its
+            argument: a register's number)."""
+            for c in cmds:
+                if (b0 & int(c.get("mask", 0xFF))) == int(c["code"]):
+                    return c
+            return None
         best = None
         pins = list(lines)
+        # how much of the first byte's 256 values the table takes: a table of registers in its low bits takes most,
+        # and any SPI traffic "fits" it: only a table as selective as SPI_TABLE_SELECTIVE tells by fitting
+        cover = sum(lookup(b) is not None for b in range(256)) / 256
         for cmd_pin in pins:
             resp_pins = [x for x in pins if x != cmd_pin]
             known = unknown = consistent = 0
@@ -319,7 +334,7 @@ def match_spi(lines: dict, packs: PackSet) -> list[Match]:
                 f = bytes(int(v) & 0xFF for v in fr)
                 if not f:
                     continue
-                c = table.get(f[0])
+                c = lookup(f[0])
                 if c is None:
                     unknown += 1
                     continue
@@ -328,6 +343,8 @@ def match_spi(lines: dict, packs: PackSet) -> list[Match]:
                 ok = len(f) == int(c["length"]) if "length" in c else len(f) >= need + (1 if c.get("response") else 0)
                 consistent += ok
                 rec = {"frame": i, "command": c["name"], "length_ok": bool(ok)}
+                if "mask" in c:
+                    rec[c.get("arg", "arg")] = f[0] & ~int(c["mask"]) & 0xFF
                 if c.get("address_bytes") and len(f) >= need:
                     rec["address"] = int.from_bytes(f[1:1 + int(c["address_bytes"])], "big")
                 for rp in resp_pins:
@@ -339,6 +356,13 @@ def match_spi(lines: dict, packs: PackSet) -> list[Match]:
                             rec["jedec_id"] = r[1:4].hex()
                     if c.get("identify") == "sfdp" and len(r) >= need + 4 and r[need:need + 4] == b"SFDP":
                         ident.append("SFDP signature")
+                    # a register whose value names the chip, read: [[identify_read]] first byte, the answer's byte
+                    # after it (`at`, 1 by default) among `values`
+                    for idr in p.get("identify_read", []):
+                        if f[0] == int(idr["byte"]) and len(r) > int(idr.get("at", 1)) \
+                                and r[int(idr.get("at", 1))] in [int(v) for v in idr["values"]]:
+                            ident.append(f'{idr["name"]} {r[int(idr.get("at", 1))]:#04x}')
+                            rec["identity"] = idr["name"]
                 msgs.append(rec)
             if known + unknown == 0:
                 continue
@@ -347,7 +371,7 @@ def match_spi(lines: dict, packs: PackSet) -> list[Match]:
             ratio = known / (known + unknown)
             if ident and ratio >= 0.5:
                 level = "identified"
-            elif known >= 3 and ratio >= 0.8 and consistent >= 0.8 * known:
+            elif known >= 3 and ratio >= 0.8 and consistent >= 0.8 * known and cover <= SPI_TABLE_SELECTIVE:
                 level = "consistent"
             else:
                 level = None

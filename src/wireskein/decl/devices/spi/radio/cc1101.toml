@@ -1,0 +1,51 @@
+# TI CC1101 (sub-GHz transceiver): a header byte (R/W bit 7, burst bit 6, address 5:0); addresses 0x30-0x3D without
+# data are command strobes, read with the burst bit they are status registers. Its VERSION status register (0xF1)
+# reads 0x14 (0x04 on early parts): that names it.
+[device]
+name = "CC1101"
+bus = "spi"
+kind = "command_table"
+command_bytes = 1
+
+[[identify_read]]
+byte = 0xF1
+name = "CC1101 VERSION"
+values = [0x14, 0x04]
+
+[[command]]
+code = 0xF0
+mask = 0xF0
+arg = "status_register"
+name = "READ_STATUS"
+length = 2
+
+[[command]]
+code = 0x30
+mask = 0x30
+arg = "strobe"
+name = "STROBE"
+length = 1
+
+[[command]]
+code = 0x00
+mask = 0xC0
+arg = "register"
+name = "WRITE"
+
+[[command]]
+code = 0x40
+mask = 0xC0
+arg = "register"
+name = "WRITE_BURST"
+
+[[command]]
+code = 0x80
+mask = 0xC0
+arg = "register"
+name = "READ"
+
+[[command]]
+code = 0xC0
+mask = 0xC0
+arg = "register"
+name = "READ_BURST"

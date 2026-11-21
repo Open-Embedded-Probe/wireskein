@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) SPI device definitions take masked commands (`mask`: the first byte's other bits an argument, `arg`, e.g. a register's number) and register reads that name the chip (`[[identify_read]]`: the answer's byte among `values`). A table that takes more than a quarter of the first byte's values (any traffic fits it) is "consistent" no more, only identified by such a read. New: TI CC1101 (named by its VERSION, 0x14 / 0x04).
+- (JA) SPI のデバイスの定義に、マスク付きの命令（`mask`: 1 バイト目の残りのビットを引数 `arg` に。レジスタの番号など）と、部品を名乗るレジスタの読み出し（`[[identify_read]]`: 応答のバイトが `values` のどれか）を書ける。1 バイト目の値の 4 分の 1 より多くを覆う表（どんな通信も合う）は「consistent」にせず、そうした読み出しでだけ識別する。新しく TI CC1101（VERSION 0x14 / 0x04 で名乗る）。
 - (EN) SAE J1850 VPW is read (`j1850`): SOF, passive / active symbols of 64 / 128 us told apart for each level by its own two lengths (a comparator's offset lengthens one level), bytes MSB first, CRC8 checked. sigrok-dumps' capture (a GM PCM): 33 frames, every CRC holding.
 - (JA) SAE J1850 VPW を読む（`j1850`）: SOF、64 / 128 µs のパッシブ / アクティブの記号（コンパレータのずれで片方のレベルが長くなるので、短い・長いはレベルごとに分ける）、MSB からのバイト、CRC8 の確かめ。sigrok-dumps の記録（GM の PCM）: 33 フレーム、CRC はすべて通る。
 - (EN) SENT (SAE J2716) is read (`sent`): the tick from the 56-tick sync, the status and data nibbles, CRC4 checked both the 2010 way and the legacy one. sigrok-dumps' capture: every message's CRC holds (2010).

@@ -16,3 +16,5 @@
 - 証拠がなくアドレスが合うだけの定義は、アドレスごとに 1 件の候補一覧にまとめます。
 
 型は 3 つです。`register_map`（レジスタ表）と `command_table`（コマンド表）がこのフォルダの対象で、メッセージの枠（NMEA、Modbus、SCPI など）は `_engine/analyzers/` 側にあります。判定の強さは `identified`（識別子の値や CRC などの検算が一致）/ `consistent`（表には合うが検算がない）/ `address_only`（主張せず、候補の一覧だけ）の 3 段階です。理由は [設計の決定](../../../../docs/design.ja.md) §3.4 にあります。
+
+SPI の `command_table` の命令には `mask` を書ける（`バイト & mask == code` で 1 バイト目が合い、残りのビットを `arg` の名前で出す。`register` など）。定義は `[[identify_read]]` で部品を名乗れる（`byte`: 読み出しの 1 バイト目、`values`: 応答の `at` 番目（既定 1）のバイト）。1 バイト目の値の 4 分の 1 より多くを覆う表は、そうした読み出しでだけ識別し、「consistent」にはしない（どんな SPI の通信も合うため）。
