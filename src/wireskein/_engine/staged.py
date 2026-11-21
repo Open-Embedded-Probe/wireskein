@@ -583,6 +583,7 @@ class LinPlugin:
 
 
 CAN_FORBIDDEN_RUNS = 0.05  # runs of 6 to 10 bits, this share of a line's at most for CAN at a bit time
+CAN_MAX_NOMINAL = 1.05e6  # a nominal bit rate above this is no CAN's
 CAN_FD_GIVE_UP = 2        # errors with no frame read, at a nominal rate tried, before the next (a line of no CAN)
 CAN_FD_CHECK_BITS = 4     # a CAN FD frame's stuff count (three bits Gray-coded and a parity) checked, beside its CRC
 
@@ -605,6 +606,9 @@ class CanFdPlugin:
         _, length, _ = ch.runs(c.cap.n_samples)
         inner = length[1:-1].astype(np.float64)
         for m in canbus.FD_RATIOS:
+            # a CAN bus's nominal rate is 1 Mb/s at most (FD's data phase alone goes faster)
+            if c.cap.rate / (u0 * m) > CAN_MAX_NOMINAL:
+                continue
             u = canbus.bit_time(ch, u0 * m, nb.idle) or u0 * m
             # stuffing keeps a frame's runs to 5 bits, the bus's idle 11 or more: runs between (an error flag's
             # alone) in more than a few of them are no CAN at this bit time

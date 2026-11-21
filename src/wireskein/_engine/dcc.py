@@ -11,6 +11,7 @@ from .stack import Node, Stream
 ONE_HALF = (52e-6, 64e-6)
 ZERO_HALF = (90e-6, 10e-3)
 PREAMBLE = 10
+DCC_ONES = 0.3            # halves of a 1's length, this share of the line's at least
 EVIDENCE_BITS = 8
 
 
@@ -21,6 +22,9 @@ def bits_of(ch, n: int, rate: float) -> tuple[list[int], list[int]]:
     if len(e) < 40:
         return [], []
     d = np.diff(e) / rate
+    # a DCC signal's halves are mostly 1s' (58 us): a line without them is none (found before pairing them)
+    if float(np.mean((d >= ONE_HALF[0]) & (d <= ONE_HALF[1]))) < DCC_ONES:
+        return [], []
     kind = np.where((d >= ONE_HALF[0]) & (d <= ONE_HALF[1]), 1, np.where((d >= ZERO_HALF[0]) & (d <= ZERO_HALF[1]), 0, -1))
     bits, at = [], []
     i = 0

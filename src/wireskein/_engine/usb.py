@@ -16,7 +16,8 @@ TOKENS = {"OUT", "IN", "SETUP", "PING"}
 DATA = {"DATA0", "DATA1", "DATA2", "MDATA"}
 USB_MIN_SAMPLES = 2.0          # samples a bit at least
 USB_SKEW = 0.4                 # an SE0 / both high shorter than this share of a bit: the pair's skew in a change
-USB_OPPOSITE = 0.5             # a pair is at opposite levels this share of the time (resets and a detached
+USB_COUNTS = 0.25              # the line with fewer changes has this share of the other's at least
+USB_OPPOSITE = 0.6             # a pair is at opposite levels this share of the time (resets and a detached
                                # device hold both low or both high a while) ...
 USB_SKEW_S = 150e-9            # D+ and D- changing this far apart still change together
 USB_TOGETHER = 0.8             # ... and this share of each line's changes is within a sample of the other's
@@ -87,10 +88,11 @@ def _value(bits: list[int]) -> int:
     return sum(b << i for i, b in enumerate(bits))
 
 
-def packets(dp, dm, n: int, rate: float, speed: float) -> list[dict]:
-    """The packets on a pair at `speed` with dp / dm as given (full speed's J: D+ high; low speed's: D- high)."""
+def packets(dp, dm, n: int, rate: float, speed: float, states=None) -> list[dict]:
+    """The packets on a pair at `speed` with dp / dm as given (full speed's J: D+ high; low speed's: D- high);
+    `states` the pair's (_states) when known."""
     u = rate / speed
-    t, st = _deskew(*_states(dp, dm, n), n, u)
+    t, st = _deskew(*(states if states is not None else _states(dp, dm, n)), n, u)
     idle = 1 if speed == FS else 2                  # J
     out = []
     i = 0
@@ -207,10 +209,10 @@ def transactions(pk: list[dict]) -> list[dict]:
 
 
 def _pair_opposite(a, b, n: int) -> float:
-    cuts = np.unique(np.concatenate([[0], np.asarray(a.edges), np.asarray(b.edges), [n]]))
-    la, lb = a.level_at(cuts[:-1]), b.level_at(cuts[:-1])
-    dur = np.diff(cuts)
-    return float(dur[la != lb].sum() / max(1, dur.sum()))
+    """The share of the time two lines are at opposite levels, from their levels at 4096 ticks across the capture
+    (sorting both lines' changes together is what this saves)."""
+    x = np.linspace(0, max(0, n - 1), 4096).astype(np.int64)
+    return float(np.mean(a.level_at(x) != b.level_at(x)))
 
 
 def usb_pair(a, b, n: int, rate: float = 0.0) -> bool:
@@ -224,9 +226,13 @@ def usb_pair(a, b, n: int, rate: float = 0.0) -> bool:
     def near(x, y):
         i = np.clip(np.searchsorted(y, x), 1, len(y) - 1)
         return float(np.mean(np.minimum(np.abs(x - y[i - 1]), np.abs(y[i] - x)) <= tick))
-    # the line with fewer changes keeps to the other (low speed's keep-alives are SE0s: D- alone changes)
+    # the line with fewer changes keeps to the other (low speed's keep-alives are SE0s: D- alone changes); that
+    # (a search) first, the levels' time (a sort of both lines' changes) only for a pair that passes it
     few, many = (ea, eb) if len(ea) <= len(eb) else (eb, ea)
-    return _pair_opposite(a, b, n) >= USB_OPPOSITE and near(few, many) >= USB_TOGETHER
+    # (a fast clock has an edge near any line's: the pair's counts are of a size)
+    if len(few) < USB_COUNTS * len(many):
+        return False
+    return near(few, many) >= USB_TOGETHER and _pair_opposite(a, b, n) >= USB_OPPOSITE
 
 
 def read_pair(a, b, n: int, rate: float):
@@ -234,11 +240,13 @@ def read_pair(a, b, n: int, rate: float):
     if not usb_pair(a, b, n, rate):
         return None
     best = None
+    t, st = _states(a, b, n)
+    swapped = np.where(st == 1, 2, np.where(st == 2, 1, st))       # (J and K the other way round)
     for speed in (FS, LS):
         if rate / speed < USB_MIN_SAMPLES:
             continue
-        for dp, dm in ((a, b), (b, a)):
-            pk = packets(dp, dm, n, rate, speed)
+        for dp, dm, sts in ((a, b, (t, st)), (b, a, (t, swapped))):
+            pk = packets(dp, dm, n, rate, speed, sts)
             good = [p for p in pk if p.get("ok")]
             if best is None or len(good) > best[0]:
                 best = (len(good), pk, speed, dp.name, dm.name)

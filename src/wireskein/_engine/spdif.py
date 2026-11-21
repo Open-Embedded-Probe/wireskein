@@ -27,14 +27,25 @@ def subframes(edges: np.ndarray) -> list[dict]:
     # the runs (of up to three halves) are whole multiples of most nearly
     x = d[d < 4 * common[0]]
     cands = np.linspace(0.8 * common[0], 1.6 * common[0], 161)
-    err = [float(np.mean(np.abs(x / h - np.round(x / h)))) for h in cands]
+    if len(x) > 4000:
+        x = x[:: len(x) // 4000]                       # (a sample of the runs tells the length)
+    r = x[None, :] / cands[:, None]
+    err = np.mean(np.abs(r - np.round(r)), axis=1)
     half = float(cands[int(np.argmin(err))])
     u = np.round(d / half).astype(int)
-    out, i, n = [], 0, len(u)
+    out, n = [], len(u)
+    # a subframe starts at a run of one and a half cells (a preamble's coding violation): from those only
+    starts = np.flatnonzero(u[:max(0, n - 3)] == 3)
+    if len(starts) < 8:
+        return []
+    k, i = 0, int(starts[0])
     while i + 4 <= n:
         pre = PREAMBLES.get(tuple(u[i:i + 4].tolist()))
         if pre is None:
-            i += 1
+            k = int(np.searchsorted(starts, i + 1))
+            if k >= len(starts):
+                break
+            i = int(starts[k])
             continue
         s0 = int(edges[i])
         j, bits = i + 4, []

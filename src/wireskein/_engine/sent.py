@@ -45,12 +45,28 @@ def messages(ch, n: int, rate: float) -> list[dict]:
     lv = ch.level_at(e)
     f = e[lv == 0]
     d = np.diff(f).astype(float)
-    out, i = [], 0
+    # where a sync may be: 56 ticks of SENT's range followed by three nibbles (found at once; the loop below walks
+    # from them only)
+    if len(d) < 4:
+        return []
+    tick_all = d / SYNC_TICKS
+    ok_tick = (tick_all >= TICK_S[0] * rate) & (tick_all <= TICK_S[1] * rate)
+    nib_ok = np.ones(len(d) - 3, bool)
+    for k in (1, 2, 3):
+        r = d[k:len(d) - 3 + k] / tick_all[:len(d) - 3]
+        nib_ok &= (r >= NIBBLE[0]) & (r <= NIBBLE[1])
+    syncs = np.flatnonzero(ok_tick[:len(d) - 3] & nib_ok)
+    if not len(syncs):
+        return []
+    out, i = [], int(syncs[0])
     while i + 3 < len(d):
         tick = d[i] / SYNC_TICKS
         nxt = d[i + 1:i + 4] / tick
         if not (TICK_S[0] * rate <= tick <= TICK_S[1] * rate) or not np.all((nxt >= NIBBLE[0]) & (nxt <= NIBBLE[1])):
-            i += 1
+            k = int(np.searchsorted(syncs, i + 1))
+            if k >= len(syncs):
+                break
+            i = int(syncs[k])
             continue
         j, nib = i + 1, []
         while j < len(d) and NIBBLE[0] <= d[j] / tick <= NIBBLE[1] and len(nib) < 9:

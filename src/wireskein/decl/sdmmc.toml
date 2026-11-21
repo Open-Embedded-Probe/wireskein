@@ -2,7 +2,8 @@
 # transmission bit (1 host to card, 0 card to host), the command index (6), the argument (32), CRC7 (x^7 + x^3 + 1
 # over the 40 bits before it), end 1, MSB first. R3 (the OCR) has no CRC: index and CRC are all 1s. R2 (CID / CSD)
 # is 136 bits: start, transmission 0, six 1s, the 128-bit register whose last 7 bits before the end bit are the CRC7
-# of the 120 before. The clock may run between them: frames are found by scanning.
+# of the 120 before. The clock may run between them: frames are found by scanning, each after two clocks of the line
+# high at least (the card answers 2 clocks after a command at the soonest, the host waits 8 after an answer).
 [plugin]
 name = "sdmmc"
 input = "frames.gap"
@@ -18,6 +19,7 @@ scan = true
 [[sequence]]
 order = "msb"
 fields = [
+  { name = "idle",  width = 2, expect = 3, hide = true },
   { name = "start", width = 1, expect = 0, hide = true },
   { name = "dir",   width = 1, enum = { "1" = "CMD", "0" = "RSP" } },
   { name = "index", width = 6 },
@@ -32,6 +34,7 @@ checks = [
 [[sequence]]
 order = "msb"
 fields = [
+  { name = "idle",  width = 2, expect = 3, hide = true },
   { name = "start", width = 1, expect = 0, hide = true },
   { name = "dir",   width = 1, expect = 0, enum = { "0" = "R3" } },
   { name = "index", width = 6, expect = 63, hide = true },
@@ -43,6 +46,7 @@ fields = [
 [[sequence]]
 order = "msb"
 fields = [
+  { name = "idle",  width = 2, expect = 3, hide = true },
   { name = "start", width = 1, expect = 0, hide = true },
   { name = "dir",   width = 1, expect = 0, enum = { "0" = "R2" } },
   { name = "rsv",   width = 6, expect = 63, hide = true },

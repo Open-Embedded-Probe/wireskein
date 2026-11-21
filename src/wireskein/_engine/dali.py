@@ -33,6 +33,11 @@ def frames(ch, n: int, rate: float) -> list[dict]:
     st, length, level = ch.runs(n)
     half = DALI_HALF * rate
     k = length / half
+    # a DALI line's runs are a half bit or a whole one: a line whose runs mostly are not, is none (found before
+    # walking its runs)
+    near = (np.abs(k - 1) < DALI_TOL) | (np.abs(k - 2) < 2 * DALI_TOL)
+    if len(k) < 20 or float(np.mean(near)) < 0.5:
+        return []
     out, i = [], 1
     while i < len(st) - 1:
         # a frame starts where the idle high falls
