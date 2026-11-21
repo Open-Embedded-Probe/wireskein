@@ -356,14 +356,16 @@ trials_in_all = false
 role = "tune"
 about = "Q1 and Q2: two or three buses a case, of those protocols and the older ones (UART, I2C, SPI, CAN, SWD, 1-Wire, NEC), with decoys: each protocol's lines beside others' (a reader claiming another's line, lines of separate buses grouped under one clock)"
 sources = ["gen:protomix[0:120]"]
-transforms = [""]
+transforms = ["", "spike:0.02", "bounce:0.1", "xtalk:0.3"]
+cycle = [["spike:0.02", "bounce:0.1", "xtalk:0.3"]]   # Q3: each case clean and with one kind of noise
 
 [suite.protomix-holdout]
 trials_in_all = false
 role = "holdout"
 about = "the same, other seeds"
 sources = ["gen:protomix[1000:1120]"]
-transforms = [""]
+transforms = ["", "spike:0.02", "bounce:0.1", "xtalk:0.3"]
+cycle = [["spike:0.02", "bounce:0.1", "xtalk:0.3"]]   # Q3: each case clean and with one kind of noise
 
 [suite.ir]
 role = "tune"
