@@ -1223,9 +1223,37 @@ def value(n: Node) -> float:
     return len(n.roles) * (n.total - CLAIM_COST)
 
 
-def equivalent(a: Node, b: Node) -> bool:
-    if a.analyzer != b.analyzer or a.roles != b.roles:
+def twin_lines(cap) -> set:
+    """Pairs of lines changing together (as many changes, 95 % of them within 2 samples of the other's: a JTAG
+    adapter's TCK and the RTCK it returns), as frozensets: a reading on one is the reading on the other."""
+    chans = [c for c in cap.channels if len(c.edges) >= 32]
+    out = set()
+    for i, a in enumerate(chans):
+        ea = np.asarray(a.edges, np.int64)
+        for b in chans[i + 1:]:
+            eb = np.asarray(b.edges, np.int64)
+            # (and the same level: a differential pair - USB's D+ and D-, opposite - changes together too, and
+            # which line is which is a reading of its own)
+            if a.initial != b.initial or abs(len(ea) - len(eb)) > TWIN_COUNT * max(len(ea), len(eb)):
+                continue
+            j = np.clip(np.searchsorted(eb, ea), 1, len(eb) - 1)
+            d = np.minimum(np.abs(eb[j] - ea), np.abs(eb[j - 1] - ea))
+            if float(np.mean(d <= TWIN_TICKS)) >= TWIN_SHARE:
+                out.add(frozenset((a.name, b.name)))
+    return out
+
+
+TWIN_COUNT, TWIN_TICKS, TWIN_SHARE = 0.05, 2, 0.95
+
+
+def equivalent(a: Node, b: Node, twins: set | None = None) -> bool:
+    if a.analyzer != b.analyzer:
         return False
+    if a.roles != b.roles:
+        # (the same roles but for a line and its twin: no other reading - a JTAG read with TCK or with RTCK)
+        if not twins or a.roles.keys() != b.roles.keys() or not all(
+                a.roles[k] == b.roles[k] or frozenset((a.roles[k], b.roles[k])) in twins for k in a.roles):
+            return False
     if a.analyzer == "uart":
         return a.params["idle"] == b.params["idle"] and abs(a.params["baud"] / b.params["baud"] - 1) <= 0.03
     if a.analyzer in ("spi", "i2c", "sync_unknown", "rvswd"):
@@ -1735,6 +1763,7 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
         roots_pack = [n for n in roots_pack if n.analyzer != "spi" or "cs" in n.roles
                       or not any(same_bits(n, k) for k in framed)]
     roots_pack += shared_buses(roots_pack, tx.survey, cap)
+    twins = twin_lines(cap)
     exps = explanations(roots_pack, value)
     claims = []
     if exps:
@@ -1759,7 +1788,7 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
                     claims.append(Claim(m.analyzer, dict(m.roles), dict(m.params), adj, margin, v, m, ru,
                                         bus=n.params["bus"]))
                 continue
-            alt = explanations(roots_pack, value, top=1, exclude=lambda r, n=n: equivalent(r, n))
+            alt = explanations(roots_pack, value, top=1, exclude=lambda r, n=n: equivalent(r, n, twins))
             alt_score, alt_set = alt[0] if alt else (0.0, [])
             margin = (best_score - alt_score) / max(1, changed_channels(best, alt_set))
             chans = set(n.roles.values())
