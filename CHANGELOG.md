@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Fixed: `--hint` took JSON only, and a protocol's name alone (`--hint rvswd`) ended in a traceback. Names alone are taken now (`rvswd`, `uart,spi`: `{"protocols": [...]}`), and JSON that does not parse says so.
+- (JA) 直した: `--hint` は JSON しか受け付けず、プロトコルの名前だけ（`--hint rvswd`）だとトレースバックで落ちていた。名前だけでも受け付け（`rvswd`、`uart,spi`: `{"protocols": [...]}`）、読めない JSON にはその旨を出す。
 - (EN) SPI device definitions take masked commands (`mask`: the first byte's other bits an argument, `arg`, e.g. a register's number) and register reads that name the chip (`[[identify_read]]`: the answer's byte among `values`). A table that takes more than a quarter of the first byte's values (any traffic fits it) is "consistent" no more, only identified by such a read. New: TI CC1101 (named by its VERSION, 0x14 / 0x04).
 - (JA) SPI のデバイスの定義に、マスク付きの命令（`mask`: 1 バイト目の残りのビットを引数 `arg` に。レジスタの番号など）と、部品を名乗るレジスタの読み出し（`[[identify_read]]`: 応答のバイトが `values` のどれか）を書ける。1 バイト目の値の 4 分の 1 より多くを覆う表（どんな通信も合う）は「consistent」にせず、そうした読み出しでだけ識別する。新しく TI CC1101（VERSION 0x14 / 0x04 で名乗る）。
 - (EN) SAE J1850 VPW is read (`j1850`): SOF, passive / active symbols of 64 / 128 us told apart for each level by its own two lengths (a comparator's offset lengthens one level), bytes MSB first, CRC8 checked. sigrok-dumps' capture (a GM PCM): 33 frames, every CRC holding.

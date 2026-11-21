@@ -46,6 +46,28 @@ from . import __version__
 from ._engine import export, markers, staged
 
 
+
+HINT_HELP = ('protocols to try: names ("rvswd", "uart,spi"), or JSON ({"protocols": [...], "pins": {pin: {"protocol", '
+             '"role", "baud"}}, ...}), or @file.json')
+
+
+def parse_hint(text: str | None) -> dict | None:
+    """--hint: JSON, @file.json, or protocol names alone ("rvswd", "uart,spi": {"protocols": [...]})."""
+    if not text:
+        return None
+    if text.startswith("@"):
+        text = Path(text[1:]).read_text()
+    t = text.strip()
+    if t[:1] in "{[":
+        try:
+            return json.loads(t)
+        except json.JSONDecodeError as e:
+            raise SystemExit(f"--hint: not JSON ({e.msg} at {e.pos}); give JSON, @file.json or protocol names")
+    names = [x.strip() for x in t.split(",") if x.strip()]
+    if not names or not all(x.replace("_", "").isalnum() for x in names):
+        raise SystemExit(f"--hint: {text!r} is neither JSON nor protocol names")
+    return {"protocols": names}
+
 def load(path: Path):
     from .decode import load as _load
     return _load(path)
@@ -311,7 +333,7 @@ def _seconds(text: str) -> float:
 
 def annotate_cmd(args) -> None:
     from . import annotate
-    hints = json.loads(Path(args.hint[1:]).read_text() if args.hint.startswith("@") else args.hint) if args.hint else None
+    hints = parse_hint(args.hint)
     th = _thresholds(getattr(args, "threshold", None))
     from .decode import as_logic
     doc = annotate.build_file(args.file, hints, (lambda cap: as_logic(cap, th)) if th else None)
@@ -597,7 +619,7 @@ def convert(args) -> None:
 
 
 def segments(args) -> None:
-    hints = json.loads(Path(args.hint[1:]).read_text() if args.hint and args.hint.startswith("@") else args.hint) if args.hint else None
+    hints = parse_hint(args.hint)
     cap = _load_for_decoding(args.capture, args)
     res = staged.analyze(cap, hints)
     found = markers.find(res, cap, hint=json.loads(args.markers) if args.markers else None)
@@ -634,7 +656,7 @@ def main() -> None:
     a.add_argument("capture", type=Path)
     a.add_argument("--mode", choices=["final", "all", "select"], default="final")
     a.add_argument("--select", nargs="*", default=[])
-    a.add_argument("--hint", default=None)
+    a.add_argument("--hint", default=None, help=HINT_HELP)
     a.add_argument("--alternatives", action="store_true")
     a.add_argument("--depth", choices=["transport", "frames", "protocol", "device"], default="protocol",
                    help="how far up the interpretation goes in final mode")
@@ -669,7 +691,7 @@ def main() -> None:
     dc.add_argument("--pins", default=None, help=PINS_HELP)
     sg = sub.add_parser("segments", help="the marker segment tree with per-segment activity and decoded items")
     sg.add_argument("capture", type=Path)
-    sg.add_argument("--hint", default=None)
+    sg.add_argument("--hint", default=None, help=HINT_HELP)
     sg.add_argument("--threshold", action="append", metavar="NAME=V|NAME=LOW,HIGH",
                     help="also decode this analog channel, read as logic at V (repeatable)")
     sg.add_argument("--markers", default=None, metavar="JSON")
@@ -813,7 +835,7 @@ def main() -> None:
 
     hints = None
     if args.hint:
-        hints = json.loads(Path(args.hint[1:]).read_text() if args.hint.startswith("@") else args.hint)
+        hints = parse_hint(args.hint)
     if args.devices is not None:
         hints = (hints or {}) | {"devices": args.devices}
     from .decode import analyze_file
