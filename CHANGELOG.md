@@ -3,6 +3,8 @@
 ## Unreleased
 - (EN) Fixed: a CAN line of mostly classic frames with a few FD ones was not read (its runs gave a bit time between the two rates, 1.25 nominal bits): the shortest runs (an FD data phase's bit) are a base for the nominal bit time too.
 - (JA) 直した: 古典の CAN のフレームが多く FD のフレームが少しの線を読めなかった（Run から出したビットの時間が 2 つの速さの間、公称の 1.25 ビットになった）。いちばん短い Run（FD のデータ相の 1 ビット）も公称のビットの時間の元にする。
+- (EN) Fixed: a line toggling at random, one of whose windows held all of a JTAG's scans, was taken as an SPI's select and the JTAG claimed as SPI: a select's windows mostly hold the clock's changes (a line with four windows or more, under half of them holding any, has its score cut by that share).
+- (JA) 直した: ランダムに変わる線の窓の 1 つが JTAG のスキャンをすべて覆い、それを SPI の選択の線として、JTAG を SPI と主張していた: 選択の線の窓は、たいていクロックの変化を含む（窓が 4 つ以上で、含むものが半分に満たない線は、その割合で点数を下げる）。
 - (EN) Fixed: a CAN FD line whose median run and shortest runs were both off the nominal bit (1 Mb/s, the data phase at 5 Mb/s, at 20 MS/s) was not read: the commonest run is a base too; and the nominal rate is no longer some 4 % off where FD data phases are many (bit_time's last pass keeps intervals within 0.15 of whole bits).
 - (JA) 直した: Run の中央値もいちばん短い Run も公称のビットから外れる CAN FD の線（公称 1 Mb/s、データ相 5 Mb/s、20 MS/s）を読めなかった: いちばん多い Run の長さも元にする。FD のデータ相が多いと公称の速さが約 4 % ずれていた（bit_time の最後の詰めは、整数ビットから 0.15 以内の間隔だけで）。
 - (EN) A declared protocol may give its clock's range (`clock_hz = [low, high]` under `[plugin]`): PS/2 (5-30 kHz) is no longer tried on every clocked group. The unknown clocked reading's fit with known framings is found once for a group's bits, not once a delimiter. (A LinkE's long write: some 2 s less.)

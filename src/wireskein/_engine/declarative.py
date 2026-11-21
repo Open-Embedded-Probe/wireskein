@@ -180,6 +180,10 @@ def data_per_bit(e: dict) -> float | None:
     return worst
 
 
+SELECT_WINDOWS_MIN = 4     # a select's windows at least for the share holding transfers to count
+SELECT_USED = 0.5          # ... and the share of them holding one, at least, for a whole score
+
+
 def clock_hz(e: dict) -> float | None:
     """The clock's rate inside the frames: the median interval between its sampling edges there."""
     fr, sb = e["frames_obj"], e["bits"]
@@ -693,6 +697,19 @@ class DeclarativePlugin:
             b = better_relation(view, ci, sb.select).boundary if ci else 0.0
             score *= b
             evidence["select_boundary"] = b
+            # a select moves for its transfers: a line with many selections holding none (a random line, one of
+            # whose windows held all of a JTAG's scans by chance: 2026-11-21, synth-protocols-534) is no select
+            # (its windows at either level, inside the capture, that hold any change of the clock)
+            sch = c.cap.channel(sb.select)
+            st, ln, lv = sch.runs(c.cap.n_samples)
+            st, ln, lv = st[1:-1], ln[1:-1], lv[1:-1]
+            ce = np.asarray(c.cap.channel(sb.clock).edges)
+            held = (np.searchsorted(ce, st + ln) - np.searchsorted(ce, st)) > 0
+            best = max(((int(held[lv == L].sum()), int((lv == L).sum())) for L in (0, 1)), key=lambda x: x[0])
+            used, windows = best
+            if windows >= SELECT_WINDOWS_MIN and used < SELECT_USED * windows:
+                score *= used / (SELECT_USED * windows)
+                evidence["select_used"] = used / windows
         if "degenerate" in terms:
             # a bus is suspicious only if every data pin is dominated by one value
             # (a flash MISO idles at 0xFF most of the time; that is normal)
