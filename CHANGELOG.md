@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) HDMI CEC is read (`cec`): start bits (3.7 ms low), blocks of 8 data bits MSB first, EOM and ACK by pulse widths; the header's initiator and destination, the opcode and operands, each message acknowledged or not. sigrok-dumps' CEC: every message of the captures compared is sigrok's (120 and 31).
+- (JA) HDMI CEC を読む（`cec`）: スタートビット（Low 3.7 ms）、8 データビット（MSB から）、EOM、ACK をパルスの幅で。ヘッダの送り手と宛先、オペコードとオペランド、メッセージごとの ACK。sigrok-dumps の CEC: 比べた記録のすべてのメッセージが sigrok と同じ（120 と 31）。
 - (EN) SWIM (STM8's single wire debug) is read (`swim`): each bit a low pulse (short 1, long 0), frames of a start bit (host 0, target 1), 3 command or 8 data bits, even parity and the receiver's acknowledge; ROTF / WOTF with their count, 24-bit address and bytes. sigrok-dumps' 5 SWIM captures: confirmed, every frame's parity holding (sample1: 564 of sigrok's 568 frames).
 - (JA) SWIM（STM8 の 1 線のデバッグ）を読む（`swim`）: 1 ビットに Low のパルス 1 つ（短いと 1、長いと 0）、フレームはスタートビット（ホスト 0、ターゲット 1）、コマンド 3 ビットかデータ 8 ビット、偶数パリティ、受け手の ACK。ROTF / WOTF はバイト数、24 ビットのアドレス、バイト。sigrok-dumps の SWIM 5 本: 確定、すべてのフレームのパリティが通る（sample1 は sigrok の 568 フレーム中 564）。
 - (EN) Wiegand is read (`wiegand`, roles `d0` / `d1`): two lines idle high whose low pulses take turns at a steady pace, frames between long gaps; 26- and 34-bit frames' parities checked (and which line is D1 by them), a 26-bit one's facility and card numbers. sigrok-dumps' capture: both 34-bit frames sigrok's (8a640910).
