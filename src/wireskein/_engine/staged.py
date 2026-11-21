@@ -878,6 +878,7 @@ SLOW_PERIODS = 4     # a clock this many times k a period or more: slow enough t
 NOISY_RUNS = 0.12    # a clock's runs around this share a noise's at least (views.noise_runs): its periods from it cleaned
 NOISY_WINDOW = 64    # runs each side of an edge, for that share
 NOISY_WIDE = 2048    # runs each side, for the share of runs breaking the clock's period (views.broken_runs)
+GLITCH_SHARE_CLEANED = 0.9   # ... and where its typical run is its cleaned one's (crosstalk from a fast clock)
 GLITCH_SHARE = 0.6    # a clock's runs this short a share or less: a view with them taken out
 REBUILD_SHORT = 0.02  # a clock's runs half its median or less, this share or more: views with the clock rebuilt
 REBUILD_FEW = 4       # ... and this many of them at least (one short run of a few dozen is no bounce)
@@ -941,10 +942,16 @@ def glitch_views(cap, sv, g, memo: dict | None = None):
         med = float(np.median(inner))
         clean = np.diff(np.asarray(V.spikes_out(ch.edges, BOUNCE_TICKS * step), np.int64))
         # (where most runs are left: a clock with runs under BOUNCE_TICKS loses them all, and its bursts are no run)
-        if len(clean) >= 16 and len(clean) >= 0.25 * len(inner):
+        # (crosstalk from a fast clock beside it can make three in four of its runs a spike's: a tenth left, 64 runs
+        # and more, is still the clock's: 2026-11-21, spivar-14 with crosstalk, 563 of 2482)
+        if len(clean) >= 16 and (len(clean) >= 0.25 * len(inner) or (len(clean) >= 64 and len(clean) >= 0.1 * len(inner))):
             med = max(med, float(np.median(clean)))
         memo[key] = med
+        memo[("cleaned", g.clock, step)] = med > float(np.median(inner))
     med = memo[key]
+    # (a clock whose typical run came from it cleaned has its short runs a noise's, however many: a share up to
+    # GLITCH_SHARE_CLEANED of them still gives the views)
+    share_max = GLITCH_SHARE_CLEANED if memo[("cleaned", g.clock, step)] else GLITCH_SHARE
     # Short pulses relative to the clock's own runs (reflections last a few ns,
     # i.e. more samples at higher rates; single-sample spikes at any rate).
     lim = max(float(step), 0.25 * med)
@@ -961,7 +968,7 @@ def glitch_views(cap, sv, g, memo: dict | None = None):
                 if 0 < s.mean() < GLITCH_SHARE:
                     seen = np.concatenate((seen, r[s]))
     # (bounces at half the edges make a third of the runs short: still a view; the widths stay under half a run)
-    if med >= 3 and len(seen) and short.mean() < GLITCH_SHARE:
+    if med >= 3 and len(seen) and short.mean() < share_max:
         # the filter width is undecidable here: fixed small widths and one from
         # the observed short pulses are siblings; plugins' checks pick. A width
         # never exceeds half the clock's typical run.
@@ -1000,7 +1007,7 @@ def glitch_views(cap, sv, g, memo: dict | None = None):
                 continue
             made.append(lines)
             yield Capture(cap.rate, cap.n_samples, chans), k
-    if 2 * med >= survey_mod.SPIKE_PERIOD * step and 2 * step > 0.5 * med and short.mean() < GLITCH_SHARE:
+    if 2 * med >= survey_mod.SPIKE_PERIOD * step and 2 * step > 0.5 * med and short.mean() < share_max:
         # a clock too fast for the widths above (its runs under 4 samples: 2 is over half of one) but with halves of
         # two samples or more: its lines with their pulses of a sample taken out (spikes, crosstalk; each with its
         # own two changes), as the survey's view of such a clock (survey.gated_view), where the clock's own pulses of
