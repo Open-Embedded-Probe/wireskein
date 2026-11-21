@@ -488,4 +488,8 @@ sigrok-dumps（sigrok の記録集。1018 本、断りのないものはパブ�
 - 1ef13ac の中身: 誤った確定 4 → 10。増えたのは pulse-holdout の synth-pulse-1025（6 つの変換すべて）の DMX512 の
   確定と、synth-pulse-1019 + bounce 0.1 の UART。今のコードでも 1025 の DMX512 は残る。holdout なので合わせず、調整側の
   gen:pulse 40〜499（460 件）で同じ誤りを探して 0 件。
+- CI 3fa4a98（7e0f7df を含み 3240d05 の前）: CPU 203 分（2dd2e95 116、1ef13ac 1796）、時間切れ 0。WCH の実機の組で読めた
+  割合が下がった（linke-l103-core 1.0 → 0.87、l103-rate 1.0 → 0.83、v203-core、wch-ladder）: RVSWD の読みに同じ点数の
+  対抗ができてあいまい（margin 0）。3240d05 の cJTAG の先落とし（TCKC の区間に TMSC が 2〜3 回変わる線は読まない）の後は
+  確定に戻り、調整側の l103 rate と v203 の 21 件はすべて読めて誤り 0。
 
