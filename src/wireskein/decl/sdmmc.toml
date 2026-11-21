@@ -1,0 +1,61 @@
+# SD (and MMC) in SD mode: the CMD line, read on CLK's rise. A command or a short response is 48 bits: start 0, the
+# transmission bit (1 host to card, 0 card to host), the command index (6), the argument (32), CRC7 (x^7 + x^3 + 1
+# over the 40 bits before it), end 1, MSB first. R3 (the OCR) has no CRC: index and CRC are all 1s. R2 (CID / CSD)
+# is 136 bits: start, transmission 0, six 1s, the 128-bit register whose last 7 bits before the end bit are the CRC7
+# of the 120 before. The clock may run between them: frames are found by scanning.
+[plugin]
+name = "sdmmc"
+input = "frames.gap"
+data_pins = 1
+
+[roles]
+clock = "clk"
+data = "cmd"
+
+[frame]
+scan = true
+
+[[sequence]]
+order = "msb"
+fields = [
+  { name = "start", width = 1, expect = 0, hide = true },
+  { name = "dir",   width = 1, enum = { "1" = "CMD", "0" = "RSP" } },
+  { name = "index", width = 6 },
+  { name = "arg",   width = 32 },
+  { name = "crc",   width = 7, hide = true },
+  { name = "end",   width = 1, expect = 1, hide = true },
+]
+checks = [
+  { kind = "crc", field = "crc", from = "start", to = "arg", poly = 9, width = 7 },
+]
+
+[[sequence]]
+order = "msb"
+fields = [
+  { name = "start", width = 1, expect = 0, hide = true },
+  { name = "dir",   width = 1, expect = 0, enum = { "0" = "R3" } },
+  { name = "index", width = 6, expect = 63, hide = true },
+  { name = "ocr",   width = 32 },
+  { name = "crc",   width = 7, expect = 127, hide = true },
+  { name = "end",   width = 1, expect = 1, hide = true },
+]
+
+[[sequence]]
+order = "msb"
+fields = [
+  { name = "start", width = 1, expect = 0, hide = true },
+  { name = "dir",   width = 1, expect = 0, enum = { "0" = "R2" } },
+  { name = "rsv",   width = 6, expect = 63, hide = true },
+  { name = "reg0",  width = 32 },
+  { name = "reg1",  width = 32 },
+  { name = "reg2",  width = 32 },
+  { name = "reg3",  width = 24 },
+  { name = "crc",   width = 7, hide = true },
+  { name = "end",   width = 1, expect = 1, hide = true },
+]
+checks = [
+  { kind = "crc", field = "crc", from = "reg0", to = "reg3", poly = 9, width = 7 },
+]
+
+[score]
+terms = ["degenerate"]

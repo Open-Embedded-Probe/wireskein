@@ -677,7 +677,7 @@ class DmxPlugin:
 # declared in decl/*.toml (docs/design.ja.md §3.2)
 PLUGINS = ([SyncUnknownPlugin(), UartPlugin(), LinPlugin(), DmxPlugin(), CanFdPlugin(), SwioPlugin(), RgbLedPlugin(),
             OneWirePlugin(), NecPlugin(), I2sPlugin(), JtagPlugin(), CjtagPlugin(), DhtPlugin()]
-           + load_all(["i2c", "spi", "rvswd"]) + load_all(["swd", "can", "mdio", "ps2"]))
+           + load_all(["i2c", "spi", "rvswd"]) + load_all(["swd", "can", "mdio", "ps2", "sdmmc"]))
 UPPER = [Lines(), Nmea(), ModbusRtu(), MarkerGrammar()]
 
 

@@ -61,12 +61,12 @@ def read_sr(path: Path) -> Capture:
         rawfiles = {a["file"]: z.read(a["file"]) for a in extra.get("analog", {}).values() if a.get("file") in z.namelist()}
         listed = set(extra.get("extras", []))
         carried = {n: z.read(n) for n in z.namelist() if n.startswith(("attach/", "notes/")) or n in listed}
-        dtype = {1: np.uint8, 2: np.uint16, 4: np.uint32}[unitsize]
+        dtype = sample_dtype(unitsize)
         want = [b for b in (sorted(b - 1 for b in names) if names else range(min(total, unitsize * 8)))
                 if b < unitsize * 8]
         stepped = any(int(c.get("step", 1)) != 1 for c in extra.get("channels", {}).values())
         if stepped:          # channels of their own step: their samples picked from the whole
-            data = np.frombuffer(b"".join(z.read(n) for n in chunks), dtype=dtype)
+            data = samples(b"".join(z.read(n) for n in chunks), unitsize, dtype)
             n_logic = len(data)
         else:                # a block at a time, the changes kept: a capture of any length
             data = None
@@ -207,6 +207,26 @@ def _levels(ch: Channel, s0: int, s1: int) -> np.ndarray:
 BLOCK = 1 << 24          # samples read at a time: a chunk of a .sr may be the whole capture
 
 
+def sample_dtype(unitsize: int):
+    """The integer type a sample of `unitsize` bytes is read into (a .sr of 33 to 64 channels: 5 to 8 bytes)."""
+    if unitsize in (1, 2, 4):
+        return {1: np.uint8, 2: np.uint16, 4: np.uint32}[unitsize]
+    if 1 <= unitsize <= 8:
+        return np.uint64
+    raise ValueError(f"a .sr sample of {unitsize} bytes: up to 8 (64 channels) read")
+
+
+def samples(raw: bytes, unitsize: int, dtype) -> np.ndarray:
+    """A .sr's sample bytes (little-endian, `unitsize` each) as integers of `dtype`."""
+    if unitsize in (1, 2, 4, 8):
+        return np.frombuffer(raw, dtype=dtype)
+    b = np.frombuffer(raw[:len(raw) // unitsize * unitsize], np.uint8).reshape(-1, unitsize)
+    out = np.zeros(len(b), np.uint64)
+    for k in range(unitsize):
+        out |= b[:, k].astype(np.uint64) << np.uint64(8 * k)
+    return out
+
+
 def _blocks(z, chunks: list[str], unitsize: int, dtype, start: int, end: int | None):
     """The samples of ticks [start, end) of the chunks, BLOCK at a time, decompressed as they are read:
     (the block's first tick from start, its samples)."""
@@ -226,7 +246,7 @@ def _blocks(z, chunks: list[str], unitsize: int, dtype, start: int, end: int | N
                 raw = f.read(BLOCK * unitsize)
                 if not raw:
                     break
-                data = np.frombuffer(raw, dtype=dtype)
+                data = samples(raw, unitsize, dtype)
                 lo, hi = max(0, start - k), len(data) if end is None else min(len(data), end - k)
                 if hi > lo:
                     yield k + lo - start, data[lo:hi]
@@ -255,7 +275,7 @@ def read_sr_changes(path: Path, start: int = 0, end: int | None = None) -> Captu
         total = int(dev.get("total probes", unitsize * 8))
         chunks = sorted((n for n in z.namelist() if n == prefix or n.startswith(prefix + "-")),
                         key=lambda n: int(n.rsplit("-", 1)[1]) if n != prefix else 0)
-        dtype = {1: np.uint8, 2: np.uint16, 4: np.uint32}[unitsize]
+        dtype = sample_dtype(unitsize)
         bits = [b for b in (sorted(b - 1 for b in names) if names else range(min(total, unitsize * 8)))
                 if b < unitsize * 8]
         initial, edges, n_ticks = _changes(z, chunks, unitsize, dtype, bits, start, end)
@@ -312,7 +332,7 @@ def convert_sr(path: Path, out: Path, start: int = 0, end: int | None = None, ex
         total = int(dev.get("total probes", unitsize * 8))
         chunks = sorted((n for n in z.namelist() if n == prefix or n.startswith(prefix + "-")),
                         key=lambda n: int(n.rsplit("-", 1)[1]) if n != prefix else 0)
-        dtype = {1: np.uint8, 2: np.uint16, 4: np.uint32}[unitsize]
+        dtype = sample_dtype(unitsize)
         bits = [b for b in (sorted(b - 1 for b in names) if names else range(min(total, unitsize * 8)))
                 if b < unitsize * 8]
         if pins:                             # only these channels written

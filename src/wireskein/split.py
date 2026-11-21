@@ -593,7 +593,8 @@ class SrSource(Source):
         self.meta = {"file": str(path)}
 
     def _dtype(self):
-        return {1: np.uint8, 2: np.uint16, 4: np.uint32}[self.unitsize]
+        from ._engine import srio
+        return srio.sample_dtype(self.unitsize)
 
     def blocks(self):
         from ._engine import srio
