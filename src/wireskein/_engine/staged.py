@@ -130,6 +130,9 @@ class Ctx:
 
 # ---------------- sync plugins ----------------
 
+SYNC_UNKNOWN_PAIR = 0.6     # data lines keeping to the clock this closely (survey's data_score) for a whole score
+
+
 class SyncUnknownPlugin:
     """Clock + data with a consistent frame length that no known plugin claims.
     Reported as a separate kind of result, never as a known protocol."""
@@ -169,7 +172,10 @@ class SyncUnknownPlugin:
                 fit, chance = float(np.mean(ln % 8 == 0)), 1 / 8
             known = max(known, max(0.0, (fit - chance) / (1 - chance)))  # above chance only
         m["known_fit"] = known
-        score = 0.9 * share * q(len(lens), 4) * (0.5 + 0.5 * clk) * (1 - known)
+        # and only as far as its lines keep to the clock: a UART line at a third of a free clock's rate keeps to it at
+        # 0.3 by chance (2026-11-21, synth-uartlike-30 with spikes: 0.70 unknown beside the UART's 0.67)
+        score = (0.9 * share * q(len(lens), 4) * (0.5 + 0.5 * clk) * (1 - known)
+                 * min(1.0, pair / SYNC_UNKNOWN_PAIR))
         roles = {"clk": sb.clock, **({"cs": sb.select} if sb.select else {})}
         for i, d in enumerate(sb.data):
             roles[f"data{i}"] = d
