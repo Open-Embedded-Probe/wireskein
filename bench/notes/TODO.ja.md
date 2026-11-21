@@ -137,3 +137,6 @@
   - 速さ: 宣言の clock_hz（PS/2）、sync_unknown の既知の区切りを 1 回、2 サンプル未満の非同期の区分を飛ばす。残りは SWD の走査（約 1.3 秒）、
     UART のレートの試し、CAN FD の底の候補。
   - 残り: nack-17 odslow の SDA を UART と誤る。印のある難しい件での細部の誤り（JTAG の TDI / TDO、I2S の形式）。
+- xtalk 0.3 で SPI が崩れる（spivar-14 など 9 件）: 隣の速いクロックのクロストークが、SPI のクロックの待機中に 1 サンプルのスパイクとして密に乗る。
+  glitch_views の k=2 の見方でも、_slow_at が「周りのクロックが速い」と見てスパイクを残す（クロックの変化 730、全部除けば 564 で SPI を確定で読む）。
+  クロストークの密なスパイクを noise_runs / broken_runs が雑音と数えない理由を調べる。protomix の xtalk の SWD・I2C の読み違いも同じ形か確かめる。
