@@ -197,3 +197,12 @@ def test_states_keeps_each_odd_pulse_when_asked(tmp_path):
     assert any("activity" in x for x in states.of_line(e, 0, 2000, 1e6))
     xs = states.of_line(e, 0, 2000, 1e6, max_odd=None)
     assert [x["odd"] for x in xs if "odd" in x] == [100, 250, 520, 610, 900]
+
+
+def test_the_state_before_does_not_turn_on_a_rise_at_the_bound(tmp_path):
+    # the wave's rise falls a tick into the segment, a period a tick longer just before it (a timer's jitter): the
+    # wave still ran as the segment began, as it does with the bound 100 ticks earlier (2026-11-22, V203's PA1)
+    lv = wave([("pulses", 500, 1000, 14), ("pulses", 500, 1001, 1), ("pulses", 500, 1000, 5), ("level", 0, 10_000)])
+    for a in (15_000, 14_900):
+        r = run(tmp_path / str(a), lv, [("stop", a, 29_000, [becomes("P", level=0)])])["stop"]
+        assert r["status"] == "ok" and r["measured"]["before"] == {"period_s": 0.001, "high_s": 0.0005}, (a, r)

@@ -1865,7 +1865,11 @@ def check_becomes(cap, x):
     if pch is not None:
         # whole periods that ended before the window (one that runs into it may span a stop and a restart)
         pre = rows_all[rows_all[:, 0] + rows_all[:, 2] <= 0][-3:] if len(rows_all) else rows_all
-        running = len(pre) >= 2 and bool(np.all(similar(pre, pre[-1]))) and pre[-1, 0] + 2 * pre[-1, 2] > 0
+        # and the wave still ran at the window's start: the period after the last whole one (it runs into the
+        # window) ends in it, within the tolerance of a period (a rise in the window's first sample or two is the
+        # same wave as one just before it: the verdict must not turn on where the bounds fall, 2026-11-22 V203)
+        running = len(pre) >= 2 and bool(np.all(similar(pre, pre[-1]))) and \
+            pre[-1, 0] + 2 * pre[-1, 2] + max(2 * q, 0.02 * pre[-1, 2]) > 0
         prior = ({"period_s": float(pre[-1, 2]) / rate, "high_s": float(pre[-1, 1]) / rate, "row": pre[-1]}
                  if running else {"level": _level_at(pch, s0)})
     if x.get("level") is not None:

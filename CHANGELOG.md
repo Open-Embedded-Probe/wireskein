@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Fixed: `becomes` gave a verdict that turned on where the segment's bounds fell (unchecked: ng 100 ticks out, ok 100 in) where a wave's rise came a sample into the segment after a period a sample longer: the state before was read as the level, the wave not running. The wave still runs at the start where its next period ends in the segment within a period's tolerance (2 %, or 2 samples).
+- (JA) 直した: 波の立ち上がりが区間の 1 サンプル目に来て、その前の周期が 1 サンプル長いと、`becomes` の合否が区間の境目の位置で変わっていた（unchecked: 100 tick 外で ng、内で ok）: 前の状態を、波が止まったレベルと取っていた。次の周期が、周期の許す幅（2 % か 2 サンプル）で区間の中で終われば、始まりで波は走っている。
 - (EN) Fixed: a CAN line of mostly classic frames with a few FD ones was not read (its runs gave a bit time between the two rates, 1.25 nominal bits): the shortest runs (an FD data phase's bit) are a base for the nominal bit time too.
 - (JA) 直した: 古典の CAN のフレームが多く FD のフレームが少しの線を読めなかった（Run から出したビットの時間が 2 つの速さの間、公称の 1.25 ビットになった）。いちばん短い Run（FD のデータ相の 1 ビット）も公称のビットの時間の元にする。
 - (EN) Fixed: a JTAG capture with the adapter's RTCK beside TCK (the same line returned, 95 % of its changes within 2 samples) was ambiguous at a score of 1.0: the reading on TCK and the one on RTCK tied. Lines changing together at the same level are twins, and readings differing only by a line and its twin are one (a differential pair, opposite, is not). sigrok-dumps' glyn_tonga2_init: confirmed.
