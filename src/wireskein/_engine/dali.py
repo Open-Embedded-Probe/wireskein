@@ -12,6 +12,7 @@ from .stack import Node, Stream
 DALI_HALF = 1 / 2400       # a half bit, seconds
 DALI_TOL = 0.25            # runs within this share of a whole number of halves
 EVIDENCE_BITS = 8
+DALI_GOOD = 0.8           # frames of valid Manchester and length, this share of all at least
 
 
 def _address(a: int) -> dict:
@@ -85,7 +86,7 @@ class DaliPlugin:
             return []
         fr = frames(ch, c.cap.n_samples, rate)
         good = [f for f in fr if f.get("ok")]
-        if len(good) < 2:
+        if len(good) < 2 or len(good) < DALI_GOOD * len(fr):
             return []
         # evidence in bits: each frame's halves all valid Manchester pairs at DALI's own rate, and its length 8 or 16
         info = sum(4 + (2 if f["kind"] == "forward" else 1) for f in good)

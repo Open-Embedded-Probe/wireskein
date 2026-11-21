@@ -12,6 +12,8 @@ SYNC_TICKS = 56
 TICK_S = (2.5e-6, 100e-6)
 NIBBLE = (11.5, 27.5)          # a nibble's ticks (12 to 27)
 EVIDENCE_BITS = 8
+SENT_TICK_TOL = 0.05       # a message's tick within this share of the median: the same sensor's
+SENT_GOOD = 0.8            # messages of one tick and length whose CRC holds, this share of all at least
 
 
 def _table():
@@ -75,8 +77,16 @@ class SentPlugin:
         if rate < 1e6:
             return []
         msgs = messages(ch, c.cap.n_samples, rate)
-        good = [m for m in msgs if m["ok"]]
-        if len(good) < 3:
+        if len(msgs) < 3:
+            return []
+        # a sensor's messages share its tick and its count of data nibbles: those that do are its, the rest (a line
+        # of other pulses read where some 56 ticks happen) are not; a CRC4 holds by chance one time in 16
+        tick = float(np.median([m["tick_s"] for m in msgs]))
+        lens = [len(m["data"]) for m in msgs]
+        mode = max(set(lens), key=lens.count)
+        same = [m for m in msgs if abs(m["tick_s"] / tick - 1) < SENT_TICK_TOL and len(m["data"]) == mode]
+        good = [m for m in same if m["ok"]]
+        if len(good) < 3 or len(good) < SENT_GOOD * len(msgs):
             return []
         # evidence in bits: each message's CRC (4) and its sync of 56 ticks with nibbles in range (2)
         info = 6 * len(good)

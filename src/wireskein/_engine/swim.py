@@ -13,6 +13,7 @@ COMMANDS = {0: "SRST", 1: "ROTF", 2: "WOTF"}
 SWIM_GAP = 1.6            # a gap of this many bit times between pulses ends a frame
 SWIM_SHORT = 0.5          # a low shorter than this share of a bit: 1
 EVIDENCE_BITS = 8
+SWIM_GOOD = 0.8           # frames whose parity and acknowledge hold, this share of all at least
 
 
 def frames(ch, n: int, rate: float) -> list[dict]:
@@ -90,7 +91,8 @@ class SwimPlugin:
         if not fr:
             return []
         good = [f for f in fr if f["parity_ok"] and f["ack"] == 1]
-        if len(good) < 3:
+        # a frame's parity and acknowledge hold by chance one time in four: a line of other pulses has some
+        if len(good) < 3 or len(good) < SWIM_GOOD * len(fr):
             return []
         tr = transactions(fr)
         # evidence in bits: each frame's parity and acknowledge (2), the frames' lengths (3 or 8 bits: 1)
