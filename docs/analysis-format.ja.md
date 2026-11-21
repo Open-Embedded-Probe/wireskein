@@ -139,6 +139,7 @@ analyze の書き出し（`--mode final`、`depth` まで）の層。刻みは�
 | `uart` | `nmea`、`modbus_rtu`（チェックサム / CRC が通ったもの）、`lines` か `bytes`（`{"s": [...], "hex"}`。9 データビットなら `hex` は文字ごとの下位 8 ビット、`bit8` は 9 ビット目を `"0"` / `"1"` で順に。マルチドロップではアドレスの印）: 最終の読みは、読めたもののうちこの順で最初のもの（GPS の文は、テキストの行ではなく `nmea`） |
 | `can` | `frames`: `s`、`id`、`ide`（1: 拡張の識別子）、`dlc`、`data`（16 進。DLC が運ぶバイト。CAN FD は 64 まで）、`ack`、`ok`。CAN FD のフレームは `fd: true`、`brs`、`esi` と、BRS のあるものは `data_ratio`（データ相の速さの名目の速さに対する比）も。FD のフレームのある線は `params.fd`、`bitrate`、`data_bitrate`（フレームが 1 つの速さに切り替わるとき） |
 | `dali` | `frames`: `s`、`e`、`kind`（`forward`: コントローラの 16 ビット、`backward`: 機器の 8 ビット）、`data`（コマンドか明るさのバイト、応答）、前向きのフレームは `addr_byte` とその読み `to`（`short` / `group` / `broadcast` / `special`）、`address`、`selector`（`command` / `arc_power`）、`ok`。役割は `dali` |
+| `dcc` | `packets`: `s`、`e`、`bytes`（16 進、最後が誤り検出のバイト）、`address`（1〜127、14 ビットの長いアドレスは `long`、`broadcast`、`idle`、アクセサリのデコーダは最初のバイトと `accessory`）、`ok`（誤り検出のバイトと終わりのビットが合う）。役割は `track` |
 | `cec` | `messages`: `s`、`e`、`initiator`、`destination`（論理アドレス。15: ブロードキャスト）、あれば `opcode` と `data`（16 進、オペランド）、`acked`（すべてのブロックの ACK: 宛先のあるメッセージは相手が 0、ブロードキャストは 1 のまま）、`complete`（最後のブロックの EOM を見た）。役割は `cec` |
 | `lin` | `frames`: `s`（break）、`id`、`data`（16 進）、`ok`（sync、識別子のパリティ、チェックサムが合う） |
 | `dmx512` | `packets`: `s`（break）、`start_code`、`data`（16 進。スロット）。線の Run から出た速さではなく規格の 250 kbaud で読んだときは `params.rate_given: "dmx512"`（スロットが 1 つの値ばかりだと速さが出ない）。`params.idle` は線の待機のレベル（1。RS-485 の反転側の線は 0） |

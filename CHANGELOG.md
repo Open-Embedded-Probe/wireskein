@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) DCC (model railway control) is read on the track signal (`dcc`): bits as full cycles of 1 (58 us halves) or 0 (100 us and more), preambles, bytes led by 0s, the error detection byte (XOR) checked, the decoder's address. sigrok-dumps' DCC captures (no sigrok truth): every packet's error detection byte holds.
+- (JA) DCC（鉄道模型の制御）を線路の信号で読む（`dcc`）: 1 周期で 1 ビット（半周期 58 µs で 1、100 µs 以上で 0）、プリアンブル、0 で始まるバイト、誤り検出のバイト（XOR）の確かめ、デコーダのアドレス。sigrok-dumps の DCC の記録（sigrok の正解はなし）: すべてのパケットの誤り検出のバイトが合う。
 - (EN) DALI is read (`dali`): Manchester at 1200 b/s, forward frames (address byte read as short / group / broadcast and command or arc power) and backward frames (answers). sigrok-dumps' capture: every frame sigrok's (18).
 - (JA) DALI を読む（`dali`）: 1200 b/s のマンチェスタ符号、前向きのフレーム（アドレスのバイトを個別 / グループ / 全体と読み、コマンドか明るさ）と後ろ向きのフレーム（応答）。sigrok-dumps の記録: すべてのフレームが sigrok と同じ（18）。
 - (EN) Fixed: an LED string all dark (every bit 0) was held at 0.3 of its score as a clock's one duty might be: frames between resets of one length, a whole number of LEDs (24 or 32 bits each), now count as its evidence. sigrok-dumps' NeoPixel captures at 6 and 24 MHz (a string of 24 dark, 435 and 858 frames) read, confirmed.
