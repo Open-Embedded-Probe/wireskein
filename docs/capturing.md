@@ -128,6 +128,7 @@ Nothing it does is a guess: each is told where it was done, and anything else is
 | A clock lost between samples (a frame a clock short) | Restored only where every likely place gives the same bits and they pass the checks | `restored` (the tick), `undersampled` |
 | A clock too fast for the rate | — | `undersampled`, `clock_speeds` |
 | I2C: a pulse shorter than 50 ns (t_SP), but an SCL high where a clock is due with whole lows around it (a clock a slow rise clipped short: kept); an edge crossing the threshold more than once within a third of SCL's half and 1000 ns (t_r; from 5 MS/s) | Left out; read as one at its last change, as an I2C input does (its spike filter, its hysteresis) | `params.deglitch: i2c_input`; the `i2c` check's `bus_glitch`, `slow_edge` |
+| A lone line's or a pair's pulses far shorter than its usual runs (spikes, bounces at its edges), for the pulse-width protocols (CEC, S/PDIF, DALI, DCC, SENT, J1850, SWIM, USB PD, DHT, Wiegand, USB, cJTAG) | Read as it is and with pulses under a quarter of its median run (2-64 samples) left out; the reading that holds wins | `params.deglitch` (the width left out, in samples) |
 | Activity no frame reads | — | `uninterpreted` |
 
 On 4 KiB flashed by a LinkE at 50 MS/s, 174 of 3026 frames a clock short read so, each one a 160 MS/s capture of the
