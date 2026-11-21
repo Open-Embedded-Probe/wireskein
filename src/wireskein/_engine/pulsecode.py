@@ -104,27 +104,61 @@ ONEWIRE = {
 }
 
 
+OVERDRIVE_ROM = (0x3C, 0x69)    # Overdrive Skip ROM, Overdrive Match ROM: the devices at overdrive speed after it
+OVERDRIVE_LOOK = 8              # lows after such a command whose pace tells the switch
+
+
 def onewire(ch: Channel, n: int, rate: float, speed: str = "standard") -> dict:
     """A 1-Wire line (idle high, every pulse low). A low of at least `reset_detect` is a reset; the next low that
     starts within the presence window after it is the presence pulse; every other low is a slot, 1 when shorter
     than `split` (write 1, or read 1), else 0 (write 0, or a read 0 held by the slave), LSB first. Who drove a low
-    is not on the line: a read slot reads as the bit it carried."""
-    sp = ONEWIRE[speed]
+    is not on the line: a read slot reads as the bit it carried.
+
+    At standard speed an Overdrive Skip ROM or Overdrive Match ROM (the reset's first byte) puts the devices at
+    overdrive speed: the rest is read at it (the reset's "overdrive_after_bits"), its resets too ("speed"), until a
+    reset of standard length. Only the slots at `speed` go to "slot" / "recovery" (the pace of the master's slots)."""
     st, w = pulses(ch, n, 0)
     out = {"resets": [], "low_0": [], "low_1": [], "slot": [], "recovery": [], "before_reset": 0}
     cur = None
     bits: list[int] = []
     last = None                                    # (start, width) of the previous slot
+    mode = speed
+    std_reset = ONEWIRE["standard"]["reset_detect"] * rate
 
     def close():
         if cur is not None:
             cur["data"], cur["leftover_bits"] = (lambda d: (d[0].hex(), d[1]))(_bytes(bits, lsb_first=True))
             cur["bits"] = len(bits)
 
-    for s, x in zip(st.tolist(), w.tolist()):
+    starts, widths = st.tolist(), w.tolist()
+
+    def paced_overdrive(i):
+        """The lows after the i-th at overdrive: of the next ones (up to OVERDRIVE_LOOK, to a reset of standard
+        length) most spaced closer than a standard slot, or every one as short as overdrive's lows with both bits
+        among them (a master may pace overdrive slots as far apart as standard ones: sigrok-dumps' SoCkit). A reset's
+        first byte of 0x3C or 0x69 that the master follows with standard slots was data, not the switch."""
+        od = ONEWIRE["overdrive"]
+        gaps, lows = [], []
+        for j in range(i + 1, min(len(starts), i + 1 + OVERDRIVE_LOOK)):
+            if widths[j] >= std_reset:
+                break
+            gaps.append(starts[j] - starts[j - 1])
+            lows.append(widths[j])
+        if not gaps:
+            return False
+        if float(np.median(gaps)) < ONEWIRE["standard"]["slot"][0] * rate:
+            return True
+        lo = np.asarray(lows, float) / rate
+        return bool(np.all(lo <= od["low_0"][1]) and np.any(lo < od["split"]) and np.any(lo >= od["split"]))
+
+    for i, (s, x) in enumerate(zip(starts, widths)):
+        sp = ONEWIRE[mode]
         if x >= sp["reset_detect"] * rate:
             close()
-            cur = {"t": s, "reset": x, "presence": False}
+            if x >= std_reset:
+                mode = speed
+                sp = ONEWIRE[mode]
+            cur = {"t": s, "reset": x, "presence": False, **({"speed": mode} if mode != speed else {})}
             out["resets"].append(cur)
             bits, last = [], None
             continue
@@ -137,11 +171,16 @@ def onewire(ch: Channel, n: int, rate: float, speed: str = "standard") -> dict:
             continue
         one = x < sp["split"] * rate
         bits.append(int(one))
-        out["low_1" if one else "low_0"].append((s, x))
-        if last is not None and s - last[0] < 4 * sp["slot"][0] * rate:
-            out["slot"].append((last[0], s - last[0]))
-            out["recovery"].append((last[0] + last[1], s - last[0] - last[1]))
+        if mode == speed:
+            out["low_1" if one else "low_0"].append((s, x))
+            if last is not None and s - last[0] < 4 * sp["slot"][0] * rate:
+                out["slot"].append((last[0], s - last[0]))
+                out["recovery"].append((last[0] + last[1], s - last[0] - last[1]))
         last = (s, x)
+        if (mode == "standard" and len(bits) == 8 and _bytes(bits, lsb_first=True)[0][0] in OVERDRIVE_ROM
+                and paced_overdrive(i)):
+            mode, last = "overdrive", None
+            cur["overdrive_after_bits"] = 8
     close()
     return out
 

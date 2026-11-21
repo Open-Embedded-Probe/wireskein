@@ -168,7 +168,8 @@ def layers_of(n) -> dict:
     elif a == "rgb_led":
         out["frames"] = [{"s": f["t"], "bits": f["bits"], "data": f["data"]} for f in n.output.items["frames"]]
     elif a == "onewire":
-        out["resets"] = [{"s": z["t"], "reset_ticks": z["reset"], "presence": z["presence"], "data": z["data"]}
+        out["resets"] = [{"s": z["t"], "reset_ticks": z["reset"], "presence": z["presence"], "data": z["data"],
+                          **{k: z[k] for k in ("speed", "overdrive_after_bits") if k in z}}
                          for z in n.output.items]
     elif a == "ir_nec":
         out["frames"] = [{"s": f["t"], **{k: f[k] for k in ("repeat", "addr", "ext", "cmd", "cmd_ok") if k in f}}

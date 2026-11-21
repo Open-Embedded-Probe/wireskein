@@ -96,6 +96,11 @@ ONEWIRE_PRESENCE = 2     # presence pulses seen: this many count as every reset 
 ONEWIRE_PACE = 0.25   # a slot period within this of the median keeps the master's pace
 
 
+def _runs_once(v: np.ndarray) -> np.ndarray:
+    """The values with each run of one value kept once."""
+    return v[np.concatenate(([True], v[1:] != v[:-1]))] if len(v) else v
+
+
 class OneWirePlugin:
     name = "onewire"
     consumes = ("line",)
@@ -136,8 +141,10 @@ class OneWirePlugin:
             # start to the next keep to their median; a UART's lows read as slots come whole bits apart, scattered
             per = np.array([p for _, p in r["slot"]], np.float64)
             paced = float(np.mean(np.abs(per / np.median(per) - 1) <= ONEWIRE_PACE)) if len(per) else 0.0
-            # a clock's lows are all alike: its "bytes" are one value (0x00 or 0xff), a master's commands and data vary
-            data = np.frombuffer(bytes.fromhex("".join(z["data"] for z in rs)), np.uint8)
+            # a clock's lows are all alike: its "bytes" are one value (0x00 or 0xff), a master's commands and data vary.
+            # A run of one value inside a reset (a blank memory page read: 0xff after 0xff) is one value there
+            data = np.concatenate([np.zeros(0, np.uint8)] + [_runs_once(np.frombuffer(bytes.fromhex(z["data"]), np.uint8))
+                                                              for z in rs])
             score = ((0.6 + 0.4 * pres) * whole * q(bits / 8, 2) * q(len(rs), 1) * float(np.clip((paced - 0.5) / 0.3, 0, 1))
                      * degenerate(data))
             if score >= 0.2 and (best is None or score > best[0]):
