@@ -86,9 +86,22 @@ def test_transactions(speed, rate):
         pk.append({"pid": "DATA1" if k % 2 else "DATA0", "data": data})
         pk.append({"pid": "ACK"})
     cap = line(pk, speed, rate)
-    ex = decode.export(decode.analyze(cap), cap)
+    ex = decode.export(decode.analyze(cap), cap, depth="frames")
     (c,) = [c for c in ex["claims"] if c["verdict"] in ("confirmed", "likely")]
     assert c["protocol"] == "usb" and c["roles"] == {"dp": "DP", "dm": "DM"} and c["params"]["speed"] == speed
     got = [{k: v for k, v in p.items() if k not in ("s", "e", "ok")} for p in c["result"]["packets"]]
     want = [{**p, **({"data": p["data"].hex()} if "data" in p else {})} for p in pk]
     assert got == want and all(p["ok"] for p in c["result"]["packets"])
+
+
+def test_setup_transaction():
+    """A control transfer's SETUP stage as a transaction with its request named (GET_DESCRIPTOR of the device)."""
+    pk = [{"pid": "SETUP", "addr": 0, "endp": 0}, {"pid": "DATA0", "data": bytes.fromhex("8006000100004000")},
+          {"pid": "ACK"}, {"pid": "IN", "addr": 0, "endp": 0}, {"pid": "NAK"}] * 3
+    cap = line(pk, "low", 12e6)
+    ex = decode.export(decode.analyze(cap), cap)
+    (c,) = [c for c in ex["claims"] if c["protocol"] == "usb"]
+    tr = c["result"]["transactions"]
+    assert [(x["token"], x.get("handshake")) for x in tr] == [("SETUP", "ACK"), ("IN", "NAK")] * 3
+    st = tr[0]["setup"]
+    assert (st["request"], st["direction"], st["wValue"], st["wLength"]) == ("GET_DESCRIPTOR", "in", 0x0100, 64)

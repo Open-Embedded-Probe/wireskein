@@ -155,6 +155,57 @@ def packets(dp, dm, n: int, rate: float, speed: float) -> list[dict]:
     return out
 
 
+REQUESTS = {0: "GET_STATUS", 1: "CLEAR_FEATURE", 3: "SET_FEATURE", 5: "SET_ADDRESS", 6: "GET_DESCRIPTOR",
+            7: "SET_DESCRIPTOR", 8: "GET_CONFIGURATION", 9: "SET_CONFIGURATION", 10: "GET_INTERFACE",
+            11: "SET_INTERFACE", 12: "SYNCH_FRAME"}
+HANDSHAKES = {"ACK", "NAK", "STALL", "NYET"}
+
+
+def setup_request(data: bytes) -> dict:
+    """A SETUP's eight bytes as their fields (USB 2.0 9.3); a standard request named."""
+    rt, req = data[0], data[1]
+    out = {"bmRequestType": rt, "bRequest": req, "wValue": int.from_bytes(data[2:4], "little"),
+           "wIndex": int.from_bytes(data[4:6], "little"), "wLength": int.from_bytes(data[6:8], "little"),
+           "direction": "in" if rt & 0x80 else "out", "type": ("standard", "class", "vendor", "reserved")[(rt >> 5) & 3]}
+    if out["type"] == "standard" and req in REQUESTS:
+        out["request"] = REQUESTS[req]
+    return out
+
+
+def transactions(pk: list[dict]) -> list[dict]:
+    """Packets grouped as the host's transactions: a token (IN / OUT / SETUP / PING), its data packet if any, the
+    handshake ending it; a SOF alone. A packet that failed its checks ends the transaction it is in."""
+    out, cur = [], None
+
+    def close():
+        nonlocal cur
+        if cur is not None:
+            out.append(cur)
+        cur = None
+    for p in pk:
+        pid = p.get("pid")
+        if not p.get("ok"):
+            close()
+            continue
+        if pid == "SOF":
+            close()
+            out.append({"s": p["s"], "e": p["e"], "token": "SOF", "frame": p["frame"]})
+        elif pid in TOKENS:
+            close()
+            cur = {"s": p["s"], "e": p["e"], "token": pid, "addr": p["addr"], "endp": p["endp"]}
+        elif pid in DATA and cur is not None and "data" not in cur:
+            cur.update(e=p["e"], data_pid=pid, data=p["data"])
+            if cur["token"] == "SETUP" and len(p["data"]) == 16:
+                cur["setup"] = setup_request(bytes.fromhex(p["data"]))
+        elif pid in HANDSHAKES and cur is not None:
+            cur.update(e=p["e"], handshake=pid)
+            close()
+        else:
+            close()
+    close()
+    return out
+
+
 def _pair_opposite(a, b, n: int) -> float:
     cuts = np.unique(np.concatenate([[0], np.asarray(a.edges), np.asarray(b.edges), [n]]))
     la, lb = a.level_at(cuts[:-1]), b.level_at(cuts[:-1])

@@ -156,7 +156,9 @@ def layers_of(n) -> dict:
         else:
             out["packets"] = n.output.items
     elif a == "usb":
+        from .usb import transactions
         out["packets"] = list(n.output.items)
+        out["transactions"] = transactions(out["packets"])
     elif a in ("swd", "mdio", "can") or getattr(getattr(n, "plugin", None), "external", False) or n.params.get("external"):
         rows = [{{"start": "s", "end": "e"}.get(k, k): (int(v) if isinstance(v, np.integer) else v) for k, v in x.items()}
                 for x in (n.output.items or [])]
@@ -204,7 +206,7 @@ def _mdio_addresses(rows: list) -> None:
 FINAL = {"i2c": "transactions", "spi": ("sd", "transfers"), "uart": ("nmea", "modbus_rtu", "lines", "bytes"),
          "lin": "frames", "dmx512": "packets", "rvswd": ("dm", "dmi"), "swio": ("dm", "dmi"), "sync_unknown": "summary",
          "swd": "packets", "mdio": "frames", "i2s": "frames", "jtag": "scans", "dht": "readings", "can": "frames", "rgb_led": "frames", "onewire": "resets",
-         "ir_nec": "frames", "usb": "packets"}
+         "ir_nec": "frames", "usb": ("transactions", "packets")}
 
 
 def final_of(n, lay: dict) -> dict:
