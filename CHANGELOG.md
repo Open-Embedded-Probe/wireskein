@@ -3,6 +3,8 @@
 ## Unreleased
 - (EN) Fixed: a CAN line of mostly classic frames with a few FD ones was not read (its runs gave a bit time between the two rates, 1.25 nominal bits): the shortest runs (an FD data phase's bit) are a base for the nominal bit time too.
 - (JA) 直した: 古典の CAN のフレームが多く FD のフレームが少しの線を読めなかった（Run から出したビットの時間が 2 つの速さの間、公称の 1.25 ビットになった）。いちばん短い Run（FD のデータ相の 1 ビット）も公称のビットの時間の元にする。
+- (EN) Fixed: a free clock sampling a CAN line four times a bit gave chance CRC7s, read as SD frames and confirmed: responses following no command count against an SD reading (half of them, at least, answering one for a whole score), and an R2 of a register all 1s (an idle line) is none.
+- (JA) 直した: 止まらないクロックが CAN の線を 1 ビット 4 回取ると、CRC7 がたまたま合い、SD のフレームとして確定していた: コマンドに続かない応答は SD の読みに不利に数え（満点には応答の半分以上がコマンドに答えること）、中身が全部 1 の R2（待機の線）は認めない。
 - (EN) Fixed: cJTAG under spikes or bounces (a spike on TMSC while TCKC is high reads as an escape, a bounce on TCKC as a cycle more): TCKC and TMSC are also read with pulses under a quarter of TCKC's median run taken out.
 - (JA) 直した: スパイクやバウンスのある cJTAG（TCKC が High の間の TMSC のスパイクはエスケープに、TCKC のバウンスは 1 サイクル多く見える）: TCKC と TMSC を、TCKC の Run の中央値の 4 分の 1 より短いパルスを除いたものでも読む。
 - (EN) Fixed: Wiegand (and a USB pair) under spikes or bounces: the two lines are read as they are and with pulses under a quarter of their shorter level's median run taken out (Wiegand's misses on the noisy generated cases 17 -> 0).

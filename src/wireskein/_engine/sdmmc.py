@@ -15,6 +15,7 @@ from .stack import Node, Stream
 
 POLY = 0x09                 # x^7 + x^3 + 1 (the x^7 term implied)
 SD_ANSWERED = 0.3           # commands answered, this share of them at least
+SD_RESPONSES_ANSWERING = 0.5   # responses following a command, this share of them for a whole score
 EVIDENCE_BITS = 8
 
 
@@ -102,6 +103,8 @@ def frames(t: np.ndarray, bits: np.ndarray) -> list[dict]:
         for k in range(2, 8):
             head &= bits[k:m2 + k] == 1
         for i in np.flatnonzero(head & (crc2[8:8 + m2] == got2)).tolist():
+            if bits[i + 8:i + 128].min() == bits[i + 8:i + 128].max():
+                continue                      # a register of all 1s (or 0s): an idle line's, no CID / CSD
             before = [f for f in out if f["_i"] + f["_n"] <= i]
             prev = before[-1] if before else None
             if prev is None or prev["dir"] != "CMD" or prev["index"] not in R2_AFTER:
@@ -157,6 +160,11 @@ class SdmmcPlugin:
             # evidence in bits: each frame's CRC7 (7; R3's fixed 1s alike), an answered command again (its index: 6)
             info = 7 * len(f) + 6 * ans
             score = (1 - 0.5 ** (info / EVIDENCE_BITS)) * (0.6 + 0.4 * ans / max(1, ncmd))
+            # and a card answers commands: responses that follow none are chance CRCs (a free clock sampling a CAN
+            # line four times a bit: five "responses" to one command, 2026-11-21, synth-protocols-251 with spikes)
+            n_rsp = sum(1 for x in f if x.get("dir") in ("RSP", "R2", "R3"))
+            if n_rsp >= 2:
+                score *= min(1.0, ans / n_rsp / SD_RESPONSES_ANSWERING)
             node = Node("sdmmc", {"sample_edge": "rise"}, {"clk": sb.clock, "cmd": d}, Stream("sdmmc.frames", f),
                         {"frames": len(f), "commands": ncmd, "answered": ans}, layer_score=score, total=score)
             if best is None or node.total > best.total:
