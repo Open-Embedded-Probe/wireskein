@@ -130,6 +130,7 @@ class Ctx:
 
 # ---------------- sync plugins ----------------
 
+SYNC_UNKNOWN_BITS = 8      # the commonest frame this many bits or more for a whole score
 SYNC_UNKNOWN_PAIR = 0.6     # data lines keeping to the clock this closely (survey's data_score) for a whole score
 
 
@@ -181,8 +182,10 @@ class SyncUnknownPlugin:
         m["known_fit"] = known
         # and only as far as its lines keep to the clock: a UART line at a third of a free clock's rate keeps to it at
         # 0.3 by chance (2026-11-21, synth-uartlike-30 with spikes: 0.70 unknown beside the UART's 0.67)
+        # and frames of a few bits are a noise's pieces (a clock's bursts cut by spikes: hundreds of 3-bit "frames",
+        # 2026-11-21, protomix-12 with crosstalk), no bus's words: whole from 8 bits on
         score = (0.9 * share * q(len(lens), 4) * (0.5 + 0.5 * clk) * (1 - known)
-                 * min(1.0, pair / SYNC_UNKNOWN_PAIR))
+                 * min(1.0, pair / SYNC_UNKNOWN_PAIR) * min(1.0, top[0][0] / SYNC_UNKNOWN_BITS))
         roles = {"clk": sb.clock, **({"cs": sb.select} if sb.select else {})}
         for i, d in enumerate(sb.data):
             roles[f"data{i}"] = d
@@ -878,6 +881,7 @@ SLOW_PERIODS = 4     # a clock this many times k a period or more: slow enough t
 NOISY_RUNS = 0.12    # a clock's runs around this share a noise's at least (views.noise_runs): its periods from it cleaned
 NOISY_WINDOW = 64    # runs each side of an edge, for that share
 NOISY_WIDE = 2048    # runs each side, for the share of runs breaking the clock's period (views.broken_runs)
+CLEAN_NOISE_SHARE = 0.3   # a clock's runs this share a noise's (views.noise_runs): its typical run from it cleaned
 I2C_INPUT_PASSES = 3      # timing.i2c_input run again on its output while it changes, at most this many times
 GLITCH_SHARE_CLEANED = 0.9   # ... and where its typical run is its cleaned one's (crosstalk from a fast clock)
 GLITCH_SHARE = 0.6    # a clock's runs this short a share or less: a view with them taken out
@@ -945,7 +949,12 @@ def glitch_views(cap, sv, g, memo: dict | None = None):
         # (where most runs are left: a clock with runs under BOUNCE_TICKS loses them all, and its bursts are no run)
         # (crosstalk from a fast clock beside it can make three in four of its runs a spike's: a tenth left, 64 runs
         # and more, is still the clock's: 2026-11-21, spivar-14 with crosstalk, 563 of 2482)
-        if len(clean) >= 16 and (len(clean) >= 0.25 * len(inner) or (len(clean) >= 64 and len(clean) >= 0.1 * len(inner))):
+        # (or, where most of its short runs are a noise's - a pulse beside a long run, views.noise_runs: crosstalk from a
+        # free clock over a mostly idle bus, 12000 spikes beside an SWD clock's 482 changes, protomix-12; a LinkE's
+        # clock's own short highs sit beside short lows and do not count)
+        noisy = len(inner) and V.noise_runs(ch.edges, BOUNCE_TICKS * step)[-1] >= CLEAN_NOISE_SHARE * len(inner)
+        if len(clean) >= 16 and (len(clean) >= 0.25 * len(inner) or (len(clean) >= 64 and len(clean) >= 0.1 * len(inner))
+                                 or (len(clean) >= 64 and noisy)):
             med = max(med, float(np.median(clean)))
         memo[key] = med
         memo[("cleaned", g.clock, step)] = med > float(np.median(inner))
