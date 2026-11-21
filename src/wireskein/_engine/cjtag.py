@@ -9,10 +9,13 @@ cycles; the evidence is the OAC of OScan1 after a selection and, as for JTAG, ea
 TDO) and IR scans of one length."""
 from __future__ import annotations
 
+from dataclasses import replace
+
 import numpy as np
 
 from .jtag import EVIDENCE_BITS, JTAG_CAPTURES, JTAG_SCANS, _value, scans, walk
 from .stack import Node, Stream
+from .views import pulses_out
 
 ESC_DESELECT, ESC_SELECT, ESC_RESET = 4, 6, 8     # TMSC's toggles in one TCKC high: at least this many
 OAC_OSCAN1 = 0b1100                               # the OAC naming OScan1 (sent LSB first: 0 0 1 1)
@@ -100,8 +103,21 @@ class CjtagPlugin:
     def run(self, c, fr, g):
         sb = fr.source
         out = []
-        for d in sb.data:
-            r = read_cjtag(c.cap.channel(sb.clock), c.cap.channel(d), c.cap.n_samples)
+        for d, k in [(d, k) for d in sb.data for k in (0, None)]:
+            kc, kd = c.cap.channel(sb.clock), c.cap.channel(d)
+            if k is None:
+                # and with pulses under a quarter of TCKC's median run taken out of both: a spike on TMSC while TCKC
+                # is high is an escape's toggle, a bounce on TCKC a cycle more (2026-11-21: cJTAG under noise)
+                runs = np.diff(np.asarray(kc.edges, np.int64))
+                if len(runs) < 8:
+                    continue
+                k = int(np.clip(0.25 * float(np.median(runs)), 2, 64))
+                kc2 = replace(kc, edges=pulses_out(np.asarray(kc.edges, np.int64), k))
+                kd2 = replace(kd, edges=pulses_out(np.asarray(kd.edges, np.int64), k))
+                if len(kc2.edges) == len(kc.edges) and len(kd2.edges) == len(kd.edges):
+                    continue
+                kc, kd = kc2, kd2
+            r = read_cjtag(kc, kd, c.cap.n_samples)
             if r is None or not r["oscan1"].any():
                 continue
             st = walk(r["tms"])
@@ -129,7 +145,8 @@ class CjtagPlugin:
             mets = {"scans": len(sc), "ir_scans": len(ir), "ir_bits": ir_len, "ir_same": same, "ir_capture_ok": ok01,
                     "escapes": len(r["escapes"]), "activations": len(r["activations"]), "oscan1": n_osc,
                     "evidence_bits": float(info)}
-            out.append(Node("jtag", {"sample_edge": "rise", "cjtag": "oscan1", **({"ir_bits": ir_len} if ir_len else {})},
+            out.append(Node("jtag", {"sample_edge": "rise", "cjtag": "oscan1", **({"ir_bits": ir_len} if ir_len else {}),
+                                     **({"deglitch": k} if k else {})},
                             {"tckc": sb.clock, "tmsc": d}, Stream("jtag.scans", items), mets,
                             layer_score=score, total=score))
         return sorted(out, key=lambda x: -x.total)[:1]

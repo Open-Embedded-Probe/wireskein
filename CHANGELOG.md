@@ -3,6 +3,8 @@
 ## Unreleased
 - (EN) Fixed: a CAN line of mostly classic frames with a few FD ones was not read (its runs gave a bit time between the two rates, 1.25 nominal bits): the shortest runs (an FD data phase's bit) are a base for the nominal bit time too.
 - (JA) 直した: 古典の CAN のフレームが多く FD のフレームが少しの線を読めなかった（Run から出したビットの時間が 2 つの速さの間、公称の 1.25 ビットになった）。いちばん短い Run（FD のデータ相の 1 ビット）も公称のビットの時間の元にする。
+- (EN) Fixed: cJTAG under spikes or bounces (a spike on TMSC while TCKC is high reads as an escape, a bounce on TCKC as a cycle more): TCKC and TMSC are also read with pulses under a quarter of TCKC's median run taken out.
+- (JA) 直した: スパイクやバウンスのある cJTAG（TCKC が High の間の TMSC のスパイクはエスケープに、TCKC のバウンスは 1 サイクル多く見える）: TCKC と TMSC を、TCKC の Run の中央値の 4 分の 1 より短いパルスを除いたものでも読む。
 - (EN) Fixed: Wiegand (and a USB pair) under spikes or bounces: the two lines are read as they are and with pulses under a quarter of their shorter level's median run taken out (Wiegand's misses on the noisy generated cases 17 -> 0).
 - (JA) 直した: スパイクやバウンスのある Wiegand（と USB の対）: 2 本の線をそのままと、短い方のレベルの Run の中央値の 4 分の 1 より短いパルスを除いたものの両方で読む（ノイズを掛けた合成の件の Wiegand の見落とし 17 → 0）。
 - (EN) Fixed: the pulse-width readers of a lone line (CEC, S/PDIF, DALI, DCC, SENT, J1850, SWIM, USB PD, DHT, ...) read nothing where a tenth of the edges bounced: the line is read as it is and with pulses under a quarter of its median run (2-64 samples) taken out. On the generated cases of those protocols with bounces or spikes: 193 -> 300 buses read of 349, false claims 7 -> 3.
