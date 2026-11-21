@@ -1,0 +1,40 @@
+# PS/2 (a keyboard's or mouse's port): the device drives the clock (10-16.7 kHz) in bursts of 11 cycles, one byte a
+# burst. Device to host: start 0, 8 data bits LSB first, odd parity, stop 1, read on the clock's fall. Host to device
+# (the host holds the clock low, then the device clocks): the same frame read on the rise, and the device's
+# acknowledge (0) after the stop bit. A burst is a frame (the clock stops between them).
+[plugin]
+name = "ps2"
+input = "frames.gap"
+data_pins = 1
+
+[roles]
+clock = "clk"
+data = "data"
+
+[[sequence]]
+order = "lsb"
+fields = [
+  { name = "start",  width = 1, expect = 0, hide = true },
+  { name = "data",   width = 8 },
+  { name = "parity", width = 1, hide = true },
+  { name = "stop",   width = 1, expect = 1, hide = true },
+]
+checks = [
+  { kind = "parity", field = "parity", over = ["data"], odd = 1 },
+]
+
+[[sequence]]
+order = "lsb"
+fields = [
+  { name = "start",  width = 1, expect = 0, hide = true },
+  { name = "data",   width = 8 },
+  { name = "parity", width = 1, hide = true },
+  { name = "stop",   width = 1, expect = 1, hide = true },
+  { name = "ack",    width = 1, expect = 0, hide = true },
+]
+checks = [
+  { kind = "parity", field = "parity", over = ["data"], odd = 1 },
+]
+
+[score]
+terms = ["degenerate"]
