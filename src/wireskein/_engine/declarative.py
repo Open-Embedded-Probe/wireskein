@@ -911,7 +911,7 @@ class DeclarativePlugin:
             if ck is not None and (ck.period or 0) < SCAN_MIN_PERIOD:
                 return []
         recs, n_ok, n_tried, used, active = [], 0, 0, 0, 0
-        spans = []
+        spans, rec_bits = [], []
         info = 0.0
         starts = prefix_positions(seqs, bits) if scan else None
         starts = starts.tolist() if starts is not None else None     # looked up one position at a time: bisect
@@ -937,6 +937,7 @@ class DeclarativePlugin:
                         rec, k, _, _, bits_i = got
                         rec["start"] = int(t[a])
                         recs.append(rec)
+                        rec_bits.append(bits_i if rec["ok"] else 0)
                         n_ok += rec["ok"]
                         info += bits_i if rec["ok"] else 0
                         used += k if rec["ok"] else 0
@@ -950,6 +951,7 @@ class DeclarativePlugin:
                 rec["start"] = int(t[p])
                 rec["end"] = int(t[min(p + k, len(t)) - 1])    # its last bit: what it covers (decode's unread)
                 recs.append(rec)
+                rec_bits.append(bits_i)
                 n_ok += 1
                 info += bits_i
                 used += k
@@ -985,7 +987,20 @@ class DeclarativePlugin:
             keys = [tuple(v for k, v in r.items() if k not in ("start", "end", "ok")) for r in recs if r["ok"]]
             top = max(keys.count(k) for k in set(keys)) / len(keys)
             m["top_share"] = top
-            score *= 1.0 if top <= 0.5 else max(0.05, 1 - (top - 0.5) / 0.5)
+            if sp.get("score", {}).get("repeats") == "once" and not scan:
+                # frames a check (a CRC) holds are no periodic line's whatever their repeating: a frame sent again
+                # tells nothing new, so each distinct frame's bits count once
+                first, info_u = set(), 0.0
+                for r, b in zip(recs, rec_bits):
+                    key = tuple(v for k, v in r.items() if k not in ("start", "end", "ok"))
+                    if r["ok"] and key not in first:
+                        first.add(key)
+                        info_u += b
+                ev_u = 1 - 0.5 ** (info_u / float(sp.get("score", {}).get("evidence_bits", 8)))
+                score *= ev_u / evidence if evidence > 0 else 0.0
+                m["evidence_bits"] = round(info_u, 1)
+            else:
+                score *= 1.0 if top <= 0.5 else max(0.05, 1 - (top - 0.5) / 0.5)
         if hasattr(src, "source"):
             roles = {sp["roles"]["clock"]: sb.clock, sp["roles"]["data"]: sb.data[0]}
             params = {"sample_edge": sb.sample_edge, "declared": self.path, **self._ext}

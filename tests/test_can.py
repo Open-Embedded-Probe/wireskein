@@ -238,3 +238,17 @@ def test_hardware_no_ack_retries():
     assert {e["field"] for e in got["errors_at"]} == {"ack_delimiter"}
     assert got["frame_count"] == 41 and all(f["id"] == sent[0]["id"] and f["data"] == "0102" for f in got["frames"])
     assert got["error_flags"] == 16
+
+
+def test_analyze_one_message_sent_again():
+    """A capture of one message repeated (a node's periodic frame): the CRC holds each, so the repeats are no
+    periodic line's, and the reading counts the message once."""
+    from wireskein import decode
+    b = Bus(125e3)
+    for _ in range(3):
+        b.frame(0x222, b"\x00\x11\x22\x33\x44", ifs=200)
+    cap = b.line()
+    ex = decode.export(decode.analyze(cap), cap, mode="final", depth="frames")
+    (c,) = [c for c in ex["claims"] if c["verdict"] in ("confirmed", "likely")]
+    assert c["protocol"] == "can"
+    assert [(f["id"], f["data"]) for f in c["result"]["frames"]] == [(0x222, "0011223344")] * 3

@@ -36,3 +36,5 @@ checks = [
 
 [score]
 terms = ["degenerate"]
+# a frame sent again (the CRC holds it) counts once, not as a periodic line's (a capture of one message repeated)
+repeats = "once"
