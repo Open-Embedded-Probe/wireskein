@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) SAE J1850 VPW is read (`j1850`): SOF, passive / active symbols of 64 / 128 us told apart for each level by its own two lengths (a comparator's offset lengthens one level), bytes MSB first, CRC8 checked. sigrok-dumps' capture (a GM PCM): 33 frames, every CRC holding.
+- (JA) SAE J1850 VPW を読む（`j1850`）: SOF、64 / 128 µs のパッシブ / アクティブの記号（コンパレータのずれで片方のレベルが長くなるので、短い・長いはレベルごとに分ける）、MSB からのバイト、CRC8 の確かめ。sigrok-dumps の記録（GM の PCM）: 33 フレーム、CRC はすべて通る。
 - (EN) SENT (SAE J2716) is read (`sent`): the tick from the 56-tick sync, the status and data nibbles, CRC4 checked both the 2010 way and the legacy one. sigrok-dumps' capture: every message's CRC holds (2010).
 - (JA) SENT（SAE J2716）を読む（`sent`）: 56 ティックの同期からティックを出し、状態とデータのニブル、CRC4 を 2010 年版と旧来の両方で確かめる。sigrok-dumps の記録: すべてのメッセージの CRC が通る（2010 年版）。
 - (EN) DCC (model railway control) is read on the track signal (`dcc`): bits as full cycles of 1 (58 us halves) or 0 (100 us and more), preambles, bytes led by 0s, the error detection byte (XOR) checked, the decoder's address. sigrok-dumps' DCC captures (no sigrok truth): every packet's error detection byte holds.
