@@ -878,6 +878,7 @@ SLOW_PERIODS = 4     # a clock this many times k a period or more: slow enough t
 NOISY_RUNS = 0.12    # a clock's runs around this share a noise's at least (views.noise_runs): its periods from it cleaned
 NOISY_WINDOW = 64    # runs each side of an edge, for that share
 NOISY_WIDE = 2048    # runs each side, for the share of runs breaking the clock's period (views.broken_runs)
+I2C_INPUT_PASSES = 3      # timing.i2c_input run again on its output while it changes, at most this many times
 GLITCH_SHARE_CLEANED = 0.9   # ... and where its typical run is its cleaned one's (crosstalk from a fast clock)
 GLITCH_SHARE = 0.6    # a clock's runs this short a share or less: a view with them taken out
 REBUILD_SHORT = 0.02  # a clock's runs half its median or less, this share or more: views with the clock rebuilt
@@ -1426,6 +1427,16 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
             hint = pin_hint.get(g.clock, {})
             spike = float(hint.get("spike_max_s") or timing.I2C_SPIKE_S)       # a check's spike_max_s
             iv, changed = timing.i2c_input(cap, g.clock, g.data[0], spike, freq_hz=hint.get("freq_hz"))
+            # (again on its own output while that changes something: two bounces at an edge leave a pulse the first
+            # pass's spike filter takes only once the burst beside it is one change; 2026-11-21, synth-mixed-146 at
+            # bounce 0.5: length fit 0.3 after one pass, 1.0 after two)
+            for _ in range(I2C_INPUT_PASSES - 1):
+                if not changed:
+                    break
+                iv2, more = timing.i2c_input(iv, g.clock, g.data[0], spike, freq_hz=hint.get("freq_hz"))
+                if not more:
+                    break
+                iv = iv2
             if changed:
                 i2c_view = iv
                 views.append((iv, "i2c_input"))

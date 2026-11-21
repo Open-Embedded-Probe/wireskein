@@ -3,6 +3,8 @@
 ## Unreleased
 - (EN) Fixed: a CAN line of mostly classic frames with a few FD ones was not read (its runs gave a bit time between the two rates, 1.25 nominal bits): the shortest runs (an FD data phase's bit) are a base for the nominal bit time too.
 - (JA) 直した: 古典の CAN のフレームが多く FD のフレームが少しの線を読めなかった（Run から出したビットの時間が 2 つの速さの間、公称の 1.25 ビットになった）。いちばん短い Run（FD のデータ相の 1 ビット）も公称のビットの時間の元にする。
+- (EN) Fixed: I2C at about 1 MHz with bounces at half the edges (50 MS/s) was not read: two bounces at an edge left a pulse the input view's spike filter took only once the burst beside it was one change. The input view is taken again on its own output while that changes something (three passes at most).
+- (JA) 直した: エッジの半分にバウンスのある約 1 MHz の I2C（50 MS/s）を読めなかった: 1 つのエッジの 2 つのバウンスが、となりのまとまりが 1 つの変化になって初めてスパイクのフィルタで取れるパルスを残していた。入力の見方を、それ自身の出力に、変化がある間かけ直す（最大 3 回）。
 - (EN) Fixed: crosstalk from a clock puts a one-sample pulse on the line beside it at each of its edges, in phase with it by that alone: another bus's select and a PWM were taken as an SPI's data. A line's one-sample pulses are left out of how it keeps to a clock where the clock's period is 6 samples or more (RING's 3 needed 9).
 - (JA) 直した: クロックからのクロストークは、となりの線にクロックの辺ごとに 1 サンプルのパルスを置き、それだけで位相がそろって見える: 別のバスの選択の線や PWM を SPI のデータとしていた。クロックの周期が 6 サンプル以上の所では、線の 1 サンプルのパルスを、クロックへの従い方から除く（RING の 3 では 9 サンプル以上が要った）。
 - (EN) Fixed: an SPI clock under dense crosstalk from a fast clock beside it (three in four of its runs a spike's) got no filtered view: its typical run is taken from it cleaned where a tenth of its runs (64 or more) is left, and then a share of short runs up to 0.9 still gives the views.
