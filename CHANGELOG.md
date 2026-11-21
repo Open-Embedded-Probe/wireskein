@@ -3,6 +3,8 @@
 ## Unreleased
 - (EN) Fixed: a CAN line of mostly classic frames with a few FD ones was not read (its runs gave a bit time between the two rates, 1.25 nominal bits): the shortest runs (an FD data phase's bit) are a base for the nominal bit time too.
 - (JA) 直した: 古典の CAN のフレームが多く FD のフレームが少しの線を読めなかった（Run から出したビットの時間が 2 つの速さの間、公称の 1.25 ビットになった）。いちばん短い Run（FD のデータ相の 1 ビット）も公称のビットの時間の元にする。
+- (EN) Fixed: a burst clock with spikes was claimed as a UART: its clock-likeness was taken from the UART's view, whose spike filter (wider than the clock's half period) took the clock apart; a line that is a clock outright as it is (0.9 or more) keeps that. And an SPI select's windows shorter than a clock period holding none (its bounces) are not counted against it (the rule of e855852 had taken the select from SPI buses under bounces).
+- (JA) 直した: スパイクの乗ったバースト状のクロックを UART と主張していた: クロックらしさを UART の見方から取っていて、その見方のスパイクのフィルタ（クロックの半周期より広い）がクロックを壊していた。そのままで明らかにクロックの線（0.9 以上）は、その値を使う。また、SPI の選択の線の、クロックの 1 周期より短く何も含まない窓（バウンス）は、不利に数えない（e855852 の決まりが、バウンスのある SPI から選択の線を外していた）。
 - (EN) Fixed: a free clock sampling a CAN line four times a bit gave chance CRC7s, read as SD frames and confirmed: responses following no command count against an SD reading (half of them, at least, answering one for a whole score), and an R2 of a register all 1s (an idle line) is none.
 - (JA) 直した: 止まらないクロックが CAN の線を 1 ビット 4 回取ると、CRC7 がたまたま合い、SD のフレームとして確定していた: コマンドに続かない応答は SD の読みに不利に数え（満点には応答の半分以上がコマンドに答えること）、中身が全部 1 の R2（待機の線）は認めない。
 - (EN) Fixed: cJTAG under spikes or bounces (a spike on TMSC while TCKC is high reads as an escape, a bounce on TCKC as a cycle more): TCKC and TMSC are also read with pulses under a quarter of TCKC's median run taken out.

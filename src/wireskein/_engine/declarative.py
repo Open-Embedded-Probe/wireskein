@@ -705,7 +705,11 @@ class DeclarativePlugin:
             st, ln, lv = st[1:-1], ln[1:-1], lv[1:-1]
             ce = np.asarray(c.cap.channel(sb.clock).edges)
             held = (np.searchsorted(ce, st + ln) - np.searchsorted(ce, st)) > 0
-            best = max(((int(held[lv == L].sum()), int((lv == L).sum())) for L in (0, 1)), key=lambda x: x[0])
+            # (windows shorter than a clock period holding none are the line's bounces or spikes, not selections)
+            ck = c.sv.clocks.get(sb.clock)
+            real = held | (ln >= (ck.period if ck is not None and ck.period else 0))
+            best = max(((int(held[lv == L].sum()), int(((lv == L) & real).sum())) for L in (0, 1)),
+                       key=lambda x: x[0])
             used, windows = best
             if windows >= SELECT_WINDOWS_MIN and used < SELECT_USED * windows:
                 score *= used / (SELECT_USED * windows)

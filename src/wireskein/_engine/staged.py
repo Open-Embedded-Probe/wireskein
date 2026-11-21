@@ -276,6 +276,7 @@ UART_PACED = 0.5          # ... at a character length three divides: a line of p
 UART_FRAMED = 0.35        # LIN / DMX512 framing past this share of the break-framed blocks counts against a plain UART
 
 
+UART_RAW_CLOCK = 0.9      # the line as it is this clock-like or more: a clock, whatever a view of it shows
 UART_BOUNCED_PAIR = 0.3   # a clock's keeping of the line, as it is, this at least to look again with bounces out
 UART_CEC = 0.5            # a line's low pulses inside CEC's messages past this share: no UART's (full at all)
 USB_SE0_MIN = 3           # both lines of a pair low this many times, each 1-4 bits ...
@@ -370,7 +371,9 @@ class UartPlugin:
         coverage = sum(a for a, _ in cover) / max(1, sum(b for _, b in cover))
         f = c.sv.features[rb.pin]
         clock_like = max(f.scores.get("clock", 0), f.scores.get("clock_local", 0))
-        if len(pin.edges) != f.n_edges and clock_like > UART_VIEW_CLOCK:
+        # (unless the line as it is is a clock outright: its own half periods, 3 samples, are no bounces, and a burst
+        # clock read through such a view as a UART kept 0.23 of its 0.97: 2026-11-21, protocols-106 with spikes)
+        if len(pin.edges) != f.n_edges and UART_VIEW_CLOCK < clock_like < UART_RAW_CLOCK:
             # read on a view with the line's bounces or spikes taken out, the line lifted past a UART's clock-likeness
             # (a bounce at every edge makes a UART line regular: 0.43-0.6, held right UARTs at 0.7): as that view has
             # it. Under it the line's own stands (a defective I2C capture's SDA, 0.30, read as a UART)
