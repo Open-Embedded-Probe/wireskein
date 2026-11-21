@@ -46,6 +46,9 @@ def main() -> None:
     ap.add_argument("--timeout", type=float, default=runner.TIMEOUT_S,
                     help="seconds one algorithm may take on one case; past it it is stopped and recorded as timed out "
                          "(an error of the ledger's line); 0: no limit")
+    ap.add_argument("--max-timeouts", type=int, default=runner.MAX_TIMEOUTS,
+                    help="timeouts past which the run (the shard) stops, the rest not run (recorded in its meta); "
+                         "0: no limit")
     ap.add_argument("--list", action="store_true", help="stages, algorithms and suites")
     ap.add_argument("--dry-run", action="store_true", help="what would run")
     ap.add_argument("--has-trials", action="store_true",
@@ -113,7 +116,7 @@ def main() -> None:
             ap.error("--shard needs --run-id (the same for every shard)")
         shard = (i, n)
     runner.run(stages, by_stage, dsets, args.j, args.note, args.algos_dir, args.label, args.memory, shard,
-               args.run_id, args.timeout, named)
+               args.run_id, args.timeout, named, args.max_timeouts)
 
 
 if __name__ == "__main__":

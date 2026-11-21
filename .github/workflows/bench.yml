@@ -40,8 +40,8 @@ on:
         type: boolean
         default: true
       timeout:
-        description: "Seconds one algorithm may take on one case before it is stopped (recorded as timed out); 0: none"
-        default: "300"
+        description: "Seconds one algorithm may take on one case before it is stopped (recorded as timed out; past 10 in a shard, the shard stops); 0: none"
+        default: "60"
 
 permissions:
   contents: read

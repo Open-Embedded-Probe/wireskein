@@ -105,7 +105,9 @@ def git_state() -> dict:
 # ---------------- worker ----------------
 
 _EXTRA: list[str] = []
-TIMEOUT_S = 300.0       # one algorithm on one case: past this it is stopped and recorded as timed out
+TIMEOUT_S = 60.0        # one algorithm on one case: past this it is stopped and recorded as timed out (a case that
+                        # needs longer wants its algorithm, or its data, looked at again)
+MAX_TIMEOUTS = 10       # timeouts in one run (one shard) past which the rest is not run: something is broken
 _TIMEOUT = TIMEOUT_S
 
 
@@ -230,7 +232,7 @@ def machine() -> dict:
 def run(stage_names: list[str], algos_by_stage: dict[str, list], dsets: list[tuple[str, str, str, str]],
         jobs: int, note: str, extra: list[str], label: str = "", memory: bool = False,
         shard: tuple[int, int] | None = None, run_id: str | None = None, timeout: float = TIMEOUT_S,
-        named: set[str] | None = None) -> str:
+        named: set[str] | None = None, max_timeouts: int = MAX_TIMEOUTS) -> str:
     """Run the cases (of one shard: every n-th from the i-th, all algorithms of a case in the same worker, so that
     against-main costs pair up) and write their items; without a shard, add the results to the ledger too (with
     shards, merge.py does once all are in)."""
@@ -261,10 +263,18 @@ def run(stage_names: list[str], algos_by_stage: dict[str, list], dsets: list[tup
     t0 = time.time()
     with (runs_dir / f"{stem}.jsonl").open("w") as fh, \
             mp.get_context("fork").Pool(jobs, _init, (extra, timeout)) as pool:
+        timeouts = 0
         for k, out in enumerate(pool.imap_unordered(_work, work, chunksize=1), 1):
             fh.write(json.dumps(out, default=_json) + "\n")
             if "error" in out:
                 print(f"  case {out['case']}: {out['error']}", file=sys.stderr)
+            timeouts += sum(1 for r in out.get("results", []) if r.get("timeout"))
+            if max_timeouts and timeouts > max_timeouts:
+                # something is broken (an algorithm far slower than it was): the rest would only spend the limit
+                meta["aborted"] = f"{timeouts} timeouts after {k} of {len(work)} cases: the rest not run"
+                print(f"  stopped: {meta['aborted']}", file=sys.stderr)
+                pool.terminate()
+                break
             if k % 20 == 0 or k == len(work):
                 print(f"  [{k}/{len(work)}] {time.time() - t0:.0f}s", file=sys.stderr)
     meta["env"]["load_after"] = os.getloadavg()[0]
@@ -348,6 +358,10 @@ def aggregate(run_id: str, item_files: list[Path]) -> tuple[dict, list[str]]:
                "note": m0["note"], "git": m0["git"], "env": env, "argv": m0["argv"], "plan": m0["plan"],
                "cases": m0["cases_total"], "results": len(lines),
                "seconds": max(m.get("seconds", 0) for m in metas)}
+    stopped = [f"shard {m['shard'][0]}: {m['aborted']}" if m.get("shard") else m["aborted"] for m in metas
+               if m.get("aborted")]
+    if stopped:
+        run_rec["aborted"] = stopped          # (those shards' results cover part of their cases)
     return run_rec, lines
 
 
