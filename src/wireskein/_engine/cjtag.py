@@ -16,6 +16,7 @@ from .stack import Node, Stream
 
 ESC_DESELECT, ESC_SELECT, ESC_RESET = 4, 6, 8     # TMSC's toggles in one TCKC high: at least this many
 OAC_OSCAN1 = 0b1100                               # the OAC naming OScan1 (sent LSB first: 0 0 1 1)
+CJTAG_OTHER = 0.02                                # TCKC intervals with 2-3 TMSC changes, this share at most
 OAC_BITS = 12                                     # OAC, EC, CP
 
 
@@ -31,6 +32,16 @@ def read_cjtag(ckc, msc, n: int) -> dict | None:
     nxt = np.searchsorted(fall, rise, side="right")
     hi_end = np.where(nxt < len(fall), fall[np.minimum(nxt, len(fall) - 1)], n)
     me = np.asarray(msc.edges, np.int64)
+    # an escape is ESC_SELECT or more of TMSC's changes with no TCKC edge among them: none, no cJTAG (found before
+    # the per-rise counts)
+    at = np.searchsorted(ke, me)
+    if len(at) < ESC_SELECT or not np.any(at[ESC_SELECT - 1:] == at[:len(at) - ESC_SELECT + 1]):
+        return None
+    # outside escapes TMSC changes once between TCKC's edges at most: two or three there in more than a few of
+    # them is another pair of lines (a fast line beside a slow one)
+    per = np.bincount(at)
+    if np.sum((per >= 2) & (per < ESC_DESELECT)) > CJTAG_OTHER * np.sum(per >= 1):
+        return None
     toggles = np.searchsorted(me, hi_end, side="left") - np.searchsorted(me, rise, side="right")
     if not np.any((toggles >= ESC_SELECT) & (toggles < ESC_RESET)):
         return None

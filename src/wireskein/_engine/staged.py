@@ -449,6 +449,7 @@ DMX_BREAK_S = 88e-6       # a break at least this long (the standard's minimum f
 DMX_MIN_BITS = 3          # samples a bit at least for the rate given (a bit's middle to read)
 DMX_SLOT_ACTIVE = 9        # bits a slot is away from idle at most (its start bit and eight 0s)
 DMX_CHAR_BITS = 11        # a slot: start, 8 data bits, 2 stops
+DMX_SHORT_RUNS = 0.1      # runs shorter than half a bit at 250 kbaud, this share of a DMX512 line's at most
 DMX_MIN_SLOTS = 8         # slots a packet, by the median, at least
 DMX_ONE_PACKET = 24       # slots a packet, at least, for one packet alone to count (a short capture holds one)
 
@@ -473,6 +474,11 @@ def dmx_at_rate(c, view_cap, pin: str, k: int, rb, by_type, roots) -> int:
     dmx = [p for p in by_type.get("chars", []) if p.name == "dmx512"]
     u_dmx = view_cap.rate / DMX_BAUD
     n_runs = 0
+    # a DMX512 line's runs are a bit (4 us) or longer: many shorter than half of one are another line's, not read
+    # at 250 kbaud (found before reading its characters)
+    _, length, _ = view_cap.channel(pin).runs(view_cap.n_samples)
+    if len(length) > 2 and float(np.mean(length[1:-1] < 0.5 * u_dmx)) > DMX_SHORT_RUNS:
+        return 0
     for idle in (dmx_idles(view_cap, pin) if dmx else []):
         if rb is not None and idle == rb.idle and any(abs(u / u_dmx - 1) < DMX_RATE_TOL for _, _, u in rb.blocks):
             continue            # read so already
@@ -516,7 +522,8 @@ class LinPlugin:
         return out[:1]
 
 
-CAN_FD_GIVE_UP = 8        # errors with no frame read, at a nominal rate tried, before the next (a line of no CAN)
+CAN_FORBIDDEN_RUNS = 0.05  # runs of 6 to 10 bits, this share of a line's at most for CAN at a bit time
+CAN_FD_GIVE_UP = 2        # errors with no frame read, at a nominal rate tried, before the next (a line of no CAN)
 CAN_FD_CHECK_BITS = 4     # a CAN FD frame's stuff count (three bits Gray-coded and a parity) checked, beside its CRC
 
 
@@ -535,8 +542,14 @@ class CanFdPlugin:
         u0 = float(np.median(nb.units))
         # the bit time the line's runs give is the data phase's where its bits are the most (a switched rate): the
         # nominal one is a whole multiple of it, tried in turn; a line read as classic CAN at the first is no FD's
+        _, length, _ = ch.runs(c.cap.n_samples)
+        inner = length[1:-1].astype(np.float64)
         for m in canbus.FD_RATIOS:
             u = canbus.bit_time(ch, u0 * m, nb.idle) or u0 * m
+            # stuffing keeps a frame's runs to 5 bits, the bus's idle 11 or more: runs between (an error flag's
+            # alone) in more than a few of them are no CAN at this bit time
+            if len(inner) and float(np.mean((inner > 5.5 * u) & (inner < 10.5 * u))) > CAN_FORBIDDEN_RUNS:
+                continue
             r = canbus.read(ch, c.cap.n_samples, u, nb.idle, fd_ratios=canbus.FD_RATIOS, give_up=CAN_FD_GIVE_UP)
             frames = r["frames"]
             if any(f.get("fd") for f in frames):

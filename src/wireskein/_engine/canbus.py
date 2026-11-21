@@ -36,6 +36,14 @@ class _Line:
         self.falls = self.e[lv != idle]                              # recessive to dominant
         self.rises = self.e[lv == idle]
 
+    def idle_falls(self, min_ticks: float) -> np.ndarray:
+        """The falls after a recessive run of min_ticks or more (from the capture's start where it began
+        recessive): the places a start of frame may be after an error."""
+        k = np.searchsorted(self.rises, self.falls, side="right")
+        start0 = float("-inf") if self.initial == self.idle else 0.0
+        since = np.where(k > 0, self.rises[np.maximum(k - 1, 0)].astype(np.float64), start0)
+        return self.falls[self.falls - since >= min_ticks]
+
     def level(self, t: float) -> int:
         k = int(np.searchsorted(self.e, t, side="right"))
         return self.initial ^ (k & 1)
@@ -145,7 +153,7 @@ def _read_frame(line: _Line, sof: int, u: float, sp: float, n: int, fd_ratio: fl
             if seen is not None:
                 seen["fd"] = True           # (what follows depends on the data rate tried)
             fr = _read_fd(sof, u, sp, fd_ratio, sp_data, raw, switch, bits, fixed, run, sent, int(ident), bool(ide),
-                          boundary_stuff)
+                          boundary_stuff, seen)
             return fr, st["edge"]
         if ide:
             bits(1, "r0")
@@ -193,18 +201,23 @@ def crc_fd(bits, width: int, poly: int) -> int:
 GRAY = (0, 1, 3, 2, 6, 7, 5, 4)         # the stuff count mod 8, Gray-coded, as sent
 
 
-def _read_fd(sof, u, sp, ratio, sp_data, raw, switch, bits, fixed, run, sent, ident, ide, boundary_stuff) -> dict:
+def _read_fd(sof, u, sp, ratio, sp_data, raw, switch, bits, fixed, run, sent, ident, ide, boundary_stuff,
+             seen=None) -> dict:
     """The rest of a CAN FD frame after FDF: res, BRS, ESI, DLC, data (dynamically stuffed), the stuff count and the
     CRC (a fixed stuff bit, the complement of the bit before, ahead of them and after every 4 bits), the delimiter,
     ACK. With BRS recessive the bits from after BRS's sample point to the CRC delimiter's are at u / ratio."""
     bits(1, "res")
     brs = bits(1, "brs")
+    if seen is not None:
+        seen["brs"] = bool(brs)             # (without BRS the data rate tried changes nothing)
     if brs:
         switch(u / ratio, sp_data)
     esi = bits(1, "esi")
     dlc = bits(4, "dlc")
     nbytes = FD_LENGTHS[dlc]
     data = bytes(bits(8, "data") for _ in range(nbytes))
+    if seen is not None:
+        seen["five"] = run["c"] == 5        # (the boundary's two readings differ only so)
     if boundary_stuff and run["c"] == 5:
         # five equal bits ending the data (or the DLC): a dynamic stuff bit before the fixed one, counted and under
         # the CRC (else the fixed stuff bit stands for it): which one a transmitter does, the stuff count and the CRC
@@ -281,7 +294,15 @@ def read(ch: Channel, n: int, u: float, idle: int = 1, sp: float = 0.75, fd_rati
     need, after, pos = 11, float("-inf"), 0.0    # recessive bits before a start of frame, counted from `after`
     # (a line recessive from the capture's start was idle before it: its first frame needs no 11 bits seen)
     lead_in, cut = None, False
+    # after an error (or at the start) a frame starts only after 11 recessive bits: those falls found at once, not
+    # every fall of a line of no CAN walked to them
+    idle_falls = line.idle_falls((11 - 0.5) * u)
     while True:
+        if need == 11 and after <= 0.0:
+            k = int(np.searchsorted(idle_falls, pos, side="left"))
+            if k == len(idle_falls):
+                break
+            pos = max(pos, float(idle_falls[k]))
         f = line.next_fall(pos)
         if f is None:
             break
@@ -323,19 +344,27 @@ def _read_any(line, sof, u, sp, n, fd_ratios, sp_data):
     if fd_ratios is None:
         return _read_frame(line, sof, u, sp, n)
     worst, cut = None, False
+    first, seen = {}, {}
     for r, bs in ((r, bs) for r in fd_ratios for bs in (False, True)):
+        if first and not first.get("brs") and r != fd_ratios[0]:
+            break                   # no BRS: every data rate reads the same
+        if bs and not seen.get("five"):
+            continue                # no five equal bits at the data's end (read at this rate, just before): no
+                                    # second reading of the boundary
         seen = {}
         try:
             fr, end = _read_frame(line, sof, u, sp, n, fd_ratio=r, sp_data=sp_data, boundary_stuff=bs, seen=seen)
         except _Error as x:
             if not seen:
                 raise               # a classic frame's error, or one before FDF: the same at every data rate
+            first = first or seen
             if worst is None or x.tick > worst.tick:
                 worst = x
             continue
         except _Cut:
             if not seen:
                 raise
+            first = first or seen
             cut = True              # (a data rate too slow runs past the capture's end)
             continue
         if fr.get("fd") and fr.get("brs"):
