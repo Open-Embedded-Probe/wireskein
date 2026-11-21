@@ -1,4 +1,4 @@
-"""I2S and its kin (left- / right-justified, TDM of two slots): a bit clock (SCK / BCLK), a word select (WS / LRCLK)
+"""I2S and its kin (left- / right-justified, and TDM: a frame sync once a frame of three slots or more): a bit clock (SCK / BCLK), a word select (WS / LRCLK)
 changing once a slot, and a serial data line, both moving on the bit clock. WS is one of the clock's data lines to
 the survey (it changes on the clock's edges), so the plugin takes a clocked group of two data lines or more and tries
 each as WS beside each other as SD.
@@ -14,7 +14,7 @@ import numpy as np
 from .stack import Node, Stream
 
 I2S_SLOT_MIN = 8          # bits a slot at least ...
-I2S_SLOT_MAX = 64         # ... and at most (TDM's frames of 8 slots of 32 are not read here)
+I2S_SLOT_MAX = 64         # ... and at most (a longer one is a TDM frame: read_tdm)
 I2S_REGULAR = 0.9         # of WS's runs, this share or more of one length (the slot)
 I2S_SLOTS = 8             # slots for full evidence (q)
 
@@ -88,8 +88,92 @@ def read_i2s(t: np.ndarray, ws: np.ndarray, sd: np.ndarray):
     return frames, m, params
 
 
+TDM_SLOTS = (32, 24, 16, 8)   # slot widths tried in a TDM frame (one dividing it); 32 taken where no padding tells
+TDM_FRAME_MAX = 1024         # bits a TDM frame at most (16 slots of 64)
+
+
+def _frame_starts(fs: np.ndarray):
+    """A TDM frame sync's frame starts (at the sampling edges): where FS turns to its active level, the level of its
+    shorter run (a pulse a bit or a slot long; at 50 % duty, high). (starts, frame bits, regular share, active
+    level) or None."""
+    ch, runs = _runs(fs)
+    if len(runs) < 4:
+        return None
+    lv = fs[ch[:-1]]
+    hi, lo = runs[lv == 1], runs[lv == 0]
+    if not len(hi) or not len(lo):
+        return None
+    active = 1 if np.median(hi) <= np.median(lo) else 0
+    starts = ch[fs[ch] == active]
+    if len(starts) < 3:
+        return None
+    period = np.diff(starts)
+    vals, cnt = np.unique(period, return_counts=True)
+    frame = int(vals[np.argmax(cnt)])
+    return starts, frame, float(cnt.max() / len(period)), active
+
+
+def read_tdm(t: np.ndarray, fs: np.ndarray, sd: np.ndarray):
+    """TDM: a frame sync (FS) once a frame of three slots or more, the frame's slots one after another on SD. The
+    frame starts where FS turns active; its first slot's MSB at that edge (DSP mode B, `offset` 0) or a bit after
+    (DSP mode A and I2S-style TDM, `offset` 1), told by the padding as in I2S. The slot width is the one whose
+    slots share padding at their end (or start); with none, 32 bits where the frame holds three or more of them.
+    (frames, metrics, params) or None. A frame sync of two equal runs of up to I2S_SLOT_MAX each is I2S's."""
+    fr = _frame_starts(fs)
+    if fr is None:
+        return None
+    starts, frame, regular, active = fr
+    ch, runs = _runs(fs)
+    lv = fs[ch[:-1]]
+    hi, lo = float(np.median(runs[lv == 1])), float(np.median(runs[lv == 0]))
+    two_equal = hi == lo and hi <= I2S_SLOT_MAX
+    if two_equal or regular < I2S_REGULAR or not 3 * I2S_SLOT_MIN <= frame <= TDM_FRAME_MAX:
+        return None
+    best = None
+    for off in (1, 0):
+        s = starts + off
+        s = s[s + frame <= len(sd)]
+        if len(s) < 2:
+            continue
+        rows = sd[s[:, None] + np.arange(frame)]
+        for slot in TDM_SLOTS:
+            if frame % slot or frame // slot < 3:
+                continue
+            tail, head = _padding(rows.reshape(-1, slot))
+            pad = max(tail, head)
+            # more padding first; then the offset whose padding is at the end; then the narrower slot (two slots of
+            # 16 with the same padding read as one of 32 show it only once, at its end)
+            key = (min(pad, slot - 1), tail >= head, off == 1, -slot)
+            if best is None or key > best[0]:
+                best = (key, off, slot, s, rows, tail, head)
+    if best is None:
+        return None
+    (pad, _, _, _), off, slot, s, rows, tail, head = best
+    assumed = pad == 0
+    if assumed:
+        # no padding tells the slot or the offset: 32 bits where the frame holds three or more, a bit after FS
+        slot = 32 if frame % 32 == 0 and frame // 32 >= 3 else slot
+        off, tail, head = 1, 0, 0
+        s = starts + off
+        s = s[s + frame <= len(sd)]
+        rows = sd[s[:, None] + np.arange(frame)]
+    n_slots = frame // slot
+    cells = rows.reshape(len(s), n_slots, slot)
+    right = head > tail
+    bits = max(1, slot - (head if right else tail))
+    cells = cells[:, :, slot - bits:] if right else cells[:, :, :bits]
+    words = (cells.astype(np.int64) << np.arange(bits - 1, -1, -1)).sum(2)
+    words = np.where(words >= 1 << (bits - 1), words - (1 << bits), words)
+    frames = [{"s": int(t[st]), "slots": [int(w) for w in row]} for st, row in zip(s.tolist(), words.tolist())]
+    m = {"slot": slot, "regular": regular, "slots": int(len(s) * n_slots), "bits": bits, "frame": frame}
+    params = {"format": "tdm", "slot_bits": slot, "word_bits": bits, "slots_per_frame": n_slots, "offset": off,
+              "fs_active": int(active), **({"justify": "right"} if right else {}),
+              **({"format_assumed": True} if assumed else {})}
+    return frames, m, params
+
+
 class I2sPlugin:
-    """I2S on a clocked group: WS one of its data lines, SD another."""
+    """I2S (or TDM) on a clocked group: WS (FS) one of its data lines, SD another."""
     name = "i2s"
     consumes = ("frames.gap",)
 
@@ -103,7 +187,7 @@ class I2sPlugin:
             for si, d in enumerate(sb.data):
                 if si == wi:
                     continue
-                r = read_i2s(sb.t, sb.bits[wi], sb.bits[si])
+                r = read_i2s(sb.t, sb.bits[wi], sb.bits[si]) or read_tdm(sb.t, sb.bits[wi], sb.bits[si])
                 if r is None:
                     continue
                 frames, m, params = r
