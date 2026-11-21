@@ -1020,6 +1020,13 @@ class DeclarativePlugin:
             return []
         if self.data_pins and len(sb.data) != self.data_pins:
             return []
+        lim = self.spec.get("plugin", {}).get("clock_hz")
+        if lim:
+            # a protocol whose clock keeps to a range (PS/2's 10-16.7 kHz): a clock far out of it is not tried at all
+            ci = c.sv.clocks.get(sb.clock)
+            hz = float(c.cap.rate) / ci.period if ci is not None and ci.period else None
+            if hz is not None and not float(lim[0]) <= hz <= float(lim[1]):
+                return []
         if "sequence" in self.spec:
             nodes = self._run_sequence(c, fr, g)
         else:

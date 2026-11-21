@@ -6,6 +6,7 @@
 name = "ps2"
 input = "frames.gap"
 data_pins = 1
+clock_hz = [5000, 30000]     # the clock's period as the survey finds it (10-16.7 kHz, a margin): others not tried
 
 [roles]
 clock = "clk"

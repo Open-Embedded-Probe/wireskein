@@ -111,6 +111,7 @@ with rec.section(2, "ping", expect=[protocol("demo_link", "uart", {"data": "PA2"
 - **定義のディレクトリ**は、WireSkein の `decl/` と同じ形です: 直下の `*.toml` がプロトコル、`devices/<バス>/...` がデバイスの定義、`markers/*.toml` がマーカーの方言。どれも無くてかまいません。
 - **足し方:** スクリプトや試験では `wireskein.protocols.add_definitions(パス)`、パッケージからは entry point の `wireskein.definitions`（`NAME = "module"`: その module のディレクトリに定義がある。またはパスを返す callable）。
 - **ビットの層**は WireSkein が持つものを、定義の `input` で名前で選びます: `"nrzbits"`（1 本の線。ビットの時間を線から読み、10 ビット以上の待機の後をフレームとする）、または `"frames.select"`、`"frames.gap"`、`"frames.startstop"`（クロックとデータ。選択の線、隙間、START / STOP で区切る）。独自の線の符号（マンチェスターなど）は、WireSkein の中にビットの層が要るので、定義では書けません。
+- **クロックの範囲**（`[plugin]` の `clock_hz = [下限, 上限]`。クロックのある入力で）: クロックの速さが決まった範囲に収まるプロトコル（PS/2 の 10〜16.7 kHz）は、範囲から大きく外れたクロックでは試しません。
 - **分析**は、それを独自のプロトコルとして出します。フレームは `result.frames` の下（`format = "hex"` の欄はバイトの 16 進）で、チェック（決まった値、CRC）がその証拠です。
 - **試験**は、`protocol(NAME, None, {役割: ピン}, messages=[...])` でフレームを確かめます（`bus` が None: そのプロトコル自身がバス）。
 - WireSkein のプロトコルの名前は断ります。

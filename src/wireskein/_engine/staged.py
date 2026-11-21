@@ -156,11 +156,14 @@ class SyncUnknownPlugin:
         # "Unknown" means "not explained by the known framings": discount by how
         # well the same frames fit I2C (9n, +1) or SPI (8n) word lengths.
         # every known framing of the same bits counts, not only this delimiter's
-        known = 0.0
-        # all views of the same clock/data, with or without the select candidate
-        views = [typed.frames_gap(sb), typed.frames_startstop(c.cap, sb).closed()]
-        if sb.select:
-            views.append(methods.get("select_frames", typed.frames_select)(c.cap, c.sv, sb))
+        known = getattr(sb, "_known_fit", None)       # the same for every delimiter of these bits: once
+        views = []
+        if known is None:
+            known = 0.0
+            # all views of the same clock/data, with or without the select candidate
+            views = [typed.frames_gap(sb), typed.frames_startstop(c.cap, sb).closed()]
+            if sb.select:
+                views.append(methods.get("select_frames", typed.frames_select)(c.cap, c.sv, sb))
         for v in views:
             ln = np.diff(v.bounds, axis=1).ravel()
             ln = ln[ln > 0]
@@ -171,6 +174,10 @@ class SyncUnknownPlugin:
             else:
                 fit, chance = float(np.mean(ln % 8 == 0)), 1 / 8
             known = max(known, max(0.0, (fit - chance) / (1 - chance)))  # above chance only
+        try:
+            sb._known_fit = known
+        except AttributeError:
+            pass
         m["known_fit"] = known
         # and only as far as its lines keep to the clock: a UART line at a third of a free clock's rate keeps to it at
         # 0.3 by chance (2026-11-21, synth-uartlike-30 with spikes: 0.70 unknown beside the UART's 0.67)
