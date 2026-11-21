@@ -1641,8 +1641,11 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
     if framed:
         def same_bits(sp, k):
             r = list(k.roles.values())
-            return (sp.roles.get("clk") == r[0] and {v for kk, v in sp.roles.items() if kk.startswith("data")} == set(r[1:])
-                    and sp.params.get("sample_edge") == k.params["sample_edge"] and k.total >= sp.total - SCAN_BELOW)
+            # (or those bits and other lines beside: a free clock's line taken as a second SPI data line by a spike's
+            # chance keeping, 2026-11-21, synth-protomix-45: the SPI reading holds MDIO's frames and a line no frame needs)
+            # (on either edge: the other edge's reading of the same lines is garbage the declared frames explain)
+            return (sp.roles.get("clk") == r[0] and {v for kk, v in sp.roles.items() if kk.startswith("data")} >= set(r[1:])
+                    and k.total >= sp.total - SCAN_BELOW)
         roots_pack = [n for n in roots_pack if n.analyzer != "spi" or "cs" in n.roles
                       or not any(same_bits(n, k) for k in framed)]
     roots_pack += shared_buses(roots_pack, tx.survey, cap)
