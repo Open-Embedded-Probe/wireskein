@@ -60,3 +60,22 @@ def test_tdm_frames(n, slot, bits, offset, width):
     # whole frames from the first frame sync on (the one FS leads by a bit has no sync before it)
     k = frames.index(got[0])
     assert k <= 1 and got == frames[k:k + len(got)] and len(got) >= len(frames) - 2
+
+
+def test_two_audio_buses_at_twice_the_bit_clock():
+    """A TDM bus (8 kHz, 4 slots of 16) and an I2S one (16 kHz, 32-bit slots): the second's bit clock is twice the
+    first's, so its WS, a square wave in step with the first's frames, read as the first's SD (its words 0x00, 0xff,
+    0x07, 0xf8: steps). Each bus is read with its own lines (2026-11-21, synth-protomix-145)."""
+    rng = np.random.default_rng(145)
+    b1, f1, s1 = gen.Wave(0), gen.Wave(0), gen.Wave(0)
+    b2, w2, s2 = gen.Wave(0), gen.Wave(0), gen.Wave(0)
+    tdm_frames = [[int(x) for x in row] for row in rng.integers(-2048, 2048, (40, 4))]
+    end1 = gen.tdm(b1, f1, s1, 100e-6, tdm_frames, fs=8000, slot=16, bits=12, offset=1, fs_width=1)
+    i2s_frames = [(int(a), int(b)) for a, b in rng.integers(-(1 << 23), 1 << 23, (80, 2))]
+    end2 = gen.i2s(b2, w2, s2, 137.3e-6, i2s_frames, 16000, slot=32, bits=24, fmt="left")   # (a phase of its own)
+    cap = gen.quantize({"BCLK1": b1, "FS1": f1, "SD1": s1, "BCLK2": b2, "WS2": w2, "SD2": s2}, 200e6,
+                       max(end1, end2) + 10e-6, rng)
+    ex = decode.export(decode.analyze(cap), cap)
+    got = sorted(tuple(sorted(c["roles"].items())) for c in ex["claims"]
+                 if c["protocol"] == "i2s" and c["verdict"] in ("confirmed", "likely"))
+    assert got == [(("sck", "BCLK1"), ("sd", "SD1"), ("ws", "FS1")), (("sck", "BCLK2"), ("sd", "SD2"), ("ws", "WS2"))]

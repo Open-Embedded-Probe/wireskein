@@ -41,6 +41,10 @@ def read_sr(path: Path) -> Capture:
     with zipfile.ZipFile(path) as z:
         cfg = metadata(z)
         dev = cfg["device 1"]
+        if "samplerate" not in dev:
+            # (sigrok writes none where the device had none set: times in samples only, which analysis cannot read)
+            raise ValueError(f"{Path(path).name}: the .sr gives no samplerate (its metadata has none); "
+                             "analysis needs the sample rate")
         rate = _parse_rate(dev["samplerate"])
         unitsize = int(dev.get("unitsize", "1"))
         prefix = dev.get("capturefile", "logic-1")
@@ -268,6 +272,10 @@ def read_sr_changes(path: Path, start: int = 0, end: int | None = None) -> Captu
             extra = json.loads(z.read(EXTRA))
             if extra.get("analog") or any(int(c.get("step", 1)) != 1 for c in extra.get("channels", {}).values()):
                 return None
+        if "samplerate" not in dev:
+            # (sigrok writes none where the device had none set: times in samples only, which analysis cannot read)
+            raise ValueError(f"{Path(path).name}: the .sr gives no samplerate (its metadata has none); "
+                             "analysis needs the sample rate")
         rate = _parse_rate(dev["samplerate"])
         unitsize = int(dev.get("unitsize", "1"))
         prefix = dev.get("capturefile", "logic-1")
@@ -326,6 +334,10 @@ def convert_sr(path: Path, out: Path, start: int = 0, end: int | None = None, ex
         if any(n not in ("version", "metadata") and n != prefix and not n.startswith(prefix + "-")
                for n in z.namelist()):
             return None
+        if "samplerate" not in dev:
+            # (sigrok writes none where the device had none set: times in samples only, which analysis cannot read)
+            raise ValueError(f"{Path(path).name}: the .sr gives no samplerate (its metadata has none); "
+                             "analysis needs the sample rate")
         rate = _parse_rate(dev["samplerate"])
         unitsize = int(dev.get("unitsize", "1"))
         names = {int(k[5:]): v for k, v in dev.items() if re.fullmatch(r"probe\d+", k)}

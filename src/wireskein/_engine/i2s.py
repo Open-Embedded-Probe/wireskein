@@ -34,6 +34,40 @@ def _padding(sd_slots: np.ndarray) -> tuple[int, int]:
     return tail, head
 
 
+def _square_words(frames: list[dict], bits: int) -> float:
+    """1 unless the words are nearly all steps (at most one change of bit inside: 0x00, 0xff, 0x07, 0xf8 - a square
+    wave read as data, its changes anywhere in a word) of two values or more: then down to 0.05 as their share goes
+    from 0.9 to 1. A word held the same (a test pattern) or silence is no step of two values."""
+    vals = [v for f in frames for v in (f["slots"] if "slots" in f else (f.get("left"), f.get("right"))) if v is not None]
+    if len(vals) < 8 or bits <= 1:
+        return 1.0
+    mask = (1 << bits) - 1
+    v = np.asarray(vals, np.int64) & mask
+    x = (v ^ (v >> 1)) & (mask >> 1)                       # the changes between neighbouring bits
+    changes = np.zeros(len(v), np.int64)
+    for k in range(bits - 1):
+        changes += (x >> k) & 1
+    step = changes <= 1
+    if len(np.unique(v[step])) < 2:
+        return 1.0
+    share = float(step.mean())
+    return 1.0 if share <= 0.9 else max(0.05, 1 - (share - 0.9) / 0.1)
+
+
+I2S_OTHER_CLOCK = 0.1     # a share off for each line whose changes meet another clock's edges, not this one's
+
+
+def _own_clock(sv, clock: str, lines) -> float:
+    """1, less I2S_OTHER_CLOCK for each line meeting another clock's edges (survey's coincide) more than this one's."""
+    f = 1.0
+    for x in lines:
+        mine = sv.pairs.get((clock, x))
+        other = max((r.coincide for (k, o), r in sv.pairs.items() if o == x and k != clock and k != x), default=0.0)
+        if mine is not None and other - mine.coincide > 0.5:
+            f *= 1 - I2S_OTHER_CLOCK
+    return f
+
+
 def read_i2s(t: np.ndarray, ws: np.ndarray, sd: np.ndarray):
     """The frames of an I2S-like stream from WS and SD sampled at the bit clock's sampling edges: (frames, metrics,
     params) or None when WS changes at no regular slot."""
@@ -199,8 +233,15 @@ class I2sPlugin:
                 frames, m, params = r
                 pair = float(c.sv.pairs[(sb.clock, d)].data_score)
                 q = 1 - 0.5 ** (m["slots"] / I2S_SLOTS)
-                score = m["regular"] * q * (0.5 + 0.5 * clk) * (0.5 + 0.5 * pair)
-                m.update(clk=clk, pair=pair)
+                # words all 0s or all 1s, both kinds (another bus's WS, a square wave in step with the frame, read as
+                # SD by a clock at twice its own: 2026-11-21, synth-protomix-145) carry nothing; a word held the same
+                # (a test pattern, 0x12121212 in every slot of sigrok's TDM capture) or silence (all 0s) does
+                tv = _square_words(frames, int(params.get("word_bits") or m.get("bits") or 0))
+                # a line whose changes fall on another clock's edges, not on this one's, is that bus's (two audio
+                # buses whose bit clocks are 1 : 2 each read the other's WS as their own in step: protomix-145)
+                own = _own_clock(c.sv, sb.clock, (w, d))
+                score = m["regular"] * q * (0.5 + 0.5 * clk) * (0.5 + 0.5 * pair) * tv * own
+                m.update(clk=clk, pair=pair, square_words=tv, own_clock=own)
                 out.append(Node("i2s", {"sample_edge": sb.sample_edge, **params}, {"sck": sb.clock, "ws": w, "sd": d},
                                 Stream("i2s.frames", frames), m, layer_score=score, total=score))
         return sorted(out, key=lambda n: -n.total)[:1]
