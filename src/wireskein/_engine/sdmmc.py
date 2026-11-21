@@ -37,13 +37,17 @@ _UNIT = {40: _crc7_unit(40), 120: _crc7_unit(120)}
 
 
 def _crc_windows(bits: np.ndarray, nbits: int) -> np.ndarray:
-    """The CRC7 of every window bits[i:i + nbits] (i = 0 .. len - nbits)."""
+    """The CRC7 of every window bits[i:i + nbits] (i = 0 .. len - nbits). Each CRC bit is the parity of a sum over the
+    window; the seven sums run in one convolution, each in a 6-bit digit of its own (a sum is nbits <= 120 at most:
+    the digits are 8 bits wide, 56 bits in all)."""
     unit = _UNIT[nbits]
-    out = np.zeros(len(bits) - nbits + 1, np.int64)
-    b = bits.astype(np.int64)
+    kern = np.zeros(nbits, np.int64)
     for k in range(7):
-        kern = ((unit >> k) & 1)[::-1]
-        out |= (np.convolve(b, kern, "valid") & 1) << k
+        kern |= ((unit >> k) & 1) << (8 * k)
+    tot = np.convolve(bits.astype(np.int64), kern[::-1], "valid")
+    out = np.zeros(len(tot), np.int64)
+    for k in range(7):
+        out |= ((tot >> (8 * k)) & 1) << k
     return out
 
 

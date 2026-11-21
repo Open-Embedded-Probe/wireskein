@@ -34,6 +34,7 @@ from pathlib import Path
 
 import numpy as np
 
+from . import kernels as K
 from . import typed
 from .stack import Node, Stream
 
@@ -538,7 +539,7 @@ def _active_bits_in(bits: np.ndarray, bounds, run: int = 16) -> int:
     bd = np.asarray(bounds, np.int64).reshape(-1, 2)
     a, b = bd[:, 0], bd[:, 1]
     chg = np.flatnonzero(np.diff(bits)) + 1
-    cuts = np.unique(np.concatenate((chg, a, b)))
+    cuts = K.unique_ints(np.concatenate((chg, a, b)))
     seg_s, seg_e = cuts[:-1], cuts[1:]
     k = np.searchsorted(a, seg_s, side="right") - 1
     inside = (k >= 0) & (seg_s < b[np.maximum(k, 0)])

@@ -10,6 +10,24 @@ from __future__ import annotations
 import numpy as np
 
 
+def unique_ints(x: np.ndarray) -> np.ndarray:
+    """np.unique of integers, by a sort: numpy 2's np.unique hashes, a hundred times slower on 500k sorted runs of
+    sample positions (2026-11-21: 3 s of a 64 KiB read's analysis)."""
+    y = np.sort(np.asarray(x), kind="stable")
+    if len(y) < 2:
+        return y
+    return y[np.concatenate(([True], y[1:] != y[:-1]))]
+
+
+def in_sorted(x: np.ndarray, table: np.ndarray) -> np.ndarray:
+    """np.isin(x, table) for a sorted table, by binary search (np.isin sorts or hashes both)."""
+    table = np.asarray(table)
+    if not len(table):
+        return np.zeros(len(x), bool)
+    j = np.minimum(np.searchsorted(table, x), len(table) - 1)
+    return table[j] == x
+
+
 def level_at(edges: np.ndarray, initial: int, pos: np.ndarray) -> np.ndarray:
     n = np.searchsorted(edges, pos, side="right")
     return (initial ^ (n & 1)).astype(np.int8)

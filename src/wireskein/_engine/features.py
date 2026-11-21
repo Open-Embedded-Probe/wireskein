@@ -65,19 +65,26 @@ def estimate_units(runs: np.ndarray, max_mult: int = 12, top: int = 6) -> list[U
             if p / k >= 1.5:
                 cands.add(float(p / k))
     out = []
+    # the same sums over each distinct length once, weighed by its count (lengths repeat: a capture's 500k runs hold
+    # a few thousand values)
+    vals, cnt = np.unique(runs, return_counts=True)
+    cnt = cnt.astype(np.float64)
+    cum = np.cumsum(cnt)
     for u in sorted(cands):
-        sel = runs[runs <= max_mult * u * 1.05]
-        if len(sel) < max(4, 0.2 * len(runs)):
+        m = int(np.searchsorted(vals, max_mult * u * 1.05, side="right"))
+        n_sel = float(cum[m - 1]) if m else 0.0
+        if n_sel < max(4, 0.2 * len(runs)):
             continue
+        sv, sc = vals[:m], cnt[:m]
         # refine: least squares on k = round(r/u)
-        k = np.maximum(1, np.round(sel / u))
-        u2 = float((sel * k).sum() / (k * k).sum())
-        k = np.maximum(1, np.round(sel / u2))
-        resid = np.abs(sel / u2 - k)
-        fit = float(np.mean(resid < 0.2)) * min(1.0, len(sel) / len(runs) / 0.5)
+        k = np.maximum(1, np.round(sv / u))
+        u2 = float((sc * sv * k).sum() / (sc * k * k).sum())
+        k = np.maximum(1, np.round(sv / u2))
+        resid = np.abs(sv / u2 - k)
+        fit = float((sc * (resid < 0.2)).sum() / n_sel) * min(1.0, n_sel / len(runs) / 0.5)
         # quantization: when a unit is only a few samples, ±1 sample is a large fraction
-        c = UnitCandidate(u2, fit, int(len(sel)))
-        c.resid = float(np.mean(resid))
+        c = UnitCandidate(u2, fit, int(n_sel))
+        c.resid = float((sc * resid).sum() / n_sel)
         out.append(c)
     if not out:
         return []

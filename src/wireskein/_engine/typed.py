@@ -199,10 +199,10 @@ def sync_bits(cap, sv: Survey, clock: str, data: tuple[str, ...], select: str | 
         ch = cap.channel(d)
         if len(t) > 1 and ch.step == 1:
             e = V.spikes_out_where_slow(np.asarray(ch.edges), RING, t)
-            at = np.isin(e, t)
+            at = K.in_sorted(e, t)
             inside = e[(e >= t[0]) & (e <= t[-1])]
             share = at.sum() / len(inside) if len(inside) else 0.0
-            other = (np.isin(inside, t_other).sum() / len(inside)) if len(inside) else 0.0
+            other = (K.in_sorted(inside, t_other).sum() / len(inside)) if len(inside) else 0.0
             side = "left" if share >= ON_EDGE_SHARE and other <= share / ON_EDGE_OVER else "right"
             rows.append(((ch.initial + np.searchsorted(e, t, side=side)) & 1).astype(np.uint8))
         else:
