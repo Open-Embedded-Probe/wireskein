@@ -158,6 +158,8 @@ def layers_of(n) -> dict:
     elif a in ("swd", "mdio", "can") or getattr(getattr(n, "plugin", None), "external", False) or n.params.get("external"):
         rows = [{{"start": "s", "end": "e"}.get(k, k): (int(v) if isinstance(v, np.integer) else v) for k, v in x.items()}
                 for x in (n.output.items or [])]
+        if a == "mdio":
+            _mdio_addresses(rows)
         out["packets" if a == "swd" else "frames"] = rows
     elif a == "i2s":
         out["frames"] = list(n.output.items)
@@ -179,6 +181,22 @@ def layers_of(n) -> dict:
             out[ch.analyzer] = {"messages": list(ch.output.items), **{k: ch.metrics[k] for k in
                                                                        ("checks_passed", "checks_failed")}}
     return out
+
+
+def _mdio_addresses(rows: list) -> None:
+    """Clause 45's register address on its reads and writes (`addr`): the last ADDR frame's for the port and device,
+    a read-and-increment (RINC) stepping it after its read; unknown (no ADDR seen) left out."""
+    at = {}
+    for r in rows:
+        if "dev" not in r:
+            continue
+        key = (r.get("phy"), r.get("dev"))
+        if r.get("op") == "ADDR":
+            at[key] = r.get("data")
+        elif key in at and at[key] is not None:
+            r["addr"] = at[key]
+            if r.get("op") == "RINC":
+                at[key] = (at[key] + 1) & 0xFFFF
 
 
 FINAL = {"i2c": "transactions", "spi": ("sd", "transfers"), "uart": ("nmea", "modbus_rtu", "lines", "bytes"),

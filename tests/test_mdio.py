@@ -35,3 +35,16 @@ def test_clause_45():
     assert c["protocol"] == "mdio"
     assert [(f["op"], f["dev"], f["data"]) for f in c["result"]["frames"]] == \
         [({0: "ADDR", 3: "R"}[f["op"]], f["dev"], f["data"]) for f in frames]
+
+
+def test_clause_45_addresses_followed():
+    """A read and its address: ADDR sets a device's register address, a read-and-increment steps it after reading
+    (sigrok's mdio shows 8001, 8002, ... so)."""
+    frames = [{"clause": 45, "op": 0, "phy": 0, "dev": 1, "data": 0x8000}]
+    frames += [{"clause": 45, "op": 2, "phy": 0, "dev": 1, "data": 0x10 + k} for k in range(5)]
+    frames += [{"clause": 45, "op": 0, "phy": 0, "dev": 3, "data": 0x0020},
+               {"clause": 45, "op": 1, "phy": 0, "dev": 3, "data": 0x1234},
+               {"clause": 45, "op": 3, "phy": 0, "dev": 1, "data": 0x55}]
+    (c,) = _read(frames)
+    got = [(f["op"], f["dev"], f.get("addr")) for f in c["result"]["frames"] if f["op"] != "ADDR"]
+    assert got == [("RINC", 1, 0x8000 + k) for k in range(5)] + [("W", 3, 0x20), ("R", 1, 0x8005)]
