@@ -57,6 +57,8 @@ def _square_words(frames: list[dict], bits: int) -> float:
 
 
 I2S_BURSTS = 4            # a bit clock's bursts this many at most, or no more than its frames: it runs on
+I2S_SLOTS_USUAL = (16, 18, 20, 24, 32)   # an I2S slot's bits
+I2S_ODD_SLOT = 0.6        # the score so much for a slot of other bits
 I2S_MIN_WORD = 8          # audio words this many bits at least (8-bit PCM and up)
 I2S_OTHER_CLOCK = 0.1     # a share off for each line whose changes meet another clock's edges, not this one's
 
@@ -252,8 +254,13 @@ class I2sPlugin:
                 # SCL, 97 bursts for 11 "frames" of a GPIO counter's outputs: sigrok-dumps' mcp23017 captures)
                 nb = len(sb.burst_start)
                 runs_on = 1.0 if nb <= max(I2S_BURSTS, len(frames)) else len(frames) / nb
-                score = m["regular"] * q * (0.5 + 0.5 * clk) * (0.5 + 0.5 * pair) * tv * own * runs_on
-                m.update(clk=clk, pair=pair, square_words=tv, own_clock=own, runs_on=runs_on)
+                # and an I2S slot is a usual length (16, 18, 20, 24 or 32 bits): another is a bit clock that lost or
+                # gained periods (bounces rebuilt into a grid: 28-bit slots of 15-bit words where 32 / 16 were sent,
+                # 2026-11-22, synth-protocols-177 with bounces)
+                usual = 1.0 if params.get("format") == "tdm" or params.get("slot_bits") in I2S_SLOTS_USUAL \
+                    else I2S_ODD_SLOT
+                score = m["regular"] * q * (0.5 + 0.5 * clk) * (0.5 + 0.5 * pair) * tv * own * runs_on * usual
+                m.update(clk=clk, pair=pair, square_words=tv, own_clock=own, runs_on=runs_on, usual_slot=usual)
                 out.append(Node("i2s", {"sample_edge": sb.sample_edge, **params}, {"sck": sb.clock, "ws": w, "sd": d},
                                 Stream("i2s.frames", frames), m, layer_score=score, total=score))
         return sorted(out, key=lambda n: -n.total)[:1]
