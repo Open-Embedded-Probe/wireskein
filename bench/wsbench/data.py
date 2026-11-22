@@ -29,7 +29,9 @@ was measured:
                                   pull-ups, 50 times "S, 0x13 write, NACK, P" each (what the device answered: the
                                   summaries beside them), truth made on reading; SCL / SDA renamed D0 / D1
     transforms  "spike:0.1+bounce:0.1"  applied left to right; "" for none
-                spike / bounce / xtalk: noise in ticks of the capture (as wide whatever the rate)
+                spike / bounce / xtalk: noise in ticks of the capture (as wide whatever the rate); xtalk:L:LAGS
+                                  the pulses' lags after the neighbour's edge, each one of the digits ("01": in
+                                  its sample or the next; xtalk:L is "1")
                 pspike:L:NS / pbounce:L:NS: noise in time (NS nanoseconds), the way a line shows it: wider in
                 samples the faster it is taken, missed when shorter than a sample and no sample falls in it
                 odslow:NS: an open-drain bus (I2C) through a weak pull-up: each rise NS x U(0.6, 1) ns late, a high
@@ -415,8 +417,11 @@ def noise_bounce(cap: Capture, lvl: float, rng) -> Capture:
     return Capture(cap.rate, cap.n_samples, out)
 
 
-def noise_xtalk(cap: Capture, lvl: float, rng) -> Capture:
-    """At a share lvl of the next channel's edges, a 1-tick pulse on this one (coupling between neighbours)."""
+def noise_xtalk(cap: Capture, lvl: float, rng, lags: str = "1") -> Capture:
+    """At a share lvl of the next channel's edges, a 1-tick pulse on this one (coupling between neighbours), starting
+    a lag of ticks after the edge: each pulse's lag one of `lags`' digits at random ("1": a tick after, as always
+    before; "01": in the edge's own sample or the next, as a sampled coupling shows it)."""
+    choice = np.array([int(c) for c in lags], np.int64)
     chans = cap.channels
     out = []
     for i, ch in enumerate(chans):
@@ -425,7 +430,9 @@ def noise_xtalk(cap: Capture, lvl: float, rng) -> Capture:
             out.append(ch)
             continue
         ne = np.asarray(chans[(i + 1) % len(chans)].edges, np.int64)
-        g = ne[rng.random(len(ne)) < lvl] + 1
+        g = ne[rng.random(len(ne)) < lvl]
+        g = g + (choice[rng.integers(len(choice), size=len(g))] if len(choice) > 1 else choice[0])
+        g = g[g >= 1]
         g = g[g < cap.n_samples - 1]
         out.append(replace(ch, edges=_toggle(e, np.concatenate([g, g + 1]))))
     return Capture(cap.rate, cap.n_samples, out)
@@ -557,6 +564,8 @@ def apply(cap: Capture, clean: Capture | None, chain: str, case_id: str,
             lines = {b["roles"][r] for b in (truth or {}).get("buses", []) for r in OPEN_DRAIN.get(b["protocol"], ())
                      if r in b["roles"]}
             cap = noise_odslow(cap, float(args[0]), _rng(case_id, spec), lines)
+        elif kind == "xtalk" and len(args) > 1:
+            cap = noise_xtalk(cap, float(args[0]), _rng(case_id, spec), args[1])
         elif kind in NOISE:
             cap = NOISE[kind](cap, float(args[0]), _rng(case_id, spec))
         elif kind in TIMED_NOISE:

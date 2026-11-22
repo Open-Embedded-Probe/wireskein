@@ -10,6 +10,8 @@
 #
 # role: tune     algorithms may be adjusted on what it shows
 #       holdout  looked at to confirm only; never adjusted on (the generated heldout seeds, the real records)
+# xtalk:L:01: crosstalk whose pulses fall in the neighbour's edge's sample or the next, beside xtalk:L's a tick after it
+# (a fix that holds only for one lag fits the generator, not the wire)
 
 [suite.smoke]
 role = "tune"
@@ -21,15 +23,15 @@ transforms = ["", "spike:0.1", "bounce:0.1"]
 role = "tune"
 about = "100 generated cases, clean and with three kinds of noise at two or three strengths"
 sources = ["set:tuning[0:100]"]
-transforms = ["", "spike:0.02", "spike:0.1", "spike:0.3", "bounce:0.1", "bounce:0.5", "xtalk:0.05", "xtalk:0.3"]
-cycle = [["spike:0.02", "spike:0.1", "spike:0.3"], ["bounce:0.1", "bounce:0.5"], ["xtalk:0.05", "xtalk:0.3"]]
+transforms = ["", "spike:0.02", "spike:0.1", "spike:0.3", "bounce:0.1", "bounce:0.5", "xtalk:0.05", "xtalk:0.3", "xtalk:0.3:01"]
+cycle = [["spike:0.02", "spike:0.1", "spike:0.3"], ["bounce:0.1", "bounce:0.5"], ["xtalk:0.05", "xtalk:0.3", "xtalk:0.3:01"]]
 
 [suite.noise-holdout]
 role = "holdout"
 about = "the same noise on cases never tuned on"
 sources = ["set:heldout[0:100]"]
-transforms = ["", "spike:0.02", "spike:0.1", "spike:0.3", "bounce:0.1", "bounce:0.5", "xtalk:0.05", "xtalk:0.3"]
-cycle = [["spike:0.02", "spike:0.1", "spike:0.3"], ["bounce:0.1", "bounce:0.5"], ["xtalk:0.05", "xtalk:0.3"]]
+transforms = ["", "spike:0.02", "spike:0.1", "spike:0.3", "bounce:0.1", "bounce:0.5", "xtalk:0.05", "xtalk:0.3", "xtalk:0.3:01"]
+cycle = [["spike:0.02", "spike:0.1", "spike:0.3"], ["bounce:0.1", "bounce:0.5"], ["xtalk:0.05", "xtalk:0.3", "xtalk:0.3:01"]]
 
 [suite.size]
 role = "tune"
@@ -299,13 +301,15 @@ transforms = [""]
 role = "tune"
 about = "SPI in each shape the spec allows (eval/synth.py's spivar, the shapes in turn by seed): a CS; none; active high; tied low (a captured line that never moves: no CS, nothing shows it selects); two tied low; selections holding several transfers; one selection around everything (its CS may be left out: cs_optional); a target on each of 2-3 CS; two targets with one CS captured (the other a target with no CS); selections with no clock"
 sources = ["gen:spivar[0:100]"]
-transforms = [""]
+transforms = ["", "xtalk:0.3", "xtalk:0.3:01"]
+cycle = [["xtalk:0.3", "xtalk:0.3:01"]]   # each case clean and with crosstalk (a tick after the neighbour's edge, or in its sample or the next)
 
 [suite.spi-shapes-holdout]
 role = "holdout"
 about = "the same, other seeds"
 sources = ["gen:spivar[1000:1100]"]
-transforms = [""]
+transforms = ["", "xtalk:0.3", "xtalk:0.3:01"]
+cycle = [["xtalk:0.3", "xtalk:0.3:01"]]   # each case clean and with crosstalk (a tick after the neighbour's edge, or in its sample or the next)
 
 [suite.uartlike]
 role = "tune"
@@ -356,16 +360,16 @@ trials_in_all = false
 role = "tune"
 about = "Q1 and Q2: two or three buses a case, of those protocols and the older ones (UART, I2C, SPI, CAN, SWD, 1-Wire, NEC), with decoys: each protocol's lines beside others' (a reader claiming another's line, lines of separate buses grouped under one clock)"
 sources = ["gen:protomix[0:120]"]
-transforms = ["", "spike:0.02", "bounce:0.1", "xtalk:0.3"]
-cycle = [["spike:0.02", "bounce:0.1", "xtalk:0.3"]]   # Q3: each case clean and with one kind of noise
+transforms = ["", "spike:0.02", "bounce:0.1", "xtalk:0.3", "xtalk:0.3:01"]
+cycle = [["spike:0.02", "bounce:0.1", "xtalk:0.3", "xtalk:0.3:01"]]   # Q3: each case clean and with one kind of noise
 
 [suite.protomix-holdout]
 trials_in_all = false
 role = "holdout"
 about = "the same, other seeds"
 sources = ["gen:protomix[1000:1120]"]
-transforms = ["", "spike:0.02", "bounce:0.1", "xtalk:0.3"]
-cycle = [["spike:0.02", "bounce:0.1", "xtalk:0.3"]]   # Q3: each case clean and with one kind of noise
+transforms = ["", "spike:0.02", "bounce:0.1", "xtalk:0.3", "xtalk:0.3:01"]
+cycle = [["spike:0.02", "bounce:0.1", "xtalk:0.3", "xtalk:0.3:01"]]   # Q3: each case clean and with one kind of noise
 
 [suite.ir]
 role = "tune"
