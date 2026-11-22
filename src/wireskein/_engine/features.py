@@ -12,6 +12,8 @@ import numpy as np
 
 from .model import Capture, Channel
 
+IDLE_ENDS_OF_MEDIAN = 10   # an end run this many times the line's median run: the line at rest there
+
 
 @dataclass
 class UnitCandidate:
@@ -119,7 +121,15 @@ def channel_features(cap: Capture, ch: Channel) -> ChannelFeatures:
     ilen, ilev = length[inner], level[inner]
     # Idle level: the level holding most of the time spent in the longest runs
     # (the 20 longest, which covers inter-frame gaps even on busy lines).
+    # (and an end run long beside the usual ones, the line at rest there: a capture cut inside a character at its
+    # start and resting for a long time at its end, CI c22bb73 synth-mixed-137 cut to its second half, was read with
+    # the low of its characters as idle, the UART inverted)
     pool_len, pool_lev = (ilen, ilev) if len(ilen) else (length, level)
+    if len(ilen) and len(length) >= 2:
+        med0 = float(np.median(ilen))
+        ends = np.array([0, len(length) - 1])
+        ends = ends[length[ends] >= IDLE_ENDS_OF_MEDIAN * med0]
+        pool_len, pool_lev = np.concatenate([pool_len, length[ends]]), np.concatenate([pool_lev, level[ends]])
     top = np.argsort(pool_len)[-20:]
     t_hi = pool_len[top][pool_lev[top] == 1].sum()
     t_lo = pool_len[top][pool_lev[top] == 0].sum()

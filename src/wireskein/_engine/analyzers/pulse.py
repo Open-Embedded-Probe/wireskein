@@ -35,6 +35,7 @@ def _bounce_view(ch, rate: float):
 RGB_SHORTEST = 0.15e-6  # s: no pulse of a WS2812-like line is shorter (T0H 0.25 us or more)
 RGB_ONE_OVER_ZERO = 1.5  # a 1's high over a 0's, this many times at least
 RGB_MIXED = 0.1         # the rarer kind of bit's share a string's data has at least
+RGB_BIT_MIN_S = 0.8e-6    # a bit this long at least
 RGB_T1H_MAX = 0.9         # a 1's high, this share of the bit at most
 RGB_T0H_MIN = 0.1         # a 0's high, this share of the bit at least
 RGB_CUT_HIGH_S = 2e-6     # a capture begun inside a bit: its first fall within this
@@ -74,7 +75,9 @@ class RgbLedPlugin:
         if not fr:
             return []
         bit_s = r["bit"] / c.cap.rate
-        if not 0.5e-6 <= bit_s <= 3e-6:
+        # (a one-wire LED's bit is 1.2-2.5 us, 0.9 at the least its timings allow: a free clock aliased by the
+        # sampling to a bit of 0.5 us, its bounces read as varied bits, was likely: synth-mixed-nack-99 with bounces)
+        if not RGB_BIT_MIN_S <= bit_s <= 3e-6:
             return []
         per = np.array([d for _, d in r["period"]], np.float64)
         steady = float(np.mean(np.abs(per / r["bit"] - 1) < 0.25)) if len(per) else 0.0
