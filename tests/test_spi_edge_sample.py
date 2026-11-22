@@ -79,3 +79,28 @@ def test_a_fast_skewed_clocks_short_runs_are_its_own():
     spikes = rises[rng.random(len(rises)) < 0.2] + 11
     clk = np.sort(np.concatenate([rises, rises + 8, spikes, spikes + 1]))
     assert not V.own_short_runs(clk, 1)
+
+
+def test_a_clocks_fast_stretches_do_not_tie_the_edges():
+    """A clock that changes speed, taken down: slow stretches of 10 samples a period and fast ones of 2 (halves of a
+    sample). The data changes on the fall, so it is sampled on the rise; in the fast stretches a change is a sample
+    from either edge, and counted they tied the two (synth-mixed-freqhop-18 decimated by 2: SPI on the wrong edge)."""
+    import numpy as np
+    from wireskein._engine import typed
+    from wireskein._engine.model import Capture, Channel
+    rng = np.random.default_rng(3)
+    clk, dat, t, lv = [], [], 100, 0
+    for stretch in range(12):
+        half = 5 if stretch % 2 == 0 else 1
+        for i in range(48 if half == 1 else 16):
+            clk += [t, t + half]                       # rise, fall
+            b = int(rng.integers(2))
+            if b != lv:
+                # the data changes a sample after the fall; taken down, in a fast stretch in the rise's sample or the fall's
+                dat.append(t + half + 1 if half > 1 else t + int(rng.integers(2)))
+                lv = b
+            t += 2 * half
+        t += 30
+    cap = Capture(5e6, t + 100, [Channel("CLK", 0, np.asarray(clk, np.int64)),
+                                 Channel("D", 0, np.asarray(dat, np.int64))])
+    assert typed.sample_edge_for(cap, "CLK", ("D",)) == ["rise"]

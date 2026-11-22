@@ -145,6 +145,13 @@ def sample_edge_for(cap, clock: str, data: tuple[str, ...], _debounced: bool = F
     dr, df = [], []
     for d in data:
         de = cap.channel(d).edges
+        if len(de) and len(rise) > 1 and len(fall):
+            # where the clock runs too fast for its edges to be told apart (a half of a sample or two: a clock that
+            # changes speed, taken down) a change is a sample from either: those left out where the slower stretches
+            # hold enough (a clock fast throughout keeps them all)
+            slow = K.local_period(rise, de) >= TELLS_EDGES * c.step
+            if not slow.all() and slow.sum() >= max(8, 0.1 * len(de)):
+                de = de[slow]
         if len(de) and len(rise) and len(fall):
             dr.append(np.median(K.nearest_distance(de, rise)[0]))
             df.append(np.median(K.nearest_distance(de, fall)[0]))
@@ -179,6 +186,7 @@ def sample_edge_for(cap, clock: str, data: tuple[str, ...], _debounced: bool = F
     return ["rise" if a >= b else "fall"]
 
 
+TELLS_EDGES = 4          # a clock's period this many samples or more: a data change's distance to each edge tells them apart
 ON_EDGE_SHARE = 0.1      # a data line's changes on the sampling edge's sample, this share: a driver clocked by it ...
 ON_EDGE_OVER = 3          # ... and this many times its changes on the other edge's (another clock in step with it,
                           # drifting, meets both edges alike)
