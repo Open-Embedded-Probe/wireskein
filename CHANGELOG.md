@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Fixed: an SPI whose clock changes speed, taken down so its fast stretches have halves of a sample, was read on the wrong edge (ambiguous: CI b7415e8, synth-mixed-freqhop-18 decimated by 2, confirmed before): there a data change is a sample from either edge and says nothing. The edge is measured on the data changes where the clock's period is 4 samples or more (all of them for a clock fast throughout).
+- (JA) 直した: 速さの変わるクロックの SPI を間引き、速い所の半周期が 1 サンプルになった記録で、誤った辺で読んでいた（ambiguous: CI b7415e8、2 で間引いた synth-mixed-freqhop-18。前は確定）: そこではデータの変化がどちらの辺からも 1 サンプルで、手がかりにならない。辺は、クロックの周期が 4 サンプル以上の所のデータの変化で測る（全体が速いクロックでは全部で）。
 - (EN) A long capture read in pieces analyses again on their own only the doubtful pieces that hold one of 16 points spread over the part (`doubtful[].holds` on those): a capture of a kind not read made every piece doubtful (sigrok-dumps' HP signature analysis, 134 of 141 pieces), each analysed again: 7.8 -> 3.9 minutes, the claims the same. Which pieces does not depend on the order they are read in.
 - (JA) 長い記録を区切って読むとき、疑わしい区切りのうち、パートに等間隔に置いた 16 点を含むものだけを、それだけでも analyze し直す（`doubtful[].holds` はそれらに付く）: 読めない種類の記録では、どの区切りも疑わしくなり（sigrok-dumps の HP のシグネチャ解析、141 個のうち 134 個）、すべてをやり直していた: 7.8 分 → 3.9 分、主張は同じ。どの区切りかは、読む順番によらない。
 - (EN) `wireskein.decode.analyze(cap)` analyses the part it is given whole, and on one of more than 2 000 000 changes now says on stderr that `analyze_file(path)` reads a long capture in pieces: sigrok-dumps' imx6_quad SD capture (627 M samples, a clock of 16 M changes) did not finish in 15 minutes there, where `wireskein analyze` read it in 2.6 minutes and 0.9 GB (SD confirmed). docs/long-captures.md §3.1 says where Python splits.
