@@ -322,32 +322,22 @@ def frames_startstop(cap, sb: SyncBits) -> Frames:
     after = K.edge_levels(de, d.initial)
     ev_t = de[hi]
     ev_k = np.where(after[hi] == 0, 1, 2)  # 1 START-like, 2 STOP-like
-    events, bounds, conds = [], [], []
-    open_at, began = None, None
     pos = np.searchsorted(sb.t, ev_t)
-    for tt, kind, p in zip(ev_t.tolist(), ev_k.tolist(), pos.tolist()):
-        if kind == 1:
-            if open_at is not None:
-                bounds.append((open_at, p))
-                conds.append((began, "Sr"))
-                events.append(("Sr", tt))
-                began = "Sr"
-            else:
-                events.append(("S", tt))
-                began = "S"
-            open_at = p
-        else:
-            if open_at is not None:
-                bounds.append((open_at, p))
-                conds.append((began, "P"))
-            events.append(("P", tt))
-            open_at = None
+    # a frame is open after a START-like event and closed by the next event of either kind (the state is the kind of
+    # the event before: no walk needed). A START-like event inside an open frame is a repeated START (Sr)
+    start = ev_k == 1
+    was_open = np.concatenate(([False], start[:-1]))
+    names = np.where(start, np.where(was_open, "Sr", "S"), "P")
+    events = list(zip(names.tolist(), ev_t.tolist()))
+    close = np.flatnonzero(was_open)
+    bounds = list(zip(pos[close - 1].tolist(), pos[close].tolist()))
+    conds = list(zip(names[close - 1].tolist(), np.where(start[close], "Sr", "P").tolist()))
     # a START never closed (a bus left stuck, a window too short) is kept: where
     # the traffic stopped is often what a fault test asks for
-    open_tail = open_at is not None and open_at < len(sb.t)
+    open_tail = bool(len(start)) and bool(start[-1]) and int(pos[-1]) < len(sb.t)
     if open_tail:
-        bounds.append((open_at, len(sb.t)))
-        conds.append((began, None))
+        bounds.append((int(pos[-1]), len(sb.t)))
+        conds.append((str(names[-1]), None))
     return Frames(sb, "startstop", np.asarray(bounds, dtype=np.int64).reshape(-1, 2), events, open_tail, conds)
 
 
