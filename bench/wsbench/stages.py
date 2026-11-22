@@ -232,7 +232,9 @@ class E2E(Stage):
         rec = evaluate.judge(case.cap, case.truth, out)
         # each truth bus with its hardness tags (data.hardness: judge keeps the truth's order)
         detail = [{"protocol": b["protocol"], "outcome": b["outcome"], "tags": t, "decode": b.get("decode"),
-                   **({"unread": b["unread"]} if "unread" in b else {})}
+                   **({"unread": b["unread"]} if "unread" in b else {}),
+                   # the protocol of a wrong claim on its lines (bench/confusion.py: protocols taken for each other)
+                   **({"taken_by": b["wrong_claim"]["label"].split("(")[0]} if b.get("wrong_claim") else {})}
                   for b, t in zip(rec["buses"], case.bus_tags or [[]] * len(rec["buses"]))
                   if b["in_scope"] and b["outcome"] != "absent"]
         buses = [b for b in rec["buses"] if b["in_scope"] and b["outcome"] != "absent"]
@@ -251,11 +253,13 @@ class E2E(Stage):
                  "claims_likely": sum(c["verdict"] == "likely" for c in rec["claims"]),
                  "claims_ambiguous": sum(c["verdict"] == "ambiguous" for c in rec["claims"]),
                  # each claim's own figures, for calibrating the verdict's thresholds afterwards (bench/calibrate.py):
-                 # protocol, verdict, total, margin, right, and why not (wrong_kind; None when right)
+                 # protocol, verdict, total, margin, right, why not (wrong_kind; None when right), and the runner-up's
+                 # protocol (bench/confusion.py: protocols that come close to each other)
                  "claim_list": [[c["protocol"], c["verdict"], round(float(c["total"]), 4), round(float(c["margin"]), 4),
                                  bool(c["correct"]),
                                  None if c["correct"] or c["verdict"] == "unknown-sync"
-                                 else wrong_kind(out[i], case.truth, case.aliased)]
+                                 else wrong_kind(out[i], case.truth, case.aliased),
+                                 c["runner_up"].split("(")[0] if c.get("runner_up") else None]
                                 for i, c in enumerate(rec["claims"])],
                  # wrong confirmed claims by why (wrong_kind): the protocol named wrongly, or told incompletely
                  "false_confirmed_kinds": dict(Counter(

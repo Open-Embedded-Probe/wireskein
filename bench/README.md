@@ -15,6 +15,7 @@ uv run python bench/report.py                                      # algorithms 
 uv run python bench/report.py --stage e2e --delta                  # against the main algorithm
 uv run python bench/report.py --history clock_period/comb          # the trail of one algorithm
 uv run python bench/select.py --stage e2e --suite noise --by noise # choosing between algorithms (1.8)
+uv run python bench/confusion.py RUN_DIR...                       # protocols taken for each other / close (a run's shards)
 ```
 
 Runs kept in the ledger use the same versions on every machine (`uv run --with-requirements bench/requirements.txt

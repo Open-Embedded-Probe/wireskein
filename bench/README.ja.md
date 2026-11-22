@@ -14,6 +14,7 @@ uv run python bench/report.py                                      # アルゴ�
 uv run python bench/report.py --stage e2e --delta                  # 本命との差
 uv run python bench/report.py --history clock_period/comb          # 1 つの方式の試行の跡
 uv run python bench/select.py --stage e2e --suite noise --by noise # 切り替えの検討（1.8）
+uv run python bench/confusion.py 実行のディレクトリ...             # 取り違えたプロトコルの組と、拮抗した組（実行のシャードから）
 ```
 
 台帳に残す計測は、どの機械でも同じ版で走らせます（`uv run --with-requirements bench/requirements.txt python bench/...`、1.9）。
