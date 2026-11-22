@@ -283,8 +283,10 @@ def pair_relation(cap: Capture, clk: ClockInfo, other: str) -> PairRelation:
     ce = c.edges
     first = ce[np.minimum(np.searchsorted(ce, b[:, 0], side="left"), len(ce) - 1)]
     last = ce[np.maximum(np.searchsorted(ce, b[:, 1], side="right") - 1, 0)]
-    j0 = np.searchsorted(de, first, side="left")
-    j1 = np.searchsorted(de, last, side="right")
+    # (a change in the sample of the burst's first or last clock edge is outside it: at a few samples a period a
+    # select's edge shares a sample with the clock's next to it - CI c22bb73, synth-mixed-freqhop-16 at 2 MS/s)
+    j0 = np.searchsorted(de, first, side="right")
+    j1 = np.searchsorted(de, last, side="left")
     framed = (j0 == j1) & (j0 > 0) & (j0 < len(de))
     # a window holding several bursts must look like one transfer, or any slow
     # line would frame them all: tight around them (lead + trail no longer than
