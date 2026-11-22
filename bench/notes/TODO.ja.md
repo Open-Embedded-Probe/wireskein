@@ -195,6 +195,14 @@
     から出す、と決まった（2026-11-22、ユーザー）。済み。
   - E（外の TOML の reframe / [score] terms の文書）は済み。pytest-embedded-wireskein は公開の capture.markers に直し（3461e84）、
     release を patch / minor / major で上げる形にした（e54f20e。wireskein は 99e24f4）。どちらも未 push。
+  - ノイズの扱い（2026-11-22）: 短い Run が線自身のものかの判断は、形だけの基準ではどちらも 1 割近く外れる（周期を壊すかで
+    136 / 89、規則正しさで 364 / 139。合成の記録のノイズ前と比べた）。パルスを 1 つずつ隣の辺との時間で分けるのは、合成の
+    クロストークが必ず 1 サンプル後に入る形にしか合わない（実機は同じサンプルか 1 つ後）。そこで bench に xtalk:L:01
+    （ずれ 0〜1）を足して、noise / protomix / spi-shapes の cycle に入れた。今の版はずれ 0〜1 でも同じくらい読める。
+    判断は views.own_short_runs 1 つにまとめた（survey、staged、typed）。クロックの Run の中のパルスは「3 つ続く短い Run の
+    真ん中」として除く（survey にもそろえた: spivar-67+xtalk）。
+  - 解析の結果が同じプロセスで前に読んだものに左右されていた（declarative のメモが見方の id を鍵にしていた、9b84a20）。
+    これまでの CI の数字にもこの揺れが混ざっていた。直したあと、72 件を順番を変えて読ませて同じことを確かめた。
   - まだ: h417_slow の stream（実機の確認用）で I2C の線を UART と有力に 3 件（調整用の noise では出ない。調整しない）。
     vc820 のフルスピード USB を 4 MS/s で取った対を RVSWD と ambiguous。kc85 の /MREQ・MEI を rgb_led と ambiguous（規則正しさ 0.49）。
     signature の巨大な記録（対応外の HP シグネチャ解析）は CLI の分割の道でも 144 秒。

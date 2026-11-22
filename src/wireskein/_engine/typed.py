@@ -169,7 +169,7 @@ def sample_edge_for(cap, clock: str, data: tuple[str, ...], _debounced: bool = F
             # (not where the clock's runs of a sample are its own, its period kept to a sample: a clock of 5 samples a
             # period with lows of one or two, an I2C at 400 kHz at 2 MS/s, lost half its edges and read on the fall
             # alone, sigrok-dumps' ssd1306-i2c: the clock is taken as it is, its data lines cleaned)
-            if _own_short_runs(c, cap.n_samples):
+            if V.own_short_runs(c.edges, c.step):
                 cleaned[clock] = np.asarray(c.edges, np.int64)
             if any(len(cleaned[n]) != len(cap.channel(n).edges) for n in pins):
                 view = replace(cap, channels=[replace(x, edges=cleaned[x.name]) if x.name in pins else x
@@ -177,24 +177,6 @@ def sample_edge_for(cap, clock: str, data: tuple[str, ...], _debounced: bool = F
                 return sample_edge_for(view, clock, data, _debounced=True)
         return ["rise", "fall"]
     return ["rise" if a >= b else "fall"]
-
-
-OWN_SHORT_REGULAR = 0.95    # a clock's rise-to-rise intervals within a sample of their median, this share: its runs
-                            # of a sample are its own (a fast clock), not a noise's pulses
-
-
-def _own_short_runs(c, n: int) -> bool:
-    """The clock's runs of a sample are its own, not a noise's pulses: the clock as it is keeps its period to a
-    sample (a noise's pulses scatter its rises; even a crosstalk copying another clock's edges leaves the real ones
-    between them)."""
-    lv = K.edge_levels(c.edges, c.initial)
-    r = np.asarray(c.edges, np.int64)[lv == 1]
-    if len(r) < 16:
-        return False
-    d = np.diff(r)
-    med = float(np.median(d))
-    d = d[d < 4 * med]                      # the gaps between bursts left out
-    return len(d) >= 8 and float(np.mean(np.abs(d - med) <= c.step)) >= OWN_SHORT_REGULAR
 
 
 ON_EDGE_SHARE = 0.1      # a data line's changes on the sampling edge's sample, this share: a driver clocked by it ...
