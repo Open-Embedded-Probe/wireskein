@@ -17,7 +17,7 @@ WireSkein turns a capture into what a reader needs - the buses on it, their mess
 | The marker lines of your own test logs read as segments | A marker dialect under `markers/` of a definitions directory | [Markers](markers.md) §4 |
 | A rule tests apply that no check has, judged alike by `wireskein verify`, pytest and the viewer | A check kind (`wireskein.plugins.register_check`) | [Guide](capture-test-guide.md) §4.10 |
 | A judgement only one test makes | `wireskein.verify.sections(run)`, an analysis of the segment, `rec.result(...)` | [Guide](capture-test-guide.md) §3.3 |
-| Something to look at, not to judge | Read the capture in Python (`wireskein.capture`, `wireskein.states`, `wireskein.decode`) and put what you find in the file (§3) | [File format](wireskein-format.md) §5 |
+| Something to look at, not to judge | Read the capture in Python (`wireskein.capture`, and `wireskein.decode`: `analyze`, `states`) and put what you find in the file (§3) | [File format](wireskein-format.md) §5 |
 | A line coding or a physical layer WireSkein does not read (Manchester, say) | Not an extension point: it needs a bit layer in WireSkein itself | Propose it |
 
 The ways stack: a definition gives the analysis a protocol, a protocol object reads what rides on it, a check judges it in a test, and its messages and notices end up as annotations and markers in the file.
@@ -49,7 +49,7 @@ acme = "acme_wireskein.definitions"
 
 ## 3. Results in the viewer
 
-- **Annotations:** `wireskein annotate FILE --save` (or `wireskein.annotate.build_file` and `save`) writes the analysis as rows, the messages of an installed protocol among them. A message's `text` is what the viewer draws for it (else its fields), its `level` (`ok`, `warn`, `error`) its colour, its `s` and `e` its span.
+- **Annotations:** `wireskein annotate FILE --save` (or `wireskein.decode.annotations_file` and `wireskein.capture.write_annotations`) writes the analysis as rows, the messages of an installed protocol among them. A message's `text` is what the viewer draws for it (else its fields), its `level` (`ok`, `warn`, `error`) its colour, its `s` and `e` its span.
 - **Markers:** `wireskein.capture.add_markers(path, [{"t": tick, "label": ..., "end"?: tick, "part"?: k}], by="my_tool")` puts markers of your own in the file, in place of the ones your tool put there before; others' stay. `wireskein.capture.markers(path)` reads them all. Verification writes its notices and changes the same way (`by: "verify"`).
 - **Notes and attachments:** `wireskein.capture.note(path, ...)` and `attach(path, name, data)` keep anything else with the capture without rewriting its channels.
 

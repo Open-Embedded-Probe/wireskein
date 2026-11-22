@@ -17,7 +17,7 @@ WireSkein は、キャプチャを読み手に要るもの（載っているバ�
 | 自分の試験のログのマーカーの行を区間として読む | 定義のディレクトリの `markers/` のマーカーの方言 | [マーカー](markers.ja.md) §4 |
 | どの検査も持たないきまりを試験に使い、`wireskein verify`、pytest、ビューアで同じに判定する | 検査の種類（`wireskein.plugins.register_check`） | [ガイド](capture-test-guide.ja.md) §4.10 |
 | 1 つの試験だけがする判定 | `wireskein.verify.sections(run)`、区間の分析、`rec.result(...)` | [ガイド](capture-test-guide.ja.md) §3.3 |
-| 判定ではなく、見るためのもの | Python でキャプチャを読み（`wireskein.capture`、`wireskein.states`、`wireskein.decode`）、見つけたものをファイルに入れる（§3） | [ファイル形式](wireskein-format.ja.md) §5 |
+| 判定ではなく、見るためのもの | Python でキャプチャを読み（`wireskein.capture` と、`wireskein.decode` の `analyze`、`states`）、見つけたものをファイルに入れる（§3） | [ファイル形式](wireskein-format.ja.md) §5 |
 | WireSkein が読まない線の符号や物理層（マンチェスターなど） | 拡張の口ではありません。WireSkein の中にビットの層が要ります | 提案してください |
 
 方法は積み重なります: 定義が分析にプロトコルを与え、プロトコルのオブジェクトがその上に乗るものを読み、検査が試験でそれを判定し、そのメッセージと注意は、ファイルの注釈と印になります。
@@ -49,7 +49,7 @@ acme = "acme_wireskein.definitions"
 
 ## 3. 結果をビューアに出す
 
-- **注釈:** `wireskein annotate FILE --save`（または `wireskein.annotate.build_file` と `save`）は、分析を行として書きます。入れたプロトコルのメッセージもその中に入ります。メッセージの `text` がビューアで描かれる文字（無ければ欄の値）、`level`（`ok`、`warn`、`error`）が色、`s` と `e` が範囲です。
+- **注釈:** `wireskein annotate FILE --save`（または `wireskein.decode.annotations_file` と `wireskein.capture.write_annotations`）は、分析を行として書きます。入れたプロトコルのメッセージもその中に入ります。メッセージの `text` がビューアで描かれる文字（無ければ欄の値）、`level`（`ok`、`warn`、`error`）が色、`s` と `e` が範囲です。
 - **印:** `wireskein.capture.add_markers(path, [{"t": tick, "label": ..., "end"?: tick, "part"?: k}], by="my_tool")` は、自分の印をファイルに入れます。自分の道具が前に入れた印は置き換え、ほかの印は残します。`wireskein.capture.markers(path)` ですべてを読みます。照合も、注意と変化点を同じやり方で書きます（`by: "verify"`）。
 - **メモと添付:** `wireskein.capture.note(path, ...)` と `attach(path, name, data)` は、チャンネルを書き直さずに、ほかのものをキャプチャと一緒に残します。
 

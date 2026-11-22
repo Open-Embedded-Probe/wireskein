@@ -38,7 +38,8 @@ from ._fileformat import (add_markers, analog_raw, analog_volts, attach, attachm
                           note, notes, pack)
 
 __all__ = ["Analog", "Capture", "Channel", "Events", "Part", "Reduced", "add_markers", "analog_raw", "analog_volts", "attach",
-           "attachments", "events", "from_interleaved", "logic", "markers", "note", "notes", "pack", "read", "write"]
+           "annotations", "attachments", "events", "from_interleaved", "logic", "markers", "note", "notes", "pack", "read", "write",
+           "write_annotations"]
 
 
 def logic(name: str, initial: int, edges, n: int, step: int = 1, phase: int = 0, **acquisition) -> Channel | Events:
@@ -184,3 +185,15 @@ def write(path: str | Path, cap: Capture) -> Path:
     parts = [fileformat.Part(list(p.channels), dict(p.meta), p.tick0, p.ticks) for p in cap.parts]
     return fileformat.write(path, cap.tick_hz, parts=parts, layout=cap.layout, lost=[dict(x) for x in cap.lost] or None,
                             capture_id=cap.id, **cap.meta)
+
+
+def annotations(path: str | Path) -> dict | None:
+    """The annotations a file holds (decode/annotations.json, wireskein-annotations/1), or None."""
+    from . import annotate
+    return annotate.load(path)
+
+
+def write_annotations(path: str | Path, doc: dict) -> None:
+    """Put annotations (wireskein.decode.annotations_file) in the file, in place of those it held."""
+    from . import annotate
+    annotate.save(path, doc)

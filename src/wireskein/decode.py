@@ -40,7 +40,8 @@ from ._engine.export import dumps
 from ._engine.model import Capture, Channel
 from ._engine.srio import read_sr, write_sr
 
-__all__ = ["analyze", "analyze_file", "as_logic", "decode_file", "dumps", "export"]
+__all__ = ["analyze", "analyze_file", "annotations", "annotations_file", "as_logic", "decode_file", "dumps", "export",
+           "states", "states_file"]
 
 FORMAT = "wireskein-analysis/1"
 IDLE_S = 1e-3          # a bus with no bit times of its own: activity apart by more than this is two bursts
@@ -129,6 +130,36 @@ def analyze(cap, hints: dict | None = None):
     changes view (Part.view, as_logic). hints (all optional): {"protocols": [...], "pins": {pin: {"protocol", "role",
     "baud"}}, "exclude_pins": [...], "devices": ["i2c/**", ...]} restrict what is tried."""
     return staged.analyze(_load(cap), hints)
+
+
+def states(cap, pins: list[str] | None = None, tol: float = 0.02, min_periods: int = 3,
+           max_odd: int | None = 3) -> dict:
+    """{pin: [stretches]}: each logic line of a part as the levels and waves it goes through, and the odd pulses
+    between them (`wireskein states`). cap: as analyze takes, or a segment's window (verify.sections). A stretch:
+    t0 / t1 (ticks), and {"level": v} or {"period_s", "high_s", "freq_hz", "duty", "periods"}; odd pulses between."""
+    from . import states as _st
+    return _st.of_capture(_load(cap), pins, tol, min_periods, max_odd)
+
+
+def states_file(path: str | Path, pins: list[str] | None = None, part: int | None = None, tol: float = 0.02,
+                min_periods: int = 3, max_odd: int | None = 3) -> dict:
+    """{"tick_hz", "parts": [{"part", "ticks", "lines": {pin: [stretches]}}]} of a capture file (parts that follow on
+    without a gap read as one), as `wireskein states --json` writes it."""
+    from . import states as _st
+    return _st.of_file(path, pins, part, tol, min_periods, max_odd)
+
+
+def annotations(cap, hints: dict | None = None) -> dict:
+    """The analysis as rows for the viewer (wireskein-annotations/1): cap as analyze takes."""
+    from . import annotate
+    return annotate.build(_load(cap), hints)
+
+
+def annotations_file(path: str | Path, hints: dict | None = None, part: int | None = None) -> dict:
+    """The annotations of a capture file, each part decoded on its own (`wireskein annotate`); write them into it with
+    wireskein.capture.write_annotations."""
+    from . import annotate
+    return annotate.build_file(path, hints, part=part)
 
 
 def export(res, cap, mode: str = "final", select: list[str] | None = None, alternatives: bool = False,

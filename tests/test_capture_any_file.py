@@ -55,3 +55,17 @@ def test_a_vcd_holds_one_part(tmp_path):
 
 def test_decode_shows_no_types_of_its_own():
     assert not {"Capture", "Channel", "load", "save"} & set(decode.__all__)
+
+
+def test_states_and_annotations_through_the_public_modules(tmp_path):
+    cap = uart(b"states " * 20)
+    out = capture.write(tmp_path / "s.wireskein", cap)
+    lines = decode.states(capture.read(out))
+    assert lines["TX"] and all("t0" in x and "t1" in x for x in lines["TX"])        # a UART: a stretch of activity
+    whole = decode.states_file(out)
+    assert whole["parts"][0]["lines"]["TX"] == lines["TX"]
+    doc = decode.annotations_file(out)
+    assert doc["format"] == "wireskein-annotations/1" and doc["rows"]
+    assert capture.annotations(out) is None
+    capture.write_annotations(out, doc)
+    assert capture.annotations(out) == doc

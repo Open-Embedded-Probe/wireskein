@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) `wireskein.decode.states` / `states_file` (each line as its levels and waves, `wireskein states`) and `annotations` / `annotations_file` (the analysis as the viewer's rows, `wireskein annotate`), and `wireskein.capture.annotations` / `write_annotations` to read and put them in a file: what `wireskein.states` and `wireskein.annotate` gave, now through the public modules (those two are internal).
+- (JA) `wireskein.decode.states` / `states_file`（線ごとのレベルと波の区間、`wireskein states`）と `annotations` / `annotations_file`（分析をビューアの行に、`wireskein annotate`）、ファイルの注釈を読み書きする `wireskein.capture.annotations` / `write_annotations`。`wireskein.states` と `wireskein.annotate` が出していたものを、公開のモジュールから使えるようにした（この 2 つは内部のもの）。
 - (EN) Breaking: every definition file says what it is in `format` at its top - `"wireskein-protocol/1"` (a protocol), `"wireskein-device/1"` (a device pack), `"wireskein-marker-dialect/1"` (a marker dialect) - and one without it, or of another, is refused with what it needs. WireSkein's own carry it; one of yours gains the line.
 - (JA) 破壊的: 定義のファイルは、先頭の `format` で何かを言う: `"wireskein-protocol/1"`（プロトコル）、`"wireskein-device/1"`（機器パック）、`"wireskein-marker-dialect/1"`（マーカーの方言）。無いものや違うものは、要るものを添えて断る。WireSkein 自身のものには入れてある。自分のものには 1 行足す。
 - (EN) `wireskein --plugin MODULE_OR_FILE.py --definitions DIR <command>`: additions for one run without packaging them (a module or a .py file that adds what it has with `wireskein.plugins`, a definitions directory; both repeatable). They go through the environment (`WIRESKEIN_PLUGINS`, `WIRESKEIN_DEFINITIONS`, which `wireskein.plugins` reads too), so a split read's worker processes have them.
