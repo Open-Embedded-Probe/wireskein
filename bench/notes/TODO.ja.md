@@ -182,7 +182,9 @@
     12 MHz のクロックの rgb_led（ビットは 0.8 µs 以上）、スロットが半端な I2S（0.6 倍）、文字の途中で始まる UART の逆読み
     （端の長い Run も休みのレベルに数える）、同じサンプルの CS の辺（区切りの外）、ssd1306 の SCL（規則正しいクロックの 1 サンプルの Run は自身のもの）。
   - 速く: frames_startstop をまとめて（mx25l1605d 125 → 43 秒）、break の区切り、edge_bursts（LinkE の 64 KiB 読み出し CPU 53 → 43 秒）。
-  - まだ: protomix-72（4 MHz の SPI を 16 MS/s、1 周期 4 サンプル）の MISO がクロストークで消える（既知の 6 サンプル未満の問題）。
-    h417_slow の stream（実機の確認用）で I2C の線を UART と有力に 3 件（調整用の noise では出ない。調整しない）。
+  - CI 4418607（c22bb73 から読めた数 +11、誤った有力 14 → 9、CPU 96 → 81 分、崩れなし）。調整用の組で残っていた
+    protomix-72（4 MHz の SPI を 16 MS/s、1 周期 4 サンプル）の MISO がクロストークで消える件は 793fc4a で直した
+    （クロックの量子化による 1 サンプルの Run 1 つで、対を測る見方の 1 サンプルのパルス除きが止まっていた）。
+  - まだ: h417_slow の stream（実機の確認用）で I2C の線を UART と有力に 3 件（調整用の noise では出ない。調整しない）。
     vc820 のフルスピード USB を 4 MS/s で取った対を RVSWD と ambiguous。kc85 の /MREQ・MEI を rgb_led と ambiguous（規則正しさ 0.49）。
     signature の巨大な記録（対応外の HP シグネチャ解析）は CLI の分割の道でも 144 秒。
