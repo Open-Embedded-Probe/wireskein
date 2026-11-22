@@ -26,6 +26,7 @@ import functools
 import itertools
 import hashlib
 import re
+import sys
 from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
@@ -128,8 +129,19 @@ def as_logic(cap, thresholds: dict) -> Capture:
 def analyze(cap, hints: dict | None = None):
     """What a part holds. cap: a wireskein.capture.Capture of one part, one of its parts (a Part), or a part's
     changes view (Part.view, as_logic). hints (all optional): {"protocols": [...], "pins": {pin: {"protocol", "role",
-    "baud"}}, "exclude_pins": [...], "devices": ["i2c/**", ...]} restrict what is tried."""
-    return staged.analyze(_load(cap), hints)
+    "baud"}}, "exclude_pins": [...], "devices": ["i2c/**", ...]} restrict what is tried. The part is analysed whole:
+    one of more than WHOLE_EDGES changes says on stderr that analyze_file reads a file in pieces (time and memory
+    bounded whatever its length, docs/long-captures.md)."""
+    v = _load(cap)
+    n = sum(len(c.edges) for c in v.channels)
+    if n > WHOLE_EDGES:
+        print(f"wireskein: analysing {n:,} changes whole (its time and memory grow with them): "
+              f"wireskein.decode.analyze_file(path) reads a long capture in pieces (docs/long-captures.md)",
+              file=sys.stderr)
+    return staged.analyze(v, hints)
+
+
+WHOLE_EDGES = 2_000_000    # analyze on a part this long or longer: the note that analyze_file reads in pieces
 
 
 def states(cap, pins: list[str] | None = None, tol: float = 0.02, min_periods: int = 3,

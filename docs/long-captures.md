@@ -71,7 +71,9 @@ State across frames (the RISC-V Debug Module) is read over the pieces as one.
 ### 3.1 Options
 
 `--split KEY=VALUE,...` on `analyze` and `decode` (Python: `split=`, or `"split"` in a decode spec), `--split off` to
-read whole however long:
+read whole however long. In Python the pieces come from a file: `wireskein.decode.analyze_file(path)` and
+`decode_file(path, spec)` split, while `wireskein.decode.analyze(cap)` analyses the part it is given whole (one of more
+than 2 000 000 changes says so on stderr):
 
 | Option | Meaning | Default |
 | --- | --- | --- |

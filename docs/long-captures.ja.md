@@ -71,7 +71,9 @@ wireskein survey long.sr --json --plan         # 文書（wireskein-survey/1）�
 ### 3.1 オプション
 
 `analyze` と `decode` の `--split KEY=VALUE,...`（Python では `split=`、decode の spec の `"split"`）。
-`--split off` は、どんなに長くても全体を一度に読みます。
+`--split off` は、どんなに長くても全体を一度に読みます。Python で区切って読むのはファイルからです:
+`wireskein.decode.analyze_file(path)` と `decode_file(path, spec)` は区切りますが、`wireskein.decode.analyze(cap)` は
+渡されたパートを丸ごと読みます（変化が 2 000 000 を超えると、stderr でそう言います）。
 
 | オプション | 意味 | 既定 |
 | --- | --- | --- |

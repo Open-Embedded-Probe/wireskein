@@ -69,3 +69,12 @@ def test_states_and_annotations_through_the_public_modules(tmp_path):
     assert capture.annotations(out) is None
     capture.write_annotations(out, doc)
     assert capture.annotations(out) == doc
+
+
+def test_a_long_part_analysed_whole_says_analyze_file_splits(capsys, monkeypatch):
+    monkeypatch.setattr(decode, "WHOLE_EDGES", 100)
+    decode.analyze(uart(b"long " * 10))
+    assert "analyze_file(path) reads a long capture in pieces" in capsys.readouterr().err
+    monkeypatch.setattr(decode, "WHOLE_EDGES", 10**9)
+    decode.analyze(uart(b"long " * 10))
+    assert "in pieces" not in capsys.readouterr().err
