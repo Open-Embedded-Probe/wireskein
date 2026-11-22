@@ -115,6 +115,8 @@ with rec.section(2, "ping", expect=[protocol("demo_link", "uart", {"data": "PA2"
 - **分析**は、それを独自のプロトコルとして出します。フレームは `result.frames` の下（`format = "hex"` の欄はバイトの 16 進）で、チェック（決まった値、CRC）がその証拠です。
 - **試験**は、`protocol(NAME, None, {役割: ピン}, messages=[...])` でフレームを確かめます（`bus` が None: そのプロトコル自身がバス）。
 - WireSkein のプロトコルの名前は断ります。
+- **コアが測る証拠**（`[score]` の `terms = [...]`。どれも名前で選び、プロトコルの点数に掛けます。自分のコードは要りません）: `select_boundary`（選択線の窓が転送を区切り、そのために使われている）、`degenerate`（どのデータのピンも 1 つの値ばかり）、`static_data`（どの語もすべて 0 かすべて 1: クロックが動くあいだ止まった線）、`single_frame_penalty`（区切りのあいだのフレームが 1 つ: 半分に）、`startstop_clearance` と `bus_free`（I²C の START / STOP と、バスの休み）、`data_once_a_bit`（1 ビットに 2 回ほど変わるデータの線はクロック）、`max_clock_hz`（`[score]` の `max_clock_hz`、既定は 5 MHz を超える: そういうバスはない）。使い方は、`decl/` にある WireSkein 自身の定義が見本です。
+- **区切り直し**（`[frame]` の `reframe = 名前`）: フレームを、その名前のコアの決まりで切り直します。今あるのは `"rvswd_stop"`（RVSWD の START と STOP で区切る。記録がそれを隠すときは、止まりの間隔で切る）だけです。
 
 ### 5.1 見本: demo_wire
 

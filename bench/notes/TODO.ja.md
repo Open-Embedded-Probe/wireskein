@@ -193,8 +193,8 @@
     client → wireskein → wireskein-captures の push（[data] cf8f23c が decode._save を使う）。[oep] に順番を伝えた。
   - states と annotate は decode（states / states_file、annotations / annotations_file）と capture（annotations / write_annotations）
     から出す、と決まった（2026-11-22、ユーザー）。済み。
-  - まだ: E（外の TOML で reframe / [score] terms が使えることの文書）。pytest-embedded-wireskein の tests が非公開の
-    _fileformat.markers を使う（公開は capture.markers。担当のセッションがない: ユーザーに）。
+  - E（外の TOML の reframe / [score] terms の文書）は済み。pytest-embedded-wireskein は公開の capture.markers に直し（3461e84）、
+    release を patch / minor / major で上げる形にした（e54f20e。wireskein は 99e24f4）。どちらも未 push。
   - まだ: h417_slow の stream（実機の確認用）で I2C の線を UART と有力に 3 件（調整用の noise では出ない。調整しない）。
     vc820 のフルスピード USB を 4 MS/s で取った対を RVSWD と ambiguous。kc85 の /MREQ・MEI を rgb_led と ambiguous（規則正しさ 0.49）。
     signature の巨大な記録（対応外の HP シグネチャ解析）は CLI の分割の道でも 144 秒。

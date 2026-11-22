@@ -130,6 +130,8 @@ A protocol that is its own bus - its own framing on a clock and data, or on one 
 - **The analysis** shows it as a protocol of its own, its frames under `result.frames` (a field with `format = "hex"` as hex bytes), and its checks (expected values, CRCs) as the evidence for it.
 - **A test** checks its frames with `protocol(NAME, None, {role: pin}, messages=[...])` (`bus` None: the protocol is the bus).
 - A name of WireSkein's own protocols is refused.
+- **Evidence the core measures** (`terms = [...]` under `[score]`; each multiplies the protocol's score, by name - no code of yours): `select_boundary` (the select's windows frame the transfers, and it is used for them), `degenerate` (every data pin dominated by one value), `static_data` (every word all 0s or all 1s: a line held while a clock runs), `single_frame_penalty` (one frame between gaps: halved), `startstop_clearance` and `bus_free` (START / STOP and the bus's idle as I²C has them), `data_once_a_bit` (a data line changing about twice a bit is a clock), `max_clock_hz` (above `max_clock_hz` under `[score]`, 5 MHz by default: no such bus). WireSkein's own definitions under `decl/` show them in use.
+- **Reframing** (`reframe = NAME` under `[frame]`): frames cut again by the core's rule of that name; `"rvswd_stop"` (frames delimited by RVSWD's START and STOP, or cut at its stop intervals where a capture hides them) is the one there is.
 
 ### 5.1 The example: demo_wire
 

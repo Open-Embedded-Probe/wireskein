@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) docs/protocols.md §5 names what a definition of your own can ask the core for: the evidence terms under `[score]` (`select_boundary`, `degenerate`, `static_data`, `single_frame_penalty`, `startstop_clearance`, `bus_free`, `data_once_a_bit`, `max_clock_hz`) and `reframe` under `[frame]` (`"rvswd_stop"`), as WireSkein's own definitions use them.
+- (JA) docs/protocols.md §5 に、自分の定義がコアに頼めるものを書いた: `[score]` の証拠の項（`select_boundary`、`degenerate`、`static_data`、`single_frame_penalty`、`startstop_clearance`、`bus_free`、`data_once_a_bit`、`max_clock_hz`）と、`[frame]` の `reframe`（`"rvswd_stop"`）。WireSkein 自身の定義と同じ使い方。
 
 ## 0.0.35
 - (EN) Fixed: `wireskein capture --source oep:...` with oep-client-python 0.0.63 failed on its request's renamed fields (0.0.34 still passed `rate`, `timeout`, `seconds`): it passes `rate_hz`, `analog_rate_hz`, `timeout_s`, `duration_s` now, and needs oep-client-python 0.0.63 or later.
