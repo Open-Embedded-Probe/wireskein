@@ -219,3 +219,24 @@ def test_an_excerpt_keeps_its_own_first_sample_on_the_probe_clock(tmp_path):
     cli.convert(argparse.Namespace(input=p, output=out, part=None, from_s=2e-4, to_s=5e-4))
     part = capture.read(out).parts[0]
     assert part.meta["start_ns"] == 5_200_000 and part.meta["start_uncertainty_ns"] == 5000
+
+
+def test_the_cli_takes_a_plugin_file(tmp_path):
+    """`wireskein --plugin FILE`: a file of one's own adding the format, for that run only."""
+    import subprocess
+    import sys
+    tx, end = uart_changes(b"hello, saleae\r\n" * 3)
+    p = tmp_path / "export.csv"
+    p.write_text(csv_text({"Channel 0": tx}, end))
+    plug = tmp_path / "my_formats.py"
+    example = Path(__file__).parents[1] / "examples/formats/saleae_csv.py"
+    plug.write_text("import importlib.util\nfrom wireskein import plugins\n"
+                    f"spec = importlib.util.spec_from_file_location('saleae_csv', {str(example)!r})\n"
+                    "m = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\n"
+                    "plugins.register_format(m.FORMAT)\n")
+    run = [sys.executable, "-m", "wireskein"]
+    without = subprocess.run([*run, "info", str(p)], capture_output=True, text=True)
+    assert without.returncode != 0
+    got = subprocess.run([*run, "--plugin", str(plug), "analyze", str(p)], capture_output=True, text=True)
+    assert got.returncode == 0, got.stderr
+    assert '"uart"' in got.stdout

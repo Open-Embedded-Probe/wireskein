@@ -35,6 +35,11 @@ Installed packages declare them in entry point groups, read once when first need
 "wireskein.checks" (a check function, or an object with .check and optionally .notices, .logic, .every_edge) and
 "wireskein.sources". The entry point's name is the addition's name: an object whose own `name` differs is refused.
 
+The environment adds them too, where a process starts without the caller's registrations (`wireskein --plugin MODULE
+--definitions DIR ...` sets it, so a split read's worker processes have them): WIRESKEIN_PLUGINS, modules to import or .py
+files to run (each adds what it has with this module), and WIRESKEIN_DEFINITIONS, definitions directories, each list separated by
+os.pathsep.
+
 Names are letters, digits and "_", starting with a letter, and none of WireSkein's own (its protocols, layers,
 formats, check kinds and sources): those are refused, as is an entry point naming one.
 """
@@ -59,7 +64,7 @@ _FORMATS: dict[str, object] = {}
 _SOURCES: dict[str, object] = {}
 _CHECKS: set[str] = set()
 _DIRS: list[Path] = []
-_LOADED: set[str] = set()
+_LOADED: set = set()
 
 
 def _name(name, what: str) -> str:
@@ -214,9 +219,34 @@ def _named(ep, obj, attr: str = "name"):
     return obj
 
 
+def load_environment() -> None:
+    """The modules and definitions directories the environment names (WIRESKEIN_PLUGINS, WIRESKEIN_DEFINITIONS),
+    once each."""
+    import importlib
+    import os
+    for d in filter(None, os.environ.get("WIRESKEIN_DEFINITIONS", "").split(os.pathsep)):
+        add_definitions(d)
+    for m in filter(None, os.environ.get("WIRESKEIN_PLUGINS", "").split(os.pathsep)):
+        if ("module", m) in _LOADED:
+            continue
+        _LOADED.add(("module", m))
+        if m.endswith(".py"):               # a file of one's own, not installed
+            import importlib.util
+            spec = importlib.util.spec_from_file_location(Path(m).stem, m)
+            if spec is None:
+                raise ImportError(f"{m}: not a Python file")
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+        else:
+            importlib.import_module(m)
+
+
 def _load() -> None:
-    """What installed packages add, each group once."""
+    """What installed packages and the environment add, each group once."""
     from importlib.metadata import entry_points
+    if "environment" not in _LOADED:
+        _LOADED.add("environment")
+        load_environment()
     for group in ("wireskein.definitions", "wireskein.protocols", "wireskein.formats", "wireskein.checks",
                   "wireskein.sources"):
         if group in _LOADED:

@@ -29,7 +29,7 @@ WireSkein は、キャプチャを読み手に要るもの（載っているバ�
 - **正解は、試験されるもの以外から取る。** 追加は、それを読むコードとは別に作った信号で確かめます: 試験の中の自分の符号器か、既存のライブラリで出すプローブ（OEP のプローブの ESP-IDF の UART ドライバなど）。試験される機器の出力は、決して正解にしません。それこそが誤っているかもしれないからです。
 - **名前。** 追加の名前は、英字で始まる英数字と `_` で、WireSkein の持つ名前（プロトコルと層、形式、検査の種類、取得元）とは別のものにします。同じ名前は断ります。entry point の名前が追加の名前です。オブジェクトの `name` がそれと違えば断ります。
 - **失敗は見えるままに。** プロトコルの `decode` の例外は、そのバスと一緒に出て、分析は続きます。だれも足していない種類の検査は `ng` で、飛ばしません。
-- **足し方。** スクリプトや試験では、`wireskein.plugins` でそれぞれ足します: `register_protocol`、`add_definitions`、`register_format`、`register_check`、`register_source`。外すのはそれぞれの `unregister_*`（`remove_definitions`）。パッケージは追加を entry point で宣言し、入れたときにいつも使えるようにします。
+- **足し方。** スクリプトや試験では、`wireskein.plugins` でそれぞれ足します: `register_protocol`、`add_definitions`、`register_format`、`register_check`、`register_source`。外すのはそれぞれの `unregister_*`（`remove_definitions`）。コマンドでは、`wireskein --plugin モジュールか.pyのファイル --definitions ディレクトリ <コマンド> ...` で、その実行だけ足せます（ファイルは `wireskein.plugins` で自分の持つものを足します。どちらも繰り返せます。環境変数の `WIRESKEIN_PLUGINS` と `WIRESKEIN_DEFINITIONS` も同じ）。パッケージは追加を entry point で宣言し、入れたときにいつも使えるようにします。
 
 | entry point の group | 足すもの | 値 |
 | --- | --- | --- |

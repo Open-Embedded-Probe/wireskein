@@ -116,3 +116,14 @@ def test_an_entry_point_of_a_builtin_source_is_refused(eps):
     eps["wireskein.sources"] = [("oep", Src())]
     with pytest.raises(ValueError, match="of WireSkein's own"):
         plugins.sources()
+
+
+def test_the_environment_adds_definitions_and_modules(eps, monkeypatch, tmp_path):
+    (tmp_path / "acme_plug.py").write_text("from wireskein import plugins\n"
+                                           "class P:\n    over = ('uart',)\n    name = 'acme_env'\n"
+                                           "    def decode(self, bus): return {}\n"
+                                           "plugins.register_protocol(P())\n")
+    monkeypatch.setenv("WIRESKEIN_DEFINITIONS", str(tmp_path))
+    monkeypatch.setenv("WIRESKEIN_PLUGINS", str(tmp_path / "acme_plug.py"))
+    assert plugins.definitions() == [tmp_path.resolve()]
+    assert "acme_env" in plugins.protocols()
