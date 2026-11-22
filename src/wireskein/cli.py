@@ -407,14 +407,14 @@ def capture_cmd(args) -> None:
         need = "--rate and --samples" if logic else "--analog-rate (or --rate) and --analog-samples (or --samples)"
         raise ValueError(f"give {need}")
     req = sources.Request(
-        channels=logic, rate=sources.parse_count(rate), samples=sources.parse_count(samples) if samples else 0,
-        mode=args.mode, duration=_seconds(args.duration) if args.duration else None, on_loss=args.on_loss,
+        channels=logic, rate_hz=sources.parse_count(rate), samples=sources.parse_count(samples) if samples else 0,
+        mode=args.mode, duration_s=_seconds(args.duration) if args.duration else None, on_loss=args.on_loss,
         segments=args.segments,
         trigger=sources.parse_trigger(args.trigger) if args.trigger else None,
-        pretrigger=sources.parse_count(args.pretrigger) if args.pretrigger else None, timeout=args.timeout,
+        pretrigger=sources.parse_count(args.pretrigger) if args.pretrigger else None, timeout_s=args.timeout,
         arm=args.arm,
         analog=sources.parse_analog(args.analog) if args.analog else [],
-        analog_rate=sources.parse_count(args.analog_rate) if args.analog_rate else None,
+        analog_rate_hz=sources.parse_count(args.analog_rate) if args.analog_rate else None,
         analog_samples=sources.parse_count(args.analog_samples) if args.analog_samples else None,
         resolution=sources.parse_resolution(args.channels or ""), fast=sources.parse_fast(args.fast), glitch_filter_ns=args.glitch_filter)
     out = sources.capture(args.source, req, args.output)

@@ -62,13 +62,13 @@ def _check(out, samples, pretrigger, rate):
 
 
 def test_a_logic_edge_alone_on_a_long_one_shot(uart_while_capturing, tmp_path):
-    req = sources.Request(LOGIC, 10_000_000, 500_000, trigger=("L4", "fall"), pretrigger=20_000, timeout=15)
+    req = sources.Request(LOGIC, 10_000_000, 500_000, trigger=("L4", "fall"), pretrigger=20_000, timeout_s=15)
     _check(sources.capture(f"oep:{TARGET}", req, tmp_path / "a.wireskein"), 500_000, 20_000, 10_000_000)
 
 
 def test_a_logic_edge_starts_the_analog_too(uart_while_capturing, tmp_path):
-    req = sources.Request(LOGIC, 10_000_000, 200_000, trigger=("L4", "fall"), pretrigger=20_000, timeout=15,
-                          analog=[("AN", ANALOG, None)], analog_rate=20_000)
+    req = sources.Request(LOGIC, 10_000_000, 200_000, trigger=("L4", "fall"), pretrigger=20_000, timeout_s=15,
+                          analog=[("AN", ANALOG, None)], analog_rate_hz=20_000)
     head, chans = _check(sources.capture(f"oep:{TARGET}", req, tmp_path / "a.wireskein"), 200_000, 20_000, 10_000_000)
     an = chans[-1]
     assert an.acquisition["trigger_index"] == 40 and an.n >= 400   # 20000 at 10 MHz = 40 at 20 kHz; as long (20 ms)
@@ -77,14 +77,14 @@ def test_a_logic_edge_starts_the_analog_too(uart_while_capturing, tmp_path):
 def test_an_analog_crossing_starts_the_logic_too(tmp_path):
     """A floating input (ANALOG): its values wander, so the middle of a short look is crossed soon (no stimulus)."""
     look = sources.capture(f"oep:{TARGET}", sources.Request([], 20_000, 2000, analog=[("AN", ANALOG, None)],
-                                                            analog_rate=20_000), tmp_path / "look.wireskein")
+                                                            analog_rate_hz=20_000), tmp_path / "look.wireskein")
     (a,) = fileformat.read(look)[1]
     v = a.values()
     if max(v) - min(v) < 2:        # a pin that barely moves (GPIO17 on the P4): nothing would cross its middle
         pytest.skip(f"the floating analog {ANALOG} hardly moves ({min(v)}..{max(v)})")
     volts = ((min(v) + max(v)) // 2 + 1 - a.zero) * a.scale_nv * 1e-9
-    req = sources.Request(LOGIC, 10_000_000, 200_000, trigger=("AN", "rise", volts), pretrigger=20_000, timeout=15,
-                          analog=[("AN", ANALOG, None)], analog_rate=20_000)
+    req = sources.Request(LOGIC, 10_000_000, 200_000, trigger=("AN", "rise", volts), pretrigger=20_000, timeout_s=15,
+                          analog=[("AN", ANALOG, None)], analog_rate_hz=20_000)
     head, chans = fileformat.read(sources.capture(f"oep:{TARGET}", req, tmp_path / "a.wireskein"))
     assert chans[0].n >= 200_000 and head["meta"]["trigger_tick"] == 20_000
     assert chans[-1].acquisition["trigger_index"] == 40
@@ -100,7 +100,7 @@ def test_repeat_runs_on_as_a_timeline(tmp_path):
 def test_repeat_one_part_per_trigger(uart_while_capturing, tmp_path):
     """Each acquisition on its own falling edge of the fixture UART's TX (rearm 1)."""
     req = sources.Request(LOGIC, 10_000_000, 20_000, mode="repeat", segments=5, trigger=("L4", "fall"),
-                          pretrigger=2_000, timeout=15)
+                          pretrigger=2_000, timeout_s=15)
     try:
         out = sources.capture(f"oep:{TARGET}", req, tmp_path / "r.wireskein")
     except RuntimeError as e:      # oep-probe-arduino 0.0.36 takes a trigger in one-shot only
@@ -117,7 +117,7 @@ def test_repeat_one_part_per_trigger(uart_while_capturing, tmp_path):
 
 
 def test_an_analog_stream_alone(tmp_path):
-    req = sources.Request([], 20_000, 0, mode="stream", duration=3.0, analog=[("AN", ANALOG, None)], analog_rate=20_000)
+    req = sources.Request([], 20_000, 0, mode="stream", duration_s=3.0, analog=[("AN", ANALOG, None)], analog_rate_hz=20_000)
     try:
         out = sources.capture(f"oep:{TARGET}", req, tmp_path / "a.wireskein")
     except RuntimeError as e:      # oep-probe-arduino 0.0.36: the analog track has no streaming
@@ -135,8 +135,8 @@ def test_logic_and_analog_streamed_together(tmp_path):
     from oep_client import capture as oc
     if not hasattr(oc.CaptureGroup, "stream"):
         pytest.skip("oep-client-python without CaptureGroup.stream")
-    req = sources.Request(LOGIC, 10_000_000, 0, mode="stream", duration=5.0, analog=[("AN", ANALOG, None)],
-                          analog_rate=20_000)
+    req = sources.Request(LOGIC, 10_000_000, 0, mode="stream", duration_s=5.0, analog=[("AN", ANALOG, None)],
+                          analog_rate_hz=20_000)
     out = sources.capture(f"oep:{TARGET}", req, tmp_path / "g.wireskein")
     head = fileformat.read_header(out)
     assert head["complete"] is True, head.get("lost")

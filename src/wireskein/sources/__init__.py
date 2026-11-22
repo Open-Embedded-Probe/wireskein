@@ -13,7 +13,7 @@ Sources of others are added with wireskein.plugins (register_source, or the entr
 a module or object with capture(target: str, request: Request) -> Result).
 
     from wireskein import sources
-    req = sources.Request([("SDA", "GPIO47"), ("SCL", "x035.scl")], rate=20_000_000, samples=200_000)
+    req = sources.Request([("SDA", "GPIO47"), ("SCL", "x035.scl")], rate_hz=20_000_000, samples=200_000)
     sources.capture("oep:/dev/ttyACM0", req, "i2c.wireskein")
 """
 
@@ -39,7 +39,7 @@ REDUCTIONS = ("sample", "any_high", "any_low", "change_latch")   # a logic line 
 @dataclass
 class Request:
     channels: list[tuple[str, str]]          # logic: (name to record, the device's channel id), in this order
-    rate: int                                # logic samples per second asked for (the device may answer another)
+    rate_hz: int                             # logic samples per second asked for (the device may answer another)
     samples: int
     trigger: tuple | None = None             # (logic channel, one of TRIGGERS) or (analog channel, rise / fall / high /
                                              # low, volts); None: start at once
@@ -47,16 +47,16 @@ class Request:
     arm: str = "pretrigger"                  # when the trigger is looked for: "pretrigger" (once it is there: the
                                              # samples before the trigger are always that many) or "now" (at once:
                                              # an early trigger leaves fewer)
-    timeout: float = 10.0                    # seconds to wait for the capture to finish
+    timeout_s: float = 10.0                  # seconds to wait for the capture to finish
     analog: list[tuple[str, str, int | None]] = field(default_factory=list)   # (name, channel id, input range / frontend)
-    analog_rate: int | None = None           # analog samples per second (default: the source's choice or `rate`)
+    analog_rate_hz: int | None = None        # analog samples per second (default: the source's choice or `rate_hz`)
     analog_samples: int | None = None        # default: as long as the logic capture
     # logic channels reduced over intervals of D samples (OEP capture's format 1): name -> (mode, D), D 2 or more;
     # mode "sample" (each interval's first sample), "any_high" (1 when it had a 1), "any_low" (0 when it had a 0),
     # "change_latch" (its last level and whether it changed). Lines not named are kept as every sample
     resolution: dict[str, tuple[str, int]] = field(default_factory=dict)
-    mode: str = "oneshot"                    # "oneshot" (samples, in the probe's memory), "stream" (for duration
-    duration: float | None = None            # seconds, sent as it is taken: longer than the probe's memory) or "repeat"
+    mode: str = "oneshot"                    # "oneshot" (samples, in the probe's memory), "stream" (for duration_s
+    duration_s: float | None = None          # seconds, sent as it is taken: longer than the probe's memory) or "repeat"
     segments: int | None = None              # (`segments` acquisitions of `samples` each, read and released as they
                                              # come: with a trigger, one per trigger - layout "segments"; without, run
                                              # on - a timeline)
@@ -91,7 +91,7 @@ class Request:
                 raise ValueError("repeat: logic channels only (an analog track in repeat is not done yet)")
         elif self.segments is not None:
             raise ValueError("segments is for repeat only")
-        if self.mode == "stream" and not (self.duration and self.duration > 0):
+        if self.mode == "stream" and not (self.duration_s and self.duration_s > 0):
             raise ValueError("a stream needs a duration (seconds)")
         if self.arm not in ("pretrigger", "now"):
             raise ValueError(f"arm {self.arm!r}: pretrigger or now")
@@ -133,7 +133,7 @@ def run(source: str, request: Request) -> Result:
     """source: "<scheme>:<target>", e.g. "oep:/dev/ttyACM0", "sigrok:fx2lafw"."""
     scheme, _, target = source.partition(":")
     res = _module(scheme).capture(target, request)
-    res.meta = {"source": source, "requested_rate": request.rate, **res.meta}
+    res.meta = {"source": source, "requested_rate": request.rate_hz, **res.meta}
     return res
 
 
