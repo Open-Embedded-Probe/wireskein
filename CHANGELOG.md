@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 0.0.35
 - (EN) Fixed: `wireskein capture --source oep:...` with oep-client-python 0.0.63 failed on its request's renamed fields (0.0.34 still passed `rate`, `timeout`, `seconds`): it passes `rate_hz`, `analog_rate_hz`, `timeout_s`, `duration_s` now, and needs oep-client-python 0.0.63 or later.
 - (JA) 直した: oep-client-python 0.0.63 では、`wireskein capture --source oep:...` が、名前の変わった要求の欄で失敗していた（0.0.34 はまだ `rate`、`timeout`、`seconds` を渡していた）。`rate_hz`、`analog_rate_hz`、`timeout_s`、`duration_s` を渡すようにし、oep-client-python 0.0.63 以上を要るものにした。
 
