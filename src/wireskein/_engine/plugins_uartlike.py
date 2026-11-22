@@ -15,6 +15,13 @@ def _split_on_breaks(ch):
     """Characters between consecutive breaks: [(break_time, values, ok)]."""
     out = []
     b = np.concatenate((ch.breaks, [np.iinfo(np.int64).max]))
+    if not len(ch.start) or bool(np.all(ch.start[1:] >= ch.start[:-1])):
+        # in time order already (as the characters come): each break's characters are a slice, no sort a break
+        # (a clock read as a UART has hundreds of thousands of "breaks": 444 000 sorts of a LinkE read)
+        lo = np.searchsorted(ch.start, b[:-1], side="right")
+        hi = np.searchsorted(ch.start, b[1:], side="left")
+        v8 = ch.values & 0xFF
+        return [(int(t), v8[a:z], ch.ok[a:z]) for t, a, z in zip(b[:-1].tolist(), lo.tolist(), hi.tolist())]
     order = np.argsort(ch.start, kind="stable")
     start, values, ok = ch.start[order], ch.values[order], ch.ok[order]
     lo = np.searchsorted(start, b[:-1], side="right")

@@ -386,19 +386,13 @@ def edge_bursts(ch: Channel, w) -> list[tuple[int, int]]:
     if len(e) < 3:
         return []
     w = np.broadcast_to(np.asarray(w, np.float64), e.shape)
-    out, i = [], 0
     close = np.diff(e) <= w[1:]
-    while i < len(e) - 1:
-        if close[i]:
-            j = i
-            while j < len(close) and close[j]:
-                j += 1
-            if (j - i + 1) % 2 == 1:                           # changes i..j: a net change, crossed j - i + 1 times
-                out.append((i, j))
-            i = j + 1
-        else:
-            i += 1
-    return out
+    # the runs of close neighbours, all at once: changes i..j (j - i of them close), a net change when crossed an odd
+    # number of times (j - i + 1)
+    d = np.diff(np.concatenate(([0], close.astype(np.int8), [0])))
+    i, j = np.flatnonzero(d == 1), np.flatnonzero(d == -1)
+    odd = (j - i) % 2 == 0
+    return list(zip(i[odd].tolist(), j[odd].tolist()))
 
 
 def upper_quartiles_around(d: np.ndarray) -> np.ndarray:
@@ -444,10 +438,13 @@ def i2c_burst_ticks(cap: Capture, scl: str, freq_hz: float | None = None, at=Non
     # upper quartile of the 4 before and the 4 after: bounces may be most of them where every edge bounces; a clock
     # that changes speed is judged by its own speed there), is not
     m = upper_quartiles_around(np.diff(rises).astype(np.float64))
-    keep = [int(rises[0])]
-    for r, mi in zip(rises[1:].tolist(), m.tolist()):
-        if r - keep[-1] >= mi / 4:
-            keep.append(r)
+    if bool(np.all(np.diff(rises) >= m / 4)):
+        keep = rises.tolist()             # each far enough from the one before: all kept (the walk keeps them too)
+    else:
+        keep = [int(rises[0])]
+        for r, mi in zip(rises[1:].tolist(), m.tolist()):
+            if r - keep[-1] >= mi / 4:
+                keep.append(r)
     if len(keep) < 3:
         return 0
     return np.minimum(K.local_period(np.asarray(keep, np.int64), np.asarray(at, np.int64)) / 6, tr).astype(np.int64)
