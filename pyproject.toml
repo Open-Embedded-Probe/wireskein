@@ -24,7 +24,7 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-oep = ["oep-client-python[usb-async]>=0.0.52"]   # usb-async: queued IN transfers, so a stream rides out the host's jitter; 0.0.52: capture format 1's reductions (Reduced, Part.samples)
+oep = ["oep-client-python[usb-async]>=0.0.63"]   # usb-async: queued IN transfers, so a stream rides out the host's jitter; 0.0.63: acquire.Request's units in its names (rate_hz, timeout_s, duration_s)
 
 [project.scripts]
 wireskein = "wireskein.cli:main"
@@ -34,9 +34,9 @@ Homepage = "https://github.com/Open-Embedded-Probe/wireskein"
 Repository = "https://github.com/Open-Embedded-Probe/wireskein"
 
 [dependency-groups]
-# oep-client-python 0.0.52: format 1's reductions on the virtual probe (tests/test_oep_virtual_bench.py); pyyaml:
+# oep-client-python 0.0.63: acquire.Request's new names, format 1's reductions on the virtual probe (tests/test_oep_virtual_bench.py); pyyaml:
 # tools/knowledge_decl.py reads EmbedBenchDeviceData's knowledge
-dev = ["pytest>=8", "oep-client-python[usb-async]>=0.0.52", "pyyaml>=6"]
+dev = ["pytest>=8", "oep-client-python[usb-async]>=0.0.63", "pyyaml>=6"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/wireskein"]

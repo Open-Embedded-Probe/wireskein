@@ -25,9 +25,9 @@ def capture(target: str, req: Request) -> Result:
     if not target:
         raise ValueError("oep:<address>: an OEP address (oep://UNIT_ID[?via=ROUTE]), a serial port or tcp://HOST:PORT")
     areq = acquire.Request(list(req.channels), req.rate_hz, req.samples, trigger=req.trigger, pretrigger=req.pretrigger,
-                           arm=req.arm, timeout=req.timeout_s, analog=list(req.analog), analog_rate=req.analog_rate_hz,
-                           analog_samples=req.analog_samples, resolution=dict(req.resolution), mode=req.mode,
-                           seconds=req.duration_s, segments=req.segments, on_loss=req.on_loss, spool_dir=req.spool_dir,
+                           arm=req.arm, timeout_s=req.timeout_s, analog=list(req.analog),
+                           analog_rate_hz=req.analog_rate_hz, analog_samples=req.analog_samples,
+                           resolution=dict(req.resolution), mode=req.mode, duration_s=req.duration_s, segments=req.segments, on_loss=req.on_loss, spool_dir=req.spool_dir,
                            **_glitch(req, acquire))
     res = acquire.capture_at(target, areq, fast=req.fast, owner="wireskein capture")
     if res.parts is None and _ticks(res.all_parts[0], res.tick_hz, acquire) is None:
