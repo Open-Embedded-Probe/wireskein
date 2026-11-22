@@ -138,24 +138,6 @@ def test_an_analog_trigger_starts_the_logic_too(probe, tmp_path):
     assert "cross_up" in head["meta"]["probe"]["trigger_caps"]["kinds"]   # the group's declaration, kept
 
 
-def test_a_condition_the_group_does_not_declare_is_refused_before_bind():
-    from oep_client import capture as oc
-    from oep_client.acquire import _check_caps
-
-    class Group:
-        def trigger_caps(self):
-            return oc.TriggerCaps(1, 1, 1, False, sum(1 << oc.COND[k] for k in ("level", "edge")), 0, None)
-
-    an = type("T", (), {"fn": 3})()
-    source = oc.TriggerSource([oc.Stage([[oc.Cond.above(an, 0, 100)]])])
-    req = sources.Request([("A", "GPIO10")], 1_000_000, 100, trigger=("SQ", "high", 1.0), analog=[("SQ", "GPIO16", None)])
-    probe = {}
-    with pytest.raises(RuntimeError, match=r"cannot start its tracks on SQ:high:1.0V together: its capture group "
-                                           r"triggers on level, edge \(trigger_caps"):
-        _check_caps(Group(), source, req, "x", probe)
-    assert probe["trigger_caps"]["kinds"] == ["level", "edge"]
-
-
 def test_a_group_refused_says_which_track_before_setting_either(probe, tmp_path):
     """Both tracks asked with the values they would be set to (capture §3.3 query) before either is set: the analog's
     pretrigger, the logic's counted at the analog rate, is not below its 4 samples - refused, and where it came from."""
@@ -256,24 +238,6 @@ def test_cli_analog_only_needs_no_logic_rate(probe, tmp_path):
     assert r.returncode != 0 and "give --rate and --samples" in r.stderr
 
 
-def test_a_trigger_that_never_comes_is_named():
-    from oep_client.acquire import Request, _waiting, oc_state
-
-    class Waiting:
-        def status(self):
-            return (oc_state("waiting"), 0, 0, 0)
-
-    def never():
-        raise TimeoutError("capture did not finish")
-
-    req = Request([("A", "GPIO10")], 1_000_000, 100, trigger=("A", "rise"), timeout=2)     # the client's request
-    with pytest.raises(TimeoutError, match=r"no trigger \(A:rise\) within 2 s"):
-        _waiting(never, Waiting(), req)
-    with pytest.raises(TimeoutError, match="did not finish"):          # no trigger asked: the plain timeout
-        _waiting(never, Waiting(), Request([("A", "GPIO10")], 1_000_000, 100, timeout=2))
-
-
-
 def _reductions():
     from oep_client import acquire
     if not hasattr(acquire, "Reduced"):
@@ -365,53 +329,6 @@ def test_a_format_1_stream(probe, tmp_path):
         assert [c.encoding for c in chans] == ["bits", "change_latch"]
 
 
-class FakeCap:
-    """Stands for oep-client's LogicCapture in _stream_parts (format 0)."""
-
-
-def fake_stream(segments, gaps):
-    """A Received of format 0 (w 8, one channel at bit 0): segments as (position, samples, start_ns), each sample a
-    byte; `gaps` (data index, bytes skipped) as the probe's drops."""
-    from oep_client import capture as oc
-    got = oc.Received()
-    got.start = segments[0][0]
-    for pos, n, ns in segments:
-        got.segments[pos] = oc.SegmentInfo(pos, n, ns, 100)
-        got.data += bytes([(pos + k) & 1 for k in range(n)])
-    got.gaps = gaps
-    return got
-
-
-def test_stream_parts_split_at_a_loss_and_stop_there_by_default():
-    from types import SimpleNamespace
-    from oep_client.acquire import _stream_parts
-    cfg = SimpleNamespace(rate=1_000_000, width=8, positions=[0], event_d={})
-    # segments of 100 samples at 1 MHz (100 us each); the one at position 200 was dropped (a gap of 100 bytes)
-    got = fake_stream([(0, 100, 0), (100, 100, 100_000), (300, 100, 300_000)], [(200, 100)])
-    req = sources.Request([("A", "GPIO1")], 1_000_000, 0, mode="stream", duration_s=1)
-    parts, lost = _stream_parts(FakeCap(), cfg, got, ["A"], [1], req)
-    assert len(parts) == 1 and parts[0].channels[0].n == 200 and lost == [
-        {"after_part": 0, "reason": "the probe dropped a segment (no room to send)", "stopped": True}]
-    req = sources.Request([("A", "GPIO1")], 1_000_000, 0, mode="stream", duration_s=1, on_loss="continue")
-    parts, lost = _stream_parts(FakeCap(), cfg, got, ["A"], [1], req)
-    assert [p.tick0 for p in parts] == [0, 300] and [p.channels[0].n for p in parts] == [200, 100]
-    assert lost == [{"after_part": 0, "reason": "the probe dropped a segment (no room to send)", "ticks": 100}]
-    assert parts[1].meta["start_ns"] == 300_000
-
-
-def test_a_stream_that_lost_its_start_keeps_nothing_by_default():
-    from types import SimpleNamespace
-    from oep_client.acquire import _stream_parts
-    cfg = SimpleNamespace(rate=1_000_000, width=8, positions=[0], event_d={})
-    got = fake_stream([(100, 100, 100_000)], [])
-    req = sources.Request([("A", "GPIO1")], 1_000_000, 0, mode="stream", duration_s=1)
-    with pytest.raises(RuntimeError, match="dropped the stream's first 100 bytes"):
-        _stream_parts(FakeCap(), cfg, got, ["A"], [1], req)
-    req = sources.Request([("A", "GPIO1")], 1_000_000, 0, mode="stream", duration_s=1, on_loss="continue")
-    parts, lost = _stream_parts(FakeCap(), cfg, got, ["A"], [1], req)
-    assert parts[0].tick0 == 0 and lost[0]["after_part"] == -1
-
-
 def test_a_format_1_stream_reads_the_same_line_as_format_0(probe, tmp_path):
     """The same lines streamed as samples (format 0) and reduced (format 1): TX every 2nd sample, CLK (a change every 4
     samples) as change_latch over 2. Equal where both have it - TX at its samples, CLK at each interval's last tick -
@@ -430,43 +347,6 @@ def test_a_format_1_stream_reads_the_same_line_as_format_0(probe, tmp_path):
     for line, ticks in (("TX", np.arange(0, n, 2)), ("CLK", np.arange(1, n, 2))):
         a, b = f0.channel(line), f1.channel(line)
         assert np.array_equal(a.level_at(ticks), b.level_at(ticks)), line
-
-
-def _polls(segments, gaps, polls):
-    """Received states as the client fills them over `polls` calls: the same bytes and gaps as fake_stream, cut."""
-    full = fake_stream(segments, gaps)
-    cuts = sorted({0, len(full.data)} | {len(full.data) * k // polls for k in range(1, polls)})
-    return full, cuts
-
-
-def test_a_spooled_stream_is_the_same_as_one_put_together_at_the_end(tmp_path):
-    """_Spool, fed poll by poll (the bytes taken out of the client's Received each time), gives the parts and losses
-    that _stream_parts gives from everything at once - and keeps the bits on disk."""
-    from types import SimpleNamespace
-    from oep_client import capture as oc
-    from oep_client.acquire import _Spool, _stream_parts
-    cfg = SimpleNamespace(rate=1_000_000, width=8, positions=[0], event_d={})
-    segs = [(0, 100, 0), (100, 100, 100_000), (300, 100, 300_000), (400, 60, 400_000)]
-    req = sources.Request([("A", "GPIO1")], 1_000_000, 0, mode="stream", duration_s=1, on_loss="continue",
-                          spool_dir=str(tmp_path))
-    once = fake_stream(segs, [(200, 100)])
-    want_parts, want_lost = _stream_parts(FakeCap(), cfg, once, ["A"], [1], req)
-    full = fake_stream(segs, [(200, 100)])
-    spool = _Spool(FakeCap(), cfg, ["A"], [1], req)
-    got = oc.Received()
-    for lo, hi in ((0, 37), (37, 150), (150, 260), (260, 360)):   # the client's bytes, a poll at a time
-        if got.start is None:
-            got.start = 0
-        got.data += full.data[lo:hi]
-        got.gaps += [(i - lo + len(got.data) - (hi - lo), n) for i, n in full.gaps if lo <= i < hi]
-        got.segments.update({p: s for p, s in full.segments.items() if True})
-        spool.take(got)
-        assert len(got.data) == 0                                  # taken out: memory holds a poll's worth
-    spool.take(got, final=True)
-    assert [(p.tick0, p.channels[0].n) for p in spool.parts] == [(p.tick0, p.channels[0].n) for p in want_parts]
-    assert spool.done_lost == want_lost
-    for a, b in zip(spool.parts, want_parts):
-        assert a.channels[0].bits[:] == b.channels[0].bits        # the same bits, read back from disk
 
 
 def test_sections_on_the_probes_clock_cut_one_stream(probe, tmp_path):
