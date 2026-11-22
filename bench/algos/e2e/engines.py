@@ -7,7 +7,8 @@ from wsbench import algorithm
 
 @algorithm("e2e", "engine", status="trial", about="another engine of bench/engines",
            variants={"light": {"name": "light"}, "views": {"name": "views"},
-                     "declarative": {"name": "declarative"}})
+                     "declarative": {"name": "declarative"}, "learned": {"name": "learned"},
+                     "synth": {"name": "synth"}})
 def engine(cap, name):
     import engines
     return engines.ENGINES[name](cap)

@@ -8,6 +8,10 @@ engine is (bench/algos/e2e/engines.py registers them as trials).
             candidate
 - declarative: protocols as tables (protocols.toml) read by one interpreter; candidates, noise handling and output
             from the declarations alone
+- learned:  the views engine's candidates, each given a learnt probability of being right (learned.py, trained on
+            the tuning side only), the best set by it
+- synth:    the views engine's candidates scored by the share of their lines' changes they explain (the protocol made
+            again from what was read), a scale shared by every protocol
 """
 from __future__ import annotations
 
@@ -112,4 +116,14 @@ def _declarative(cap):
     return importlib.import_module(__name__ + ".declarative").engine(cap)
 
 
-ENGINES = {"light": light, "views": views, "declarative": _declarative}
+def _learned(cap):
+    import importlib
+    return importlib.import_module(__name__ + ".learned").engine(cap)
+
+
+def _synth(cap):
+    import importlib
+    return importlib.import_module(__name__ + ".synth").engine(cap)
+
+
+ENGINES = {"light": light, "views": views, "declarative": _declarative, "learned": _learned, "synth": _synth}
