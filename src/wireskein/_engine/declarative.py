@@ -82,18 +82,32 @@ def view_clk_pair(c, sb, clk: float, pair: float) -> tuple[float, float]:
     from .features import channel_features
     from .survey import clock_info, pair_relation
     memo = _memo(c)
-    key = ("view_clk", id(view), sb.clock)
+    key = ("view_clk", _view_id(memo, view), sb.clock)
     if key not in memo:
         memo[key] = clock_info(view, channel_features(view, view.channel(sb.clock)))
     ci = memo[key]
     if ci is None:
         return clk, pair
     def rel(d):
-        k2 = ("view_pair", id(view), sb.clock, d)
+        k2 = ("view_pair", _view_id(memo, view), sb.clock, d)
         if k2 not in memo:
             memo[k2] = pair_relation(view, ci, d).data_score
         return memo[k2]
     return max(clk, ci.clock_score), max(pair, min(rel(d) for d in sb.data))
+
+
+def _view_id(memo: dict, view) -> tuple:
+    """A view's key in the memo: its id, with the view it was made for held weakly - a view dropped and another made
+    at the same address is told apart (the second read the first one's answers: an analysis's result changed with
+    what ran before it in the process, 2026-11-22, spivar-77 with crosstalk); the view itself is not kept alive."""
+    import weakref
+    refs = memo.setdefault("_views", {})
+    r = refs.get(id(view))
+    if r is None or r() is not view:
+        refs[id(view)] = weakref.ref(view)
+        gen = memo["_view_gen"] = memo.get("_view_gen", 0) + 1
+        memo[("_gen", id(view))] = gen
+    return id(view), memo[("_gen", id(view))]
 
 
 def _memo(c) -> dict:
@@ -718,7 +732,7 @@ class DeclarativePlugin:
             view = getattr(sb, "view", c.cap)
             # (once a view, clock and select: a parallel bus's groups asked it hundreds of times - a Z80's capture)
             memo = _memo(c)
-            key = ("select_boundary", id(view), sb.clock, sb.select)
+            key = ("select_boundary", _view_id(memo, view), sb.clock, sb.select)
             if key not in memo:
                 ci = clock_info(view, c.sv.features[sb.clock])
                 memo[key] = better_relation(view, ci, sb.select).boundary if ci else 0.0
