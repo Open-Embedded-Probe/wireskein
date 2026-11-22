@@ -205,4 +205,6 @@
     これまでの CI の数字にもこの揺れが混ざっていた。直したあと、72 件を順番を変えて読ませて同じことを確かめた。
   - まだ: h417_slow の stream（実機の確認用）で I2C の線を UART と有力に 3 件（調整用の noise では出ない。調整しない）。
     vc820 のフルスピード USB を 4 MS/s で取った対を RVSWD と ambiguous。kc85 の /MREQ・MEI を rgb_led と ambiguous（規則正しさ 0.49）。
-    signature の巨大な記録（対応外の HP シグネチャ解析）は CLI の分割の道でも 144 秒。
+    signature の巨大な記録（対応外の HP シグネチャ解析、unstable1.sr）は、区切りの 134 / 141 が疑わしく全部やり直していた。
+    やり直しを等間隔の 16 点の区切りに絞って 7.8 → 3.9 分（7a4586d）。残りは 141 区切りの decode そのもの。
+    Python の decode.analyze に巨大なパートを渡すと分割しない（imx6_quad の SD で 15 分超）。stderr で analyze_file を案内（e61387a）。
