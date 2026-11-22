@@ -1,0 +1,39 @@
+# Protocols as the declarative engine (bench/engines/declarative.py) reads them: each says its lines, its kind of
+# timing and how its words are framed; noise is handled from these alone (each line cleaned against the timing the
+# declaration implies, a fixed family of views read). Adding a protocol of these kinds is a table here.
+
+[uart]
+lines = ["data"]
+timing = "async"                 # one line, a bit time of its own
+start = 0                        # the start bit's level (idle the other)
+data_bits = [8, 7]
+parity = ["none", "even", "odd"]
+stop_bits = 1
+order = "lsb"
+min_frames = 4
+layer = "bytes"                  # the output: the characters' values as bytes (and the frames as chars)
+
+[i2c]
+lines = ["scl", "sda"]
+timing = "clocked"
+clock = "scl"
+idle = 1                         # both lines idle high
+sample = "rise"
+delimit = "startstop"            # SDA changing while SCL is high: START (to low), STOP (to high)
+word = 9                         # 8 bits and an acknowledge
+order = "msb"
+min_units = 1
+layer = "transactions"           # the output: a unit a transaction, its first word the address
+first_word = { addr = [0, 7], rw = 7 }   # bits 0..6 the address, bit 7 read (1) / write (0)
+ack_bit = 8                      # each word's last bit: 0 acknowledged
+
+[spi]
+lines = ["clk", "data+", "cs?"]  # data+: one or more lines; cs?: may be absent
+timing = "clocked"
+clock = "clk"
+sample = "either"                # the edge farther from where the data changes
+delimit = "select|burst"         # the select's active level, or the clock's bursts without one
+word = 8
+order = "msb"
+min_units = 2
+layer = "transfers"              # the output: a unit a transfer, each data line's words as hex

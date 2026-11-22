@@ -6,6 +6,8 @@ engine is (bench/algos/e2e/engines.py registers them as trials).
 - light:    readers on the lines as captured, candidates by each protocol's least conditions, the best set of claims
 - views:    light, read on a fixed family of views (as captured, pulses of a sample out, bounces merged), best per
             candidate
+- declarative: protocols as tables (protocols.toml) read by one interpreter; candidates, noise handling and output
+            from the declarations alone
 """
 from __future__ import annotations
 
@@ -105,4 +107,9 @@ def views(cap):
     return claims_of(list(best.values()))
 
 
-ENGINES = {"light": light, "views": views}
+def _declarative(cap):
+    import importlib
+    return importlib.import_module(__name__ + ".declarative").engine(cap)
+
+
+ENGINES = {"light": light, "views": views, "declarative": _declarative}
