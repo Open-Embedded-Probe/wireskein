@@ -182,13 +182,15 @@ def gated_view(cap: Capture, clk: ClockInfo, w: float = GATE) -> tuple[Capture, 
         step = cch.step
         if clk.period < SPIKE_PERIOD * step:
             return cap, clk
-        # and where the clock's own pulses of a sample are a noise's: most of them break its period (a spike); a
-        # clock of uneven duty has highs of a sample that keep it (a LinkE's V203 at 50 MS/s: 0.24 of its runs)
+        # the clock's own pulses of a sample taken out too where they are a noise's: most of them break its period (a
+        # spike); a clock of uneven duty has highs of a sample that keep it (a LinkE's V203 at 50 MS/s: 0.24 of its
+        # runs; a rate a little off a whole number of samples, one run in hundreds): kept as it is, the other lines'
+        # still taken out (crosstalk on a data line sampled four times a period)
         ce = np.asarray(cch.edges, np.int64)
         one = int(np.count_nonzero(np.diff(ce) <= step))
-        if one and V.broken_runs(ce, 2 * step)[-1] < SPIKE_BROKEN * one:
-            return cap, clk
-        chans = [replace(x, edges=V.pulses_out(x.edges, 2 * x.step)) for x in cap.channels]
+        own = bool(one) and V.broken_runs(ce, 2 * step)[-1] < SPIKE_BROKEN * one
+        chans = [x if own and x.name == clk.name else replace(x, edges=V.pulses_out(x.edges, 2 * x.step))
+                 for x in cap.channels]
         if all(len(a.edges) == len(b.edges) for a, b in zip(chans, cap.channels)):
             return cap, clk
         view = replace(cap, channels=chans)
