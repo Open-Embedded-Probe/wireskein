@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from wireskein import capture as wc, protocols
+from wireskein import capture as wc, plugins
 from wireskein._engine import gen
 from wireskein.decode import analyze_file
 
@@ -19,9 +19,9 @@ RATE, BAUD = 2e6, 115200
 
 @pytest.fixture
 def demo_cmd():
-    protocols.register(demo.PROTOCOL)
+    plugins.register_protocol(demo.PROTOCOL)
     yield demo
-    protocols.unregister("demo_cmd")
+    plugins.unregister_protocol("demo_cmd")
 
 
 def lines_of(talk, gap=300e-6):

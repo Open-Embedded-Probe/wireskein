@@ -22,7 +22,7 @@ A protocol is a Python object with
 
 ## 2. Adding it
 
-- In a script or a test: `wireskein.protocols.register(protocol)`.
+- In a script or a test: `wireskein.plugins.register_protocol(protocol)` (and `unregister_protocol(name)`).
 - From a package: declare it in the entry point group `wireskein.protocols`, and it is there whenever the package is installed:
 
 ```toml
@@ -124,7 +124,7 @@ with rec.section(2, "ping", expect=[protocol("demo_link", "uart", {"data": "PA2"
 A protocol that is its own bus - its own framing on a clock and data, or on one NRZ line - is written declaratively in TOML, as WireSkein's own I²C, SPI, SWD and CAN are ([design](design.md) §3.2), and added from outside as a directory of definitions.
 
 - **A definitions directory** is laid out as WireSkein's `decl/`: the `*.toml` at its top are protocols, `devices/<bus>/...` device packs, `markers/*.toml` marker dialects. Each part is optional.
-- **Adding it:** `wireskein.protocols.add_definitions(path)` in a script or a test, or the entry point group `wireskein.definitions` from a package (`NAME = "module"`: the module's directory holds the definitions; or a callable returning the path).
+- **Adding it:** `wireskein.plugins.add_definitions(path)` in a script or a test, or the entry point group `wireskein.definitions` from a package (`NAME = "module"`: the module's directory holds the definitions; or a callable returning the path).
 - **The bit layer** is one WireSkein has, named by the definition's `input`: `"nrzbits"` (one line, its bit time read from the line, a frame after ten idle bit times or more), or `"frames.select"`, `"frames.gap"`, `"frames.startstop"` (a clock and data, framed by a select line, by gaps, or by START / STOP). A line coding of its own (Manchester and the like) needs a bit layer in WireSkein itself and is not a definition.
 - **A clock's range** (`clock_hz = [low, high]` under `[plugin]`, for a clocked input): a protocol whose clock keeps to a range (PS/2's 10-16.7 kHz) is not tried on a clock far out of it.
 - **The analysis** shows it as a protocol of its own, its frames under `result.frames` (a field with `format = "hex"` as hex bytes), and its checks (expected values, CRCs) as the evidence for it.

@@ -12,7 +12,7 @@ not a check failed; a frame shorter than 2 bytes is not this protocol's. A seq t
 one is shown (level "warn": a frame lost or sent again), not a failed check.
 
 It rides on "can" and "lin": the analysis gives it the frames it decoded ({"s", "id", "data": hex, ...}), so one
-decode reads both (wireskein.protocols).
+decode reads both (wireskein.plugins.register_protocol).
 """
 
 from __future__ import annotations

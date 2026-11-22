@@ -1101,7 +1101,7 @@ class DeclarativePlugin:
 
 
 def load_dir(root: Path) -> list[DeclarativePlugin]:
-    """The protocol definitions at the top of a definitions directory added from outside (wireskein.protocols);
+    """The protocol definitions at the top of a definitions directory added from outside (wireskein.plugins.add_definitions);
     each marked external, its provenance the directory's name and the file's."""
     out = []
     for p in sorted(Path(root).glob("*.toml")):

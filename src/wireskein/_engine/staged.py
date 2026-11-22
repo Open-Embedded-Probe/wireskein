@@ -1144,9 +1144,9 @@ def i2c_device_node(parent: Node) -> Node | None:
 
 
 def _external_plugins() -> list:
-    """Declarative protocols from definition directories added from outside (wireskein.protocols.add_definitions,
+    """Declarative protocols from definition directories added from outside (wireskein.plugins.add_definitions,
     the entry point group wireskein.definitions); a name of WireSkein's own is refused."""
-    from .. import protocols as P
+    from .. import plugins as P
     from .declarative import load_dir
     out = []
     own = {p.name for p in PLUGINS}
@@ -1159,11 +1159,11 @@ def _external_plugins() -> list:
 
 
 def _protocols(roots: list[Node]) -> None:
-    """Protocols of others on the buses decoded (wireskein.protocols): each given the bus as the analysis exports
+    """Protocols of others on the buses decoded (wireskein.plugins.register_protocol): each given the bus as the analysis exports
     it; its checks, as Modbus RTU's, support the bus."""
-    from .. import protocols as P
+    from .. import plugins as P
     from . import export
-    protos = P.registered()
+    protos = P.protocols()
     if not protos:
         return
     for n in roots:
@@ -1184,7 +1184,7 @@ def _protocols(roots: list[Node]) -> None:
                 got = {"messages": [], "checks_passed": 0, "checks_failed": 0, "error": f"{type(e).__name__}: {e}"}
             m = {"checks_passed": int(got.get("checks_passed", 0)), "checks_failed": int(got.get("checks_failed", 0)),
                  **({"error": got["error"]} if "error" in got else {})}
-            s = P.score(m)
+            s = P._score(m)
             child = Node(p.name, {}, n.roles, Stream(p.name, list(got.get("messages", []))), m, n,
                          layer_score=s, total=s)
             child.user = True
@@ -1441,7 +1441,7 @@ def _hinted_groups(pin_hint: dict, sv, have: list, buses: list | None = None) ->
 def _device_packs(select: tuple[str, ...]):
     """hints["devices"]: pack path patterns under decl/devices ("i2c/**", "!i2c/qst/**"), and under devices/ of
     each definitions directory added from outside."""
-    from .. import protocols as P
+    from .. import plugins as P
     extra = tuple(str(d / "devices") for d in P.definitions() if (d / "devices").is_dir())
     return _device_packs_at(select, extra)
 

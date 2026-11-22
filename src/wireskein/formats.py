@@ -13,54 +13,14 @@ added, in the order they were. Everything that reads a capture (analyze, decode,
 reads it: `wireskein convert FILE out.wireskein` keeps it as a WireSkein file. A format of several parts is read a
 part at a time (`--part`), as a WireSkein file's.
 
-Installed packages declare formats in the entry point group "wireskein.formats" (NAME = "module:object"); a script
-calls register(format).
+Formats are added with wireskein.plugins (register_format, or the entry point group "wireskein.formats").
 """
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
-__all__ = ["kind", "read", "register", "registered", "unregister"]
-
-_REGISTERED: dict[str, object] = {}
-_LOADED = False
-BUILTIN = ("wireskein", "sr", "vcd")
-
-
-def register(fmt) -> None:
-    """Add a format (see the module's docstring for its shape)."""
-    name = getattr(fmt, "name", None)
-    if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", name):
-        raise ValueError(f"a format needs a name of letters, digits and _: {name!r}")
-    if name in BUILTIN:
-        raise ValueError(f"{name!r} is a format WireSkein reads itself")
-    for k in ("sniff", "read"):
-        if not callable(getattr(fmt, k, None)):
-            raise ValueError(f"{name}: {k} is missing")
-    _REGISTERED[name] = fmt
-
-
-def unregister(name: str) -> None:
-    _REGISTERED.pop(name, None)
-
-
-def registered() -> dict[str, object]:
-    """The formats added: by register, and by installed packages (entry point group "wireskein.formats")."""
-    global _LOADED
-    if not _LOADED:
-        _LOADED = True
-        from importlib.metadata import entry_points
-        for ep in entry_points(group="wireskein.formats"):
-            obj = ep.load()
-            if not getattr(obj, "name", None):
-                try:
-                    obj.name = ep.name
-                except AttributeError:
-                    pass
-            register(obj)
-    return dict(_REGISTERED)
+__all__ = ["kind", "read"]
 
 
 def kind(path: str | Path) -> str | None:
@@ -69,7 +29,8 @@ def kind(path: str | Path) -> str | None:
     k = fileformat.sniff(path)
     if k is not None:
         return k
-    fmts = registered()
+    from . import plugins
+    fmts = plugins.formats()
     if not fmts:
         return None
     try:
@@ -89,7 +50,8 @@ def kind(path: str | Path) -> str | None:
 def read(path: str | Path, name: str | None = None):
     """A file of a format added, as a wireskein.capture.Capture."""
     name = name or kind(path)
-    fmt = registered().get(name)
+    from . import plugins
+    fmt = plugins.formats().get(name)
     if fmt is None:
         raise ValueError(f"{path}: no format added reads it")
     cap = fmt.read(Path(path))

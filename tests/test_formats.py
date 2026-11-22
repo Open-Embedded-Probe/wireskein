@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from wireskein import formats
+from wireskein import formats, plugins
 from wireskein.decode import analyze_file, load
 
 SPEC = importlib.util.spec_from_file_location("saleae_csv", Path(__file__).parents[1] / "examples/formats/saleae_csv.py")
@@ -17,9 +17,9 @@ BAUD = 115200
 
 @pytest.fixture
 def saleae():
-    formats.register(demo.FORMAT)
+    plugins.register_format(demo.FORMAT)
     yield demo
-    formats.unregister("saleae_csv")
+    plugins.unregister_format("saleae_csv")
 
 
 def uart_changes(data, t0=200e-6):
@@ -89,11 +89,11 @@ def test_a_format_needs_a_name_sniff_and_read():
         def sniff(self, head, path): return False
         def read(self, path): return None
     with pytest.raises(ValueError):
-        formats.register(Bad())
+        plugins.register_format(Bad())
     Bad.name = "x"
     del Bad.read
     with pytest.raises(ValueError):
-        formats.register(Bad())
+        plugins.register_format(Bad())
 
 
 def test_the_tick_is_the_step_of_the_changes_and_the_last_row_is_the_end(tmp_path, saleae):

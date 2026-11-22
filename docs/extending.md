@@ -8,14 +8,14 @@ WireSkein turns a capture into what a reader needs - the buses on it, their mess
 
 | You want | Use | Details |
 | --- | --- | --- |
-| A protocol that rides on UART, SPI or I2C (command frames, reports, packets) read in the analysis | A protocol object in Python (`wireskein.protocols`) | [Protocols](protocols.md) §1-§4 |
+| A protocol that rides on UART, SPI or I2C (command frames, reports, packets) read in the analysis | A protocol object in Python (`wireskein.plugins.register_protocol`) | [Protocols](protocols.md) §1-§4 |
 | Text commands on one UART line and their answers on another (AT commands, a shell) | A protocol object on `"uart_pair"` | [Protocols](protocols.md) §3.1 |
 | A higher layer on CAN or LIN frames (CANopen, J1939, OBD-II / UDS, a node's signals), or on a protocol of your own definition | A protocol object on `"can"`, `"lin"` or the definition's name | [Protocols](protocols.md) §3.2 |
-| Captures in a file format WireSkein does not read (another analyzer's export, a lab's own log) | A file format (`wireskein.formats`) | §2, `examples/formats/saleae_csv.py` |
+| Captures in a file format WireSkein does not read (another analyzer's export, a lab's own log) | A file format (`wireskein.plugins.register_format`) | §2, `examples/formats/saleae_csv.py` |
 | A protocol that is its own bus: its own framing on a clock and data, or on one NRZ line | A TOML definition in a definitions directory | [Protocols](protocols.md) §5 |
 | The registers and commands of a device on I2C or SPI named | A device pack under `devices/` of a definitions directory | [Device packs](../src/wireskein/decl/devices/README.md) |
 | The marker lines of your own test logs read as segments | A marker dialect under `markers/` of a definitions directory | [Markers](markers.md) §4 |
-| A rule tests apply that no check has, judged alike by `wireskein verify`, pytest and the viewer | A check kind (`wireskein.checks`) | [Guide](capture-test-guide.md) §4.10 |
+| A rule tests apply that no check has, judged alike by `wireskein verify`, pytest and the viewer | A check kind (`wireskein.plugins.register_check`) | [Guide](capture-test-guide.md) §4.10 |
 | A judgement only one test makes | `wireskein.verify.sections(run)`, an analysis of the segment, `rec.result(...)` | [Guide](capture-test-guide.md) §3.3 |
 | Something to look at, not to judge | Read the capture in Python (`wireskein.capture`, `wireskein.states`, `wireskein.decode`) and put what you find in the file (§3) | [File format](wireskein-format.md) §5 |
 | A line coding or a physical layer WireSkein does not read (Manchester, say) | Not an extension point: it needs a bit layer in WireSkein itself | Propose it |
@@ -27,16 +27,16 @@ The ways stack: a definition gives the analysis a protocol, a protocol object re
 - **Read the documented shapes.** A protocol gets the bus as the [analysis format](analysis-format.md) exports it, a check the segment's window ([guide](capture-test-guide.md) §4.10), a script the files of the [file format](wireskein-format.md) and the [run format](run-format.md). Within a format number (`/1`) these shapes do not change, so an addition built on them keeps working; WireSkein's internal types may change and are not used.
 - **Show only what evidence carries.** A protocol counts the checks its frames pass and fail (a CRC, a length, a sequence number), and the analysis believes it only above chance; with no check it shows nothing. A check says what it measured whatever its verdict, and what the protocol allows but deserves a look is a notice at its tick, not a failure (guide §4.9).
 - **Take the truth from elsewhere than what is tested.** Test an addition on signals made apart from the code that reads them: an encoder of your own in the test, or a probe sending with an established library (an OEP probe's ESP-IDF UART driver, say). The output of a device under test is never the truth: it may be the very thing that is wrong.
-- **Names.** A protocol's or a check's name is letters, digits and `_`, and not one of WireSkein's own; WireSkein refuses one that is.
+- **Names.** An addition's name is letters, digits and `_`, starting with a letter, and not one of WireSkein's own (its protocols and layers, formats, check kinds and sources); WireSkein refuses one that is. An entry point's name is the addition's name: an object whose own `name` differs is refused.
 - **Failures stay visible.** An exception in a protocol's `decode` is shown with its bus and the analysis goes on; a check of a kind nobody added is `ng`, never skipped.
-- **Packaging.** A package declares its additions as entry points, and they are there whenever it is installed:
+- **Adding.** In a script or a test, `wireskein.plugins` adds each: `register_protocol`, `add_definitions`, `register_format`, `register_check`, `register_source`, each with its `unregister_*` (`remove_definitions`). A package declares its additions as entry points instead, and they are there whenever it is installed:
 
 | Entry point group | Adds | Value |
 | --- | --- | --- |
 | `wireskein.protocols` | A protocol on UART, SPI or I2C | An object with `name`, `over`, `decode` |
 | `wireskein.definitions` | A definitions directory (protocols, device packs, marker dialects) | A module whose directory holds them, or a callable returning its path |
 | `wireskein.checks` | A check kind | A check function, or an object with `.check` (and `.notices`) |
-| `wireskein.sources` | A capture source for `wireskein capture` | A module with `capture(target, request)` |
+| `wireskein.sources` | A capture source for `wireskein capture` | A module or object with `capture(target, request)` |
 | `wireskein.formats` | A file format read wherever a capture is (analyze, decode, states, convert, the viewer) | An object with `name`, `sniff(head, path)`, `read(path)` returning a `wireskein.capture.Capture` |
 
 ```toml
@@ -59,7 +59,7 @@ acme = "acme_wireskein.definitions"
 2. `wireskein states FILE` and the bytes tell the shape: a start byte, a length, a checksum.
 3. Write the protocol (§1): `decode` finds the frames in the bytes and counts their checksums.
 4. Test it on signals made apart from it: the frames encoded and put on a line by an encoder of your own in the test (a UART frame is a start bit, the data bits least significant first, a stop bit), written as a capture with `wireskein.capture`; or a probe sending them with its UART driver. (WireSkein's own tests use its internal generator; it is not an interface.)
-5. `register` it (or install it): `wireskein analyze` now reads the UART `confirmed` with its frames under `result`.
+5. Add it with `wireskein.plugins.register_protocol` (or install it): `wireskein analyze` now reads the UART `confirmed` with its frames under `result`.
 6. In a test, `protocol(NAME, "uart", {"data": PIN}, messages=[...])` checks the frames of a segment.
 
 ## 4.1 Which shape is yours
@@ -94,3 +94,4 @@ in a test (`wireskein.verify.sections`, the analysis's `lines`) and judge them t
 | `examples/checks/demo_settle.py` | A check kind: a line that must settle, its bounces as notices, measuring only without an expected level |
 | `tests/test_demo_cmd.py` | demo_cmd in the analysis and in a test's protocol check |
 | `tests/test_check_plugins.py` | A check kind added from outside, with its notices; demo_settle on a bouncing contact |
+| `tests/test_plugins.py` | The names refused, each entry point group read, a source added |

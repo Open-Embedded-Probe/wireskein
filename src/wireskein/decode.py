@@ -69,11 +69,11 @@ def load(path, part: int | None = None) -> Capture:
     if kind == "vcd":
         from ._engine.vcdio import read_vcd
         return read_vcd(path)
-    from . import formats
+    from . import formats, plugins
     name = formats.kind(path)
     if name is None:
         raise ValueError(f"{path}: not a WireSkein file, a sigrok session (.sr), a VCD, or a format added "
-                         f"(wireskein.formats: {', '.join(formats.registered()) or 'none'})")
+                         f"(wireskein.plugins.register_format: {', '.join(plugins.formats()) or 'none'})")
     cap = formats.read(path, name)
     if len(cap.parts) > 1 and part is None:
         raise ValueError(f"{path} ({name}) has {len(cap.parts)} parts: name one (part, from 0)")

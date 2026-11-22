@@ -30,7 +30,7 @@ from .runlog import FORMAT
 REPORT_FORMAT = "wireskein-report/1"   # docs/run-format.ja.md §3
 MEASURED = "measured"             # a check function's verdict for "only measure" (uart(baud=None) with nothing else)
 
-__all__ = ["MARKS", "MEASURED", "NOTICES", "REPORT_FORMAT", "dumps", "failed", "junit", "lines", "register_check",
+__all__ = ["MARKS", "MEASURED", "NOTICES", "REPORT_FORMAT", "dumps", "failed", "junit", "lines",
            "sections", "summary_line", "verify"]
 STATUSES = ("ok", "ng", "unchecked", "measured")      # docs/run-format.ja.md §3
 
@@ -698,15 +698,15 @@ def check_spi(cap, x):
 
 
 def check_protocol(cap, x):
-    """A protocol of one's own (wireskein.protocols) on a bus with the given pins: its messages in order, each
+    """A protocol of one's own (wireskein.plugins.register_protocol) on a bus with the given pins: its messages in order, each
     compared on the keys the expectation gives, and its checks."""
-    from . import protocols as P
+    from . import plugins as P
     from ._engine import export
     if x.get("bus") is None:
         return _declared_protocol(cap, x)
-    proto = P.registered().get(x["name"])
+    proto = P.protocols().get(x["name"])
     if proto is None:
-        return False, {}, f"no protocol named {x['name']!r} (wireskein.protocols)"
+        return False, {}, f"no protocol named {x['name']!r} (wireskein.plugins.register_protocol)"
     if x["bus"] not in proto.over:
         return False, {}, f"{x['name']} rides on {', '.join(proto.over)}, not {x['bus']}"
     if x["bus"] == "uart_pair":
@@ -2186,41 +2186,24 @@ def _pins_of(x: dict) -> set[str]:
     return out
 
 
-def register_check(kind: str, check, *, notices: dict | None = None, logic: bool = True,
-                   every_edge: bool = True) -> None:
-    """Add a check kind (the entry point group "wireskein.checks" does it for an installed package): check(cap, x)
-    -> (ok: True / False / None for unchecked / MEASURED, measured: dict, reason: str), cap the segment's window
-    (cap.rate, cap.n_samples, cap.channel(name): .initial, .edges in ticks, .step, .level_at(ticks); cap.analog),
-    x the expectation ({"kind": kind, "pins": [...], ...}; "pins" are the channels it needs). It may put notices
-    in measured["notices"] ([{"kind", "tick", ...}], ticks of the window); notices names their kinds and meanings.
-    logic: it reads logic levels (an analog pin then needs threshold=); every_edge: it needs every edge (a line kept
-    as changes that hide some is unchecked). A kind wireskein has is not replaced."""
-    if kind in CHECKS and kind not in _ADDED:
-        raise ValueError(f"{kind!r} is a check of wireskein's own")
+def _add_check(kind: str, check, notices: dict | None, logic: bool, every_edge: bool) -> None:
+    """A check kind from outside (plugins.register_check)."""
     CHECKS[kind] = check
-    _ADDED.add(kind)
     NOTICES[kind] = dict(notices or {})
     (LOGIC.add if logic else LOGIC.discard)(kind)
     (EVENT_CHECKS.discard if every_edge else EVENT_CHECKS.add)(kind)
 
 
-_ADDED: set[str] = set()
-_LOADED_EPS = False
+def _remove_check(kind: str) -> None:
+    for t in (CHECKS, NOTICES):
+        t.pop(kind, None)
+    LOGIC.discard(kind)
+    EVENT_CHECKS.discard(kind)
 
 
 def _load_checks() -> None:
-    """The checks installed packages add (entry point group "wireskein.checks": NAME = module:object, the object a
-    check function, or one with .check and optionally .notices, .logic, .every_edge)."""
-    global _LOADED_EPS
-    if _LOADED_EPS:
-        return
-    _LOADED_EPS = True
-    from importlib.metadata import entry_points
-    for ep in entry_points(group="wireskein.checks"):
-        obj = ep.load()
-        fn = getattr(obj, "check", obj)
-        register_check(ep.name, fn, notices=getattr(obj, "notices", None), logic=getattr(obj, "logic", True),
-                       every_edge=getattr(obj, "every_edge", True))
+    from . import plugins
+    plugins.checks()
 
 
 def _in_segment(c: dict, t: int, path: str, seg) -> bool:

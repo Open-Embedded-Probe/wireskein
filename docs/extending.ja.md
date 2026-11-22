@@ -8,14 +8,14 @@ WireSkein は、キャプチャを読み手に要るもの（載っているバ�
 
 | したいこと | 使うもの | 詳しく |
 | --- | --- | --- |
-| UART、SPI、I2C に乗るプロトコル（命令のフレーム、報告、パケット）を分析で読む | Python のプロトコルのオブジェクト（`wireskein.protocols`） | [独自のプロトコル](protocols.ja.md) §1〜§4 |
+| UART、SPI、I2C に乗るプロトコル（命令のフレーム、報告、パケット）を分析で読む | Python のプロトコルのオブジェクト（`wireskein.plugins.register_protocol`） | [独自のプロトコル](protocols.ja.md) §1〜§4 |
 | UART の 1 本のテキストの命令と、もう 1 本の応答（AT コマンド、シェル） | `"uart_pair"` に乗るプロトコルのオブジェクト | [独自のプロトコル](protocols.ja.md) §3.1 |
 | CAN や LIN のフレームの上の層（CANopen、J1939、OBD-II / UDS、ノードの信号）、または自分の定義のプロトコルの上 | `"can"`、`"lin"`、定義の名前に乗るプロトコルのオブジェクト | [独自のプロトコル](protocols.ja.md) §3.2 |
-| WireSkein が読まないファイルの形式のキャプチャ（ほかのアナライザの書き出し、研究室の独自のログ） | ファイルの形式（`wireskein.formats`） | §2、`examples/formats/saleae_csv.py` |
+| WireSkein が読まないファイルの形式のキャプチャ（ほかのアナライザの書き出し、研究室の独自のログ） | ファイルの形式（`wireskein.plugins.register_format`） | §2、`examples/formats/saleae_csv.py` |
 | それ自体がバスのプロトコル（クロックとデータ、または 1 本の NRZ の線の上の独自のフレーム） | 定義のディレクトリの TOML の定義 | [独自のプロトコル](protocols.ja.md) §5 |
 | I2C や SPI の機器のレジスタや命令に名前を付ける | 定義のディレクトリの `devices/` のデバイスの定義 | [デバイスの定義](../src/wireskein/decl/devices/README.ja.md) |
 | 自分の試験のログのマーカーの行を区間として読む | 定義のディレクトリの `markers/` のマーカーの方言 | [マーカー](markers.ja.md) §4 |
-| どの検査も持たないきまりを試験に使い、`wireskein verify`、pytest、ビューアで同じに判定する | 検査の種類（`wireskein.checks`） | [ガイド](capture-test-guide.ja.md) §4.10 |
+| どの検査も持たないきまりを試験に使い、`wireskein verify`、pytest、ビューアで同じに判定する | 検査の種類（`wireskein.plugins.register_check`） | [ガイド](capture-test-guide.ja.md) §4.10 |
 | 1 つの試験だけがする判定 | `wireskein.verify.sections(run)`、区間の分析、`rec.result(...)` | [ガイド](capture-test-guide.ja.md) §3.3 |
 | 判定ではなく、見るためのもの | Python でキャプチャを読み（`wireskein.capture`、`wireskein.states`、`wireskein.decode`）、見つけたものをファイルに入れる（§3） | [ファイル形式](wireskein-format.ja.md) §5 |
 | WireSkein が読まない線の符号や物理層（マンチェスターなど） | 拡張の口ではありません。WireSkein の中にビットの層が要ります | 提案してください |
@@ -27,16 +27,16 @@ WireSkein は、キャプチャを読み手に要るもの（載っているバ�
 - **書かれた形を読む。** プロトコルは [分析の形式](analysis-format.ja.md) が書き出す形のバスを、検査は区間の窓（ガイド §4.10）を、スクリプトは [ファイル形式](wireskein-format.ja.md) と [記録の形式](run-format.ja.md) のファイルを受け取ります。形式の番号（`/1`）の中でこれらの形は変わらないので、その上に作った追加は動き続けます。WireSkein の内部の型は変わることがあり、使いません。
 - **証拠のあるものだけを出す。** プロトコルは、フレームが通ったチェックと失敗したチェック（CRC、長さ、順番の番号）を数え、分析は偶然を超えるときだけそれを信じます。チェックが無ければ何も出しません。検査は、判定にかかわらず測ったものを言い、プロトコルとしては許されるが見ておきたいものは、失敗ではなく、その tick の注意にします（ガイド §4.9）。
 - **正解は、試験されるもの以外から取る。** 追加は、それを読むコードとは別に作った信号で確かめます: 試験の中の自分の符号器か、既存のライブラリで出すプローブ（OEP のプローブの ESP-IDF の UART ドライバなど）。試験される機器の出力は、決して正解にしません。それこそが誤っているかもしれないからです。
-- **名前。** プロトコルや検査の名前は、英数字と `_` で、WireSkein の持つ名前とは別のものにします。同じ名前は断ります。
+- **名前。** 追加の名前は、英字で始まる英数字と `_` で、WireSkein の持つ名前（プロトコルと層、形式、検査の種類、取得元）とは別のものにします。同じ名前は断ります。entry point の名前が追加の名前です。オブジェクトの `name` がそれと違えば断ります。
 - **失敗は見えるままに。** プロトコルの `decode` の例外は、そのバスと一緒に出て、分析は続きます。だれも足していない種類の検査は `ng` で、飛ばしません。
-- **パッケージ。** パッケージは追加を entry point で宣言し、入れたときにいつも使えるようにします。
+- **足し方。** スクリプトや試験では、`wireskein.plugins` でそれぞれ足します: `register_protocol`、`add_definitions`、`register_format`、`register_check`、`register_source`。外すのはそれぞれの `unregister_*`（`remove_definitions`）。パッケージは追加を entry point で宣言し、入れたときにいつも使えるようにします。
 
 | entry point の group | 足すもの | 値 |
 | --- | --- | --- |
 | `wireskein.protocols` | UART、SPI、I2C に乗るプロトコル | `name`、`over`、`decode` を持つオブジェクト |
 | `wireskein.definitions` | 定義のディレクトリ（プロトコル、デバイスの定義、マーカーの方言） | それを持つディレクトリの module、またはそのパスを返す callable |
 | `wireskein.checks` | 検査の種類 | 検査の関数、または `.check`（と `.notices`）を持つオブジェクト |
-| `wireskein.sources` | `wireskein capture` の取得元 | `capture(target, request)` を持つ module |
+| `wireskein.sources` | `wireskein capture` の取得元 | `capture(target, request)` を持つ module かオブジェクト |
 | `wireskein.formats` | キャプチャを読むところ（analyze、decode、states、convert、ビューア）すべてで読むファイルの形式 | `name`、`sniff(head, path)`、`wireskein.capture.Capture` を返す `read(path)` を持つオブジェクト |
 
 ```toml
@@ -59,7 +59,7 @@ acme = "acme_wireskein.definitions"
 2. `wireskein states FILE` とバイトから、形が分かります: 始まりのバイト、長さ、チェックサム。
 3. プロトコルを書きます（§1）: `decode` がバイトの中のフレームを見つけ、チェックサムを数えます。
 4. それとは別に作った信号で確かめます: 試験の中の自分の符号器でフレームを符号化して線に乗せ（UART の 1 文字は、開始ビット、下位からのデータのビット、停止ビット）、`wireskein.capture` でキャプチャとして書くか、プローブにその UART ドライバで出させます（WireSkein 自身の試験は内部の生成器を使います。これは公開の口ではありません）。
-5. `register` する（または入れる）と、`wireskein analyze` はその UART を `confirmed` と読み、フレームを `result` の下に出します。
+5. `wireskein.plugins.register_protocol` で足す（または入れる）と、`wireskein analyze` はその UART を `confirmed` と読み、フレームを `result` の下に出します。
 6. 試験では、`protocol(NAME, "uart", {"data": PIN}, messages=[...])` で区間のフレームを確かめます。
 
 ## 4.1 どの形か
@@ -92,3 +92,4 @@ acme = "acme_wireskein.definitions"
 | `examples/checks/demo_settle.py` | 検査の種類: 落ち着かなければならない線、注意としてのチャタリング、期待のレベルが無ければ測るだけ |
 | `tests/test_demo_cmd.py` | 分析と、試験のプロトコルの検査での demo_cmd |
 | `tests/test_check_plugins.py` | 外から足した検査の種類と、その注意。チャタリングする接点での demo_settle |
+| `tests/test_plugins.py` | 断る名前、entry point の各 group の読み込み、足した取得元 |

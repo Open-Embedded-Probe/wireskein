@@ -1,4 +1,4 @@
-"""saleae_csv: a file format of WireSkein's examples, added from outside (wireskein.formats): the CSV a Saleae Logic 2
+"""saleae_csv: a file format of WireSkein's examples, added from outside (wireskein.plugins.register_format): the CSV a Saleae Logic 2
 exports ("File > Export Data", CSV), of digital channels or of analog ones (Logic 2 writes them to two files).
 
     digital.csv                          analog.csv

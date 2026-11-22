@@ -76,7 +76,7 @@ def rows_of(doc: dict) -> list[dict]:
         layers = claim.get("layers", {})
         timed = [(name, v) for name, v in layers.items()
                  if isinstance(v, list) and v and isinstance(v[0], dict) and "s" in v[0]]
-        # a protocol of one's own (wireskein.protocols) is {"messages": [...]}: its messages with times are a row too
+        # a protocol of one's own (wireskein.plugins.register_protocol) is {"messages": [...]}: its messages with times are a row too
         timed += [(name, v["messages"]) for name, v in layers.items()
                   if isinstance(v, dict) and isinstance(v.get("messages"), list) and v["messages"]
                   and isinstance(v["messages"][0], dict) and "s" in v["messages"][0]]

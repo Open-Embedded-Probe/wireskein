@@ -407,7 +407,7 @@ sd_spi("PA5", "PA7", "PA6", "PA4", [{"cmd": 0, "r1": 0x01}, {"cmd": 8, "arg": 0x
 
 wireskein に検査の無いきまりは、検査の種類として足せます。wireskein の検査と同じに判定し、報告します（`wireskein verify` でも pytest-embedded-wireskein でも）。
 
-- 入れたパッケージが、entry point の `wireskein.checks` に宣言します: `NAME = "module:object"`。object は検査の関数か、`.check` と、あれば `.notices`（種類 -> 意味）、`.logic`、`.every_edge` を持つもの。試験から `wireskein.verify.register_check(NAME, check, notices=...)` で足すこともできます。
+- 入れたパッケージが、entry point の `wireskein.checks` に宣言します: `NAME = "module:object"`。object は検査の関数か、`.check` と、あれば `.notices`（種類 -> 意味）、`.logic`、`.every_edge` を持つもの。試験から `wireskein.plugins.register_check(NAME, check, notices=...)` で足すこともできます（外すのは `unregister_check(NAME)`）。
 - `check(cap, x)` は `(ok, measured, reason)` を返します: `ok` は True、False、None（unchecked）、`MEASURED`。`cap` は区間の窓です: `cap.rate`、`cap.n_samples`、`cap.channel(名前)`（`.initial`、tick の `.edges`、`.step`、`.level_at(ticks)`）、`cap.analog`。`x` は期待 `{"kind": NAME, "pins": [...], ...}` で、`pins` は要るチャンネルの名前です。
 - `measured["notices"]` に注意を入れられます（`[{"kind", "tick", ...}]`、窓の tick）。§4.9 のとおり、場所を付け、`notices=` で制限し、印にします。
 - wireskein の持つ種類は置き換えません。だれも足していない種類を書いた期待は `ng` です。

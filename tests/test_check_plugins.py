@@ -1,4 +1,4 @@
-"""Checks from elsewhere (verify.register_check, the entry point group wireskein.checks): judged, reported, their
+"""Checks from elsewhere (plugins.register_check, the entry point group wireskein.checks): judged, reported, their
 notices limited and marked like wireskein's own; an unknown kind is an error of the expectation."""
 
 import importlib.metadata as md
@@ -6,7 +6,7 @@ import importlib.metadata as md
 import numpy as np
 import pytest
 
-from wireskein import verify
+from wireskein import plugins, verify
 from wireskein.runlog import Recorder
 
 
@@ -30,11 +30,9 @@ def three_pulses(cap, x):
 
 @pytest.fixture
 def registered():
-    verify.register_check("x_pulses", three_pulses, notices={"late_pulse": "a pulse after 4 ms"})
+    plugins.register_check("x_pulses", three_pulses, notices={"late_pulse": "a pulse after 4 ms"})
     yield
-    for d in (verify.CHECKS, verify.NOTICES):
-        d.pop("x_pulses", None)
-    verify._ADDED.discard("x_pulses")
+    plugins.unregister_check("x_pulses")
 
 
 def test_a_registered_check_is_judged_with_its_notices(tmp_path, registered):
@@ -53,7 +51,7 @@ def test_an_unknown_kind_is_an_error_of_the_expectation(tmp_path):
 
 def test_a_kind_of_wireskein_is_not_replaced():
     with pytest.raises(ValueError):
-        verify.register_check("square", three_pulses)
+        plugins.register_check("square", three_pulses)
 
 
 def test_an_installed_package_adds_a_check(tmp_path, monkeypatch):
@@ -64,14 +62,12 @@ def test_an_installed_package_adds_a_check(tmp_path, monkeypatch):
     ep = md.EntryPoint("y_pulses", "irrelevant:obj", "wireskein.checks")
     monkeypatch.setattr(md.EntryPoint, "load", lambda self: Plugin)
     monkeypatch.setattr(md, "entry_points", lambda group=None: [ep] if group == "wireskein.checks" else [])
-    monkeypatch.setattr(verify, "_LOADED_EPS", False)
+    monkeypatch.setattr(plugins, "_LOADED", set())
     try:
         (r,) = run(tmp_path, [{"kind": "y_pulses", "pins": ["P"], "count": 3}])["results"]
         assert r["status"] == "ok" and len(r["notices"]) == 1, r
     finally:
-        for d in (verify.CHECKS, verify.NOTICES):
-            d.pop("y_pulses", None)
-        verify._ADDED.discard("y_pulses")
+        plugins.unregister_check("y_pulses")
 
 
 # ---- the example examples/checks/demo_settle.py, on a contact bouncing then settling (made here) ----
@@ -82,7 +78,7 @@ def test_the_example_check_demo_settle(tmp_path):
     spec = importlib.util.spec_from_file_location("demo_settle", Path(__file__).parents[1] / "examples/checks/demo_settle.py")
     demo = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(demo)
-    verify.register_check("demo_settle", demo.CHECK.check, notices=demo.CHECK.notices)
+    plugins.register_check("demo_settle", demo.CHECK.check, notices=demo.CHECK.notices)
     try:
         lv = np.zeros(100_000, np.uint8)                     # 1 MS/s: bounces at 10 ms, settled high from 10.5 ms
         for a, b in ((10_000, 10_050), (10_120, 10_200), (10_300, 10_310), (10_500, 100_000)):
@@ -97,6 +93,4 @@ def test_the_example_check_demo_settle(tmp_path):
         assert few["status"] == "ng" and "7 changes, more than 3" in few["reason"], few
         assert none["status"] == "ng" and "bounce" in none["reason"], none
     finally:
-        for d in (verify.CHECKS, verify.NOTICES):
-            d.pop("demo_settle", None)
-        verify._ADDED.discard("demo_settle")
+        plugins.unregister_check("demo_settle")

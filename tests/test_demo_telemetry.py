@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from wireskein import capture as wc, protocols
+from wireskein import capture as wc, plugins
 from wireskein.decode import analyze_file
 
 SPEC = importlib.util.spec_from_file_location("demo_telemetry",
@@ -19,9 +19,9 @@ SPEC.loader.exec_module(demo)
 
 @pytest.fixture
 def telemetry():
-    protocols.register(demo.PROTOCOL)
+    plugins.register_protocol(demo.PROTOCOL)
     yield demo
-    protocols.unregister("demo_telemetry")
+    plugins.unregister_protocol("demo_telemetry")
 
 
 def write(tmp_path, rate, lines: dict, n: int):

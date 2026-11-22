@@ -1,4 +1,4 @@
-"""demo_link: a protocol of one's own, as an example of adding one to WireSkein's analysis (wireskein.protocols).
+"""demo_link: a protocol of one's own, as an example of adding one to WireSkein's analysis (wireskein.plugins.register_protocol).
 
 A made-up framed command protocol, the shape many device protocols have:
 
@@ -14,7 +14,7 @@ On a UART the frames follow one another in the byte stream; on SPI each window o
 analysis exports it, finds frames in each byte stream and counts their CRCs - the evidence that the bus carries this
 protocol.
 
-Use it in a script with wireskein.protocols.register(DemoLink()), or install a package whose pyproject.toml says
+Use it in a script with wireskein.plugins.register_protocol(DemoLink()), or install a package whose pyproject.toml says
 
     [project.entry-points."wireskein.protocols"]
     demo_link = "demo_link:PROTOCOL"

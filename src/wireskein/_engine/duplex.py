@@ -136,7 +136,7 @@ def scpi_node(d: Duplex, pm: dict) -> Node | None:
 
 
 def pair_bus(d: Duplex, tick_hz: float | None = None) -> dict:
-    """The pair as protocols of others get it (wireskein.protocols, bus "uart_pair"): both lines' messages in time
+    """The pair as protocols of others get it (wireskein.plugins.register_protocol, bus "uart_pair"): both lines' messages in time
     order, a message being one line's characters up to a pause of more than 3 characters."""
     return {"roles": {"a": d.a, "b": d.b}, "tick_hz": tick_hz,
             "messages": [{"pin": m.pin, "s": m.t0, "e": m.t1, "hex": m.data.hex(), "text": m.data.decode("latin-1")}
@@ -145,9 +145,9 @@ def pair_bus(d: Duplex, tick_hz: float | None = None) -> dict:
 
 def user_protocols(d: Duplex, node: Node, tick_hz: float | None = None, only: str | None = None) -> list[Node]:
     """The protocols of others riding on a UART pair, each as a child of `node`, scored by its checks."""
-    from .. import protocols as P
+    from .. import plugins as P
     out = []
-    mine = [p for p in P.registered().values() if "uart_pair" in p.over and (only is None or p.name == only)]
+    mine = [p for p in P.protocols().values() if "uart_pair" in p.over and (only is None or p.name == only)]
     if not mine:
         return out
     bus = pair_bus(d, tick_hz)
@@ -158,7 +158,7 @@ def user_protocols(d: Duplex, node: Node, tick_hz: float | None = None, only: st
             got = {"messages": [], "checks_passed": 0, "checks_failed": 0, "error": f"{type(e).__name__}: {e}"}
         m = {"checks_passed": int(got.get("checks_passed", 0)), "checks_failed": int(got.get("checks_failed", 0)),
              **({"error": got["error"]} if "error" in got else {})}
-        sc = P.score(m)
+        sc = P._score(m)
         child = Node(p.name, {}, {"a": d.a, "b": d.b}, Stream(p.name, list(got.get("messages", []))), m, node,
                      layer_score=sc, total=sc)
         child.user = True

@@ -218,7 +218,7 @@ def layers_of(n) -> dict:
     elif a == "ir_nec":
         out["frames"] = [{"s": f["t"], **{k: f[k] for k in ("repeat", "addr", "ext", "cmd", "cmd_ok") if k in f}}
                          for f in n.output.items]
-    for ch in getattr(n, "children", []):     # protocols of others (wireskein.protocols) whose checks held
+    for ch in getattr(n, "children", []):     # protocols of others (wireskein.plugins.register_protocol) whose checks held
         if getattr(ch, "user", False) and ch.total >= 0.3:
             out[ch.analyzer] = {"messages": list(ch.output.items), **{k: ch.metrics[k] for k in
                                                                        ("checks_passed", "checks_failed")}}

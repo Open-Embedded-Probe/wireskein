@@ -12,7 +12,7 @@ to no command, a seq that does not match, a command left unanswered when the nex
 Text without this shape is neither: on other text the protocol finds nothing and shows nothing.
 
 It rides on "uart_pair": the analysis pairs two UART lines at one rate whose messages follow one another, and gives
-both lines' messages in time order (wireskein.protocols). Which line is the host is read from the lines themselves.
+both lines' messages in time order (wireskein.plugins.register_protocol). Which line is the host is read from the lines themselves.
 """
 
 from __future__ import annotations

@@ -406,7 +406,7 @@ Some behaviour is allowed by the protocol but worth a look: a test may want to m
 
 A rule wireskein has no check for can be added as a check kind, judged and reported like wireskein's own (by `wireskein verify` and pytest-embedded-wireskein alike).
 
-- An installed package declares it in the entry point group `wireskein.checks`: `NAME = "module:object"`, the object a check function, or one with `.check` and optionally `.notices` (kind -> meaning), `.logic` and `.every_edge`. A test can also call `wireskein.verify.register_check(NAME, check, notices=...)`.
+- An installed package declares it in the entry point group `wireskein.checks`: `NAME = "module:object"`, the object a check function, or one with `.check` and optionally `.notices` (kind -> meaning), `.logic` and `.every_edge`. A test can also call `wireskein.plugins.register_check(NAME, check, notices=...)` (and `unregister_check(NAME)`).
 - `check(cap, x)` returns `(ok, measured, reason)`: `ok` True, False, None (unchecked) or `MEASURED`. `cap` is the segment's window: `cap.rate`, `cap.n_samples`, `cap.channel(name)` (`.initial`, `.edges` in ticks, `.step`, `.level_at(ticks)`), `cap.analog`. `x` is the expectation, `{"kind": NAME, "pins": [...], ...}`; `pins` names the channels it needs.
 - It may put notices in `measured["notices"]` (`[{"kind", "tick", ...}]`, ticks of the window); they are placed, limited by `notices=` and marked as §4.9 says.
 - A kind wireskein has is not replaced. An expectation naming a kind nobody added is `ng`.

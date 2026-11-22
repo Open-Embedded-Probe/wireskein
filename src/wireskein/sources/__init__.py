@@ -9,8 +9,8 @@ built-in sources:
     sigrok:<driver>   a device sigrok supports, through sigrok-cli (e.g. sigrok:fx2lafw, sigrok:demo,
                       sigrok:dreamsourcelab-dslogic:conn=1.6)
 
-Other packages add sources through the entry point group "wireskein.sources"
-(name = module or object with capture(target: str, request: Request) -> Result).
+Sources of others are added with wireskein.plugins (register_source, or the entry point group "wireskein.sources":
+a module or object with capture(target: str, request: Request) -> Result).
 
     from wireskein import sources
     req = sources.Request([("SDA", "GPIO47"), ("SCL", "x035.scl")], rate=20_000_000, samples=200_000)
@@ -23,7 +23,6 @@ import importlib
 import re
 from dataclasses import dataclass, field
 from fractions import Fraction
-from importlib.metadata import entry_points
 from pathlib import Path
 
 from .. import _fileformat as fileformat
@@ -123,11 +122,11 @@ class Result:
 def _module(scheme: str):
     if scheme in BUILTIN:
         return importlib.import_module(BUILTIN[scheme])
-    for ep in entry_points(group="wireskein.sources"):
-        if ep.name == scheme:
-            return ep.load()
-    known = sorted({*BUILTIN, *(ep.name for ep in entry_points(group="wireskein.sources"))})
-    raise ValueError(f"unknown source {scheme!r} (known: {', '.join(known)})")
+    from .. import plugins
+    added = plugins.sources()
+    if scheme in added:
+        return added[scheme]
+    raise ValueError(f"unknown source {scheme!r} (known: {', '.join(sorted({*BUILTIN, *added}))})")
 
 
 def run(source: str, request: Request) -> Result:

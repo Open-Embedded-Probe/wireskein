@@ -1,4 +1,4 @@
-"""demo_settle: a check kind of WireSkein's examples, added from outside (verify.register_check, or the entry point
+"""demo_settle: a check kind of WireSkein's examples, added from outside (wireskein.plugins.register_check, or the entry point
 group wireskein.checks).
 
 It judges what no check of WireSkein's says: a line that must settle. After its last change in the segment the

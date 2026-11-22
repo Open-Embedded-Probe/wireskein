@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from wireskein import capture as wc, protocols
+from wireskein import capture as wc, plugins
 from wireskein._engine import gen
 from wireskein.decode import analyze_file
 
@@ -20,9 +20,9 @@ RATE = 2e6
 
 @pytest.fixture
 def demo_link():
-    protocols.register(demo.PROTOCOL)
+    plugins.register_protocol(demo.PROTOCOL)
     yield demo
-    protocols.unregister("demo_link")
+    plugins.unregister_protocol("demo_link")
 
 
 def write(tmp_path, waves, end):
@@ -83,10 +83,10 @@ def test_a_protocol_needs_a_name_buses_and_decode():
         name, over = "lines", ("uart",)
         def decode(self, bus): return {}
     with pytest.raises(ValueError):
-        protocols.register(Bad())                            # a layer of WireSkein's own
+        plugins.register_protocol(Bad())                            # a layer of WireSkein's own
     Bad.name, Bad.over = "x", ("not a bus",)
     with pytest.raises(ValueError):
-        protocols.register(Bad())
+        plugins.register_protocol(Bad())
 
 
 def test_a_test_checks_the_messages_of_its_protocol(tmp_path, demo_link):
@@ -114,9 +114,9 @@ DEFS = Path(__file__).parents[1] / "examples/definitions"
 
 @pytest.fixture
 def demo_wire():
-    protocols.add_definitions(DEFS)
+    plugins.add_definitions(DEFS)
     yield
-    protocols.remove_definitions(DEFS)
+    plugins.remove_definitions(DEFS)
 
 
 def wire_bits(addr: int, cmd: int, data: bytes) -> list[int]:
@@ -202,12 +202,12 @@ def test_device_packs_and_marker_dialects_from_a_definitions_directory(tmp_path)
     (tmp_path / "markers/mine.toml").write_text(
         '[dialect]\nname = "mine"\nlevels = ["case"]\n\n[[marker]]\npattern = \'^BEGIN (?P<name>.+)$\'\naction = "begin"\n')
     before = len(staged._device_packs(("**",))[0])
-    protocols.add_definitions(tmp_path)
+    plugins.add_definitions(tmp_path)
     try:
         assert len(staged._device_packs(("**",))[0]) == before + 1
         assert "mine" in markers.load_dialects() and "heading" in markers.load_dialects()
     finally:
-        protocols.remove_definitions(tmp_path)
+        plugins.remove_definitions(tmp_path)
     assert len(staged._device_packs(("**",))[0]) == before
 
 
@@ -251,7 +251,7 @@ def test_a_protocol_rides_on_a_declared_protocol(tmp_path, demo_wire):
             ok = sum(1 for a, b in zip(vals, vals[1:]) if b == a + 1)
             return {"messages": [{"s": f["s"], "value": v} for f, v in zip(fr, vals)], "checks_passed": ok,
                     "checks_failed": len(vals) - 1 - ok}
-    protocols.register(Counter())
+    plugins.register_protocol(Counter())
     try:
         w, bt = gen.Wave(1), 1 / 50e3
         t = 20 * bt
@@ -265,4 +265,4 @@ def test_a_protocol_rides_on_a_declared_protocol(tmp_path, demo_wire):
         got = c["result"]["wire_counter"]
         assert got["checks_passed"] == 3 and [m["value"] for m in got["messages"]] == [0x10, 0x11, 0x12, 0x13], got
     finally:
-        protocols.unregister("wire_counter")
+        plugins.unregister_protocol("wire_counter")
