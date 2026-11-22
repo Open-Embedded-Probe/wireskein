@@ -60,3 +60,23 @@ def test_a_hold_of_a_sample_or_more_needs_nothing():
 def test_only_before():
     with pytest.raises(ValueError):
         spi("SCK", edge_sample="after")
+
+
+
+def test_a_fast_skewed_clocks_short_runs_are_its_own():
+    """A clock of 5 samples a period, high 3 or 4 and low 2 or 1 (an I2C at 400 kHz at 2 MS/s: sigrok-dumps'
+    ssd1306-i2c, read on the fall alone where its data met both edges alike: the look again with one-sample pulses
+    taken out took the clock's own lows, half its changes). Its period is kept to a sample, and its short runs are its
+    own; a clock with crosstalk's pulses of a sample scatters its rises, and they are a noise's."""
+    import numpy as np
+    from wireskein._engine import typed
+    from wireskein._engine.model import Channel
+    rng = np.random.default_rng(1)
+    rises = np.arange(10, 50_000, 5, dtype=np.int64)
+    clk = np.sort(np.concatenate([rises, rises + rng.choice([3, 4], len(rises))]))
+    assert typed._own_short_runs(Channel("SCL", 0, clk), 50_010)
+    # a slower clock (16 samples a period) with a pulse of a sample in a fifth of its lows, from a line beside it
+    rises = np.arange(10, 50_000, 16, dtype=np.int64)
+    spikes = rises[rng.random(len(rises)) < 0.2] + 11
+    clk = np.sort(np.concatenate([rises, rises + 8, spikes, spikes + 1]))
+    assert not typed._own_short_runs(Channel("SCK", 0, clk), 50_010)
