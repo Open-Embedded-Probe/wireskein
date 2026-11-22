@@ -1,0 +1,12 @@
+"""Engines of other directions (bench/engines), judged as the main engine is: kept side by side to learn from each
+other's weak points (bench/notes/2026-11-22-structure-experiments.ja.md). Trials: none is meant to replace the
+main engine as it stands."""
+
+from wsbench import algorithm
+
+
+@algorithm("e2e", "engine", status="trial", about="another engine of bench/engines",
+           variants={"light": {"name": "light"}, "views": {"name": "views"}})
+def engine(cap, name):
+    import engines
+    return engines.ENGINES[name](cap)
