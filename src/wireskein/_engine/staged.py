@@ -235,6 +235,7 @@ def _on_grid(pin, blocks) -> float | None:
 
 
 SYNC_MIN_PERIOD = 4     # samples: a clock this slow at least, for a line keeping to it to mean anything
+DATA_OF_BUS_READ = 0.95        # ... and taken by a clocked reading this sure (a false JTAG at 0.85 took an S/PDIF line as TMS)
 DATA_OF_BUS_ONE_SAMPLE = 0.1   # a line this share of whose runs are a sample is no bus's data line (crosstalk)
 CLOCKS_A_BUS_ASYNC = 0.6  # ... the partner's keeping enough to skip the async readings (an RVSWD DIO keeps to SWCLK at 0.66)
 CLOCKS_A_BUS = 0.8      # a clock this clock-like, with a partner keeping to it as data this well, is no UART line
@@ -439,7 +440,9 @@ class UartPlugin:
             # (a gate that takes most of the line's changes out reads no line: as survey.better_relation, the line
             # as it is then - an SPI's SDO went from 216 changes to 34 there, kept 0.89 raw, 0 through it, and was
             # read as a UART: sigrok-dumps' ltc2422)
-            if len(view.channel(rb.pin).edges) < UART_GATE_KEEPS * len(c.cap.channel(rb.pin).edges):
+            # (counted against the line's changes but pulses of a couple of ticks, as there: crosstalk's pulses are
+            # what the gate is for, synth-pulse-13 with crosstalk from an LED line)
+            if len(view.channel(rb.pin).edges) < UART_GATE_KEEPS * len(V.gated(np.asarray(c.cap.channel(rb.pin).edges, np.int64), 3)):
                 return r.data_score
             return min(r.data_score, survey_mod.pair_relation(view, vc, rb.pin).data_score)
         sync = max((kept(k, r) * c.sv.clocks[k].clock_score for (k, o), r in c.sv.pairs.items()
@@ -461,7 +464,10 @@ class UartPlugin:
         # clock's data
         for (k, o), r in c.sv.pairs.items():
             ck = c.sv.clocks.get(k)
-            if (o == rb.pin and k != rb.pin and ck is not None and ck.period and r.data_score >= UART_SAME_CLOCK_PAIR
+            # (a clock: a data line under spikes common to all lines keeps to another data line as well; 2026-11-22,
+            # synth-mixed-53 with pspike, a UART taken as an SPI's MOSI's data at clock-likeness 0.25)
+            if (o == rb.pin and k != rb.pin and ck is not None and ck.period and ck.clock_score >= CLOCKS_A_BUS
+                    and r.data_score >= UART_SAME_CLOCK_PAIR
                     and abs(u_main / ck.period - 1) < UART_SAME_CLOCK_RATE):
                 sync = max(sync, 1.0)
                 m["bit_of_clock"] = k
@@ -1607,6 +1613,10 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
     t0 = time.perf_counter()
     run_async = not allowed or bool(allowed & ASYNC)
     run_pulse = not allowed or bool(allowed & PULSE_PROTOCOLS)
+    # the lines a clocked reading takes, read well (an RVSWD's DIO): a line only keeping to some clock
+    # (an S/PDIF or 1-Wire line beside an LED string, a clock to the survey) is still tried by the pulse readers
+    bus_read = {p for n in roots if n.total >= DATA_OF_BUS_READ
+                for p in n.roles.values() if isinstance(p, str)}
     for g in tx.groups:
         if g.kind != "single" or g.pin in sync_pins:
             continue
@@ -1616,7 +1626,8 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
         # (nor a bus's data line: an RVSWD's DIO tried as CEC, S/PDIF, USB PD ... took 2.4 s of a LinkE write)
         if (run_pulse and pin_hint.get(g.pin, {}).get("protocol") not in ASYNC
                 and (pin_hint.get(g.pin, {}).get("protocol")
-                     or not (_clocks_a_bus(c.sv, g.pin) or _data_of_a_bus(c.sv, cap.channel(g.pin))))):
+                     or not (_clocks_a_bus(c.sv, g.pin)
+                             or (g.pin in bus_read and _data_of_a_bus(c.sv, cap.channel(g.pin)))))):
             ch0 = cap.channel(g.pin)
             for ch, k in _line_views(ch0, cap.n_samples):
                 for p in by_type.get("line", []):

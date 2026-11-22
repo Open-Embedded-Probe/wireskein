@@ -145,6 +145,11 @@ class OneWirePlugin:
         b = _bounce_view(ch, c.cap.rate)
         if b is not None:
             views.append((b, -4))
+        # a view whose lows are mostly shorter than any 1-Wire low (1 us) is none (an LED string's bits: millions of
+        # lows read one by one at each speed); a noise's short lows leave the view with them taken out
+        low_min = min(v["low_1"][0] for v in pc.ONEWIRE.values()) * float(c.cap.rate)
+        views = [(line, dg) for line, dg in views
+                 if (lambda w: len(w) and float(np.median(w)) >= low_min)(pc.pulses(line, c.cap.n_samples, 0)[1])]
         for (line, dg), speed in ((v, s) for v in views for s in ("standard", "overdrive")):
             r = pc.onewire(line, c.cap.n_samples, c.cap.rate, speed)
             rs = r["resets"]
