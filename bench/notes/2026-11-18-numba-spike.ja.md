@@ -8,7 +8,7 @@
 製品の版・CHANGELOG・docs は変えていない。
 
 関連:
-- [Rust のコアの試し](2026-11-18-rust-spike.ja.md)（ブランチ rust-core-spike）: 単体のカーネルでは numba は Rust と同じくらい速い
+- Rust のコアの試し（ブランチ rust-core-spike の `bench/notes/2026-11-18-rust-spike.ja.md`。main にはない）: 単体のカーネルでは numba は Rust と同じくらい速い
 - [グランドデザイン](2026-11-18-grand-design.ja.md)（§3 の「1 つの層に実装は 1 つ」）
 
 ## 0. まとめ

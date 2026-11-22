@@ -87,7 +87,7 @@ JS（wireskein-web）は固まるまで凍結。Rust はできる所から。全
 
 ## 8. 決めたこと・未定のこと（2026-11-18、ユーザー）
 
-**Rust のコアを採るかどうかは未定**（調査を進めて決める: bench/notes/2026-11-18-rust-spike.ja.md）。採るなら、の条件:
+**Rust のコアを採るかどうかは未定**（調査を進めて決める: ブランチ rust-core-spike の bench/notes/2026-11-18-rust-spike.ja.md）。採るなら、の条件:
 
 1. 置き場所は wireskein のリポジトリの中（design §2 は、採ると決めたときに書き換える）。
 2. wheel は GitHub Actions のホスト型ランナーで作れる主なもので、ch32rv と同等以上: Linux x86_64、Linux aarch64
