@@ -763,7 +763,7 @@ def _analyze_split(source, hints, opts, depth: str, head: dict, items=None) -> d
     edges = {j: c["params"]["sample_edge"] for j, c in enumerate(keep)
              if (c.get("params") or {}).get("sample_edge") in ("rise", "fall")}
     work = functools.partial(_piece, spec=spec, head=head, reanalyze=bool((opts or {}).get("reanalyze", 1)),
-                             edges=edges)
+                             edges=edges, span=source.n)
     sink = _Items(items, spec, head.get("part", 0)) if items is not None else None
     outs = []
     try:
@@ -1002,7 +1002,7 @@ def _part_split(source, spec: dict, head: dict, opts, items=None) -> dict:
         reanalyze = bool((opts or {}).get("reanalyze", 1))
         pieces = _split.run(source, opts, watch=watch or None, noisy=noisy)
         edges, first = _edges_from_first(pieces, spec, head, int((opts or {}).get("roles_from", 3)))
-        work = functools.partial(_piece, spec=spec, head=head, reanalyze=reanalyze, edges=edges)
+        work = functools.partial(_piece, spec=spec, head=head, reanalyze=reanalyze, edges=edges, span=source.n)
         for (p, _), o in _split.mapped(work, itertools.chain(first, pieces), int((opts or {}).get("workers", 1))):
             if sink is not None:
                 sink.take(p, o)
@@ -1092,11 +1092,17 @@ class _Items:
             self._dm(j, st.ready(final=True))
 
 
-def _piece(pw, spec: dict, head: dict, reanalyze: bool = False, edges: dict | None = None) -> dict:
+REANALYSES = 16   # doubtful pieces analysed on their own: those holding one of this many points spread over the part
+
+def _piece(pw, spec: dict, head: dict, reanalyze: bool = False, edges: dict | None = None,
+           span: int | None = None) -> dict:
     """One piece decoded (in a worker process, when there are several): (Piece, its capture) -> its part document.
     reanalyze: a piece the roles read badly is analysed on its own too, what it holds given as "_reanalysis" (the
     capture may change on the way: another bus, another speed). edges: bus -> the edge the first piece read it on
-    (_edges_from_first); a piece that read a bus on the other is read again on that one."""
+    (_edges_from_first); a piece that read a bus on the other is read again on that one. span: the part's ticks; of
+    the doubtful pieces only those holding one of REANALYSES points spread evenly over it are analysed on their own
+    (a capture of a kind not read, every piece doubtful: 134 of 141 pieces analysed again took minutes), the same
+    ones whatever order the pieces are read in."""
     p, wcap = pw
     whole = p.cut == "end" and p.a == 0
     o = _part(wcap, spec, head, strict=not whole)                # one piece: read as always
@@ -1122,12 +1128,21 @@ def _piece(pw, spec: dict, head: dict, reanalyze: bool = False, edges: dict | No
             r.update(noise(wcap, b["pins"]["clk"], [q for k, q in b["pins"].items() if k != "clk"],
                            p.s - p.a, p.e - p.a))
             _shares(r)
-    if reanalyze and not whole and p.edges and _doubt_why(p, o):
+    if reanalyze and not whole and p.edges and _sampled(p, span) and _doubt_why(p, o):
         ex = export(staged.analyze(wcap, None), wcap, "final", None, False, None, "protocol")
         o["_reanalysis"] = [{"protocol": c["protocol"], "roles": c["roles"], "verdict": c["verdict"],
                              "score": c["score"], **({"params": c["params"]} if c.get("params") else {})}
                             for c in ex["claims"] if c.get("verdict") in ("confirmed", "likely")]
     return o
+
+
+def _sampled(p, span: int | None) -> bool:
+    """Whether a piece holds one of REANALYSES points spread over the part's span ticks (every piece, without one)."""
+    if not span:
+        return True
+    k = np.arange(REANALYSES)
+    t = ((k + 0.5) * span / REANALYSES).astype(np.int64)
+    return bool(np.any((t >= p.s) & (t < p.e)))
 
 
 def _doubt_why(p, o: dict) -> list[str]:

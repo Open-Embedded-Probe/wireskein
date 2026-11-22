@@ -90,7 +90,7 @@ wireskein survey long.sr --json --plan         # 文書（wireskein-survey/1）�
 | `cuts=T1;T2` | 探さずに、ここ（tick）で切る | |
 | `workers` | 区切りを、このプロセス数で同時に decode する（同時に抱えるのは 2 倍まで） | 1 |
 | `roles_from` | `analyze`: 役割を探すのに、先頭から試す区切りの数（先頭はバスより前のことがある） | 3 |
-| `reanalyze` | 疑わしい区切りを、それだけでも analyze し、見つけたものを `doubtful[].holds` に出す（0: しない） | 1 |
+| `reanalyze` | 疑わしい区切りを、それだけでも analyze し、見つけたものを `doubtful[].holds` に出す（0: しない）。多いときは、パートに等間隔に置いた 16 点を含むものだけ | 1 |
 
 既定値は、WCH-LinkE の SDI の見張りの 2 秒（850 万変化）で測って決めました。区切りが 50 万〜100 万変化のときに
 いちばん速く軽く、25 万では強制で切る所が出ました。

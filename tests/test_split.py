@@ -257,7 +257,8 @@ def test_a_capture_changing_on_the_way_is_told_with_what_the_doubtful_piece_hold
     assert {c["protocol"] for c in part["claims"]} == {"uart"}               # the roles from the start
     doubtful = part["split"]["doubtful"]
     assert doubtful and all(d["seconds"][1] > t for d in doubtful)             # none in the UART half
-    late = [d for d in doubtful if d["seconds"][0] > t + 1e-3]
+    # those analysed again (the ones at REANALYSES points spread over the part) hold I2C
+    late = [d for d in doubtful if d["seconds"][0] > t + 1e-3 and "holds" in d]
     assert late and all(any(h["protocol"] == "i2c" and set(h["roles"].values()) == {"SCL", "SDA"}
                             for h in d["holds"]) for d in late)
 
@@ -325,3 +326,17 @@ def test_dio_ringing_inside_a_held_clock_is_no_stop(tmp_path):
     assert all(len(x["bits"]) in (53, 85) for x in dmi)
     rate = 25e6
     assert any(abs(x["s"] / rate + 0.354 - 0.35498) < 2e-5 and len(x["bits"]) == 53 and x["ok"] for x in dmi)
+
+
+def test_of_many_doubtful_pieces_those_at_spread_points_are_analysed_again():
+    """REANALYSES points spread over the part: a piece holding one is analysed again when doubtful, the others are
+    not (a capture of a kind not read made every piece doubtful and took minutes); which ones does not depend on the
+    order the pieces are read in."""
+    from wireskein import decode
+    from wireskein.split import Piece
+    span = 1_000_000
+    pieces = [Piece(s, s + 10_000, s, s + 10_000, 50_000, "data_quiet") for s in range(0, span, 10_000)]
+    picked = [p for p in pieces if decode._sampled(p, span)]
+    assert len(picked) == decode.REANALYSES
+    assert picked == [p for p in reversed(pieces) if decode._sampled(p, span)][::-1]
+    assert decode._sampled(pieces[3], None)              # no span given: every piece

@@ -90,7 +90,7 @@ than 2 000 000 changes says so on stderr):
 | `cuts=T1;T2` | Cut here (ticks), instead of looking | |
 | `workers` | Pieces decoded in this many processes at once (at most twice as many in flight) | 1 |
 | `roles_from` | `analyze`: pieces tried, from the start, for the roles (the start may be before the bus) | 3 |
-| `reanalyze` | A doubtful piece is analysed on its own too, what it holds given in `doubtful[].holds` (0: not) | 1 |
+| `reanalyze` | A doubtful piece is analysed on its own too, what it holds given in `doubtful[].holds` (0: not); of many, those holding one of 16 points spread over the part | 1 |
 
 The defaults come from 2 s of a WCH-LinkE's SDI monitor (8.5M changes): pieces of 500k to 1M changes were the
 quickest and lightest; 250k needed forced cuts.
