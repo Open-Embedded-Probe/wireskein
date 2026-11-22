@@ -1073,12 +1073,10 @@ def glitch_views(cap, sv, g, memo: dict | None = None):
         # two samples or more: its lines with their pulses of a sample taken out (spikes, crosstalk; each with its
         # own two changes), as the survey's view of such a clock (survey.gated_view), where the clock's own pulses of
         # a sample are a noise's (most break its period; a LinkE's V203 at 50 MS/s has highs of a sample, its own)
-        ce = np.asarray(ch.edges, np.int64)
-        one = int(np.count_nonzero(inner <= step))
-        if one and V.broken_runs(ce, 2 * step)[-1] < survey_mod.SPIKE_BROKEN * one:
-            return
-        chans = [replace(x, edges=V.pulses_out(x.edges, 2 * x.step, middle=x.name == g.clock)) if x.name in pins else x
-                 for x in cap.channels]
+        # (the clock's own runs of a sample kept as they are, its data lines still cleaned: views.own_short_runs)
+        own = V.own_short_runs(ch.edges, step)
+        chans = [replace(x, edges=V.pulses_out(x.edges, 2 * x.step, middle=x.name == g.clock))
+                 if x.name in pins and not (own and x.name == g.clock) else x for x in cap.channels]
         if any(len(a.edges) != len(b.edges) for a, b in zip(chans, cap.channels)):
             yield Capture(cap.rate, cap.n_samples, chans), 2 * step
 

@@ -1,6 +1,10 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Fixed: an analysis could read differently with what had run before it in the same process (a test run, a split read's worker, the bench): the definitions' store of what a view of the lines answered was keyed by the view's address, and a view dropped and another made at that address read the first one's answers (spivar-77 with crosstalk: SPI wrong or confirmed by the order). A view's key now tells them apart.
+- (JA) 直した: 同じプロセスで前に何を読んだかで、解析の結果が変わることがあった（試験の実行、分割して読む子のプロセス、測定台）。定義の側が、線の見方の答えを見方の番地で覚えていて、捨てた見方と同じ番地に作られた別の見方が、前の見方の答えを読んでいた（クロストーク付きの spivar-77: 順番しだいで SPI が誤りにも確定にもなった）。見方の鍵で、両者を見分けるようにした。
+- (EN) Fixed: a clock of 6 samples a period with crosstalk inside its runs lost a tenth of its edges in the view its pairs are measured on (its pulses of a sample taken out shortest first), so its data line read as no data and an SPI was confirmed without its MOSI (spivar-67 with crosstalk, 3 buses): a pulse inside one of the clock's runs is taken out as three touching short runs, as the reading's views already did. The test of whether a clock's runs of a sample are its own is one (views.own_short_runs) for both, and where they are, its data lines are still cleaned in the reading's view too.
+- (JA) 直した: 1 周期 6 サンプルのクロックの Run の中にクロストークが入ると、対を測る見方でクロックの辺の 1 割を失っていた（1 サンプルのパルスを短い順に除いたため）。データの線がデータでないと読まれ、SPI を MOSI なしで確定していた（クロストーク付きの spivar-67、3 本）: クロックの Run の中のパルスは、触れ合う 3 つの短い Run として除く（読みの見方はすでにそうしていた）。クロックの 1 サンプルの Run が自身のものかの判断は 1 つ（views.own_short_runs）にし、自身のものでも、読みの見方でデータの線はきれいにする。
 - (EN) docs/protocols.md §5 names what a definition of your own can ask the core for: the evidence terms under `[score]` (`select_boundary`, `degenerate`, `static_data`, `single_frame_penalty`, `startstop_clearance`, `bus_free`, `data_once_a_bit`, `max_clock_hz`) and `reframe` under `[frame]` (`"rvswd_stop"`), as WireSkein's own definitions use them.
 - (JA) docs/protocols.md §5 に、自分の定義がコアに頼めるものを書いた: `[score]` の証拠の項（`select_boundary`、`degenerate`、`static_data`、`single_frame_penalty`、`startstop_clearance`、`bus_free`、`data_once_a_bit`、`max_clock_hz`）と、`[frame]` の `reframe`（`"rvswd_stop"`）。WireSkein 自身の定義と同じ使い方。
 

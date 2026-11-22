@@ -86,6 +86,19 @@ def noise_runs(clock: np.ndarray, short: float) -> np.ndarray:
     return np.concatenate(([0], np.cumsum((runs < short) & beside)))
 
 
+OWN_SHORT_BROKEN = 0.35     # a clock's runs of a sample, under this share of them breaking its period: its own
+
+
+def own_short_runs(clock: np.ndarray, step: int) -> bool:
+    """A clock's runs of a sample (it has some) are its own, not a noise's pulses: most of them keep its period (a
+    clock of uneven duty, a LinkE's V203 at 50 MS/s with highs of a sample; a rate a little off a whole number of
+    samples, one run in hundreds), where a spike or crosstalk breaks it. One test for every view that takes pulses
+    of a sample out: there the clock is kept as it is and the other lines are still cleaned."""
+    ce = np.asarray(clock, np.int64)
+    one = int(np.count_nonzero(np.diff(ce) <= step))
+    return bool(one) and broken_runs(ce, 2 * step)[-1] < OWN_SHORT_BROKEN * one
+
+
 def broken_runs(clock: np.ndarray, short: float, off: float = 0.25, median: int = 33) -> np.ndarray:
     """The running count (from 0, one per run) of the clock's runs shorter than `short` that break its period: both
     periods through one (rise to rise, or fall to fall) off the median of the periods around by `off`, and not like
