@@ -21,7 +21,7 @@ for profile, stress, seeds, name in SPECS:
     (SETS / name).mkdir(parents=True, exist_ok=True)
     for s in seeds:
         cap, truth = synth.scenario(s, profile, stress)
-        decode.save(SETS / name / f"{truth['id']}.wireskein", cap)
+        decode._save(SETS / name / f"{truth['id']}.wireskein", cap)
         (SETS / name / f"{truth['id']}.truth.json").write_text(json.dumps(truth, indent=1, ensure_ascii=False) + "\n")
     manifest["sets"][name] = {"profile": profile, "stress": stress, "seeds": [seeds.start, seeds.stop],
                               "count": len(seeds)}

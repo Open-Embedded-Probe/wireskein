@@ -20,7 +20,7 @@ from pathlib import Path
 import numpy as np
 
 from wireskein._engine import timing
-from wireskein.decode import load
+from wireskein.decode import _load as load
 
 
 def expected(addr: int, rw: str, ack: int) -> list[str]:

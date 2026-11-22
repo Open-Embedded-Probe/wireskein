@@ -54,7 +54,7 @@ def swio_reference(sr: Path) -> dict:
 
 
 def convert(src: Path, fid: str, truth_for) -> None:
-    cap = decode.load(src)
+    cap = decode._load(src)
     anon, mapping = anonymize(cap, seed_of(fid))
     by_orig = {v: k for k, v in mapping.items()}
     truth = {
@@ -64,7 +64,7 @@ def convert(src: Path, fid: str, truth_for) -> None:
         **truth_for(by_orig),
     }
     OUT.mkdir(parents=True, exist_ok=True)
-    decode.save(OUT / f"{fid}.wireskein", anon)
+    decode._save(OUT / f"{fid}.wireskein", anon)
     (OUT / f"{fid}.truth.json").write_text(json.dumps(truth, indent=1, ensure_ascii=False) + "\n")
     size = (OUT / f"{fid}.wireskein").stat().st_size
     print(f"{fid}: {cap.n_samples} samples @ {cap.rate / 1e6:g} MHz, {sum(len(c.edges) for c in cap.channels)} edges, {size / 1e3:.0f} kB")
