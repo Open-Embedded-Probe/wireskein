@@ -2,6 +2,8 @@
 # burst. Device to host: start 0, 8 data bits LSB first, odd parity, stop 1, read on the clock's fall. Host to device
 # (the host holds the clock low, then the device clocks): the same frame read on the rise, and the device's
 # acknowledge (0) after the stop bit. A burst is a frame (the clock stops between them).
+format = "wireskein-protocol/1"
+
 [plugin]
 name = "ps2"
 input = "frames.gap"

@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import os
 import re
-import tomllib
+from . import defs
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -74,7 +74,7 @@ class PackSet:
 
     def pack(self, rel: Path) -> dict:
         if rel not in self._full:
-            self._full[rel] = tomllib.loads((self.root / rel).read_text()) | {"_file": str(rel)}
+            self._full[rel] = defs.read(self.root / rel, "device") | {"_file": str(rel)}
         return self._full[rel]
 
     def i2c(self, addresses) -> list[dict]:
@@ -124,7 +124,7 @@ def _headers(root: Path, rels: list[Path]) -> dict[str, dict]:
         key, mt = str(p), p.stat().st_mtime_ns
         c = cache.get(key)
         if c is None or c["mtime"] != mt:
-            d = tomllib.loads(p.read_text())["device"]
+            d = defs.read(p, "device")["device"]
             c = {"mtime": mt, "header": {k: d[k] for k in ("name", "bus", "kind", "addresses") if k in d}}
             cache[key], dirty = c, True
         h = c["header"]

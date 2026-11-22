@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import json
 import re
-import tomllib
+from . import defs
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -82,7 +82,7 @@ def load_dialects() -> dict[str, dict]:
     out = {}
     paths = sorted(HERE.glob("*.toml")) + [p for d in P.definitions() for p in sorted((d / "markers").glob("*.toml"))]
     for p in paths:
-        d = tomllib.loads(p.read_text())
+        d = defs.read(p, "marker-dialect")
         for m in d["marker"]:
             m["_re"] = re.compile(m["pattern"])
         out[d["dialect"]["name"]] = d

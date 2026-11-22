@@ -129,6 +129,8 @@ with rec.section(2, "ping", expect=[protocol("demo_link", "uart", {"data": "PA2"
 - フレームとフレームのあいだは、10 ビット分以上の待機です。
 
 ```toml
+format = "wireskein-protocol/1"
+
 [plugin]
 name = "demo_wire"
 input = "nrzbits"

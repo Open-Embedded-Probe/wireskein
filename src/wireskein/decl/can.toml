@@ -1,6 +1,8 @@
 # Classic CAN data/remote frames, standard and extended identifiers. One line
 # (bus level, recessive = 1). Bit stuffing (a complement after 5 equal bits)
 # from SOF to the end of the CRC; CRC-15 over the destuffed bits.
+format = "wireskein-protocol/1"
+
 [plugin]
 name = "can"
 input = "nrzbits"

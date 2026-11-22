@@ -6,6 +6,8 @@
 # significant bit first. After five equal bits the sender puts in one of the other value (bit stuffing), from the
 # start bit to the end of the CRC, so a receiver keeps its bit timing on any data. Frames are apart by ten bit times
 # of idle or more.
+format = "wireskein-protocol/1"
+
 [plugin]
 name = "demo_wire"
 input = "nrzbits"

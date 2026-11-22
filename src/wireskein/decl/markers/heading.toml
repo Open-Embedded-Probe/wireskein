@@ -3,6 +3,8 @@
 # name ("##") only closes, without opening a new section. The target firmware
 # treats lines starting with '#' as comments, so markers can share the command
 # UART with PING/PONG and parameter lines; those stay as data inside sections.
+format = "wireskein-marker-dialect/1"
+
 [dialect]
 name = "heading"
 kind = "heading"

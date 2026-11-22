@@ -73,6 +73,8 @@ Existing run syntaxes are read by adding a TOML dialect to `decl/markers/`. Besi
 Example: a run that wraps each case in `CASE_BEGIN` / `CASE_END`, marks its steps with `PHASE` and its results with `RESULT`, as a TOML file in `decl/markers/`:
 
 ```toml
+format = "wireskein-marker-dialect/1"
+
 [dialect]
 name = "cases"
 levels = ["case", "phase"]

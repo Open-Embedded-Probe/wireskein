@@ -28,7 +28,7 @@ import numpy as np
 from wireskein import __version__
 from wireskein._engine import fileio
 from wireskein._engine.model import Capture, Channel
-from wireskein.decode import load, only
+from wireskein.decode import _load as load, only
 
 
 def toggle(edges: np.ndarray, at: np.ndarray) -> np.ndarray:

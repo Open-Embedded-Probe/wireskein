@@ -1,5 +1,7 @@
 # Generated from EmbedBenchDeviceData 0c56bed knowledge/sht30.yaml and
 # chips/sht30.yaml by tools/knowledge_decl.py. Regenerate rather than edit.
+format = "wireskein-device/1"
+
 [device]
 name = "SHT30"
 bus = "i2c"

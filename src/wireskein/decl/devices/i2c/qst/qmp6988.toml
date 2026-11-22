@@ -1,5 +1,7 @@
 # Generated from EmbedBenchDeviceData 0c56bed knowledge/qmp6988.yaml and
 # chips/qmp6988.yaml by tools/knowledge_decl.py. Regenerate rather than edit.
+format = "wireskein-device/1"
+
 [device]
 name = "QMP6988"
 bus = "i2c"

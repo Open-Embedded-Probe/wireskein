@@ -2,6 +2,8 @@
 # parity only when ACK = OK; the turnaround's side depends on RnW. LSB first.
 # The clock may keep running with idle cycles between packets, so packets are
 # found by scanning each burst for a request whose fixed bits and parity hold.
+format = "wireskein-protocol/1"
+
 [plugin]
 name = "swd"
 input = "frames.gap"

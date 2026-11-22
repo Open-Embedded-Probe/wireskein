@@ -144,6 +144,8 @@ idle 1 | start 0 | addr 7 | cmd 4 | len 4 | data 8 x len | crc8 | stop 1      (m
 - Frames are apart by ten idle bit times or more.
 
 ```toml
+format = "wireskein-protocol/1"
+
 [plugin]
 name = "demo_wire"
 input = "nrzbits"

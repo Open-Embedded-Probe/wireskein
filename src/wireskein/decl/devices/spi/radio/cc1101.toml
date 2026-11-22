@@ -1,6 +1,8 @@
 # TI CC1101 (sub-GHz transceiver): a header byte (R/W bit 7, burst bit 6, address 5:0); addresses 0x30-0x3D without
 # data are command strobes, read with the burst bit they are status registers. Its VERSION status register (0xF1)
 # reads 0x14 (0x04 on early parts): that names it.
+format = "wireskein-device/1"
+
 [device]
 name = "CC1101"
 bus = "spi"

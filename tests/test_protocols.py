@@ -200,7 +200,7 @@ def test_device_packs_and_marker_dialects_from_a_definitions_directory(tmp_path)
     shutil.copy(pack, tmp_path / "devices/i2c/mine/copy.toml")
     (tmp_path / "markers").mkdir()
     (tmp_path / "markers/mine.toml").write_text(
-        '[dialect]\nname = "mine"\nlevels = ["case"]\n\n[[marker]]\npattern = \'^BEGIN (?P<name>.+)$\'\naction = "begin"\n')
+        'format = "wireskein-marker-dialect/1"\n\n[dialect]\nname = "mine"\nlevels = ["case"]\n\n[[marker]]\npattern = \'^BEGIN (?P<name>.+)$\'\naction = "begin"\n')
     before = len(staged._device_packs(("**",))[0])
     plugins.add_definitions(tmp_path)
     try:

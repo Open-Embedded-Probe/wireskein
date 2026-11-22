@@ -1,4 +1,6 @@
 # SPI: 8-bit words per data pin inside a CS window (or a clock burst).
+format = "wireskein-protocol/1"
+
 [plugin]
 name = "spi"
 input = ["frames.select", "frames.gap"]

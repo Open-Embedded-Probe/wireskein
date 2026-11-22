@@ -73,6 +73,8 @@ PWM duty=64
 例: ケースを `CASE_BEGIN` / `CASE_END` で囲み、ステップを `PHASE`、結果を `RESULT` で示す記録。`decl/markers/` に置く TOML:
 
 ```toml
+format = "wireskein-marker-dialect/1"
+
 [dialect]
 name = "cases"
 levels = ["case", "phase"]

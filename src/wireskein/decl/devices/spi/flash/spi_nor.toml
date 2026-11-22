@@ -1,5 +1,7 @@
 # JEDEC-style SPI NOR command set (common subset). RDID returns manufacturer +
 # 2-byte device id; SFDP returns the "SFDP" signature.
+format = "wireskein-device/1"
+
 [device]
 name = "SPI NOR flash"
 bus = "spi"

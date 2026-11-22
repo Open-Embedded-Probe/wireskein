@@ -1,5 +1,7 @@
 # I2C: 9-bit words (8 data bits MSB first + ACK) between START and STOP/Sr,
 # sampled on the SCL rising edge. The extra bit before STOP gives 9n+1.
+format = "wireskein-protocol/1"
+
 [plugin]
 name = "i2c"
 input = "frames.startstop"

@@ -58,6 +58,8 @@ def render(root: Path, chip: str, commit: str) -> tuple[Path, str]:
     commands = data.get("commands") or []
     lines = [f"{MARK} {commit} knowledge/{chip}.yaml and",
              f"# chips/{chip}.yaml by wireskein's tools/knowledge_decl.py. Regenerate rather than edit.",
+             'format = "wireskein-device/1"',
+             "",
              "[device]",
              f"name = {string(catalog['name'])}",
              f"bus = {string(bus)}"]

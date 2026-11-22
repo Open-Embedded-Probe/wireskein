@@ -1,5 +1,7 @@
 # WCH RVSWD short frames (from wch-protocols tools/dmi_decode.py).
 # Frame boundaries need a core kernel (stop-interval re-framing); the layout is declarative.
+format = "wireskein-protocol/1"
+
 [plugin]
 name = "rvswd"
 input = "frames.gap"

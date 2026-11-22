@@ -11,6 +11,7 @@ The chips' knowledge is kept in EmbedBenchDeviceData (`knowledge/<chip>.yaml`, t
   - CLI: `wireskein analyze CAPTURE --depth device --devices "i2c/**" "!i2c/qst/**"`
   - Hint: `{"devices": ["i2c/sensirion/**"]}`
   - Without a pattern, all (`**`) are used.
+- Each file starts with `format = "wireskein-device/1"` (a file without it is refused).
 - At start only each file's `[device]` header is read. The headers are cached in `~/.cache/wireskein/device-headers.json` (under `XDG_CACHE_HOME` when set), keyed by the file's modification time. A table itself is read only when it is needed: for I²C when its address is seen, for SPI when an SPI bus is found. This keeps start-up and matching fast with thousands of definitions.
 - When several definitions are identified by the same evidence (e.g. SHT30 and SHT31 share their commands and CRC), they are returned as one claim, `"SHT30 | SHT31"`.
 - Definitions that only match an address, without evidence, are gathered into one candidate list per address.

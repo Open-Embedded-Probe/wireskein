@@ -29,7 +29,7 @@ import ast
 import bisect
 import math
 import re
-import tomllib
+from . import defs
 from pathlib import Path
 
 import numpy as np
@@ -613,7 +613,7 @@ class DeclarativePlugin:
     def load(cls, path: Path) -> "DeclarativePlugin":
         # the definition's name under decl/ (provenance in the output; never a local absolute path)
         name = path.relative_to(HERE).as_posix() if path.is_relative_to(HERE) else path.name
-        return cls(tomllib.loads(path.read_text()), name)
+        return cls(defs.read(path, "protocol"), name)
 
     # ---------------- word-based ----------------
     def _words(self, fr, row):
@@ -1105,7 +1105,7 @@ def load_dir(root: Path) -> list[DeclarativePlugin]:
     each marked external, its provenance the directory's name and the file's."""
     out = []
     for p in sorted(Path(root).glob("*.toml")):
-        plug = DeclarativePlugin(tomllib.loads(p.read_text()), f"{Path(root).name}/{p.name}")
+        plug = DeclarativePlugin(defs.read(p, "protocol"), f"{Path(root).name}/{p.name}")
         plug.external = True
         out.append(plug)
     return out

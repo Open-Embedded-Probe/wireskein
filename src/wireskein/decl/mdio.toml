@@ -6,6 +6,8 @@
 # ones, is what a select line's fall gives: a CS read by a free-running clock). MSB first, sampled on MDC's rise. The clock may run
 # on between frames, so frames are found by scanning for the preamble's 32 ones and the start (a PHY may take a
 # frame without its preamble, which is not read: a run of 8 ones, an SPI's 0xff byte, read MDIO frames in SPI data).
+format = "wireskein-protocol/1"
+
 [plugin]
 name = "mdio"
 input = "frames.gap"
