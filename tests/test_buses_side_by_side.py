@@ -62,3 +62,24 @@ def test_led_strings_driven_together_are_no_clock_and_data():
     assert all(r.data_score < 0.2 for r in sv.pairs.values()), {k: r.data_score for k, r in sv.pairs.items()}
     ex = decode.export(decode.analyze(cap), cap)
     assert sorted((c["protocol"], c["roles"]["data"]) for c in ex["claims"]) == [("rgb_led", "A"), ("rgb_led", "B")]
+
+
+def test_a_data_line_handed_over_in_one_low_is_still_data():
+    """I2C's ACK: the master lets SDA go and the target pulls it low in one low of SCL, two changes in that period.
+    Where the bytes written repeat, most of the periods SDA changes in are such (sigrok-dumps'
+    8564je_continous_reg_write: 129 of 166), and SDA is still SCL's data: two changes a period in a few of the
+    clock's periods, never three."""
+    from wireskein._engine import survey
+    from wireskein._engine.model import Capture, Channel
+    rng = np.random.default_rng(2)
+    rises = np.arange(100, 200_000, 40, dtype=np.int64)
+    clk = np.sort(np.concatenate([rises, rises + 20]))
+    sda, level = [], 1
+    for k, r in enumerate(rises[:-1].tolist()):
+        if k % 9 == 8:                                    # the ACK's low: released, then pulled low, in one low
+            sda += [r + 24, r + 27]
+        elif k % 9 == 0 and rng.random() < 0.3:          # a data bit changing now and then
+            sda.append(r + 30)
+    cap = Capture(16e6, 200_100, [Channel("SCL", 0, clk), Channel("SDA", 1, np.asarray(sda, np.int64))])
+    sv = survey.survey(cap)
+    assert sv.pairs[("SCL", "SDA")].data_score > 0.5

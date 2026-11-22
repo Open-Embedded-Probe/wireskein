@@ -216,8 +216,10 @@ def despiked_relation(cap: Capture, clk_name: str, other: str, k: int) -> tuple[
 
 
 DATA_PER_PERIOD = 4        # a data line's changes in one clock period at most (its change, spikes): more, another bus's
-DATA_DENSE = 1.5           # and on average over the clock's periods it changes in: more, a line of its own
-DATA_DENSE_PERIODS = 16    # periods of the clock's own length it changes in, at least, for that average
+DATA_DENSE = 1.5           # changes on average in the clock's periods a line changes in, more ...
+DATA_DENSE_SPREAD = 0.9    # ... in nearly every one of the clock's periods: a pulse train of its own (a caliper's data, twice in 3 of 4: kept)
+DATA_FASTER = 0.25         # the periods a line changes in, this share with three changes or more: a faster line
+DATA_DENSE_PERIODS = 16    # periods of the clock's own length it changes in, at least, for either
 
 
 def pair_relation(cap: Capture, clk: ClockInfo, other: str) -> PairRelation:
@@ -255,14 +257,18 @@ def pair_relation(cap: Capture, clk: ClockInfo, other: str) -> PairRelation:
         crowded = float(per[per > DATA_PER_PERIOD].sum()) / len(di)
         pr *= 1 - crowded
         pf *= 1 - crowded
-        # and a data line changes at most once a period (NRZ); one changing more than that on average in the periods
-        # it changes in is a line of its own beside the clock: a pulse train (four WS281x lines driven together:
-        # sigrok-dumps' ws281x_4ch, each rising with the others at every bit, each tried as every other's data) or
-        # a faster line (a UART at 250 kbaud beside an 18 kHz clock, 2.3 changes in each period it changes in,
-        # in phase with it by chance at 0.37: synth-pulse-13). (A bounced data line's extra changes are merged in
-        # the gate's view, measured too.)
+        # and a data line changes once a period (NRZ), twice where its driver hands it over (I2C's ACK: the master
+        # lets SDA go and the target pulls it low in one low of SCL); one changing more is a line of its own beside the
+        # clock: a pulse train, twice in most of the clock's periods (four WS281x lines driven together:
+        # sigrok-dumps' ws281x_4ch, each rising with the others at every bit, each tried as every other's data), or
+        # a faster line, three times or more in many of the periods it changes in (a UART at 250 kbaud beside an
+        # 18 kHz clock, in phase with it by chance at 0.37: synth-pulse-13). (A bounced data line's extra changes are
+        # merged in the gate's view, measured too.)
         active = per[:len(rise)][per[:len(rise)] > 0]
-        if len(active) >= DATA_DENSE_PERIODS and float(active.mean()) > DATA_DENSE:
+        periods = int(np.count_nonzero(per_len <= 2 * float(np.median(per_len))))
+        if len(active) >= DATA_DENSE_PERIODS and (
+                (float(active.mean()) > DATA_DENSE and len(active) >= DATA_DENSE_SPREAD * periods)
+                or float(np.mean(active >= 3)) >= DATA_FASTER):
             pr = pf = 0.0
     dist, _ = K.nearest_distance(de, c.edges)
     coincide = float(np.mean(dist <= max(c.step, d.step)))   # within one sample of the coarser line

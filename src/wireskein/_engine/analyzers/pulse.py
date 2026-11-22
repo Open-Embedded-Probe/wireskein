@@ -35,6 +35,7 @@ def _bounce_view(ch, rate: float):
 RGB_SHORTEST = 0.15e-6  # s: no pulse of a WS2812-like line is shorter (T0H 0.25 us or more)
 RGB_ONE_OVER_ZERO = 1.5  # a 1's high over a 0's, this many times at least
 RGB_MIXED = 0.1         # the rarer kind of bit's share a string's data has at least
+RGB_T1H_MAX = 0.9         # a 1's high, this share of the bit at most
 RGB_T0H_MIN = 0.1         # a 0's high, this share of the bit at least
 RGB_CUT_HIGH_S = 2e-6     # a capture begun inside a bit: its first fall within this
 RGB_SAME_FRAMES = 4     # frames of one length (a whole number of LEDs) for a dark string's evidence
@@ -95,6 +96,10 @@ class RgbLedPlugin:
             # and a 0's high is a good part of the bit (T0H 0.2-0.4 us of 1.2): "0s" of a few ticks in a slow bit are
             # a noise's pieces, a bounced clock's highs split (2026-11-22, a 1 MHz decoy at 200 MS/s with bounces)
             if float(np.median([w for _, w in r["t0h"]])) < RGB_T0H_MIN * r["bit"]:
+                return []
+            # and a 1's high is inside its bit (T1H 0.6-0.8 us of 1.2): "1s" longer than the bit are a line's long highs
+            # between pulses of one width (a CPU's address line: 519 samples beside a bit of 21, sigrok-dumps' i8039)
+            if float(np.median([w for _, w in r["t1h"]])) > RGB_T1H_MAX * r["bit"]:
                 return []
         mixed = 0.3 + 0.7 * float(np.clip(minor / RGB_MIXED, 0, 1))
         # a string all dark (every bit 0) is one duty too: but its frames, between resets, are of one length, a whole
