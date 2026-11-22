@@ -285,7 +285,7 @@ def test_format_1_keeps_each_line_at_its_resolution(probe, tmp_path):
     and B raw, C every 4th sample (bits at step 4), D any_high over 4, E any_low over 64, F and G change_latch over 64
     (F, bit 5, changes twice an interval from the second: changed and came back; G, bit 6, once from the second)."""
     _reductions()
-    from wireskein.decode import load
+    from wireskein.decode import _load as load
     text = "A=GPIO10,B=GPIO11,C=GPIO12/sample:4,D=GPIO13/any_high:4,E=GPIO14/any_low:64,F=GPIO15/change_latch:64," \
            "G=GPIO16/change_latch:64"
     req = sources.Request(sources.parse_channels(text), 20_000_000, 4096, resolution=sources.parse_resolution(text))
@@ -417,7 +417,7 @@ def test_a_format_1_stream_reads_the_same_line_as_format_0(probe, tmp_path):
     samples) as change_latch over 2. Equal where both have it - TX at its samples, CLK at each interval's last tick -
     across segments."""
     _reductions()
-    from wireskein.decode import load
+    from wireskein.decode import _load as load
     src = probe("--logic-wave", "10=uart:115200", "--logic-wave", "11=square:8")
     got = {}
     for name, res in (("f0", {}), ("f1", {"TX": ("sample", 2), "CLK": ("change_latch", 2)})):

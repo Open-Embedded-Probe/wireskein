@@ -85,7 +85,7 @@ def test_sr_of_five_byte_samples(tmp_path):
         z.writestr("version", "2")
         z.writestr("metadata", meta)
         z.writestr("logic-1-1", samples.tobytes())
-    cap = decode.load(p)
+    cap = decode._load(p)
     ch = cap.channel("D38")
     assert ch.initial == 0 and list(ch.edges[:3]) == [10, 20, 30]
     assert len(cap.channel("D0").edges) == 0

@@ -1,8 +1,8 @@
 """Decoding a capture: finding what it holds (`analyze`), or decoding the buses a spec names (`decode_file`).
 
-    cap = load("capture.wireskein", part=0)  # one part as the decoders read it; a .sr or a VCD too
-    res = analyze(cap, {"protocols": ["i2c"]})
-    doc = export(res, cap)                   # JSON-ready dict, as `wireskein analyze` prints
+    cap = wireskein.capture.read("capture.wireskein")    # or a .sr, a VCD, a format added
+    res = analyze(cap, {"protocols": ["i2c"]})          # a capture of one part, or one of its parts (cap.parts[k])
+    doc = export(res, cap)                              # JSON-ready dict, as `wireskein analyze` prints
     doc = decode_file("c0001.wireskein", {"buses": [{"protocol": "i2c", "pins": {"scl": "SCL", "sda": "SDA"}}]})
 
 analyze finds what a capture holds and claims only what the evidence carries: a short case (one transfer) is too
@@ -36,22 +36,26 @@ from . import __version__, _fileformat as fileformat
 from ._engine import export as _exp
 from ._engine import fileio, staged, timing
 from ._engine import kernels as K
-from ._engine.export import dumps, export
+from ._engine.export import dumps
 from ._engine.model import Capture, Channel
 from ._engine.srio import read_sr, write_sr
 
-__all__ = ["Capture", "Channel", "analyze", "analyze_file", "as_logic", "decode_file", "dumps", "export", "load", "save"]
+__all__ = ["analyze", "analyze_file", "as_logic", "decode_file", "dumps", "export"]
 
 FORMAT = "wireskein-analysis/1"
 IDLE_S = 1e-3          # a bus with no bit times of its own: activity apart by more than this is two bursts
 IDLE_BITS = 16         # else: more than this many bit times without a change
 
 
-def load(path, part: int | None = None) -> Capture:
-    """A WireSkein file (a capture of several parts needs `part`), a sigrok .sr or a VCD, told apart by content; or a
-    wireskein.capture.Capture in memory (one just taken, before or without saving it), its part as the checks read
-    it."""
-    from .capture import Capture as Whole
+def _load(path, part: int | None = None) -> Capture:
+    """The changes view of a part (what the decoders and checks read: wireskein.capture.Part.view): of a file - a
+    WireSkein file (a capture of several parts needs `part`), a sigrok .sr, a VCD or a format added, told apart by
+    content -, of a wireskein.capture.Capture in memory, or of a wireskein.capture.Part; a view is itself."""
+    from .capture import Capture as Whole, Part
+    if isinstance(path, Capture):
+        return path
+    if isinstance(path, Part):
+        return path.view()
     if isinstance(path, Whole):
         if len(path.parts) > 1 and part is None:
             raise ValueError(f"a capture of {len(path.parts)} parts: name one (part, from 0)")
@@ -85,7 +89,7 @@ def load(path, part: int | None = None) -> Capture:
     return v
 
 
-def save(path: str | Path, cap: Capture, **meta) -> Path:
+def _save(path: str | Path, cap: Capture, **meta) -> Path:
     """By the name: .sr (one rate: slow channels are repeated, their real rate
     kept in wireskein.json inside the zip), .vcd (the changes; wireskein's own
     data in a $comment), anything else a WireSkein file
@@ -102,11 +106,12 @@ def save(path: str | Path, cap: Capture, **meta) -> Path:
     return fileio.save(path, cap, **meta)
 
 
-def as_logic(cap: Capture, thresholds: dict) -> Capture:
-    """The capture with these analog channels also read as logic (name -> volts,
-    or (low, high) for hysteresis), so the decoders see them: a UART or I2C line
-    captured by an ADC. The analog channels stay as they are."""
+def as_logic(cap, thresholds: dict) -> Capture:
+    """The part's changes view with these analog channels also read as logic (name -> volts, or (low, high) for
+    hysteresis), so the decoders see them: a UART or I2C line captured by an ADC. The analog channels stay as they
+    are. cap: a wireskein.capture.Capture of one part, a Part, or a view."""
     from ._engine import analog
+    cap = _load(cap)
     names = {c.name for c in cap.channels}
     extra = []
     for name, th in thresholds.items():
@@ -119,10 +124,17 @@ def as_logic(cap: Capture, thresholds: dict) -> Capture:
     return Capture(cap.rate, cap.n_samples, cap.channels + extra, cap.meta, cap.analog, cap.events)
 
 
-def analyze(cap: Capture, hints: dict | None = None):
-    """hints (all optional): {"protocols": [...], "pins": {pin: {"protocol", "role", "baud"}},
-    "exclude_pins": [...], "devices": ["i2c/**", ...]} restrict what is tried."""
-    return staged.analyze(cap, hints)
+def analyze(cap, hints: dict | None = None):
+    """What a part holds. cap: a wireskein.capture.Capture of one part, one of its parts (a Part), or a part's
+    changes view (Part.view, as_logic). hints (all optional): {"protocols": [...], "pins": {pin: {"protocol", "role",
+    "baud"}}, "exclude_pins": [...], "devices": ["i2c/**", ...]} restrict what is tried."""
+    return staged.analyze(_load(cap), hints)
+
+
+def export(res, cap, mode: str = "final", select: list[str] | None = None, alternatives: bool = False,
+           window: tuple[int, int] | None = None, depth: str = "protocol") -> dict:
+    """analyze's result as a JSON-ready dict, as `wireskein analyze` prints it (cap: what was analysed)."""
+    return _exp.export(res, _load(cap), mode, select, alternatives, window, depth)
 
 
 def _spec(spec: dict) -> dict:
@@ -833,7 +845,7 @@ def _open(path: Path, part: int | None = None):
         runs = _runs(path, raw)
         return (raw, [fileformat.part_view(raw, k) for k, _, _ in runs], [cap for _, _, cap in runs],
                 [k for k, _, _ in runs], [span for _, span, _ in runs])
-    v = load(path, part)
+    v = _load(path, part)
     tick = Fraction(v.meta.get("tick_hz") or Fraction(v.rate).limit_denominator(10**9))
     raw = {"id": v.meta.get("capture_id"), "tick_hz": [tick.numerator, tick.denominator],
            "complete": v.meta.get("complete", True), "lost": v.meta.get("lost", []),
@@ -1306,7 +1318,7 @@ def analyze_file(path: str | Path, hints: dict | None = None, mode: str = "final
             for k, src in enumerate(srcs):
                 got = _analyze_split(src, hints, opts, depth, src.head, items)
                 if got is None:                     # short: as always
-                    cap = only(fileio.load(path, k) if kind == "wireskein" else load(path), pins)
+                    cap = only(fileio.load(path, k) if kind == "wireskein" else _load(path), pins)
                     res = staged.analyze(cap, hints)
                     ex = export(res, cap, mode if not select else "select", select, alternatives, None, depth)
                     _note_undersampled(ex.get("claims", []), cap, res)

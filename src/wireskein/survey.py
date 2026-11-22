@@ -141,7 +141,7 @@ def survey_file(path, pins: list[str] | None = None, bins: int = 1000, top: int 
     else read whole first."""
     from . import split
     from ._fileformat import sniff
-    from .decode import _capture_of, _file_source, load, only
+    from .decode import _capture_of, _file_source, _load as load, only
     path = Path(path)
     src = _file_source(path, pins)
     if src is None:

@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 from wireskein import _fileformat as ff
-from wireskein.decode import decode_file, load
+from wireskein.decode import decode_file, _load as load
 
 ROOT = Path(__file__).parent.parent
 D = Path(__file__).parent / "data" / "rvswd_long_truth"

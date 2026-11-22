@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from wireskein import formats, plugins
-from wireskein.decode import analyze_file, load
+from wireskein.decode import analyze_file, _load as load
 
 SPEC = importlib.util.spec_from_file_location("saleae_csv", Path(__file__).parents[1] / "examples/formats/saleae_csv.py")
 demo = importlib.util.module_from_spec(SPEC)
@@ -159,7 +159,7 @@ def test_a_sr_read_a_chunk_at_a_time_and_an_excerpt(tmp_path, monkeypatch, block
         e = x.edges[(x.edges > s0) & (x.edges < s1)] - s0
         assert np.array_equal(e, y.edges) and y.initial == int(x.level_at(np.array([s0]))[0])
     # written straight through, a block at a time: the same lines
-    from wireskein.decode import load
+    from wireskein.decode import _load as load
     out, n, names, rate = srio.convert_sr(p, tmp_path / "long.wireskein")
     back = load(out)
     assert n == len(data) and names == ["A", "B"]
@@ -194,7 +194,7 @@ def test_convert_an_excerpt(tmp_path):
     tx, end = uart_changes(b"abcdef")
     p = tmp_path / "in.wireskein"
     from wireskein._engine.model import Capture, Channel
-    from wireskein.decode import save
+    from wireskein.decode import _save as save
     import numpy as np
     e = np.array([round(t * 1e6) for t, _ in tx], np.int64)
     save(p, Capture(1e6, round(end * 1e6) + 10, [Channel("TX", 1, e)]))
@@ -210,7 +210,7 @@ def test_an_excerpt_keeps_its_own_first_sample_on_the_probe_clock(tmp_path):
     import argparse
     from wireskein import capture, cli
     from wireskein._engine.model import Capture, Channel
-    from wireskein.decode import save
+    from wireskein.decode import _save as save
     import numpy as np
     p = tmp_path / "in.wireskein"
     save(p, Capture(1e6, 1000, [Channel("TX", 1, np.array([300, 600], np.int64))]), start_ns=5_000_000,

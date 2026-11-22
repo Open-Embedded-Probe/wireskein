@@ -310,11 +310,13 @@ wireskein decode c0001.wireskein --spec '{"buses": [{"protocol": "i2c", "pins": 
 ```
 
 ```python
-from wireskein.decode import load, save, analyze, export
+from wireskein import capture
+from wireskein.decode import analyze, export
 
-cap = load("capture.wireskein")                                     # .sr や .vcd も
-res = analyze(cap, {"protocols": ["spi"]})
+cap = capture.read("capture.wireskein")                             # .sr、.vcd、足した形式も
+res = analyze(cap, {"protocols": ["spi"]})                          # パートが複数なら cap.parts[k]
 doc = export(res, cap)
+capture.write("capture.vcd", cap)                                   # 名前で: .sr、.vcd、ほかは WireSkein
 ```
 
 `decode` と `analyze` は、バスごとに、どう読めたかを stderr に出します。読めたフレームとそのうち検査の合ったもの、

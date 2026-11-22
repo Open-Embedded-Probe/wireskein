@@ -117,6 +117,11 @@ class Capture:
     analog: list[AnalogTrace] = field(default_factory=list)
     events: list[EventTrace] = field(default_factory=list)   # lines kept as changes at step > 1
 
+    @property
+    def rate_hz(self) -> float:
+        """Ticks per second (what the public view names it: wireskein.capture.Part.view)."""
+        return self.rate
+
     def channel(self, name: str) -> Channel:
         for ch in self.channels:
             if ch.name == name:

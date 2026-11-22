@@ -71,14 +71,14 @@ def wch(repo: Path) -> None:
         for sr in sorted((src / sub).glob("*.sr")):
             if sr.stat().st_size > WCH_MAX_BYTES:
                 continue
-            cap = decode.load(sr)
+            cap = decode._load(sr)
             out = WCH_OUT / sub / (sr.stem + ".wireskein")
             out.parent.mkdir(parents=True, exist_ok=True)
             # a .wireskein saved again differs (its capture id) though its edges do not: one already there with the
             # same edges is kept as it is
-            if not (out.exists() and _same(decode.load(out), cap)):
-                decode.save(out, cap)
-                if not _same(decode.load(out), cap):
+            if not (out.exists() and _same(decode._load(out), cap)):
+                decode._save(out, cap)
+                if not _same(decode._load(out), cap):
                     raise SystemExit(f"{sr}: the .wireskein does not read back the same")
             files[str(out.relative_to(WCH_OUT))] = {"from": str(sr.relative_to(repo)), "sha256": _sha(sr)}
             dump = sr.with_suffix(".bin")              # what ch32rv read (read_flash_4k, read_ram_256)

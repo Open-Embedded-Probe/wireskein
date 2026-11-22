@@ -49,7 +49,7 @@ def test_a_line_from_its_changes_is_kept_in_the_smaller_form(tmp_path):
     assert v.rate == 8e6 / 3 and v.channel("DRDY").edges.tolist() == [500]
     copy = capture.read(capture.write(tmp_path / "copy.wireskein", capture.read(_file(tmp_path / "c.wireskein"))))
     assert copy.lost[0]["ticks"] == 300 and copy.parts[1].channel("CLK").changes()[1].tolist() == [40]
-    assert decode.load(tmp_path / "copy.wireskein", part=0).channel("CLK").edges.tolist()[:2] == [1, 2]
+    assert decode._load(tmp_path / "copy.wireskein", part=0).channel("CLK").edges.tolist()[:2] == [1, 2]
 
 
 def test_events_whose_quanta_hide_changes_are_read_with_decode():

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from .. import _fileformat as fileformat
 from . import Request, Result
+from .. import capture as wc
 
 
 def capture(target: str, req: Request) -> Result:
@@ -35,12 +36,11 @@ def capture(target: str, req: Request) -> Result:
     meta = dict(res.meta) if res.parts is not None else {k: v for k, v in res.meta.items()
                                                          if k not in fileformat.PART_META}
     if res.parts is not None:
-        parts = [fileformat.Part([_channel(c, acquire) for c in p.channels], dict(p.meta), p.tick0,
-                                 _ticks(p, res.tick_hz, acquire)) for p in res.parts]
+        parts = [wc.Part(_ticks(p, res.tick_hz, acquire), [_channel(c, acquire) for c in p.channels], dict(p.meta),
+                         p.tick0) for p in res.parts]
     else:
-        parts = [fileformat.Part([_channel(c, acquire) for c in res.channels],
-                                 {k: v for k, v in res.meta.items() if k in fileformat.PART_META}, 0,
-                                 _ticks(res.all_parts[0], res.tick_hz, acquire))]
+        parts = [wc.Part(_ticks(res.all_parts[0], res.tick_hz, acquire), [_channel(c, acquire) for c in res.channels],
+                         {k: v for k, v in res.meta.items() if k in fileformat.PART_META}, 0)]
     return Result(res.tick_hz, [], meta, parts, list(res.lost), res.layout, res.temp_dir)
 
 
@@ -49,7 +49,6 @@ def capture_of(res):
     session the caller holds (acquire.capture(hst, req)). The probe's facts go to the capture's meta (probe), each
     part's own to the part."""
     from oep_client import acquire
-    from .. import capture as wc
     meta = {k: v for k, v in res.meta.items() if k not in fileformat.PART_META}
     parts = [wc.Part(_ticks(p, res.tick_hz, acquire) or _end(p, res.tick_hz, acquire),
                      [_channel(c, acquire) for c in p.channels], dict(p.meta), p.tick0) for p in res.all_parts]

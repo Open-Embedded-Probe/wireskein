@@ -56,12 +56,14 @@ class Part:
     """A block of ticks with no gap inside: tick 0 of its own, `ticks` long, `tick0` ticks after the first part's
     tick 0 (a timeline), its own facts in `meta` (start_ns, start_uncertainty_ns, trigger_tick, boot_id, ...)."""
 
-    def __init__(self, ticks: int, channels: list | None = None, meta: dict | None = None, tick0: int | None = None):
-        self.ticks = int(ticks)
+    def __init__(self, ticks: int | None, channels: list | None = None, meta: dict | None = None,
+                 tick0: int | None = None):
+        self.ticks = None if ticks is None else int(ticks)       # None: as long as its channels (a part to write)
         self.meta = dict(meta or {})
         self.tick0 = tick0
         self._channels = None if channels is None else list(channels)
         self._file = None                      # (path, index, header seen from this part)
+        self._view = None                      # the changes view it was read as (a .sr, a VCD): view() is it
         self._tick_hz = None                   # the capture's, set when the part joins one
 
     @classmethod
@@ -70,10 +72,22 @@ class Part:
         p._file = (path, index, head)
         return p
 
+    @classmethod
+    def _from_view(cls, v) -> Part:
+        p = cls(v.n_samples, None, {k: v.meta[k] for k in fileformat.PART_META if k in v.meta}, 0)
+        p._view = v
+        return p
+
     @property
     def channels(self) -> list[Channel | Events | Reduced | Analog]:
         """The channels as stored (read from the file on first use); those of an encoding this version does not
         read are left out (`skipped`)."""
+        if self._channels is None and self._view is not None:
+            from ._engine import fileio
+            v = self._view
+            kept = {t.name for t in v.events}
+            self._channels = ([fileio.to_logic(c, v.n_samples) for c in v.channels if c.name not in kept]
+                              + [fileio.to_events(t) for t in v.events] + [fileio.to_analog(a) for a in v.analog])
         if self._channels is None:
             path, index, _ = self._file
             self._channels = fileformat.read(path, part=index)[1]
@@ -95,7 +109,11 @@ class Part:
         raise KeyError(name)
 
     def view(self):
-        """The part as the decoders and checks read it (wireskein.decode, wireskein.verify). Needs numpy."""
+        """The part as its changes, as the decoders and checks read it (wireskein.decode, wireskein.verify): `rate_hz`,
+        `n_samples`, `meta`, `channels` and `channel(name)` - a logic line's `name`, `initial` (its level before tick 0),
+        `edges` (the ticks it changes at, numpy), `step` and `level_at(ticks)` -, and `analog`. Needs numpy."""
+        if self._view is not None:
+            return self._view
         from ._engine import fileio
         decoded = [fileio.decode(c) for c in self.channels]
         if self._file is not None:
@@ -131,16 +149,38 @@ class Capture:
 
 
 def read(path: str | Path) -> Capture:
-    """A WireSkein file's capture. The header is read now; each part's channels when first asked for."""
+    """A capture file, told apart by content: a WireSkein file (the header read now, each part's channels when first
+    asked for), a sigrok session (.sr), a VCD, or a format added (wireskein.plugins.register_format)."""
     path = Path(path)
+    kind = fileformat.sniff(path)
+    if kind != "wireskein":
+        if kind is None:
+            from . import formats
+            name = formats.kind(path)
+            if name is not None:
+                return formats.read(path, name)
+        from .decode import _load
+        v = _load(path)
+        meta = {k: x for k, x in v.meta.items() if k not in fileformat.PART_META and k not in _VIEW_ONLY}
+        return Capture(fileformat._fraction(v.meta.get("tick_hz") or Fraction(v.rate).limit_denominator(10**9)),
+                       [Part._from_view(v)], meta=meta, path=path)
     raw = fileformat.read_header(path)
     parts = [Part._from_file(path, k, fileformat.part_view(raw, k)) for k in range(len(raw["parts"]))]
     return Capture(fileformat.tick_hz(raw), parts, raw.get("layout", "timeline"), list(raw.get("lost", [])),
                    dict(raw.get("meta", {})), raw.get("id"), path)
 
 
+_VIEW_ONLY = {"tick_hz", "file", "format", "complete", "lost", "part", "n_parts", "capture_id", "layout", "extras"}
+
+
 def write(path: str | Path, cap: Capture) -> Path:
-    """Write a capture as a WireSkein file."""
+    """Write a capture, by the name: .sr (a sigrok session: one part, one rate - slower channels repeated), .vcd (the
+    changes of one part), anything else a WireSkein file (.wireskein is the usual name)."""
+    if Path(path).suffix in (".sr", ".vcd"):
+        if len(cap.parts) != 1:
+            raise ValueError(f"not writing {path}: a .sr or a VCD holds one part, the capture has {len(cap.parts)}")
+        from .decode import _load, _save
+        return _save(path, _load(cap), **cap.meta)
     parts = [fileformat.Part(list(p.channels), dict(p.meta), p.tick0, p.ticks) for p in cap.parts]
     return fileformat.write(path, cap.tick_hz, parts=parts, layout=cap.layout, lost=[dict(x) for x in cap.lost] or None,
                             capture_id=cap.id, **cap.meta)

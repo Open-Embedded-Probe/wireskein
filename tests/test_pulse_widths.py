@@ -69,7 +69,7 @@ def test_square_from_another_source_fits_its_own_grid():
 def test_a_capture_in_memory_is_checked_as_a_file_is():
     from fractions import Fraction
     from wireskein import capture
-    from wireskein.decode import load
+    from wireskein.decode import _load as load
     c = capture.Capture(Fraction(10**6), [capture.Part(1_000_000, [capture.logic("P", 0, [100_000, 350_000], 1_000_000)])])
     ok, got, _ = check_pulses(load(c), pulses("P", count=1, width_min_s=0.2, width_max_s=0.3))
     assert ok and got["widths_s"] == [0.25]

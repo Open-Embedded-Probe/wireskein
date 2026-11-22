@@ -279,11 +279,13 @@ wireskein decode c0001.wireskein --spec '{"buses": [{"protocol": "i2c", "pins": 
 ```
 
 ```python
-from wireskein.decode import load, save, analyze, export
+from wireskein import capture
+from wireskein.decode import analyze, export
 
-cap = load("capture.wireskein")                                     # or .sr / .vcd
-res = analyze(cap, {"protocols": ["spi"]})
+cap = capture.read("capture.wireskein")                             # or .sr / .vcd / a format added
+res = analyze(cap, {"protocols": ["spi"]})                          # a capture of several parts: cap.parts[k]
 doc = export(res, cap)
+capture.write("capture.vcd", cap)                                   # by the name: .sr, .vcd, else WireSkein
 ```
 
 After each bus, `decode` and `analyze` say how it read on stderr: frames read and ok, unread stretches, the clock's

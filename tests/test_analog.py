@@ -12,7 +12,7 @@ import pytest
 
 from wireskein import _fileformat as fileformat
 from wireskein._engine import fileio
-from wireskein.decode import load, save
+from wireskein.decode import _load as load, _save as save
 
 TICK = 20_000_000
 ADC_RATE = Fraction(80_000_000, 1667)          # 47990.4... Hz: 416.75 ticks of 20 MHz per sample

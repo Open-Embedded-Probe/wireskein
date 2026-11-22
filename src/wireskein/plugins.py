@@ -21,8 +21,8 @@ What each addition is:
   WireSkein's own files, sigrok sessions and VCDs are told apart first; a file none of them is goes to the formats
   added, in the order they were.
 - a check kind (register_check): check(window, x) -> (ok: True / False / None for unchecked / verify.MEASURED,
-  measured: dict, reason: str), window the segment's window as changes (rate, n_samples, channel(name) with
-  .initial, .edges in ticks, .step and .level_at(ticks); analog), x the expectation ({"kind": kind, "pins": [...],
+  measured: dict, reason: str), window the segment's window as its changes (as wireskein.capture.Part.view
+  gives a part: rate_hz, n_samples, channel(name) with .initial, .edges in ticks, .step and .level_at(ticks); analog), x the expectation ({"kind": kind, "pins": [...],
   ...}). It may put notices in measured["notices"] ([{"kind", "tick", ...}], ticks of the window); `notices` names
   their kinds and meanings. logic: it reads logic levels (an analog pin then needs threshold=); every_edge: it needs
   every edge (a line kept as changes that hide some is unchecked). (docs/capture-test-guide.md §4.10)

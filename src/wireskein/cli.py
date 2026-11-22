@@ -69,7 +69,7 @@ def parse_hint(text: str | None) -> dict | None:
     return {"protocols": names}
 
 def load(path: Path):
-    from .decode import load as _load
+    from .decode import _load
     return _load(path)
 
 
@@ -350,7 +350,7 @@ def annotate_cmd(args) -> None:
 
 def align_cmd(args) -> None:
     from . import align
-    from .decode import load
+    from .decode import _load as load
     cap = load(args.file)
     th = [float(v) for v in args.threshold.split(",")] if args.threshold else None
     if args.to:                                               # onto another file's ticks (spec §5.1.1)
@@ -432,7 +432,7 @@ def capture_cmd(args) -> None:
         what = (f"{len(chans) - n_analog} logic" + (f" ({coarse} as changes at a coarser step)" if coarse else "")
                 + (f" + {n_analog} analog" if n_analog else "") + " channels")
     else:
-        from .decode import load
+        from .decode import _load as load
         cap = load(out)
         rate, meta, what = cap.rate, cap.meta, _count(cap)
     n_parts = len(raw["parts"]) if raw else 1
@@ -548,7 +548,7 @@ def _fewer(raw: dict, req) -> None:
 
 
 def convert(args) -> None:
-    from .decode import load as load_file, save
+    from .decode import _load as load_file, _save as save
     part = getattr(args, "part", None)
     from . import _fileformat as fileformat
     if part is None and fileformat.sniff(args.input) == "wireskein":

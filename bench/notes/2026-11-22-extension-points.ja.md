@@ -69,3 +69,16 @@ v1 の B7 で公開を `capture`、`runlog`、`verify`、`decode`、`sources` �
 - B: 利用者が触る型は `wireskein.capture` の Capture、Part、Channel だけにする。検査には、そこから作った変化で持つ見方を
   渡す。`decode.Capture` と `decode.Channel` は外に出さない。
 - C〜G は提案のまま進める。
+
+## B10 の具体の形（2026-11-22）
+
+- `capture.read(path)` は、記録のどの種類も `capture.Capture` として読む: WireSkein のファイル、sigrok の .sr、VCD、
+  足した形式。WireSkein 以外は読み手の変化で持つ見方から作り、その Part は見方を持ったまま（`view()` で作り直さない）。
+- `capture.write(path, cap)` は名前で書き分ける: .sr、.vcd、ほかは WireSkein（これまでの `decode.save` の役）。
+  .sr と .vcd は 1 つのパートだけ。
+- `decode.analyze(x, hints)`、`decode.export(res, x)`、`decode.as_logic(x, thresholds)` は、`capture.Part`、
+  1 つのパートの `capture.Capture`、または `Part.view()` の見方を受け取る。
+- `decode.load`、`decode.save`、`decode.Capture`、`decode.Channel` は外に出さない（中の `_load`、`_save`）。
+- `Part.view()` が変化で持つ見方（検査に渡るのも同じ）。文書にする面: `rate_hz`、`n_samples`、`meta`、`channels`、
+  `channel(name)`（`.name`、`.initial`、`.edges`、`.step`、`.level_at(ticks)`）、`analog`。
+- `sources.Result.parts` は `capture.Part` の並び。

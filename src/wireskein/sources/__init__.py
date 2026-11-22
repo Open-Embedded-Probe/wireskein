@@ -109,7 +109,8 @@ class Result:
     tick_hz: Fraction
     channels: list[fileformat.Channel]
     meta: dict = field(default_factory=dict)
-    parts: list[fileformat.Part] | None = None   # instead of channels: a capture in parts (wireskein-format §3.4)
+    parts: list | None = None                    # instead of channels: wireskein.capture.Part's, a capture in parts
+                                                 # (wireskein-format §3.4)
     lost: list[dict] = field(default_factory=list)   # what was lost while capturing (a failure)
     layout: str = "timeline"
     temp_dir: str | None = None                  # files the channels are read from, removed once written
@@ -155,12 +156,13 @@ def capture(source: str, request: Request, out: str | Path, attachments: dict | 
 def _save(res: "Result", out: Path, attachments, meta) -> Path:
     tmp = out if out.suffix != ".sr" else out.with_name(out.name + fileformat.SUFFIX)
     if res.parts is not None:
-        fileformat.write(tmp, res.tick_hz, None, attachments, parts=res.parts, layout=res.layout, lost=res.lost or None,
+        parts = [fileformat.Part(list(p.channels), dict(p.meta), p.tick0, p.ticks) for p in res.parts]
+        fileformat.write(tmp, res.tick_hz, None, attachments, parts=parts, layout=res.layout, lost=res.lost or None,
                          **{**res.meta, **meta})
     else:
         fileformat.write(tmp, res.tick_hz, res.channels, attachments, lost=res.lost or None, **{**res.meta, **meta})
     if tmp != out:
-        from ..decode import load, save
+        from ..decode import _load as load, _save as save
         try:
             save(out, load(tmp), **{**res.meta, **meta})
         finally:

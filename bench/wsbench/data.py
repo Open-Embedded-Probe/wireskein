@@ -230,7 +230,7 @@ def _wchfix(path: Path) -> tuple[Capture, dict]:
     and SWIO alike, the reading measured by it (eval: expect.read_bytes). Channels renamed D0.. in an order from the file's name (the sigrok
     file's, <op>.sr, as before the copy: the same cases, the same input_sha)."""
     from wireskein import decode as _decode
-    cap = _decode.load(path)
+    cap = _decode._load(path)
     rel = path.relative_to(WCH_FIXTURE).with_suffix(".sr")
     order = sorted(cap.channels, key=lambda c: zlib.crc32(f"{rel}|{c.name}".encode()))
     new = {c.name: f"D{i}" for i, c in enumerate(order)}
