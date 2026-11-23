@@ -163,6 +163,11 @@ def with_upper(claims, cap):
     return claims
 
 
+def _open2(cap):
+    import importlib
+    return importlib.import_module(__name__ + ".shapes").engine(cap, need_two=True)
+
+
 def _views_upper(cap):
     return with_upper(views(cap), cap)
 
@@ -174,4 +179,4 @@ def _synth_gated(cap):
 
 ENGINES = {"light": light, "views": views, "declarative": _declarative, "learned": _learned, "synth": _synth,
            "synth_gated": _synth_gated,
-           "nulled": _nulled, "open": _open, "views_upper": _views_upper}
+           "nulled": _nulled, "open": _open, "views_upper": _views_upper, "open2": _open2}
