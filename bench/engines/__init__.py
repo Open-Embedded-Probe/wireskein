@@ -17,6 +17,7 @@ engine is (bench/algos/e2e/engines.py registers them as trials).
 - nulled:   the views engine's candidates, each fit less the same reader's on a surrogate that keeps the lines'
             own statistics and breaks the protocol's structure (an open-world test, nulled.py)
 - <name>_open: an engine's claims with the shapes' open world after it (shapes.opened)
+- light_surveyed: light with WireSkein's survey first, only its clocks tried as SCL and SCK
 - cascade:  light_open first, WireSkein's own engine where it leaves an active line without a confirmed claim
 - views_upper: the views engine's claims through WireSkein's upper stage (wireskein._upper), as the main engine's
 - open:     the views engine with shapes that explain a line without naming a protocol (a pulse code) among the
@@ -31,8 +32,9 @@ from . import readers as R
 SURE, SURE_MARGIN, LIKELY = 0.85, 0.15, 0.6
 
 
-def candidates(cap):
-    """Every assignment the protocols' least conditions allow, read: [(protocol, roles, fit, params, layers,
+def candidates(cap, clocks=None):
+    """clocks: the lines that may be a clock (SCL, SCK), all where None.
+Every assignment the protocols' least conditions allow, read: [(protocol, roles, fit, params, layers,
     evidence)]. UART: a line of 20 changes or more; I2C: SCL changes no less than SDA, both idle high; SPI: a select
     changes far less than the clock, a data line no more than half again as often."""
     n, rate = cap.n_samples, cap.rate
@@ -44,12 +46,16 @@ def candidates(cap):
             if r:
                 out.append(("uart", {"data": c.name}, r[0], r[1], r[2], {}))
     for a, b in itertools.permutations(act, 2):
+        if clocks is not None and a.name not in clocks:
+            continue
         if len(a.edges) < len(b.edges) or a.initial != 1 or b.initial != 1:
             continue
         r = R.read_i2c(a, b, n)
         if r:
             out.append(("i2c", {"scl": a.name, "sda": b.name}, r[0], r[1], r[2], {}))
     for clk in act:
+        if clocks is not None and clk.name not in clocks:
+            continue
         others = [c for c in act if c is not clk]
         for cs in [None] + others:
             if cs is not None and len(cs.edges) * 8 > len(clk.edges):
@@ -177,6 +183,14 @@ def _opened(name):
     return run
 
 
+def light_surveyed(cap):
+    """light with WireSkein's survey first (wireskein._engine.survey, without the asynchronous reading): only the
+    lines it takes for clocks are tried as SCL and SCK."""
+    from wireskein._engine import survey
+    sv = survey.survey(cap, asyncs=False)
+    return claims_of(candidates(cap, clocks=set(sv.clocks)))
+
+
 def cascade(cap, first="light_open"):
     """A light engine first, WireSkein's own where it is not sure: its claims are taken when every active line (4
     changes or more) is under a confirmed claim of it, else the main engine reads the capture. (The cost of the light
@@ -204,5 +218,5 @@ def _synth_gated(cap):
 ENGINES = {"light": light, "views": views, "declarative": _declarative, "learned": _learned, "synth": _synth,
            "synth_gated": _synth_gated,
            "nulled": _nulled, "open": _open, "views_upper": _views_upper, "open2": _open2,
-           "cascade": cascade}
+           "cascade": cascade, "light_surveyed": light_surveyed}
 ENGINES.update({f"{k}_open": _opened(k) for k in ("light", "views", "declarative", "synth", "learned")})

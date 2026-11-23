@@ -17,12 +17,29 @@ def level_at(edges, initial, t):
     return (int(initial) + np.searchsorted(edges, t, side="right")) & 1
 
 
+_CLEANED: dict = {}     # id(edges) -> (a weak reference to them, {short: cleaned}): a line is read many times
+
+
 def clean(edges, short):
-    e = np.asarray(edges, np.int64)
-    if len(e) < 3 or short <= 1:
-        return e
-    from wireskein._engine import views as V
-    return V.pulses_out(e, int(short))
+    """The line's changes with its pulses under `short` taken out, worked out once a line and width (the readers try
+    each line in many roles: light spent 7 tenths of its time cleaning the same lines again)."""
+    import weakref
+    if len(edges) < 3 or short <= 1:
+        return np.asarray(edges, np.int64)
+    k = id(edges)
+    got = _CLEANED.get(k)
+    if got is None or got[0]() is not edges:               # a new array at an old one's address is another line
+        try:
+            ref = weakref.ref(edges, lambda _, k=k: _CLEANED.pop(k, None))
+        except TypeError:                                  # (a list: no weak reference, not kept)
+            from wireskein._engine import views as V
+            return V.pulses_out(np.asarray(edges, np.int64), int(short))
+        got = _CLEANED[k] = (ref, {})
+    by = got[1]
+    if int(short) not in by:
+        from wireskein._engine import views as V
+        by[int(short)] = V.pulses_out(np.asarray(edges, np.int64), int(short))
+    return by[int(short)]
 
 
 # ---------------- UART ----------------
