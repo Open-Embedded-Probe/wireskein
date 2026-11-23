@@ -2,7 +2,7 @@
 
 [English](protocols.md)
 
-WireSkein は UART、SPI、I2C を自分で復号します。その上に乗るプロトコル（機器の命令のフレーム、センサーの報告、ブートローダーのパケット、UART の組の上のテキストの命令とその応答など）は、WireSkein に手を入れずに分析に足せます。足すと、`wireskein analyze` がそのメッセージをバスの下に出し、試験はほかの検査と同じに確かめられます（§1〜§4）。クロックとデータ、または 1 本の線の上で、それ自体がバスであるプロトコルは、宣言の定義として足します（§5）。
+WireSkein は UART、SPI、I2C を自分で復号します。その上に乗るプロトコル（機器の命令のフレーム、センサーの報告、ブートローダーのパケット、UART の組の上のテキストの命令とその応答など）は、WireSkein に手を入れずに分析に足せます。足すと、`wireskein analyze` がそのメッセージをバスの下に出し、試験はほかの検査と同じに確かめられます（§1〜§4）。クロックとデータ、または 1 本の線の上で、それ自体がバスであるプロトコルは、拡張点ではありません。WireSkein 自身のそうしたプロトコルは、変わりうる分析のエンジンの一部です（§5）。
 
 ## 1. プロトコル
 
@@ -11,10 +11,10 @@ WireSkein は UART、SPI、I2C を自分で復号します。その上に乗る�
 | 属性 | 意味 |
 | --- | --- |
 | `name` | 出すときの名前。英数字と `_`。WireSkein の層の名前とは別のもの |
-| `over` | 乗るバス。`"uart"`、`"spi"`、`"i2c"`、`"uart_pair"`（2 本の UART、§3.1）、`"can"`、`"lin"`、`"dmx512"`、または自分の定義のプロトコルの名前（§3.2）のタプル |
+| `over` | 乗るバス。`"uart"`、`"spi"`、`"i2c"`、`"uart_pair"`（2 本の UART、§3.1）、`"can"`、`"lin"`、`"dmx512"` のタプル |
 | `decode(bus)` | 復号したバス 1 本を読み、`{"messages": [...], "checks_passed": n, "checks_failed": m}` を返す |
 
-`bus` は、分析が書き出す形のバスです（[分析の形式](analysis-format.ja.md) §4）: `roles`（役割ごとのピン）、`tick_hz`、その層。UART なら `bytes`（`{"s": [tick...], "hex": "..."}`）、`chars`（それぞれ `{"s", "value", "ok"}`）、`breaks`。SPI なら `transfers`（それぞれ `{"s", "e", <ピン>: 16 進}`）。I2C なら `transactions`。UART の組なら、両方の線の `messages`（§3.1）。CAN、LIN、定義なら、その `frames`（§3.2）。プロトコルは WireSkein の内部の型を見ないので、分析の形式が変わらない限り動き続けます。
+`bus` は、分析が書き出す形のバスです（[分析の形式](analysis-format.ja.md) §4）: `roles`（役割ごとのピン）、`tick_hz`、その層。UART なら `bytes`（`{"s": [tick...], "hex": "..."}`）、`chars`（それぞれ `{"s", "value", "ok"}`）、`breaks`。SPI なら `transfers`（それぞれ `{"s", "e", <ピン>: 16 進}`）。I2C なら `transactions`。UART の組なら、両方の線の `messages`（§3.1）。CAN と LIN なら、その `frames`（§3.2）。プロトコルは WireSkein の内部の型を見ないので、分析の形式が変わらない限り動き続けます。
 
 - **メッセージ**は、ただの JSON の値です。それぞれの最初の tick を `"s"` に入れると、読み手とビューアがそこを見つけられます。
 - **チェック**が証拠です: チェックサム、合う長さ、数えていく順番の番号。でたらめのバイトでは偶然にしか通らないチェックが、そのバスがこのプロトコルを運んでいることを言います。分析は、通った数が多く失敗が少ないほど、バスの確かさを上げ（Modbus RTU と同じ）、チェックが通ったときだけ、そのプロトコルをバスの最終の読みとして出します。チェックの無いプロトコルは何も出しません: 証拠が無ければ、どのバイトも何にでも読めるからです。
@@ -83,9 +83,9 @@ demo_link = "demo_link:PROTOCOL"
 
 その試験（`tests/test_demo_cmd.py`）は、読み手とは別の符号器で、やり取りを 2 本の線に乗せます。実機では、`examples/protocols/demo_cmd_p4.wireskein` が、OEP のプローブが 2 つの ESP-IDF の UART ドライバ（115200 8N1。ホストと機器がそれぞれ自分の線）で送ったもので、それぞれが送ったものは `demo_cmd_p4.truth.json` にあります。demo_cmd が無いと、分析は 2 本の UART を読むだけで、その上には何も出しません。あると、5 つのやり取りと、命令に当たる 4 つの応答を読みます。
 
-## 3.2 CAN、LIN、自分の定義のフレームの上: demo_telemetry
+## 3.2 CAN、LIN のフレームの上: demo_telemetry
 
-プロトコルは、分析がもう読んでいるフレームの上にも乗れます: `"can"`、`"lin"`、`"dmx512"`、または自分の定義のプロトコル（§5）の名前。そのとき `bus` は、そのプロトコルの `frames`（DMX512 は `packets`）を、分析の形式 §3.2 のとおりに持ちます: CAN は `{"s", "id", "ide", "dlc", "data": 16 進, "ack", "ok"}`、LIN は `{"s", "id", "data": 16 進, "ok"}`、定義はその欄。CANopen、J1939、OBD-II / UDS、LIN のノードの信号などは、ここに乗せます。
+プロトコルは、分析がもう読んでいるフレームの上にも乗れます: `"can"`、`"lin"`、`"dmx512"`。そのとき `bus` は、そのプロトコルの `frames`（DMX512 は `packets`）を、分析の形式 §3.2 のとおりに持ちます: CAN は `{"s", "id", "ide", "dlc", "data": 16 進, "ack", "ok"}`、LIN は `{"s", "id", "data": 16 進, "ok"}`。CANopen、J1939、OBD-II / UDS、LIN のノードの信号などは、ここに乗せます。
 
 `examples/protocols/demo_telemetry.py` は、このガイドのために作ったものです: どのノードも、自分の識別子のフレームで測った値を送り、データは `seq | 値... | check`、check は `(識別子 + その前のバイト) & 0xFF` と `0x5A` の排他的論理和です。1 つの `decode` が CAN も LIN も読みます（`over = ("can", "lin")`）。check が合うフレームはチェックが通ったもので、ノードの前の seq から続かない seq は見せます（`level: "warn"`）。メッセージは、demo_link が UART の下に出るのと同じく、CAN や LIN のバスの `result` の下に出ます。その試験（`tests/test_demo_telemetry.py`）は、自分の符号器でフレームを線に乗せます。実機では、`examples/protocols/demo_telemetry_p4_can.wireskein` と `_lin.wireskein` が、OEP のプローブが ESP-IDF の TWAI ドライバ（self-test、500 kbit/s）と UART ドライバ（19200 baud。break は 9/13 の速さの 0x00）で送ったもので、送ったものはそれぞれの `.truth.json` にあります。
 
@@ -99,62 +99,15 @@ with rec.section(2, "ping", expect=[protocol("demo_link", "uart", {"data": "PA2"
     ...
 ```
 
-- `bus` は `"uart"`、`"spi"`、`"i2c"`、`"uart_pair"`、`"can"`、`"lin"`、定義の名前、`roles` は役割ごとのピン（UART、CAN、LIN は `{"data": ...}`、`{"clk", "mosi", "miso", "cs"}`、`{"scl", "sda"}`、`{"a": TX, "b": RX}`）です。組では、組の点数にかかわらず 2 本を一緒に読みます: `protocol("demo_cmd", "uart_pair", {"a": "PA2", "b": "PA3"}, baud=115200, messages=[{"verb": "PING", "status": "OK"}])`。
+- `bus` は `"uart"`、`"spi"`、`"i2c"`、`"uart_pair"`、`"can"`、`"lin"`、`roles` は役割ごとのピン（UART、CAN、LIN は `{"data": ...}`、`{"clk", "mosi", "miso", "cs"}`、`{"scl", "sda"}`、`{"a": TX, "b": RX}`）です。組では、組の点数にかかわらず 2 本を一緒に読みます: `protocol("demo_cmd", "uart_pair", {"a": "PA2", "b": "PA3"}, baud=115200, messages=[{"verb": "PING", "status": "OK"}])`。
 - `messages` は順に比べ、それぞれ書いたキーだけを比べます（`"s"` など書かないキーは比べません）。`messages` が無ければ、メッセージが 1 つ以上あること。
 - チェックの失敗は `checks_failed_max`（既定 0）まで。
 - これで言えないきまりは、自分の検査（[ガイド](capture-test-guide.ja.md) §4.10）か、試験の判定（`rec.result`、ガイド §3.3）にします。
 
-## 5. 線そのものの上のプロトコル: 定義
+## 5. 機器パックとマーカーの方言: 定義のディレクトリ
 
-自分がバスであるプロトコル（クロックとデータの上、または 1 本の NRZ の線の上の、独自のフレーム）は、WireSkein の I²C、SPI、SWD、CAN と同じく TOML で宣言的に書き（[設計](design.ja.md) §3.2）、定義のディレクトリとして外から足します。
+バスの上に乗るものは、コードを書かずに表でも名付けられます: I²C や SPI の機器のレジスタと命令（機器パック）と、自分の試験の記録のマーカーの行（マーカーの方言）です。どちらも分析が書き出すものを読むので、バスの見つけ方に依りません。
 
-- **定義のディレクトリ**は、WireSkein の `decl/` と同じ形です: 直下の `*.toml` がプロトコル、`devices/<バス>/...` がデバイスの定義、`markers/*.toml` がマーカーの方言。どれも無くてかまいません。
-- **足し方:** スクリプトや試験では `wireskein.plugins.add_definitions(パス)`、パッケージからは entry point の `wireskein.definitions`（`NAME = "module"`: その module のディレクトリに定義がある。またはパスを返す callable）。
-- **ビットの層**は WireSkein が持つものを、定義の `input` で名前で選びます: `"nrzbits"`（1 本の線。ビットの時間を線から読み、10 ビット以上の待機の後をフレームとする）、または `"frames.select"`、`"frames.gap"`、`"frames.startstop"`（クロックとデータ。選択の線、隙間、START / STOP で区切る）。独自の線の符号（マンチェスターなど）は、WireSkein の中にビットの層が要るので、定義では書けません。
-- **クロックの範囲**（`[plugin]` の `clock_hz = [下限, 上限]`。クロックのある入力で）: クロックの速さが決まった範囲に収まるプロトコル（PS/2 の 10〜16.7 kHz）は、範囲から大きく外れたクロックでは試しません。
-- **分析**は、それを独自のプロトコルとして出します。フレームは `result.frames` の下（`format = "hex"` の欄はバイトの 16 進）で、チェック（決まった値、CRC）がその証拠です。
-- **試験**は、`protocol(NAME, None, {役割: ピン}, messages=[...])` でフレームを確かめます（`bus` が None: そのプロトコル自身がバス）。
-- WireSkein のプロトコルの名前は断ります。
-- **コアが測る証拠**（`[score]` の `terms = [...]`。どれも名前で選び、プロトコルの点数に掛けます。自分のコードは要りません）: `select_boundary`（選択線の窓が転送を区切り、そのために使われている）、`degenerate`（どのデータのピンも 1 つの値ばかり）、`static_data`（どの語もすべて 0 かすべて 1: クロックが動くあいだ止まった線）、`single_frame_penalty`（区切りのあいだのフレームが 1 つ: 半分に）、`startstop_clearance` と `bus_free`（I²C の START / STOP と、バスの休み）、`data_once_a_bit`（1 ビットに 2 回ほど変わるデータの線はクロック）、`max_clock_hz`（`[score]` の `max_clock_hz`、既定は 5 MHz を超える: そういうバスはない）。使い方は、`decl/` にある WireSkein 自身の定義が見本です。
-- **区切り直し**（`[frame]` の `reframe = 名前`）: フレームを、その名前のコアの決まりで切り直します。今あるのは `"rvswd_stop"`（RVSWD の START と STOP で区切る。記録がそれを隠すときは、止まりの間隔で切る）だけです。
-
-### 5.1 見本: demo_wire
-
-`examples/definitions/demo_wire.toml` は、このガイドのために作った 1 本線のプロトコルです。
-
-```
-待機 1 | 開始 0 | addr 7 | cmd 4 | len 4 | data 8 x len | crc8 | 終わり 1      （最上位ビットから）
-```
-
-- CRC-8（多項式 0x07、初期値 0）は、アドレスからデータまでに取ります。
-- 送り手は、同じ値が 5 ビット続いたら反対の値を 1 ビット入れます（ビットスタッフィング）。開始ビットから CRC の終わりまでで、CAN と同じく、どのデータでも受け手がビットの時間を保てるようにするためです。
-- フレームとフレームのあいだは、10 ビット分以上の待機です。
-
-```toml
-format = "wireskein-protocol/1"
-
-[plugin]
-name = "demo_wire"
-input = "nrzbits"
-
-[roles]
-data = "data"
-
-[[sequence]]
-order = "msb"
-stuffing = { after = 5, from = "sof", to = "crc" }
-fields = [
-  { name = "sof",  width = 1, expect = 0, hide = true },
-  { name = "addr", width = 7 },
-  { name = "cmd",  width = 4 },
-  { name = "len",  width = 4 },
-  { name = "data", width = "8 * len", format = "hex" },
-  { name = "crc",  width = 8, hide = true },
-  { name = "eof",  width = 1, expect = 1, hide = true },
-]
-checks = [
-  { kind = "crc", field = "crc", from = "addr", to = "data", poly = 0x07, width = 8 },
-]
-```
-
-その試験は、読む定義とは別に、自分の符号器で線を 1 ビットずつ書きます（`tests/test_protocols.py`）。
+- **定義のディレクトリ**は、`devices/<バス>/...` の機器パック（[機器パック](../src/wireskein/decl/devices/README.md)）と、`markers/*.toml` のマーカーの方言（[マーカー](markers.ja.md) §4）を持ちます。どちらも無くてかまいません。
+- **足し方:** スクリプトや試験では `wireskein.plugins.add_definitions(パス)`、コマンドでは `wireskein --definitions ディレクトリ`、パッケージからは entry point の `wireskein.definitions`（`NAME = "module"`: その module のディレクトリに定義がある。またはパスを返す callable）。
+- **線そのものの上のプロトコル**（クロックとデータ、または 1 本の線の上の独自の枠）は、ここには入りません: WireSkein 自身のそうしたプロトコル（`decl/*.toml`: I²C、SPI、SWD、CAN など）は、分析のエンジンの一部で、そのエンジンの層に合わせて書いてあり、エンジンとともに変わりえます。直下にプロトコルの表があるディレクトリは断ります。WireSkein が読まないバスは、提案してください。

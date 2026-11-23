@@ -10,9 +10,9 @@ WireSkein は、キャプチャを読み手に要るもの（載っているバ�
 | --- | --- | --- |
 | UART、SPI、I2C に乗るプロトコル（命令のフレーム、報告、パケット）を分析で読む | Python のプロトコルのオブジェクト（`wireskein.plugins.register_protocol`） | [独自のプロトコル](protocols.ja.md) §1〜§4 |
 | UART の 1 本のテキストの命令と、もう 1 本の応答（AT コマンド、シェル） | `"uart_pair"` に乗るプロトコルのオブジェクト | [独自のプロトコル](protocols.ja.md) §3.1 |
-| CAN や LIN のフレームの上の層（CANopen、J1939、OBD-II / UDS、ノードの信号）、または自分の定義のプロトコルの上 | `"can"`、`"lin"`、定義の名前に乗るプロトコルのオブジェクト | [独自のプロトコル](protocols.ja.md) §3.2 |
+| CAN や LIN のフレームの上の層（CANopen、J1939、OBD-II / UDS、ノードの信号） | `"can"` か `"lin"` に乗るプロトコルのオブジェクト | [独自のプロトコル](protocols.ja.md) §3.2 |
 | WireSkein が読まないファイルの形式のキャプチャ（ほかのアナライザの書き出し、研究室の独自のログ） | ファイルの形式（`wireskein.plugins.register_format`） | §2、`examples/formats/saleae_csv.py` |
-| それ自体がバスのプロトコル（クロックとデータ、または 1 本の NRZ の線の上の独自のフレーム） | 定義のディレクトリの TOML の定義 | [独自のプロトコル](protocols.ja.md) §5 |
+| それ自体がバスのプロトコル（クロックとデータ、または 1 本の NRZ の線の上の独自のフレーム） | 拡張点ではない: WireSkein 自身のものは、変わりうる分析のエンジンの一部 | 提案する（[独自のプロトコル](protocols.ja.md) §5） |
 | I2C や SPI の機器のレジスタや命令に名前を付ける | 定義のディレクトリの `devices/` のデバイスの定義 | [デバイスの定義](../src/wireskein/decl/devices/README.ja.md) |
 | 自分の試験のログのマーカーの行を区間として読む | 定義のディレクトリの `markers/` のマーカーの方言 | [マーカー](markers.ja.md) §4 |
 | どの検査も持たないきまりを試験に使い、`wireskein verify`、pytest、ビューアで同じに判定する | 検査の種類（`wireskein.plugins.register_check`） | [ガイド](capture-test-guide.ja.md) §4.10 |
@@ -20,7 +20,7 @@ WireSkein は、キャプチャを読み手に要るもの（載っているバ�
 | 判定ではなく、見るためのもの | Python でキャプチャを読み（`wireskein.capture` と、`wireskein.decode` の `analyze`、`states`）、見つけたものをファイルに入れる（§3） | [ファイル形式](wireskein-format.ja.md) §5 |
 | WireSkein が読まない線の符号や物理層（マンチェスターなど） | 拡張の口ではありません。WireSkein の中にビットの層が要ります | 提案してください |
 
-方法は積み重なります: 定義が分析にプロトコルを与え、プロトコルのオブジェクトがその上に乗るものを読み、検査が試験でそれを判定し、そのメッセージと注意は、ファイルの注釈と印になります。
+方法は積み重なります: 分析がバスを見つけ、プロトコルのオブジェクト、機器パック、マーカーの方言がその上に乗るものを読み、検査が試験でそれを判定し、そのメッセージと注意は、ファイルの注釈と印になります。
 
 ## 2. どの追加も守ること
 
@@ -34,7 +34,7 @@ WireSkein は、キャプチャを読み手に要るもの（載っているバ�
 | entry point の group | 足すもの | 値 |
 | --- | --- | --- |
 | `wireskein.protocols` | UART、SPI、I2C に乗るプロトコル | `name`、`over`、`decode` を持つオブジェクト |
-| `wireskein.definitions` | 定義のディレクトリ（プロトコル、デバイスの定義、マーカーの方言） | それを持つディレクトリの module、またはそのパスを返す callable |
+| `wireskein.definitions` | 定義のディレクトリ（デバイスの定義、マーカーの方言） | それを持つディレクトリの module、またはそのパスを返す callable |
 | `wireskein.checks` | 検査の種類 | 検査の関数、または `.check`（と `.notices`）を持つオブジェクト |
 | `wireskein.sources` | `wireskein capture` の取得元 | `capture(target, request)` を持つ module かオブジェクト |
 | `wireskein.formats` | キャプチャを読むところ（analyze、decode、states、convert、ビューア）すべてで読むファイルの形式 | `name`、`sniff(head, path)`、`wireskein.capture.Capture` を返す `read(path)` を持つオブジェクト |
@@ -71,7 +71,6 @@ acme = "acme_wireskein.definitions"
 | 1 本の線のテキストの命令と、もう 1 本の応答（AT コマンド、シェル） | `"uart_pair"` に乗るプロトコル。両方の線の `messages` を読む | 命令に当たる応答 | `demo_cmd` |
 | CAN や LIN のフレームの中の信号 | `"can"` / `"lin"` に乗るプロトコル。`frames` を読む | チェックのバイト、カウンタ | `demo_telemetry` |
 | I2C や SPI のチップのレジスタ | デバイスの定義 | 正しく読める識別のレジスタ | [デバイスの定義](../src/wireskein/decl/devices/README.ja.md) |
-| 1 本の線、またはクロックとデータの上の独自のフレーム | TOML の定義 | 決まった値の欄、CRC | `demo_wire` |
 | 試験が使う、どの線にもあてはまるきまり（落ち着く線、出来事の順番） | 検査の種類 | 測った値、その tick の注意 | `demo_settle` |
 
 自分のチェックを持たないプロトコル（1 本の線のただのテキストなど）は、分析には何も出ません。チェックを持たせるか（合う応答、数えていく欄、偶然には起きないほど厳しい形）、試験の中で行を読んで（`wireskein.verify.sections`、分析の `lines`）そこで判定します。
@@ -82,7 +81,6 @@ acme = "acme_wireskein.definitions"
 | --- | --- |
 | `examples/protocols/demo_link.py` | UART と SPI に乗るプロトコル: フレームの区切り、読み直し、証拠としての CRC-8 |
 | `examples/protocols/demo_link_p4.wireskein` | OEP のプローブが ESP-IDF の UART ドライバで出して取り込んだ demo_link と、正解としての送ったもの |
-| `examples/definitions/demo_wire.toml` | 1 本の NRZ の線の上のプロトコル: ビットスタッフィング、変わる長さ、CRC-8 |
 | `tests/test_protocols.py` | 両方の見本を、別に作った信号で確かめる試験。プロトコルの検査、注釈、印 |
 | `examples/protocols/demo_cmd.py` | UART の組の上のテキストの命令と応答: 証拠としての組、出来事、ビューアのための level |
 | `examples/protocols/demo_cmd_p4.wireskein` | OEP のプローブが 2 つの ESP-IDF の UART ドライバで出して取り込んだ demo_cmd と、正解としてのそれぞれが送ったもの |

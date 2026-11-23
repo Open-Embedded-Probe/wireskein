@@ -5,15 +5,14 @@ What each addition is:
 
 - a protocol (register_protocol): an object with
       name     its name ("acme_link")
-      over     the buses it rides on: a tuple of "uart", "spi", "i2c", "uart_pair", "can", "lin", "dmx512", or the
-               name of a protocol a definitions directory adds (it gets that one's frames)
+      over     the buses it rides on: a tuple of "uart", "spi", "i2c", "uart_pair", "can", "lin", "dmx512"
       decode(bus) -> {"messages": [...], "checks_passed": int, "checks_failed": int}
   `bus` is the bus as the analysis exports it (wireskein-analysis/1, docs/analysis-format.md §4). The checks its
   messages pass and fail (a checksum, a length, a sequence number) are the evidence: the analysis gives the bus more
   confidence by them, as it does for Modbus RTU; with no check passed it shows nothing (docs/protocols.md §1-§4).
-- a definitions directory (add_definitions): laid out as WireSkein's own decl/: *.toml at its top are protocols on
-  a bit layer WireSkein has (a clock and data, or one NRZ line), devices/ device packs, markers/ marker dialects
-  (docs/protocols.md §5).
+- a definitions directory (add_definitions): devices/ device packs, markers/ marker dialects (docs/protocols.md §5).
+  A protocol on the wire itself is not one: WireSkein's own (decl/*.toml) are part of its analysis engine, which may
+  change, and a directory with protocol tables at its top is refused.
 - a file format (register_format): an object with
       name     its name ("saleae_csv")
       sniff(head: bytes, path) -> bool    whether the file is one of it, from its first 4096 bytes (and its name)
@@ -93,8 +92,7 @@ def register_protocol(protocol) -> None:
         raise ValueError(f"{name!r} is a protocol or layer of WireSkein's own")
     over = tuple(getattr(protocol, "over", ()))
     if not over or not all(isinstance(b, str) and NAME.fullmatch(b) for b in over):
-        raise ValueError(f"{name}: over must name buses ({', '.join(BUSES)}, or a protocol defined in a definitions "
-                         f"directory), not {over!r}")
+        raise ValueError(f"{name}: over must name buses ({', '.join(BUSES)}), not {over!r}")
     if not callable(getattr(protocol, "decode", None)):
         raise ValueError(f"{name}: decode(bus) is missing")
     _PROTOCOLS[name] = protocol
@@ -111,10 +109,14 @@ def protocols() -> dict[str, object]:
 
 
 def add_definitions(path) -> None:
-    """Add a directory of declarative definitions (laid out as WireSkein's own decl/: the module's docstring)."""
+    """Add a directory of device packs (devices/) and marker dialects (markers/): the module's docstring."""
     p = Path(path).resolve()
     if not p.is_dir():
         raise ValueError(f"{path}: not a directory")
+    tables = sorted(x.name for x in p.glob("*.toml"))
+    if tables:
+        raise ValueError(f"{path}: protocol tables at its top ({', '.join(tables)}): a protocol on the wire itself is "
+                         f"part of WireSkein's analysis engine, not an extension point (docs/protocols.md §5)")
     if p not in _DIRS:
         _DIRS.append(p)
 

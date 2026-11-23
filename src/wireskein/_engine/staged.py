@@ -1141,14 +1141,16 @@ def i2c_device_node(parent: Node) -> Node | None:
                 parent, layer_score=score, total=score)
 
 
+PROTOCOL_TABLES: list = []    # directories of protocol tables this engine reads besides decl/ (engine-internal: tests)
+
+
 def _external_plugins() -> list:
-    """Declarative protocols from definition directories added from outside (wireskein.plugins.add_definitions,
-    the entry point group wireskein.definitions); a name of WireSkein's own is refused."""
-    from .. import plugins as P
+    """Declarative protocols from directories of protocol tables given to this engine (PROTOCOL_TABLES: an engine-
+    internal hook, no extension point - docs/protocols.md §5); a name of WireSkein's own is refused."""
     from .declarative import load_dir
     out = []
     own = {p.name for p in PLUGINS}
-    for d in P.definitions():
+    for d in PROTOCOL_TABLES:
         for p in load_dir(d):
             if p.name in own:
                 raise ValueError(f"{d / (p.name + '.toml')}: {p.name!r} is a protocol of WireSkein's own")

@@ -10,9 +10,9 @@ WireSkein turns a capture into what a reader needs - the buses on it, their mess
 | --- | --- | --- |
 | A protocol that rides on UART, SPI or I2C (command frames, reports, packets) read in the analysis | A protocol object in Python (`wireskein.plugins.register_protocol`) | [Protocols](protocols.md) §1-§4 |
 | Text commands on one UART line and their answers on another (AT commands, a shell) | A protocol object on `"uart_pair"` | [Protocols](protocols.md) §3.1 |
-| A higher layer on CAN or LIN frames (CANopen, J1939, OBD-II / UDS, a node's signals), or on a protocol of your own definition | A protocol object on `"can"`, `"lin"` or the definition's name | [Protocols](protocols.md) §3.2 |
+| A higher layer on CAN or LIN frames (CANopen, J1939, OBD-II / UDS, a node's signals) | A protocol object on `"can"` or `"lin"` | [Protocols](protocols.md) §3.2 |
 | Captures in a file format WireSkein does not read (another analyzer's export, a lab's own log) | A file format (`wireskein.plugins.register_format`) | §2, `examples/formats/saleae_csv.py` |
-| A protocol that is its own bus: its own framing on a clock and data, or on one NRZ line | A TOML definition in a definitions directory | [Protocols](protocols.md) §5 |
+| A protocol that is its own bus: its own framing on a clock and data, or on one NRZ line | Not an extension point: WireSkein's own are part of its analysis engine, which may change | Propose it ([Protocols](protocols.md) §5) |
 | The registers and commands of a device on I2C or SPI named | A device pack under `devices/` of a definitions directory | [Device packs](../src/wireskein/decl/devices/README.md) |
 | The marker lines of your own test logs read as segments | A marker dialect under `markers/` of a definitions directory | [Markers](markers.md) §4 |
 | A rule tests apply that no check has, judged alike by `wireskein verify`, pytest and the viewer | A check kind (`wireskein.plugins.register_check`) | [Guide](capture-test-guide.md) §4.10 |
@@ -20,7 +20,7 @@ WireSkein turns a capture into what a reader needs - the buses on it, their mess
 | Something to look at, not to judge | Read the capture in Python (`wireskein.capture`, and `wireskein.decode`: `analyze`, `states`) and put what you find in the file (§3) | [File format](wireskein-format.md) §5 |
 | A line coding or a physical layer WireSkein does not read (Manchester, say) | Not an extension point: it needs a bit layer in WireSkein itself | Propose it |
 
-The ways stack: a definition gives the analysis a protocol, a protocol object reads what rides on it, a check judges it in a test, and its messages and notices end up as annotations and markers in the file.
+The ways stack: the analysis finds the buses, a protocol object, a device pack or a marker dialect reads what rides on them, a check judges it in a test, and its messages and notices end up as annotations and markers in the file.
 
 ## 2. What every addition follows
 
@@ -34,7 +34,7 @@ The ways stack: a definition gives the analysis a protocol, a protocol object re
 | Entry point group | Adds | Value |
 | --- | --- | --- |
 | `wireskein.protocols` | A protocol on UART, SPI or I2C | An object with `name`, `over`, `decode` |
-| `wireskein.definitions` | A definitions directory (protocols, device packs, marker dialects) | A module whose directory holds them, or a callable returning its path |
+| `wireskein.definitions` | A definitions directory (device packs, marker dialects) | A module whose directory holds them, or a callable returning its path |
 | `wireskein.checks` | A check kind | A check function, or an object with `.check` (and `.notices`) |
 | `wireskein.sources` | A capture source for `wireskein capture` | A module or object with `capture(target, request)` |
 | `wireskein.formats` | A file format read wherever a capture is (analyze, decode, states, convert, the viewer) | An object with `name`, `sniff(head, path)`, `read(path)` returning a `wireskein.capture.Capture` |
@@ -71,7 +71,6 @@ acme = "acme_wireskein.definitions"
 | Text commands on one line and answers on the other (AT commands, a shell) | A protocol on `"uart_pair"`, reading both lines' `messages` | An answer that belongs to its command | `demo_cmd` |
 | Signals in CAN or LIN frames | A protocol on `"can"` / `"lin"`, reading `frames` | A check byte, a counter | `demo_telemetry` |
 | Registers of a chip on I2C or SPI | A device pack | An identity register that reads right | [Device packs](../src/wireskein/decl/devices/README.md) |
-| Its own framing on one line or a clock and data | A TOML definition | Expected fields, a CRC | `demo_wire` |
 | A rule on any line a test applies (a line that settles, an order of events) | A check kind | Measured values, notices at their ticks | `demo_settle` |
 
 A protocol with no check of its own (plain text on one line, say) shows nothing in the analysis: give it one (an
@@ -84,7 +83,6 @@ in a test (`wireskein.verify.sections`, the analysis's `lines`) and judge them t
 | --- | --- |
 | `examples/protocols/demo_link.py` | A protocol on UART and SPI: framing, resynchronizing, a CRC-8 as evidence |
 | `examples/protocols/demo_link_p4.wireskein` | demo_link sent by an OEP probe's ESP-IDF UART driver and captured, with what it sent as the truth |
-| `examples/definitions/demo_wire.toml` | A protocol on one NRZ line: bit stuffing, a variable length, a CRC-8 |
 | `tests/test_protocols.py` | Both examples tested on signals made apart from them, the protocol check, annotations and markers |
 | `examples/protocols/demo_cmd.py` | Text commands and answers on a UART pair: the pairing as the evidence, events, levels for the viewer |
 | `examples/protocols/demo_cmd_p4.wireskein` | demo_cmd sent by an OEP probe's two ESP-IDF UART drivers and captured, with what each sent as the truth |

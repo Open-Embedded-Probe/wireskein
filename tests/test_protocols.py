@@ -107,16 +107,23 @@ def test_a_test_checks_the_messages_of_its_protocol(tmp_path, demo_link):
     assert "message #1: want {'seq': 2, 'cmd': 18}" in r["reason"], r["reason"]
 
 
-# ---- a protocol defined declaratively, added from outside: examples/definitions/demo_wire.toml ----
+# ---- a protocol table the current engine reads through its internal hook (no extension point: docs/protocols.md
+# §5): tests/data/protocol_tables/demo_wire.toml ----
 
-DEFS = Path(__file__).parents[1] / "examples/definitions"
+DEFS = Path(__file__).parent / "data/protocol_tables"
 
 
 @pytest.fixture
 def demo_wire():
-    plugins.add_definitions(DEFS)
+    from wireskein._engine import staged
+    staged.PROTOCOL_TABLES.append(DEFS)
     yield
-    plugins.remove_definitions(DEFS)
+    staged.PROTOCOL_TABLES.remove(DEFS)
+
+
+def test_a_definitions_directory_with_protocol_tables_is_refused():
+    with pytest.raises(ValueError, match="not an extension point"):
+        plugins.add_definitions(DEFS)
 
 
 def wire_bits(addr: int, cmd: int, data: bytes) -> list[int]:
