@@ -11,7 +11,8 @@ from wsbench import algorithm
                      "synth": {"name": "synth"}, "synth_gated": {"name": "synth_gated"},
                      "nulled": {"name": "nulled"}, "open": {"name": "open"},
                      "views_upper": {"name": "views_upper"},
-                     **{f"{k}_open": {"name": f"{k}_open"} for k in ("light", "declarative", "synth", "learned")}})
+                     **{f"{k}_open": {"name": f"{k}_open"} for k in ("light", "declarative", "synth", "learned")},
+                     "cascade": {"name": "cascade"}})
 def engine(cap, name):
     import engines
     return engines.ENGINES[name](cap)

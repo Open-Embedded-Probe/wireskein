@@ -17,6 +17,7 @@ engine is (bench/algos/e2e/engines.py registers them as trials).
 - nulled:   the views engine's candidates, each fit less the same reader's on a surrogate that keeps the lines'
             own statistics and breaks the protocol's structure (an open-world test, nulled.py)
 - <name>_open: an engine's claims with the shapes' open world after it (shapes.opened)
+- cascade:  light_open first, WireSkein's own engine where it leaves an active line without a confirmed claim
 - views_upper: the views engine's claims through WireSkein's upper stage (wireskein._upper), as the main engine's
 - open:     the views engine with shapes that explain a line without naming a protocol (a pulse code) among the
             candidates: they take lines and are not shown (shapes.py)
@@ -176,6 +177,21 @@ def _opened(name):
     return run
 
 
+def cascade(cap, first="light_open"):
+    """A light engine first, WireSkein's own where it is not sure: its claims are taken when every active line (4
+    changes or more) is under a confirmed claim of it, else the main engine reads the capture. (The cost of the light
+    engine is paid every time; the main engine's only where the light one leaves a line unexplained.)"""
+    claims = ENGINES[first](cap)
+    active = {c.name for c in cap.channels if len(c.edges) >= 4}
+    sure = {x for c in claims if c["verdict"] == "confirmed" for x in c["roles"].values()}
+    if active and active <= sure:
+        for c in claims:
+            c.setdefault("params", {})["cascade"] = first
+        return claims
+    from wireskein import decode
+    return decode.export(decode.analyze(cap), cap, mode="all", alternatives=True)["claims"]
+
+
 def _views_upper(cap):
     return with_upper(views(cap), cap)
 
@@ -187,5 +203,6 @@ def _synth_gated(cap):
 
 ENGINES = {"light": light, "views": views, "declarative": _declarative, "learned": _learned, "synth": _synth,
            "synth_gated": _synth_gated,
-           "nulled": _nulled, "open": _open, "views_upper": _views_upper, "open2": _open2}
+           "nulled": _nulled, "open": _open, "views_upper": _views_upper, "open2": _open2,
+           "cascade": cascade}
 ENGINES.update({f"{k}_open": _opened(k) for k in ("light", "views", "declarative", "synth", "learned")})
