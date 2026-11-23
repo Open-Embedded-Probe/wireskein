@@ -25,14 +25,19 @@ What each addition is:
   ...}). It may put notices in measured["notices"] ([{"kind", "tick", ...}], ticks of the window); `notices` names
   their kinds and meanings. logic: it reads logic levels (an analog pin then needs threshold=); every_edge: it needs
   every edge (a line kept as changes that hide some is unchecked). (docs/capture-test-guide.md §4.10)
+- an engine (register_engine): a name, engine(view, hints) -> claims in the analysis format (protocol, roles,
+  verdict, score, margin, params, layers), and the protocols it reads (each owner.name). It reads protocols WireSkein
+  does not, beside WireSkein's own engine: its claims join on the lines that engine left unexplained (no claim, or
+  only unknown-sync / ambiguous ones), first where a hint names their protocol (wireskein._engines); protocols of
+  others ride on them (over = the protocol's name). `view` is the part's changes view (wireskein.capture.Part.view).
 - a capture source (register_source): a scheme ("acme") and an object with capture(target: str,
   request: wireskein.sources.Request) -> wireskein.sources.Result; `wireskein capture --source acme:TARGET` and
   sources.run("acme:TARGET", ...) use it.
 
 Installed packages declare them in entry point groups, read once when first needed: "wireskein.protocols",
 "wireskein.definitions" (a module whose directory holds them, or a callable returning a path), "wireskein.formats",
-"wireskein.checks" (a check function, or an object with .check and optionally .notices, .logic, .every_edge) and
-"wireskein.sources". The entry point's name is the addition's name: an object whose own `name` differs is refused.
+"wireskein.checks" (a check function, or an object with .check and optionally .notices, .logic, .every_edge),
+"wireskein.sources" and "wireskein.engines" (an object with .engine and .protocols). The entry point's name is the addition's name: an object whose own `name` differs is refused.
 
 The environment adds them too, where a process starts without the caller's registrations (`wireskein --plugin MODULE
 --definitions DIR ...` sets it, so a split read's worker processes have them): WIRESKEIN_PLUGINS, modules to import or .py
@@ -50,9 +55,10 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-__all__ = ["add_definitions", "checks", "definitions", "formats", "protocols", "register_check", "register_format",
-           "register_protocol", "register_source", "remove_definitions", "sources", "unregister_check",
-           "unregister_format", "unregister_protocol", "unregister_source"]
+__all__ = ["add_definitions", "buses", "checks", "definitions", "engines", "formats", "protocols", "register_check",
+           "register_engine", "register_format", "register_protocol", "register_source", "registry",
+           "remove_definitions", "sources", "unregister_check", "unregister_engine", "unregister_format",
+           "unregister_protocol", "unregister_source"]
 
 NAME = re.compile(r"[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*")     # an addition's name: owner.name (B13)
 SCHEME = re.compile(r"[A-Za-z][A-Za-z0-9_]*")              # a source's: a URI scheme
@@ -61,6 +67,7 @@ REGISTRY = Path(__file__).with_name("registry.toml")
 _PROTOCOLS: dict[str, object] = {}
 _FORMATS: dict[str, object] = {}
 _SOURCES: dict[str, object] = {}
+_ENGINES: dict[str, tuple] = {}
 _CHECKS: set[str] = set()
 _DIRS: list[Path] = []
 _LOADED: set = set()
@@ -222,6 +229,31 @@ def sources() -> dict[str, object]:
     return dict(_SOURCES)
 
 
+# --- engines ----------------------------------------------------------------------------------------------------
+
+def register_engine(name: str, engine, protocols) -> None:
+    """Add an engine that reads protocols of its own beside WireSkein's (the module's docstring): name and each
+    protocol owner.name; engine(view, hints) -> claims in the analysis format, each of one of these protocols."""
+    _name(name, "engine")
+    protocols = [_name(p, "protocol") for p in (protocols or [])]
+    if not protocols:
+        raise ValueError(f"{name}: an engine reads one protocol or more")
+    if not callable(engine):
+        raise ValueError(f"{name}: the engine is not callable")
+    _ENGINES[name] = (engine, protocols)
+
+
+def unregister_engine(name: str) -> None:
+    _ENGINES.pop(name, None)
+
+
+def engines() -> dict[str, tuple]:
+    """The engines added: name -> (engine, protocols); by register_engine and installed packages
+    ("wireskein.engines": an object with .engine and .protocols)."""
+    _load()
+    return dict(_ENGINES)
+
+
 # --- entry points -----------------------------------------------------------------------------------------------
 
 def _named(ep, obj, attr: str = "name"):
@@ -266,7 +298,7 @@ def _load() -> None:
         _LOADED.add("environment")
         load_environment()
     for group in ("wireskein.definitions", "wireskein.protocols", "wireskein.formats", "wireskein.checks",
-                  "wireskein.sources"):
+                  "wireskein.sources", "wireskein.engines"):
         if group in _LOADED:
             continue
         _LOADED.add(group)
@@ -282,6 +314,8 @@ def _load() -> None:
             elif group == "wireskein.checks":
                 register_check(ep.name, getattr(obj, "check", obj), notices=getattr(obj, "notices", None),
                                logic=getattr(obj, "logic", True), every_edge=getattr(obj, "every_edge", True))
+            elif group == "wireskein.engines":
+                register_engine(ep.name, getattr(obj, "engine", obj), getattr(obj, "protocols", ()))
             else:
                 register_source(ep.name, obj)
 

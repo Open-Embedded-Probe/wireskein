@@ -35,6 +35,7 @@ import numpy as np
 
 from . import __version__, _fileformat as fileformat
 from ._engine import export as _exp
+from . import _engines
 from ._engine import fileio, staged, timing
 from ._engine import kernels as K
 from ._engine.export import dumps
@@ -138,7 +139,7 @@ def analyze(cap, hints: dict | None = None):
         print(f"wireskein: analysing {n:,} changes whole (its time and memory grow with them): "
               f"wireskein.decode.analyze_file(path) reads a long capture in pieces (docs/long-captures.md)",
               file=sys.stderr)
-    return staged.analyze(v, hints)
+    return _engines.analyze(v, hints)
 
 
 WHOLE_EDGES = 2_000_000    # analyze on a part this long or longer: the note that analyze_file reads in pieces
@@ -177,7 +178,10 @@ def annotations_file(path: str | Path, hints: dict | None = None, part: int | No
 def export(res, cap, mode: str = "final", select: list[str] | None = None, alternatives: bool = False,
            window: tuple[int, int] | None = None, depth: str = "protocol") -> dict:
     """analyze's result as a JSON-ready dict, as `wireskein analyze` prints it (cap: what was analysed)."""
-    return _exp.export(res, _load(cap), mode, select, alternatives, window, depth)
+    ex = _exp.export(res, _load(cap), mode, select, alternatives, window, depth)
+    if getattr(res, "side", None):
+        ex["claims"] = _engines.merge(ex["claims"], res.side, getattr(res, "hints", None))
+    return ex
 
 
 def _spec(spec: dict) -> dict:
@@ -746,7 +750,7 @@ def _analyze_split(source, hints, opts, depth: str, head: dict, items=None) -> d
     tried = [(p0, c0)]
     while True:
         p_, c_ = tried[-1]
-        ex = export(staged.analyze(c_, hints), c_, "final", None, False, None, depth)
+        ex = export(_engines.analyze(c_, hints), c_, "final", None, False, None, depth)
         keep = [c for c in ex["claims"] if c.get("verdict") in ("confirmed", "likely")
                 and c["protocol"] != "sync_unknown"]
         if keep or len(tried) >= int(opts.get("roles_from", 3)):
@@ -1129,7 +1133,7 @@ def _piece(pw, spec: dict, head: dict, reanalyze: bool = False, edges: dict | No
                            p.s - p.a, p.e - p.a))
             _shares(r)
     if reanalyze and not whole and p.edges and _sampled(p, span) and _doubt_why(p, o):
-        ex = export(staged.analyze(wcap, None), wcap, "final", None, False, None, "protocol")
+        ex = export(_engines.analyze(wcap, None), wcap, "final", None, False, None, "protocol")
         o["_reanalysis"] = [{"protocol": c["protocol"], "roles": c["roles"], "verdict": c["verdict"],
                              "score": c["score"], **({"params": c["params"]} if c.get("params") else {})}
                             for c in ex["claims"] if c.get("verdict") in ("confirmed", "likely")]
@@ -1377,7 +1381,7 @@ def analyze_file(path: str | Path, hints: dict | None = None, mode: str = "final
                 got = _analyze_split(src, hints, opts, depth, src.head, items)
                 if got is None:                     # short: as always
                     cap = only(fileio.load(path, k) if kind == "wireskein" else _load(path), pins)
-                    res = staged.analyze(cap, hints)
+                    res = _engines.analyze(cap, hints)
                     ex = export(res, cap, mode if not select else "select", select, alternatives, None, depth)
                     _note_undersampled(ex.get("claims", []), cap, res)
                     got = {"claims": ex["claims"], **{x: ex[x] for x in ("relations",) if x in ex}}
@@ -1410,7 +1414,7 @@ def analyze_file(path: str | Path, hints: dict | None = None, mode: str = "final
             if got is not None:                    # long: roles from the first piece, then every piece read with them
                 doc["parts"].append({**_part_head(heads[k], firsts[k], cap.n_samples, spans[k]), **got})
                 continue
-        res = staged.analyze(cap, hints)
+        res = _engines.analyze(cap, hints)
         window = (int(window_s[0] * cap.rate), int(window_s[1] * cap.rate)) if window_s else None
         seg_events = hit = None
         if segment:

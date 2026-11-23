@@ -133,9 +133,10 @@ def rows_of(doc: dict) -> list[dict]:
 
 def build(cap, hints: dict | None = None) -> dict:
     """Run the analysis on a capture and return the annotations document."""
-    from ._engine import staged
-    from ._engine.export import dumps, export
-    res = staged.analyze(cap, hints)
+    from . import _engines
+    from .decode import export
+    from ._engine.export import dumps
+    res = _engines.analyze(cap, hints)
     doc = json.loads(dumps(export(res, cap, mode="all")))
     return {"format": FORMAT, "source": f"wireskein {__version__} analyze", "rows": rows_of(doc)}
 
