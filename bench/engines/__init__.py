@@ -12,6 +12,8 @@ engine is (bench/algos/e2e/engines.py registers them as trials).
             the tuning side only), the best set by it
 - synth:    the views engine's candidates scored by the share of their lines' changes they explain (the protocol made
             again from what was read), a scale shared by every protocol
+- synth_gated: synth, each candidate also past the learnt engine's probability (0.3): its knowledge of which
+            readings are mostly wrong as the gate
 """
 from __future__ import annotations
 
@@ -126,4 +128,10 @@ def _synth(cap):
     return importlib.import_module(__name__ + ".synth").engine(cap)
 
 
-ENGINES = {"light": light, "views": views, "declarative": _declarative, "learned": _learned, "synth": _synth}
+def _synth_gated(cap):
+    import importlib
+    return importlib.import_module(__name__ + ".synth").engine(cap, gate_prob=0.3)
+
+
+ENGINES = {"light": light, "views": views, "declarative": _declarative, "learned": _learned, "synth": _synth,
+           "synth_gated": _synth_gated}

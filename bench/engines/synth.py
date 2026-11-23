@@ -48,11 +48,22 @@ def explained(c, cap):
     return ex, tot
 
 
-def engine(cap):
+def engine(cap, gate_prob: float | None = None):
+    """gate_prob: a candidate also needs the learnt engine's probability of being right this high (learned.py), its
+    knowledge of which readings are mostly wrong (decoy lines, other protocols' lines) as the gate."""
     scored = []
+    model = None
+    if gate_prob is not None:
+        import json
+        from . import learned
+        model = json.loads(learned.MODEL.read_text())
     for c in all_candidates(cap):
         if c[2] < GATE:
             continue
+        if model is not None:
+            from . import learned
+            if learned.prob(model, learned.features(c, cap)) < gate_prob:
+                continue
         ex, tot = explained(c, cap)
         if tot:
             scored.append((c, ex, ex / tot))
