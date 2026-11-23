@@ -66,6 +66,8 @@ Decisions and reasons:
 - **Avoiding false confirmation is the top priority.** Holding back when a correct answer exists is more acceptable than a false confirmation.
 - **The amount of evidence is included in the score.** For each check, the "probability of passing by chance" is estimated and counted as its information content. This keeps a run with only a few frames from mistaking a chance match for confirmation.
 - **Upper-layer support is returned to the lower layer, but absence of support is not penalized.** This lets raw binary with no upper layer still be confirmed.
+  - The upper stage (text lines, NMEA, Modbus RTU, SCPI on a UART pair, device packs, devices on I²C, SD on SPI, the RISC-V Debug Module, protocols of your own) runs after the engine has chosen its claims, on each claim as the analysis exports it (its bytes, transactions, transfers, DMI accesses), whichever engine read it (`wireskein/_upper.py`). A check that holds raises the claim's score by one formula (s + 0.5 (1 − s) · support · s), its margin as much, and the verdict is made again by the engine's rule.
+  - Why apart from the engine: the readings above a bus outlive a change of the engine that finds the bus, and engines added beside it get them too. Measured before the move (2026-11-23): choosing the claims without the upper stage's support and raising them after reads the same buses with the same verdicts (534 buses on the bench); the support mostly takes a claim from likely to confirmed.
 - **An "unknown synchronous serial" is based only on what known rules cannot explain.** Hypotheses for known protocols are placed first, and an unknown hypothesis whose pins overlap them does not win over them.
 
 ### 3.4 How far to claim
