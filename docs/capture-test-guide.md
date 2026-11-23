@@ -402,15 +402,13 @@ Some behaviour is allowed by the protocol but worth a look: a test may want to m
 
 | every check | `under_rate` | A length the check looks at under 5 samples, or within a glitch filter: what it read there is not sure (§4.11; `what`, `t_s`, `interval_s`, `samples`, `whole`, `least_rate_hz`, `best_rate_hz`, `glitch_filter_s`) |
 
-### 4.10 Checks from elsewhere
+### 4.10 A rule no check has
 
-A rule wireskein has no check for can be added as a check kind, judged and reported like wireskein's own (by `wireskein verify` and pytest-embedded-wireskein alike).
+WireSkein's check kinds are its own; none is added from outside. A rule no check says is judged by the test itself:
 
-- An installed package declares it in the entry point group `wireskein.checks`: `NAME = "module:object"`, the object a check function, or one with `.check` and optionally `.notices` (kind -> meaning), `.logic` and `.every_edge`. A test can also call `wireskein.plugins.register_check(NAME, check, notices=...)` (and `unregister_check(NAME)`).
-- `check(cap, x)` returns `(ok, measured, reason)`: `ok` True, False, None (unchecked) or `MEASURED`. `cap` is the segment's window as its changes (as `wireskein.capture.Part.view()` gives a part): `cap.rate_hz`, `cap.n_samples`, `cap.channel(name)` (`.initial`, `.edges` in ticks, `.step`, `.level_at(ticks)`), `cap.analog`. `x` is the expectation, `{"kind": NAME, "pins": [...], ...}`; `pins` names the channels it needs.
-- It may put notices in `measured["notices"]` (`[{"kind", "tick", ...}]`, ticks of the window); they are placed, limited by `notices=` and marked as §4.9 says.
-- A kind wireskein has is not replaced. An expectation naming a kind nobody added is `ng`.
-- A verdict on something no check reads at all (a test's own reading of the analyses) goes in with `rec.result()` instead (§3.3).
+- read what it needs (`wireskein.verify.sections(run)`, an analysis of the segment, the analysis's `lines` or a protocol of your own's messages) and put the verdict in with `rec.result()` (§3.3); it is reported with the checks, by `wireskein verify` and pytest-embedded-wireskein alike.
+- A protocol on a bus, declared in a table, is checked with `protocol(...)` ([protocols](protocols.md) §4).
+- A rule many tests need is a check kind for WireSkein itself: propose it.
 
 ### 4.11 How finely a check sees
 

@@ -698,7 +698,7 @@ def check_spi(cap, x):
 
 
 def check_protocol(cap, x):
-    """A protocol of one's own (wireskein.plugins.register_protocol) on a bus with the given pins: its messages in order, each
+    """A protocol of one's own (declared in a definitions directory: wireskein.plugins) on a bus with the given pins: its messages in order, each
     compared on the keys the expectation gives, and its checks."""
     from . import plugins as P
     from ._engine import export
@@ -706,7 +706,7 @@ def check_protocol(cap, x):
         return _declared_protocol(cap, x)
     proto = P.protocols().get(x["name"])
     if proto is None:
-        return False, {}, f"no protocol named {x['name']!r} (wireskein.plugins.register_protocol)"
+        return False, {}, f"no protocol named {x['name']!r} (declare it in a definitions directory: wireskein.plugins.add_definitions)"
     if x["bus"] not in proto.over:
         return False, {}, f"{x['name']} rides on {', '.join(proto.over)}, not {x['bus']}"
     if x["bus"] == "uart_pair":
@@ -776,15 +776,11 @@ def _compare_messages(x, got):
 
 
 def _declared_protocol(cap, x):
-    """A protocol of its own on the wire, declared (wireskein's decl/, or a definitions directory added): the pins
+    """A protocol of its own on the wire, declared (WireSkein's decl/): the pins
     decoded as it, its frames (each frame's own checks counted) compared as check_protocol's messages."""
     from ._engine import export
-    from . import plugins
     pins = {p: {"protocol": x["name"], "role": r, **({"baud": x["baud"]} if x.get("baud") else {})}
             for r, p in x["roles"].items()}
-    added = [e for e, protos in plugins.engines().values() if x["name"] in protos]
-    if added:
-        return _added_protocol(cap, x, added[0], {"protocols": [x["name"]], "pins": pins})
     res = _decode(cap, {"protocols": [x["name"]], "pins": pins})
     n = _best(res, x["name"], dict(x["roles"]))
     if n is None:
@@ -792,23 +788,6 @@ def _declared_protocol(cap, x):
     recs = [r for r in (n.output.items or []) if isinstance(r, dict)]
     frames = [f for f in export.layers_of(n).get("frames", export.layers_of(n).get("packets", []))]
     got = {"messages": frames, "checks_passed": sum(bool(r.get("ok")) for r in recs),
-           "checks_failed": sum(not r.get("ok", True) for r in recs)}
-    return _compare_messages(x, got)
-
-
-def _added_protocol(cap, x, engine, hints):
-    """A protocol an added engine reads (wireskein.plugins.register_engine): its claim on these pins, the items of its
-    first layer (frames, packets, messages ... as the engine names it; each item's own "ok" counted) compared as
-    check_protocol's messages."""
-    claims = [c for c in (engine(cap, hints) or []) if c.get("protocol") == x["name"]
-              and dict(c.get("roles", {})) == dict(x["roles"])]
-    if not claims:
-        return False, {}, f"nothing read as {x['name']} on these pins by the engine that reads it"
-    c = max(claims, key=lambda c: float(c.get("score", 0)))
-    lay = c.get("layers") or c.get("result") or {}
-    items = next((v for v in lay.values() if isinstance(v, list)), [])
-    recs = [r for r in items if isinstance(r, dict)]
-    got = {"messages": recs, "checks_passed": sum(bool(r.get("ok")) for r in recs),
            "checks_failed": sum(not r.get("ok", True) for r in recs)}
     return _compare_messages(x, got)
 
@@ -2207,26 +2186,6 @@ def _pins_of(x: dict) -> set[str]:
     return out
 
 
-def _add_check(kind: str, check, notices: dict | None, logic: bool, every_edge: bool) -> None:
-    """A check kind from outside (plugins.register_check)."""
-    CHECKS[kind] = check
-    NOTICES[kind] = dict(notices or {})
-    (LOGIC.add if logic else LOGIC.discard)(kind)
-    (EVENT_CHECKS.discard if every_edge else EVENT_CHECKS.add)(kind)
-
-
-def _remove_check(kind: str) -> None:
-    for t in (CHECKS, NOTICES):
-        t.pop(kind, None)
-    LOGIC.discard(kind)
-    EVENT_CHECKS.discard(kind)
-
-
-def _load_checks() -> None:
-    from . import plugins
-    plugins.checks()
-
-
 def _in_segment(c: dict, t: int, path: str, seg) -> bool:
     """A capture belongs to the section it was taken in (its recorded path) and that section's ancestors;
     one without a path (another recorder) to the section its start falls in."""
@@ -2241,8 +2200,7 @@ EMPTY = object()                  # a section shorter than its bounds' uncertain
 def _judge(cap: Capture, x: dict, pins: set[str]):
     """(ok, measured, why) of one check on one capture."""
     if x["kind"] not in CHECKS:
-        return False, {}, (f"no check named {x['kind']!r} (wireskein's, and those installed packages add through "
-                           f"the entry point group wireskein.checks)")
+        return False, {}, f"no check named {x['kind']!r}"
     cap, why = _as_logic(cap, x)
     if cap is None:
         return None, {}, why
@@ -2354,7 +2312,6 @@ def sections(run_dir: str | Path, doc: dict | None = None) -> list[dict]:
 
 
 def _verify(run_dir: Path) -> dict:
-    _load_checks()
     doc = json.loads((run_dir / "run.json").read_text())
     if doc.get("format") != FORMAT:
         raise ValueError(f"{run_dir}: format {doc.get('format')!r}, expected {FORMAT!r}")

@@ -1,27 +1,32 @@
-"""A protocol on CAN and LIN frames (and on a protocol of one's own definition), with the example demo_telemetry
-(examples/protocols): the lines are made here by encoders apart from the readers."""
+"""A protocol on CAN and LIN frames, declared (examples/protocols/demo_telemetry.toml): the lines are made here by
+encoders apart from the declaration that reads them."""
 
-import importlib.util
 from fractions import Fraction
 from pathlib import Path
 
-import numpy as np
 import pytest
 
 from wireskein import capture as wc, plugins
 from wireskein.decode import analyze_file
 
-SPEC = importlib.util.spec_from_file_location("demo_telemetry",
-                                              Path(__file__).parents[1] / "examples/protocols/demo_telemetry.py")
-demo = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(demo)
+EXAMPLES = Path(__file__).parents[1] / "examples"
+
+
+def check_of(ident: int, body: bytes) -> int:
+    return ((ident + sum(body)) & 0xFF) ^ 0x5A
+
+
+def frame(ident: int, seq: int, readings: bytes) -> bytes:
+    """demo_telemetry's data as a node sends it: seq | readings | check."""
+    body = bytes([seq & 0xFF]) + readings
+    return body + bytes([check_of(ident, body)])
 
 
 @pytest.fixture
 def telemetry():
-    plugins.register_protocol(demo.PROTOCOL)
-    yield demo
-    plugins.unregister_protocol("examples.demo_telemetry")
+    plugins.add_definitions(EXAMPLES)
+    yield
+    plugins.remove_definitions(EXAMPLES)
 
 
 def write(tmp_path, rate, lines: dict, n: int):
@@ -51,7 +56,7 @@ def can_line(skip=False):
     for k in range(3):
         for ident, rs in READINGS:
             if k < len(rs):
-                b.frame(ident, demo.frame(ident, k + (1 if skip and k == 2 else 0), rs[k]), ifs=20)
+                b.frame(ident, frame(ident, k + (1 if skip and k == 2 else 0), rs[k]), ifs=20)
     b.frame(0x7FF, b"\x01\x02\x03")                          # another node's frame, not this protocol's
     cap = b.line()
     return {"CAN": (1, cap.channels[0].edges.tolist())}, cap.n_samples
@@ -98,7 +103,7 @@ def lin_frame(ident, data, baud=19200):
 def test_on_lin_frames(tmp_path, telemetry):
     segs = [(1, 1e-3)]
     for k in range(3):
-        segs += lin_frame(0x21, demo.frame(0x21, k, bytes([k, 0x40])))
+        segs += lin_frame(0x21, frame(0x21, k, bytes([k, 0x40])))
     edges, n = edges_of(segs + [(1, 1e-3)], 2e6)
     doc = analyze_file(write(tmp_path, 2e6, {"LIN": (1, edges)}, n))
     (c,) = [c for c in doc["parts"][0]["claims"] if c["protocol"] == "lin"]
@@ -126,7 +131,7 @@ def test_hardware_probe_frames(bus, telemetry):
     d = Path(__file__).parents[1] / "examples/protocols"
     t = json.loads((d / f"demo_telemetry_p4_{bus}.truth.json").read_text())
     sent = [(f["id"], f["data"]) for f in t["frames"]]
-    mine = [(i, dt) for i, dt in sent if len(dt) >= 4 and bytes.fromhex(dt)[-1] == demo.check_of(i, bytes.fromhex(dt)[:-1])]
+    mine = [(i, dt) for i, dt in sent if len(dt) >= 4 and bytes.fromhex(dt)[-1] == check_of(i, bytes.fromhex(dt)[:-1])]
     doc = analyze_file(d / f"demo_telemetry_p4_{bus}.wireskein")
     (c,) = [c for c in doc["parts"][0]["claims"] if c["protocol"] == bus]
     got = c["result"]["examples.demo_telemetry"]

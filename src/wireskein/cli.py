@@ -653,8 +653,6 @@ def verify_cmd(args) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(prog="wireskein")
     ap.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
-    ap.add_argument("--plugin", action="append", default=[], metavar="MODULE",
-                    help="import MODULE first: it adds what it has with wireskein.plugins (repeatable)")
     ap.add_argument("--definitions", action="append", default=[], metavar="DIR", type=Path,
                     help="a definitions directory: protocols, devices/, markers/ (repeatable)")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -819,15 +817,15 @@ def main() -> None:
     al.add_argument("--apply-to", default=None, help="analog channels that get the result (default: all)")
     al.add_argument("--save", action="store_true", help="store it in the file as attach/alignment.json")
     args = ap.parse_args()
-    if args.plugin or args.definitions:
+    if args.definitions:
         # through the environment, so the worker processes of a split read (--split workers=N) add them too
-        for key, given in (("WIRESKEIN_PLUGINS", args.plugin), ("WIRESKEIN_DEFINITIONS", [str(d) for d in args.definitions])):
-            if given:
-                os.environ[key] = os.pathsep.join([*filter(None, os.environ.get(key, "").split(os.pathsep)), *given])
+        key = "WIRESKEIN_DEFINITIONS"
+        os.environ[key] = os.pathsep.join([*filter(None, os.environ.get(key, "").split(os.pathsep)),
+                                           *(str(d) for d in args.definitions)])
         from . import plugins
         try:
             plugins.load_environment()
-        except (ValueError, ImportError) as e:
+        except ValueError as e:
             sys.exit(f"wireskein: {e}")
     files = {"survey": survey_cmd, "info": info, "note": note_cmd, "attach": attach_cmd, "convert": convert, "capture": capture_cmd,
              "gui": gui_cmd, "align": align_cmd, "annotate": annotate_cmd, "states": states_cmd}

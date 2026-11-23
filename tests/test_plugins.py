@@ -1,51 +1,40 @@
-"""wireskein.plugins: one way in for every addition, one rule for names, and each entry point group read (protocols,
-definitions, formats, checks, sources). Objects made here."""
-
-import importlib.metadata as md
-from fractions import Fraction
+"""wireskein.plugins: a definitions directory is the one way in (protocols/, devices/, markers/), one rule for names,
+the environment adds them; WireSkein's own names in one ledger. Directories made here."""
 
 import pytest
 
 from wireskein import plugins, sources
 
+DECL = """format = "wireskein-protocol/1"
+name = "{name}"
+over = ["uart"]
 
-class Proto:
-    over = ("uart",)
-
-    def __init__(self, name=None):
-        if name is not None:
-            self.name = name
-
-    def decode(self, bus):
-        return {"messages": [], "checks_passed": 0, "checks_failed": 0}
+[frame]
+fields = [{{ name = "v" }}, {{ name = "c", check = {{ kind = "xor8", over = ["v"] }} }}]
+"""
 
 
-class Fmt:
-    def __init__(self, name=None):
-        if name is not None:
-            self.name = name
-
-    def sniff(self, head, path):
-        return False
-
-    def read(self, path):
-        return None
-
-
-class Src:
-    def __init__(self):
-        self.asked = []
-
-    def capture(self, target, request):
-        self.asked.append(target)
-        return sources.Result(Fraction(1000), [])
+def defs(tmp_path, name):
+    (tmp_path / "protocols").mkdir(exist_ok=True)
+    (tmp_path / "protocols/x.toml").write_text(DECL.format(name=name))
+    return tmp_path
 
 
 @pytest.mark.parametrize("name", ["uart", "i2c", "nmea", "acme_link", "Acme.link", "acme.link.x", "acme."])
-def test_a_protocol_takes_its_owners_namespace(name):
+def test_a_protocol_takes_its_owners_namespace(tmp_path, name):
     """owner.name (B13): WireSkein's own names have none, so a name of WireSkein's is refused with the rest."""
     with pytest.raises(ValueError, match="owner.name"):
-        plugins.register_protocol(Proto(name))
+        plugins.add_definitions(defs(tmp_path, name))
+    assert tmp_path.resolve() not in plugins.definitions()
+
+
+def test_a_declared_protocol_is_there_while_its_directory_is(tmp_path):
+    plugins.add_definitions(defs(tmp_path, "acme.link"))
+    try:
+        assert plugins.protocols()["acme.link"].over == ("uart",)
+    finally:
+        plugins.remove_definitions(tmp_path)
+    assert "acme.link" not in plugins.protocols()
 
 
 def test_the_registry_holds_wireskeins_names():
@@ -56,86 +45,31 @@ def test_the_registry_holds_wireskeins_names():
     assert all("." not in k for k in reg) and "uart" in plugins.buses() and "nmea" not in plugins.buses()
 
 
-@pytest.mark.parametrize("scheme", ["oep", "sigrok"])
-def test_a_source_may_not_take_a_scheme_of_wireskein(scheme):
-    with pytest.raises(ValueError, match="of WireSkein's own"):
-        plugins.register_source(scheme, Src())
-
-
-def test_a_source_added_is_run_by_its_scheme():
-    s = Src()
-    plugins.register_source("acme", s)
-    try:
-        res = sources.run("acme:bench-3", sources.Request([("A", "0")], 1000, 10))
-        assert s.asked == ["bench-3"] and res.meta["source"] == "acme:bench-3"
-    finally:
-        plugins.unregister_source("acme")
+def test_only_wireskeins_own_sources():
     with pytest.raises(ValueError, match="unknown source 'acme'"):
         sources.run("acme:bench-3", sources.Request([("A", "0")], 1000, 10))
 
 
-def test_a_check_unregistered_is_gone():
-    from wireskein import verify
-    plugins.register_check("tests.x_gone", lambda cap, x: (True, {}, ""))
-    assert "tests.x_gone" in verify.CHECKS and "tests.x_gone" in plugins.checks()
-    plugins.unregister_check("tests.x_gone")
-    assert "tests.x_gone" not in verify.CHECKS and "tests.x_gone" not in plugins.checks()
-
-
-@pytest.fixture
-def eps(monkeypatch):
-    """Entry points of the groups given, each (name, object), as installed packages would declare them."""
-    given = {}
-
-    def entry_points(group=None):
-        out = []
-        for name, obj in given.get(group, []):
-            ep = md.EntryPoint(name, f"irrelevant:{name}", group)
-            out.append(ep)
-            objs[(group, name)] = obj
-        return out
-
-    objs = {}
-    monkeypatch.setattr(md, "entry_points", entry_points)
-    monkeypatch.setattr(md.EntryPoint, "load", lambda self: objs[(self.group, self.name)])
+def test_the_environment_adds_definitions(monkeypatch, tmp_path):
     monkeypatch.setattr(plugins, "_LOADED", set())
-    for t in ("_PROTOCOLS", "_FORMATS", "_SOURCES"):
-        monkeypatch.setattr(plugins, t, {})
     monkeypatch.setattr(plugins, "_DIRS", [])
-    return given
-
-
-def test_each_group_is_read(eps, tmp_path):
-    s = Src()
-    eps.update({"wireskein.protocols": [("acme.link", Proto())], "wireskein.formats": [("acme.csv", Fmt())],
-                "wireskein.sources": [("acme", s)], "wireskein.definitions": [("acme", lambda: tmp_path)]})
-    assert plugins.protocols()["acme.link"].name == "acme.link"        # named by its entry point
-    assert plugins.formats()["acme.csv"].name == "acme.csv"
-    assert plugins.sources() == {"acme": s}
-    assert plugins.definitions() == [tmp_path.resolve()]
-
-
-def test_an_object_named_otherwise_than_its_entry_point_is_refused(eps):
-    eps["wireskein.protocols"] = [("acme.link", Proto("acme.other"))]
-    with pytest.raises(ValueError, match="named 'acme.other'"):
-        plugins.protocols()
-
-
-def test_an_entry_point_of_a_builtin_source_is_refused(eps):
-    eps["wireskein.sources"] = [("oep", Src())]
-    with pytest.raises(ValueError, match="of WireSkein's own"):
-        plugins.sources()
-
-
-def test_the_environment_adds_definitions_and_modules(eps, monkeypatch, tmp_path):
-    (tmp_path / "acme_plug.py").write_text("from wireskein import plugins\n"
-                                           "class P:\n    over = ('uart',)\n    name = 'acme.env'\n"
-                                           "    def decode(self, bus): return {}\n"
-                                           "plugins.register_protocol(P())\n")
-    monkeypatch.setenv("WIRESKEIN_DEFINITIONS", str(tmp_path))
-    monkeypatch.setenv("WIRESKEIN_PLUGINS", str(tmp_path / "acme_plug.py"))
+    monkeypatch.setenv("WIRESKEIN_DEFINITIONS", str(defs(tmp_path, "acme.env")))
     assert plugins.definitions() == [tmp_path.resolve()]
     assert "acme.env" in plugins.protocols()
+
+
+def test_the_cli_takes_a_definitions_directory(tmp_path):
+    import subprocess
+    import sys
+    from pathlib import Path
+    ex = Path(__file__).parents[1] / "examples"
+    cap = ex / "protocols/demo_link_p4.wireskein"
+    run = [sys.executable, "-m", "wireskein"]
+    got = subprocess.run([*run, "--definitions", str(ex), "analyze", str(cap)], capture_output=True, text=True)
+    assert got.returncode == 0, got.stderr
+    assert '"examples.demo_link"' in got.stdout
+    got = subprocess.run([*run, "--plugin", "x.py", "analyze", str(cap)], capture_output=True, text=True)
+    assert got.returncode != 0                                     # no code is added
 
 
 def _roles_fit(spec, roles) -> bool:

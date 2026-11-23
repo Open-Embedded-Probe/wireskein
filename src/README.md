@@ -11,7 +11,7 @@ The Python package `wireskein` (what `pip install wireskein` installs).
 | `wireskein/capture.py`, `fileformat.py` | A `.wireskein` as one value (`capture`, public) and its container (`fileformat`). Standard library only ([file format](../docs/wireskein-format.md)) |
 | `wireskein/decode.py`, `annotate.py` | Decoding (`wireskein analyze`, `wireskein decode`) and storing decode annotations |
 | `wireskein/align.py` | Aligning analog channels and other files in time (`wireskein align`) |
-| `wireskein/sources/` | Capture sources (`oep:`, `sigrok:`). More can be added through the `wireskein.sources` entry point |
+| `wireskein/sources/` | Capture sources (`oep:`, `sigrok:`) |
 | `wireskein/gui.py` | The viewer's server (`wireskein gui`). The viewer itself, `wireskein/web/`, is not in git: `tools/fetch_web.py` fetches it into the wheel |
 | `wireskein/cli.py` | The command entry point |
 | `wireskein/decl/` | Definitions: protocols (`*.toml`), devices (`devices/`), marker dialects (`markers/`) |

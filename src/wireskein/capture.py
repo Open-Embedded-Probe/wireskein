@@ -151,15 +151,10 @@ class Capture:
 
 def read(path: str | Path) -> Capture:
     """A capture file, told apart by content: a WireSkein file (the header read now, each part's channels when first
-    asked for), a sigrok session (.sr), a VCD, or a format added (wireskein.plugins.register_format)."""
+    asked for), a sigrok session (.sr) or a VCD."""
     path = Path(path)
     kind = fileformat.sniff(path)
     if kind != "wireskein":
-        if kind is None:
-            from . import formats
-            name = formats.kind(path)
-            if name is not None:
-                return formats.read(path, name)
         from .decode import _load
         v = _load(path)
         meta = {k: x for k, x in v.meta.items() if k not in fileformat.PART_META and k not in _VIEW_ONLY}

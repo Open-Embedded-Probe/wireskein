@@ -11,7 +11,7 @@ Python の package `wireskein` です（`pip install wireskein` で入るもの�
 | `wireskein/capture.py`、`fileformat.py` | `.wireskein` を 1 つの値として扱う（`capture`、公開）と、その入れ物（`fileformat`）。標準ライブラリだけ（[ファイルの形式](../docs/wireskein-format.ja.md)） |
 | `wireskein/decode.py`、`annotate.py` | 復号（`wireskein analyze`、`wireskein decode`）と、復号の注釈の保存 |
 | `wireskein/align.py` | アナログやほかのファイルとの時刻の合わせ込み（`wireskein align`） |
-| `wireskein/sources/` | 取得元（`oep:`、`sigrok:`）。entry point の `wireskein.sources` で足せる |
+| `wireskein/sources/` | 取得元（`oep:`、`sigrok:`） |
 | `wireskein/gui.py` | ビューアのサーバー（`wireskein gui`）。ビューアの本体 `wireskein/web/` は git に入れず、`tools/fetch_web.py` で取ってきて wheel に入れる |
 | `wireskein/cli.py` | コマンドの入口 |
 | `wireskein/decl/` | 方式（`*.toml`）、デバイス（`devices/`）、マーカーの方言（`markers/`）の定義 |

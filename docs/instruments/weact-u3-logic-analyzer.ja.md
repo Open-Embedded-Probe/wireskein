@@ -146,7 +146,7 @@ WeAct Studio の Logic Analyzer V2（CH32H417、USB 3.0、200 MHz × 16 本）�
    - リポジトリが入れる libsigrok（`install/`）に対して、公式の sigrok-cli を組み立てれば、このドライバーで取れるはずです。
    - 独自のキーを sigrok-cli が扱えるかは分かりません。
    - 試験の中で自動で取り込みたいときの道です。
-3. **本体を WireSkein から直接動かす（`wireskein.sources` に取り込み元を足す）。**
+3. **本体を WireSkein から直接動かす（WireSkein 自身の取り込み元として）。**
    - 上のとおり通信は単純で、libusb があれば書けます。
    - 気をつける所:
      - 200 MHz・16 本では 400 MB/s です。Python で受けるには、非同期の転送を何本も出しておく必要があります。

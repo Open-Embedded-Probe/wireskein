@@ -1,0 +1,19 @@
+# demo_telemetry: made up for docs/protocols.md, on the frames of CAN and LIN. Each node sends its readings in
+# frames of its own identifier, the data being
+#
+#     seq | reading... | check        check = (identifier + the bytes before it) & 0xFF, xor 0x5A
+#
+# The check is the evidence; a seq that does not follow its node's last one is shown (level "warn").
+format = "wireskein-protocol/1"
+name = "examples.demo_telemetry"
+over = ["can", "lin"]
+
+[frame]
+fields = [
+    { name = "seq" },
+    { name = "readings", size = "rest", as = "hex" },
+    { name = "check", check = { kind = "sum8", init = "@id", xorout = 0x5A, over = ["seq", "readings"] } },
+]
+show = ["@id", "seq", "readings"]
+text = "{@id:#x} #{seq} {readings|-}"
+sequence = { field = "seq", per = "@id", modulo = 256, note = " (seq skipped)" }

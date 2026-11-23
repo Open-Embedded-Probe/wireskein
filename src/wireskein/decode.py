@@ -1,6 +1,6 @@
 """Decoding a capture: finding what it holds (`analyze`), or decoding the buses a spec names (`decode_file`).
 
-    cap = wireskein.capture.read("capture.wireskein")    # or a .sr, a VCD, a format added
+    cap = wireskein.capture.read("capture.wireskein")    # or a .sr, a VCD
     res = analyze(cap, {"protocols": ["i2c"]})          # a capture of one part, or one of its parts (cap.parts[k])
     doc = export(res, cap)                              # JSON-ready dict, as `wireskein analyze` prints
     doc = decode_file("c0001.wireskein", {"buses": [{"protocol": "i2c", "pins": {"scl": "SCL", "sda": "SDA"}}]})
@@ -52,7 +52,7 @@ IDLE_BITS = 16         # else: more than this many bit times without a change
 
 def _load(path, part: int | None = None) -> Capture:
     """The changes view of a part (what the decoders and checks read: wireskein.capture.Part.view): of a file - a
-    WireSkein file (a capture of several parts needs `part`), a sigrok .sr, a VCD or a format added, told apart by
+    WireSkein file (a capture of several parts needs `part`), a sigrok .sr or a VCD, told apart by
     content -, of a wireskein.capture.Capture in memory, or of a wireskein.capture.Part; a view is itself."""
     from .capture import Capture as Whole, Part
     if isinstance(path, Capture):
@@ -76,20 +76,8 @@ def _load(path, part: int | None = None) -> Capture:
     if kind == "vcd":
         from ._engine.vcdio import read_vcd
         return read_vcd(path)
-    from . import formats, plugins
-    name = formats.kind(path)
-    if name is None:
-        raise ValueError(f"{path}: not a WireSkein file, a sigrok session (.sr), a VCD, or a format added "
-                         f"(wireskein.plugins.register_format: {', '.join(plugins.formats()) or 'none'})")
-    cap = formats.read(path, name)
-    if len(cap.parts) > 1 and part is None:
-        raise ValueError(f"{path} ({name}) has {len(cap.parts)} parts: name one (part, from 0)")
-    k = part or 0
-    v = cap.parts[k].view()
-    v.meta.update(file=str(path), format=name, complete=cap.complete, lost=list(cap.lost), part=k,
-                  n_parts=len(cap.parts), capture_id=cap.id, **{key: val for key, val in cap.meta.items()
-                                                                if key not in v.meta})
-    return v
+    raise ValueError(f"{path}: not a WireSkein file, a sigrok session (.sr) or a VCD (another format: convert it to a "
+                     f"WireSkein file with wireskein.capture)")
 
 
 def _save(path: str | Path, cap: Capture, **meta) -> Path:
@@ -178,10 +166,7 @@ def annotations_file(path: str | Path, hints: dict | None = None, part: int | No
 def export(res, cap, mode: str = "final", select: list[str] | None = None, alternatives: bool = False,
            window: tuple[int, int] | None = None, depth: str = "protocol") -> dict:
     """analyze's result as a JSON-ready dict, as `wireskein analyze` prints it (cap: what was analysed)."""
-    ex = _exp.export(res, _load(cap), mode, select, alternatives, window, depth)
-    if getattr(res, "side", None):
-        ex["claims"] = _engines.merge(ex["claims"], res.side, getattr(res, "hints", None))
-    return ex
+    return _exp.export(res, _load(cap), mode, select, alternatives, window, depth)
 
 
 def _spec(spec: dict) -> dict:
@@ -604,22 +589,6 @@ def unread(cap: Capture, pins: list[str], lay: dict, n, idle: int, select: str |
     return un
 
 
-def _added_bus(engine, cap: Capture, b: dict) -> dict:
-    """A bus of a protocol an added engine reads, decoded by it with these pins: its claim on them (the analysis
-    format's: decoded, params, fit, result as its layers)."""
-    hints = {"protocols": [b["protocol"]], "pins": {p: {"protocol": b["protocol"], "role": r, **b["params"]}
-                                                   for r, p in b["pins"].items()}}
-    claims = [c for c in (engine(cap, hints) or []) if c.get("protocol") == b["protocol"]
-              and dict(c.get("roles", {})) == dict(b["pins"])]
-    out = {"protocol": b["protocol"], "pins": b["pins"]}
-    if not claims:
-        return {**out, "decoded": False, "result": {}}
-    c = max(claims, key=lambda c: float(c.get("score", 0)))
-    return {**out, "decoded": True, "params": dict(c.get("params") or {}),
-            "fit": {"score": round(float(c.get("score", 0)), 4), "claimed": True, "verdict": c.get("verdict")},
-            "result": dict(c.get("layers") or c.get("result") or {})}
-
-
 def _bus(res, cap: Capture, b: dict, depth: str, claimed: list) -> dict:
     n = _node(res, cap, b)
     out = {"protocol": b["protocol"], "pins": b["pins"]}
@@ -841,19 +810,14 @@ def _part(cap: Capture, spec: dict, head: dict, strict: bool = False) -> dict:
         raise ValueError(f"lines not in the capture: {', '.join(miss)}")
     # a pin named by buses of two protocols (one line read as RVSWD and as SWIO) is hinted once a reading: each set
     # of buses that names no pin under two protocols is analyzed on its own
-    # buses of a protocol an added engine reads (wireskein.plugins.register_engine) are read by that engine
-    from . import plugins
-    added = {p: e for e, protos in plugins.engines().values() for p in protos}
-    mine = [b for b in spec["buses"] if b["protocol"] not in added]
-    groups = _apart(mine)
+    groups = _apart(spec["buses"])
     reads = [_engines.main(cap, _hints({**spec, "buses": g}, strict, [c.name for c in cap.channels])) for g in groups]
     res_of = {id(b): r for g, r in zip(groups, reads) for b in g}
     res = reads[0]
     out = {"part": head.get("part", 0), "ticks": cap.n_samples,
            **({"tick0": head["tick0"]} if "tick0" in head else {}),
            **{k: head["meta"][k] for k in ("start_ns", "start_uncertainty_ns", "boot_id") if k in head.get("meta", {})},
-           "buses": [_added_bus(added[b["protocol"]], cap, b) if b["protocol"] in added
-                     else _bus(res_of[id(b)], cap, b, spec["depth"], res_of[id(b)].claims) for b in spec["buses"]],
+           "buses": [_bus(res_of[id(b)], cap, b, spec["depth"], res_of[id(b)].claims) for b in spec["buses"]],
            "lines": [{"pin": p, "initial": int(cap.channel(p).initial),
                       "edges": np.asarray(cap.channel(p).edges).tolist()} for p in spec["lines"]]}
     _shared(out["buses"], cap)
@@ -908,7 +872,7 @@ def _runs(path: Path, raw: dict) -> list:
 
 def _open(path: Path, part: int | None = None):
     """(raw header, heads, views, first parts, spans) of a capture: a WireSkein file's runs of parts (parts that follow
-    on without a gap are one stretch), or a .sr, a VCD or a format added as one part."""
+    on without a gap are one stretch), or a .sr or a VCD as one part."""
     if path.is_file() and fileformat.sniff(path) == "wireskein":
         raw = fileformat.read_header(path)
         runs = _runs(path, raw)
@@ -923,7 +887,7 @@ def _open(path: Path, part: int | None = None):
 
 
 def decode_file(path: str | Path, spec: dict, split=None, pins: list[str] | None = None, items=None) -> dict:
-    """The document for a capture (a WireSkein file, a .sr, a VCD or a format added): every part decoded with the
+    """The document for a capture (a WireSkein file, a .sr or a VCD): every part decoded with the
     spec's roles. A part of more changes than the split's max_edges is read in pieces (wireskein.split; `split`
     overrides spec["split"]: a dict, "key=value,...", or "off"); a WireSkein file of one part is then read from the
     file a block at a time, only the piece being read held. pins: only these channels are read. items: a file the

@@ -203,7 +203,7 @@ def riscv_dm(r: dict):
 
 
 def _protocols(r: dict, up: Upper, rate: float) -> None:
-    """Protocols of others on the bus (wireskein.plugins.register_protocol): each given the bus as the analysis exports
+    """Protocols of others on the bus (declared in a definitions directory: wireskein.plugins): each given the bus as the analysis exports
     it (with the upper layers read so far); its checks, as Modbus RTU's, support the bus."""
     from . import plugins as P
     mine = [p for p in P.protocols().values() if r["protocol"] in p.over]

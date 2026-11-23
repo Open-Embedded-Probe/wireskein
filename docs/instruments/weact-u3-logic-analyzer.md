@@ -146,7 +146,7 @@ The threshold:
    - Upstream sigrok-cli built against the libsigrok this repository installs (`install/`) should capture through this driver.
    - Whether sigrok-cli copes with the fork's own keys is not known.
    - This is the way to go for capturing automatically during a test.
-3. **Drive the device from WireSkein (a source added to `wireskein.sources`).**
+3. **Drive the device from WireSkein (a capture source of WireSkein's own).**
    - As above, the protocol is simple, and it can be written on libusb.
    - Things to watch:
      - 200 MHz × 16 lines is 400 MB/s. Receiving that in Python needs many asynchronous transfers queued.

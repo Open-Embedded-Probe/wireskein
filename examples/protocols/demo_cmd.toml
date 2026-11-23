@@ -1,0 +1,19 @@
+# demo_cmd: a text command protocol made up for docs/protocols.md, on two UART lines (a command line and its answers):
+#
+#     host     #<seq> <VERB>[ <arg>...]          seq: two hex digits, one more each command
+#     device   #<seq> OK[ <value>...]  |  #<seq> ERR <code>  |  !<EVENT>[ <value>...]  (unasked)
+#
+# Text has no checksum: the evidence is the pairing. An answer with the seq of the command just before it is a check
+# passed (one in 256 by chance); an answer to no command, or a command unanswered when the next comes, a check failed.
+format = "wireskein-protocol/1"
+name = "examples.demo_cmd"
+over = ["uart_pair"]
+
+[lines]
+command = '^#(?P<seq>[0-9a-f]{2}) (?P<verb>[A-Z][A-Z0-9_]*)(?P<args>(?: \S+)*)$'
+answer = '^#(?P<seq>[0-9a-f]{2}) (?P<status>OK|ERR)(?P<values>(?: \S+)*)$'
+event = '^!(?P<event>[A-Z][A-Z0-9_]*)(?P<values>(?: \S+)*)$'
+pair = "seq"
+words = ["args", "values"]
+warn = { status = "ERR" }
+answered = "{command} -> {status}{values}"

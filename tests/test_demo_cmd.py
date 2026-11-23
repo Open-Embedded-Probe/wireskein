@@ -1,7 +1,6 @@
-"""A text command protocol on two UART lines (bus "uart_pair"), with the example demo_cmd (examples/protocols): the
+"""A text command protocol on two UART lines (bus "uart_pair"), declared (examples/protocols/demo_cmd.toml): the
 lines made here, independently of any device under test, are the truth."""
 
-import importlib.util
 from pathlib import Path
 
 import numpy as np
@@ -11,17 +10,15 @@ from wireskein import capture as wc, plugins
 from wireskein._engine import gen
 from wireskein.decode import analyze_file
 
-SPEC = importlib.util.spec_from_file_location("demo_cmd", Path(__file__).parents[1] / "examples/protocols/demo_cmd.py")
-demo = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(demo)
+EXAMPLES = Path(__file__).parents[1] / "examples"
 RATE, BAUD = 2e6, 115200
 
 
 @pytest.fixture
 def demo_cmd():
-    plugins.register_protocol(demo.PROTOCOL)
-    yield demo
-    plugins.unregister_protocol("examples.demo_cmd")
+    plugins.add_definitions(EXAMPLES)
+    yield
+    plugins.remove_definitions(EXAMPLES)
 
 
 def lines_of(talk, gap=300e-6):

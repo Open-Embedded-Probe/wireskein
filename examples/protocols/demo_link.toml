@@ -1,0 +1,21 @@
+# demo_link: a framed command protocol made up for docs/protocols.md, the shape many device protocols have:
+#
+#     0xA5 | len | seq | cmd | payload[len] | crc8
+#
+# A reply has bit 7 of cmd set and the seq of its request. On a UART the frames follow one another in the byte
+# stream; on SPI each CS window carries one on MOSI (a request) and one on MISO (a reply). The CRC is the evidence.
+format = "wireskein-protocol/1"
+name = "examples.demo_link"
+over = ["uart", "spi"]
+
+[frame]
+fields = [
+    { name = "sof", equals = 0xA5 },
+    { name = "len", max = 32 },
+    { name = "seq" },
+    { name = "cmd", mask = 0x7F },
+    { name = "reply", of = "cmd", mask = 0x80, as = "bool" },
+    { name = "payload", size = "len", as = "hex" },
+    { name = "crc", check = { kind = "crc8", over = ["len", "seq", "cmd", "payload"] } },
+]
+show = ["seq", "cmd", "reply", "payload"]

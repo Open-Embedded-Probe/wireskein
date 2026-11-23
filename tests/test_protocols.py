@@ -1,7 +1,7 @@
-"""Protocols of one's own on a bus WireSkein decodes (wireskein.protocols), with the example demo_link
-(examples/protocols): the signals made here, independently of any device under test, are the truth."""
+"""Protocols of one's own on a bus WireSkein decodes, declared in a definitions directory (protocols/*.toml), with
+the example demo_link (examples/protocols/demo_link.toml): the signals made here, by an encoder apart from the
+declaration that reads them, are the truth."""
 
-import importlib.util
 import json
 from pathlib import Path
 
@@ -12,17 +12,44 @@ from wireskein import capture as wc, plugins
 from wireskein._engine import gen
 from wireskein.decode import analyze_file
 
-SPEC = importlib.util.spec_from_file_location("demo_link", Path(__file__).parents[1] / "examples/protocols/demo_link.py")
-demo = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(demo)
+EXAMPLES = Path(__file__).parents[1] / "examples"
 RATE = 2e6
+
+
+def crc8(data: bytes) -> int:
+    crc = 0
+    for b in data:
+        crc ^= b
+        for _ in range(8):
+            crc = ((crc << 1) ^ 0x07) & 0xFF if crc & 0x80 else (crc << 1) & 0xFF
+    return crc
+
+
+def frame(seq: int, cmd: int, payload: bytes = b"") -> bytes:
+    """demo_link's frame as its sender makes it: 0xA5 | len | seq | cmd | payload | crc8."""
+    body = bytes([len(payload), seq & 0xFF, cmd & 0xFF]) + payload
+    return bytes([0xA5]) + body + bytes([crc8(body)])
+
+
+def sent_frames(data: bytes) -> list[tuple[int, int, str]]:
+    """(seq, cmd, payload) of the frames a sender put one after another (stray bytes before 0xA5 left out): the truth
+    of a capture."""
+    out, i = [], 0
+    while i < len(data):
+        if data[i] != 0xA5:
+            i += 1
+            continue
+        n = data[i + 1]
+        out.append((data[i + 2], data[i + 3] & 0x7F, data[i + 4:i + 4 + n].hex()))
+        i += 5 + n
+    return out
 
 
 @pytest.fixture
 def demo_link():
-    plugins.register_protocol(demo.PROTOCOL)
-    yield demo
-    plugins.unregister_protocol("examples.demo_link")
+    plugins.add_definitions(EXAMPLES)
+    yield
+    plugins.remove_definitions(EXAMPLES)
 
 
 def write(tmp_path, waves, end):
@@ -41,8 +68,7 @@ def claims(doc):
     return part["claims"]
 
 
-REQS = [demo.frame(1, 0x10, b"\x01\x02"), demo.frame(2, 0x11), demo.frame(3, 0x12, bytes(range(8))),
-        demo.frame(4, 0x10, b"\xff")]
+REQS = [frame(1, 0x10, b"\x01\x02"), frame(2, 0x11), frame(3, 0x12, bytes(range(8))), frame(4, 0x10, b"\xff")]
 
 
 def test_frames_over_a_uart_are_read_with_their_crcs(tmp_path, demo_link):
@@ -59,7 +85,7 @@ def test_frames_over_a_uart_are_read_with_their_crcs(tmp_path, demo_link):
 
 def test_frames_over_spi_on_both_lines(tmp_path, demo_link):
     clk, mosi, miso, cs = gen.Wave(0), gen.Wave(0), gen.Wave(0), gen.Wave(1)
-    rep = [demo.frame(1, 0x90, b"\x00"), demo.frame(2, 0x91)]   # each no longer than its request
+    rep = [frame(1, 0x90, b"\x00"), frame(2, 0x91)]   # each no longer than its request
     frames = [(REQS[0], rep[0].ljust(len(REQS[0]), b"\xff")), (REQS[1], rep[1].ljust(len(REQS[1]), b"\xff"))]
     t = gen.spi(clk, mosi, miso, cs, 10e-6, frames, 250e3, mode=0)
     doc = analyze_file(write(tmp_path, {"SCK": clk, "MOSI": mosi, "MISO": miso, "CS": cs}, t + 50e-6))
@@ -78,15 +104,36 @@ def test_bytes_that_are_not_its_frames_show_nothing(tmp_path, demo_link):
     assert "examples.demo_link" not in json.dumps(c)                  # no CRC held: not shown, not the final reading
 
 
-def test_a_protocol_needs_a_name_buses_and_decode():
-    class Bad:
-        name, over = "lines", ("uart",)
-        def decode(self, bus): return {}
-    with pytest.raises(ValueError):
-        plugins.register_protocol(Bad())                            # a layer of WireSkein's own
-    Bad.name, Bad.over = "x", ("not a bus",)
-    with pytest.raises(ValueError):
-        plugins.register_protocol(Bad())
+DECL = """format = "wireskein-protocol/1"
+name = "{name}"
+over = {over}
+
+[frame]
+fields = [{{ name = "sof", equals = 0x7E }}, {{ name = "v" }}, {{ name = "c", check = {{ kind = "{kind}", over = ["v"] }} }}]
+"""
+
+
+@pytest.mark.parametrize("name, over, kind, why", [
+    ("lines", '["uart"]', "xor8", "owner.name"),                 # a name of WireSkein's own
+    ("tests.x", '["not_a_bus"]', "xor8", "over names buses"),
+    ("tests.x", '["uart_pair"]', "xor8", "not uart_pair"),
+    ("tests.x", '["uart"]', "crc7_unknown", "check kind"),
+])
+def test_a_declaration_in_error_is_refused_when_added(tmp_path, name, over, kind, why):
+    (tmp_path / "protocols").mkdir()
+    (tmp_path / "protocols/x.toml").write_text(DECL.format(name=name, over=over, kind=kind))
+    with pytest.raises(ValueError, match=why):
+        plugins.add_definitions(tmp_path)
+    plugins.remove_definitions(tmp_path)
+
+
+def test_a_protocol_declared_twice_is_refused(tmp_path):
+    (tmp_path / "protocols").mkdir()
+    for f in ("a", "b"):
+        (tmp_path / f"protocols/{f}.toml").write_text(DECL.format(name="tests.x", over='["uart"]', kind="xor8"))
+    with pytest.raises(ValueError, match="declared twice"):
+        plugins.add_definitions(tmp_path)
+    plugins.remove_definitions(tmp_path)
 
 
 def test_a_test_checks_the_messages_of_its_protocol(tmp_path, demo_link):
@@ -228,11 +275,10 @@ def test_the_example_on_hardware_sent_by_a_probe(demo_link):
     assert truth["uart"]["interface"].startswith("oep.fixture.uart (ESP-IDF UART driver)")
     doc = analyze_file(d / "demo_link_p4.wireskein")
     (c,) = [c for c in claims(doc) if c["protocol"] == "uart"]
-    want, _, _ = demo.frames_in(bytes.fromhex(truth["uart"]["bytes"]))
+    want = sent_frames(bytes.fromhex(truth["uart"]["bytes"]))
     got = c["result"]["examples.demo_link"]
     assert c["verdict"] == "confirmed" and got["checks_failed"] == 0, got
-    assert [(m["seq"], m["cmd"], m["payload"]) for m in got["messages"]] == [
-        (m["seq"], m["cmd"], m["payload"]) for m in want]
+    assert [(m["seq"], m["cmd"], m["payload"]) for m in got["messages"]] == want
 
 
 def test_its_messages_are_annotations_and_markers_for_the_viewer(tmp_path, demo_link):
@@ -246,31 +292,3 @@ def test_its_messages_are_annotations_and_markers_for_the_viewer(tmp_path, demo_
     wc2.add_markers(p, [{"t": it["s"], "label": f"seq {it['detail']['seq']}"} for it in row["items"]], by="my_tool")
     wc2.add_markers(p, [{"t": row["items"][0]["s"], "label": "again"}], by="my_tool")      # replaces its own
     assert [(m["label"], m["by"]) for m in wc2.markers(p)] == [("again", "my_tool")]
-
-
-def test_a_protocol_rides_on_a_declared_protocol(tmp_path, demo_wire):
-    # a protocol of one's own on demo_wire's frames: cmd 3 carries a counter that must count
-    class Counter:
-        name, over = "tests.wire_counter", ("tests.demo_wire",)
-
-        def decode(self, bus):
-            fr = [f for f in bus.get("frames", []) if f.get("cmd") == 3]
-            vals = [int(f["data"], 16) for f in fr if f.get("data")]
-            ok = sum(1 for a, b in zip(vals, vals[1:]) if b == a + 1)
-            return {"messages": [{"s": f["s"], "value": v} for f, v in zip(fr, vals)], "checks_passed": ok,
-                    "checks_failed": len(vals) - 1 - ok}
-    plugins.register_protocol(Counter())
-    try:
-        w, bt = gen.Wave(1), 1 / 50e3
-        t = 20 * bt
-        for k in range(4):
-            for b in wire_bits(0x21, 0x3, bytes([0x10 + k])):
-                w.set(t, b)
-                t += bt
-            t += 14 * bt
-        doc = analyze_file(write(tmp_path, {"W": w}, t + 20 * bt))
-        (c,) = [c for c in claims(doc) if c["protocol"] == "tests.demo_wire"]
-        got = c["result"]["tests.wire_counter"]
-        assert got["checks_passed"] == 3 and [m["value"] for m in got["messages"]] == [0x10, 0x11, 0x12, 0x13], got
-    finally:
-        plugins.unregister_protocol("tests.wire_counter")

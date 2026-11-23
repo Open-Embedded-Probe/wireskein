@@ -2,94 +2,119 @@
 
 [English](protocols.md)
 
-WireSkein は UART、SPI、I2C を自分で復号します。その上に乗るプロトコル（機器の命令のフレーム、センサーの報告、ブートローダーのパケット、UART の組の上のテキストの命令とその応答など）は、WireSkein に手を入れずに分析に足せます。足すと、`wireskein analyze` がそのメッセージをバスの下に出し、試験はほかの検査と同じに確かめられます（§1〜§4）。クロックとデータ、または 1 本の線の上で、それ自体がバスであるプロトコルは、拡張点ではありません。WireSkein 自身のそうしたプロトコルは、変わりうる分析のエンジンの一部です（§5）。
+WireSkein は UART、SPI、I2C、CAN、LIN などを自分で復号します。その上に乗るプロトコル（機器の命令のフレーム、センサーの報告、CAN のフレームの中のノードの値、UART の組の上のテキストの命令と応答など）は、コードを書かずに表で宣言します。宣言すると、`wireskein analyze` がそのメッセージをバスの下に出し、試験はほかの検査と同じに確かめられます（§4）。クロックとデータ、または 1 本の線の上で、それ自体がバスであるプロトコルは、拡張点ではありません。WireSkein 自身のそうしたプロトコルは、変わりうる分析のエンジンの一部です（§5）。
 
-## 1. プロトコル
+## 1. プロトコルの表
 
-プロトコルは、次を持つ Python のオブジェクトです。
-
-| 属性 | 意味 |
-| --- | --- |
-| `name` | 出すときの名前。持ち主の名前空間と自分の名前の `持ち主.名前`（`acme.link`。英小文字、数字、`_`）で、WireSkein の名前とぶつからない |
-| `over` | 乗るバス。`"uart"`、`"spi"`、`"i2c"`、`"uart_pair"`（2 本の UART、§3.1）、`"can"`、`"lin"`、`"dmx512"` のタプル |
-| `decode(bus)` | 復号したバス 1 本を読み、`{"messages": [...], "checks_passed": n, "checks_failed": m}` を返す |
-
-`bus` は、分析が書き出す形のバスです（[分析の形式](analysis-format.ja.md) §4）: `roles`（役割ごとのピン）、`tick_hz`、その層。UART なら `bytes`（`{"s": [tick...], "hex": "..."}`）、`chars`（それぞれ `{"s", "value", "ok"}`）、`breaks`。SPI なら `transfers`（それぞれ `{"s", "e", <ピン>: 16 進}`）。I2C なら `transactions`。UART の組なら、両方の線の `messages`（§3.1）。CAN と LIN なら、その `frames`（§3.2）。プロトコルは WireSkein の内部の型を見ないので、分析の形式が変わらない限り動き続けます。
-
-- **メッセージ**は、ただの JSON の値です。それぞれの最初の tick を `"s"` に入れると、読み手とビューアがそこを見つけられます。
-- **チェック**が証拠です: チェックサム、合う長さ、数えていく順番の番号。でたらめのバイトでは偶然にしか通らないチェックが、そのバスがこのプロトコルを運んでいることを言います。分析は、通った数が多く失敗が少ないほど、バスの確かさを上げ（Modbus RTU と同じ）、チェックが通ったときだけ、そのプロトコルをバスの最終の読みとして出します。チェックの無いプロトコルは何も出しません: 証拠が無ければ、どのバイトも何にでも読めるからです。
-- `decode` の例外は、バスと一緒に出ます（`error`）。分析は続きます。
-
-## 2. 足し方
-
-- スクリプトや試験の中で: `wireskein.plugins.register_protocol(protocol)`（外すのは `unregister_protocol(name)`）。
-- パッケージから: entry point の `wireskein.protocols` に宣言すると、パッケージを入れたときにいつも使えます。
+表は、定義のディレクトリ（[独自の分析](extending.ja.md) §2）の `protocols/<名前>.toml` に置きます。
 
 ```toml
-[project.entry-points."wireskein.protocols"]
-"examples.demo_link" = "demo_link:PROTOCOL"
+format = "wireskein-protocol/1"
+name = "acme.link"          # 持ち主の名前空間と自分の名前（英小文字、数字、_）
+over = ["uart", "spi"]      # 乗るバス
+
+[frame]                      # バイトのフレーム（§2）。UART の組の命令と応答なら [lines]（§3）
+...
 ```
 
-## 3. 見本: demo_link
+| `over` | 表が読むもの（[分析の形式](analysis-format.ja.md) §4 が書き出すバス） |
+| --- | --- |
+| `"uart"` | バイトの流れ（`bytes`）。フレームを探す |
+| `"spi"` | 転送（`transfers`）ごと、データの線ごと。フレームを探す。メッセージに `line` が付く |
+| `"i2c"` | トランザクション（`transactions`）ごとのバイト。フレームを探す。`addr` をフィールドやチェックで使える（`@addr`） |
+| `"can"`、`"lin"`、`"dmx512"` | フレーム（`frames`、`packets`）ごとのデータを、表のフレーム 1 つとして丸ごと読む。フレームの値（`@id` など）を使える。バス自身が誤ったフレームは除く |
+| `"uart_pair"` | 同じ速さの 2 本の UART で、メッセージが交互に続くもの。そのテキストの行を時刻の順に（§3） |
 
-`examples/protocols/demo_link.py` は、このガイドのために作ったプロトコルです。多くの機器のプロトコルと同じ形をしています。
+どのメッセージにも、最初の tick が `"s"` に入ります。プロトコルのフレームが通ったチェックと失敗したチェックが、その証拠です: 分析は、通った数が多く失敗が少ないほどバスの確かさを上げ（Modbus RTU と同じ）、チェックが通ったときだけ、そのプロトコルをバスの最終の読みとして出します。チェックが一度も通らないプロトコルは何も出しません: 証拠が無ければ、どのバイトも何にでも読めるからです。
 
-```
-0xA5 | len | seq | cmd | payload[len] | crc8
-```
+## 2. フレーム: `[frame]`
 
-- `0xA5` がフレームの始まりです。途中から読み始めた読み手は、フレームが合う次の `0xA5` を探します（読み直し）。
-- `len` はペイロードの長さ（0〜32）、`seq` はフレームを数え、`cmd` は命令です。応答は `cmd` のビット 7 を立て、要求の seq を持ちます。
-- `crc8` は、`len`、`seq`、`cmd` とペイロードの CRC-8（多項式 0x07、初期値 0）で、これがチェックです。
-- UART ではフレームがバイトの流れの中に続き、SPI では CS の窓ごとに、MOSI に 1 つ（要求）、MISO に 1 つ（応答）が乗ります。1 つの `decode` が両方を読むので、`over = ("uart", "spi")` です。
-
-`wireskein analyze` では、バスの `result` の下に次のように出ます。
-
-```json
-"examples.demo_link": {"messages": [{"s": 1210, "seq": 1, "cmd": 16, "reply": false, "payload": "0102"}, ...],
-              "checks_passed": 4, "checks_failed": 0}
-```
-
-その試験（`tests/test_protocols.py`）は、WireSkein の生成器で信号を作ります。正解を、試験される機器から取らないためです。実機では、プローブが既存のライブラリで出した信号を正解にします。試験されるファームウェアの出力ではありません: `examples/protocols/demo_link_p4.wireskein` は、OEP のプローブ（ESP32-P4）が ESP-IDF の UART のドライバ（115200 8N1）でフレームを出し、そのピンを取り込んだもので、送ったものは `demo_link_p4.truth.json` にあります。demo_link が無いと、分析はその UART を `likely` と読み、あると `confirmed` で、3 つのフレームとその CRC を読みます。同じキャプチャには SPI のフレームもありますが、プローブ自身がピンを動かす SPI の controller で出したもので、既存のライブラリではないので、正解にはしません。
-
-## 3.1 2 本の線の上の命令と応答: demo_cmd
-
-多くの機器は、UART の 1 本でテキストの命令を受け、もう 1 本で答えます（AT コマンド、シェル、試験の治具のプロトコル）。`"uart"` の `decode` が見るのは 1 本だけです。命令とその応答を組で読むプロトコルは、代わりに `"uart_pair"` に乗ります。分析は、同じ速さで、メッセージが交互に続く（片方が話し、次にもう片方）2 本の UART を組にし、両方の線のメッセージを時刻の順にプロトコルに渡します。
-
-```json
-{"roles": {"a": "TX", "b": "RX"}, "tick_hz": 2000000.0,
- "messages": [{"pin": "TX", "s": 200, "e": 1764, "hex": "2331652050494e470a", "text": "#1e PING\n"},
-              {"pin": "RX", "s": 2364, "e": 3580, "hex": "...", "text": "#1e OK\n"}, ...]}
+```toml
+[frame]
+fields = [
+    { name = "sof", equals = 0xA5 },                      # 0xA5 でなければならないバイト
+    { name = "len", max = 32 },
+    { name = "seq" },
+    { name = "cmd", mask = 0x7F },                        # 出す値は mask のビット
+    { name = "reply", of = "cmd", mask = 0x80, as = "bool" },   # 前のフィールドからもう 1 つの値
+    { name = "payload", size = "len", as = "hex" },       # len の数だけのバイト
+    { name = "crc", check = { kind = "crc8", over = ["len", "seq", "cmd", "payload"] } },
+]
+show = ["seq", "cmd", "reply", "payload"]                 # メッセージのキー（既定はチェック以外の全フィールド）
+text = "#{seq} cmd {cmd:#x}"                              # 任意: ビューアが描く文字
 ```
 
-メッセージは、1 本の線の、3 文字より長い休みまでの文字です。行に分けるのはプロトコルの側です。どちらの線がホストかは、プロトコルが読み取ります（分析は知りません）。
+| フィールドのキー | 意味 |
+| --- | --- |
+| `name` | 名前（必須） |
+| `size` | バイト数: 数（既定 1）、前のフィールドの名前（その値）、`"rest"`（後ろのフィールドの手前まで） |
+| `endian` | 2 バイト以上のフィールドの `"big"`（既定）か `"little"` |
+| `equals`、`min`、`max` | そこにフレームがあるための値。合わなければフレームは無い（チェックの失敗ではない） |
+| `mask` | 出す値は、このビットを下に詰めたもの（1 ビットなら `as = "bool"`） |
+| `of` | 新しいバイトでなく、前のフィールドから読む（`mask` と一緒に） |
+| `as` | `"hex"`（バイトの列）、`"bool"`。既定は、8 バイト以下なら数、それより長ければ 16 進 |
+| `check` | このフィールドは、`over` に並べたフィールド（そのバイトを、その順に）のチェック: `kind` と下のオプション |
 
-`examples/protocols/demo_cmd.py` は、このガイドのために作ったテキストのプロトコルです。
+| チェックの `kind` | 中身 |
+| --- | --- |
+| `crc8`、`crc8_maxim`、`crc8_sae_j1850`、`crc16_modbus`、`crc16_ccitt_false`、`crc16_xmodem`、`crc16_kermit`、`crc32` | よく使う名前の CRC。`poly`、`init`、`refin`、`refout`、`xorout` で変えられる |
+| `crc` | 自分の CRC: `width`、`poly`、`init`、`refin`、`refout`、`xorout` |
+| `sum8`、`sum16`、`xor8` | バイトの和（2⁸、2¹⁶ で割った余り）か xor。`init` から始め、最後に `xorout` で xor |
+
+`init` には、バスのフレームの値を名指せます（`"@id"`: CAN や LIN の識別子、`"@addr"`: I2C のアドレス）。
+
+### 2.1 フレームの見つけ方
+
+流れ（UART のバイト、SPI の転送、I2C のトランザクション）では、どのバイトでもフレームを試します。フィールドの `equals`、`min`、`max` が合わないか、フレームが終わりを越えるなら、そこにフレームは無く、次のバイトを試します。チェックが失敗したフレームはチェックの失敗に数え、次のバイトから探し続けます（同期の取り直し）。CAN、LIN、DMX512 のフレームでは、フレームのデータを丸ごと読みます: ちょうど表のフレーム 1 つでなければなりません。
+
+### 2.2 カウンタ
+
+```toml
+sequence = { field = "seq", per = "@id", modulo = 256, note = " (seq skipped)" }
+```
+
+1 ずつ増える値（`per` があれば、その値ごとに）: どのメッセージにも `level` が付き、`ok`、または数が飛んだ所（フレームの欠けや二重送り）は `warn` で、`text` の後ろに `note` が付きます。飛びは見せるだけで、チェックの失敗にはしません。
+
+### 2.3 ビューアのための文字
+
+`text` はひな形です: `{name}` は値、`{name:x}` / `{name:#x}` / `{name:02x}` / `{name:d}` は書式付き、`{name|-}` は値が空なら `-`。`{@id}` はバスのフレームの値。
+
+## 3. 命令と応答: `[lines]`
+
+多くの機器は、1 本の UART でテキストの命令を受け、もう 1 本で応答します（AT コマンド、シェル、試験治具のプロトコル）。`[lines]` の表は `"uart_pair"` に乗ります: 分析は、同じ速さでメッセージが交互に続く 2 本の UART を組にし、メッセージを行に分け（行の tick は、メッセージの中に割り振る）、表はそれを時刻の順に読みます。
+
+```toml
+[lines]
+command = '^#(?P<seq>[0-9a-f]{2}) (?P<verb>[A-Z][A-Z0-9_]*)(?P<args>(?: \S+)*)$'
+answer = '^#(?P<seq>[0-9a-f]{2}) (?P<status>OK|ERR)(?P<values>(?: \S+)*)$'
+event = '^!(?P<event>[A-Z][A-Z0-9_]*)(?P<values>(?: \S+)*)$'      # 任意: 聞かれずに知らせるもの
+pair = "seq"                                  # 任意: この group が同じ応答だけが属する
+words = ["args", "values"]                    # 語のリストに分ける group
+warn = { status = "ERR" }                     # この値の応答は level warn
+answered = "{command} -> {status}{values}"    # 応答の来た命令の文字
+```
+
+- `command`、`answer`、`event` は正規表現で、名前付きの group がメッセージのキーになります。命令を送る線がホストで、もう一方の線の行は応答とイベントです。
+- **証拠は組です:** すぐ前の命令への応答（`pair` があれば、その group が同じもの）はチェックの成功、どの命令にも属さない応答や、次の命令が来ても応答の無い命令は失敗です。この形の無いテキストはどちらでもないので、ほかのテキストでは何も出しません。
+- メッセージは、応答付きの命令（`level` は `ok`、`warn` の値か応答が無ければ `warn`）、イベント（`ok`）、何にも属さない応答（`error`）のどれかです。パートの `relations` の下に出ます（分析の形式 §4）。
+
+## 4. 例と、試験での確かめ方
+
+`examples/` は 3 つの表を持つ定義のディレクトリで、それぞれ、OEP のプローブが ESP-IDF のドライバで送った記録が付いています（正解は送ったもので `*.truth.json` にあり、試験対象の機器の出力ではありません）。
+
+| 表 | 形 | 記録 |
+| --- | --- | --- |
+| `demo_link.toml` | UART と SPI の上の `0xA5 \| len \| seq \| cmd \| payload[len] \| crc8`。応答は `cmd` の bit 7 を立てる | `demo_link_p4.wireskein`（UART 115200 8N1） |
+| `demo_cmd.toml` | `#<seq> <VERB>[ <arg>...]` に `#<seq> OK[ <value>...]` か `#<seq> ERR <code>` で応え、`!<EVENT>` は聞かれずに | `demo_cmd_p4.wireskein`（2 本の UART） |
+| `demo_telemetry.toml` | CAN と LIN のフレームの中の `seq \| reading... \| check`。check は `(識別子 + 前のバイト) & 0xFF` を `0x5A` で xor、識別子ごとのカウンタ | `demo_telemetry_p4_can.wireskein`、`_lin.wireskein` |
 
 ```
-ホスト   #<seq> <VERB>[ <arg>...]          seq: 16 進 2 桁。命令ごとに 1 増える
-機器     #<seq> OK[ <value>...]  |  #<seq> ERR <code>  |  !<EVENT>[ <value>...]（頼まれずに）
+$ wireskein --definitions examples analyze examples/protocols/demo_link_p4.wireskein
+"examples.demo_link": {"messages": [{"s": 563052, "seq": 1, "cmd": 16, "reply": false, "payload": "0102"}, ...],
+                       "checks_passed": 3, "checks_failed": 0}
 ```
 
-- テキストにはチェックサムが無いので、組であることが証拠です。直前の命令と `seq` が同じ応答は、チェックが通ったものです（偶然なら 256 に 1）。どの命令にも当たらない応答と、次の命令が来ても答えの無い命令は、チェックの失敗です。この形でないテキストはどちらでもないので、ほかのテキストでは何も出しません。
-- メッセージは、命令とその応答（`verb`、`args`、`status`、`values`）か、出来事です。ビューアのために `text` と `level`（`ok`。`ERR` と答えの無いものは `warn`、何にも当たらない応答は `error`）を持ちます。
-- `wireskein analyze` では、`scpi` と同じく、パートの `relations` の下に出ます（分析の形式 §4）。
-
-```json
-{"protocol": "examples.demo_cmd", "roles": {"a": "TX", "b": "RX"}, "score": 0.9375,
- "messages": [{"s": 200, "seq": "1e", "verb": "PING", "args": [], "status": "OK", "text": "#1e PING -> OK", ...}],
- "checks_passed": 4, "checks_failed": 0}
-```
-
-その試験（`tests/test_demo_cmd.py`）は、読み手とは別の符号器で、やり取りを 2 本の線に乗せます。実機では、`examples/protocols/demo_cmd_p4.wireskein` が、OEP のプローブが 2 つの ESP-IDF の UART ドライバ（115200 8N1。ホストと機器がそれぞれ自分の線）で送ったもので、それぞれが送ったものは `demo_cmd_p4.truth.json` にあります。demo_cmd が無いと、分析は 2 本の UART を読むだけで、その上には何も出しません。あると、5 つのやり取りと、命令に当たる 4 つの応答を読みます。
-
-## 3.2 CAN、LIN のフレームの上: demo_telemetry
-
-プロトコルは、分析がもう読んでいるフレームの上にも乗れます: `"can"`、`"lin"`、`"dmx512"`。そのとき `bus` は、そのプロトコルの `frames`（DMX512 は `packets`）を、分析の形式 §3.2 のとおりに持ちます: CAN は `{"s", "id", "ide", "dlc", "data": 16 進, "ack", "ok"}`、LIN は `{"s", "id", "data": 16 進, "ok"}`。CANopen、J1939、OBD-II / UDS、LIN のノードの信号などは、ここに乗せます。
-
-`examples/protocols/demo_telemetry.py` は、このガイドのために作ったものです: どのノードも、自分の識別子のフレームで測った値を送り、データは `seq | 値... | check`、check は `(識別子 + その前のバイト) & 0xFF` と `0x5A` の排他的論理和です。1 つの `decode` が CAN も LIN も読みます（`over = ("can", "lin")`）。check が合うフレームはチェックが通ったもので、ノードの前の seq から続かない seq は見せます（`level: "warn"`）。メッセージは、demo_link が UART の下に出るのと同じく、CAN や LIN のバスの `result` の下に出ます。その試験（`tests/test_demo_telemetry.py`）は、自分の符号器でフレームを線に乗せます。実機では、`examples/protocols/demo_telemetry_p4_can.wireskein` と `_lin.wireskein` が、OEP のプローブが ESP-IDF の TWAI ドライバ（self-test、500 kbit/s）と UART ドライバ（19200 baud。break は 9/13 の速さの 0x00）で送ったもので、送ったものはそれぞれの `.truth.json` にあります。
-
-## 4. 試験で確かめる
+試験では:
 
 ```python
 from wireskein.runlog import protocol
@@ -102,12 +127,11 @@ with rec.section(2, "ping", expect=[protocol("examples.demo_link", "uart", {"dat
 - `bus` は `"uart"`、`"spi"`、`"i2c"`、`"uart_pair"`、`"can"`、`"lin"`、`roles` は役割ごとのピン（UART、CAN、LIN は `{"data": ...}`、`{"clk", "mosi", "miso", "cs"}`、`{"scl", "sda"}`、`{"a": TX, "b": RX}`）です。組では、組の点数にかかわらず 2 本を一緒に読みます: `protocol("examples.demo_cmd", "uart_pair", {"a": "PA2", "b": "PA3"}, baud=115200, messages=[{"verb": "PING", "status": "OK"}])`。
 - `messages` は順に比べ、それぞれ書いたキーだけを比べます（`"s"` など書かないキーは比べません）。`messages` が無ければ、メッセージが 1 つ以上あること。
 - チェックの失敗は `checks_failed_max`（既定 0）まで。
-- これで言えないきまりは、自分の検査（[ガイド](capture-test-guide.ja.md) §4.10）か、試験の判定（`rec.result`、ガイド §3.3）にします。
+- 定義のディレクトリは、試験を検証する所で足します（`wireskein --definitions DIR verify RUN`、または試験の中で `add_definitions`）。
+- これで言えないきまりは、試験の判定にします（`rec.result`、[ガイド](capture-test-guide.ja.md) §3.3）。
 
-## 5. 機器パックとマーカーの方言: 定義のディレクトリ
+## 5. 表でないもの
 
-バスの上に乗るものは、コードを書かずに表でも名付けられます: I²C や SPI の機器のレジスタと命令（機器パック）と、自分の試験の記録のマーカーの行（マーカーの方言）です。どちらも分析が書き出すものを読むので、バスの見つけ方に依りません。
-
-- **定義のディレクトリ**は、`devices/<バス>/...` の機器パック（[機器パック](../src/wireskein/decl/devices/README.md)）と、`markers/*.toml` のマーカーの方言（[マーカー](markers.ja.md) §4）を持ちます。どちらも無くてかまいません。
-- **足し方:** スクリプトや試験では `wireskein.plugins.add_definitions(パス)`、コマンドでは `wireskein --definitions ディレクトリ`、パッケージからは entry point の `wireskein.definitions`（`NAME = "module"`: その module のディレクトリに定義がある。またはパスを返す callable）。
-- **線そのものの上のプロトコル**（クロックとデータ、または 1 本の線の上の独自の枠）は、ここには入りません: WireSkein 自身のそうしたプロトコル（`decl/*.toml`: I²C、SPI、SWD、CAN など）は、分析のエンジンの一部で、そのエンジンの層に合わせて書いてあり、エンジンとともに変わりえます。直下にプロトコルの表があるディレクトリは断ります。WireSkein が読まないバスは、提案してください。
+- **線そのものの上のプロトコル**（クロックとデータ、または 1 本の線の上の独自の枠）: WireSkein 自身のそうしたプロトコル（`decl/*.toml`: I²C、SPI、SWD、CAN など）は、分析のエンジンの一部で、そのエンジンの層に合わせて書いてあり、エンジンとともに変わりえます。直下にプロトコルの表がある定義のディレクトリは断ります。WireSkein が読まないバスは、提案してください。
+- **表で言えないプロトコル**（フレームをまたぐ状態、分割したものの組み立て、独自の計算）: 分析の出力を自分のコードで読み（`wireskein analyze FILE`、バスの層）、試験では `rec.result` で判定します。
+- **機器パックとマーカーの方言**は、同じディレクトリの `devices/` と `markers/` にある別の表です（[機器パック](../src/wireskein/decl/devices/README.md)、[マーカー](markers.ja.md) §4）。

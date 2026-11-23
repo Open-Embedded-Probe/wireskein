@@ -9,9 +9,6 @@ built-in sources:
     sigrok:<driver>   a device sigrok supports, through sigrok-cli (e.g. sigrok:fx2lafw, sigrok:demo,
                       sigrok:dreamsourcelab-dslogic:conn=1.6)
 
-Sources of others are added with wireskein.plugins (register_source, or the entry point group "wireskein.sources":
-a module or object with capture(target: str, request: Request) -> Result).
-
     from wireskein import sources
     req = sources.Request([("SDA", "GPIO47"), ("SCL", "x035.scl")], rate_hz=20_000_000, samples=200_000)
     sources.capture("oep:/dev/ttyACM0", req, "i2c.wireskein")
@@ -123,11 +120,7 @@ class Result:
 def _module(scheme: str):
     if scheme in BUILTIN:
         return importlib.import_module(BUILTIN[scheme])
-    from .. import plugins
-    added = plugins.sources()
-    if scheme in added:
-        return added[scheme]
-    raise ValueError(f"unknown source {scheme!r} (known: {', '.join(sorted({*BUILTIN, *added}))})")
+    raise ValueError(f"unknown source {scheme!r} (known: {', '.join(sorted(BUILTIN))})")
 
 
 def run(source: str, request: Request) -> Result:

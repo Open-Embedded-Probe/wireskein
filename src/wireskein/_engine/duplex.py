@@ -136,7 +136,7 @@ def scpi_node(d: Duplex, pm: dict) -> Node | None:
 
 
 def pair_bus(d: Duplex, tick_hz: float | None = None) -> dict:
-    """The pair as protocols of others get it (wireskein.plugins.register_protocol, bus "uart_pair"): both lines' messages in time
+    """The pair as protocols of others get it (declared in a definitions directory, bus "uart_pair"): both lines' messages in time
     order, a message being one line's characters up to a pause of more than 3 characters."""
     return {"roles": {"a": d.a, "b": d.b}, "tick_hz": tick_hz,
             "messages": [{"pin": m.pin, "s": m.t0, "e": m.t1, "hex": m.data.hex(), "text": m.data.decode("latin-1")}

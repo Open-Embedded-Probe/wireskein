@@ -403,15 +403,13 @@ sd_spi("PA5", "PA7", "PA6", "PA4", [{"cmd": 0, "r1": 0x01}, {"cmd": 8, "arg": 0x
 
 | どの検査も | `under_rate` | 検査が見る長さが 5 サンプルに届かないか、グリッチフィルタの幅のうち。そこで読めたものは確かでない（§4.11。`what`、`t_s`、`interval_s`、`samples`、`whole`、`least_rate_hz`、`best_rate_hz`、`glitch_filter_s`） |
 
-### 4.10 ほかから足す検査
+### 4.10 検査の無いきまり
 
-wireskein に検査の無いきまりは、検査の種類として足せます。wireskein の検査と同じに判定し、報告します（`wireskein verify` でも pytest-embedded-wireskein でも）。
+検査の種類は WireSkein 自身のもので、外からは足しません。どの検査も言わないきまりは、試験が自分で判定します:
 
-- 入れたパッケージが、entry point の `wireskein.checks` に宣言します: `NAME = "module:object"`。object は検査の関数か、`.check` と、あれば `.notices`（種類 -> 意味）、`.logic`、`.every_edge` を持つもの。試験から `wireskein.plugins.register_check(NAME, check, notices=...)` で足すこともできます（外すのは `unregister_check(NAME)`）。
-- `check(cap, x)` は `(ok, measured, reason)` を返します: `ok` は True、False、None（unchecked）、`MEASURED`。`cap` は区間の窓を変化で持つもので（`wireskein.capture.Part.view()` がパートに返すのと同じ）: `cap.rate_hz`、`cap.n_samples`、`cap.channel(名前)`（`.initial`、tick の `.edges`、`.step`、`.level_at(ticks)`）、`cap.analog`。`x` は期待 `{"kind": NAME, "pins": [...], ...}` で、`pins` は要るチャンネルの名前です。
-- `measured["notices"]` に注意を入れられます（`[{"kind", "tick", ...}]`、窓の tick）。§4.9 のとおり、場所を付け、`notices=` で制限し、印にします。
-- wireskein の持つ種類は置き換えません。だれも足していない種類を書いた期待は `ng` です。
-- どの検査も読まないものの判定（試験が自分で分析を読んだもの）は、代わりに `rec.result()` で入れます（§3.3）。
+- 要るものを読み（`wireskein.verify.sections(run)`、区間の分析、分析の `lines` や自分のプロトコルのメッセージ）、判定を `rec.result()` で入れます（§3.3）。`wireskein verify` でも pytest-embedded-wireskein でも、検査と一緒に報告します。
+- 表で宣言したバスの上のプロトコルは、`protocol(...)` で確かめます（[プロトコル](protocols.ja.md) §4）。
+- 多くの試験が要るきまりは、WireSkein 本体の検査の種類として提案してください。
 
 ### 4.11 検査がどの細かさで見たか
 
