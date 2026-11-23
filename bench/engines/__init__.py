@@ -18,6 +18,7 @@ engine is (bench/algos/e2e/engines.py registers them as trials).
             own statistics and breaks the protocol's structure (an open-world test, nulled.py)
 - <name>_open: an engine's claims with the shapes' open world after it (shapes.opened)
 - light_surveyed: light with WireSkein's survey first, only its clocks tried as SCL and SCK
+- light_main_<protocol>: light with WireSkein's own engine as its reader of that protocol (the candidates light's)
 - cascade:  light_open first, WireSkein's own engine where it leaves an active line without a confirmed claim
 - views_upper: the views engine's claims through WireSkein's upper stage (wireskein._upper), as the main engine's
 - open:     the views engine with shapes that explain a line without naming a protocol (a pulse code) among the
@@ -191,6 +192,51 @@ def light_surveyed(cap):
     return claims_of(candidates(cap, clocks=set(sv.clocks)))
 
 
+def main_reader(protocol, cap, roles):
+    """WireSkein's own engine as a reader: the capture cut to the role lines, the protocol and the roles hinted ->
+    (fit, params, layers, evidence) of its best reading with those roles, or None."""
+    from dataclasses import replace
+    from wireskein._engine import export, staged
+    names = set(roles.values())
+    sub = replace(cap, channels=[c for c in cap.channels if c.name in names])
+    pins = {x: {"protocol": protocol, "role": r} for r, x in roles.items()}
+    res = staged.analyze(sub, {"protocols": [protocol], "pins": pins})
+    def shape(rs):                         # the roles with the data lines as a set (an engine may number them otherwise)
+        return ({k: v for k, v in rs.items() if not k.startswith("data")},
+                frozenset(v for k, v in rs.items() if k.startswith("data")))
+    got = [n for n in res.roots if n.analyzer == protocol and n.output is not None and shape(n.roles) == shape(roles)]
+    if not got:
+        return None
+    n = max(got, key=lambda n: n.total)
+    ev = {k: v for k, v in n.metrics.items() if not isinstance(v, (dict, list))}      # as the analysis exports it
+    return float(n.total), dict(n.params), export.layers_of(n), ev
+
+
+def light_with(protocol, every_pair=False):
+    """light with WireSkein's own reader for one protocol (main_reader): how much of the gap is the reader's.
+    every_pair (I2C): every two active lines tried as SCL and SDA, not only those light's least conditions allow."""
+    def run(cap):
+        out = []
+        for c in candidates(cap):
+            if c[0] != protocol:
+                out.append(c)
+                continue
+            if every_pair:
+                continue
+            r = main_reader(protocol, cap, c[1])
+            if r is not None:
+                out.append((c[0], c[1], *r))
+        if every_pair:
+            act = [c for c in cap.channels if len(c.edges) >= 4]
+            for a, b in itertools.permutations(act, 2):
+                roles = {"scl": a.name, "sda": b.name}
+                r = main_reader(protocol, cap, roles)
+                if r is not None:
+                    out.append((protocol, roles, *r))
+        return claims_of(out)
+    return run
+
+
 def cascade(cap, first="light_open"):
     """A light engine first, WireSkein's own where it is not sure: its claims are taken when every active line (4
     changes or more) is under a confirmed claim of it, else the main engine reads the capture. (The cost of the light
@@ -218,5 +264,7 @@ def _synth_gated(cap):
 ENGINES = {"light": light, "views": views, "declarative": _declarative, "learned": _learned, "synth": _synth,
            "synth_gated": _synth_gated,
            "nulled": _nulled, "open": _open, "views_upper": _views_upper, "open2": _open2,
-           "cascade": cascade, "light_surveyed": light_surveyed}
+           "cascade": cascade, "light_surveyed": light_surveyed, "light_main_i2c": light_with("i2c"),
+           "light_main_i2c_all": light_with("i2c", every_pair=True),
+           "light_main_spi": light_with("spi"), "light_main_uart": light_with("uart")}
 ENGINES.update({f"{k}_open": _opened(k) for k in ("light", "views", "declarative", "synth", "learned")})
