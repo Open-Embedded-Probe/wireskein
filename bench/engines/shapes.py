@@ -63,3 +63,12 @@ def engine(cap, need_two=False):
     taken = {x for c in claims_of(candidates(cap, need_two) + cands) if c["protocol"] == "other"
              for x in c["roles"].values()}
     return claims_of([c for c in cands if not set(c[1].values()) & taken])
+
+
+def opened(claims: list[dict], cap) -> list[dict]:
+    """The open world after any engine (no candidates needed): a claim on a line a shape fits is left out unless it
+    explains more than the shape (its score times its lines over 1, the shape's): the two-pass engine's choice
+    read off the claims."""
+    shaped = {ch.name for ch in cap.channels if pulse_code(ch)}
+    return [c for c in claims if not (set(c["roles"].values()) & shaped
+                                      and float(c["score"]) * len(set(c["roles"].values())) <= 1.0)]

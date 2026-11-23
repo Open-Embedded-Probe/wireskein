@@ -16,6 +16,7 @@ engine is (bench/algos/e2e/engines.py registers them as trials).
             readings are mostly wrong as the gate
 - nulled:   the views engine's candidates, each fit less the same reader's on a surrogate that keeps the lines'
             own statistics and breaks the protocol's structure (an open-world test, nulled.py)
+- <name>_open: an engine's claims with the shapes' open world after it (shapes.opened)
 - views_upper: the views engine's claims through WireSkein's upper stage (wireskein._upper), as the main engine's
 - open:     the views engine with shapes that explain a line without naming a protocol (a pulse code) among the
             candidates: they take lines and are not shown (shapes.py)
@@ -168,6 +169,13 @@ def _open2(cap):
     return importlib.import_module(__name__ + ".shapes").engine(cap, need_two=True)
 
 
+def _opened(name):
+    def run(cap):
+        import importlib
+        return importlib.import_module(__name__ + ".shapes").opened(ENGINES[name](cap), cap)
+    return run
+
+
 def _views_upper(cap):
     return with_upper(views(cap), cap)
 
@@ -180,3 +188,4 @@ def _synth_gated(cap):
 ENGINES = {"light": light, "views": views, "declarative": _declarative, "learned": _learned, "synth": _synth,
            "synth_gated": _synth_gated,
            "nulled": _nulled, "open": _open, "views_upper": _views_upper, "open2": _open2}
+ENGINES.update({f"{k}_open": _opened(k) for k in ("light", "views", "declarative", "synth", "learned")})

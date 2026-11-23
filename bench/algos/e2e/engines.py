@@ -10,7 +10,8 @@ from wsbench import algorithm
                      "declarative": {"name": "declarative"}, "learned": {"name": "learned"},
                      "synth": {"name": "synth"}, "synth_gated": {"name": "synth_gated"},
                      "nulled": {"name": "nulled"}, "open": {"name": "open"},
-                     "views_upper": {"name": "views_upper"}})
+                     "views_upper": {"name": "views_upper"},
+                     **{f"{k}_open": {"name": f"{k}_open"} for k in ("light", "declarative", "synth", "learned")}})
 def engine(cap, name):
     import engines
     return engines.ENGINES[name](cap)
