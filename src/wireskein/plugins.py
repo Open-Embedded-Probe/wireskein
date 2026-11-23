@@ -4,7 +4,7 @@ capture sources (docs/extending.md).
 What each addition is:
 
 - a protocol (register_protocol): an object with
-      name     its name ("acme_link")
+      name     its name ("acme.link": owner.name)
       over     the buses it rides on: a tuple of "uart", "spi", "i2c", "uart_pair", "can", "lin", "dmx512"
       decode(bus) -> {"messages": [...], "checks_passed": int, "checks_failed": int}
   `bus` is the bus as the analysis exports it (wireskein-analysis/1, docs/analysis-format.md §4). The checks its
@@ -14,7 +14,7 @@ What each addition is:
   A protocol on the wire itself is not one: WireSkein's own (decl/*.toml) are part of its analysis engine, which may
   change, and a directory with protocol tables at its top is refused.
 - a file format (register_format): an object with
-      name     its name ("saleae_csv")
+      name     its name ("examples.saleae_csv": owner.name)
       sniff(head: bytes, path) -> bool    whether the file is one of it, from its first 4096 bytes (and its name)
       read(path) -> wireskein.capture.Capture
   WireSkein's own files, sigrok sessions and VCDs are told apart first; a file none of them is goes to the formats
@@ -39,8 +39,10 @@ The environment adds them too, where a process starts without the caller's regis
 files to run (each adds what it has with this module), and WIRESKEIN_DEFINITIONS, definitions directories, each list separated by
 os.pathsep.
 
-Names are letters, digits and "_", starting with a letter, and none of WireSkein's own (its protocols, layers,
-formats, check kinds and sources): those are refused, as is an entry point naming one.
+Names (B13): an addition's is its owner's namespace and its own, owner.name ("acme.link": lowercase letters, digits
+and "_"), so it never meets one of WireSkein's own, which have none (registry.toml, the one ledger of them); a capture
+source's is a URI scheme ("acme"), not one WireSkein has. An entry point's name is the addition's: an object named
+otherwise is refused.
 """
 
 from __future__ import annotations
@@ -52,11 +54,9 @@ __all__ = ["add_definitions", "checks", "definitions", "formats", "protocols", "
            "register_protocol", "register_source", "remove_definitions", "sources", "unregister_check",
            "unregister_format", "unregister_protocol", "unregister_source"]
 
-BUSES = ("uart", "spi", "i2c", "uart_pair", "can", "lin", "dmx512")   # and any protocol a definition adds
-LAYERS = {"lines", "nmea", "modbus_rtu", "markers", "bytes", "chars", "breaks", "transfers", "transactions", "words",
-          "bits", "frames", "packets", "sd", "devices", "modes", "modes_ok"}
-FORMATS = ("wireskein", "sr", "vcd")
-NAME = re.compile(r"[A-Za-z][A-Za-z0-9_]*")
+NAME = re.compile(r"[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*")     # an addition's name: owner.name (B13)
+SCHEME = re.compile(r"[A-Za-z][A-Za-z0-9_]*")              # a source's: a URI scheme
+REGISTRY = Path(__file__).with_name("registry.toml")
 
 _PROTOCOLS: dict[str, object] = {}
 _FORMATS: dict[str, object] = {}
@@ -67,15 +67,32 @@ _LOADED: set = set()
 
 
 def _name(name, what: str) -> str:
+    """An addition's name: its owner's namespace and its own, owner.name, each a lowercase letter then lowercase
+    letters, digits and "_" (B13: WireSkein's own names have no namespace, so none is ever one of an addition's)."""
     if not isinstance(name, str) or not NAME.fullmatch(name):
-        raise ValueError(f"a {what} needs a name of letters, digits and _: {name!r}")
+        raise ValueError(f"a {what}'s name is its owner's namespace and its own, owner.name (lowercase letters, "
+                         f"digits and _): {name!r}")
     return name
 
 
-def own_protocols() -> set[str]:
-    """The names of WireSkein's own protocols and layers (a protocol or a definition may not take one)."""
-    from ._engine import staged
-    return {*BUSES, *LAYERS, *(p.name for p in staged.PLUGINS), *(u.name for u in staged.UPPER)}
+_REG = None
+
+
+def registry() -> dict:
+    """WireSkein's own protocol names (registry.toml): name -> {kind, roles, layers, result, over, engines}."""
+    global _REG
+    if _REG is None:
+        import tomllib
+        doc = tomllib.loads(REGISTRY.read_text())
+        if doc.get("format") != "wireskein-registry/1":
+            raise ValueError(f"{REGISTRY.name}: format {doc.get('format')!r}")
+        _REG = doc["protocols"]
+    return _REG
+
+
+def buses() -> list[str]:
+    """The buses WireSkein reads (a protocol's over names these, or an engine's protocols added from outside)."""
+    return sorted(k for k, v in registry().items() if v["kind"] == "bus")
 
 
 def own_sources() -> set[str]:
@@ -88,11 +105,11 @@ def own_sources() -> set[str]:
 def register_protocol(protocol) -> None:
     """Add a protocol for the analyses that run after it (its shape: the module's docstring)."""
     name = _name(getattr(protocol, "name", None), "protocol")
-    if name in own_protocols():
-        raise ValueError(f"{name!r} is a protocol or layer of WireSkein's own")
     over = tuple(getattr(protocol, "over", ()))
-    if not over or not all(isinstance(b, str) and NAME.fullmatch(b) for b in over):
-        raise ValueError(f"{name}: over must name buses ({', '.join(BUSES)}), not {over!r}")
+    known = set(buses())
+    if not over or not all(isinstance(b, str) and (b in known or NAME.fullmatch(b)) for b in over):
+        raise ValueError(f"{name}: over must name buses ({', '.join(sorted(known))}, or an added engine's "
+                         f"owner.name), not {over!r}")
     if not callable(getattr(protocol, "decode", None)):
         raise ValueError(f"{name}: decode(bus) is missing")
     _PROTOCOLS[name] = protocol
@@ -138,8 +155,6 @@ def definitions() -> list[Path]:
 def register_format(fmt) -> None:
     """Add a file format (its shape: the module's docstring)."""
     name = _name(getattr(fmt, "name", None), "format")
-    if name in FORMATS:
-        raise ValueError(f"{name!r} is a format WireSkein reads itself")
     for k in ("sniff", "read"):
         if not callable(getattr(fmt, k, None)):
             raise ValueError(f"{name}: {k} is missing")
@@ -188,7 +203,8 @@ def checks() -> list[str]:
 
 def register_source(scheme: str, source) -> None:
     """Add a capture source under a scheme (its shape: the module's docstring)."""
-    _name(scheme, "source")
+    if not isinstance(scheme, str) or not SCHEME.fullmatch(scheme):
+        raise ValueError(f"a source's scheme is letters, digits and _: {scheme!r}")
     if scheme in own_sources():
         raise ValueError(f"{scheme!r} is a source of WireSkein's own")
     if not callable(getattr(source, "capture", None)):

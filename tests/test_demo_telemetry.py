@@ -21,7 +21,7 @@ SPEC.loader.exec_module(demo)
 def telemetry():
     plugins.register_protocol(demo.PROTOCOL)
     yield demo
-    plugins.unregister_protocol("demo_telemetry")
+    plugins.unregister_protocol("examples.demo_telemetry")
 
 
 def write(tmp_path, rate, lines: dict, n: int):
@@ -61,7 +61,7 @@ def test_on_can_frames(tmp_path, telemetry):
     lines, n = can_line()
     doc = analyze_file(write(tmp_path, 20e6, lines, n))
     (c,) = [c for c in doc["parts"][0]["claims"] if c["protocol"] == "can"]
-    got = c["result"]["demo_telemetry"]
+    got = c["result"]["examples.demo_telemetry"]
     assert (got["checks_passed"], got["checks_failed"]) == (5, 1), got     # 0x7FF's last byte is no check
     assert [(m["id"], m["seq"], m["readings"]) for m in got["messages"]] == [
         (0x321, 0, "1020"), (0x18FF0042, 0, "00000100"), (0x321, 1, "1120"), (0x18FF0042, 1, "00000101"),
@@ -72,7 +72,7 @@ def test_a_skipped_seq_is_shown(tmp_path, telemetry):
     lines, n = can_line(skip=True)
     doc = analyze_file(write(tmp_path, 20e6, lines, n))
     (c,) = [c for c in doc["parts"][0]["claims"] if c["protocol"] == "can"]
-    assert [m["level"] for m in c["result"]["demo_telemetry"]["messages"]][-1] == "warn"
+    assert [m["level"] for m in c["result"]["examples.demo_telemetry"]["messages"]][-1] == "warn"
 
 
 # LIN: an encoder of this test's own (break, delimiter, sync, protected identifier, data, enhanced checksum)
@@ -102,7 +102,7 @@ def test_on_lin_frames(tmp_path, telemetry):
     edges, n = edges_of(segs + [(1, 1e-3)], 2e6)
     doc = analyze_file(write(tmp_path, 2e6, {"LIN": (1, edges)}, n))
     (c,) = [c for c in doc["parts"][0]["claims"] if c["protocol"] == "lin"]
-    got = c["result"]["demo_telemetry"]
+    got = c["result"]["examples.demo_telemetry"]
     assert got["checks_passed"] == 3 and [m["seq"] for m in got["messages"]] == [0, 1, 2], got
 
 
@@ -111,7 +111,7 @@ def test_a_test_checks_it_on_can(tmp_path, telemetry):
     from wireskein.runlog import protocol
     lines, n = can_line()
     cap = wc.read(write(tmp_path, 20e6, lines, n)).parts[0].view()
-    x = protocol("demo_telemetry", "can", {"data": "CAN"}, checks_failed_max=1,
+    x = protocol("examples.demo_telemetry", "can", {"data": "CAN"}, checks_failed_max=1,
                  messages=[{"id": 0x321, "seq": 0}, {"id": 0x18FF0042, "seq": 0}, {"id": 0x321, "seq": 1},
                            {"id": 0x18FF0042, "seq": 1}, {"id": 0x321, "seq": 2, "readings": "1221"}])
     ok, got, why = check_protocol(cap, x)
@@ -129,6 +129,6 @@ def test_hardware_probe_frames(bus, telemetry):
     mine = [(i, dt) for i, dt in sent if len(dt) >= 4 and bytes.fromhex(dt)[-1] == demo.check_of(i, bytes.fromhex(dt)[:-1])]
     doc = analyze_file(d / f"demo_telemetry_p4_{bus}.wireskein")
     (c,) = [c for c in doc["parts"][0]["claims"] if c["protocol"] == bus]
-    got = c["result"]["demo_telemetry"]
+    got = c["result"]["examples.demo_telemetry"]
     assert got["checks_passed"] == len(mine) and got["checks_failed"] == len(sent) - len(mine), got
     assert [(m["id"], m["seq"]) for m in got["messages"]] == [(i, bytes.fromhex(dt)[0]) for i, dt in mine]

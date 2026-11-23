@@ -19,7 +19,7 @@ BAUD = 115200
 def saleae():
     plugins.register_format(demo.FORMAT)
     yield demo
-    plugins.unregister_format("saleae_csv")
+    plugins.unregister_format("examples.saleae_csv")
 
 
 def uart_changes(data, t0=200e-6):
@@ -53,9 +53,9 @@ def test_a_csv_is_read_and_analysed(tmp_path, saleae):
     tx, end = uart_changes(b"hello, saleae\r\n" * 3)
     p = tmp_path / "export.csv"
     p.write_text(csv_text({"Channel 0": tx, "Channel 1": []}, end))
-    assert formats.kind(p) == "saleae_csv"
+    assert formats.kind(p) == "examples.saleae_csv"
     cap = load(p)
-    assert cap.meta["format"] == "saleae_csv"
+    assert cap.meta["format"] == "examples.saleae_csv"
     e = cap.channel("Channel 0").edges
     assert len(e) == len(tx) and abs(int(e[0]) / cap.rate - tx[0][0]) <= 1e-9
     doc = analyze_file(p)
@@ -114,7 +114,7 @@ def test_an_analog_export_is_read_as_volts(tmp_path, saleae):
     rows = [f"{(292 + 800 * i) / 1e9:.9f},{1.65 + (i % 2) * 1.6:.3f},{0.5:.3f}" for i in range(1000)]
     p = tmp_path / "analog.csv"
     p.write_text("Time [s],Channel 0,Channel 1\n" + "\n".join(rows) + "\n")
-    assert formats.kind(p) == "saleae_csv"
+    assert formats.kind(p) == "examples.saleae_csv"
     cap = formats.read(p)
     (part,) = cap.parts
     ch = {c.name: c for c in part.channels}

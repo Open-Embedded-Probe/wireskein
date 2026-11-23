@@ -1,0 +1,262 @@
+# WireSkein's own protocol names: the one ledger of them (bench/notes/2026-11-23-extension-spec.ja.md §4). A name here
+# is WireSkein's; one from outside takes its owner's namespace ("acme.link") and never one of these.
+#
+# kind: bus (read from the lines by an engine) or upper (read from a bus's output, above any engine)
+# roles: the claim's role names; "name+" one or more (name0, name1, ...), "name?" may be absent; alternative sets
+#        as a list of lists
+# layers: the output's layers (analyze --mode all); result: those under result (--mode final); docs/analysis-format.md
+# engines: the engines that read it (main: WireSkein's own)
+format = "wireskein-registry/1"
+
+[protocols.uart]
+kind = "bus"
+roles = ["data"]
+layers = ["bytes", "chars", "breaks", "blocks"]
+result = ["bytes"]
+engines = ["main"]
+
+[protocols.spi]
+kind = "bus"
+roles = ["clk", "data+", "cs?"]
+layers = ["transfers", "words", "bits", "frames", "modes", "modes_ok"]
+result = ["transfers"]
+engines = ["main"]
+
+[protocols.i2c]
+kind = "bus"
+roles = ["scl", "sda"]
+layers = ["transactions", "words", "bits", "frames", "conditions"]
+result = ["transactions"]
+engines = ["main"]
+
+[protocols.can]
+kind = "bus"
+roles = ["data"]
+layers = ["frames"]
+result = ["frames"]
+engines = ["main"]
+
+[protocols.lin]
+kind = "bus"
+roles = ["data"]
+layers = ["frames", "chars", "breaks", "blocks"]
+result = ["frames"]
+engines = ["main"]
+
+[protocols.dmx512]
+kind = "bus"
+roles = ["data"]
+layers = ["packets", "chars", "breaks", "blocks"]
+result = ["packets"]
+engines = ["main"]
+
+[protocols.rvswd]
+kind = "bus"
+roles = ["clk", "dio"]
+layers = ["dmi", "dm", "frames", "bits"]
+result = ["dm"]
+engines = ["main"]
+
+[protocols.swio]
+kind = "bus"
+roles = ["dio"]
+layers = ["dmi", "dm", "pulses"]
+result = ["dm"]
+engines = ["main"]
+
+[protocols.swd]
+kind = "bus"
+roles = ["swclk", "swdio"]
+layers = ["packets"]
+result = ["packets"]
+engines = ["main"]
+
+[protocols.jtag]
+kind = "bus"
+roles = [["tck", "tdi", "tdo", "tms"], ["tckc", "tmsc"]]
+layers = ["scans"]
+result = ["scans"]
+engines = ["main"]
+
+[protocols.mdio]
+kind = "bus"
+roles = ["mdc", "mdio"]
+layers = ["frames"]
+result = ["frames"]
+engines = ["main"]
+
+[protocols.ps2]
+kind = "bus"
+roles = ["clk", "data"]
+layers = ["frames"]
+result = ["frames"]
+engines = ["main"]
+
+[protocols.sdmmc]
+kind = "bus"
+roles = ["clk", "cmd"]
+layers = ["frames"]
+result = ["frames"]
+engines = ["main"]
+
+[protocols.i2s]
+kind = "bus"
+roles = ["sck", "ws", "sd"]
+layers = ["frames"]
+result = ["frames"]
+engines = ["main"]
+
+[protocols.onewire]
+kind = "bus"
+roles = ["dq"]
+layers = ["resets"]
+result = ["resets"]
+engines = ["main"]
+
+[protocols.rgb_led]
+kind = "bus"
+roles = ["data"]
+layers = ["frames"]
+result = ["frames"]
+engines = ["main"]
+
+[protocols.ir_nec]
+kind = "bus"
+roles = ["data"]
+layers = ["frames"]
+result = ["frames"]
+engines = ["main"]
+
+[protocols.cec]
+kind = "bus"
+roles = ["cec"]
+layers = ["messages"]
+result = ["messages"]
+engines = ["main"]
+
+[protocols.dali]
+kind = "bus"
+roles = ["dali"]
+layers = ["frames"]
+result = ["frames"]
+engines = ["main"]
+
+[protocols.dcc]
+kind = "bus"
+roles = ["track"]
+layers = ["packets"]
+result = ["packets"]
+engines = ["main"]
+
+[protocols.dht]
+kind = "bus"
+roles = ["data"]
+layers = ["readings"]
+result = ["readings"]
+engines = ["main"]
+
+[protocols.j1850]
+kind = "bus"
+roles = ["data"]
+layers = ["frames"]
+result = ["frames"]
+engines = ["main"]
+
+[protocols.sent]
+kind = "bus"
+roles = ["data"]
+layers = ["messages"]
+result = ["messages"]
+engines = ["main"]
+
+[protocols.spdif]
+kind = "bus"
+roles = ["data"]
+layers = ["subframes"]
+result = ["subframes"]
+engines = ["main"]
+
+[protocols.swim]
+kind = "bus"
+roles = ["swim"]
+layers = ["transactions"]
+result = ["transactions"]
+engines = ["main"]
+
+[protocols.usb]
+kind = "bus"
+roles = ["dp", "dm"]
+layers = ["packets", "transactions"]
+result = ["transactions"]
+engines = ["main"]
+
+[protocols.usb_pd]
+kind = "bus"
+roles = ["cc"]
+layers = ["packets"]
+result = ["packets"]
+engines = ["main"]
+
+[protocols.wiegand]
+kind = "bus"
+roles = ["d0", "d1"]
+layers = ["frames"]
+result = ["frames"]
+engines = ["main"]
+
+[protocols.sync_unknown]
+kind = "bus"                     # a clocked bus whose framing is none of the above (verdict unknown-sync)
+roles = ["clk", "data+", "cs?"]
+layers = ["summary"]
+result = ["summary"]
+engines = ["main"]
+
+[protocols.uart_pair]
+kind = "bus"                     # two UART lines read together, a command line and its answers (protocols of others ride on it)
+roles = ["a", "b"]
+layers = ["messages"]
+result = ["messages"]
+engines = ["main"]
+
+# ---- upper: read from a bus's output ----
+
+[protocols.lines]
+kind = "upper"
+over = ["uart", "spi"]
+layers = ["lines"]
+
+[protocols.nmea]
+kind = "upper"
+over = ["uart", "spi"]
+layers = ["nmea"]
+
+[protocols.modbus_rtu]
+kind = "upper"
+over = ["uart"]
+layers = ["modbus_rtu"]
+
+[protocols.markers]
+kind = "upper"
+over = ["uart"]
+layers = ["markers"]
+
+[protocols.scpi]
+kind = "upper"
+over = ["uart_pair"]
+roles = ["tx", "rx"]
+layers = ["exchanges"]
+
+[protocols.riscv_dm]
+kind = "upper"
+over = ["rvswd", "swio"]
+layers = ["dm"]
+
+[protocols.i2c_devices]
+kind = "upper"
+over = ["i2c"]
+layers = ["devices"]
+
+[protocols.sd]
+kind = "upper"
+over = ["spi"]
+layers = ["sd"]

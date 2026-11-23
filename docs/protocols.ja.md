@@ -10,7 +10,7 @@ WireSkein は UART、SPI、I2C を自分で復号します。その上に乗る�
 
 | 属性 | 意味 |
 | --- | --- |
-| `name` | 出すときの名前。英数字と `_`。WireSkein の層の名前とは別のもの |
+| `name` | 出すときの名前。持ち主の名前空間と自分の名前の `持ち主.名前`（`acme.link`。英小文字、数字、`_`）で、WireSkein の名前とぶつからない |
 | `over` | 乗るバス。`"uart"`、`"spi"`、`"i2c"`、`"uart_pair"`（2 本の UART、§3.1）、`"can"`、`"lin"`、`"dmx512"` のタプル |
 | `decode(bus)` | 復号したバス 1 本を読み、`{"messages": [...], "checks_passed": n, "checks_failed": m}` を返す |
 
@@ -27,7 +27,7 @@ WireSkein は UART、SPI、I2C を自分で復号します。その上に乗る�
 
 ```toml
 [project.entry-points."wireskein.protocols"]
-demo_link = "demo_link:PROTOCOL"
+"examples.demo_link" = "demo_link:PROTOCOL"
 ```
 
 ## 3. 見本: demo_link
@@ -46,7 +46,7 @@ demo_link = "demo_link:PROTOCOL"
 `wireskein analyze` では、バスの `result` の下に次のように出ます。
 
 ```json
-"demo_link": {"messages": [{"s": 1210, "seq": 1, "cmd": 16, "reply": false, "payload": "0102"}, ...],
+"examples.demo_link": {"messages": [{"s": 1210, "seq": 1, "cmd": 16, "reply": false, "payload": "0102"}, ...],
               "checks_passed": 4, "checks_failed": 0}
 ```
 
@@ -76,7 +76,7 @@ demo_link = "demo_link:PROTOCOL"
 - `wireskein analyze` では、`scpi` と同じく、パートの `relations` の下に出ます（分析の形式 §4）。
 
 ```json
-{"protocol": "demo_cmd", "roles": {"a": "TX", "b": "RX"}, "score": 0.9375,
+{"protocol": "examples.demo_cmd", "roles": {"a": "TX", "b": "RX"}, "score": 0.9375,
  "messages": [{"s": 200, "seq": "1e", "verb": "PING", "args": [], "status": "OK", "text": "#1e PING -> OK", ...}],
  "checks_passed": 4, "checks_failed": 0}
 ```
@@ -94,12 +94,12 @@ demo_link = "demo_link:PROTOCOL"
 ```python
 from wireskein.runlog import protocol
 
-with rec.section(2, "ping", expect=[protocol("demo_link", "uart", {"data": "PA2"}, baud=115200,
+with rec.section(2, "ping", expect=[protocol("examples.demo_link", "uart", {"data": "PA2"}, baud=115200,
                                              messages=[{"seq": 1, "cmd": 0x10}, {"seq": 1, "cmd": 0x10, "reply": True}])]):
     ...
 ```
 
-- `bus` は `"uart"`、`"spi"`、`"i2c"`、`"uart_pair"`、`"can"`、`"lin"`、`roles` は役割ごとのピン（UART、CAN、LIN は `{"data": ...}`、`{"clk", "mosi", "miso", "cs"}`、`{"scl", "sda"}`、`{"a": TX, "b": RX}`）です。組では、組の点数にかかわらず 2 本を一緒に読みます: `protocol("demo_cmd", "uart_pair", {"a": "PA2", "b": "PA3"}, baud=115200, messages=[{"verb": "PING", "status": "OK"}])`。
+- `bus` は `"uart"`、`"spi"`、`"i2c"`、`"uart_pair"`、`"can"`、`"lin"`、`roles` は役割ごとのピン（UART、CAN、LIN は `{"data": ...}`、`{"clk", "mosi", "miso", "cs"}`、`{"scl", "sda"}`、`{"a": TX, "b": RX}`）です。組では、組の点数にかかわらず 2 本を一緒に読みます: `protocol("examples.demo_cmd", "uart_pair", {"a": "PA2", "b": "PA3"}, baud=115200, messages=[{"verb": "PING", "status": "OK"}])`。
 - `messages` は順に比べ、それぞれ書いたキーだけを比べます（`"s"` など書かないキーは比べません）。`messages` が無ければ、メッセージが 1 つ以上あること。
 - チェックの失敗は `checks_failed_max`（既定 0）まで。
 - これで言えないきまりは、自分の検査（[ガイド](capture-test-guide.ja.md) §4.10）か、試験の判定（`rec.result`、ガイド §3.3）にします。

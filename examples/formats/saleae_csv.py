@@ -42,7 +42,7 @@ def _is_digital(row) -> bool:
 
 
 class SaleaeCsv:
-    name = "saleae_csv"
+    name = "examples.saleae_csv"
 
     def sniff(self, head: bytes, path) -> bool:
         return head.lstrip(b"\xef\xbb\xbf").startswith(b"Time [s],")
@@ -75,7 +75,7 @@ class SaleaeCsv:
                     lv = v
             chans.append(capture.logic(name, init, edges, n))
         return capture.Capture(Fraction(NS, step), [capture.Part(n, chans, {"start_s": float(Fraction(t0, NS))})],
-                               meta={"source": "saleae_csv"})
+                               meta={"source": "examples.saleae_csv"})
 
     def _analog(self, path, names, rows) -> capture.Capture:
         ns = [round(Fraction(r[0]) * NS) for r in rows[:2]]
@@ -90,7 +90,7 @@ class SaleaeCsv:
                  for k, name in enumerate(names)]
         n = ns[0] + dt * len(rows)
         return capture.Capture(Fraction(NS), [capture.Part(n, chans, {"start_s": 0.0})],
-                               meta={"source": "saleae_csv"})
+                               meta={"source": "examples.saleae_csv"})
 
 
 FORMAT = SaleaeCsv()

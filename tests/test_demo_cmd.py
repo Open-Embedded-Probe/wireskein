@@ -21,7 +21,7 @@ RATE, BAUD = 2e6, 115200
 def demo_cmd():
     plugins.register_protocol(demo.PROTOCOL)
     yield demo
-    plugins.unregister_protocol("demo_cmd")
+    plugins.unregister_protocol("examples.demo_cmd")
 
 
 def lines_of(talk, gap=300e-6):
@@ -52,7 +52,7 @@ def test_commands_and_answers_are_read_as_a_pair(tmp_path, demo_cmd):
     waves, end = lines_of(TALK)
     p, _ = write(tmp_path, waves, end + 200e-6)
     doc = analyze_file(p)
-    (r,) = [r for r in doc["parts"][0].get("relations", []) if r["protocol"] == "demo_cmd"]
+    (r,) = [r for r in doc["parts"][0].get("relations", []) if r["protocol"] == "examples.demo_cmd"]
     assert r["checks_passed"] == 4 and r["checks_failed"] == 0 and set(r["roles"].values()) == {"TX", "RX"}, r
     got = [(m.get("verb") or m.get("event"), m.get("status"), m.get("values")) for m in r["messages"]]
     assert got == [("PING", "OK", []), ("LED", "OK", []), ("BUTTON", None, ["1"]), ("READ", "OK", ["23.5"]),
@@ -64,7 +64,7 @@ def test_other_text_shows_nothing(tmp_path, demo_cmd):
     waves, end = lines_of([("host", "hello\n"), ("dev", "world\n")] * 3)
     p, _ = write(tmp_path, waves, end + 200e-6)
     doc = analyze_file(p)
-    assert not [r for r in doc["parts"][0].get("relations", []) if r["protocol"] == "demo_cmd"]
+    assert not [r for r in doc["parts"][0].get("relations", []) if r["protocol"] == "examples.demo_cmd"]
 
 
 def test_a_wrong_answer_fails_its_check(tmp_path, demo_cmd):
@@ -72,7 +72,7 @@ def test_a_wrong_answer_fails_its_check(tmp_path, demo_cmd):
     from wireskein.verify import check_protocol
     from wireskein.runlog import protocol
     _, cap = write(tmp_path, waves, end + 200e-6)
-    ok, got, why = check_protocol(cap, protocol("demo_cmd", "uart_pair", {"a": "TX", "b": "RX"}, baud=BAUD))
+    ok, got, why = check_protocol(cap, protocol("examples.demo_cmd", "uart_pair", {"a": "TX", "b": "RX"}, baud=BAUD))
     assert ok is False and got["checks_failed"] == 2 and got["checks_passed"] == 1, (why, got)
 
 
@@ -83,11 +83,11 @@ def test_a_test_checks_the_exchange(tmp_path, demo_cmd):
     _, cap = write(tmp_path, waves, end + 200e-6)
     want = [{"verb": "PING", "status": "OK"}, {"verb": "LED", "args": ["1"], "status": "OK"}, {"event": "BUTTON"},
             {"verb": "READ", "values": ["23.5"]}, {"verb": "MOTOR", "status": "ERR"}]
-    ok, got, why = check_protocol(cap, protocol("demo_cmd", "uart_pair", {"a": "TX", "b": "RX"}, messages=want,
+    ok, got, why = check_protocol(cap, protocol("examples.demo_cmd", "uart_pair", {"a": "TX", "b": "RX"}, messages=want,
                                                 baud=BAUD))
     assert ok is True, (why, got)
     want[3] = {"verb": "READ", "values": ["24.0"]}
-    ok, _, why = check_protocol(cap, protocol("demo_cmd", "uart_pair", {"a": "TX", "b": "RX"}, messages=want, baud=BAUD))
+    ok, _, why = check_protocol(cap, protocol("examples.demo_cmd", "uart_pair", {"a": "TX", "b": "RX"}, messages=want, baud=BAUD))
     assert ok is False and "message #3" in why
 
 
@@ -100,7 +100,7 @@ def test_hardware_two_esp_idf_uarts(demo_cmd):
     sent = [(s["line"], s["text"]) for s in t["steps"]]
     assert sent == [("host" if side == "host" else "device", text.strip()) for side, text in TALK]
     doc = analyze_file(d / "demo_cmd_p4.wireskein")
-    (r,) = [r for r in doc["parts"][0].get("relations", []) if r["protocol"] == "demo_cmd"]
+    (r,) = [r for r in doc["parts"][0].get("relations", []) if r["protocol"] == "examples.demo_cmd"]
     assert (r["checks_passed"], r["checks_failed"]) == (4, 0), r
     assert [m["text"] for m in r["messages"]] == ["#1e PING -> OK", "#1f LED 1 -> OK", "!BUTTON 1",
                                                   "#20 READ TEMP -> OK 23.5", "#21 MOTOR 9 -> ERR 3"]
@@ -109,6 +109,6 @@ def test_hardware_two_esp_idf_uarts(demo_cmd):
 def test_annotations_have_the_exchanges(demo_cmd):
     from wireskein.annotate import build_file
     doc = build_file(Path(__file__).parents[1] / "examples/protocols/demo_cmd_p4.wireskein")
-    (row,) = [r for r in doc["rows"] if r["name"] == "demo_cmd messages"]
+    (row,) = [r for r in doc["rows"] if r["name"] == "examples.demo_cmd messages"]
     assert [(i["text"], i["level"]) for i in row["items"]][-1] == ("#21 MOTOR 9 -> ERR 3", "warn")
     assert all("e" in i for i in row["items"])

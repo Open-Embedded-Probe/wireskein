@@ -23,7 +23,7 @@ def check_of(ident: int, body: bytes) -> int:
 
 
 class DemoTelemetry:
-    name = "demo_telemetry"
+    name = "examples.demo_telemetry"
     over = ("can", "lin")
 
     def decode(self, bus: dict) -> dict:

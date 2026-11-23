@@ -9,7 +9,7 @@
 format = "wireskein-protocol/1"
 
 [plugin]
-name = "demo_wire"
+name = "tests.demo_wire"
 input = "nrzbits"
 
 [roles]

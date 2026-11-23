@@ -80,9 +80,12 @@ def load_dialects() -> dict[str, dict]:
     """WireSkein's dialects (decl/markers) and those under markers/ of definition directories added from outside."""
     from .. import plugins as P
     out = {}
-    paths = sorted(HERE.glob("*.toml")) + [p for d in P.definitions() for p in sorted((d / "markers").glob("*.toml"))]
+    own = sorted(HERE.glob("*.toml"))
+    paths = own + [p for d in P.definitions() for p in sorted((d / "markers").glob("*.toml"))]
     for p in paths:
         d = defs.read(p, "marker-dialect")
+        if p not in own:
+            P._name(d["dialect"]["name"], "marker dialect")           # an addition's: owner.name (B13)
         for m in d["marker"]:
             m["_re"] = re.compile(m["pattern"])
         out[d["dialect"]["name"]] = d

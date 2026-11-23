@@ -2,7 +2,7 @@
 
 A format is an object with
 
-    name     its name ("saleae_csv"): letters, digits and "_", not one WireSkein reads itself
+    name     its name, its owner's namespace and its own ("acme.csv"; wireskein.plugins)
     sniff(head: bytes, path) -> bool
              whether the file is one of it, from its first 4096 bytes (and its name, when the content cannot say)
     read(path) -> wireskein.capture.Capture

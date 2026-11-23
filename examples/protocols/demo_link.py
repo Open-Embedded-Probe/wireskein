@@ -17,7 +17,7 @@ protocol.
 Use it in a script with wireskein.plugins.register_protocol(DemoLink()), or install a package whose pyproject.toml says
 
     [project.entry-points."wireskein.protocols"]
-    demo_link = "demo_link:PROTOCOL"
+    "examples.demo_link" = "demo_link:PROTOCOL"
 """
 
 SOF = 0xA5
@@ -66,7 +66,7 @@ def frames_in(data: bytes, ticks: list[int] | None = None) -> tuple[list[dict], 
 
 
 class DemoLink:
-    name = "demo_link"
+    name = "examples.demo_link"
     over = ("uart", "spi")
 
     def decode(self, bus: dict) -> dict:

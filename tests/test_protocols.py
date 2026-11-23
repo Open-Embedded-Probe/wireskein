@@ -22,7 +22,7 @@ RATE = 2e6
 def demo_link():
     plugins.register_protocol(demo.PROTOCOL)
     yield demo
-    plugins.unregister_protocol("demo_link")
+    plugins.unregister_protocol("examples.demo_link")
 
 
 def write(tmp_path, waves, end):
@@ -50,7 +50,7 @@ def test_frames_over_a_uart_are_read_with_their_crcs(tmp_path, demo_link):
     t = gen.uart(tx, 50e-6, b"\x00\x13" + b"".join(REQS), 115200)      # two stray bytes before: it resynchronizes
     doc = analyze_file(write(tmp_path, {"TX": tx}, t + 200e-6))
     (c,) = [c for c in claims(doc) if c["protocol"] == "uart"]
-    got = c["result"]["demo_link"]
+    got = c["result"]["examples.demo_link"]
     assert got["checks_passed"] == 4 and got["checks_failed"] == 0, got
     assert [(m["seq"], m["cmd"], m["payload"]) for m in got["messages"]] == [
         (1, 0x10, "0102"), (2, 0x11, ""), (3, 0x12, "0001020304050607"), (4, 0x10, "ff")]
@@ -64,7 +64,7 @@ def test_frames_over_spi_on_both_lines(tmp_path, demo_link):
     t = gen.spi(clk, mosi, miso, cs, 10e-6, frames, 250e3, mode=0)
     doc = analyze_file(write(tmp_path, {"SCK": clk, "MOSI": mosi, "MISO": miso, "CS": cs}, t + 50e-6))
     (c,) = [c for c in claims(doc) if c["protocol"] == "spi"]
-    got = c["result"]["demo_link"]
+    got = c["result"]["examples.demo_link"]
     assert got["checks_passed"] == 4, got
     assert sorted((m["line"], m["seq"], m["reply"]) for m in got["messages"]) == [
         ("MISO", 1, True), ("MISO", 2, True), ("MOSI", 1, False), ("MOSI", 2, False)]
@@ -75,7 +75,7 @@ def test_bytes_that_are_not_its_frames_show_nothing(tmp_path, demo_link):
     t = gen.uart(tx, 50e-6, b"hello, world\r\n" * 4, 115200)
     doc = analyze_file(write(tmp_path, {"TX": tx}, t + 200e-6))
     (c,) = [c for c in claims(doc) if c["protocol"] == "uart"]
-    assert "demo_link" not in json.dumps(c)                  # no CRC held: not shown, not the final reading
+    assert "examples.demo_link" not in json.dumps(c)                  # no CRC held: not shown, not the final reading
 
 
 def test_a_protocol_needs_a_name_buses_and_decode():
@@ -99,7 +99,7 @@ def test_a_test_checks_the_messages_of_its_protocol(tmp_path, demo_link):
     for name, want, status in (("right", [{"seq": 1, "cmd": 0x10, "payload": "0102"}, {"seq": 2, "cmd": 0x11}], "ok"),
                                ("wrong", [{"seq": 1, "cmd": 0x10}, {"seq": 2, "cmd": 0x12}], "ng")):
         rec = Recorder(tmp_path / name)
-        with rec.section(1, "t", expect=[protocol("demo_link", "uart", {"data": "TX"}, messages=want, baud=115200)]):
+        with rec.section(1, "t", expect=[protocol("examples.demo_link", "uart", {"data": "TX"}, messages=want, baud=115200)]):
             rec.capture(rec.armed(), RATE, interleaved=lv.tobytes(), names=["TX"])
         rec.close()
         (r,) = verify.verify(tmp_path / name)["results"]
@@ -159,7 +159,7 @@ def test_a_declared_protocol_from_outside_is_read(tmp_path, demo_wire):
             t += bt
         t += 14 * bt                                     # idle between frames
     doc = analyze_file(write(tmp_path, {"W": w}, t + 20 * bt))
-    (c,) = [c for c in claims(doc) if c["protocol"] == "demo_wire"]
+    (c,) = [c for c in claims(doc) if c["protocol"] == "tests.demo_wire"]
     frames = c["result"]["frames"]
     assert [(f["addr"], f["cmd"], f["data"]) for f in frames] == [
         (0x21, 3, "000000"), (0x21, 4, ""), (0x7F, 15, "ffffffff"), (0x05, 1, "5aa5")], frames
@@ -172,7 +172,7 @@ def test_a_declared_protocol_is_not_found_without_its_definitions(tmp_path):
         w.set(t, b)
         t += bt
     doc = analyze_file(write(tmp_path, {"W": w}, t + 20 * bt))
-    assert not [c for c in claims(doc) if c["protocol"] == "demo_wire"]
+    assert not [c for c in claims(doc) if c["protocol"] == "tests.demo_wire"]
 
 
 def test_a_test_checks_the_frames_of_a_declared_protocol(tmp_path, demo_wire):
@@ -190,7 +190,7 @@ def test_a_test_checks_the_frames_of_a_declared_protocol(tmp_path, demo_wire):
     for name, want, status in (("right", [{"addr": 0x21, "cmd": 3, "data": "000000"}, {"cmd": 4}], "ok"),
                                ("wrong", [{"addr": 0x21, "cmd": 3}, {"cmd": 5}], "ng")):
         rec = Recorder(tmp_path / name)
-        with rec.section(1, "t", expect=[protocol("demo_wire", None, {"data": "W"}, messages=want)]):
+        with rec.section(1, "t", expect=[protocol("tests.demo_wire", None, {"data": "W"}, messages=want)]):
             rec.capture(rec.armed(), RATE, interleaved=lv.tobytes(), names=["W"])
         rec.close()
         (r,) = verify.verify(tmp_path / name)["results"]
@@ -207,12 +207,12 @@ def test_device_packs_and_marker_dialects_from_a_definitions_directory(tmp_path)
     shutil.copy(pack, tmp_path / "devices/i2c/mine/copy.toml")
     (tmp_path / "markers").mkdir()
     (tmp_path / "markers/mine.toml").write_text(
-        'format = "wireskein-marker-dialect/1"\n\n[dialect]\nname = "mine"\nlevels = ["case"]\n\n[[marker]]\npattern = \'^BEGIN (?P<name>.+)$\'\naction = "begin"\n')
+        'format = "wireskein-marker-dialect/1"\n\n[dialect]\nname = "tests.mine"\nlevels = ["case"]\n\n[[marker]]\npattern = \'^BEGIN (?P<name>.+)$\'\naction = "begin"\n')
     before = len(staged._device_packs(("**",))[0])
     plugins.add_definitions(tmp_path)
     try:
         assert len(staged._device_packs(("**",))[0]) == before + 1
-        assert "mine" in markers.load_dialects() and "heading" in markers.load_dialects()
+        assert "tests.mine" in markers.load_dialects() and "heading" in markers.load_dialects()
     finally:
         plugins.remove_definitions(tmp_path)
     assert len(staged._device_packs(("**",))[0]) == before
@@ -228,7 +228,7 @@ def test_the_example_on_hardware_sent_by_a_probe(demo_link):
     doc = analyze_file(d / "demo_link_p4.wireskein")
     (c,) = [c for c in claims(doc) if c["protocol"] == "uart"]
     want, _, _ = demo.frames_in(bytes.fromhex(truth["uart"]["bytes"]))
-    got = c["result"]["demo_link"]
+    got = c["result"]["examples.demo_link"]
     assert c["verdict"] == "confirmed" and got["checks_failed"] == 0, got
     assert [(m["seq"], m["cmd"], m["payload"]) for m in got["messages"]] == [
         (m["seq"], m["cmd"], m["payload"]) for m in want]
@@ -240,7 +240,7 @@ def test_its_messages_are_annotations_and_markers_for_the_viewer(tmp_path, demo_
     t = gen.uart(tx, 50e-6, b"".join(REQS[:2]), 115200)
     p = write(tmp_path, {"TX": tx}, t + 200e-6)
     rows = annotate.build_file(p)["rows"]
-    (row,) = [r for r in rows if r["name"] == "uart demo_link"]
+    (row,) = [r for r in rows if r["name"] == "uart examples.demo_link"]
     assert [it["detail"]["seq"] for it in row["items"]] == [1, 2] and row["near"] == "TX"
     wc2.add_markers(p, [{"t": it["s"], "label": f"seq {it['detail']['seq']}"} for it in row["items"]], by="my_tool")
     wc2.add_markers(p, [{"t": row["items"][0]["s"], "label": "again"}], by="my_tool")      # replaces its own
@@ -250,7 +250,7 @@ def test_its_messages_are_annotations_and_markers_for_the_viewer(tmp_path, demo_
 def test_a_protocol_rides_on_a_declared_protocol(tmp_path, demo_wire):
     # a protocol of one's own on demo_wire's frames: cmd 3 carries a counter that must count
     class Counter:
-        name, over = "wire_counter", ("demo_wire",)
+        name, over = "tests.wire_counter", ("tests.demo_wire",)
 
         def decode(self, bus):
             fr = [f for f in bus.get("frames", []) if f.get("cmd") == 3]
@@ -268,8 +268,8 @@ def test_a_protocol_rides_on_a_declared_protocol(tmp_path, demo_wire):
                 t += bt
             t += 14 * bt
         doc = analyze_file(write(tmp_path, {"W": w}, t + 20 * bt))
-        (c,) = [c for c in claims(doc) if c["protocol"] == "demo_wire"]
-        got = c["result"]["wire_counter"]
+        (c,) = [c for c in claims(doc) if c["protocol"] == "tests.demo_wire"]
+        got = c["result"]["tests.wire_counter"]
         assert got["checks_passed"] == 3 and [m["value"] for m in got["messages"]] == [0x10, 0x11, 0x12, 0x13], got
     finally:
-        plugins.unregister_protocol("wire_counter")
+        plugins.unregister_protocol("tests.wire_counter")

@@ -27,7 +27,7 @@ WireSkein は、キャプチャを読み手に要るもの（載っているバ�
 - **書かれた形を読む。** プロトコルは [分析の形式](analysis-format.ja.md) が書き出す形のバスを、検査は区間の窓（ガイド §4.10）を、スクリプトは [ファイル形式](wireskein-format.ja.md) と [記録の形式](run-format.ja.md) のファイルを受け取ります。形式の番号（`/1`）の中でこれらの形は変わらないので、その上に作った追加は動き続けます。WireSkein の内部の型は変わることがあり、使いません。
 - **証拠のあるものだけを出す。** プロトコルは、フレームが通ったチェックと失敗したチェック（CRC、長さ、順番の番号）を数え、分析は偶然を超えるときだけそれを信じます。チェックが無ければ何も出しません。検査は、判定にかかわらず測ったものを言い、プロトコルとしては許されるが見ておきたいものは、失敗ではなく、その tick の注意にします（ガイド §4.9）。
 - **正解は、試験されるもの以外から取る。** 追加は、それを読むコードとは別に作った信号で確かめます: 試験の中の自分の符号器か、既存のライブラリで出すプローブ（OEP のプローブの ESP-IDF の UART ドライバなど）。試験される機器の出力は、決して正解にしません。それこそが誤っているかもしれないからです。
-- **名前。** 追加の名前は、英字で始まる英数字と `_` で、WireSkein の持つ名前（プロトコルと層、形式、検査の種類、取得元）とは別のものにします。同じ名前は断ります。entry point の名前が追加の名前です。オブジェクトの `name` がそれと違えば断ります。
+- **名前。** 追加の名前は、持ち主の名前空間と自分の名前の `持ち主.名前`（`acme.link`: 英小文字、数字、`_`）にします。WireSkein 自身の名前には名前空間がない（`src/wireskein/registry.toml`、その台帳）ので、自分の名前が今も先々もぶつかりません。取得元の名前は URI の scheme（`acme`）で、WireSkein の持つものとは別にします。entry point の名前が追加の名前です。オブジェクトの `name` がそれと違えば断ります。
 - **失敗は見えるままに。** プロトコルの `decode` の例外は、そのバスと一緒に出て、分析は続きます。だれも足していない種類の検査は `ng` で、飛ばしません。
 - **足し方。** スクリプトや試験では、`wireskein.plugins` でそれぞれ足します: `register_protocol`、`add_definitions`、`register_format`、`register_check`、`register_source`。外すのはそれぞれの `unregister_*`（`remove_definitions`）。コマンドでは、`wireskein --plugin モジュールか.pyのファイル --definitions ディレクトリ <コマンド> ...` で、その実行だけ足せます（ファイルは `wireskein.plugins` で自分の持つものを足します。どちらも繰り返せます。環境変数の `WIRESKEIN_PLUGINS` と `WIRESKEIN_DEFINITIONS` も同じ）。パッケージは追加を entry point で宣言し、入れたときにいつも使えるようにします。
 
@@ -41,7 +41,7 @@ WireSkein は、キャプチャを読み手に要るもの（載っているバ�
 
 ```toml
 [project.entry-points."wireskein.protocols"]
-acme_link = "acme_wireskein:PROTOCOL"
+"acme.link" = "acme_wireskein:PROTOCOL"
 
 [project.entry-points."wireskein.definitions"]
 acme = "acme_wireskein.definitions"

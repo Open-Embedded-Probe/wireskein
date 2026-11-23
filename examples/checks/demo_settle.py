@@ -6,7 +6,7 @@ line stays at `level` for at least `quiet_s`, and it changes at most `changes_ma
 contact bounce, a button's debounced output, a supply-good line). Each change but the last is a notice `bounce` at
 its tick, so the viewer shows where the line bounced; a test limits them with notices={"bounce": n} or "ng".
 
-    {"kind": "demo_settle", "pins": ["PA0"], "level": 1, "quiet_s": 0.01, "changes_max": 5}
+    {"kind": "examples.demo_settle", "pins": ["PA0"], "level": 1, "quiet_s": 0.01, "changes_max": 5}
 """
 
 from __future__ import annotations

@@ -27,7 +27,7 @@ The ways stack: the analysis finds the buses, a protocol object, a device pack o
 - **Read the documented shapes.** A protocol gets the bus as the [analysis format](analysis-format.md) exports it, a check the segment's window ([guide](capture-test-guide.md) §4.10), a script the files of the [file format](wireskein-format.md) and the [run format](run-format.md). Within a format number (`/1`) these shapes do not change, so an addition built on them keeps working; WireSkein's internal types may change and are not used.
 - **Show only what evidence carries.** A protocol counts the checks its frames pass and fail (a CRC, a length, a sequence number), and the analysis believes it only above chance; with no check it shows nothing. A check says what it measured whatever its verdict, and what the protocol allows but deserves a look is a notice at its tick, not a failure (guide §4.9).
 - **Take the truth from elsewhere than what is tested.** Test an addition on signals made apart from the code that reads them: an encoder of your own in the test, or a probe sending with an established library (an OEP probe's ESP-IDF UART driver, say). The output of a device under test is never the truth: it may be the very thing that is wrong.
-- **Names.** An addition's name is letters, digits and `_`, starting with a letter, and not one of WireSkein's own (its protocols and layers, formats, check kinds and sources); WireSkein refuses one that is. An entry point's name is the addition's name: an object whose own `name` differs is refused.
+- **Names.** An addition's name is its owner's namespace and its own, `owner.name` (`acme.link`: lowercase letters, digits and `_`): WireSkein's own names have none (`src/wireskein/registry.toml`, the one ledger of them), so a name of yours never meets one of them, now or later. A capture source's name is a URI scheme (`acme`), not one WireSkein has. An entry point's name is the addition's name: an object whose own `name` differs is refused.
 - **Failures stay visible.** An exception in a protocol's `decode` is shown with its bus and the analysis goes on; a check of a kind nobody added is `ng`, never skipped.
 - **Adding.** In a script or a test, `wireskein.plugins` adds each: `register_protocol`, `add_definitions`, `register_format`, `register_check`, `register_source`, each with its `unregister_*` (`remove_definitions`). On the command line, `wireskein --plugin MODULE_OR_FILE.py --definitions DIR <command> ...` adds them for that run (the file adds what it has with `wireskein.plugins`; both repeatable; the environment's `WIRESKEIN_PLUGINS` and `WIRESKEIN_DEFINITIONS` do the same). A package declares its additions as entry points instead, and they are there whenever it is installed:
 
@@ -41,7 +41,7 @@ The ways stack: the analysis finds the buses, a protocol object, a device pack o
 
 ```toml
 [project.entry-points."wireskein.protocols"]
-acme_link = "acme_wireskein:PROTOCOL"
+"acme.link" = "acme_wireskein:PROTOCOL"
 
 [project.entry-points."wireskein.definitions"]
 acme = "acme_wireskein.definitions"

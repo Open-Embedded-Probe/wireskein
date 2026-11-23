@@ -10,7 +10,7 @@ A protocol is a Python object with
 
 | Attribute | Meaning |
 | --- | --- |
-| `name` | The name it is shown under: letters, digits and `_`, not one of WireSkein's own layers |
+| `name` | The name it is shown under: its owner's namespace and its own, `owner.name` (`acme.link`; lowercase letters, digits and `_`), so it never meets a name of WireSkein's |
 | `over` | The buses it rides on: a tuple of `"uart"`, `"spi"`, `"i2c"`, `"uart_pair"` (two UART lines, §3.1), `"can"`, `"lin"`, `"dmx512"` |
 | `decode(bus)` | Reads one decoded bus and returns `{"messages": [...], "checks_passed": n, "checks_failed": m}` |
 
@@ -27,7 +27,7 @@ A protocol is a Python object with
 
 ```toml
 [project.entry-points."wireskein.protocols"]
-demo_link = "demo_link:PROTOCOL"
+"examples.demo_link" = "demo_link:PROTOCOL"
 ```
 
 ## 3. The example: demo_link
@@ -46,7 +46,7 @@ demo_link = "demo_link:PROTOCOL"
 What it shows in `wireskein analyze`, under the bus's `result`:
 
 ```json
-"demo_link": {"messages": [{"s": 1210, "seq": 1, "cmd": 16, "reply": false, "payload": "0102"}, ...],
+"examples.demo_link": {"messages": [{"s": 1210, "seq": 1, "cmd": 16, "reply": false, "payload": "0102"}, ...],
               "checks_passed": 4, "checks_failed": 0}
 ```
 
@@ -83,7 +83,7 @@ device   #<seq> OK[ <value>...]  |  #<seq> ERR <code>  |  !<EVENT>[ <value>...] 
 - It shows in `wireskein analyze` under the part's `relations` (analysis format §4), as `scpi` does:
 
 ```json
-{"protocol": "demo_cmd", "roles": {"a": "TX", "b": "RX"}, "score": 0.9375,
+{"protocol": "examples.demo_cmd", "roles": {"a": "TX", "b": "RX"}, "score": 0.9375,
  "messages": [{"s": 200, "seq": "1e", "verb": "PING", "args": [], "status": "OK", "text": "#1e PING -> OK", ...}],
  "checks_passed": 4, "checks_failed": 0}
 ```
@@ -108,12 +108,12 @@ lines with encoders of their own. On hardware, `examples/protocols/demo_telemetr
 ```python
 from wireskein.runlog import protocol
 
-with rec.section(2, "ping", expect=[protocol("demo_link", "uart", {"data": "PA2"}, baud=115200,
+with rec.section(2, "ping", expect=[protocol("examples.demo_link", "uart", {"data": "PA2"}, baud=115200,
                                              messages=[{"seq": 1, "cmd": 0x10}, {"seq": 1, "cmd": 0x10, "reply": True}])]):
     ...
 ```
 
-- `bus` is `"uart"`, `"spi"`, `"i2c"`, `"uart_pair"`, `"can"` or `"lin"`, `roles` its pins by role (`{"data": ...}` for a UART, CAN or LIN; `{"clk", "mosi", "miso", "cs"}`; `{"scl", "sda"}`; `{"a": TX, "b": RX}`). On a pair the two lines are read together whatever the pairing's own score: `protocol("demo_cmd", "uart_pair", {"a": "PA2", "b": "PA3"}, baud=115200, messages=[{"verb": "PING", "status": "OK"}])`.
+- `bus` is `"uart"`, `"spi"`, `"i2c"`, `"uart_pair"`, `"can"` or `"lin"`, `roles` its pins by role (`{"data": ...}` for a UART, CAN or LIN; `{"clk", "mosi", "miso", "cs"}`; `{"scl", "sda"}`; `{"a": TX, "b": RX}`). On a pair the two lines are read together whatever the pairing's own score: `protocol("examples.demo_cmd", "uart_pair", {"a": "PA2", "b": "PA3"}, baud=115200, messages=[{"verb": "PING", "status": "OK"}])`.
 - `messages` are compared in order, each on the keys it gives (`"s"` and others it leaves out are not). Without `messages`, at least one message.
 - At most `checks_failed_max` (default 0) of its checks may fail.
 - A rule this cannot say is a check of its own ([guide](capture-test-guide.md) §4.10) or a verdict of the test (`rec.result`, guide §3.3).

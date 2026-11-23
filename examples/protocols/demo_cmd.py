@@ -36,7 +36,7 @@ def _lines(msg: dict):
 
 
 class DemoCmd:
-    name = "demo_cmd"
+    name = "examples.demo_cmd"
     over = ("uart_pair",)
 
     def decode(self, bus: dict) -> dict:

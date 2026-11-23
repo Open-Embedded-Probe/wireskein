@@ -30,13 +30,13 @@ def three_pulses(cap, x):
 
 @pytest.fixture
 def registered():
-    plugins.register_check("x_pulses", three_pulses, notices={"late_pulse": "a pulse after 4 ms"})
+    plugins.register_check("tests.x_pulses", three_pulses, notices={"late_pulse": "a pulse after 4 ms"})
     yield
-    plugins.unregister_check("x_pulses")
+    plugins.unregister_check("tests.x_pulses")
 
 
 def test_a_registered_check_is_judged_with_its_notices(tmp_path, registered):
-    rep = run(tmp_path, [{"kind": "x_pulses", "pins": ["P"], "count": 3, "notices": {"late_pulse": "ng"}}])
+    rep = run(tmp_path, [{"kind": "tests.x_pulses", "pins": ["P"], "count": 3, "notices": {"late_pulse": "ng"}}])
     (r,) = rep["results"]
     assert r["status"] == "ng" and "1 late_pulse" in r["reason"] and r["measured"]["pulses"] == 3, r
     assert r["notices"] == [{"kind": "late_pulse", "tick": 5000, "part": 0}]
@@ -59,15 +59,15 @@ def test_an_installed_package_adds_a_check(tmp_path, monkeypatch):
         check = staticmethod(three_pulses)
         notices = {"late_pulse": "a pulse after 4 ms"}
 
-    ep = md.EntryPoint("y_pulses", "irrelevant:obj", "wireskein.checks")
+    ep = md.EntryPoint("tests.y_pulses", "irrelevant:obj", "wireskein.checks")
     monkeypatch.setattr(md.EntryPoint, "load", lambda self: Plugin)
     monkeypatch.setattr(md, "entry_points", lambda group=None: [ep] if group == "wireskein.checks" else [])
     monkeypatch.setattr(plugins, "_LOADED", set())
     try:
-        (r,) = run(tmp_path, [{"kind": "y_pulses", "pins": ["P"], "count": 3}])["results"]
+        (r,) = run(tmp_path, [{"kind": "tests.y_pulses", "pins": ["P"], "count": 3}])["results"]
         assert r["status"] == "ok" and len(r["notices"]) == 1, r
     finally:
-        plugins.unregister_check("y_pulses")
+        plugins.unregister_check("tests.y_pulses")
 
 
 # ---- the example examples/checks/demo_settle.py, on a contact bouncing then settling (made here) ----
@@ -78,13 +78,13 @@ def test_the_example_check_demo_settle(tmp_path):
     spec = importlib.util.spec_from_file_location("demo_settle", Path(__file__).parents[1] / "examples/checks/demo_settle.py")
     demo = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(demo)
-    plugins.register_check("demo_settle", demo.CHECK.check, notices=demo.CHECK.notices)
+    plugins.register_check("examples.demo_settle", demo.CHECK.check, notices=demo.CHECK.notices)
     try:
         lv = np.zeros(100_000, np.uint8)                     # 1 MS/s: bounces at 10 ms, settled high from 10.5 ms
         for a, b in ((10_000, 10_050), (10_120, 10_200), (10_300, 10_310), (10_500, 100_000)):
             lv[a:b] = 1
         rec = Recorder(tmp_path)
-        x = {"kind": "demo_settle", "pins": ["K"], "level": 1, "quiet_s": 0.05}
+        x = {"kind": "examples.demo_settle", "pins": ["K"], "level": 1, "quiet_s": 0.05}
         with rec.section(1, "press", expect=[x, {**x, "changes_max": 3}, {**x, "notices": {"bounce": "ng"}}]):
             rec.capture(rec.armed(), 1_000_000, interleaved=lv.tobytes(), names=["K"])
         rec.close()
@@ -93,4 +93,4 @@ def test_the_example_check_demo_settle(tmp_path):
         assert few["status"] == "ng" and "7 changes, more than 3" in few["reason"], few
         assert none["status"] == "ng" and "bounce" in none["reason"], none
     finally:
-        plugins.unregister_check("demo_settle")
+        plugins.unregister_check("examples.demo_settle")
