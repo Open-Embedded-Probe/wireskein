@@ -14,6 +14,10 @@ engine is (bench/algos/e2e/engines.py registers them as trials).
             again from what was read), a scale shared by every protocol
 - synth_gated: synth, each candidate also past the learnt engine's probability (0.3): its knowledge of which
             readings are mostly wrong as the gate
+- nulled:   the views engine's candidates, each fit less the same reader's on a surrogate that keeps the lines'
+            own statistics and breaks the protocol's structure (an open-world test, nulled.py)
+- open:     the views engine with shapes that explain a line without naming a protocol (a pulse code) among the
+            candidates: they take lines and are not shown (shapes.py)
 """
 from __future__ import annotations
 
@@ -103,14 +107,18 @@ def _views(cap):
                                              for c in cap.channels])
 
 
-def views(cap):
+def views_candidates(cap):
     best = {}
     for name, v in _views(cap):
         for c in candidates(v):
             k = (c[0], tuple(sorted(c[1].items())))
             if k not in best or c[2] > best[k][2]:
                 best[k] = (*c[:3], {**c[3], "view": name}, *c[4:])
-    return claims_of(list(best.values()))
+    return list(best.values())
+
+
+def views(cap):
+    return claims_of(views_candidates(cap))
 
 
 def _declarative(cap):
@@ -128,10 +136,21 @@ def _synth(cap):
     return importlib.import_module(__name__ + ".synth").engine(cap)
 
 
+def _nulled(cap):
+    import importlib
+    return importlib.import_module(__name__ + ".nulled").engine(cap)
+
+
+def _open(cap):
+    import importlib
+    return importlib.import_module(__name__ + ".shapes").engine(cap)
+
+
 def _synth_gated(cap):
     import importlib
     return importlib.import_module(__name__ + ".synth").engine(cap, gate_prob=0.3)
 
 
 ENGINES = {"light": light, "views": views, "declarative": _declarative, "learned": _learned, "synth": _synth,
-           "synth_gated": _synth_gated}
+           "synth_gated": _synth_gated,
+           "nulled": _nulled, "open": _open}
