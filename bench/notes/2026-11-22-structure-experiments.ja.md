@@ -458,3 +458,9 @@ light_open、ノイズ付きの組（gen:pulse・gen:ir・set:tuning・gen:spiva
 - 2 つの手当てを合わせる（`light_main_uart_open`: 今のエンジンの UART の読み手 + 形の開いた世界）。gen:pulse・uartlike・ir・
   spivar の [0:30]、set:tuning[0:30] のきれいと bounce 0.1（275 本）: light_open 読めた 113・誤り 36 → 130・10。読み手の
   特異さと開いた世界は別の誤りを消し、足し合わせが効く。残り 10 の多くは DMX512・LIN（物理的に UART）。
+- 今のエンジンの UART の読み手が、おとりを UART と読まない手がかり（light の読み手が 0.6 以上で読む線、gen:pulse[0:15]・
+  ir[0:10]・set:tuning[0:15]、今のエンジンの evidence）: 本物の UART は clock_like 0.2 前後・fixed_bits 0・two_values 1.0。
+  LED は clock_like 1.0・fixed_bits 0.57（点数 0.25）、IR（変調なし）は fixed_bits 0.5、搬送波は clock_like 1.0・fixed_bits 0.8、
+  1-Wire は two_values 0.05（点数 0.02〜0.04）。clock_like は形の開いた世界と同じ情報。fixed_bits（どの文字でも同じ値の
+  ビット位置）と two_values（データが 2 値だけでない）は「文字の中身に構造がありすぎる」ことを見る、形では拾えない別の
+  手がかり: 軽いエンジンの UART の読み手に移すなら、この 2 つから（調整になるので今はしない）。
