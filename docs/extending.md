@@ -12,7 +12,7 @@ WireSkein turns a capture into what a reader needs - the buses on it, their mess
 | Text commands on one UART line and their answers on another (AT commands, a shell) | A protocol object on `"uart_pair"` | [Protocols](protocols.md) §3.1 |
 | A higher layer on CAN or LIN frames (CANopen, J1939, OBD-II / UDS, a node's signals) | A protocol object on `"can"` or `"lin"` | [Protocols](protocols.md) §3.2 |
 | Captures in a file format WireSkein does not read (another analyzer's export, a lab's own log) | A file format (`wireskein.plugins.register_format`) | §2, `examples/formats/saleae_csv.py` |
-| A protocol that is its own bus: its own framing on a clock and data, or on one NRZ line | Not an extension point: WireSkein's own are part of its analysis engine, which may change | Propose it ([Protocols](protocols.md) §5) |
+| A protocol that is its own bus: its own framing on a clock and data, or on one NRZ line | An engine of your own beside WireSkein's (`wireskein.plugins.register_engine`): it reads that protocol and returns claims in the analysis format; they join on the lines WireSkein's engine left unexplained, first where a hint names the protocol (WireSkein's own such protocols are part of its engine, not an extension point) | §2.1 |
 | The registers and commands of a device on I2C or SPI named | A device pack under `devices/` of a definitions directory | [Device packs](../src/wireskein/decl/devices/README.md) |
 | The marker lines of your own test logs read as segments | A marker dialect under `markers/` of a definitions directory | [Markers](markers.md) §4 |
 | A rule tests apply that no check has, judged alike by `wireskein verify`, pytest and the viewer | A check kind (`wireskein.plugins.register_check`) | [Guide](capture-test-guide.md) §4.10 |
@@ -29,7 +29,7 @@ The ways stack: the analysis finds the buses, a protocol object, a device pack o
 - **Take the truth from elsewhere than what is tested.** Test an addition on signals made apart from the code that reads them: an encoder of your own in the test, or a probe sending with an established library (an OEP probe's ESP-IDF UART driver, say). The output of a device under test is never the truth: it may be the very thing that is wrong.
 - **Names.** An addition's name is its owner's namespace and its own, `owner.name` (`acme.link`: lowercase letters, digits and `_`): WireSkein's own names have none (`src/wireskein/registry.toml`, the one ledger of them), so a name of yours never meets one of them, now or later. A capture source's name is a URI scheme (`acme`), not one WireSkein has. An entry point's name is the addition's name: an object whose own `name` differs is refused.
 - **Failures stay visible.** An exception in a protocol's `decode` is shown with its bus and the analysis goes on; a check of a kind nobody added is `ng`, never skipped.
-- **Adding.** In a script or a test, `wireskein.plugins` adds each: `register_protocol`, `add_definitions`, `register_format`, `register_check`, `register_source`, each with its `unregister_*` (`remove_definitions`). On the command line, `wireskein --plugin MODULE_OR_FILE.py --definitions DIR <command> ...` adds them for that run (the file adds what it has with `wireskein.plugins`; both repeatable; the environment's `WIRESKEIN_PLUGINS` and `WIRESKEIN_DEFINITIONS` do the same). A package declares its additions as entry points instead, and they are there whenever it is installed:
+- **Adding.** In a script or a test, `wireskein.plugins` adds each: `register_protocol`, `add_definitions`, `register_format`, `register_check`, `register_source`, `register_engine`, each with its `unregister_*` (`remove_definitions`). On the command line, `wireskein --plugin MODULE_OR_FILE.py --definitions DIR <command> ...` adds them for that run (the file adds what it has with `wireskein.plugins`; both repeatable; the environment's `WIRESKEIN_PLUGINS` and `WIRESKEIN_DEFINITIONS` do the same). A package declares its additions as entry points instead, and they are there whenever it is installed:
 
 | Entry point group | Adds | Value |
 | --- | --- | --- |
@@ -37,6 +37,7 @@ The ways stack: the analysis finds the buses, a protocol object, a device pack o
 | `wireskein.definitions` | A definitions directory (device packs, marker dialects) | A module whose directory holds them, or a callable returning its path |
 | `wireskein.checks` | A check kind | A check function, or an object with `.check` (and `.notices`) |
 | `wireskein.sources` | A capture source for `wireskein capture` | A module or object with `capture(target, request)` |
+| `wireskein.engines` | An engine of your own beside WireSkein's | An object with `.engine(view, hints)` and `.protocols` |
 | `wireskein.formats` | A file format read wherever a capture is (analyze, decode, states, convert, the viewer) | An object with `name`, `sniff(head, path)`, `read(path)` returning a `wireskein.capture.Capture` |
 
 ```toml
@@ -46,6 +47,32 @@ The ways stack: the analysis finds the buses, a protocol object, a device pack o
 [project.entry-points."wireskein.definitions"]
 acme = "acme_wireskein.definitions"
 ```
+
+### 2.1 An engine of your own
+
+A protocol WireSkein does not read at all - its own framing on its own lines - is read by an engine of your own,
+run beside WireSkein's own engine. WireSkein's engine may change (its layers and rules are its own), so nothing
+of yours is built inside it: your engine sees only what every engine sees, and answers in the analysis format.
+
+```python
+from wireskein import plugins
+
+def acme_wire(view, hints):
+    """view: the part's changes (rate_hz, n_samples, channels, channel(name): initial, edges, step, level_at)."""
+    ...
+    return [{"protocol": "acme.wire", "roles": {"data": "D3"}, "verdict": "confirmed", "score": 0.93,
+             "margin": 0.9, "params": {...}, "layers": {"frames": [...]}}]
+
+plugins.register_engine("acme.wire_engine", acme_wire, ["acme.wire"])
+```
+
+- **Names**: the engine's and each protocol's `owner.name`; its claims name only those protocols.
+- **Joining**: its claims join on the lines WireSkein's engine left unexplained (no claim, or only `unknown-sync` /
+  `ambiguous` ones); where a hint names the protocol (`--hint acme.wire`), first, the main engine's claims on
+  those lines left out. Between engines of others, the higher score, then the name.
+- **Riding on it**: a protocol of your own may ride on the engine's protocol (`over = ("acme.wire",)`): it gets the
+  claim's layers as a bus, and its checks raise the claim's score as on any bus.
+- **Packaging**: the entry point group `wireskein.engines` (an object with `.engine` and `.protocols`).
 
 ## 3. Results in the viewer
 

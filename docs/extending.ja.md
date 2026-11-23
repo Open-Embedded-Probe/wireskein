@@ -12,7 +12,7 @@ WireSkein は、キャプチャを読み手に要るもの（載っているバ�
 | UART の 1 本のテキストの命令と、もう 1 本の応答（AT コマンド、シェル） | `"uart_pair"` に乗るプロトコルのオブジェクト | [独自のプロトコル](protocols.ja.md) §3.1 |
 | CAN や LIN のフレームの上の層（CANopen、J1939、OBD-II / UDS、ノードの信号） | `"can"` か `"lin"` に乗るプロトコルのオブジェクト | [独自のプロトコル](protocols.ja.md) §3.2 |
 | WireSkein が読まないファイルの形式のキャプチャ（ほかのアナライザの書き出し、研究室の独自のログ） | ファイルの形式（`wireskein.plugins.register_format`） | §2、`examples/formats/saleae_csv.py` |
-| それ自体がバスのプロトコル（クロックとデータ、または 1 本の NRZ の線の上の独自のフレーム） | 拡張点ではない: WireSkein 自身のものは、変わりうる分析のエンジンの一部 | 提案する（[独自のプロトコル](protocols.ja.md) §5） |
+| それ自体がバスのプロトコル（クロックとデータ、または 1 本の NRZ の線の上の独自のフレーム） | WireSkein のエンジンと並べる自分のエンジン（`wireskein.plugins.register_engine`）: そのプロトコルを読み、分析の形式の主張を返す。主張は、WireSkein のエンジンが説明しなかった線に足し、hints がそのプロトコルを名指せば先にする（WireSkein 自身のそうしたプロトコルはエンジンの一部で、拡張点ではない） | §2.1 |
 | I2C や SPI の機器のレジスタや命令に名前を付ける | 定義のディレクトリの `devices/` のデバイスの定義 | [デバイスの定義](../src/wireskein/decl/devices/README.ja.md) |
 | 自分の試験のログのマーカーの行を区間として読む | 定義のディレクトリの `markers/` のマーカーの方言 | [マーカー](markers.ja.md) §4 |
 | どの検査も持たないきまりを試験に使い、`wireskein verify`、pytest、ビューアで同じに判定する | 検査の種類（`wireskein.plugins.register_check`） | [ガイド](capture-test-guide.ja.md) §4.10 |
@@ -29,7 +29,7 @@ WireSkein は、キャプチャを読み手に要るもの（載っているバ�
 - **正解は、試験されるもの以外から取る。** 追加は、それを読むコードとは別に作った信号で確かめます: 試験の中の自分の符号器か、既存のライブラリで出すプローブ（OEP のプローブの ESP-IDF の UART ドライバなど）。試験される機器の出力は、決して正解にしません。それこそが誤っているかもしれないからです。
 - **名前。** 追加の名前は、持ち主の名前空間と自分の名前の `持ち主.名前`（`acme.link`: 英小文字、数字、`_`）にします。WireSkein 自身の名前には名前空間がない（`src/wireskein/registry.toml`、その台帳）ので、自分の名前が今も先々もぶつかりません。取得元の名前は URI の scheme（`acme`）で、WireSkein の持つものとは別にします。entry point の名前が追加の名前です。オブジェクトの `name` がそれと違えば断ります。
 - **失敗は見えるままに。** プロトコルの `decode` の例外は、そのバスと一緒に出て、分析は続きます。だれも足していない種類の検査は `ng` で、飛ばしません。
-- **足し方。** スクリプトや試験では、`wireskein.plugins` でそれぞれ足します: `register_protocol`、`add_definitions`、`register_format`、`register_check`、`register_source`。外すのはそれぞれの `unregister_*`（`remove_definitions`）。コマンドでは、`wireskein --plugin モジュールか.pyのファイル --definitions ディレクトリ <コマンド> ...` で、その実行だけ足せます（ファイルは `wireskein.plugins` で自分の持つものを足します。どちらも繰り返せます。環境変数の `WIRESKEIN_PLUGINS` と `WIRESKEIN_DEFINITIONS` も同じ）。パッケージは追加を entry point で宣言し、入れたときにいつも使えるようにします。
+- **足し方。** スクリプトや試験では、`wireskein.plugins` でそれぞれ足します: `register_protocol`、`add_definitions`、`register_format`、`register_check`、`register_source`、`register_engine`。外すのはそれぞれの `unregister_*`（`remove_definitions`）。コマンドでは、`wireskein --plugin モジュールか.pyのファイル --definitions ディレクトリ <コマンド> ...` で、その実行だけ足せます（ファイルは `wireskein.plugins` で自分の持つものを足します。どちらも繰り返せます。環境変数の `WIRESKEIN_PLUGINS` と `WIRESKEIN_DEFINITIONS` も同じ）。パッケージは追加を entry point で宣言し、入れたときにいつも使えるようにします。
 
 | entry point の group | 足すもの | 値 |
 | --- | --- | --- |
@@ -37,6 +37,7 @@ WireSkein は、キャプチャを読み手に要るもの（載っているバ�
 | `wireskein.definitions` | 定義のディレクトリ（デバイスの定義、マーカーの方言） | それを持つディレクトリの module、またはそのパスを返す callable |
 | `wireskein.checks` | 検査の種類 | 検査の関数、または `.check`（と `.notices`）を持つオブジェクト |
 | `wireskein.sources` | `wireskein capture` の取得元 | `capture(target, request)` を持つ module かオブジェクト |
+| `wireskein.engines` | WireSkein のエンジンと並べる自分のエンジン | `.engine(view, hints)` と `.protocols` を持つオブジェクト |
 | `wireskein.formats` | キャプチャを読むところ（analyze、decode、states、convert、ビューア）すべてで読むファイルの形式 | `name`、`sniff(head, path)`、`wireskein.capture.Capture` を返す `read(path)` を持つオブジェクト |
 
 ```toml
@@ -46,6 +47,32 @@ WireSkein は、キャプチャを読み手に要るもの（載っているバ�
 [project.entry-points."wireskein.definitions"]
 acme = "acme_wireskein.definitions"
 ```
+
+### 2.1 自分のエンジン
+
+WireSkein がまったく読まないプロトコル（自分の線の上の独自の枠）は、自分のエンジンで読み、WireSkein のエンジンと並べて
+回します。WireSkein のエンジンは変わりえます（その層と決まりはエンジン自身のもの）。だから、自分のものはその中に作らず、
+自分のエンジンは、どのエンジンも見るものだけを見て、分析の形式で答えます。
+
+```python
+from wireskein import plugins
+
+def acme_wire(view, hints):
+    """view: パートの変化（rate_hz、n_samples、channels、channel(名前): initial、edges、step、level_at）。"""
+    ...
+    return [{"protocol": "acme.wire", "roles": {"data": "D3"}, "verdict": "confirmed", "score": 0.93,
+             "margin": 0.9, "params": {...}, "layers": {"frames": [...]}}]
+
+plugins.register_engine("acme.wire_engine", acme_wire, ["acme.wire"])
+```
+
+- **名前**: エンジンも各プロトコルも `持ち主.名前`。主張のプロトコルは、そのどれか。
+- **合わせ方**: 主張は、WireSkein のエンジンが説明しなかった線（主張なし、または `unknown-sync`・`ambiguous` だけの線）に
+  足します。hints がそのプロトコルを名指したとき（`--hint protocols=acme.wire`）は先にし、その線の本命の主張は外します。
+  ほかの人のエンジンどうしでは、点数の高い方、次に名前の順。
+- **上に乗せる**: 自前のプロトコルは、エンジンのプロトコルの上に乗れます（`over = ("acme.wire",)`）。主張の層をバスと
+  して受け取り、そのチェックは、ほかのバスと同じく主張の点数を上げます。
+- **パッケージ**: entry point の `wireskein.engines`（`.engine` と `.protocols` を持つオブジェクト）。
 
 ## 3. 結果をビューアに出す
 
