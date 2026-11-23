@@ -10,17 +10,26 @@ on:
   workflow_dispatch:
     inputs:
       stages:
-        description: "Stages, space separated, or all (default: e2e, the check of a commit on main)"
+        description: "Stages (e2e: the check of a commit on main)"
+        type: choice
+        options: ["e2e", "all", "clock_period", "bit_unit", "clean", "grouping", "lineclass", "segments"]
         default: "e2e"
       suites:
-        description: "Suites of bench/suites.toml, space separated; all: every suite (tune: those for tuning)"
+        description: "Suites of bench/suites.toml (all: every suite; tune: those for tuning; (other): those in other)"
+        type: choice
+        options: ["all", "tune", "quick", "quick-noise", "smoke", "noise", "noise-holdout", "protocols", "protomix",
+                  "spi-shapes", "uartlike", "pulse", "real", "real-i2c", "scale", "(other)"]
         default: "all"
       algos:
-        description: "Algorithms by name, space separated (empty: by status). The default, wireskein alone, runs no gate (the cost run is for trials); empty it to measure trials"
+        description: "Algorithms (wireskein alone runs no gate; engine: every engine of bench/engines; (status ...): every algorithm of those statuses; (other): those in other)"
+        type: choice
+        options: ["wireskein", "engine", "wireskein engine", "engine.light", "engine.views", "engine.declarative",
+                  "engine.learned", "engine.synth", "engine.synth_gated", "(status main,trial)",
+                  "(status main,trial,retired)", "(other)"]
         default: "wireskein"
-      status:
-        description: "With no algorithm named: which statuses (main,trial,retired)"
-        default: "main,trial"
+      other:
+        description: "With (other): suites or algorithms by name, space separated (both (other): suites | algorithms)"
+        default: ""
       shards:
         description: "Parallel jobs (1-20)"
         default: "20"
@@ -84,9 +93,17 @@ jobs:
         id: gate
         env:
           STAGES: ${{ inputs.stages }}
+          SUITES: ${{ inputs.suites }}
           ALGOS: ${{ inputs.algos }}
-          STATUS: ${{ inputs.status }}
+          OTHER: ${{ inputs.other }}
         run: |
+          # the choices read: (other) from the other field ("suites | algorithms" when both), (status ...) as --status
+          if [ "$SUITES" = "(other)" ] && [ "$ALGOS" = "(other)" ]; then
+            ALGOS="${OTHER#*|}"; SUITES="${OTHER%%|*}"
+          elif [ "$SUITES" = "(other)" ]; then SUITES="$OTHER"
+          elif [ "$ALGOS" = "(other)" ]; then ALGOS="$OTHER"; fi
+          STATUS="main,trial"
+          case "$ALGOS" in "(status "*) STATUS="${ALGOS#(status }"; STATUS="${STATUS%)}"; ALGOS="";; esac
           args=()
           for s in $STAGES; do args+=(--stage "$s"); done
           for a in $ALGOS; do args+=(--algo "$a"); done
@@ -133,7 +150,7 @@ jobs:
           STAGES: ${{ inputs.stages }}
           SUITES: ${{ inputs.suites }}
           ALGOS: ${{ inputs.algos }}
-          STATUS: ${{ inputs.status }}
+          OTHER: ${{ inputs.other }}
           NOTE: ${{ inputs.note }}
           MEMORY: ${{ inputs.memory }}
           SHARD: ${{ matrix.shard }}
@@ -142,6 +159,13 @@ jobs:
           N: ${{ needs.plan.outputs.n }}
           RUN_ID: ${{ needs.plan.outputs.run_id }}
         run: |
+          # the choices read: (other) from the other field ("suites | algorithms" when both), (status ...) as --status
+          if [ "$SUITES" = "(other)" ] && [ "$ALGOS" = "(other)" ]; then
+            ALGOS="${OTHER#*|}"; SUITES="${OTHER%%|*}"
+          elif [ "$SUITES" = "(other)" ]; then SUITES="$OTHER"
+          elif [ "$ALGOS" = "(other)" ]; then ALGOS="$OTHER"; fi
+          STATUS="main,trial"
+          case "$ALGOS" in "(status "*) STATUS="${ALGOS#(status }"; STATUS="${STATUS%)}"; ALGOS="";; esac
           args=()
           for s in $STAGES; do args+=(--stage "$s"); done
           for s in $SUITES; do args+=(--suite "$s"); done
