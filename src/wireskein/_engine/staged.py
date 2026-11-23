@@ -67,6 +67,16 @@ class Claim:
     node: Node
     runner_up: Node | None
     bus: str | None = None  # the bus a target's claim is on, when several targets share its lines (shared_buses)
+    held: bool = False      # kept from confirmed whatever its score (an SPI bus whose selects are open)
+    upper: object = None    # what the upper stage gave it (wireskein._upper.Upper)
+
+
+def regrade(c: Claim, total: float, margin: float) -> str:
+    """A claim's verdict again at a raised score and margin (after the upper stage), by the rule that gave it."""
+    if c.verdict == "unknown-sync":
+        return c.verdict
+    v = _verdict(total, margin, c.runner_up is not None)
+    return "likely" if c.held and v == "confirmed" else v
 
 
 def channel_labels(nodes: list[Node]) -> dict[str, tuple]:
@@ -1562,12 +1572,8 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
                         if k:
                             n.params["deglitch"] = k
                         roots.append(n)
-    t0 = time.perf_counter()
-    # the upper stage: what reads the buses' output (upper layers, a UART pair's exchanges, device packs, devices on
-    # I2C, SD on SPI, RISC-V's DM, protocols of others), apart from this engine (wireskein._upper)
-    from .. import _upper
-    rels = _upper.run(roots, hints)
-    t["upper"] = time.perf_counter() - t0
+    # the upper stage (upper layers, a UART pair's exchanges, device packs, devices on I2C, SD on SPI, RISC-V's DM,
+    # protocols of others) reads the claims chosen here, apart from this engine (wireskein._upper, wireskein._engines)
     t0 = time.perf_counter()
     # unknown-sync only explains what no known protocol explains better: a
     # free-running clock "sampling" a known bus's pins must not win by pin count
@@ -1638,15 +1644,12 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
             v = _verdict(n.total, margin, ru is not None)
             if n.analyzer == "sync_unknown":
                 v = "unknown-sync"
-            if (v == "confirmed" and n.analyzer == "spi" and "cs" not in n.roles
-                    and n.roles.get("clk") in tx.survey.select_ambiguous):
+            held = n.analyzer == "spi" and "cs" not in n.roles and n.roles.get("clk") in tx.survey.select_ambiguous
+            if v == "confirmed" and held:
                 v = "likely"            # selects are there but which lines are open: the bus without them is not sure
-            claims.append(Claim(n.analyzer, dict(n.roles), dict(n.params), n.total, margin, v, n, ru))
+            claims.append(Claim(n.analyzer, dict(n.roles), dict(n.params), n.total, margin, v, n, ru, held=held))
     t["pack"] = time.perf_counter() - t0
     res = StagedResult(roots, exps, claims, t, tx.survey.features, tx, runs)
-    res.relations = rels
+    res.relations = []
     return res
 
-
-# (the upper stage's names, kept here for those that ask this module: wireskein._upper holds them)
-from .._upper import UPPER, _device_packs, _device_packs_at, i2c_device_node, sd_spi_node  # noqa: E402,F401

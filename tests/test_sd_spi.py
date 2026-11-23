@@ -67,9 +67,10 @@ def test_a_block_write_with_its_data_response():
 
 
 def test_analyze_reads_sd_commands_on_spi():
-    from wireskein._engine import export, staged
-    res = staged.analyze(_cap(INIT))
+    from wireskein import _engines
+    from wireskein._engine import export
+    res = _engines.main(_cap(INIT))
     (c,) = [c for c in res.claims if c.protocol == "spi"]
-    fin = export.final_of(c.node, export.layers_of(c.node))
+    fin = export.final_of(c.node, export.layers_of(c.node, c.upper), c.upper)
     assert [x["cmd"] for x in fin["sd"]] == ["CMD0", "CMD8", "CMD55", "ACMD41", "CMD58", "CMD17"]
     assert fin["sd"][-1]["blocks"][0]["crc_ok"] is True

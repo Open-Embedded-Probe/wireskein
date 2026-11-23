@@ -44,7 +44,7 @@ from fractions import Fraction
 from pathlib import Path
 
 from . import __version__
-from ._engine import export, markers, staged
+from ._engine import export, markers
 
 
 
@@ -622,7 +622,8 @@ def convert(args) -> None:
 def segments(args) -> None:
     hints = parse_hint(args.hint)
     cap = _load_for_decoding(args.capture, args)
-    res = staged.analyze(cap, hints)
+    from . import _engines
+    res = _engines.main(cap, hints)
     found = markers.find(res, cap, hint=json.loads(args.markers) if args.markers else None)
     if found is None:
         sys.exit("no marker stream found (give --markers)")

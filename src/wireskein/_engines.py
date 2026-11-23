@@ -6,17 +6,51 @@ added engines the higher score, then the name. Protocols of others that ride on 
 (over = its name) read its claims there (upper)."""
 from __future__ import annotations
 
+from . import _upper
 from ._engine import staged
 
 SURE = ("confirmed", "likely")
 
 
 def analyze(view, hints: dict | None = None):
-    """The main engine's result, with the added engines' claims beside it (res.side)."""
-    res = staged.analyze(view, hints)
+    """The main engine's result after the upper stage, with the added engines' claims beside it (res.side)."""
+    res = main(view, hints)
     res.side = _side(view, hints)
     res.hints = hints
     return res
+
+
+def main(view, hints: dict | None = None):
+    """The main engine's claims, then the upper stage on them (wireskein._upper): each claim's upper readings
+    (claim.upper), its score raised by them, its margin raised as much, its verdict made again by the engine's rule;
+    the UART pairs' relations (res.relations)."""
+    res = staged.analyze(view, hints)
+    res.hints = hints
+    mine = [c for c in res.claims if not c.bus and c.node.output is not None]
+    ups, res.relations = _upper.run([reading(c.node, c.total) for c in mine], float(view.rate), hints)
+    for c, up in zip(mine, ups):
+        c.upper = up
+        d = up.score - c.total
+        if d:
+            c.total, c.margin = up.score, c.margin + d
+            c.verdict = staged.regrade(c, c.total, c.margin)
+    return res
+
+
+def reading(node, score: float | None = None) -> dict:
+    """A reading of the main engine as the upper stage takes it: the bus as the analysis exports it."""
+    from ._engine import export
+    return {"protocol": node.analyzer, "roles": dict(node.roles), "params": dict(node.params),
+            "score": float(node.total if score is None else score), "layers": export.layers_of(node)}
+
+
+def upper_of(node, rate: float, hints: dict | None = None, claims=()):
+    """The upper stage on one reading of the main engine (a bus named by a spec, a test's): its claim's when it is
+    one, else read alone (no pairs)."""
+    c = next((c for c in claims if c.node is node and getattr(c, "upper", None) is not None), None)
+    if c is not None:
+        return c.upper
+    return _upper.finish(_upper.read(reading(node), rate, hints))
 
 
 def _side(view, hints) -> list[dict]:
@@ -61,28 +95,21 @@ def merge(claims: list[dict], side: list[dict], hints: dict | None = None) -> li
             continue
         taken |= lines
         out.append(c)
-    return _upper(main + out)
+    return _on_added(main + out)
 
 
-def _upper(claims: list[dict]) -> list[dict]:
-    """Protocols of others on an added engine's protocol (over = its name): each reads the claim as the analysis
-    exports it; its checks raise the claim's score as on any bus (staged's formula)."""
-    from . import plugins
-    protos = plugins.protocols()
+def _on_added(claims: list[dict]) -> list[dict]:
+    """The upper stage on the added engines' claims (wireskein._upper, as on the main engine's): protocols of others
+    on an added engine's protocol (over = its name) read the claim as the analysis exports it, their readings in its
+    result, their checks raising its score."""
     for c in claims:
-        if "engine" not in c:
+        if "engine" not in c or c.get("verdict") == "error":
             continue
-        mine = [p for p in protos.values() if c["protocol"] in p.over]
-        for p in mine:
-            bus = {"roles": dict(c["roles"]), "tick_hz": None, **(c.get("layers") or c.get("result") or {})}
-            try:
-                got = p.decode(bus) or {}
-            except Exception as e:  # noqa: BLE001
-                got = {"messages": [], "checks_passed": 0, "checks_failed": 0, "error": f"{type(e).__name__}: {e}"}
-            m = {"messages": list(got.get("messages", [])), "checks_passed": int(got.get("checks_passed", 0)),
-                 "checks_failed": int(got.get("checks_failed", 0)), **({"error": got["error"]} if "error" in got else {})}
-            s = plugins._score(m)
-            c.setdefault("result", {})[p.name] = m
-            t = float(c.get("score", 0))
-            c["score"] = round(t + 0.5 * (1 - t) * s * t, 4)
+        r = {"protocol": c["protocol"], "roles": c["roles"], "params": c.get("params") or {},
+             "score": float(c.get("score", 0)), "layers": c.get("layers") or c.get("result") or {}}
+        up = _upper.finish(_upper.read(r, None, None))
+        for name, m in up.user.items():
+            c.setdefault("result", {})[name] = {k: v for k, v in m.items() if k != "score"}
+        if up.user:
+            c["score"] = round(up.score, 4)
     return claims

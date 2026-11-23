@@ -73,8 +73,11 @@ def _words(n, size: int) -> list[dict]:
     return rows
 
 
-def layers_of(n) -> dict:
-    """All layers of a claim, lowest first, as plain data."""
+def layers_of(n, up=None) -> dict:
+    """All layers of a reading, lowest first, as plain data: the engine's, then the upper stage's (up: its Upper,
+    wireskein._upper)."""
+    if up is not None:
+        return {**layers_of(n), **up.layers}
     a = n.analyzer
     out = {}
     if a in ("i2c", "spi", "sync_unknown", "rvswd"):
@@ -111,13 +114,6 @@ def layers_of(n) -> dict:
                 out["modes_ok"] = [m["mode"] for m in out["modes"] if m["readable"]]
             except (KeyError, ValueError, TypeError):
                 pass
-        sd = [ch for ch in n.children if ch.analyzer == "sd_spi"]
-        if sd:
-            out["sd"] = [{"s": c["t"], "cmd": ("ACMD" if c["acmd"] else "CMD") + str(c["cmd"]), "arg": c["arg"],
-                          "r1": c.get("r1"), **{k: c[k] for k in ("resp", "ncr", "crc_ok") if k in c},
-                          **({"blocks": [{"s": b["t"], "token": b["token"], "len": b.get("len"),
-                                          "crc_ok": b.get("crc_ok")} for b in c["blocks"]]} if "blocks" in c else {})}
-                         for c in sd[0].output.items]
     elif a == "sync_unknown":
         out["summary"] = {"frame_bits": n.metrics.get("frame_bits"), "delimiter": n.metrics.get("delimiter")}
     elif a in ("rvswd", "swio"):
@@ -142,11 +138,6 @@ def layers_of(n) -> dict:
                       for x, dx in zip(n.output.items, details)]
         for row, dx in zip(out["dmi"], details):
             row.update(dx)
-        dm = [ch for ch in n.children if ch.analyzer == "riscv_dm"]
-        if dm:
-            out["dm"] = [{**({"s": int(t0)} if t0 is not None else {}), **({"e": int(t1)} if t1 is not None else {}),
-                          "op": k, "addr": ad, "value": v, **({"size": sz} if sz else {})}
-                         for k, ad, v, sz, t0, t1 in dm[0].output.items]
     elif a in ("uart", "lin", "dmx512"):
         lay = getattr(n, "layers", None) or {}
         if "blocks" in lay:
@@ -164,13 +155,6 @@ def layers_of(n) -> dict:
             ninth = _ninth_bits(n, it["value"])
             if ninth is not None:
                 out["bytes"]["bit8"] = ninth
-            for ch in n.children:
-                if ch.output is None or ch.total < 0.3:
-                    continue
-                if ch.analyzer == "lines":
-                    out["lines"] = list(ch.output.items)
-                elif ch.analyzer in ("nmea", "modbus_rtu"):
-                    out[ch.analyzer] = list(ch.output.items)
         elif a == "lin":
             out["frames"] = n.output.items
         else:
@@ -218,10 +202,6 @@ def layers_of(n) -> dict:
     elif a == "ir_nec":
         out["frames"] = [{"s": f["t"], **{k: f[k] for k in ("repeat", "addr", "ext", "cmd", "cmd_ok") if k in f}}
                          for f in n.output.items]
-    for ch in getattr(n, "children", []):     # protocols of others (wireskein.plugins.register_protocol) whose checks held
-        if getattr(ch, "user", False) and ch.total >= 0.3:
-            out[ch.analyzer] = {"messages": list(ch.output.items), **{k: ch.metrics[k] for k in
-                                                                       ("checks_passed", "checks_failed")}}
     return out
 
 
@@ -247,11 +227,11 @@ FINAL = {"i2c": "transactions", "spi": ("sd", "transfers"), "uart": ("nmea", "mo
          "ir_nec": "frames", "usb": ("transactions", "packets")}
 
 
-def final_of(n, lay: dict) -> dict:
-    mine = [ch for ch in getattr(n, "children", []) if getattr(ch, "user", False) and ch.total >= 0.3]
-    if mine:                                   # a protocol of others whose checks held is the bus's final reading
-        best = max(mine, key=lambda ch: ch.total)
-        return {best.analyzer: lay[best.analyzer]}
+def final_of(n, lay: dict, up=None) -> dict:
+    from .._upper import final_user
+    best = final_user(up)
+    if best is not None:                       # a protocol of others whose checks held is the bus's final reading
+        return {best: lay[best]}
     want = FINAL.get(n.analyzer, ("frames",) if n.params.get("external") else ())
     want = (want,) if isinstance(want, str) else want
     for k in want:
@@ -293,9 +273,10 @@ LOWER = {"i2c": "transactions", "spi": "transfers", "uart": "bytes", "lin": "fra
          "ir_nec": "frames", "usb": "packets"}
 
 
-def devices_of(n, with_candidates: bool) -> list[dict]:
+def devices_of(up, with_candidates: bool) -> list[dict]:
+    """The device packs' matches the upper stage gave a reading (up: its Upper)."""
     out = []
-    for m in getattr(n, "devices", []) or []:
+    for m in getattr(up, "devices", None) or []:
         if m.level in ("identified", "consistent") or (with_candidates and m.level == "address_only"):
             out.append({"device": m.device, "level": m.level, "evidence": m.evidence,
                         **({"messages": m.messages} if m.level != "address_only" else {})})
@@ -314,7 +295,8 @@ def export(res, cap, mode: str = "final", select: list[str] | None = None, alter
                "params": {k: (float(v) if isinstance(v, (np.floating, float)) else v) for k, v in c.params.items()}}
         if getattr(c, "bus", None):
             rec["bus"] = c.bus                  # a target's claim: the claims with the same bus share its lines
-        lay = layers_of(n)
+        up = getattr(c, "upper", None)
+        lay = layers_of(n, up)
         if window:
             lay = _window(lay, *window)
         if mode == "final":
@@ -326,15 +308,16 @@ def export(res, cap, mode: str = "final", select: list[str] | None = None, alter
                 if k and k in lay:
                     rec["result"] = {k: lay[k]}
             else:
-                rec["result"] = final_of(n, lay)
+                rec["result"] = final_of(n, lay, up)
                 if depth == "device":
-                    ds = devices_of(n, with_candidates=True)
+                    ds = devices_of(up, with_candidates=True)
                     if ds:
                         rec["devices"] = ds
         elif mode == "all":
             rec["layers"] = lay
             rec["evidence"] = {k: (float(v) if isinstance(v, (np.floating, float, np.integer)) else v)
-                               for k, v in n.metrics.items() if not isinstance(v, (dict, list))}
+                               for k, v in {**n.metrics, **(up.evidence if up else {})}.items()
+                               if not isinstance(v, (dict, list))}
             if alternatives and c.runner_up is not None:
                 rec["runner_up"] = {"protocol": c.runner_up.analyzer, "roles": c.runner_up.roles,
                                     "score": round(float(c.runner_up.total), 4)}
@@ -345,7 +328,7 @@ def export(res, cap, mode: str = "final", select: list[str] | None = None, alter
                 if not fnmatch.fnmatch(c.protocol, proto):
                     continue
                 if layer == "final":
-                    picked.update(final_of(n, lay))
+                    picked.update(final_of(n, lay, up))
                 else:
                     for k in fnmatch.filter(lay.keys(), layer or "*"):
                         picked[k] = lay[k]
@@ -355,18 +338,12 @@ def export(res, cap, mode: str = "final", select: list[str] | None = None, alter
         doc["claims"].append(rec)
     if hasattr(res, "relations"):
         rel = []
-        for r in res.relations:
-            sc = [ch for ch in r.children if ch.analyzer == "scpi"]
-            if sc and (mode != "select" or any(fnmatch.fnmatch("scpi", p.partition(".")[0]) for p in select or [])):
-                rel.append({"protocol": "scpi", "roles": sc[0].roles, "score": round(float(sc[0].total), 4),
-                            "exchanges": sc[0].output.items})
-            for u in r.children:          # protocols of others on the pair (bus "uart_pair") whose checks held
-                if not getattr(u, "user", False) or u.total < 0.3:
-                    continue
-                if mode == "select" and not any(fnmatch.fnmatch(u.analyzer, p.partition(".")[0]) for p in select or []):
-                    continue
-                rel.append({"protocol": u.analyzer, "roles": u.roles, "score": round(float(u.total), 4),
-                            "messages": u.output.items, **{k: u.metrics[k] for k in ("checks_passed", "checks_failed")}})
+        for r in res.relations:          # the UART pairs' (wireskein._upper.pairs): SCPI, protocols of others on a pair
+            if r.get("user") and r["score"] < 0.3:
+                continue
+            if mode == "select" and not any(fnmatch.fnmatch(r["protocol"], p.partition(".")[0]) for p in select or []):
+                continue
+            rel.append({k: v for k, v in r.items() if k != "user"})
         if rel:
             doc["relations"] = rel
     return doc

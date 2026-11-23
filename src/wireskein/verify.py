@@ -364,8 +364,8 @@ def check_pulses(cap, x):
 
 
 def _decode(cap, hints):
-    from ._engine import staged
-    return staged.analyze(cap, hints)
+    from . import _engines
+    return _engines.main(cap, hints)
 
 
 def _best(res, analyzer, need: dict, also=None):
@@ -717,10 +717,10 @@ def check_protocol(cap, x):
     n = _best(res, x["bus"], {r: p for r, p in x["roles"].items()})
     if n is None:
         return False, {}, f"nothing decoded as {x['bus']} on these pins"
-    child = next((c for c in n.children if c.analyzer == x["name"]), None)
-    msgs = list(child.output.items) if child is not None else []
-    m = child.metrics if child is not None else {"checks_passed": 0, "checks_failed": 0}
-    got = {"messages": msgs, "checks_passed": m.get("checks_passed", 0), "checks_failed": m.get("checks_failed", 0)}
+    from . import _engines
+    m = _engines.upper_of(n, float(cap.rate), res.hints, res.claims).user.get(x["name"]) or {}
+    got = {"messages": list(m.get("messages", [])), "checks_passed": m.get("checks_passed", 0),
+           "checks_failed": m.get("checks_failed", 0)}
     if "error" in m:
         return False, got, f"{x['name']} failed: {m['error']}"
     return _compare_messages(x, got)

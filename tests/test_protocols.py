@@ -200,7 +200,7 @@ def test_a_test_checks_the_frames_of_a_declared_protocol(tmp_path, demo_wire):
 
 def test_device_packs_and_marker_dialects_from_a_definitions_directory(tmp_path):
     import shutil
-    from wireskein._engine import markers, staged
+    from wireskein._engine import markers
     root = Path(__file__).parents[1] / "src/wireskein/decl"
     pack = next(iter(sorted((root / "devices/i2c").rglob("*.toml"))))
     (tmp_path / "devices/i2c/mine").mkdir(parents=True)
@@ -208,14 +208,15 @@ def test_device_packs_and_marker_dialects_from_a_definitions_directory(tmp_path)
     (tmp_path / "markers").mkdir()
     (tmp_path / "markers/mine.toml").write_text(
         'format = "wireskein-marker-dialect/1"\n\n[dialect]\nname = "tests.mine"\nlevels = ["case"]\n\n[[marker]]\npattern = \'^BEGIN (?P<name>.+)$\'\naction = "begin"\n')
-    before = len(staged._device_packs(("**",))[0])
+    from wireskein import _upper
+    before = len(_upper._device_packs(("**",))[0])
     plugins.add_definitions(tmp_path)
     try:
-        assert len(staged._device_packs(("**",))[0]) == before + 1
+        assert len(_upper._device_packs(("**",))[0]) == before + 1
         assert "tests.mine" in markers.load_dialects() and "heading" in markers.load_dialects()
     finally:
         plugins.remove_definitions(tmp_path)
-    assert len(staged._device_packs(("**",))[0]) == before
+    assert len(_upper._device_packs(("**",))[0]) == before
 
 
 def test_the_example_on_hardware_sent_by_a_probe(demo_link):

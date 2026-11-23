@@ -627,11 +627,12 @@ def _bus(res, cap: Capture, b: dict, depth: str, claimed: list) -> dict:
         out.update(decoded=False, result={})
         lay = {}
     else:
-        lay = _exp.layers_of(n)
+        up = _engines.upper_of(n, float(cap.rate), getattr(res, "hints", None), claimed)
+        lay = _exp.layers_of(n, up)
         c = next((c for c in claimed if c.node is n), None)
         out.update(decoded=True, params={k: (float(v) if isinstance(v, (np.floating, float)) else v)
                                                     for k, v in n.params.items()},
-                   fit={"score": round(float(n.total), 4), "claimed": c is not None,
+                   fit={"score": round(float(up.score), 4), "claimed": c is not None,
                         **({"verdict": c.verdict} if c is not None else {})})
         k = _exp.LOWER.get(n.analyzer)
         if depth == "transport":
@@ -639,11 +640,11 @@ def _bus(res, cap: Capture, b: dict, depth: str, claimed: list) -> dict:
         elif depth == "frames":
             out["result"] = {k: lay[k]} if k and k in lay else {}
         else:
-            out["result"] = _exp.final_of(n, lay)
+            out["result"] = _exp.final_of(n, lay, up)
             if k and k in lay and k not in out["result"]:
                 out["result"][k] = lay[k]          # the transfers stay beside a higher reading (sd over spi)
             if depth == "device":
-                ds = _exp.devices_of(n, with_candidates=True)
+                ds = _exp.devices_of(up, with_candidates=True)
                 if ds:
                     out["devices"] = ds
         for k in (lay if "*" in b.get("layers", ()) else b.get("layers", ())):
@@ -845,7 +846,7 @@ def _part(cap: Capture, spec: dict, head: dict, strict: bool = False) -> dict:
     added = {p: e for e, protos in plugins.engines().values() for p in protos}
     mine = [b for b in spec["buses"] if b["protocol"] not in added]
     groups = _apart(mine)
-    reads = [staged.analyze(cap, _hints({**spec, "buses": g}, strict, [c.name for c in cap.channels])) for g in groups]
+    reads = [_engines.main(cap, _hints({**spec, "buses": g}, strict, [c.name for c in cap.channels])) for g in groups]
     res_of = {id(b): r for g, r in zip(groups, reads) for b in g}
     res = reads[0]
     out = {"part": head.get("part", 0), "ticks": cap.n_samples,

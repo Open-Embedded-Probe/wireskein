@@ -49,9 +49,10 @@ def test_a_protocol_takes_its_owners_namespace(name):
 
 
 def test_the_registry_holds_wireskeins_names():
+    from wireskein import _upper
     from wireskein._engine import staged
     reg = plugins.registry()
-    assert {p.name for p in staged.PLUGINS} | {u.name for u in staged.UPPER} <= set(reg)
+    assert {p.name for p in staged.PLUGINS} | {u.name for u in _upper.UPPER} <= set(reg)
     assert all("." not in k for k in reg) and "uart" in plugins.buses() and "nmea" not in plugins.buses()
 
 
