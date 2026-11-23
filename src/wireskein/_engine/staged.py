@@ -71,6 +71,18 @@ class Claim:
     upper: object = None    # what the upper stage gave it (wireskein._upper.Upper)
 
 
+def i2c_addresses(txs: list[dict]) -> float | None:
+    """How much an I2C reading's transactions look like a real bus's: few addresses, repeatedly, acknowledged at
+    least sometimes (the share of the two busiest addresses, by the number of transactions); None under 3."""
+    txs = [t for t in txs if t.get("addr") is not None]
+    if len(txs) < 3:
+        return None
+    _, cnt = np.unique([t["addr"] for t in txs], return_counts=True)
+    top2 = float(np.sort(cnt)[::-1][:2].sum() / len(txs))
+    acked = float(np.mean([t.get("addr_ack", False) for t in txs]))
+    return top2 * (1 - 0.5 ** (len(txs) / 3)) * (1.0 if acked > 0 else 0.3)
+
+
 def regrade(c: Claim, total: float, margin: float) -> str:
     """A claim's verdict again at a raised score and margin (after the upper stage), by the rule that gave it."""
     if c.verdict == "unknown-sync":
@@ -1572,8 +1584,16 @@ def analyze(cap: Capture, hints: dict | None = None) -> StagedResult:
                         if k:
                             n.params["deglitch"] = k
                         roots.append(n)
-    # the upper stage (upper layers, a UART pair's exchanges, device packs, devices on I2C, SD on SPI, RISC-V's DM,
-    # protocols of others) reads the claims chosen here, apart from this engine (wireskein._upper, wireskein._engines)
+    # an I2C bus's own evidence beyond its frames: a real bus talks to few addresses, repeatedly, acknowledged
+    # (i2c_addresses); it lifts a weak reading before the claims are chosen. The upper stage (upper layers, a UART
+    # pair's exchanges, device packs, SD on SPI, RISC-V's DM, protocols of others) reads the claims chosen here,
+    # apart from this engine (wireskein._upper, wireskein._engines)
+    for n in roots:
+        if n.analyzer == "i2c" and n.output is not None:
+            d = i2c_addresses(n.output.items)
+            if d is not None:
+                n.metrics["addresses"] = round(d, 4)
+                n.total = n.layer_score + 0.5 * (1 - n.layer_score) * d * n.layer_score
     t0 = time.perf_counter()
     # unknown-sync only explains what no known protocol explains better: a
     # free-running clock "sampling" a known bus's pins must not win by pin count

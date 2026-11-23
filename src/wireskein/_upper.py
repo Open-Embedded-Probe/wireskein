@@ -1,6 +1,6 @@
 """The upper stage: what reads the buses' output rather than the lines - upper layers on byte streams (lines, NMEA,
 Modbus RTU, marker dialects), a UART pair's exchanges (SCPI, protocols of others on a pair), device packs on I2C and
-SPI, devices on I2C, SD on SPI, RISC-V's debug module on RVSWD / SWIO, protocols of others on a bus (wireskein.plugins)
+SPI, SD on SPI, RISC-V's debug module on RVSWD / SWIO, protocols of others on a bus (wireskein.plugins)
 - apart from the engine that found the buses (bench/notes/2026-11-23-extension-spec.ja.md §1, §3.1, §3.3).
 
 It reads a bus as the analysis exports it (a reading: protocol, roles, params, score and its layers, the lowest
@@ -82,11 +82,8 @@ def read(r: dict, rate: float | None, hints: dict | None = None) -> Upper:
         _bytes_upper(node, up)
     if proto in ("i2c", "spi"):
         _devices(r, up, hints)
-    if proto == "i2c":
-        d = i2c_devices(r)
-        if d is not None:
-            up.score = _support(float(r["score"]), d, float(r["score"]))
-    elif proto == "spi":
+    # (an I2C bus's addresses are its own evidence, not a reading above it: the engine's, staged.i2c_addresses)
+    if proto == "spi":
         sd = sd_spi(r)
         if sd is not None:
             score, cmds = sd
@@ -162,18 +159,6 @@ def _devices(r: dict, up: Upper, hints) -> None:
         up.devices = []
     if any(m.level == "identified" for m in up.devices):
         up.score = _support(up.score, up.score)
-
-
-def i2c_devices(r: dict) -> float | None:
-    """Devices on an I2C bus, as evidence for it: a real bus talks to few addresses, repeatedly, acknowledged."""
-    txs = [t for t in _transactions(r) if t.get("addr") is not None]
-    if len(txs) < 3:
-        return None
-    addrs = [t["addr"] for t in txs]
-    _, cnt = np.unique(addrs, return_counts=True)
-    top2 = float(np.sort(cnt)[::-1][:2].sum() / len(addrs))
-    acked = float(np.mean([t.get("addr_ack", False) for t in txs]))
-    return top2 * (1 - 0.5 ** (len(txs) / 3)) * (1.0 if acked > 0 else 0.3)
 
 
 def sd_spi(r: dict):
