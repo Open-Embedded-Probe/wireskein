@@ -82,3 +82,32 @@ def test_an_engine_and_its_protocols_take_an_owners_namespace():
         plugins.register_engine("blip", blip, ["tests.blip"])
     with pytest.raises(ValueError, match="owner.name"):
         plugins.register_engine("tests.blip_engine", blip, ["blip"])
+
+
+def test_a_test_checks_an_added_engines_protocol(engine, tmp_path):
+    """protocol(NAME, None, roles, messages=...) on a protocol an added engine reads: that engine's claim is checked
+    (its layer's items as the messages)."""
+    from wireskein import verify
+    from wireskein.runlog import Recorder, protocol
+    cap = uart_and_quiet()
+    rises = [int(t) for t in cap.parts[0].view().channel("X").edges[::2]]
+    rec = Recorder(tmp_path)
+    good = protocol("tests.blip", None, {"data": "X"}, messages=[{"s": t} for t in rises])
+    bad = protocol("tests.blip", None, {"data": "X"}, messages=[{"s": t + 1} for t in rises])
+    with rec.section(1, "t", expect=[good, bad]):
+        rec.capture(rec.armed(), 2_000_000, channels=list(cap.parts[0].channels))
+    rec.close()
+    ok, wrong = verify.verify(tmp_path)["results"]
+    assert ok["status"] == "ok", ok
+    assert wrong["status"] == "ng", wrong
+
+
+def test_a_spec_names_an_added_engines_protocol(engine, tmp_path):
+    """wireskein decode's spec: a bus of an added engine's protocol is read by it, the others by WireSkein's."""
+    cap = uart_and_quiet()
+    p = capture.write(tmp_path / "c.wireskein", cap)
+    doc = decode.decode_file(p, {"buses": [{"protocol": "tests.blip", "pins": {"data": "X"}},
+                                           {"protocol": "uart", "pins": {"data": "U"}}]})
+    blip_bus, uart_bus = doc["parts"][0]["buses"]
+    assert blip_bus["decoded"] and blip_bus["fit"]["verdict"] == "confirmed" and blip_bus["result"]["pulses"]
+    assert uart_bus["decoded"] and bytes.fromhex(uart_bus["result"]["bytes"]["hex"]).startswith(b"hello engines")

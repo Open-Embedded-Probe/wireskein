@@ -604,6 +604,22 @@ def unread(cap: Capture, pins: list[str], lay: dict, n, idle: int, select: str |
     return un
 
 
+def _added_bus(engine, cap: Capture, b: dict) -> dict:
+    """A bus of a protocol an added engine reads, decoded by it with these pins: its claim on them (the analysis
+    format's: decoded, params, fit, result as its layers)."""
+    hints = {"protocols": [b["protocol"]], "pins": {p: {"protocol": b["protocol"], "role": r, **b["params"]}
+                                                   for r, p in b["pins"].items()}}
+    claims = [c for c in (engine(cap, hints) or []) if c.get("protocol") == b["protocol"]
+              and dict(c.get("roles", {})) == dict(b["pins"])]
+    out = {"protocol": b["protocol"], "pins": b["pins"]}
+    if not claims:
+        return {**out, "decoded": False, "result": {}}
+    c = max(claims, key=lambda c: float(c.get("score", 0)))
+    return {**out, "decoded": True, "params": dict(c.get("params") or {}),
+            "fit": {"score": round(float(c.get("score", 0)), 4), "claimed": True, "verdict": c.get("verdict")},
+            "result": dict(c.get("layers") or c.get("result") or {})}
+
+
 def _bus(res, cap: Capture, b: dict, depth: str, claimed: list) -> dict:
     n = _node(res, cap, b)
     out = {"protocol": b["protocol"], "pins": b["pins"]}
@@ -824,14 +840,19 @@ def _part(cap: Capture, spec: dict, head: dict, strict: bool = False) -> dict:
         raise ValueError(f"lines not in the capture: {', '.join(miss)}")
     # a pin named by buses of two protocols (one line read as RVSWD and as SWIO) is hinted once a reading: each set
     # of buses that names no pin under two protocols is analyzed on its own
-    groups = _apart(spec["buses"])
+    # buses of a protocol an added engine reads (wireskein.plugins.register_engine) are read by that engine
+    from . import plugins
+    added = {p: e for e, protos in plugins.engines().values() for p in protos}
+    mine = [b for b in spec["buses"] if b["protocol"] not in added]
+    groups = _apart(mine)
     reads = [staged.analyze(cap, _hints({**spec, "buses": g}, strict, [c.name for c in cap.channels])) for g in groups]
     res_of = {id(b): r for g, r in zip(groups, reads) for b in g}
     res = reads[0]
     out = {"part": head.get("part", 0), "ticks": cap.n_samples,
            **({"tick0": head["tick0"]} if "tick0" in head else {}),
            **{k: head["meta"][k] for k in ("start_ns", "start_uncertainty_ns", "boot_id") if k in head.get("meta", {})},
-           "buses": [_bus(res_of[id(b)], cap, b, spec["depth"], res_of[id(b)].claims) for b in spec["buses"]],
+           "buses": [_added_bus(added[b["protocol"]], cap, b) if b["protocol"] in added
+                     else _bus(res_of[id(b)], cap, b, spec["depth"], res_of[id(b)].claims) for b in spec["buses"]],
            "lines": [{"pin": p, "initial": int(cap.channel(p).initial),
                       "edges": np.asarray(cap.channel(p).edges).tolist()} for p in spec["lines"]]}
     _shared(out["buses"], cap)

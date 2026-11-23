@@ -779,8 +779,12 @@ def _declared_protocol(cap, x):
     """A protocol of its own on the wire, declared (wireskein's decl/, or a definitions directory added): the pins
     decoded as it, its frames (each frame's own checks counted) compared as check_protocol's messages."""
     from ._engine import export
+    from . import plugins
     pins = {p: {"protocol": x["name"], "role": r, **({"baud": x["baud"]} if x.get("baud") else {})}
             for r, p in x["roles"].items()}
+    added = [e for e, protos in plugins.engines().values() if x["name"] in protos]
+    if added:
+        return _added_protocol(cap, x, added[0], {"protocols": [x["name"]], "pins": pins})
     res = _decode(cap, {"protocols": [x["name"]], "pins": pins})
     n = _best(res, x["name"], dict(x["roles"]))
     if n is None:
@@ -788,6 +792,23 @@ def _declared_protocol(cap, x):
     recs = [r for r in (n.output.items or []) if isinstance(r, dict)]
     frames = [f for f in export.layers_of(n).get("frames", export.layers_of(n).get("packets", []))]
     got = {"messages": frames, "checks_passed": sum(bool(r.get("ok")) for r in recs),
+           "checks_failed": sum(not r.get("ok", True) for r in recs)}
+    return _compare_messages(x, got)
+
+
+def _added_protocol(cap, x, engine, hints):
+    """A protocol an added engine reads (wireskein.plugins.register_engine): its claim on these pins, the items of its
+    first layer (frames, packets, messages ... as the engine names it; each item's own "ok" counted) compared as
+    check_protocol's messages."""
+    claims = [c for c in (engine(cap, hints) or []) if c.get("protocol") == x["name"]
+              and dict(c.get("roles", {})) == dict(x["roles"])]
+    if not claims:
+        return False, {}, f"nothing read as {x['name']} on these pins by the engine that reads it"
+    c = max(claims, key=lambda c: float(c.get("score", 0)))
+    lay = c.get("layers") or c.get("result") or {}
+    items = next((v for v in lay.values() if isinstance(v, list)), [])
+    recs = [r for r in items if isinstance(r, dict)]
+    got = {"messages": recs, "checks_passed": sum(bool(r.get("ok")) for r in recs),
            "checks_failed": sum(not r.get("ok", True) for r in recs)}
     return _compare_messages(x, got)
 
