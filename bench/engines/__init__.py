@@ -16,6 +16,7 @@ engine is (bench/algos/e2e/engines.py registers them as trials).
             readings are mostly wrong as the gate
 - nulled:   the views engine's candidates, each fit less the same reader's on a surrogate that keeps the lines'
             own statistics and breaks the protocol's structure (an open-world test, nulled.py)
+- views_upper: the views engine's claims through WireSkein's upper stage (wireskein._upper), as the main engine's
 - open:     the views engine with shapes that explain a line without naming a protocol (a pulse code) among the
             candidates: they take lines and are not shown (shapes.py)
 """
@@ -146,6 +147,26 @@ def _open(cap):
     return importlib.import_module(__name__ + ".shapes").engine(cap)
 
 
+def with_upper(claims, cap):
+    """WireSkein's upper stage (wireskein._upper) on an engine's claims, as on the main engine's: the upper layers
+    in each claim's layers, its score and margin raised by their checks, its verdict again by the claims_of rule."""
+    from wireskein import _upper
+    ups, _ = _upper.run(claims, float(cap.rate))
+    for c, up in zip(claims, ups):
+        d = up.score - c["score"]
+        c["layers"] = {**c.get("layers", {}), **up.layers}
+        if d > 0:
+            c["score"], c["margin"] = round(up.score, 4), round(c["margin"] + d, 4)
+            fit, margin = c["score"], c["margin"]
+            c["verdict"] = ("confirmed" if fit >= SURE and margin >= SURE_MARGIN else "likely" if margin >= 0.05
+                            else "ambiguous")
+    return claims
+
+
+def _views_upper(cap):
+    return with_upper(views(cap), cap)
+
+
 def _synth_gated(cap):
     import importlib
     return importlib.import_module(__name__ + ".synth").engine(cap, gate_prob=0.3)
@@ -153,4 +174,4 @@ def _synth_gated(cap):
 
 ENGINES = {"light": light, "views": views, "declarative": _declarative, "learned": _learned, "synth": _synth,
            "synth_gated": _synth_gated,
-           "nulled": _nulled, "open": _open}
+           "nulled": _nulled, "open": _open, "views_upper": _views_upper}

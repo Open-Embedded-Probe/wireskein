@@ -9,7 +9,8 @@ from wsbench import algorithm
            variants={"light": {"name": "light"}, "views": {"name": "views"},
                      "declarative": {"name": "declarative"}, "learned": {"name": "learned"},
                      "synth": {"name": "synth"}, "synth_gated": {"name": "synth_gated"},
-                     "nulled": {"name": "nulled"}, "open": {"name": "open"}})
+                     "nulled": {"name": "nulled"}, "open": {"name": "open"},
+                     "views_upper": {"name": "views_upper"}})
 def engine(cap, name):
     import engines
     return engines.ENGINES[name](cap)
