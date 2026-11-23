@@ -47,12 +47,7 @@ def pulse_code(ch, need_two=False):
 
 
 def candidates(cap, need_two=False):
-    out = []
-    for ch in cap.channels:
-        s = pulse_code(ch, need_two)
-        if s:
-            out.append(("other", {"data": ch.name}, s, {"shape": "pulse_code"}, {}, {}))
-    return out
+    return [("other", {"data": x}, 1.0, {"shape": "pulse_code"}, {}, {}) for x in sorted(shaped_lines(cap, need_two))]
 
 
 def engine(cap, need_two=False):
@@ -65,10 +60,18 @@ def engine(cap, need_two=False):
     return claims_of([c for c in cands if not set(c[1].values()) & taken])
 
 
+def shaped_lines(cap, need_two=False) -> set:
+    """The lines a shape fits on any of the views engine's views (as captured, pulses of a sample out, bounces
+    merged), as the readers are tried on them: on the lines as captured only, a spike or a bounce adds widths and
+    the shape is lost (light_open, noise added: 134 false claims against 20 on the views)."""
+    from . import _views
+    return {ch.name for _, v in _views(cap) for ch in v.channels if pulse_code(ch, need_two)}
+
+
 def opened(claims: list[dict], cap) -> list[dict]:
     """The open world after any engine (no candidates needed): a claim on a line a shape fits is left out unless it
     explains more than the shape (its score times its lines over 1, the shape's): the two-pass engine's choice
     read off the claims."""
-    shaped = {ch.name for ch in cap.channels if pulse_code(ch)}
+    shaped = shaped_lines(cap)
     return [c for c in claims if not (set(c["roles"].values()) & shaped
                                       and float(c["score"]) * len(set(c["roles"].values())) <= 1.0)]
