@@ -267,4 +267,5 @@ ENGINES = {"light": light, "views": views, "declarative": _declarative, "learned
            "cascade": cascade, "light_surveyed": light_surveyed, "light_main_i2c": light_with("i2c"),
            "light_main_i2c_all": light_with("i2c", every_pair=True),
            "light_main_spi": light_with("spi"), "light_main_uart": light_with("uart")}
-ENGINES.update({f"{k}_open": _opened(k) for k in ("light", "views", "declarative", "synth", "learned")})
+ENGINES.update({f"{k}_open": _opened(k) for k in ("light", "views", "declarative", "synth", "learned",
+                                                   "light_main_uart")})

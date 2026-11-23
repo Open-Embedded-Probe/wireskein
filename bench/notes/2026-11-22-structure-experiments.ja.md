@@ -455,3 +455,6 @@ light_open、ノイズ付きの組（gen:pulse・gen:ir・set:tuning・gen:spiva
   に上がったのと合う。
 - 読み手を小さなエンジンに移すと、何が「読み手の力」で何が「全体の作り」の力かが分けられる。今のエンジンの強い所は、
   UART の読み手の特異さと、SPI の候補をノイズに強く作る所。
+- 2 つの手当てを合わせる（`light_main_uart_open`: 今のエンジンの UART の読み手 + 形の開いた世界）。gen:pulse・uartlike・ir・
+  spivar の [0:30]、set:tuning[0:30] のきれいと bounce 0.1（275 本）: light_open 読めた 113・誤り 36 → 130・10。読み手の
+  特異さと開いた世界は別の誤りを消し、足し合わせが効く。残り 10 の多くは DMX512・LIN（物理的に UART）。
