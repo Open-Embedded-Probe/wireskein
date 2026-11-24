@@ -25,6 +25,7 @@ pub struct Line<'a> {
 pub struct Group<'a> {
     pub clock: &'a str,
     pub how: usize,
+    pub initial: u8,
     pub edges: Vec<i64>,
     pub rises: Vec<i64>,
     pub falls: Vec<i64>,
@@ -123,6 +124,7 @@ pub fn groups<'a>(view: &View<'a>) -> Vec<Group<'a>> {
             out.push(Group {
                 clock: clk.name,
                 how,
+                initial: clk.initial,
                 edges: ck.edges,
                 rises: ck.rises,
                 falls: ck.falls,

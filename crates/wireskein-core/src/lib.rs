@@ -36,6 +36,7 @@ pub mod swd;
 pub mod swim;
 pub mod swio;
 pub mod sync;
+pub mod syncunk;
 pub mod uart;
 pub mod usb;
 pub mod usbpd;
@@ -168,7 +169,9 @@ pub fn choose(mut cands: Vec<Candidate>) -> Vec<Claim> {
         }
         let confirmed = (c.score >= 0.85 && margin >= 0.15)
             || (rival && ((c.score >= 0.80 && margin >= 0.25) || (c.score >= 0.60 && margin >= 0.50)));
-        let verdict = if confirmed {
+        let verdict = if c.protocol == "sync_unknown" {
+            "unknown-sync" // a kind of its own, never a known protocol's verdict
+        } else if confirmed {
             "confirmed"
         } else if c.score >= 0.6 && margin >= 0.05 {
             "likely"
@@ -279,7 +282,33 @@ pub fn candidates_with(view: &View, bauds: &std::collections::BTreeMap<String, f
     cands.extend(ps2::candidates(view));
     cands.extend(swd::candidates(view));
     cands.extend(can::candidates(view));
+    cands.extend(unknown(&cands, syncunk::candidates_of(&groups)));
     cands
+}
+
+pub const UNKNOWN_KNOWN_MIN: f64 = 0.5; // a known reading this sure on an unknown reading's clock and lines ...
+
+/// The unknown clocked readings that explain what no known reading explains better (Python's `roots_pack`): none
+/// sharing a line with a known reading that scores as much (a free clock "sampling" a known bus's lines must not
+/// win by their count), none whose clock and lines hold a sure known reading (its frames that bus's, with their
+/// structure).
+fn unknown(known: &[Candidate], unk: Vec<Candidate>) -> Vec<Candidate> {
+    let clock_of = |c: &Candidate| -> Option<String> {
+        ["clk", "scl", "mdc", "tck", "tckc", "sck", "swclk"]
+            .iter()
+            .find_map(|r| c.roles.get(*r).cloned())
+            .or_else(|| c.roles.values().next().cloned())
+    };
+    unk.into_iter()
+        .filter(|u| {
+            let ls = lines(u);
+            !known.iter().any(|k| {
+                let kl = lines(k);
+                (k.score >= u.score && !kl.is_disjoint(&ls))
+                    || (k.score >= UNKNOWN_KNOWN_MIN && clock_of(k) == u.roles.get("clk").cloned() && kl.is_subset(&ls))
+            })
+        })
+        .collect()
 }
 
 /// What the analysis is told (Python's `staged._hinted`): the protocols to read (none: all), each pin's protocol,
