@@ -170,7 +170,12 @@ pub const SPECIFIC: f64 = 0.6; // a reading of fixed framing this sure stands fo
 /// specific one is left out where the specific one is sure: an SPI reading (no select) of MDC and MDIO, whose 64-bit
 /// frames are whole bytes as well, is MDIO's frames told without their preamble and start.
 pub fn candidates(view: &View) -> Vec<Candidate> {
-    let mut cands = uart::candidates(view);
+    candidates_with(view, &Default::default())
+}
+
+/// Every reading, UART lines in `bauds` read at the baud given.
+pub fn candidates_with(view: &View, bauds: &std::collections::BTreeMap<String, f64>) -> Vec<Candidate> {
+    let mut cands = uart::candidates_with(view, bauds);
     cands.extend(i2c::candidates(view));
     cands.extend(spi::candidates(view));
     let md = mdio::candidates(view);
@@ -192,15 +197,118 @@ pub fn candidates(view: &View) -> Vec<Candidate> {
     cands
 }
 
-/// The claims on a part's lines (built up protocol by protocol: UART, I2C, SPI, MDIO and CEC so far).
+/// What the analysis is told (Python's `staged._hinted`): the protocols to read (none: all), each pin's protocol,
+/// role and baud, the pins left out.
+#[derive(Debug, Default, Clone)]
+pub struct Hints {
+    pub protocols: std::collections::BTreeSet<String>,
+    pub pins: std::collections::BTreeMap<String, PinHint>,
+    pub exclude: std::collections::BTreeSet<String>,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct PinHint {
+    pub protocol: Option<String>,
+    pub role: Option<String>,
+    pub baud: Option<f64>,
+}
+
+impl Hints {
+    pub fn from_json(v: &serde_json::Value) -> Hints {
+        let mut h = Hints::default();
+        let strs = |x: &serde_json::Value| -> Vec<String> {
+            x.as_array()
+                .map(|a| a.iter().filter_map(|s| s.as_str().map(String::from)).collect())
+                .unwrap_or_default()
+        };
+        h.protocols = strs(&v["protocols"]).into_iter().collect();
+        h.exclude = strs(&v["exclude_pins"]).into_iter().collect();
+        if let Some(m) = v["pins"].as_object() {
+            for (pin, i) in m {
+                let p = PinHint {
+                    protocol: i["protocol"].as_str().map(String::from),
+                    role: i["role"].as_str().map(String::from),
+                    baud: i["baud"].as_f64(),
+                };
+                if !h.protocols.is_empty()
+                    && let Some(proto) = &p.protocol
+                {
+                    h.protocols.insert(proto.clone());
+                }
+                h.pins.insert(pin.clone(), p);
+            }
+        }
+        h
+    }
+
+    /// Whether a reading keeps to the hints: a protocol asked for, and each of its pins in the protocol and role
+    /// named for it (an SPI's data roles: data0, data1 ... answer mosi and miso).
+    pub fn allows(&self, c: &Candidate) -> bool {
+        if !self.protocols.is_empty() && !self.protocols.contains(&c.protocol) {
+            return false;
+        }
+        c.roles.iter().all(|(role, pin)| match self.pins.get(pin) {
+            None => true,
+            Some(h) => {
+                h.protocol.as_ref().is_none_or(|p| *p == c.protocol)
+                    && h.role.as_ref().is_none_or(|r| {
+                        r == role
+                            || (c.protocol == "spi"
+                                && role.starts_with("data")
+                                && matches!(r.as_str(), "mosi" | "miso"))
+                    })
+            }
+        })
+    }
+}
+
+/// The claims on a part's lines (built up protocol by protocol), under the hints.
 pub fn analyze(view: &View, hints: &serde_json::Value) -> Vec<Claim> {
-    let _ = hints;
-    choose(candidates(view))
+    let h = Hints::from_json(hints);
+    if h.protocols.is_empty() && h.pins.is_empty() && h.exclude.is_empty() {
+        return choose(candidates(view));
+    }
+    let kept = View {
+        rate: view.rate,
+        n_samples: view.n_samples,
+        channels: view
+            .channels
+            .iter()
+            .filter(|c| !h.exclude.contains(c.name))
+            .copied()
+            .collect(),
+    };
+    let bauds: std::collections::BTreeMap<String, f64> = h
+        .pins
+        .iter()
+        .filter_map(|(p, i)| i.baud.map(|b| (p.clone(), b)))
+        .collect();
+    let mut cands = candidates_with(&kept, &bauds);
+    cands.retain(|c| h.allows(c));
+    choose(cands)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hints_keep_readings_to_them() {
+        let h = Hints::from_json(
+            &serde_json::json!({"protocols": ["uart"], "pins": {"A": {"protocol": "uart", "role": "data", "baud": 9600}}, "exclude_pins": ["B"]}),
+        );
+        assert!(h.protocols.contains("uart") && h.exclude.contains("B") && h.pins["A"].baud == Some(9600.0));
+        let c = |p: &str, role: &str| Candidate {
+            protocol: p.into(),
+            roles: [(role.to_string(), "A".to_string())].into(),
+            score: 0.9,
+            alt: None,
+            params: Default::default(),
+            evidence: Default::default(),
+            layers: claim::raw("{}".into()),
+        };
+        assert!(h.allows(&c("uart", "data")) && !h.allows(&c("i2c", "sda")) && !h.allows(&c("uart", "tx")));
+    }
 
     #[test]
     fn an_empty_part_has_no_claims() {

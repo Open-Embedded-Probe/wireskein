@@ -534,11 +534,15 @@ fn read(
     clock_like: f64,
     sync: f64,
     tight: f64,
+    given: Option<f64>,
 ) -> Option<Reading> {
     let n = view.n_samples;
     let (start, length, level) = runs(ch, n);
     let inner = length.len().saturating_sub(2);
-    let u0 = if inner < 40 {
+    // a bit time given (a hint's baud) replaces the line's own estimate
+    let u0 = if let Some(u) = given {
+        u
+    } else if inner < 40 {
         f.units.first()?.samples
     } else {
         unit_of(&start, &length, &level, idle, 0, n)?
@@ -972,6 +976,11 @@ fn views(ch: &Channel, f: &Features, n: i64) -> Vec<(Vec<i64>, i64)> {
 /// few characters frame and the line rests there); the best reading is the line's candidate, with the best reading
 /// that is no same one (another idle level, or a rate 3 % off or more) as its own alternative.
 pub fn candidates(view: &View) -> Vec<crate::Candidate> {
+    candidates_with(view, &Default::default())
+}
+
+/// The UART readings, the lines in `bauds` read at the baud given (a hint's) rather than at their own estimate.
+pub fn candidates_with(view: &View, bauds: &std::collections::BTreeMap<String, f64>) -> Vec<crate::Candidate> {
     let mut out = Vec::new();
     let n = view.n_samples;
     let feats: Vec<Features> = view.channels.iter().map(|c| features(c, n)).collect();
@@ -995,6 +1004,7 @@ pub fn candidates(view: &View) -> Vec<crate::Candidate> {
             continue;
         }
         let f = feats[ci].clone();
+        let given = bauds.get(ch.name).map(|&b| view.rate / b);
         let raw_clock = f.clock.max(f.clock_local);
         // a bus's clock (another line keeps to it as its data) is no UART line
         if raw_clock >= CLOCKS_A_BUS
@@ -1031,13 +1041,13 @@ pub fn candidates(view: &View) -> Vec<crate::Candidate> {
                 let fv = features(&vch, n);
                 clock_like = clock_like.min(fv.clock.max(fv.clock_local));
             }
-            let Some(r) = read(view, &vch, &f, f.idle, k, clock_like, sync, tight) else {
+            let Some(r) = read(view, &vch, &f, f.idle, k, clock_like, sync, tight, given) else {
                 continue;
             };
             if r.framing < UART_OTHER_IDLE {
                 let u = r.params["baud"].as_f64().map_or(0.0, |b| view.rate / b);
                 if rests_at(&vch, n, 1 - f.idle, u)
-                    && let Some(r2) = read(view, &vch, &f, 1 - f.idle, k, clock_like, sync, tight)
+                    && let Some(r2) = read(view, &vch, &f, 1 - f.idle, k, clock_like, sync, tight, given)
                 {
                     readings.push(r2);
                 }
@@ -1144,6 +1154,24 @@ mod tests {
         assert_eq!(lay["bytes"]["hex"], json!(hex));
         let baud = c.params["baud"].as_f64().unwrap();
         assert!((baud / (2e6 / 17.0) - 1.0).abs() < 0.01, "{baud}");
+    }
+
+    #[test]
+    fn a_baud_given_reads_a_line_too_short_to_estimate() {
+        // eight characters: few runs for an estimate of their own; the baud given reads them
+        let text = b"OK\r\nOK\r\n";
+        let (e, n) = uart(text, 17, 100, 3);
+        let v = View::new(2e6, n, vec![Channel::new("TX", 1, &e)]).unwrap();
+        let mut bauds = std::collections::BTreeMap::new();
+        bauds.insert("TX".to_string(), 2e6 / 17.0);
+        let cs = candidates_with(&v, &bauds);
+        let c = cs
+            .iter()
+            .find(|c| c.protocol == "uart")
+            .expect("a UART reading at the baud given");
+        let lay: Value = serde_json::from_str(c.layers.get()).unwrap();
+        let hex: String = text.iter().map(|b| format!("{b:02x}")).collect();
+        assert_eq!(lay["bytes"]["hex"], json!(hex));
     }
 
     #[test]
