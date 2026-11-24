@@ -176,6 +176,7 @@ pub fn choose(mut cands: Vec<Candidate>) -> Vec<Claim> {
     out
 }
 
+pub const GENERIC: [&str; 3] = ["uart", "i2c", "spi"]; // readers of any lines' bits, of no framing of their own
 pub const SPECIFIC: f64 = 0.6; // a reading of fixed framing this sure stands for a generic one of the same lines
 
 /// Every reading of a part's lines, before the claims are chosen. A generic reading of the same lines as a more
@@ -205,18 +206,28 @@ pub fn candidates_with(view: &View, bauds: &std::collections::BTreeMap<String, f
                 .any(|(k, d)| c.roles.get("clk") == Some(k) && c.roles.get("data0") == Some(d)))
     });
     cands.extend(md);
-    cands.extend(cec::candidates(view));
+    // the readers of a line's own timing, each reading checked (CRC, parity, fixed framing): a line one of them reads
+    // surely carries that protocol, and a generic reading using it (a UART of its pulses, an I2C or SPI taking it as
+    // data beside some clock) is left out, as SPI on MDIO's lines above
+    let mut own = cec::candidates(view);
+    own.extend(dali::candidates(view));
+    own.extend(dcc::candidates(view));
+    own.extend(j1850::candidates(view));
+    own.extend(sent::candidates(view));
+    own.extend(spdif::candidates(view));
+    own.extend(swim::candidates(view));
+    own.extend(usbpd::candidates(view));
+    own.extend(wiegand::candidates(view));
+    let taken: std::collections::BTreeSet<String> = own
+        .iter()
+        .filter(|c| c.score >= SPECIFIC)
+        .flat_map(|c| c.roles.values().cloned())
+        .collect();
+    cands.retain(|c| !(GENERIC.contains(&c.protocol.as_str()) && c.roles.values().any(|l| taken.contains(l))));
+    cands.extend(own);
     cands.extend(ps2::candidates(view));
     cands.extend(swd::candidates(view));
     cands.extend(can::candidates(view));
-    cands.extend(dali::candidates(view));
-    cands.extend(dcc::candidates(view));
-    cands.extend(j1850::candidates(view));
-    cands.extend(sent::candidates(view));
-    cands.extend(spdif::candidates(view));
-    cands.extend(swim::candidates(view));
-    cands.extend(usbpd::candidates(view));
-    cands.extend(wiegand::candidates(view));
     cands
 }
 
