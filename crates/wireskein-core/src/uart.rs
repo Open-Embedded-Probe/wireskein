@@ -1110,7 +1110,7 @@ pub const UART_RAW_CLOCK: f64 = 0.9;
 pub const EQUIVALENT_BAUD: f64 = 0.03;
 
 /// The line as it is, and views of it with spikes or bounces taken out (`staged.single_views`): (edges, k).
-fn views(ch: &Channel, f: &Features, n: i64) -> Vec<(Vec<i64>, i64)> {
+pub(crate) fn views(ch: &Channel, f: &Features, n: i64) -> Vec<(Vec<i64>, i64)> {
     let mut out = vec![(ch.edges.to_vec(), 0)];
     let (_, length, _) = runs(ch, n);
     let inner: &[i64] = if length.len() >= 2 {

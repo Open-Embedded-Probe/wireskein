@@ -657,9 +657,17 @@ pub fn candidates(view: &View) -> Vec<Candidate> {
             continue;
         }
         // the line as it is, its short pulses out, its bounces merged (spikes and bounces are bits too short to be a
-        // node's: they break the stuffing and the CRC): the best reading of the line over them
+        // node's: they break the stuffing and the CRC): the best reading of the line over them. The widths a lone
+        // line's runs give (a quarter of the median), and the async lines' own (`staged.single_views`: spikes of a
+        // sample or two, bounces of 4 ticks), narrow enough for an FD data phase's bits of a few samples
         let mut line_best: Option<Candidate> = None;
-        for (e, k) in crate::pulse::line_views(ch0.edges) {
+        let mut views = crate::pulse::line_views(ch0.edges);
+        for (e, k) in crate::uart::views(ch0, &features(ch0, view.n_samples), view.n_samples) {
+            if !views.iter().any(|(v, _)| *v == e) {
+                views.push((e, k));
+            }
+        }
+        for (e, k) in views {
             let ch = Channel::new(ch0.name, ch0.initial, &e);
             for mut c in read_line(view, &ch) {
                 if k != 0 {
