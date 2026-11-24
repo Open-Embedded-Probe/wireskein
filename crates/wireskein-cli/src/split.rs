@@ -343,6 +343,8 @@ impl<'a> Splitter<'a> {
                     initial: lv ^ ((i & 1) as u8),
                     edges: e[i..j.max(i)].iter().map(|&x| x - a).collect(),
                     step: 1,
+                    phase: 0,
+                    reduction: None,
                 }
             })
             .collect()
@@ -1025,6 +1027,8 @@ mod tests {
             initial: 0,
             edges: e,
             step: 1,
+            phase: 0,
+            reduction: None,
         }
     }
 

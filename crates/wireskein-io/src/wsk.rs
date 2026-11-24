@@ -517,6 +517,8 @@ pub fn head_from<R: Read + Seek>(r: R) -> Result<(Capture, bool), String> {
                 tick0: p.get("tick0").and_then(|v| v.as_i64()),
                 meta,
                 lines: vec![],
+                events: vec![],
+                analog: vec![],
                 skipped: vec![],
             }
         })
@@ -541,7 +543,7 @@ pub fn head_from<R: Read + Seek>(r: R) -> Result<(Capture, bool), String> {
 pub fn read_events_line(c: &Value, data: &[u8]) -> Result<Line, String> {
     match decode(c, data, i64::MAX)? {
         Decoded::Line(l, _) => Ok(l),
-        Decoded::Skip(_) => Err(format!("{}: not a line of changes", c["name"])),
+        Decoded::Skip(..) => Err(format!("{}: not a line of changes", c["name"])),
     }
 }
 
