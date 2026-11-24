@@ -489,6 +489,7 @@ type Target<'a> = (&'a Candidate, Vec<(i64, i64)>, f64);
 pub const SHARED_COVER: f64 = 0.95; // the targets' selections together hold this share of the clock's bursts or more
 pub const SHARED_SNUG: f64 = 0.5; // each target's select snug round its bursts this share at least
 pub const SHARED_MAX: usize = 8; // select lines on one clock tried in sets for one bus of targets
+pub const SHARED_CUT: f64 = 0.1; // a target's select cutting this share of the bursts it reaches at most
 pub const SHARED_FREE: usize = 2; // transfers outside every captured select: a target of its own, read without its CS
 
 /// One clocked bus with a target on each select line (Python's `staged.shared_buses`): CLK and the data lines
@@ -561,10 +562,27 @@ fn shared(view: &View, cands: &[Candidate]) -> Vec<Candidate> {
             s.sort();
             s
         };
+        // a select never cuts a transfer: each burst of the clock its windows reach lies inside one of them (a line
+        // toggling on its own cuts them anywhere), SHARED_CUT of them at most (a spike, a bounce)
+        let whole_bursts: Vec<(i64, i64)> = crate::sync::bursts(&ce).into_iter().filter(|(a, b)| b > a).collect();
+        let cuts = |sp: &[(i64, i64)]| -> bool {
+            let (mut reached, mut cut) = (0usize, 0usize);
+            for &(a, b) in &whole_bursts {
+                let over: Vec<&(i64, i64)> = sp.iter().filter(|&&(s, e)| s <= b && e >= a).collect();
+                if over.is_empty() {
+                    continue;
+                }
+                reached += 1;
+                if !over.iter().any(|&&(s, e)| s <= a && b <= e) {
+                    cut += 1;
+                }
+            }
+            cut as f64 > SHARED_CUT * reached as f64
+        };
         let mut list: Vec<Target> = by_cs
             .values()
             .map(|&c| (c, spans(c), adjusted(c)))
-            .filter(|x| !x.1.is_empty())
+            .filter(|x| !x.1.is_empty() && !cuts(&x.1))
             .collect();
         list.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap());
         list.truncate(SHARED_MAX);
