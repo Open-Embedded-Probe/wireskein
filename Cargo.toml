@@ -9,7 +9,7 @@ resolver = "3"
 members = ["crates/wireskein-core", "crates/wireskein-py"]
 
 [workspace.package]
-version = "0.0.35"
+version = "0.0.36"
 edition = "2024"
 rust-version = "1.88"
 license = "MIT"
