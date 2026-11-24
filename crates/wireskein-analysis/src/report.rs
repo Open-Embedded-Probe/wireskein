@@ -10,9 +10,9 @@ pub const IDLE_S: f64 = 1e-3; // activity apart by more than this is two bursts 
 pub const IDLE_BITS: i64 = 16;
 const LEAST_HALF: f64 = 5.0; // samples in the shorter of a clock's high and low, at least, to read it surely
 const BEST_HALF: f64 = 10.0;
-const SAME_SPEED: f64 = 1.25;
+pub const SAME_SPEED: f64 = 1.25;
 const RING: i64 = 3; // samples: a data line's pulses this short, where the clock is slow, a reflection's
-const STOPPED_AFTER: usize = 16;
+pub const STOPPED_AFTER: usize = 16;
 const OSCILLATING: usize = 1000;
 const NOISY: f64 = 0.01;
 
@@ -120,7 +120,7 @@ pub fn frame_clocks(items: &mut [Value], clock: &Line, rate: f64) {
     }
 }
 
-fn speed(rows: &[[f64; 4]], rate: f64, frames: Option<usize>) -> Value {
+pub fn speed(rows: &[[f64; 4]], rate: f64, frames: Option<usize>) -> Value {
     let p = median(&mut rows.iter().map(|r| r[0]).collect::<Vec<_>>());
     let h = median(&mut rows.iter().map(|r| r[1]).collect::<Vec<_>>());
     let tight = LEAST_HALF * 1e9 / rate;
@@ -205,7 +205,7 @@ fn local_period(ticks: &[i64], at: &[i64], q: f64) -> Vec<f64> {
 
 /// Signs of noise on a clocked bus in ticks [lo, hi): the clock's glitches (pulses of a sample where its period is
 /// 8 samples or more), each data line's ringing (pulses under RING where the clock is slow enough).
-fn noise(lines: &[&Line], clock: &Line, data: &[&Line], lo: i64, hi: i64) -> Map<String, Value> {
+pub fn noise(lines: &[&Line], clock: &Line, data: &[&Line], lo: i64, hi: i64) -> Map<String, Value> {
     let mut out = Map::new();
     out.insert("glitches".into(), json!(0));
     out.insert("clock_edges".into(), json!(0));
@@ -269,7 +269,7 @@ fn noise(lines: &[&Line], clock: &Line, data: &[&Line], lo: i64, hi: i64) -> Map
 }
 
 /// The noise as shares of the changes; `noisy` when one is over NOISY.
-fn shares(r: &mut Map<String, Value>) {
+pub fn shares(r: &mut Map<String, Value>) {
     let ce = r.get("clock_edges").and_then(|v| v.as_f64()).unwrap_or(0.0);
     let ge = r.get("glitch_edges").and_then(|v| v.as_f64()).unwrap_or(0.0);
     let gs = if ce > 0.0 { r4(ge / ce) } else { 0.0 };
@@ -373,7 +373,7 @@ fn items_of(lay: &Map<String, Value>, skip: &[&str]) -> Vec<(i64, i64)> {
 }
 
 /// The changes outside every span [s - margin, e + margin] (spans sorted by start).
-fn uncovered(e: &[i64], spans: &[(i64, i64)], margin: i64) -> Vec<i64> {
+pub fn uncovered(e: &[i64], spans: &[(i64, i64)], margin: i64) -> Vec<i64> {
     if spans.is_empty() {
         return e.to_vec();
     }
@@ -393,7 +393,7 @@ fn uncovered(e: &[i64], spans: &[(i64, i64)], margin: i64) -> Vec<i64> {
         .collect()
 }
 
-fn split_at_gaps(e: &[i64], idle: i64) -> Vec<Vec<i64>> {
+pub fn split_at_gaps(e: &[i64], idle: i64) -> Vec<Vec<i64>> {
     let mut out: Vec<Vec<i64>> = vec![];
     for (i, &x) in e.iter().enumerate() {
         if i == 0 || x - e[i - 1] > idle {

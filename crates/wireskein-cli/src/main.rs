@@ -6,10 +6,16 @@
 //! does: the capture, then each part (a run of parts that follow on without a gap read as one) with its claims and
 //! the relations of its UART pairs. A WireSkein file, a sigrok session (.sr) or a VCD, told apart by content.
 //!
-//!     wireskein-rs verify RUN_DIR [--json FILE] [--junit FILE] [--log] [--allow-unchecked] [-v]
+//!     wireskein-rs verify RUN_DIR [--json FILE] [--junit FILE] [--log] [--allow-unchecked] [--mark] [-v]
 //!
 //! checks a recorded run against its expectations as `wireskein verify` does (wireskein-verify): a line a result,
-//! the summary, the report as JSON (--json FILE, `-` for stdout), JUnit XML; exit 1 when a check fails.
+//! the summary, the report as JSON (--json FILE, `-` for stdout), JUnit XML; exit 1 when a check fails. --mark writes
+//! what the checks found into each capture file's markers.
+//!
+//!     wireskein-rs decode FILE SPEC [--split S|off] [--pins A,B] [--items FILE]
+//!
+//! decodes the buses a spec (JSON, or @a file of it) names with exactly those roles, as `wireskein decode` does
+//! (wireskein-analysis's decode).
 
 use serde_json::Value;
 use std::path::Path;
@@ -20,14 +26,86 @@ fn usage() -> ExitCode {
     eprintln!(
         "usage: wireskein-rs analyze FILE [--part K] [--hint NAMES|JSON|@FILE] [--mode final|all] [--window FROM TO]"
     );
-    eprintln!("       wireskein-rs verify RUN_DIR [--json FILE] [--junit FILE] [--log] [--allow-unchecked] [-v]");
+    eprintln!(
+        "       wireskein-rs verify RUN_DIR [--json FILE] [--junit FILE] [--log] [--allow-unchecked] [--mark] [-v]"
+    );
+    eprintln!("       wireskein-rs decode FILE SPEC [--split S|off] [--pins A,B] [--items FILE]");
     ExitCode::from(2)
+}
+
+/// `wireskein decode`: the decode document of a capture file with a spec's roles.
+fn decode_cmd(args: &[String]) -> ExitCode {
+    let (mut file, mut spec, mut pins, mut items) = (None, None, None, None);
+    let mut split_opts = Some(split::Options::default());
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--split" => match it.next().map(|v| split::Options::parse(v)) {
+                Some(Ok(o)) => split_opts = o,
+                Some(Err(e)) => {
+                    eprintln!("{e}");
+                    return ExitCode::from(2);
+                }
+                None => return usage(),
+            },
+            "--pins" => match it.next() {
+                Some(v) => {
+                    pins = Some(
+                        v.split(',')
+                            .map(|x| x.trim().to_string())
+                            .filter(|x| !x.is_empty())
+                            .collect::<Vec<_>>(),
+                    )
+                }
+                None => return usage(),
+            },
+            "--items" => match it.next() {
+                Some(v) => items = Some(v.clone()),
+                None => return usage(),
+            },
+            f if !f.starts_with("--") && file.is_none() => file = Some(f.to_string()),
+            f if !f.starts_with("--") && spec.is_none() => spec = Some(f.to_string()),
+            _ => return usage(),
+        }
+    }
+    let (Some(file), Some(spec)) = (file, spec) else {
+        return usage();
+    };
+    let text = match spec.strip_prefix('@') {
+        Some(p) => match std::fs::read_to_string(p) {
+            Ok(t) => t,
+            Err(e) => {
+                eprintln!("{p}: {e}");
+                return ExitCode::from(2);
+            }
+        },
+        None => spec,
+    };
+    let spec = match wireskein_analysis::decode::Spec::parse(&text) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::from(2);
+        }
+    };
+    let items = items.as_deref().map(|f| (Path::new(f), f));
+    match wireskein_analysis::decode::decode_file(Path::new(&file), &spec, split_opts.as_ref(), pins.as_deref(), items)
+    {
+        Ok(doc) => {
+            println!("{doc}");
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("wireskein-rs decode: {e}");
+            ExitCode::FAILURE
+        }
+    }
 }
 
 /// `wireskein verify`: the lines, the summary, the report and JUnit when asked; 1 when the run fails.
 fn verify_cmd(args: &[String]) -> ExitCode {
     let (mut run, mut json_out, mut junit_out) = (None, None, None);
-    let (mut log, mut allow, mut verbose) = (false, false, false);
+    let (mut log, mut allow, mut verbose, mut mark) = (false, false, false, false);
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
@@ -41,6 +119,7 @@ fn verify_cmd(args: &[String]) -> ExitCode {
             },
             "--log" => log = true,
             "--allow-unchecked" => allow = true,
+            "--mark" => mark = true,
             "-v" | "--verbose" => verbose = true,
             f if !f.starts_with('-') && run.is_none() => run = Some(f.to_string()),
             _ => return usage(),
@@ -54,6 +133,10 @@ fn verify_cmd(args: &[String]) -> ExitCode {
             return ExitCode::from(2);
         }
     };
+    if mark && let Err(e) = wireskein_verify::mark(Path::new(&run), &rep) {
+        eprintln!("{e}");
+        return ExitCode::from(2);
+    }
     if !log {
         rep.remove("log");
     }
@@ -92,6 +175,9 @@ fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.first().map(|s| s.as_str()) == Some("verify") {
         return verify_cmd(&args[1..]);
+    }
+    if args.first().map(|s| s.as_str()) == Some("decode") {
+        return decode_cmd(&args[1..]);
     }
     if args.first().map(|s| s.as_str()) != Some("analyze") {
         return usage();

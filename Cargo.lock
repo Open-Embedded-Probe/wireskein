@@ -519,6 +519,7 @@ dependencies = [
  "sha2",
  "wireskein-core",
  "wireskein-io",
+ "wireskein-verify",
 ]
 
 [[package]]

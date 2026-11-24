@@ -15,7 +15,7 @@ pub const EXTRA: &str = "wireskein/sr-extra.json";
 const BLOCK: usize = 1 << 20; // samples read at a time
 
 /// The metadata's sections (each line stands alone: sigrok 0.2 indented a probe's trigger on a line of its own).
-fn metadata(text: &str) -> BTreeMap<String, BTreeMap<String, String>> {
+pub(crate) fn metadata(text: &str) -> BTreeMap<String, BTreeMap<String, String>> {
     let mut out: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
     let mut sect = String::new();
     for line in text.lines() {
@@ -32,7 +32,7 @@ fn metadata(text: &str) -> BTreeMap<String, BTreeMap<String, String>> {
     out
 }
 
-fn rate_of(text: &str) -> Result<f64, String> {
+pub(crate) fn rate_of(text: &str) -> Result<f64, String> {
     let t = text.trim().to_lowercase();
     let (num, unit) = t.split_at(t.find(|c: char| !(c.is_ascii_digit() || c == '.')).unwrap_or(t.len()));
     let mult = match unit.trim() {

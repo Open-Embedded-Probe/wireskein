@@ -508,12 +508,126 @@ fn write_file(
     .map_err(PyValueError::new_err)
 }
 
+/// A part's logic lines read a block of ticks at a time (wireskein-io's stream: Python's `split.Source`): `names`,
+/// `n` (ticks), `initial` (each line's level before tick 0), `rate` (a .sr's samples a second, else None); iterated,
+/// (the tick read up to, [each line's changes in the block as an int64 array]).
+#[pyclass]
+struct Blocks {
+    src: std::sync::Mutex<Box<dyn wireskein_io::stream::Source + Send>>,
+    #[pyo3(get)]
+    names: Vec<String>,
+    #[pyo3(get)]
+    initial: Vec<u8>,
+    #[pyo3(get)]
+    n: i64,
+    #[pyo3(get)]
+    rate: Option<f64>,
+}
+
+impl Blocks {
+    fn of(src: Box<dyn wireskein_io::stream::Source + Send>, rate: Option<f64>) -> Blocks {
+        Blocks {
+            names: src.names().to_vec(),
+            initial: src.initial().to_vec(),
+            n: src.n(),
+            rate,
+            src: std::sync::Mutex::new(src),
+        }
+    }
+}
+
+#[pymethods]
+impl Blocks {
+    fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        slf
+    }
+
+    #[allow(clippy::type_complexity)]
+    fn __next__<'py>(&self, py: Python<'py>) -> PyResult<Option<(i64, Vec<Bound<'py, PyArray1<i64>>>)>> {
+        let got = py.detach(|| self.src.lock().map(|mut s| s.next_block()).map_err(|_| ()));
+        let got = got.map_err(|_| PyValueError::new_err("a source read after a failure"))?;
+        Ok(got.map(|(t1, es)| (t1, es.into_iter().map(|e| PyArray1::from_vec(py, e)).collect())))
+    }
+}
+
+/// file_blocks(path, part=0, pins=None) -> Blocks, or None where the part's lines are not all bits / events at one
+/// tick a sample (read whole then).
+#[pyfunction]
+#[pyo3(signature = (path, part=0, pins=None))]
+fn file_blocks(path: std::path::PathBuf, part: usize, pins: Option<Vec<String>>) -> PyResult<Option<Blocks>> {
+    let src = wireskein_io::stream::file_source_of(&path, part, pins.as_deref()).map_err(PyValueError::new_err)?;
+    Ok(src.map(|s| Blocks::of(Box::new(s), None)))
+}
+
+/// sr_blocks(path, pins=None) -> Blocks of a logic-only sigrok session, or None (analog channels, lines of their own
+/// step: read whole then).
+#[pyfunction]
+#[pyo3(signature = (path, pins=None))]
+fn sr_blocks(path: std::path::PathBuf, pins: Option<Vec<String>>) -> PyResult<Option<Blocks>> {
+    let src = wireskein_io::stream::sr_source(&path, pins.as_deref()).map_err(PyValueError::new_err)?;
+    Ok(src.map(|s| {
+        let rate = s.rate;
+        Blocks::of(Box::new(s), Some(rate))
+    }))
+}
+
+/// mark(run_dir, report_json) -> None: what a verify report found written into each capture file's markers (by
+/// "verify", its earlier ones replaced; `wireskein verify --mark`).
+#[pyfunction]
+fn mark(py: Python<'_>, run_dir: std::path::PathBuf, report_json: &str) -> PyResult<()> {
+    let rep = wireskein_verify::J::parse(report_json).map_err(PyValueError::new_err)?;
+    py.detach(|| wireskein_verify::mark(&run_dir, &rep))
+        .map_err(PyValueError::new_err)
+}
+
+/// decode_file(path, spec_json, split=None, pins=None, items=None, items_name=None) -> the decode document as JSON
+/// (Python's `decode.decode_file`: every part decoded with the spec's roles by the Rust core). split: "key=value,..."
+/// or "off" (None: the defaults); items: the file the decoded items are written to (ndjson), named in the document
+/// as items_name.
+#[pyfunction]
+#[pyo3(signature = (path, spec_json, split=None, pins=None, items=None, items_name=None))]
+fn decode_file(
+    py: Python<'_>,
+    path: std::path::PathBuf,
+    spec_json: &str,
+    split: Option<&str>,
+    pins: Option<Vec<String>>,
+    items: Option<std::path::PathBuf>,
+    items_name: Option<String>,
+) -> PyResult<String> {
+    let spec = wireskein_analysis::decode::Spec::parse(spec_json).map_err(PyValueError::new_err)?;
+    let opts = match split {
+        None => Some(wireskein_analysis::split::Options::default()),
+        Some(s) => wireskein_analysis::split::Options::parse(s).map_err(PyValueError::new_err)?,
+    };
+    let name = items_name
+        .or_else(|| items.as_ref().map(|p| p.display().to_string()))
+        .unwrap_or_default();
+    let doc = py
+        .detach(|| {
+            wireskein_analysis::decode::decode_file(
+                &path,
+                &spec,
+                opts.as_ref(),
+                pins.as_deref(),
+                items.as_deref().map(|p| (p, name.as_str())),
+            )
+        })
+        .map_err(PyValueError::new_err)?;
+    Ok(doc.to_string())
+}
+
 #[pymodule]
 fn wireskein_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_function(wrap_pyfunction!(read_file, m)?)?;
     m.add_function(wrap_pyfunction!(verify, m)?)?;
     m.add_function(wrap_pyfunction!(analyze_file, m)?)?;
+    m.add_function(wrap_pyfunction!(decode_file, m)?)?;
+    m.add_function(wrap_pyfunction!(mark, m)?)?;
+    m.add_class::<Blocks>()?;
+    m.add_function(wrap_pyfunction!(file_blocks, m)?)?;
+    m.add_function(wrap_pyfunction!(sr_blocks, m)?)?;
     m.add_function(wrap_pyfunction!(states_of_line, m)?)?;
     m.add_function(wrap_pyfunction!(survey_file, m)?)?;
     m.add_function(wrap_pyfunction!(annotations_file, m)?)?;

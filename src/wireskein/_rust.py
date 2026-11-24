@@ -14,12 +14,20 @@ The parts:
     write    a capture written: fileio.save (a WireSkein file), srio.write_sr, vcdio.write_vcd (so decode's and
              wireskein.capture's saving, `wireskein convert` ...) by wireskein-io's writers, the readers' pair
     verify   wireskein.verify.verify: the whole report from wireskein-verify (its checks read with the Rust engine);
-             mark=True writes the markers with Python's code as always; with definitions directories (protocols
+             mark=True writes the markers with Python's code unless `mark` is on too; with definitions directories (protocols
              declared in them) or the engine's extra protocol tables (staged.PROTOCOL_TABLES) verify stays Python's
     analyze  wireskein.decode.analyze_file (and so `wireskein analyze`): the document from wireskein-analysis (the
              Rust engine, the Rust upper stage, the report beside each claim, a long part read in pieces); options it
              does not have (select, alternatives, another depth, segments, thresholds, pins, items, device patterns,
              definitions directories, the engine's extra protocol tables) stay Python's
+    decode   wireskein.decode.decode_file (and so `wireskein decode`): the document from wireskein-analysis, every bus
+             read by the Rust engine (RVSWD / SWIO and buses sharing lines too, which Python reads with its own
+             engine), a long part in pieces, the items written out; device patterns, definitions directories and
+             the engine's extra protocol tables stay Python's
+    split    the sources a long capture is read from a block at a time (wireskein.split.FileSource for a WireSkein
+             file's part, SrSource for a .sr: decode's and survey's Python ways) by wireskein-io's stream
+    mark     verify(mark=True) (`wireskein verify --mark`): the markers written into each capture file by
+             wireskein-verify
     states   wireskein.states.of_line (so of_capture, of_file, of_sections, `wireskein states`): wireskein-analysis
     survey   wireskein.survey.survey_file (`wireskein survey`): wireskein-analysis, a WireSkein file of one part read a
              block at a time from the file, anything else read whole; a plan of no split stays Python's
@@ -37,7 +45,7 @@ from fractions import Fraction
 from pathlib import Path
 
 RUST_ENV = "WIRESKEIN_RUST"
-PARTS = ("engine", "io", "write", "verify", "analyze", "states", "survey", "annotate")
+PARTS = ("engine", "io", "write", "verify", "analyze", "decode", "split", "mark", "states", "survey", "annotate")
 
 
 def parts() -> frozenset:
@@ -189,6 +197,84 @@ def analyze_file(path, hints: dict | None, mode: str, window_s, part, split) -> 
     doc["wireskein"] = __version__
     doc["analysis_seconds"] = round(time.perf_counter() - t0, 3)
     return doc
+
+
+# ---------------- decode ----------------
+
+def decodes(path, spec, split) -> bool:
+    """Whether decode_file with this spec is Rust's: switched on, a file, a split it can take, nothing the Rust core
+    does not read (device patterns, definitions directories, the engine's extra protocol tables)."""
+    if not on("decode"):
+        return False
+    from . import plugins
+    from ._engine import staged
+    return (Path(path).is_file() and isinstance(spec, dict) and not spec.get("devices")
+            and _split_spec(split) is not False and not plugins.definitions() and not staged.PROTOCOL_TABLES)
+
+
+def decode_file(path, spec: dict, split, pins, items) -> dict:
+    """The decode document from wireskein-analysis (as decode.decode_file gives it): every bus read by the Rust core,
+    RVSWD / SWIO and buses sharing lines too."""
+    from . import __version__
+    from ._engine.export import dumps
+    doc = json.loads(core().decode_file(str(path), dumps(spec), _split_spec(split), list(pins) if pins else None,
+                                        None if items is None else str(items),
+                                        None if items is None else str(items)))
+    doc["wireskein"] = __version__
+    return doc
+
+
+# ---------------- split: the sources read a block at a time ----------------
+
+def _source(make, first, rate: float, meta: dict):
+    """A wireskein.split.Source over wireskein_core's Blocks (`first`; made again by `make` for each read after)."""
+    from . import split
+
+    class RustSource(split.Source):
+        def __init__(self):
+            self._first = first
+            self.names, self.n = list(self._first.names), int(self._first.n)
+            self.initial = {k: int(v) for k, v in zip(self.names, self._first.initial)}
+            self.rate, self.meta = rate, meta
+
+        def blocks(self):
+            got, self._first = (self._first or make()), None
+            for t1, es in got:
+                yield int(t1), dict(zip(self.names, es))
+
+    return RustSource()
+
+
+def file_source(path, part: int = 0, pins=None):
+    """split.FileSource through wireskein-io's stream (each bits line decompressed by a thread of its own, a block at a
+    time); ValueError where a line is not bits / events at one tick a sample, as FileSource's."""
+    from . import _fileformat as ff
+    from ._engine import fileio
+    head = ff.part_view(ff.read_header(path), part)
+    pins = list(pins) if pins else None
+    make = lambda: core().file_blocks(str(path), part, pins)       # noqa: E731
+    first = make()
+    if first is None:
+        raise ValueError("a line of its own step: read whole")
+    return _source(make, first, float(ff.tick_hz(head)), fileio.view(head, [], path).meta)
+
+
+def sr_source(path, pins=None):
+    """split.SrSource through wireskein-io's stream; ValueError for analog channels or lines of their own step, and
+    for pins the session does not have, as SrSource's."""
+    pins = list(pins) if pins else None
+    make = lambda: core().sr_blocks(str(path), pins)               # noqa: E731
+    first = make()
+    if first is None:
+        raise ValueError("analog channels or lines of their own step: read whole")
+    return _source(make, first, float(first.rate), {"file": str(path)})
+
+
+# ---------------- mark ----------------
+
+def mark(run_dir, rep: dict) -> None:
+    """verify's markers written into each capture file by wireskein-verify (as verify._mark writes them)."""
+    core().mark(str(run_dir), json.dumps(rep, default=str))
 
 
 # ---------------- io: a .sr and a VCD ----------------

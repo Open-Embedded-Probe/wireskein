@@ -374,3 +374,216 @@ def test_io_reads_a_vcd_from_elsewhere_as_python(clean, tmp_path):
                  "0!\nb0000 \"\nr1.5 #\nr0 $\n$end\n#3\n1!\nbx01z \"\nr1.25 #\n#6\n0!\nr2 #\nr1 $\n#9\n1!\nb1111 \"\n"
                  "r0.1 #\n#10\nr3 $\n")
     _same_view(_with({"WIRESKEIN_RUST": "io"}, lambda: decode._load(p)), _with({}, lambda: decode._load(p)))
+
+
+# ---------------- round 3: decode, split, mark ----------------
+
+def _spec_of(f):
+    """A decode spec of an example: its truth's buses, or (an example without them) the buses Rust's analyze
+    confirms."""
+    t = f.with_name(f.name.replace(".wireskein", ".truth.json"))
+    buses = json.loads(t.read_text()).get("buses") if t.exists() else None
+    if buses:
+        return {"buses": [{"protocol": b["protocol"], "pins": b["roles"]} for b in buses]}
+    doc = _with({"WIRESKEIN_RUST": "analyze"}, lambda: decode.analyze_file(f))
+    return {"buses": [{"protocol": c["protocol"], "pins": c["roles"]} for p in doc["parts"] for c in p["claims"]
+                      if c["verdict"] == "confirmed"]}
+
+
+def _differ(a, b, path="", tol=2e-4) -> list:
+    """Where two documents differ, a float within tol of the other the same (a fit's score read through Python's
+    upper stage and Rust's)."""
+    if isinstance(a, dict) and isinstance(b, dict):
+        return [x for k in sorted(set(a) | set(b)) for x in (
+            _differ(a[k], b[k], f"{path}.{k}", tol) if k in a and k in b else [f"{path}.{k}: in one only"])]
+    if isinstance(a, list) and isinstance(b, list):
+        return ([f"{path}: {len(a)} / {len(b)}"] if len(a) != len(b) else []) + [
+            x for i, (u, v) in enumerate(zip(a, b)) for x in _differ(u, v, f"{path}[{i}]", tol)]
+    if isinstance(a, float) or isinstance(b, float):
+        ok = isinstance(a, (int, float)) and isinstance(b, (int, float)) and abs(a - b) <= tol
+        return [] if ok else [f"{path}: {a!r} / {b!r}"]
+    return [] if a == b else [f"{path}: {a!r} / {b!r}"]
+
+
+def _decode(env, f, spec, **kw):
+    doc = _with(env, lambda: json.loads(dumps(decode.decode_file(f, spec, **kw))))
+    doc.pop("wireskein")
+    return doc
+
+
+# RVSWD and SWIO: Python reads a decode spec of them with its own engine (the Rust engine's readings compared apart;
+# SWIO reads the same whole)
+PYTHON_SPEC = {"rvswd-v203-target-info.wireskein"}
+PIECES = "max_edges=400,min_edges=50,overlap_edges=40"
+
+
+@rust_only
+@pytest.mark.parametrize("split", [None, "off", PIECES])
+@pytest.mark.parametrize("f", EXAMPLES, ids=lambda f: f.name)
+def test_decode_document_as_python_with_the_rust_engine(clean, f, split):
+    """The decode document of WIRESKEIN_RUST=decode (all of it in Rust) is the one Python makes around the Rust
+    engine: the buses' results, readings, unread stretches, devices, undeclared pins and claims; whole, in pieces (a
+    fit's score may differ in its last digit: the upper stage's text reading of a UART piece, Python's or Rust's)."""
+    if f.name in PYTHON_SPEC or (f.name.startswith("swio") and split == PIECES):
+        pytest.skip("read by the Python engine in Python (test_decode_rvswd_against_the_python_engine)")
+    spec = _spec_of(f)
+    assert _differ(_decode({"WIRESKEIN_RUST": "decode"}, f, spec, split=split),
+                   _decode({"WIRESKEIN_ENGINE": "rust"}, f, spec, split=split)) == []
+
+
+@rust_only
+@pytest.mark.parametrize("variant", ["transport", "frames", "protocol", "layers", "pins", "lines", "params"])
+def test_decode_spec_options_as_python(clean, variant):
+    f = DATA / "examples" / "mixed-0.wireskein"
+    spec, kw = _spec_of(f), {}
+    if variant in ("transport", "frames", "protocol"):
+        spec["depth"] = variant
+    elif variant == "layers":
+        spec["buses"] = [{**b, "layers": ["*"]} for b in spec["buses"]]
+    elif variant == "pins":
+        spec, kw = {"buses": spec["buses"][:1]}, {"pins": ["D6", "D11", "D5"]}
+    elif variant == "lines":
+        spec["lines"] = ["D5", "D9"]
+    else:
+        spec["buses"] = [{**b, "params": {"mode": 3}} if b["protocol"] == "spi" else b for b in spec["buses"]]
+    assert _decode({"WIRESKEIN_RUST": "decode"}, f, spec, **kw) == _decode({"WIRESKEIN_ENGINE": "rust"}, f, spec, **kw)
+
+
+@rust_only
+@pytest.mark.parametrize("split", [None, PIECES])
+def test_decode_items_written_out_as_python(clean, tmp_path, split):
+    """Items written out as the pieces go: the same rows; the reading's counts are the pieces' summed (Python's are
+    0 there: its frames went to the file before they were counted)."""
+    f = DATA / "examples" / "mixed-0.wireskein"
+    spec = _spec_of(f)
+    rs = _decode({"WIRESKEIN_RUST": "decode"}, f, spec, split=split, items=tmp_path / "rs.ndjson")
+    py = _decode({"WIRESKEIN_ENGINE": "rust"}, f, spec, split=split, items=tmp_path / "py.ndjson")
+
+    def rows(p):
+        return sorted(json.dumps(json.loads(x), sort_keys=True) for x in p.read_text().splitlines())
+    assert rows(tmp_path / "rs.ndjson") == rows(tmp_path / "py.ndjson")
+    for d in (rs, py):
+        for b in d["parts"][0]["buses"]:
+            b["result"]["items"]["file"] = "-"
+            b.pop("_owned", None)                        # (Python leaves it in when the part is one piece)
+            if split:
+                for k in ("frames", "ok", "unread", "unread_edges", "unanswered", "restored", "repaired"):
+                    b["reading"].pop(k)
+    assert rs == py
+
+
+@rust_only
+def test_decode_buses_sharing_lines_with_the_rust_engine(clean, tmp_path):
+    """Buses sharing lines (one SPI bus, a target on each CS): Python reads them with its own engine, Rust with the
+    Rust engine's bus of targets - each target's bytes, its shared and unread stretches, its reading the same (the
+    transfers start at the select's edge in the Rust engine, at the first clock in Python's)."""
+    import test_spi_shared as shared
+    cap, spec, sent = shared._bus(n_cs=3)
+    p = decode._save(tmp_path / "c.wireskein", cap)
+    rs = _decode({"WIRESKEIN_RUST": "decode"}, p, spec)
+    py = _decode({}, p, spec)
+    keys = ("frames", "ok", "unread", "shared", "shared_edges")
+    for k, (a, b) in enumerate(zip(rs["parts"][0]["buses"], py["parts"][0]["buses"])):
+        assert [x["MOSI"] for x in a["result"]["transfers"]] == [f[0].hex() for f in sent[k]]
+        assert [x["MISO"] for x in a["result"]["transfers"]] == [x["MISO"] for x in b["result"]["transfers"]]
+        assert a["fit"]["claimed"] and a["uninterpreted"] == b["uninterpreted"] == []
+        assert [(x["edges"], x["bus"]) for x in a["shared"]] == [(x["edges"], x["bus"]) for x in b["shared"]]
+        assert {x: a["reading"][x] for x in keys} == {x: b["reading"][x] for x in keys}
+        assert "stopped" not in a["reading"]
+
+
+@rust_only
+def test_decode_rvswd_against_the_python_engine(clean):
+    """RVSWD, which Python decodes with its own engine: the Rust engine reads the same Debug Module accesses (the
+    V203's last read with its value, which the Python engine leaves out) and as many frames or more."""
+    f = DATA / "examples" / "rvswd-v203-target-info.wireskein"
+    spec = _spec_of(f)
+    rs, py = _decode({"WIRESKEIN_RUST": "decode"}, f, spec), _decode({}, f, spec)
+    a, b = rs["parts"][0]["buses"][0], py["parts"][0]["buses"][0]
+    assert [(y["op"], y["addr"]) for y in a["result"]["dm"]] == [(y["op"], y["addr"]) for y in b["result"]["dm"]]
+    assert sum(y.get("value") is not None for y in a["result"]["dm"]) >= sum(
+        y.get("value") is not None for y in b["result"]["dm"])
+    assert a["reading"]["frames"] >= b["reading"]["frames"] and a["reading"]["ok"] >= b["reading"]["ok"]
+    # SWIO in short pieces (the Python engine reads fewer of them)
+    f = DATA / "examples" / "swio-v003-target-info.wireskein"
+    spec = _spec_of(f)
+    rs, py = _decode({"WIRESKEIN_RUST": "decode"}, f, spec, split=PIECES), _decode({}, f, spec, split=PIECES)
+    a, b = rs["parts"][0]["buses"][0], py["parts"][0]["buses"][0]
+    assert a["reading"]["frames"] >= b["reading"]["frames"] and a["reading"]["ok"] >= b["reading"]["ok"]
+    assert _differ(rs["parts"][0]["split"]["pieces"], py["parts"][0]["split"]["pieces"]) == []
+
+
+@rust_only
+def test_decode_falls_back_for_device_patterns(clean):
+    f = DATA / "examples" / "mixed-0.wireskein"
+    spec = _spec_of(f)
+    assert _with({"WIRESKEIN_RUST": "decode"}, lambda: _rust.decodes(f, spec, None))
+    assert not _with({"WIRESKEIN_RUST": "decode"}, lambda: _rust.decodes(f, {**spec, "devices": ["i2c/**"]}, None))
+    assert not _with({"WIRESKEIN_RUST": "decode"}, lambda: _rust.decodes(f, spec, 3.5))
+
+
+def _blocks(src):
+    got = {k: [] for k in src.names}
+    for _, es in src.blocks():
+        for k, e in es.items():
+            got[k] += np.asarray(e).tolist()
+    return src.names, src.n, src.rate, src.initial, got
+
+
+@rust_only
+@pytest.mark.parametrize("f", EXAMPLES, ids=lambda f: f.name)
+def test_split_sources_as_python(clean, tmp_path, f):
+    """The sources a long capture is read from a block at a time (a WireSkein file's part, a .sr): the same lines,
+    ticks, rate, levels and changes as Python's FileSource and SrSource, pins given or not."""
+    from wireskein import split
+    names = [c.name for c in fileio.load(f).channels]
+    for pins in (None, names[:2][::-1]):
+        a, b = _rust.file_source(f, 0, pins), split.FileSource(f, 0, pins)
+        assert _blocks(a) == _blocks(b) and a.meta == b.meta
+        assert _blocks(a) == _blocks(b)                  # read again
+    sr = decode._save(tmp_path / "c.sr", fileio.load(f))
+    for pins in (None, names[:2][::-1]):
+        assert _blocks(_rust.sr_source(sr, pins)) == _blocks(split.SrSource(sr, pins))
+    with pytest.raises(ValueError, match="pins not in the capture"):
+        _rust.sr_source(sr, ["nope"])
+
+
+@rust_only
+@pytest.mark.parametrize("f", EXAMPLES[:4], ids=lambda f: f.name)
+def test_split_part_decodes_and_surveys_as_python(clean, tmp_path, f):
+    """decode's and survey's Python ways read from the Rust sources give the same documents."""
+    from wireskein import survey
+    spec = _spec_of(f)
+    sr = decode._save(tmp_path / "c.sr", fileio.load(f))
+    for p in (f, sr):
+        assert _decode({"WIRESKEIN_RUST": "split"}, p, spec) == _decode({}, p, spec)
+        assert _with({"WIRESKEIN_RUST": "split"}, lambda: survey.survey_file(p, plan=False)) == \
+            _with({}, lambda: survey.survey_file(p, plan=False))
+
+
+@rust_only
+@pytest.mark.parametrize("run", sorted(p.parent for p in DATA.glob("**/run.json")), ids=lambda p: p.name)
+def test_mark_writes_the_markers_as_python(clean, tmp_path, run):
+    """verify's markers written by wireskein-verify (WIRESKEIN_RUST=mark): the same markers in every capture file as
+    Python's _mark writes, the markers of others kept, verify's earlier ones replaced (not doubled)."""
+    import shutil
+    from wireskein import _fileformat as ff
+    rep = _with({}, lambda: verify.verify(run))
+    files = sorted({c["file"] for c in json.loads((run / "run.json").read_text())["captures"]})
+    out = {}
+    for rust in (False, True):
+        d = tmp_path / ("rs" if rust else "py")
+        shutil.copytree(run, d)
+        for f in files:
+            ff.add_markers(d / f, [{"t": 5, "label": "mine"}], "me")
+        for _ in range(2):
+            _rust.mark(d, rep) if rust else verify._mark(d, rep)
+        out[rust] = {f: ff.markers(d / f) for f in files}
+        assert all(any(m["by"] == "me" for m in ms) for ms in out[rust].values())
+    assert out[True] == out[False]
+    for env in ({"WIRESKEIN_RUST": "mark"},):           # through verify(mark=True)
+        d = tmp_path / "v"
+        shutil.copytree(run, d)
+        _with(env, lambda: verify.verify(d, mark=True))
+        assert {f: ff.markers(d / f) for f in files} == {f: [m for m in ms if m["by"] != "me"]
+                                                          for f, ms in out[False].items()}

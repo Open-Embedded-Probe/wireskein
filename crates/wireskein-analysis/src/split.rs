@@ -116,10 +116,10 @@ pub struct Piece {
 }
 
 impl Piece {
-    fn doc(&self) -> Value {
+    pub fn doc(&self) -> Value {
         let mut d = json!({"s": self.s, "e": self.e, "edges": self.edges, "cut": self.cut});
         if let Some(r) = self.ratio {
-            d["ratio"] = json!((r * 10.0).round_ties_even() / 10.0);
+            d["ratio"] = json!(wireskein_io::pyfmt::round_n(r, 1));
         }
         if (self.a, self.b) != (self.s, self.e) {
             d["read"] = json!([self.a, self.b]);
@@ -278,6 +278,16 @@ pub struct Splitter<'a> {
 
 impl<'a> Splitter<'a> {
     pub fn new(src: &'a mut dyn wireskein_io::stream::Source, o: &Options) -> Result<Self, String> {
+        Self::watching(src, o, &[])
+    }
+
+    /// As `new`, the quiet looked for on `watch` (those of them the source has) unless the options name lines to
+    /// watch (Python's `split.run(..., watch=)`: a decode spec's lines).
+    pub fn watching(
+        src: &'a mut dyn wireskein_io::stream::Source,
+        o: &Options,
+        watch: &[String],
+    ) -> Result<Self, String> {
         let names: Vec<String> = src.names().to_vec();
         let unknown: Vec<&String> = o.watch.iter().chain(&o.ignore).filter(|x| !names.contains(x)).collect();
         if !unknown.is_empty() {
@@ -286,8 +296,16 @@ impl<'a> Splitter<'a> {
                 unknown.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
             ));
         }
+        let given: Vec<&String> = watch.iter().filter(|x| names.contains(x)).collect();
+        let want = |x: &String| {
+            if !o.watch.is_empty() {
+                o.watch.contains(x)
+            } else {
+                given.is_empty() || given.contains(&x)
+            }
+        };
         let watched = (0..names.len())
-            .filter(|&i| (o.watch.is_empty() || o.watch.contains(&names[i])) && !o.ignore.contains(&names[i]))
+            .filter(|&i| want(&names[i]) && !o.ignore.contains(&names[i]))
             .collect();
         let lv0 = src.initial().to_vec();
         let n = src.n();
@@ -468,7 +486,7 @@ impl Iterator for Splitter<'_> {
     }
 }
 
-fn view_of<'a>(lines: &'a [Line], rate: f64, n: i64) -> Result<View<'a>, String> {
+pub(crate) fn view_of<'a>(lines: &'a [Line], rate: f64, n: i64) -> Result<View<'a>, String> {
     View::new(
         rate,
         n,
@@ -667,7 +685,7 @@ fn unread_of(b: &Bus, lines: &[Line], lay: &Map<String, Value>, rate: f64, n: i6
 }
 
 /// Items shifted to the part's ticks, each kept by the piece whose own ticks it starts in.
-fn join_items(per: &[(&Piece, &Value)]) -> Vec<Value> {
+pub(crate) fn join_items(per: &[(&Piece, &Value)]) -> Vec<Value> {
     let mut out = vec![];
     for (p, v) in per {
         for x in v.as_array().into_iter().flatten() {
@@ -700,7 +718,7 @@ fn join_items(per: &[(&Piece, &Value)]) -> Vec<Value> {
 }
 
 /// A layer of parallel lists keyed by time ("t" or "s"), joined the same way; other keys the first piece's.
-fn join_columns(per: &[(&Piece, &Value)]) -> Value {
+pub(crate) fn join_columns(per: &[(&Piece, &Value)]) -> Value {
     let first = per[0].1.as_object().unwrap();
     let tkey = if first.contains_key("t") { "t" } else { "s" };
     let mut out: Map<String, Value> = first
@@ -749,7 +767,7 @@ fn size_bin(edges: i64) -> String {
 }
 
 /// What was not read, summed up: how many stretches, their changes, their sizes in bins, the largest.
-fn unread_summary(items: &[Value]) -> Value {
+pub(crate) fn unread_summary(items: &[Value]) -> Value {
     let (mut count, mut edges) = (0, 0i64);
     let mut bins: std::collections::BTreeMap<i64, (String, i64)> = Default::default();
     let mut largest: Option<Value> = None;

@@ -922,8 +922,10 @@ def decode_file(path: str | Path, spec: dict, split=None, pins: list[str] | None
     file a block at a time, only the piece being read held. pins: only these channels are read. items: a file the
     decoded items are written to as they are read (ndjson; the document gives their counts), for a capture whose
     items are more than memory holds."""
-    from . import split as _split
+    from . import _rust, split as _split
     path = Path(path)
+    if _rust.decodes(path, spec, split):                # WIRESKEIN_RUST=decode (wireskein._rust)
+        return _rust.decode_file(path, spec, split, pins, items)
     spec = _spec(spec)
     opts = _split.options(spec.get("split") if split is None else split)
     srcs = None
@@ -954,11 +956,12 @@ def decode_file(path: str | Path, spec: dict, split=None, pins: list[str] | None
 def _file_source(path: Path, pins):
     """A WireSkein file of one part read a block at a time (wireskein.split.FileSource), or None: another kind of
     file, several parts, analog lines or lines of their own step (read whole)."""
-    from . import split as _split
+    from . import _rust, split as _split
     kind = fileformat.sniff(path) if path.is_file() else None
     if kind == "sr":                                # a sigrok session: a block at a time too
         try:
-            src = _split.SrSource(path, pins)
+            # (WIRESKEIN_RUST=split: read by wireskein-io's stream)
+            src = (_rust.sr_source if _rust.on("split") else _split.SrSource)(path, pins)
         except ValueError:
             return None
         tick = Fraction(src.rate).limit_denominator(10**9)
@@ -973,7 +976,7 @@ def _file_source(path: Path, pins):
 def _file_sources(path: Path, pins):
     """Each part of a WireSkein file read a block at a time, or None: parts that follow on without a gap (read
     joined, whole), analog lines, lines of their own step."""
-    from . import split as _split
+    from . import _rust, split as _split
     raw = fileformat.read_header(path)
     parts = raw["parts"]
     if raw.get("layout", "timeline") == "timeline":
@@ -987,7 +990,7 @@ def _file_sources(path: Path, pins):
                if not pins or c["name"] in pins):
             return None
         try:
-            src = _split.FileSource(path, k, pins)
+            src = (_rust.file_source if _rust.on("split") else _split.FileSource)(path, k, pins)
         except ValueError:
             return None
         src.raw, src.head = raw, head

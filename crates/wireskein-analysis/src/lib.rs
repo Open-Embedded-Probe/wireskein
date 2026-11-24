@@ -6,6 +6,7 @@
 //! Shared by the command line (wireskein-cli) and the Python module (wireskein-py).
 
 pub mod annotate;
+pub mod decode;
 pub mod report;
 pub mod split;
 pub mod states;

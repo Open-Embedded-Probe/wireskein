@@ -2375,7 +2375,10 @@ def verify(run_dir: str | Path, mark: bool = False) -> dict:
         finally:
             _LOADED.clear()                              # the captures are read once per verify, then let go
     if mark:
-        _mark(Path(run_dir), rep)
+        if _rust.on("mark"):                             # WIRESKEIN_RUST=mark: written by wireskein-verify
+            _rust.mark(run_dir, rep)
+        else:
+            _mark(Path(run_dir), rep)
     return rep
 
 
