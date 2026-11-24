@@ -302,7 +302,10 @@ pub fn candidates_with(view: &View, bauds: &std::collections::BTreeMap<String, f
     cands.extend(ps2::candidates(view));
     cands.extend(swd::candidates(view));
     cands.extend(can::candidates(view));
-    cands.extend(unknown(&cands, syncunk::candidates_of(&groups)));
+    // (an unknown framing has no check of its own: not on a clock put on a grid, which any clock fits - the known
+    // framings' checks tell there whether the grid was the clock's)
+    let plain: Vec<clocked::Group> = groups.into_iter().filter(|g| g.how != spi::GRIDDED).collect();
+    cands.extend(unknown(&cands, syncunk::candidates_of(&plain)));
     cands
 }
 

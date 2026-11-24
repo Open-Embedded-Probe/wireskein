@@ -1,7 +1,8 @@
 //! A clock and the lines keeping to it as data, each line sampled on the clock's edges (Python's survey groups and
 //! `typed.sync_bits`, found here as SPI finds its lines): the readers of fixed framings on a clock (JTAG, SD / MMC,
 //! I2S) read these groups. Each clock is taken in the ways SPI settles it (pulses out, bounces merged, the shortest
-//! runs out, rebuilt from its period where it bounces), the other lines settled alike.
+//! runs out, rebuilt from its period - refused, followed or on a grid - where it bounces), the other lines settled
+//! alike.
 
 use crate::Candidate;
 use crate::spi::{Clean, bounced, clock_of, width};
@@ -11,7 +12,7 @@ use crate::view::{Channel, View};
 pub const KEEPS_MIN: f64 = 0.3; // a line keeps to the clock this well at least to be one of its data lines
 pub const ON_EDGE_SHARE: f64 = 0.1; // a line's changes on the sampling edge's tick, this share: read before it ...
 pub const ON_EDGE_OVER: f64 = 3.0; // ... where it meets the other edge this many times less
-pub const CLEANS: [&str; 5] = ["pulses", "bounces", "shortest", "rebuilt_refused", "rebuilt_followed"];
+pub const CLEANS: [&str; 7] = crate::spi::CLEAN_NAMES; // (as SPI's: `how` an index of them, as_is unused here)
 
 /// A data line of a clock, settled as the clock is.
 pub struct Line<'a> {
@@ -79,12 +80,13 @@ pub fn sample(initial: u8, edges: &[i64], t: &[i64], other: &[i64]) -> Vec<u8> {
 pub fn groups<'a>(view: &View<'a>) -> Vec<Group<'a>> {
     let act: Vec<&Channel<'a>> = view.channels.iter().filter(|c| c.edges.len() >= 4).collect();
     let debounce: Clean = crate::kernels::debounce;
-    let cleans: [(Clean, usize); 5] = [
+    let cleans: [(Clean, usize); 6] = [
         (crate::kernels::deglitch, 0),
         (debounce, 1),
         (crate::spi::shortest, 2),
         (debounce, 3),
         (debounce, 4),
+        (debounce, crate::spi::GRIDDED),
     ];
     let mut out = vec![];
     for (clean, how) in cleans {
