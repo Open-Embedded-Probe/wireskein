@@ -120,6 +120,27 @@ pub fn column(data: &[u8], width: usize, pos: usize, n: usize) -> Vec<u8> {
     out
 }
 
+/// Every channel's bits of `n` samples of `width` bits (`column` for each position), the samples read once.
+pub fn columns(data: &[u8], width: usize, positions: &[usize], n: usize) -> Vec<Vec<u8>> {
+    if width != 8 {
+        return positions.iter().map(|&p| column(data, width, p, n)).collect();
+    }
+    let mut out: Vec<Vec<u8>> = positions.iter().map(|_| vec![0u8; n.div_ceil(8)]).collect();
+    let whole = n / 8;
+    for k in 0..whole {
+        let w = u64::from_le_bytes(data[k * 8..k * 8 + 8].try_into().expect("8"));
+        for (o, &p) in out.iter_mut().zip(positions) {
+            o[k] = ((((w >> p) & 0x0101_0101_0101_0101).wrapping_mul(0x0102_0408_1020_4080)) >> 56) as u8;
+        }
+    }
+    for (o, &p) in out.iter_mut().zip(positions) {
+        for i in whole * 8..n {
+            o[i / 8] |= ((data[i] >> p) & 1) << (i % 8);
+        }
+    }
+    out
+}
+
 /// A format 1 configuration (§1.3, as configured and answered): the raw channels' roles, the reduced ones'
 /// (carriage, D), the block's L and the layout (w, the raw channels' bit positions).
 #[derive(Debug, Clone, Default)]
@@ -295,6 +316,17 @@ mod tests {
                         "{width} {pos} {n}"
                     );
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn every_column_at_once_is_each_column() {
+        let data: Vec<u8> = (0..1000u32).map(|i| (i.wrapping_mul(2654435761) >> 9) as u8).collect();
+        for n in [0, 5, 64, 1000] {
+            let all = columns(&data, 8, &[0, 3, 7], n);
+            for (k, p) in [0, 3, 7].into_iter().enumerate() {
+                assert_eq!(all[k], column(&data, 8, p, n));
             }
         }
     }

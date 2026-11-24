@@ -7,6 +7,9 @@ use pyo3::types::PyBytes;
 use serde_json::Value;
 use wireskein_oep::{Error, Mode, Request};
 
+/// A data push as a test gives it: (position, data, (segment position, samples, start_ns, uncertainty) or None).
+type Push = (u64, Vec<u8>, Option<(u64, u64, u64, u64)>);
+
 fn py_err(e: Error) -> PyErr {
     match e {
         Error::Value(m) => PyValueError::new_err(m),
@@ -100,7 +103,7 @@ pub fn oep_capture<'py>(
 pub fn oep_assemble<'py>(
     py: Python<'py>,
     config_json: &str,
-    pushes: Vec<(u64, Vec<u8>, Option<(u64, u64, u64, u64)>)>,
+    pushes: Vec<Push>,
     write_pos: Option<u64>,
 ) -> PyResult<(String, Vec<Bound<'py, PyBytes>>)> {
     use wireskein_oep::assemble::Format;

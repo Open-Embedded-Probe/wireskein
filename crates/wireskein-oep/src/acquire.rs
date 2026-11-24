@@ -2,7 +2,7 @@
 //! losses, times and the probe's facts out. Logic channels (oep.fixture.logic): one-shot, repeat and stream, capture
 //! format 0 and format 1's reductions, a trigger on a logic line, the glitch filter.
 
-use crate::assemble::{self, Chan, Format, Loss, Part, Spool};
+use crate::assemble::{self, Chan, Feed, Format, Loss, Part, Spool, SpoolWorker};
 use crate::blocks;
 use crate::capture::{self, Config, Logic, Setting};
 use crate::host::{self, ClockReading, Host};
@@ -828,14 +828,14 @@ impl Run<'_> {
     fn stream_into(&mut self, cfg: &Config, dir: &std::path::Path) -> Result<Acquired> {
         let req = self.req;
         let dir = dir.to_path_buf();
-        let mut spool = Spool::new(
+        let mut spool = SpoolWorker::start(Spool::new(
             self.names.clone(),
             self.ids.clone(),
             cfg.rate,
-            Self::format(&cfg),
+            Self::format(cfg),
             req.on_loss_stop,
             Some(&dir),
-        );
+        ));
         let mut col = Collector::default();
         let fn_ = self.logic.fn_;
         self.hst.subscribe(fn_, STREAM_MIN_BYTES, STREAM_MAX_DELAY_MS)?;
@@ -855,7 +855,7 @@ impl Run<'_> {
                         kept = Instant::now();
                     }
                 }
-                spool.work(false, None)?;
+                spool.work()?;
                 if req.on_loss_stop && spool.lost_any() {
                     break;
                 }
@@ -884,7 +884,7 @@ impl Run<'_> {
         let read_s = t_read.elapsed().as_secs_f64();
         let st = self.logic.status(&mut self.hst)?;
         let error = st.state == capture::STATE_ERROR;
-        spool.finish(if error { Some(st.write_pos) } else { None })?;
+        let (parts, mut lost) = spool.finish(if error { Some(st.write_pos) } else { None })?;
         let mut drops_line = String::new();
         for (name, v) in &st.named {
             if name == capture::CAPTURE_DROPS {
@@ -933,7 +933,6 @@ impl Run<'_> {
             json!({"duration_s": req.duration_s, "on_loss": if req.on_loss_stop { "stop" } else { "continue" },
                    "frames": col.frames, "bytes": received, "read_s": round3(read_s)}),
         );
-        let (parts, mut lost) = spool.take();
         if parts.is_empty() {
             let _ = std::fs::remove_dir_all(&dir);
             return Err(Error::Runtime(format!(
@@ -980,14 +979,15 @@ impl Run<'_> {
     }
 }
 
-/// The reference firmware's capture-drops counters (a named extension of status, not an OEP definition).
+/// The reference firmware's capture-drops counters (a named extension of status, not an OEP definition; its forms
+/// of 50, 42, 34 and 30 bytes as oep-client-python's capture.CaptureDrops reads them).
 fn drops(v: &[u8]) -> Option<Map<String, Value>> {
-    let u32at = |i: usize| u32::from_le_bytes(v[i..i + 4].try_into().expect("4")) as u64;
-    let mut m = Map::new();
     let n = v.len();
-    if ![34, 42, 46, 38].contains(&n) {
+    if ![30, 34, 42, 50].contains(&n) {
         return None;
     }
+    let u32at = |i: usize| u32::from_le_bytes(v[i..i + 4].try_into().expect("4")) as u64;
+    let mut m = Map::new();
     for (k, name) in ["no_stage_bytes", "unqueued_bytes", "dma_overruns", "queue_overflows"]
         .iter()
         .enumerate()
@@ -996,19 +996,24 @@ fn drops(v: &[u8]) -> Option<Map<String, Value>> {
     }
     m.insert("zero_copy".into(), json!(v[16] != 0));
     m.insert("stages".into(), json!(v[17]));
-    let mut at = 18;
-    for name in ["internal_largest", "dma_largest", "psram_total"] {
-        m.insert(name.into(), json!(u32at(at)));
-        at += 4;
-    }
-    for name in ["buffer_peak", "spill_peak", "spill_bytes"] {
-        m.insert(name.into(), if at + 4 <= n { json!(u32at(at)) } else { Value::Null });
-        at += 4;
+    for (k, name) in [
+        "internal_largest",
+        "dma_largest",
+        "psram_total",
+        "buffer_peak",
+        "spill_peak",
+        "spill_bytes",
+    ]
+    .iter()
+    .enumerate()
+    {
+        let at = 18 + 4 * k;
+        m.insert((*name).into(), if at + 4 <= n { json!(u32at(at)) } else { Value::Null });
     }
     m.insert(
         "dropped_bytes".into(),
-        if n == 46 {
-            json!(u64::from_le_bytes(v[38..46].try_into().expect("8")))
+        if n == 50 {
+            json!(u64::from_le_bytes(v[42..50].try_into().expect("8")))
         } else {
             Value::Null
         },
@@ -1029,7 +1034,7 @@ struct Collector {
 }
 
 impl Collector {
-    fn take(&mut self, link: &mut Link, fn_: u16, generation: Option<u32>, spool: &mut Spool) -> Result<()> {
+    fn take(&mut self, link: &mut Link, fn_: u16, generation: Option<u32>, spool: &mut dyn Feed) -> Result<()> {
         let mut event_seqs: Vec<u16> = link
             .events
             .iter()
@@ -1068,7 +1073,7 @@ impl Collector {
             self.frames += 1;
             self.bytes += p.data.len() as u64;
             self.end = Some(p.position + p.data.len() as u64);
-            spool.run(p.position, &p.data)?;
+            spool.run(p.position, p.data)?;
         }
         link.pushes = rest;
         Ok(())
@@ -1180,4 +1185,82 @@ fn session(
     let released = run.hst.plan_release(&[fn_]);
     let res = out.and_then(|a| released.map(|_| a));
     (run.hst, res)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// What the reading side takes a second: frames of a 7-line format 0 stream through the link, the collector and
+    /// the spool on disk (cargo test --release -p wireskein-oep -- --ignored --nocapture).
+    #[test]
+    #[ignore]
+    fn the_reading_side_keeps_up() {
+        let (tx, rx) = std::sync::mpsc::sync_channel::<Vec<u8>>(transport::BACKLOG);
+        let frame = 19_456usize;
+        let total = 400usize << 20;
+        let producer = std::thread::spawn(move || {
+            let mut pos = 0u64;
+            let mut seq = 0u16;
+            while (pos as usize) < total {
+                let mut f = vec![msg::ROLE_DATA];
+                f.extend(5u16.to_le_bytes());
+                f.extend(seq.to_le_bytes());
+                f.extend(pos.to_le_bytes());
+                f.extend((frame as u16).to_le_bytes());
+                f.extend((0..frame).map(|i| (i * 7) as u8));
+                let mut info = (pos / 65536 * 65536).to_le_bytes().to_vec();
+                info.extend(65536u32.to_le_bytes());
+                info.extend(0u64.to_le_bytes());
+                info.extend(5u32.to_le_bytes());
+                f.extend(msg::tlv(0x02, &info));
+                let mut w = (f.len() as u16).to_le_bytes().to_vec();
+                w.extend(f);
+                if tx.send(w).is_err() {
+                    return;
+                }
+                pos += frame as u64;
+                seq = seq.wrapping_add(1);
+            }
+        });
+        let mut link = Link::new(transport::Transport::from_rx(rx));
+        let dir = make_temp_dir(&std::env::temp_dir(), ".oep-bench-").unwrap();
+        let names: Vec<String> = (0..7).map(|k| format!("D{k}")).collect();
+        let mut spool = SpoolWorker::start(Spool::new(
+            names,
+            (0..7).collect(),
+            (40_000_000, 1),
+            Format::Zero {
+                width: 8,
+                positions: (0..7).collect(),
+            },
+            true,
+            Some(&dir),
+        ));
+        let mut col = Collector::default();
+        let t0 = Instant::now();
+        let mut last = Instant::now();
+        let (mut tp, mut tt, mut tw) = (0f64, 0f64, 0f64);
+        while col.bytes < total as u64 {
+            let a = Instant::now();
+            link.pump(Duration::from_millis(20), true).unwrap();
+            let b = Instant::now();
+            col.take(&mut link, 5, None, &mut spool).unwrap();
+            let c = Instant::now();
+            if last.elapsed() >= STREAM_POLL {
+                Feed::work(&mut spool).unwrap();
+                last = Instant::now();
+            }
+            tp += (b - a).as_secs_f64();
+            tt += (c - b).as_secs_f64();
+            tw += c.elapsed().as_secs_f64();
+        }
+        println!("reading: pump {tp:.2} s, take {tt:.2} s, handing work {tw:.2} s");
+        let (parts, _) = spool.finish(None).unwrap();
+        assert_eq!(parts.len(), 1);
+        let s = t0.elapsed().as_secs_f64();
+        producer.join().unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        println!("{:.1} MB/s", total as f64 / s / 1e6);
+    }
 }

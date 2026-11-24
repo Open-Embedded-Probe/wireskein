@@ -141,6 +141,7 @@ impl Sink {
     fn append(&mut self, src: &[u8], n: usize) -> Result<()> {
         match self {
             Sink::Mem(b) => b.append(src, n),
+            Sink::File(b, f, _) if b.nbits == 0 && n.is_multiple_of(8) => f.write_all(&src[..n / 8])?,
             Sink::File(b, f, _) => {
                 b.append(src, n);
                 if b.bytes.len() >= 1 << 16 {
@@ -326,9 +327,12 @@ impl Spool {
         }
         self.open(at, None)?;
         let cur = self.cur.as_mut().expect("open");
-        for (k, s) in cur.sinks.iter_mut().enumerate() {
-            let pos = positions.get(k).copied().unwrap_or(k);
-            s.append(&blocks::column(&self.pending[..n * b], width, pos, n), n)?;
+        let pos: Vec<usize> = (0..cur.sinks.len())
+            .map(|k| positions.get(k).copied().unwrap_or(k))
+            .collect();
+        let cols = blocks::columns(&self.pending[..n * b], width, &pos, n);
+        for (s, col) in cur.sinks.iter_mut().zip(cols) {
+            s.append(&col, n)?;
         }
         cur.samples += n as u64;
         self.pending.drain(..n * b);
@@ -566,6 +570,119 @@ impl Spool {
     /// (parts, losses)
     pub fn take(self) -> (Vec<Part>, Vec<Loss>) {
         (self.parts, self.lost)
+    }
+}
+
+/// What takes a stream's pushes: a spool here, or one on a thread of its own.
+pub trait Feed {
+    fn segment(&mut self, info: SegmentInfo);
+    fn run(&mut self, p0: u64, data: Vec<u8>) -> Result<()>;
+    /// put together what can be (a poll's worth)
+    fn work(&mut self) -> Result<()>;
+    fn lost_any(&self) -> bool;
+}
+
+impl Feed for Spool {
+    fn segment(&mut self, info: SegmentInfo) {
+        Spool::segment(self, info)
+    }
+    fn run(&mut self, p0: u64, data: Vec<u8>) -> Result<()> {
+        Spool::run(self, p0, &data)
+    }
+    fn work(&mut self) -> Result<()> {
+        Spool::work(self, false, None)
+    }
+    fn lost_any(&self) -> bool {
+        Spool::lost_any(self)
+    }
+}
+
+enum Job {
+    Segment(SegmentInfo),
+    Run(u64, Vec<u8>),
+    Work,
+}
+
+/// A spool on a thread of its own (acquire._Spool's worker): the reader hands the pushes over and goes on reading; a
+/// queue of QUEUE jobs at most (past it the reader waits, the transport's queue fills, the probe drops whole frames,
+/// which the positions show).
+pub struct SpoolWorker {
+    tx: Option<std::sync::mpsc::SyncSender<Job>>,
+    thread: Option<std::thread::JoinHandle<Result<Spool>>>,
+    lost: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl SpoolWorker {
+    const QUEUE: usize = 8192;
+
+    pub fn start(mut spool: Spool) -> SpoolWorker {
+        use std::sync::atomic::Ordering;
+        let (tx, rx) = std::sync::mpsc::sync_channel::<Job>(Self::QUEUE);
+        let lost = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let flag = lost.clone();
+        let thread = std::thread::Builder::new()
+            .name("oep-spool".into())
+            .spawn(move || {
+                for job in rx {
+                    match job {
+                        Job::Segment(i) => spool.segment(i),
+                        Job::Run(p, d) => spool.run(p, &d)?,
+                        Job::Work => spool.work(false, None)?,
+                    }
+                    if spool.lost_any() {
+                        flag.store(true, Ordering::SeqCst);
+                    }
+                }
+                Ok(spool)
+            })
+            .expect("a thread");
+        SpoolWorker {
+            tx: Some(tx),
+            thread: Some(thread),
+            lost,
+        }
+    }
+
+    fn send(&mut self, job: Job) -> Result<()> {
+        match &self.tx {
+            Some(tx) if tx.send(job).is_ok() => Ok(()),
+            _ => Err(self.stop_err()),
+        }
+    }
+
+    fn stop_err(&mut self) -> Error {
+        self.tx = None;
+        match self.thread.take().map(|t| t.join()) {
+            Some(Ok(Err(e))) => e,
+            _ => Error::Runtime("the stream's spool stopped".into()),
+        }
+    }
+
+    /// The end: everything handed over put together (`write_pos`: an error stop's). -> (parts, losses)
+    pub fn finish(mut self, write_pos: Option<u64>) -> Result<(Vec<Part>, Vec<Loss>)> {
+        self.tx = None;
+        let mut spool = match self.thread.take().map(|t| t.join()) {
+            Some(Ok(Ok(s))) => s,
+            Some(Ok(Err(e))) => return Err(e),
+            _ => return Err(Error::Runtime("the stream's spool stopped".into())),
+        };
+        spool.finish(write_pos)?;
+        Ok(spool.take())
+    }
+}
+
+impl Feed for SpoolWorker {
+    fn segment(&mut self, info: SegmentInfo) {
+        let _ = self.send(Job::Segment(info));
+    }
+    fn run(&mut self, p0: u64, data: Vec<u8>) -> Result<()> {
+        self.send(Job::Run(p0, data))
+    }
+    fn work(&mut self) -> Result<()> {
+        self.send(Job::Work)
+    }
+    fn lost_any(&self) -> bool {
+        self.lost.load(std::sync::atomic::Ordering::SeqCst)
     }
 }
 

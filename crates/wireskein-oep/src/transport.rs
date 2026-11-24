@@ -26,8 +26,9 @@ pub const URB_SIZE: usize = 32 * 1024;
 /// IN transfers kept queued: 480 x 32 KiB is 15 MiB of usbfs_memory_mb's default 16 (a submit refused leaves the depth
 /// at what it took).
 pub const DEPTH: usize = 480;
-/// Chunks waiting for the caller at most (each one transfer's: at most 32 KiB, so 64 MiB).
-pub const BACKLOG: usize = 2048;
+/// Chunks waiting for the caller at most (each one transfer's, a frame: about 20 KB at 40 MB/s, at most 32 KiB -
+/// 80 to 128 MiB, as oep-client-python's UsbProcessStream holds in its two processes).
+pub const BACKLOG: usize = 4096;
 
 /// What the IN side did (meta.probe.link's reader statistics).
 #[derive(Debug, Default)]
@@ -315,6 +316,31 @@ fn usb_in(
     while ep.pending() > 0 {
         if ep.wait_next_complete(Duration::from_secs(1)).is_none() {
             break;
+        }
+    }
+}
+
+struct NullSink;
+
+impl Sink for NullSink {
+    fn send(&mut self, _: &[u8]) -> Result<()> {
+        Ok(())
+    }
+}
+
+impl Transport {
+    /// A stream that only brings what `rx` gives (writes go nowhere): for a test of what reads it.
+    pub fn from_rx(rx: Receiver<Vec<u8>>) -> Transport {
+        Transport {
+            rx,
+            out: Box::new(NullSink),
+            stop: Arc::new(AtomicBool::new(false)),
+            thread: None,
+            shutdown: None,
+            reader: "test",
+            keeps_boundaries: false,
+            stats: Arc::new(Stats::default()),
+            depth: 0,
         }
     }
 }
