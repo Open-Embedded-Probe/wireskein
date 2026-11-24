@@ -145,6 +145,83 @@ pub fn followed(e: &[i64], initial: u8) -> Vec<i64> {
     odd(out)
 }
 
+pub const GRID: f64 = 0.6; // grid: a change within this many ticks of a point of the grid is the change there
+
+/// As a grid (Python's `views.clock_gridded`): per burst, from its first change, points every h - the fractional half
+/// period within 0.6-1.4 of the burst's that puts the most changes within GRID ticks of a point (less half the points
+/// with none) - each moved to the change there if any; an error at one point does not carry to the next (a clock of
+/// a few samples a half, 3 and 4 for 3.2, has no integer half to follow).
+pub fn gridded(e: &[i64], initial: u8) -> Vec<i64> {
+    let hg = if e.len() >= 8 { half(e) } else { 0.0 };
+    if hg < 2.0 {
+        return e.to_vec();
+    }
+    let mut out = vec![];
+    let (mut lv, mut raw) = (initial, initial);
+    for b in bursts(e, hg) {
+        raw ^= (b.len() & 1) as u8;
+        if b.len() < 6 {
+            for &t in b {
+                out.push(t);
+                lv ^= 1;
+            }
+            ends_as_raw(&mut out, &mut lv, raw);
+            continue;
+        }
+        let bf: Vec<f64> = b.iter().map(|&x| x as f64).collect();
+        let bd: Vec<f64> = bf.windows(2).map(|w| w[1] - w[0]).filter(|&x| x >= 0.5 * hg).collect();
+        let h0 = if bd.is_empty() { hg } else { crate::kernels::median(&bd) };
+        let (first, last) = (bf[0], bf[bf.len() - 1]);
+        // the point k of a grid of half h: the change nearest it, and how far
+        let nearest = |g: f64| -> (f64, f64) {
+            let i = bf.partition_point(|&x| x < g).clamp(1, bf.len() - 1);
+            let (a, c) = (bf[i - 1], bf[i]);
+            if (c - g).abs() <= (a - g).abs() {
+                (c, (c - g).abs())
+            } else {
+                (a, (a - g).abs())
+            }
+        };
+        let step = (0.004 * h0).max(0.01);
+        let (mut best_h, mut best_s) = (h0, f64::NEG_INFINITY);
+        let mut h = 0.6 * h0;
+        while h < 1.4 * h0 {
+            let n = ((last - first) / h + 0.5).floor() as usize + 1;
+            let mut s = 0.0;
+            // (the points in order: the change at or after each found walking on)
+            let mut i = 1usize;
+            for k in 0..n {
+                let g = first + h * k as f64;
+                while i < bf.len() - 1 && bf[i] < g {
+                    i += 1;
+                }
+                let d = (bf[i] - g).abs().min((bf[i - 1] - g).abs());
+                s += if d <= GRID { 1.0 } else { -0.5 };
+            }
+            if s > best_s {
+                (best_h, best_s) = (h, s);
+            }
+            h += step;
+        }
+        let n = ((last - first) / best_h + 0.5).floor() as usize + 1;
+        let mut pts: Vec<i64> = (0..n)
+            .map(|k| {
+                let g = first + best_h * k as f64;
+                let (t, d) = nearest(g);
+                if d <= GRID { t as i64 } else { g.round() as i64 }
+            })
+            .collect();
+        pts.sort_unstable();
+        pts.dedup();
+        for t in pts {
+            out.push(t);
+            lv ^= 1;
+        }
+        ends_as_raw(&mut out, &mut lv, raw);
+    }
+    odd(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -163,5 +240,6 @@ mod tests {
         }
         assert_eq!(refused(&e, 0), clean);
         assert_eq!(followed(&e, 0), clean);
+        assert_eq!(gridded(&e, 0), clean);
     }
 }

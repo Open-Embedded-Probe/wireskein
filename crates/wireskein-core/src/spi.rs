@@ -37,7 +37,7 @@ pub(crate) fn width(how: usize, half: f64) -> i64 {
     match how {
         1 => ((CLEAN * half) as i64).max(2).max(BOUNCE_MERGE_WIDE),
         2 => ((SHORTEST * half).round() as i64).max(2),
-        3 | 4 => REBUILD_DATA,
+        3 | 4 | GRIDDED => REBUILD_DATA,
         AS_IS => 0,
         _ => ((CLEAN * half) as i64).max(2),
     }
@@ -53,13 +53,16 @@ pub const SHORTEST: f64 = 0.6;
 /// The view of the lines as they are (Python's first view of a clocked group): a clock of a few samples a period has
 /// runs of a sample of its own, which every cleaning takes out with the clock (`views.own_short_runs`)
 pub const AS_IS: usize = 5;
-pub const CLEAN_NAMES: [&str; 6] = [
+/// The view of the clock rebuilt on a grid of a fractional half period (Python's third rebuilt view)
+pub const GRIDDED: usize = 6;
+pub const CLEAN_NAMES: [&str; 7] = [
     "pulses",
     "bounces",
     "shortest",
     "rebuilt_refused",
     "rebuilt_followed",
     "as_is",
+    "rebuilt_gridded",
 ];
 pub const REBUILD_DATA: i64 = 4; // ticks: the data and select lines' bounces merged beside a rebuilt clock
 pub const REBUILD_SHORT: f64 = 0.02; // a clock's runs half its median or less, this share or more ...
@@ -91,6 +94,7 @@ pub(crate) fn clock_of(ch: &Channel, clean: Clean, how: usize) -> Option<Clock> 
     let c = match how {
         3 => crate::rebuild::refused(ch.edges, ch.initial),
         4 => crate::rebuild::followed(ch.edges, ch.initial),
+        GRIDDED => crate::rebuild::gridded(ch.edges, ch.initial),
         AS_IS => ch.edges.to_vec(),
         _ => clean(ch.edges, width(how, half)),
     };
@@ -454,13 +458,14 @@ pub fn candidates(view: &View) -> Vec<Candidate> {
         .copied()
         .collect();
     let debounce: Clean = crate::kernels::debounce;
-    let cleans: [(Clean, usize); 6] = [
+    let cleans: [(Clean, usize); 7] = [
         (deglitch, 0),
         (debounce, 1),
         (shortest, 2),
         (debounce, 3),
         (debounce, 4),
         (deglitch, AS_IS),
+        (debounce, GRIDDED),
     ];
     // every view of each clock: the clock as it takes it, and the other lines as they settle at the clock's pace (what
     // is counted, kept to and read); each line's keeping to the clock there
@@ -474,7 +479,7 @@ pub fn candidates(view: &View) -> Vec<Candidate> {
     let mut seen: Vec<Seen> = vec![];
     for (clean, how) in cleans {
         for clk in &act {
-            if (how == 3 || how == 4) && !bounced(clk.edges) {
+            if (how == 3 || how == 4 || how == GRIDDED) && !bounced(clk.edges) {
                 continue; // the clock rebuilt from its period only where its short runs are a bounce's
             }
             let Some(ck) = clock_of(clk, clean, how) else {
@@ -486,6 +491,13 @@ pub fn candidates(view: &View) -> Vec<Candidate> {
             }
             let cc = Channel::new(clk.name, clk.initial, &ck.edges);
             let settled: Vec<Vec<i64>> = act.iter().map(|c| clean(c.edges, k)).collect();
+            // (a view the same as one before - the clock and the lines alike, and its other settling as well - reads
+            // the same: read once, as the first)
+            if seen.iter().any(|s| {
+                s.clk.name == clk.name && (s.how == 0) == (how == 0) && s.ck.edges == ck.edges && s.settled == settled
+            }) {
+                continue;
+            }
             let keeps = act
                 .iter()
                 .zip(&settled)
