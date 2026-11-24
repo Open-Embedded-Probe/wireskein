@@ -1,0 +1,19 @@
+[package]
+name = "wireskein-cli"
+description = "WireSkein's command line in plain Rust: analyze a capture file with the Rust core"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "wireskein-rs"
+path = "src/main.rs"
+
+[dependencies]
+wireskein-core = { path = "../wireskein-core" }
+wireskein-io = { path = "../wireskein-io" }
+serde_json = "1"
+sha2 = "0.10"
