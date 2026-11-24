@@ -553,13 +553,16 @@ fn shared(view: &View, cands: &[Candidate]) -> Vec<Candidate> {
             continue;
         }
         let Some(ch) = view.channel(&clk) else { continue };
-        // (the clock's pulses of a sample out, unless that takes most of it: a clock of a few samples a period has
-        // runs of a sample of its own)
-        let ce = deglitch(ch.edges, 2);
-        let ce = if 2 * ce.len() < ch.edges.len() {
+        // (the clock as the targets' readings took it: its pulses of a sample out, or as it is where they read it so -
+        // a clock of a few samples a period has runs of a sample of its own; crosstalk's pulses go)
+        let as_is = by_cs
+            .values()
+            .filter(|c| c.params.get("clean").and_then(|v| v.as_str()) == Some(CLEAN_NAMES[AS_IS]))
+            .count();
+        let ce = if 2 * as_is > by_cs.len() {
             ch.edges.to_vec()
         } else {
-            ce
+            deglitch(ch.edges, 2)
         };
         let mid: Vec<i64> = transfers_of(&ce)
             .iter()
