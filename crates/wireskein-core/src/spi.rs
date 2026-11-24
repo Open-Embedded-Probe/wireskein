@@ -30,18 +30,29 @@ pub const BOUNCE_MERGE_WIDE: i64 = 8;
 
 /// How wide a cleaning is at a clock of this half period: CLEAN of it; bounces merged over 8 samples at least where
 /// the half period is long enough to keep its edges (a bounced clock's own median interval is a bounce's)
-fn width(bounces: bool, half: f64) -> i64 {
-    let k = ((CLEAN * half) as i64).max(2);
-    if bounces { k.max(BOUNCE_MERGE_WIDE) } else { k }
+fn width(how: usize, half: f64) -> i64 {
+    match how {
+        1 => ((CLEAN * half) as i64).max(2).max(BOUNCE_MERGE_WIDE),
+        2 => ((SHORTEST * half).round() as i64).max(2),
+        _ => ((CLEAN * half) as i64).max(2),
+    }
 }
 
-fn clock_of(ch: &Channel, clean: Clean, bounces: bool) -> Option<Clock> {
+/// The runs shorter than k taken out, the shortest first, each with its own two changes (`views.pulses_out`): a
+/// fast clock's bounces, too wide for a pulse filter of a third of its half and too near its edges to merge.
+fn shortest(e: &[i64], k: i64) -> Vec<i64> {
+    crate::kernels::shortest_first(e, k)
+}
+
+pub const SHORTEST: f64 = 0.6;
+
+fn clock_of(ch: &Channel, clean: Clean, how: usize) -> Option<Clock> {
     if ch.edges.len() < 8 {
         return None;
     }
     let d: Vec<f64> = ch.edges.windows(2).map(|w| (w[1] - w[0]) as f64).collect();
     let half = median(&d);
-    let c = clean(ch.edges, width(bounces, half));
+    let c = clean(ch.edges, width(how, half));
     if c.len() < 8 {
         return None;
     }
@@ -317,16 +328,15 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
 pub fn candidates(view: &View) -> Vec<Candidate> {
     let mut best: std::collections::BTreeMap<Vec<(String, String)>, Candidate> = Default::default();
     let act: Vec<&Channel> = view.channels.iter().filter(|c| c.edges.len() >= 4).collect();
-    let cleans: [(Clean, i64); 2] = [(deglitch, 0), (crate::kernels::debounce, 1)];
+    let cleans: [(Clean, usize); 3] = [(deglitch, 0), (crate::kernels::debounce, 1), (shortest, 2)];
     for (clean, how) in cleans {
         for clk in &act {
-            let bounces = how == 1;
-            let Some(ck) = clock_of(clk, clean, bounces) else {
+            let Some(ck) = clock_of(clk, clean, how) else {
                 continue;
             };
             // the other lines as they settle at this clock's pace: what is counted, kept to and read
-            let k = width(bounces, ck.half);
-            if bounces && k as f64 > 0.6 * ck.half {
+            let k = width(how, ck.half);
+            if how == 1 && k as f64 > 0.6 * ck.half {
                 continue; // a clock too fast to merge its bounces without its own edges
             }
             let settled: Vec<Vec<i64>> = act.iter().map(|c| clean(c.edges, k)).collect();
@@ -370,7 +380,7 @@ pub fn candidates(view: &View) -> Vec<Candidate> {
                 for set in sets {
                     if let Some(mut c) = read(view, clk, &ck, cs, &set) {
                         c.params
-                            .insert("clean".into(), json!(if how == 0 { "pulses" } else { "bounces" }));
+                            .insert("clean".into(), json!(["pulses", "bounces", "shortest"][how]));
                         let key: Vec<(String, String)> = c.roles.clone().into_iter().collect();
                         if best.get(&key).is_none_or(|b| c.score > b.score) {
                             best.insert(key, c);
