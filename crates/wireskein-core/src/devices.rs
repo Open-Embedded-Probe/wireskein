@@ -56,7 +56,7 @@ struct Entry {
 /// first needed.
 pub struct PackSet {
     entries: Vec<Entry>,
-    full: RefCell<BTreeMap<String, toml::Table>>,
+    full: RefCell<BTreeMap<usize, toml::Table>>,
 }
 
 fn int(v: &toml::Value) -> Option<i64> {
@@ -192,6 +192,36 @@ impl PackSet {
         }
     }
 
+    /// The packs a caller picks (Python's `_upper._device_packs`): WireSkein's own and those under each directory
+    /// (a definitions directory's `devices/`), all selected by the same patterns; no patterns (or none given) is
+    /// "**", every pack.
+    pub fn chosen<P: AsRef<Path>>(select: &[String], dirs: &[P]) -> PackSet {
+        let all = ["**".to_string()];
+        let select = if select.is_empty() { &all[..] } else { select };
+        let mut set = PackSet::builtin(select);
+        for d in dirs {
+            set.entries.extend(PackSet::from_dir(d.as_ref(), select).entries);
+        }
+        set
+    }
+
+    /// The packs a hints object names (`analyze`'s): `devices` the patterns (Python's `hints["devices"]`),
+    /// `device_dirs` the directories of packs beside WireSkein's (each definitions directory's `devices/`). Neither
+    /// given: every built-in pack, as before.
+    pub fn from_hints(hints: &Value) -> PackSet {
+        let strs = |x: &Value| -> Vec<String> {
+            x.as_array()
+                .map(|a| a.iter().filter_map(|s| s.as_str().map(String::from)).collect())
+                .unwrap_or_default()
+        };
+        PackSet::chosen(&strs(&hints["devices"]), &strs(&hints["device_dirs"]))
+    }
+
+    /// The packs' paths (relative to their roots), in the order they are tried.
+    pub fn names(&self) -> Vec<&str> {
+        self.entries.iter().map(|e| e.rel.as_str()).collect()
+    }
+
     pub fn len(&self) -> usize {
         self.entries.len()
     }
@@ -200,8 +230,9 @@ impl PackSet {
         self.entries.is_empty()
     }
 
-    fn pack(&self, e: &Entry) -> Option<toml::Table> {
-        if let Some(t) = self.full.borrow().get(&e.rel) {
+    fn pack(&self, k: usize) -> Option<toml::Table> {
+        let e = &self.entries[k];
+        if let Some(t) = self.full.borrow().get(&k) {
             return Some(t.clone());
         }
         let text = match &e.source {
@@ -210,7 +241,7 @@ impl PackSet {
         };
         let mut t: toml::Table = toml::from_str(&text).ok()?;
         t.insert("_file".into(), toml::Value::String(e.rel.clone()));
-        self.full.borrow_mut().insert(e.rel.clone(), t.clone());
+        self.full.borrow_mut().insert(k, t.clone());
         Some(t)
     }
 
@@ -218,16 +249,18 @@ impl PackSet {
     fn i2c(&self, addresses: &BTreeSet<i64>) -> Vec<toml::Table> {
         self.entries
             .iter()
-            .filter(|e| e.header.bus == "i2c" && e.header.addresses.iter().any(|a| addresses.contains(a)))
-            .filter_map(|e| self.pack(e))
+            .enumerate()
+            .filter(|(_, e)| e.header.bus == "i2c" && e.header.addresses.iter().any(|a| addresses.contains(a)))
+            .filter_map(|(k, _)| self.pack(k))
             .collect()
     }
 
     fn bus(&self, bus: &str) -> Vec<toml::Table> {
         self.entries
             .iter()
-            .filter(|e| e.header.bus == bus)
-            .filter_map(|e| self.pack(e))
+            .enumerate()
+            .filter(|(_, e)| e.header.bus == bus)
+            .filter_map(|(k, _)| self.pack(k))
             .collect()
     }
 }

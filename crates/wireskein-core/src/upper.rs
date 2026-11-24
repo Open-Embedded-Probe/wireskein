@@ -313,11 +313,21 @@ fn pairs(lines: &[(usize, crate::duplex::Line)], ups: &mut [Option<Upper>]) -> V
 }
 
 /// The stage over the engine's claims: each one's upper layers added to its layers, its score raised, its margin
-/// raised as much, its verdict made again; the UART pairs' relations beside them.
-pub fn stage_with(mut claims: Vec<Claim>, rate: f64) -> (Vec<Claim>, Vec<Value>) {
+/// raised as much, its verdict made again; the UART pairs' relations beside them. Every built-in device pack is
+/// tried (`stage_with_packs` for the packs a caller picks).
+pub fn stage_with(claims: Vec<Claim>, rate: f64) -> (Vec<Claim>, Vec<Value>) {
+    stage_with_packs(claims, rate, &crate::devices::PackSet::builtin(&["**".into()]))
+}
+
+/// The stage with the device packs a caller picks (`PackSet::chosen`, `PackSet::from_hints`): only these are matched
+/// on I2C and SPI buses, and only these raise a bus they identify.
+pub fn stage_with_packs(
+    mut claims: Vec<Claim>,
+    rate: f64,
+    packs: &crate::devices::PackSet,
+) -> (Vec<Claim>, Vec<Value>) {
     let mut ups: Vec<Option<Upper>> = Vec::with_capacity(claims.len());
     let mut lines = vec![];
-    let packs = crate::devices::PackSet::builtin(&["**".into()]);
     for (i, c) in claims.iter().enumerate() {
         if c.bus.is_some() {
             ups.push(None);
@@ -332,9 +342,9 @@ pub fn stage_with(mut claims: Vec<Claim>, rate: f64) -> (Vec<Claim>, Vec<Value>)
                 lines.push((i, l));
             }
         } else if c.protocol == "i2c" {
-            devices_upper(c, &packs, &mut up);
+            devices_upper(c, packs, &mut up);
         } else if c.protocol == "spi" {
-            devices_upper(c, &packs, &mut up);
+            devices_upper(c, packs, &mut up);
             sd_upper(c, &mut up);
         } else if matches!(c.protocol.as_str(), "rvswd" | "swio")
             && let Ok(lay) = serde_json::from_str::<Map<String, Value>>(c.layers.get())
@@ -386,5 +396,91 @@ mod tests {
         assert_eq!(dm[0]["op"], "MEMR");
         assert_eq!(dm[0]["value"], 0x1234_5678);
         assert_eq!((dm[0]["s"].clone(), dm[0]["e"].clone()), (json!(4), json!(5)));
+    }
+
+    /// An SHT30 read (a measure command, then six bytes with their CRCs) on an I2C claim of 0.8.
+    fn sht30_claim() -> Claim {
+        fn crc(d: &[u8]) -> u8 {
+            let mut c = 0xFFu8;
+            for &b in d {
+                c ^= b;
+                for _ in 0..8 {
+                    c = if c & 0x80 != 0 { (c << 1) ^ 0x31 } else { c << 1 };
+                }
+            }
+            c
+        }
+        let (t, h) = ([0x66u8, 0x4C], [0x5Au8, 0x10]);
+        let r: String = [t[0], t[1], crc(&t), h[0], h[1], crc(&h)]
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
+        let lay = json!({"transactions": [
+            {"s": 0, "addr": 0x44, "rw": "write", "addr_ack": true, "bytes": "2400"},
+            {"s": 1, "addr": 0x44, "rw": "read", "addr_ack": true, "bytes": r},
+        ]});
+        Claim {
+            protocol: "i2c".into(),
+            roles: [
+                ("scl".to_string(), "A".to_string()),
+                ("sda".to_string(), "B".to_string()),
+            ]
+            .into(),
+            verdict: crate::verdict(0.8, 0.8, false).into(),
+            score: 0.8,
+            margin: 0.8,
+            params: Map::new(),
+            evidence: Map::new(),
+            layers: crate::claim::raw(lay.to_string()),
+            total: 0.8,
+            rival: false,
+            bus: None,
+        }
+    }
+
+    #[test]
+    fn only_the_packs_picked_raise_a_bus() {
+        use crate::devices::PackSet;
+        let all = stage_with(vec![sht30_claim()], 1e6).0;
+        assert!(all[0].total > 0.8 && all[0].layers.get().contains("SHT30"));
+        // the hints' patterns, as Python's --devices: the SHT30's pack left out, the score stays
+        let none = PackSet::from_hints(&json!({"devices": ["!i2c/sensirion/**"]}));
+        assert_eq!(none.len(), 3);
+        let out = stage_with_packs(vec![sht30_claim()], 1e6, &none).0;
+        assert_eq!(out[0].total, 0.8);
+        assert!(!out[0].layers.get().contains("SHT30"));
+        let some = PackSet::chosen(&["i2c/sensirion/*".to_string()], &[] as &[&str]);
+        assert_eq!(some.names(), ["i2c/sensirion/sht30.toml"]);
+        assert_eq!(
+            stage_with_packs(vec![sht30_claim()], 1e6, &some).0[0].total,
+            all[0].total
+        );
+        // no patterns: every pack, as before
+        assert_eq!(PackSet::from_hints(&json!({"devices": []})).len(), 4);
+        assert_eq!(PackSet::from_hints(&Value::Null).len(), 4);
+    }
+
+    #[test]
+    fn a_directorys_packs_beside_the_built_in_ones() {
+        use crate::devices::PackSet;
+        let dir = std::env::temp_dir().join(format!("wireskein-core-packs-{}", std::process::id()));
+        let sub = dir.join("i2c/acme");
+        std::fs::create_dir_all(&sub).unwrap();
+        let sht = include_str!("../../../src/wireskein/decl/devices/i2c/sensirion/sht30.toml");
+        std::fs::write(sub.join("sht30_clone.toml"), sht.replacen("\"SHT30\"", "\"ACME30\"", 1)).unwrap();
+        let d = dir.to_string_lossy().to_string();
+        let only = PackSet::from_hints(&json!({"devices": ["!i2c/sensirion/**"], "device_dirs": [d]}));
+        assert!(
+            only.names().contains(&"i2c/acme/sht30_clone.toml"),
+            "{:?}",
+            only.names()
+        );
+        let out = stage_with_packs(vec![sht30_claim()], 1e6, &only).0;
+        std::fs::remove_dir_all(&dir).ok();
+        assert!(
+            out[0].total > 0.8 && out[0].layers.get().contains("ACME30"),
+            "{}",
+            out[0].layers.get()
+        );
     }
 }

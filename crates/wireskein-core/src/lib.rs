@@ -461,9 +461,22 @@ pub fn analyze(view: &View, hints: &serde_json::Value) -> Vec<Claim> {
     analyze_full(view, hints).0
 }
 
-/// The claims on a part's lines after the upper stage, and the relations it found (a UART pair's SCPI).
+/// The claims on a part's lines after the upper stage, and the relations it found (a UART pair's SCPI). The device
+/// packs are the hints' (`devices`: path patterns as Python's `analyze --devices`, "i2c/**", "!spi/**";
+/// `device_dirs`: directories of packs beside WireSkein's, a definitions directory's `devices/`); neither given,
+/// every built-in pack.
 pub fn analyze_full(view: &View, hints: &serde_json::Value) -> (Vec<Claim>, Vec<serde_json::Value>) {
-    upper::stage_with(analyze_engine(view, hints), view.rate)
+    analyze_with_packs(view, hints, &devices::PackSet::from_hints(hints))
+}
+
+/// The claims after the upper stage with the device packs a caller picks (`devices::PackSet::chosen`); the hints'
+/// `devices` and `device_dirs` are not read.
+pub fn analyze_with_packs(
+    view: &View,
+    hints: &serde_json::Value,
+    packs: &devices::PackSet,
+) -> (Vec<Claim>, Vec<serde_json::Value>) {
+    upper::stage_with_packs(analyze_engine(view, hints), view.rate, packs)
 }
 
 /// The engine's claims under the hints, before the upper stage (for a caller with an upper stage of its own:
