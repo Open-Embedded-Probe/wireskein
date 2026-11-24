@@ -1,10 +1,15 @@
 //! WireSkein's analysis document in plain Rust (docs/analysis-format.md §4; Python's `decode.analyze_file`): a capture
 //! file (a WireSkein file, a sigrok session or a VCD) read (wireskein-io), each part analyzed by the core, each claim
 //! given as the document gives it with what analyze tells beside it (`report`), a long part read in pieces (`split`).
+//! Beside it, what is made from a capture without the engine's choice or from the document: the states of a line
+//! (`states`), the overview of a capture (`survey`), the rows a viewer draws (`annotate`).
 //! Shared by the command line (wireskein-cli) and the Python module (wireskein-py).
 
+pub mod annotate;
 pub mod report;
 pub mod split;
+pub mod states;
+pub mod survey;
 
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};

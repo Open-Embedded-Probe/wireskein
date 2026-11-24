@@ -545,6 +545,8 @@ dependencies = [
 name = "wireskein-io"
 version = "0.0.37"
 dependencies = [
+ "flate2",
+ "serde",
  "serde_json",
  "zip",
 ]

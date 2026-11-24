@@ -4,8 +4,9 @@
 //! its portfolio, and nothing in the product imports it until a part of it is made the default. The changes of each
 //! line are read in place (a C-contiguous int64 array borrowed as a slice; another copied once); the claims come back
 //! as the analysis format's JSON. Beside the engine, the parts around it: a capture file read (`read_file`), a recorded
-//! run verified (`verify`), a capture file's analysis document (`analyze_file`), each switched on in the wireskein
-//! package by WIRESKEIN_RUST (src/wireskein/_rust.py).
+//! run verified (`verify`), a capture file's analysis document (`analyze_file`), a line's states (`states_of_line`), a
+//! capture's overview (`survey_file`), a capture written (`write_file`), a file's annotations (`annotations_file`),
+//! each switched on in the wireskein package by WIRESKEIN_RUST (src/wireskein/_rust.py).
 
 use numpy::{PyArray1, PyReadonlyArray1};
 use pyo3::exceptions::PyValueError;
@@ -180,11 +181,11 @@ fn from_json<'py>(py: Python<'py>, v: &serde_json::Value) -> PyResult<Bound<'py,
 ///
 /// {"kind": "wireskein"|"sr"|"vcd", "tick_hz": (num, den), "id", "complete", "lost", "layout", "n_parts", "meta",
 ///  "parts": [{"part", "parts": (first, last)|None, "ticks", "tick0", "meta", "skipped",
-///             "lines": [{"name", "initial", "edges": int64[], "step", "phase", "reduction"}],
+///             "lines": [{"name", "initial", "edges": int64[], "step", "phase", "reduction", "acquisition"}],
 ///             "events": [{"name", "step", "phase", "n", "start_level", "quanta": int64[], "levels": uint8[],
-///                         "counts": uint8[], "reduction"}],
+///                         "counts": uint8[], "reduction", "acquisition"}],
 ///             "analog": [{"name", "encoding", "rate_hz": (num, den), "t0_ticks": (num, den), "width", "value_bits",
-///                         "zero", "scale_nv", "unit", "values": float64[]}]}]}
+///                         "zero", "scale_nv", "unit", "values": float64[], "acquisition"}]}]}
 #[pyfunction]
 #[pyo3(signature = (path, part=None, join=true))]
 fn read_file<'py>(
@@ -234,6 +235,7 @@ fn read_file<'py>(
             ld.set_item("step", l.step)?;
             ld.set_item("phase", l.phase)?;
             ld.set_item("reduction", l.reduction)?;
+            ld.set_item("acquisition", from_json(py, &serde_json::Value::Object(l.acquisition))?)?;
             lines.append(ld)?;
         }
         pd.set_item("lines", lines)?;
@@ -249,6 +251,7 @@ fn read_file<'py>(
             ed.set_item("levels", PyArray1::from_vec(py, e.levels))?;
             ed.set_item("counts", PyArray1::from_vec(py, e.counts))?;
             ed.set_item("reduction", e.reduction)?;
+            ed.set_item("acquisition", from_json(py, &serde_json::Value::Object(e.acquisition))?)?;
             events.append(ed)?;
         }
         pd.set_item("events", events)?;
@@ -265,6 +268,7 @@ fn read_file<'py>(
             ad.set_item("scale_nv", a.scale_nv)?;
             ad.set_item("unit", a.unit)?;
             ad.set_item("values", PyArray1::from_vec(py, a.values))?;
+            ad.set_item("acquisition", from_json(py, &serde_json::Value::Object(a.acquisition))?)?;
             analog.append(ad)?;
         }
         pd.set_item("analog", analog)?;
@@ -312,12 +316,208 @@ fn analyze_file(
     Ok(doc.to_string())
 }
 
+/// A C-contiguous int64 array's values (borrowed), or a copy of another's.
+fn i64s<'a>(a: &'a PyReadonlyArray1<'_, i64>) -> std::borrow::Cow<'a, [i64]> {
+    match a.as_slice() {
+        Ok(s) => std::borrow::Cow::Borrowed(s),
+        Err(_) => std::borrow::Cow::Owned(a.as_array().to_vec()),
+    }
+}
+
+/// states_of_line(edges, initial, n, rate, step=1, tol=0.02, min_periods=3, max_odd=3) -> the stretches of one line
+/// as JSON (Python's `wireskein.states.of_line`, its keys in Python's order).
+#[pyfunction]
+#[pyo3(signature = (edges, initial, n, rate, step=1, tol=0.02, min_periods=3, max_odd=Some(3)))]
+#[allow(clippy::too_many_arguments)]
+fn states_of_line(
+    py: Python<'_>,
+    edges: PyReadonlyArray1<'_, i64>,
+    initial: u8,
+    n: i64,
+    rate: f64,
+    step: i64,
+    tol: f64,
+    min_periods: usize,
+    max_odd: Option<usize>,
+) -> String {
+    let e = i64s(&edges);
+    let o = wireskein_analysis::states::Options {
+        tol,
+        min_periods,
+        max_odd,
+    };
+    py.detach(|| wireskein_analysis::states::of_line(&e, initial, n, rate, step, &o).dumps())
+}
+
+/// survey_file(path, pins=None, bins=1000, top=10, plan=None) -> the overview of a capture file as JSON (Python's
+/// `wireskein.survey.survey_file` without its "wireskein"), read a block at a time where the file allows; plan: the
+/// split options ("key=value,...", "" for the defaults) to also give the pieces it would be cut into.
+#[pyfunction]
+#[pyo3(signature = (path, pins=None, bins=1000, top=10, plan=None))]
+fn survey_file(
+    py: Python<'_>,
+    path: std::path::PathBuf,
+    pins: Option<Vec<String>>,
+    bins: usize,
+    top: usize,
+    plan: Option<&str>,
+) -> PyResult<String> {
+    let opts = match plan {
+        None => None,
+        Some(s) => Some(
+            wireskein_analysis::split::Options::parse(s)
+                .map_err(PyValueError::new_err)?
+                .ok_or_else(|| PyValueError::new_err("plan: split options, not off"))?,
+        ),
+    };
+    py.detach(|| wireskein_analysis::survey::survey_file(&path, pins.as_deref(), bins, top, opts.as_ref()))
+        .map(|j| j.dumps())
+        .map_err(PyValueError::new_err)
+}
+
+/// annotations_file(path, hints_json="null", part=None, source=None) -> the annotations document of a capture file
+/// as JSON (Python's `wireskein.annotate.build_file`: each part decoded with the Rust core).
+#[pyfunction]
+#[pyo3(signature = (path, hints_json="null", part=None, source=None))]
+fn annotations_file(
+    py: Python<'_>,
+    path: std::path::PathBuf,
+    hints_json: &str,
+    part: Option<usize>,
+    source: Option<String>,
+) -> PyResult<String> {
+    let hints: serde_json::Value =
+        serde_json::from_str(hints_json).map_err(|e| PyValueError::new_err(format!("hints: {e}")))?;
+    let source = source.unwrap_or_else(|| format!("wireskein-core {} analyze", env!("CARGO_PKG_VERSION")));
+    py.detach(|| wireskein_analysis::annotate::annotations_file(&path, &hints, part, &source))
+        .map(|j| j.dumps())
+        .map_err(PyValueError::new_err)
+}
+
+type EventsArg<'py> = (
+    String,
+    PyReadonlyArray1<'py, i64>,
+    PyReadonlyArray1<'py, u8>,
+    PyReadonlyArray1<'py, u8>,
+);
+
+/// write_file(path, info_json, lines, events=[], analog=[], extras=[], form=None) -> writes a capture of one part
+/// (wireskein-io's writers, the readers' pair): form "wireskein", "sr" or "vcd"; None: by the name, a sigrok session
+/// (.sr), a VCD (.vcd) or else a WireSkein file.
+/// info_json: {"tick_hz": [num, den], "ticks", "id", "lost", "meta",
+///             "lines": [{"step", "phase", "reduction", "acquisition"}],
+///             "events": [{"step", "phase", "n", "start_level", "reduction", "acquisition"}],
+///             "analog": [{"encoding", "rate_hz", "t0_ticks", "width", "value_bits", "zero", "scale_nv", "unit",
+///                         "acquisition"}]}
+/// lines: [(name, initial, edges)], events: [(name, quanta, levels, counts)], analog: [(name, values as float64)],
+/// extras: [(entry, bytes)] carried as they are. The file is written with the GIL released.
+#[pyfunction]
+#[pyo3(signature = (path, info_json, lines, events=vec![], analog=vec![], extras=vec![], form=None))]
+#[allow(clippy::too_many_arguments)]
+fn write_file(
+    py: Python<'_>,
+    path: std::path::PathBuf,
+    info_json: &str,
+    lines: Vec<(String, u8, PyReadonlyArray1<'_, i64>)>,
+    events: Vec<EventsArg<'_>>,
+    analog: Vec<(String, PyReadonlyArray1<'_, f64>)>,
+    extras: Vec<(String, Vec<u8>)>,
+    form: Option<&str>,
+) -> PyResult<()> {
+    use serde_json::Value;
+    let info: Value = serde_json::from_str(info_json).map_err(|e| PyValueError::new_err(format!("info: {e}")))?;
+    let bad = |what: &str| PyValueError::new_err(format!("info: {what}"));
+    let pair = |v: &Value| -> Option<(i64, i64)> { Some((v.get(0)?.as_i64()?, v.get(1)?.as_i64()?)) };
+    let obj = |v: &Value| v.as_object().cloned().unwrap_or_default();
+    let int = |v: &Value, k: &str| v[k].as_i64().ok_or_else(|| bad(k));
+    let mut ls = vec![];
+    for (k, (name, initial, edges)) in lines.iter().enumerate() {
+        let i = &info["lines"][k];
+        ls.push(wireskein_io::Line {
+            name: name.clone(),
+            initial: *initial,
+            edges: i64s(edges).into_owned(),
+            step: int(i, "step")?,
+            phase: int(i, "phase")?,
+            reduction: i["reduction"].as_str().map(String::from),
+            acquisition: obj(&i["acquisition"]),
+        });
+    }
+    let mut es = vec![];
+    for (k, (name, quanta, levels, counts)) in events.iter().enumerate() {
+        let i = &info["events"][k];
+        es.push(wireskein_io::Events {
+            name: name.clone(),
+            step: int(i, "step")?,
+            phase: int(i, "phase")?,
+            n: int(i, "n")?,
+            start_level: int(i, "start_level")? as u8,
+            quanta: i64s(quanta).into_owned(),
+            levels: levels.as_array().to_vec(),
+            counts: counts.as_array().to_vec(),
+            reduction: i["reduction"].as_str().map(String::from),
+            acquisition: obj(&i["acquisition"]),
+        });
+    }
+    let mut an = vec![];
+    for (k, (name, values)) in analog.iter().enumerate() {
+        let i = &info["analog"][k];
+        an.push(wireskein_io::Analog {
+            name: name.clone(),
+            encoding: i["encoding"].as_str().unwrap_or("analog").into(),
+            rate_hz: pair(&i["rate_hz"]).ok_or_else(|| bad("rate_hz"))?,
+            t0_ticks: pair(&i["t0_ticks"]).unwrap_or((0, 1)),
+            width: i["width"].as_i64().unwrap_or(16),
+            value_bits: i["value_bits"].as_i64(),
+            zero: i["zero"].as_f64(),
+            scale_nv: i["scale_nv"].as_f64(),
+            unit: i["unit"].as_str().unwrap_or("V").into(),
+            values: values.as_array().to_vec(),
+            acquisition: obj(&i["acquisition"]),
+        });
+    }
+    let ticks = int(&info, "ticks")?;
+    let cap = wireskein_io::Capture {
+        kind: wireskein_io::Kind::WireSkein,
+        tick_hz: pair(&info["tick_hz"]).ok_or_else(|| bad("tick_hz"))?,
+        id: info["id"].as_str().map(String::from),
+        complete: true,
+        lost: info["lost"].as_array().cloned().unwrap_or_default(),
+        layout: "timeline".into(),
+        n_parts: 1,
+        meta: obj(&info["meta"]),
+        parts: vec![wireskein_io::Part {
+            part: 0,
+            parts: None,
+            ticks,
+            tick0: Some(0),
+            meta: Default::default(),
+            lines: ls,
+            events: es,
+            analog: an,
+            skipped: vec![],
+        }],
+    };
+    py.detach(|| match form {
+        None => wireskein_io::write::write(&path, &cap, &extras),
+        Some("wireskein") => wireskein_io::write::write_wireskein(&path, &cap, &extras),
+        Some("sr") => wireskein_io::write::write_sr(&path, &cap, &extras),
+        Some("vcd") => wireskein_io::write::write_vcd(&path, &cap),
+        Some(f) => Err(format!("form {f:?}: wireskein, sr or vcd")),
+    })
+    .map_err(PyValueError::new_err)
+}
+
 #[pymodule]
 fn wireskein_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_function(wrap_pyfunction!(read_file, m)?)?;
     m.add_function(wrap_pyfunction!(verify, m)?)?;
     m.add_function(wrap_pyfunction!(analyze_file, m)?)?;
+    m.add_function(wrap_pyfunction!(states_of_line, m)?)?;
+    m.add_function(wrap_pyfunction!(survey_file, m)?)?;
+    m.add_function(wrap_pyfunction!(annotations_file, m)?)?;
+    m.add_function(wrap_pyfunction!(write_file, m)?)?;
     m.add_function(wrap_pyfunction!(analyze, m)?)?;
     m.add_function(wrap_pyfunction!(analyze_with_relations, m)?)?;
     m.add_function(wrap_pyfunction!(candidates, m)?)?;

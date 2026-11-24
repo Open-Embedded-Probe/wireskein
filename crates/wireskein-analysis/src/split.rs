@@ -345,6 +345,7 @@ impl<'a> Splitter<'a> {
                     step: 1,
                     phase: 0,
                     reduction: None,
+                    acquisition: Default::default(),
                 }
             })
             .collect()
@@ -1029,6 +1030,7 @@ mod tests {
             step: 1,
             phase: 0,
             reduction: None,
+            acquisition: Default::default(),
         }
     }
 

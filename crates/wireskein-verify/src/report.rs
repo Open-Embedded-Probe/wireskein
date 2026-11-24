@@ -532,23 +532,6 @@ pub fn verify(run_dir: &Path) -> Result<J, String> {
     "tree_issues" => t.segs[0].issues.clone(), "log" => log})
 }
 
-impl J {
-    /// `json.dumps(v)` with Python's default separators (", ", ": ").
-    pub fn dumps_py(&self) -> String {
-        match self {
-            J::List(v) => format!("[{}]", v.iter().map(J::dumps_py).collect::<Vec<_>>().join(", ")),
-            J::Dict(v) => format!(
-                "{{{}}}",
-                v.iter()
-                    .map(|(k, x)| format!("{}: {}", J::from(k).dumps(), x.dumps_py()))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-            _ => self.dumps(),
-        }
-    }
-}
-
 // ---- how finely each length a check looks at was sampled (`verify._sampling`) ----
 
 pub const LEAST_SAMPLES: f64 = 5.0;

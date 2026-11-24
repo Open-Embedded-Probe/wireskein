@@ -131,6 +131,7 @@ fn coarse(ev: Events, ticks: i64, enc: &str) -> Decoded {
             step,
             phase: phase + step - 1,
             reduction: ev.reduction.clone(),
+            acquisition: ev.acquisition.clone(),
         },
         Some(ev),
     )
@@ -139,6 +140,7 @@ fn coarse(ev: Events, ticks: i64, enc: &str) -> Decoded {
 fn decode(c: &Value, data: &[u8], ticks: i64) -> Result<Decoded, String> {
     let name = c["name"].as_str().unwrap_or("").to_string();
     let enc = c["encoding"].as_str().unwrap_or("");
+    let acq = acquisition_of(c);
     let line = |initial, edges, step, phase, reduction: Option<&str>| {
         Decoded::Line(
             Line {
@@ -148,6 +150,7 @@ fn decode(c: &Value, data: &[u8], ticks: i64) -> Result<Decoded, String> {
                 step,
                 phase,
                 reduction: reduction.map(String::from),
+                acquisition: acq.clone(),
             },
             None,
         )
@@ -191,6 +194,7 @@ fn decode(c: &Value, data: &[u8], ticks: i64) -> Result<Decoded, String> {
                         levels,
                         counts,
                         reduction: None,
+                        acquisition: acq.clone(),
                     },
                     ticks,
                     enc,
@@ -228,6 +232,7 @@ fn decode(c: &Value, data: &[u8], ticks: i64) -> Result<Decoded, String> {
                     levels,
                     counts,
                     reduction: Some("change_latch".into()),
+                    acquisition: acq.clone(),
                 },
                 ticks,
                 enc,
@@ -235,6 +240,14 @@ fn decode(c: &Value, data: &[u8], ticks: i64) -> Result<Decoded, String> {
         }
         _ => Decoded::Skip(json!({"name": name, "encoding": enc}), None),
     })
+}
+
+/// A channel's acquisition in the header (none: empty).
+fn acquisition_of(c: &Value) -> Map<String, Value> {
+    c.get("acquisition")
+        .and_then(|v| v.as_object())
+        .cloned()
+        .unwrap_or_default()
 }
 
 fn terms(v: &Value, what: &str) -> Result<(i64, i64), String> {
@@ -278,6 +291,7 @@ fn read_analog(c: &Value, data: &[u8]) -> Result<Analog, String> {
         scale_nv: c.get("scale_nv").and_then(|v| v.as_f64()),
         unit: c.get("unit").and_then(|v| v.as_str()).unwrap_or("V").to_string(),
         values,
+        acquisition: acquisition_of(c),
     })
 }
 
@@ -456,6 +470,7 @@ fn join(run: Vec<(Part, bool, bool)>) -> Vec<Part> {
             step: l0.step,
             phase: l0.phase,
             reduction: l0.reduction.clone(),
+            acquisition: l0.acquisition.clone(),
         });
     }
     let last = &run[run.len() - 1].0;

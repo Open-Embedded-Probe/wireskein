@@ -154,6 +154,7 @@ pub fn window(cap: &Rc<Cap>, s0: i64, s1: i64) -> Cap {
                 levels: sel.iter().map(|&i| t.levels[i]).collect(),
                 counts: sel.iter().map(|&i| t.counts[i]).collect(),
                 reduction: t.reduction.clone(),
+                acquisition: t.acquisition.clone(),
             }
         })
         .collect();

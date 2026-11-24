@@ -11,11 +11,10 @@ pub mod cap;
 pub mod checks;
 pub mod coded;
 pub mod decoded;
-pub mod j;
-pub mod pyfmt;
 pub mod report;
 pub mod timing;
 pub mod tree;
 
 pub use j::J;
 pub use report::{failed, junit, lines, summary_line, verify};
+pub use wireskein_io::{j, jd, pyfmt};

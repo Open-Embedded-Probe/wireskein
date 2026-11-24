@@ -1,9 +1,12 @@
 //! A sigrok session (`.sr`, Python's `_engine/srio.py`): one rate for every channel, the logic samples in chunks
 //! (`logic-1-1`, `logic-1-2`, ...) of `unitsize` bytes a sample, read a block at a time and kept as each line's
 //! changes. `wireskein/sr-extra.json` (written by WireSkein) gives back the exact tick, each channel's step and
-//! phase, the capture's id and meta. Analog channels are left out (named).
+//! phase, the capture's id and meta. Analog channels (`analog-1-K-N`, float32 volts at the tick rate) are read as
+//! Python's `read_sr` reads them: written by WireSkein, a raw channel's values from `wireskein/analog-K.raw`, a volts
+//! channel's own samples at its own rate; else every tick's value. They are also named among the channels not read
+//! as logic.
 
-use crate::{Capture, Kind, Line, Part, fraction, limit_denominator};
+use crate::{Analog, Capture, Kind, Line, Part, fraction, limit_denominator};
 use serde_json::{Map, Value, json};
 use std::collections::BTreeMap;
 use std::io::{Cursor, Read};
@@ -70,9 +73,9 @@ pub fn read_from<R: Read + std::io::Seek>(r: R) -> Result<Capture, String> {
         .iter()
         .filter_map(|(k, v)| Some((k.strip_prefix("probe")?.parse::<usize>().ok()?, v.clone())))
         .collect();
-    let analog: Vec<String> = dev
+    let analog: BTreeMap<usize, String> = dev
         .iter()
-        .filter_map(|(k, v)| k.strip_prefix("analog")?.parse::<usize>().ok().map(|_| v.clone()))
+        .filter_map(|(k, v)| Some((k.strip_prefix("analog")?.parse::<usize>().ok()?, v.clone())))
         .collect();
     let total: usize = dev
         .get("total probes")
@@ -175,12 +178,16 @@ pub fn read_from<R: Read + std::io::Seek>(r: R) -> Result<Capture, String> {
             st.0.unwrap_or(0)
         };
         lines.push(Line {
-            name,
+            name: name.clone(),
             initial,
             edges: st.2,
             step,
             phase,
             reduction: None,
+            acquisition: extra["channels"][&name]["acquisition"]
+                .as_object()
+                .cloned()
+                .unwrap_or_default(),
         });
     }
     let tick_hz = match extra["tick_hz"].as_array() {
@@ -190,9 +197,121 @@ pub fn read_from<R: Read + std::io::Seek>(r: R) -> Result<Capture, String> {
     let mut meta: Map<String, Value> = extra["meta"].as_object().cloned().unwrap_or_default();
     meta.insert("unitsize".into(), json!(unitsize));
     let skipped: Vec<Value> = analog
-        .iter()
+        .values()
         .map(|n| json!({"name": n, "encoding": "analog-f32", "analog": true}))
         .collect();
+    let mut traces = vec![];
+    // the tick a .sr's samples are at: the extra's, else its samplerate (as Python's Fraction(round(rate)))
+    let sr_tick = match extra["tick_hz"].as_array() {
+        Some(_) => tick_hz,
+        None => (rate.round_ties_even() as i64, 1),
+    };
+    for (idx, name) in &analog {
+        let mut parts: Vec<(i64, String)> = z
+            .file_names()
+            .filter_map(|n| {
+                let k = n.strip_prefix(&format!("analog-1-{idx}-"))?.parse::<i64>().ok()?;
+                Some((k, n.to_string()))
+            })
+            .collect();
+        parts.sort();
+        let mut raw = vec![];
+        for (_, n) in &parts {
+            z.by_name(n)
+                .map_err(|e| e.to_string())?
+                .read_to_end(&mut raw)
+                .map_err(|e| e.to_string())?;
+        }
+        let vals: Vec<f64> = raw
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|b| f32::from_le_bytes(*b) as f64)
+            .collect();
+        let info = &extra["analog"][name];
+        let acquisition = info["acquisition"].as_object().cloned().unwrap_or_default();
+        let terms = |v: &Value| match v.as_array() {
+            Some(a) if a.len() == 2 => fraction(a[0].as_i64().unwrap_or(0), a[1].as_i64().unwrap_or(1)),
+            _ => (0, 1),
+        };
+        let file = info["file"]
+            .as_str()
+            .filter(|f| z.file_names().any(|n| n == *f))
+            .map(String::from);
+        let trace = if let (Some(f), true) = (file, info.is_object()) {
+            // written by WireSkein: the raw values come back
+            let width = info["width"].as_i64().unwrap_or(16);
+            let mut data = vec![];
+            z.by_name(&f)
+                .map_err(|e| e.to_string())?
+                .read_to_end(&mut data)
+                .map_err(|e| e.to_string())?;
+            let size = (width / 8).max(1) as usize;
+            let values = data
+                .chunks_exact(size)
+                .map(|b| match size {
+                    1 => b[0] as f64,
+                    2 => u16::from_le_bytes([b[0], b[1]]) as f64,
+                    _ => u32::from_le_bytes([b[0], b[1], b[2], b[3]]) as f64,
+                })
+                .collect();
+            Analog {
+                name: name.clone(),
+                encoding: "analog".into(),
+                rate_hz: terms(&info["rate_hz"]),
+                t0_ticks: terms(&info["t0_ticks"]),
+                width,
+                value_bits: info["value_bits"].as_i64(),
+                zero: info["zero"].as_f64(),
+                scale_nv: info["scale_nv"].as_f64(),
+                unit: "V".into(),
+                values,
+                acquisition,
+            }
+        } else if info.is_object() {
+            // volts written by WireSkein at its own rate: its samples picked from the ticks
+            let rate_hz = terms(&info["rate_hz"]);
+            let t0_ticks = terms(&info["t0_ticks"]);
+            let per = ((sr_tick.0 as i128 * rate_hz.1 as i128) / (sr_tick.1 as i128 * rate_hz.0.max(1) as i128)).max(1)
+                as usize;
+            let t0 = t0_ticks.0.div_euclid(t0_ticks.1.max(1)).max(0) as usize;
+            let n = info["n"].as_u64().unwrap_or(u64::MAX) as usize;
+            Analog {
+                name: name.clone(),
+                encoding: "analog-f32".into(),
+                rate_hz,
+                t0_ticks,
+                width: 16,
+                value_bits: None,
+                zero: None,
+                scale_nv: None,
+                unit: info["unit"].as_str().unwrap_or("V").into(),
+                values: vals.iter().skip(t0).step_by(per).take(n).copied().collect(),
+                acquisition,
+            }
+        } else {
+            Analog {
+                name: name.clone(),
+                encoding: "analog-f32".into(),
+                rate_hz: sr_tick,
+                t0_ticks: (0, 1),
+                width: 16,
+                value_bits: None,
+                zero: None,
+                scale_nv: None,
+                unit: "V".into(),
+                values: vals,
+                acquisition,
+            }
+        };
+        traces.push(trace);
+    }
+    // no logic: as long as the longest analog channel's ticks
+    let n_ticks = if n_ticks > 0 {
+        n_ticks
+    } else {
+        traces.iter().map(|a| a.values.len() as i64).max().unwrap_or(0)
+    };
     Ok(Capture {
         kind: Kind::Sr,
         tick_hz,
@@ -210,7 +329,7 @@ pub fn read_from<R: Read + std::io::Seek>(r: R) -> Result<Capture, String> {
             meta,
             lines,
             events: vec![],
-            analog: vec![],
+            analog: traces,
             skipped,
         }],
     })

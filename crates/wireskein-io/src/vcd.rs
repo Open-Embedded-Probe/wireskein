@@ -1,9 +1,10 @@
 //! A Value Change Dump (Python's `_engine/vcdio.py`): its changes as logic lines. The tick: the `$comment wireskein
 //! {...}` block's where WireSkein wrote it, else the greatest common divisor of the change times. 1-bit variables
-//! are lines, a vector one line a bit (`NAME[k]`), x and z read as 0 (counted); `real` variables are left out
-//! (named).
+//! are lines, a vector one line a bit (`NAME[k]`), x and z read as 0 (counted); `real` variables are analog channels
+//! where the block gives their rate or their changes are evenly spaced (a sampled signal), else left out (named in
+//! meta's `vcd_not_read`); every one is also named among the channels not read as logic.
 
-use crate::{Capture, Kind, Line, Part, fraction};
+use crate::{Analog, Capture, Kind, Line, Part, fraction};
 use serde_json::{Map, Value, json};
 
 const MARK: &str = "wireskein ";
@@ -133,15 +134,22 @@ pub fn read(text: &str) -> Result<Capture, String> {
         }
     };
     let to_tick = |x: i128| -> i64 {
-        // x / per_tick, rounded where not whole
-        let num = x * per_tick_den;
-        ((num as f64) / per_tick_num as f64).round() as i64
+        // x / per_tick, rounded (ties to even, as Python's round of a Fraction) where not whole
+        let (num, den) = (x * per_tick_den, per_tick_num);
+        let (q, r) = (num.div_euclid(den), num.rem_euclid(den));
+        (if 2 * r > den || (2 * r == den && q % 2 != 0) {
+            q + 1
+        } else {
+            q
+        }) as i64
     };
     let t_end = changes.iter().flatten().map(|x| x.0).max().unwrap_or(0);
     let ticks = extra["ticks"]
         .as_i64()
         .filter(|&x| x > 0)
         .unwrap_or_else(|| ((t_end * per_tick_den) as f64 / per_tick_num as f64).ceil() as i64 + 1);
+    let mut traces = vec![];
+    let mut not_read = vec![];
     let mut xz = 0usize;
     let mut lines = vec![];
     let mut skipped = vec![];
@@ -168,19 +176,75 @@ pub fn read(text: &str) -> Result<Capture, String> {
                 cur = v;
             }
         }
-        let step = extra["channels"][&name]["step"].as_i64().unwrap_or(1);
+        let own = &extra["channels"][&name];
+        let step = own["step"].as_i64().unwrap_or(1);
+        let phase = own["phase"].as_i64().unwrap_or(0);
+        let acquisition = own["acquisition"].as_object().cloned().unwrap_or_default();
         lines.push(Line {
             name,
             initial,
             edges: e,
             step,
-            phase: 0,
+            phase,
             reduction: None,
+            acquisition,
         });
     };
     for (k, (_, vtype, width, name)) in vars.iter().enumerate() {
         let seq = &changes[k];
         if vtype == "real" {
+            let info = &extra["analog"][name];
+            let ts: Vec<i128> = seq.iter().map(|x| x.0).collect();
+            let vals: Vec<f64> = seq.iter().map(|x| x.1.parse::<f64>().unwrap_or(f64::NAN)).collect();
+            let spaced = ts.len() >= 2 && ts.windows(2).all(|w| w[1] - w[0] == ts[1] - ts[0]);
+            let terms = |v: &Value| match v.as_array() {
+                Some(a) if a.len() == 2 => Some(fraction(a[0].as_i64()?, a[1].as_i64()?)),
+                _ => None,
+            };
+            let (rate_hz, t0_ticks) = if info.is_object() {
+                (
+                    terms(&info["rate_hz"]).unwrap_or((1, 1)),
+                    terms(&info["t0_ticks"]).unwrap_or((0, 1)),
+                )
+            } else if spaced {
+                // rate = 1 / (dt * unit), t0 = ts[0] / per_tick
+                let (rn, rd) = (1_000_000_000_000_000i128, (ts[1] - ts[0]) * unit);
+                let g = gcd(rn, rd).max(1);
+                let (tn, td) = (ts[0] * per_tick_den, per_tick_num);
+                let gt = gcd(tn, td).max(1);
+                (
+                    fraction((rn / g) as i64, (rd / g) as i64),
+                    fraction((tn / gt) as i64, (td / gt) as i64),
+                )
+            } else {
+                not_read.push(json!({"name": name, "encoding": "vcd real, not evenly spaced"}));
+                skipped.push(json!({"name": name, "encoding": "vcd real", "analog": true}));
+                continue;
+            };
+            let unit_v = if info.is_object() {
+                info["unit"].as_str().unwrap_or("V")
+            } else {
+                "V"
+            };
+            // volts kept as float32 (raw values written without a conversion as they are)
+            let values = if unit_v == "raw" {
+                vals
+            } else {
+                vals.iter().map(|&v| v as f32 as f64).collect()
+            };
+            traces.push(Analog {
+                name: name.clone(),
+                encoding: "analog-f32".into(),
+                rate_hz,
+                t0_ticks,
+                width: 16,
+                value_bits: None,
+                zero: None,
+                scale_nv: None,
+                unit: unit_v.into(),
+                values,
+                acquisition: info["acquisition"].as_object().cloned().unwrap_or_default(),
+            });
             skipped.push(json!({"name": name, "encoding": "vcd real", "analog": true}));
         } else if *width == 1 {
             logic(
@@ -189,7 +253,11 @@ pub fn read(text: &str) -> Result<Capture, String> {
                 &mut lines,
             );
         } else {
-            let base = name.split('[').next().unwrap_or(name).to_string();
+            // NAME[...] at the end dropped (Python's re.sub(r"\[.*\]$", "", name))
+            let base = match name.find('[') {
+                Some(i) if name.ends_with(']') => name[..i].to_string(),
+                _ => name.clone(),
+            };
             for b in 0..*width {
                 let bits = seq
                     .iter()
@@ -213,6 +281,9 @@ pub fn read(text: &str) -> Result<Capture, String> {
     if xz > 0 {
         meta.insert("vcd_x_or_z".into(), json!(xz));
     }
+    if !not_read.is_empty() {
+        meta.insert("vcd_not_read".into(), Value::Array(not_read));
+    }
     Ok(Capture {
         kind: Kind::Vcd,
         tick_hz,
@@ -230,7 +301,7 @@ pub fn read(text: &str) -> Result<Capture, String> {
             meta,
             lines,
             events: vec![],
-            analog: vec![],
+            analog: traces,
             skipped,
         }],
     })

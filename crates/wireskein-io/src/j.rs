@@ -226,6 +226,23 @@ impl J {
     }
 }
 
+impl J {
+    /// `json.dumps(v)` with Python's default separators (", ", ": ").
+    pub fn dumps_py(&self) -> String {
+        match self {
+            J::List(v) => format!("[{}]", v.iter().map(J::dumps_py).collect::<Vec<_>>().join(", ")),
+            J::Dict(v) => format!(
+                "{{{}}}",
+                v.iter()
+                    .map(|(k, x)| format!("{}: {}", J::from(k).dumps(), x.dumps_py()))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            _ => self.dumps(),
+        }
+    }
+}
+
 /// Python's `==`: dicts whatever their keys' order, 1 == 1.0 == True.
 pub fn py_eq(a: &J, b: &J) -> bool {
     match (a, b) {

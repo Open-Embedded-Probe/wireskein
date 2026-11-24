@@ -9,10 +9,17 @@
 //! named (never read as another). Parts of a timeline that follow on without a gap are joined into one stretch of
 //! time, as `fileio.load_runs` does. Kept apart from the core: the zip reader is this crate's dependency, not the
 //! core's.
+//!
+//! The readers' pair (`write`): a capture written as a WireSkein file, a sigrok session or a VCD, as Python writes
+//! it. JSON as Python holds it (`j`: dicts in their keys' order) and numbers as Python writes them (`pyfmt`), shared
+//! by the crates that answer as Python does.
 
+pub mod j;
+pub mod pyfmt;
 pub mod sr;
 pub mod stream;
 pub mod vcd;
+pub mod write;
 pub mod wsk;
 
 use serde_json::{Map, Value};
@@ -29,6 +36,8 @@ pub struct Line {
     pub phase: i64,
     /// a reduced line (wireskein-format §4.5): "any_high", "any_low" or "change_latch"
     pub reduction: Option<String>,
+    /// how it was taken (pin, ...: wireskein-format §3.1.1)
+    pub acquisition: Map<String, Value>,
 }
 
 /// A line kept as its changes at a step of 2 or more (an `events` or `change_latch` channel, Python's EventTrace):
@@ -47,6 +56,7 @@ pub struct Events {
     pub counts: Vec<u8>,
     /// "change_latch" for a reduced line
     pub reduction: Option<String>,
+    pub acquisition: Map<String, Value>,
 }
 
 /// An analog channel of a WireSkein file (wireskein-format §4.2, §4.3): sample k at tick t0_ticks + k * tick_hz /
@@ -67,6 +77,7 @@ pub struct Analog {
     pub unit: String,
     /// the raw integers, or volts
     pub values: Vec<f64>,
+    pub acquisition: Map<String, Value>,
 }
 
 impl Analog {
