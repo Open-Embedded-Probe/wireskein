@@ -10,6 +10,8 @@ use wireskein_io::jd;
 use wireskein_io::write::j_of;
 
 pub const FORMAT: &str = "wireskein-annotations/1";
+/// where a WireSkein file keeps them (Python's `annotate.ENTRY`)
+pub const ENTRY: &str = "decode/annotations.json";
 /// per row: beyond this the viewer would only draw noise
 pub const MAX_ITEMS: usize = 50_000;
 const DATA_ROLES: [&str; 7] = ["sda", "data", "dio", "mosi", "miso", "rx", "tx"];
@@ -294,6 +296,18 @@ pub fn annotations_file(
     part: Option<usize>,
     source: &str,
 ) -> Result<J, String> {
+    annotations_file_asked(path, hints, part, source, &[])
+}
+
+/// `annotations_file` with analog channels also read as logic: (name, low, high) in volts (Python's `wireskein
+/// annotate --threshold`, its `as_logic` before decoding).
+pub fn annotations_file_asked(
+    path: &Path,
+    hints: &serde_json::Value,
+    part: Option<usize>,
+    source: &str,
+    thresholds: &[(String, f64, f64)],
+) -> Result<J, String> {
     let at = |e: String| format!("{}: {e}", path.display());
     let cap = wireskein_io::read(path)?;
     let rate = cap.rate();
@@ -317,8 +331,12 @@ pub fn annotations_file(
         {
             continue;
         }
-        let chans: Vec<Channel> = p
-            .lines
+        let asked = crate::Asked {
+            thresholds,
+            ..Default::default()
+        };
+        let lines = crate::lines_asked(p, cap.tick_hz, &asked)?;
+        let chans: Vec<Channel> = lines
             .iter()
             .map(|l| Channel::new(&l.name, l.initial, &l.edges))
             .collect();
@@ -329,7 +347,7 @@ pub fn annotations_file(
         let claims: Vec<J> = claims
             .iter()
             .map(|c| {
-                let mut d = j_of(&claim_doc(c, "all", &p.lines, rate, p.ticks, None, false));
+                let mut d = j_of(&claim_doc(c, "all", &lines, rate, p.ticks, None, false));
                 if let Ok(lay) = J::parse(c.layers.get()) {
                     d.set("layers", lay);
                 }

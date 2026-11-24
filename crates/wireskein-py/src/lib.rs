@@ -296,11 +296,13 @@ fn verify(py: Python<'_>, run_dir: std::path::PathBuf) -> PyResult<String> {
 /// also read as logic ({name: V | [LOW, HIGH]}); items: a part read in pieces writes its items here (ndjson; named
 /// items_name in the document); segment: only the items inside the first marker segment matching this glob (the
 /// marker source markers_json {"pin", "dialect"}, the dialects dialects_json, WireSkein's heading when None; events:
-/// its text lines too).
+/// its text lines too); select: the layers named ("i2c.transactions", "*.final": the mode is then "select"); depth:
+/// how far up a final document goes (transport, frames, protocol, device); alternatives: each claim's runner-up in
+/// all mode (the Rust core keeps none: no change).
 #[pyfunction]
 #[pyo3(signature = (path, hints_json="null", part=None, mode="final", window=None, split=None, pins=None,
                     thresholds_json=None, items=None, items_name=None, segment=None, markers_json=None,
-                    dialects_json=None, events=false))]
+                    dialects_json=None, events=false, select=None, depth="protocol", alternatives=false))]
 #[allow(clippy::too_many_arguments)]
 fn analyze_file(
     py: Python<'_>,
@@ -318,14 +320,18 @@ fn analyze_file(
     markers_json: Option<&str>,
     dialects_json: Option<&str>,
     events: bool,
+    select: Option<Vec<String>>,
+    depth: &str,
+    alternatives: bool,
 ) -> PyResult<String> {
     let json_of = |what: &str, t: &str| -> PyResult<serde_json::Value> {
         serde_json::from_str(t).map_err(|e| PyValueError::new_err(format!("{what}: {e}")))
     };
     let hints = json_of("hints", hints_json)?;
-    if mode != "final" && mode != "all" {
-        return Err(PyValueError::new_err(format!("mode {mode:?}: final or all")));
+    if !matches!(mode, "final" | "all" | "select") {
+        return Err(PyValueError::new_err(format!("mode {mode:?}: final, all or select")));
     }
+    let select = select.unwrap_or_default();
     let opts = match split {
         None => Some(wireskein_analysis::split::Options::default()),
         Some(s) => wireskein_analysis::split::Options::parse(s).map_err(PyValueError::new_err)?,
@@ -351,6 +357,9 @@ fn analyze_file(
                 markers: markers.as_ref(),
                 dialects: dialects.as_ref(),
                 events,
+                select: &select,
+                depth: Some(depth),
+                alternatives,
             };
             wireskein_analysis::analyze_file_asked(&path, &hints, part, mode, window, opts.as_ref(), &asked)
         })
@@ -417,23 +426,77 @@ fn survey_file(
         .map_err(PyValueError::new_err)
 }
 
-/// annotations_file(path, hints_json="null", part=None, source=None) -> the annotations document of a capture file
-/// as JSON (Python's `wireskein.annotate.build_file`: each part decoded with the Rust core).
+/// annotations_file(path, hints_json="null", part=None, source=None, thresholds_json=None) -> the annotations document
+/// of a capture file as JSON (Python's `wireskein.annotate.build_file`: each part decoded with the Rust core);
+/// thresholds_json: analog channels also read as logic first ({name: V | [LOW, HIGH]}: `wireskein annotate
+/// --threshold`).
 #[pyfunction]
-#[pyo3(signature = (path, hints_json="null", part=None, source=None))]
+#[pyo3(signature = (path, hints_json="null", part=None, source=None, thresholds_json=None))]
 fn annotations_file(
     py: Python<'_>,
     path: std::path::PathBuf,
     hints_json: &str,
     part: Option<usize>,
     source: Option<String>,
+    thresholds_json: Option<&str>,
 ) -> PyResult<String> {
     let hints: serde_json::Value =
         serde_json::from_str(hints_json).map_err(|e| PyValueError::new_err(format!("hints: {e}")))?;
+    let thresholds = match thresholds_json {
+        Some(t) => {
+            let v = serde_json::from_str(t).map_err(|e| PyValueError::new_err(format!("thresholds: {e}")))?;
+            wireskein_analysis::analog::thresholds_of(&v).map_err(PyValueError::new_err)?
+        }
+        None => vec![],
+    };
     let source = source.unwrap_or_else(|| format!("wireskein-core {} analyze", env!("CARGO_PKG_VERSION")));
-    py.detach(|| wireskein_analysis::annotate::annotations_file(&path, &hints, part, &source))
+    py.detach(|| wireskein_analysis::annotate::annotations_file_asked(&path, &hints, part, &source, &thresholds))
         .map(|j| j.dumps())
         .map_err(PyValueError::new_err)
+}
+
+/// segments_file(path, hints_json="null", thresholds_json=None, markers_json=None, dialects_json=None, results=False,
+/// events=False) -> the marker segment tree of a capture file as JSON (Python's `wireskein segments`: its
+/// `markers.describe`, the claims the Rust core's), or None when no marker stream is found.
+#[pyfunction]
+#[pyo3(signature = (path, hints_json="null", thresholds_json=None, markers_json=None, dialects_json=None,
+                    results=false, events=false))]
+#[allow(clippy::too_many_arguments)]
+fn segments_file(
+    py: Python<'_>,
+    path: std::path::PathBuf,
+    hints_json: &str,
+    thresholds_json: Option<&str>,
+    markers_json: Option<&str>,
+    dialects_json: Option<&str>,
+    results: bool,
+    events: bool,
+) -> PyResult<Option<String>> {
+    let json_of = |what: &str, t: &str| -> PyResult<serde_json::Value> {
+        serde_json::from_str(t).map_err(|e| PyValueError::new_err(format!("{what}: {e}")))
+    };
+    let hints = json_of("hints", hints_json)?;
+    let thresholds = match thresholds_json {
+        Some(t) => {
+            wireskein_analysis::analog::thresholds_of(&json_of("thresholds", t)?).map_err(PyValueError::new_err)?
+        }
+        None => vec![],
+    };
+    let markers = markers_json.map(|t| json_of("markers", t)).transpose()?;
+    let dialects = dialects_json.map(|t| json_of("dialects", t)).transpose()?;
+    py.detach(|| {
+        wireskein_analysis::segments::segments_file(
+            &path,
+            &hints,
+            &thresholds,
+            markers.as_ref(),
+            dialects.as_ref(),
+            results,
+            events,
+        )
+    })
+    .map(|d| d.map(|j| j.dumps()))
+    .map_err(PyValueError::new_err)
 }
 
 type EventsArg<'py> = (
@@ -804,6 +867,7 @@ fn wireskein_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(states_of_line, m)?)?;
     m.add_function(wrap_pyfunction!(survey_file, m)?)?;
     m.add_function(wrap_pyfunction!(annotations_file, m)?)?;
+    m.add_function(wrap_pyfunction!(segments_file, m)?)?;
     m.add_function(wrap_pyfunction!(write_file, m)?)?;
     m.add_function(wrap_pyfunction!(analyze, m)?)?;
     m.add_function(wrap_pyfunction!(analyze_with_relations, m)?)?;

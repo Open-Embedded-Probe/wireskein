@@ -36,6 +36,79 @@ fn header<R: Read + std::io::Seek>(z: &mut zip::ZipArchive<R>, path: &Path) -> R
     J::parse(&String::from_utf8_lossy(&head))
 }
 
+/// capture.json of a WireSkein file of this version, its keys in the file's order (Python's
+/// `_fileformat.read_header`, without its checks of `complete` and `layout`).
+pub fn read_header(path: &Path) -> Result<J, String> {
+    header(&mut open(path)?, path)
+}
+
+/// The entries whose names start with `prefix`, in the zip's order (Python's `attachments` with "attach/").
+pub fn entries(path: &Path, prefix: &str) -> Result<Vec<(String, Vec<u8>)>, String> {
+    let mut z = open(path)?;
+    let names: Vec<String> = z
+        .file_names()
+        .filter(|n| n.starts_with(prefix))
+        .map(String::from)
+        .collect();
+    let mut order: Vec<(usize, String)> = names
+        .into_iter()
+        .filter_map(|n| z.index_for_name(&n).map(|i| (i, n)))
+        .collect();
+    order.sort();
+    let mut out = vec![];
+    for (_, n) in order {
+        if let Some(d) = read(&mut z, &n)? {
+            out.push((n, d));
+        }
+    }
+    Ok(out)
+}
+
+/// The entries a capture carries into another file (Python's `_fileformat.extras` of a WireSkein file: every entry
+/// but the capture itself; of a .sr, its attachments, notes and the entries its extra lists), in the zip's order;
+/// none for a VCD.
+pub fn extras(path: &Path) -> Result<Vec<(String, Vec<u8>)>, String> {
+    match crate::sniff_path(path) {
+        Some(crate::Kind::WireSkein) => {
+            let head = header(&mut open(path)?, path)?;
+            let own: Vec<String> = head
+                .get("parts")
+                .list()
+                .iter()
+                .flat_map(|p| p.get("channels").list().iter().filter_map(|c| c.get("file").s()))
+                .map(String::from)
+                .collect();
+            Ok(entries(path, "")?
+                .into_iter()
+                .filter(|(n, _)| n != IDENT && n != CAPTURE && !own.contains(n) && !n.ends_with('/'))
+                .collect())
+        }
+        Some(crate::Kind::Sr) => {
+            let mut z = open(path)?;
+            let listed: Vec<String> = match read(&mut z, crate::sr::EXTRA)? {
+                Some(d) => {
+                    let x = J::parse(&String::from_utf8_lossy(&d)).unwrap_or_default();
+                    if x.get("format").s() == Some("wireskein-sr-extra/1") {
+                        x.get("extras")
+                            .list()
+                            .iter()
+                            .filter_map(|v| v.s().map(String::from))
+                            .collect()
+                    } else {
+                        vec![]
+                    }
+                }
+                None => vec![],
+            };
+            Ok(entries(path, "")?
+                .into_iter()
+                .filter(|(n, _)| n.starts_with("attach/") || n.starts_with("notes/") || listed.contains(n))
+                .collect())
+        }
+        _ => Ok(vec![]),
+    }
+}
+
 /// The markers of a WireSkein file ([{"t", "end"?, "label", "note"?, ...}], their keys in the file's order).
 pub fn markers(path: &Path) -> Result<Vec<J>, String> {
     let mut z = open(path)?;

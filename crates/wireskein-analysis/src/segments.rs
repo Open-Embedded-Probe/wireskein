@@ -6,6 +6,8 @@
 
 use regex::Regex;
 use serde_json::{Map, Value, json};
+use wireskein_io::j::J;
+use wireskein_io::jd;
 
 /// WireSkein's own dialect (decl/markers/heading.toml).
 pub fn heading() -> Value {
@@ -484,6 +486,238 @@ pub fn events_in(us: &[Uart], f: &Found, ds: &[Dialect], rate: f64, window: (i64
         .filter(|x| window.0 <= x.0 && x.0 < window.1)
         .map(|(t, pin, kind, text)| json!({"s": t as f64 / rate, "pin": pin, "kind": kind, "text": text}))
         .collect()
+}
+
+/// Frequency and duty of a line that toggles regularly inside a segment (Python's `markers._periodic`): rising to
+/// rising periods, the high time of each; None with fewer than 4 rises or periods that do not agree.
+fn periodic(ed: &[i64], level_before: u8, rate: f64, step: i64) -> Option<J> {
+    let (rises, falls): (Vec<i64>, Vec<i64>) = {
+        let even: Vec<i64> = ed.iter().step_by(2).copied().collect();
+        let odd: Vec<i64> = ed.iter().skip(1).step_by(2).copied().collect();
+        if level_before == 0 { (even, odd) } else { (odd, even) }
+    };
+    if rises.len() < 4 {
+        return None;
+    }
+    let per: Vec<f64> = rises.windows(2).map(|w| (w[1] - w[0]) as f64).collect();
+    let med = crate::states::median(&mut per.clone());
+    let agree = per.iter().filter(|p| (*p - med).abs() <= 0.05 * med).count() as f64 / per.len() as f64;
+    if med <= 0.0 || agree < 0.9 {
+        return None;
+    }
+    let mut high = vec![];
+    for (k, r) in rises[..rises.len() - 1].iter().enumerate() {
+        let j = falls.partition_point(|f| f < r);
+        if j < falls.len() {
+            let h = (falls[j] - r) as f64;
+            if h < per[k] {
+                high.push(h / med);
+            }
+        }
+    }
+    let n = per.len() as f64;
+    let mean = crate::align::np_sum(&per) / n;
+    let dev: Vec<f64> = per.iter().map(|p| (p - mean) * (p - mean)).collect();
+    let std = (crate::align::np_sum(&dev) / n).sqrt();
+    Some(jd! {
+        "freq_hz" => rate * n / (rises[rises.len() - 1] - rises[0]) as f64,
+        "duty" => if high.is_empty() { J::Null } else { J::Float(crate::states::median(&mut high)) },
+        "periods" => per.len(),
+        "period_spread" => std / med,
+        "resolution" => step as f64 / med,
+    })
+}
+
+/// Which lines moved in a segment, their levels at both ends, the quiet at its head and tail (Python's
+/// `markers.activity`); the lines named in `exclude` left out.
+fn activity(lines: &[wireskein_io::Line], b: i64, e: i64, rate: f64, exclude: &str) -> J {
+    let (mut moved, mut levels, mut periodic_) = (J::dict(), J::dict(), J::dict());
+    let (mut first, mut last): (Option<i64>, Option<i64>) = (None, None);
+    let mut changed = vec![];
+    for l in lines.iter().filter(|l| l.name != exclude) {
+        let ed = &l.edges;
+        let (i0, i1) = (ed.partition_point(|&x| x < b), ed.partition_point(|&x| x < e));
+        let lv = |t: i64| l.initial ^ ((ed.partition_point(|&x| x <= t) & 1) as u8);
+        let (a, z) = (lv(b), lv(b.max(e - 1)));
+        levels.set(&l.name, J::List(vec![J::from(a), J::from(z)]));
+        if a != z {
+            changed.push(l.name.clone());
+        }
+        if i1 > i0 {
+            moved.set(&l.name, i1 - i0);
+            first = Some(first.map_or(ed[i0], |f| f.min(ed[i0])));
+            last = Some(last.map_or(ed[i1 - 1], |x| x.max(ed[i1 - 1])));
+            if let Some(p) = periodic(&ed[i0..i1], l.initial ^ ((i0 & 1) as u8), rate, l.step) {
+                periodic_.set(&l.name, p);
+            }
+        }
+    }
+    changed.sort();
+    jd! {
+        "begin" => b, "end" => e, "moved" => moved, "levels" => levels,
+        "quiet_head_s" => first.map_or(J::Null, |f| J::Float((f - b) as f64 / rate)),
+        "quiet_tail_s" => last.map_or(J::Null, |x| J::Float((e - x) as f64 / rate)),
+        "changed" => J::List(changed.into_iter().map(J::from).collect()),
+        "periodic" => periodic_,
+    }
+}
+
+/// The segment tree as plain data (Python's `markers.describe`): each segment's times, marker line, issues, the
+/// events directly in it (with_events), the lines' activity (the marker line's left out) and, per claim (UART's
+/// text lines are the events), how many items were decoded inside (with the items: results).
+#[allow(clippy::too_many_arguments)]
+pub fn describe(
+    claims: &[wireskein_core::Claim],
+    lines: &[wireskein_io::Line],
+    rate: f64,
+    n: i64,
+    found: &Found,
+    ds: &[Dialect],
+    results: bool,
+    with_events: bool,
+) -> J {
+    let us = uarts(claims);
+    let evs = events(&us, found, ds, rate);
+    let t = &found.tree;
+    let ev_out = |x: &(i64, &str, &str, String)| {
+        jd! {"s" => x.0 as f64 / rate, "pin" => x.1, "kind" => x.2, "text" => x.3.as_str()}
+    };
+    let span = |i: usize| (t.segs[i].begin, t.segs[i].end.unwrap_or(n));
+    fn node(i: usize, t: &Tree, cx: &dyn Fn(usize) -> J) -> J {
+        let mut d = cx(i);
+        d.set(
+            "children",
+            J::List(t.segs[i].children.iter().map(|&c| node(c, t, cx)).collect()),
+        );
+        d
+    }
+    let one = |i: usize| -> J {
+        let s = &t.segs[i];
+        let (b, e) = span(i);
+        let mut d = jd! {"path" => t.path(i), "name" => s.name.as_str(), "level" => wireskein_io::write::j_of(&s.level),
+        "raw" => s.raw.as_str(), "begin_s" => b as f64 / rate, "end_s" => e as f64 / rate};
+        if !s.attrs.is_empty() {
+            d.set("attrs", wireskein_io::write::j_of(&Value::Object(s.attrs.clone())));
+        }
+        if !s.issues.is_empty() {
+            d.set(
+                "issues",
+                J::List(s.issues.iter().map(wireskein_io::write::j_of).collect()),
+            );
+        }
+        let kids: Vec<(i64, i64)> = s.children.iter().map(|&c| span(c)).collect();
+        let direct: Vec<J> = evs
+            .iter()
+            .filter(|x| b <= x.0 && x.0 < e && !kids.iter().any(|(k0, k1)| *k0 <= x.0 && x.0 < *k1))
+            .map(ev_out)
+            .collect();
+        if !direct.is_empty() && with_events {
+            d.set("events", J::List(direct));
+        }
+        d.set("activity", activity(lines, b, e, rate, &found.pin));
+        let mut inside = vec![];
+        for c in claims.iter().filter(|c| c.protocol != "uart") {
+            let doc = crate::claim_doc(c, "final", lines, rate, n, Some((b, e)), false);
+            let r = doc
+                .get("result")
+                .and_then(|v| v.as_object())
+                .cloned()
+                .unwrap_or_default();
+            let k: usize = r
+                .values()
+                .map(|v| match v {
+                    Value::Array(a) => a.len(),
+                    Value::Object(o) => o.get("s").and_then(|s| s.as_array()).map_or(0, |a| a.len()),
+                    _ => 0,
+                })
+                .sum();
+            if k > 0 {
+                let mut x = jd! {"protocol" => c.protocol.as_str(),
+                "roles" => wireskein_io::write::j_of(&json!(c.roles)), "items" => k};
+                if results {
+                    x.set("result", wireskein_io::write::j_of(&Value::Object(r)));
+                }
+                inside.push(x);
+            }
+        }
+        d.set("decoded", J::List(inside));
+        d
+    };
+    let root = &t.segs[0];
+    let top: Vec<(i64, i64)> = root.children.iter().map(|&c| span(c)).collect();
+    let mut doc = jd! {
+        "marker" => jd! {"pin" => found.pin.as_str(), "dialect" => ds[found.dialect].name.as_str(),
+                         "lines" => found.lines, "markers" => found.markers},
+        "root_issues" => J::List(root.issues.iter().map(wireskein_io::write::j_of).collect()),
+        "segments" => J::List(root.children.iter().map(|&c| node(c, t, &one)).collect()),
+    };
+    if with_events {
+        doc.set(
+            "events_outside",
+            J::List(
+                evs.iter()
+                    .filter(|x| !top.iter().any(|(k0, k1)| *k0 <= x.0 && x.0 < *k1))
+                    .map(ev_out)
+                    .collect(),
+            ),
+        );
+    }
+    doc
+}
+
+/// The segments document of a capture file (Python's `wireskein segments`): the capture (one part) read, the
+/// analog channels asked read as logic, analyzed by the core, its marker stream found (markers: {"pin", "dialect"};
+/// dialects: as `dialects` takes them, None for WireSkein's own), described.
+pub fn segments_file(
+    path: &std::path::Path,
+    hints: &Value,
+    thresholds: &[(String, f64, f64)],
+    markers: Option<&Value>,
+    dialects_json: Option<&Value>,
+    results: bool,
+    with_events: bool,
+) -> Result<Option<J>, String> {
+    let cap = wireskein_io::read(path)?;
+    if cap.parts.len() > 1 {
+        return Err(format!(
+            "{}: {} parts ({}): read one with part=, or all with read_parts()",
+            path.display(),
+            cap.n_parts,
+            cap.layout
+        ));
+    }
+    let p = cap
+        .parts
+        .first()
+        .ok_or_else(|| format!("{}: no part", path.display()))?;
+    let asked = crate::Asked {
+        thresholds,
+        ..Default::default()
+    };
+    let lines = crate::lines_asked(p, cap.tick_hz, &asked)?;
+    let rate = cap.rate();
+    let chans: Vec<wireskein_core::Channel> = lines
+        .iter()
+        .map(|l| wireskein_core::Channel::new(&l.name, l.initial, &l.edges))
+        .collect();
+    let view = wireskein_core::View::new(rate, p.ticks, chans).map_err(|e| format!("part {}: {e}", p.part))?;
+    let (claims, _) = wireskein_core::analyze_full(&view, hints);
+    let own = heading();
+    let ds = dialects(dialects_json.unwrap_or(&own))?;
+    let us = uarts(&claims);
+    let Some(found) = find(&us, &ds, rate, p.ticks, markers) else {
+        return Ok(None);
+    };
+    Ok(Some(describe(
+        &claims,
+        &lines,
+        rate,
+        p.ticks,
+        &found,
+        &ds,
+        results,
+        with_events,
+    )))
 }
 
 #[cfg(test)]

@@ -109,6 +109,82 @@ pub fn claim_doc(
     window: Option<(i64, i64)>,
     notes: bool,
 ) -> Value {
+    claim_doc_shaped(c, &Shape::of(mode), lines, rate, n, window, notes).unwrap_or(Value::Null)
+}
+
+/// How the document gives each claim (Python's `export.export`'s mode, select and depth): "final" (its result, the
+/// layer `depth` reaches), "all" (its layers and evidence) or "select" (only the layers the paths name,
+/// "<protocol>.<layer>" with wildcards, "<protocol>.final" its final layer; a claim none names is left out).
+#[derive(Debug, Clone, Copy)]
+pub struct Shape<'a> {
+    pub mode: &'a str,
+    pub select: &'a [String],
+    /// "transport" (no result), "frames" (the lower layer), "protocol" (the final layer) or "device" (the final
+    /// layer and the device packs' matches)
+    pub depth: &'a str,
+}
+
+impl<'a> Shape<'a> {
+    pub fn of(mode: &'a str) -> Shape<'a> {
+        Shape {
+            mode,
+            select: &[],
+            depth: "protocol",
+        }
+    }
+}
+
+/// The depths a final document can reach (Python's `export.DEPTHS`).
+pub const DEPTHS: [&str; 4] = ["transport", "frames", "protocol", "device"];
+
+/// Python's `fnmatch.fnmatchcase`: `*`, `?`, `[seq]` and `[!seq]` (a `[` without its `]` is itself).
+pub fn fnmatch(name: &str, pat: &str) -> bool {
+    /// p: after the "[" -> (whether c is in the class, the class's length with its "]"); None: no "]"
+    fn class(p: &[char], c: char) -> Option<(bool, usize)> {
+        let neg = p.first() == Some(&'!');
+        let start = usize::from(neg);
+        let (mut i, mut hit) = (start, false);
+        while i < p.len() {
+            if p[i] == ']' && i > start {
+                return Some((hit != neg, i + 1));
+            }
+            if i + 2 < p.len() && p[i + 1] == '-' && p[i + 2] != ']' {
+                hit |= p[i] <= c && c <= p[i + 2];
+                i += 3;
+            } else {
+                hit |= p[i] == c;
+                i += 1;
+            }
+        }
+        None
+    }
+    fn go(p: &[char], s: &[char]) -> bool {
+        match p.first() {
+            None => s.is_empty(),
+            Some('*') => (0..=s.len()).any(|k| go(&p[1..], &s[k..])),
+            Some('?') => !s.is_empty() && go(&p[1..], &s[1..]),
+            Some('[') => match class(&p[1..], s.first().copied().unwrap_or('\0')) {
+                Some((ok, k)) => !s.is_empty() && ok && go(&p[1 + k..], &s[1..]),
+                None => s.first() == Some(&'[') && go(&p[1..], &s[1..]),
+            },
+            Some(c) => s.first() == Some(c) && go(&p[1..], &s[1..]),
+        }
+    }
+    let p: Vec<char> = pat.chars().collect();
+    let s: Vec<char> = name.chars().collect();
+    go(&p, &s)
+}
+
+/// A claim as the document gives it in a shape (`Shape`); None when the select paths name none of its layers.
+pub fn claim_doc_shaped(
+    c: &wireskein_core::Claim,
+    shape: &Shape,
+    lines: &[wireskein_io::Line],
+    rate: f64,
+    n: i64,
+    window: Option<(i64, i64)>,
+    notes: bool,
+) -> Option<Value> {
     let mut out = Map::new();
     out.insert("protocol".into(), json!(c.protocol));
     out.insert("roles".into(), json!(c.roles));
@@ -125,10 +201,7 @@ pub fn claim_doc(
     if let Some((s0, s1)) = window {
         lay = windowed(lay, s0, s1);
     }
-    if mode == "all" {
-        out.insert("layers".into(), Value::Object(lay));
-        out.insert("evidence".into(), Value::Object(c.evidence.clone()));
-    } else {
+    let final_of = |lay: &Map<String, Value>| {
         let mut res = Map::new();
         if let Some(k) = final_layers(&c.protocol)
             .iter()
@@ -136,10 +209,89 @@ pub fn claim_doc(
         {
             res.insert(k.to_string(), lay[*k].clone());
         }
-        out.insert("result".into(), Value::Object(res));
+        res
+    };
+    match shape.mode {
+        "all" => {
+            out.insert("layers".into(), Value::Object(lay));
+            out.insert("evidence".into(), Value::Object(c.evidence.clone()));
+        }
+        "select" => {
+            let mut picked = Map::new();
+            for path in shape.select {
+                let (proto, layer) = path.split_once('.').unwrap_or((path, ""));
+                if !fnmatch(&c.protocol, proto) {
+                    continue;
+                }
+                if layer == "final" {
+                    picked.extend(final_of(&lay));
+                } else {
+                    let layer = if layer.is_empty() { "*" } else { layer };
+                    for (k, v) in &lay {
+                        if fnmatch(k, layer) {
+                            picked.insert(k.clone(), v.clone());
+                        }
+                    }
+                }
+            }
+            if picked.is_empty() {
+                return None;
+            }
+            out.insert("result".into(), Value::Object(picked));
+        }
+        _ => match shape.depth {
+            "transport" => {}
+            "frames" => {
+                let k = report::lower(&c.protocol);
+                if let Some(v) = lay.get(k) {
+                    out.insert("result".into(), json!({k: v}));
+                }
+            }
+            depth => {
+                out.insert("result".into(), Value::Object(final_of(&lay)));
+                if depth == "device" {
+                    // the device packs' matches, candidates (an address alone) too (Python's `export.devices_of`)
+                    let ds: Vec<Value> = lay
+                        .get("devices")
+                        .and_then(|v| v.as_array())
+                        .map(|a| {
+                            a.iter()
+                                .filter(|m| {
+                                    matches!(
+                                        m.get("level").and_then(|v| v.as_str()),
+                                        Some("identified" | "consistent" | "address_only")
+                                    )
+                                })
+                                .cloned()
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    if !ds.is_empty() {
+                        out.insert("devices".into(), Value::Array(ds));
+                    }
+                }
+            }
+        },
     }
     out.extend(notes);
-    Value::Object(out)
+    Some(Value::Object(out))
+}
+
+/// The relations a shape keeps: in select mode only those of a protocol the paths name.
+pub fn relations_shaped(relations: Vec<Value>, shape: &Shape) -> Vec<Value> {
+    if shape.mode != "select" {
+        return relations;
+    }
+    relations
+        .into_iter()
+        .filter(|r| {
+            let p = r.get("protocol").and_then(|v| v.as_str()).unwrap_or("");
+            shape
+                .select
+                .iter()
+                .any(|s| fnmatch(p, s.split_once('.').map_or(s.as_str(), |x| x.0)))
+        })
+        .collect()
 }
 
 /// What analyze tells beside a claim (Python's `decode._note_undersampled`): an RVSWD or SWIO claim's unread
@@ -239,6 +391,24 @@ pub struct Asked<'a> {
     pub markers: Option<&'a Value>,
     pub dialects: Option<&'a Value>,
     pub events: bool,
+    /// select paths ("i2c.transactions", "*.final"): given, the mode is "select" (Python's `analyze_file`)
+    pub select: &'a [String],
+    /// how far up a final document goes (None: "protocol")
+    pub depth: Option<&'a str>,
+    /// each claim's runner-up in all mode: the Rust core tells none (its rival readings are not kept), as Python's
+    /// document of the Rust engine
+    pub alternatives: bool,
+}
+
+impl Asked<'_> {
+    /// The shape the document gives its claims in, for a mode.
+    pub fn shape<'b>(&'b self, mode: &'b str) -> Shape<'b> {
+        Shape {
+            mode: if self.select.is_empty() { mode } else { "select" },
+            select: self.select,
+            depth: self.depth.unwrap_or("protocol"),
+        }
+    }
 }
 
 /// The document of what analyze finds in a capture file.
@@ -309,6 +479,20 @@ pub fn analyze_file_asked(
     asked: &Asked,
 ) -> Result<Value, String> {
     let at = |e: String| format!("{}: {e}", path.display());
+    if !matches!(mode, "final" | "all" | "select") {
+        return Err(format!(
+            "mode {}: final, all or select",
+            wireskein_io::j::py_str_repr(mode)
+        ));
+    }
+    let shape = asked.shape(mode);
+    if !DEPTHS.contains(&shape.depth) {
+        return Err(format!(
+            "depth {}: one of {}",
+            wireskein_io::j::py_str_repr(shape.depth),
+            DEPTHS.join(", ")
+        ));
+    }
     let splitting = split_opts.filter(|_| window_s.is_none() && asked.segment.is_none() && part.is_none());
     // a WireSkein file of parts each read a block at a time when it is split (its header only, now); else read whole
     let kind = wireskein_io::sniff_path(path);
@@ -374,11 +558,11 @@ pub fn analyze_file_asked(
                 let mut src = wireskein_io::stream::file_source_of(path, p.part, asked.pins.filter(|x| !x.is_empty()))
                     .map_err(at)?
                     .ok_or_else(|| at(format!("part {}: not a part to read a block at a time", p.part)))?;
-                split::analyze(&mut src, rate, hints, o, asked.items, &head, gf.as_ref())?
+                split::analyze(&mut src, rate, hints, o, asked.items, &head, gf.as_ref(), shape.depth)?
             } else {
                 let lines = lines_asked(p, cap.tick_hz, asked)?;
                 let mut src = wireskein_io::stream::MemSource::new(&lines, p.ticks);
-                split::analyze(&mut src, rate, hints, o, asked.items, &head, gf.as_ref())?
+                split::analyze(&mut src, rate, hints, o, asked.items, &head, gf.as_ref(), shape.depth)?
             };
             match got {
                 split::Split::Pieces(claims, sp) => {
@@ -434,13 +618,21 @@ pub fn analyze_file_asked(
             Value::Array(
                 claims
                     .iter()
-                    .map(|c| claim_doc(c, mode, lines, rate, p.ticks, window, true))
+                    .filter_map(|c| {
+                        let mut d = claim_doc_shaped(c, &shape, lines, rate, p.ticks, window, true)?;
+                        if let Some(b) = &c.bus {
+                            // a target's claim: the claims with the same bus share its lines
+                            d["bus"] = json!(b);
+                        }
+                        Some(d)
+                    })
                     .collect(),
             ),
         );
         if let Some((a, b)) = window {
             d.insert("window".into(), json!([a, b]));
         }
+        let relations = relations_shaped(relations, &shape);
         if !relations.is_empty() {
             d.insert("relations".into(), Value::Array(relations));
         }

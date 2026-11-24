@@ -94,10 +94,10 @@ def test_options_rust_does_not_have_stay_python(clean):
     base = dict(hints=None, mode="final", select=None, alternatives=False, depth="protocol", window_s=None,
                 segment=None, markers_hint=None, events=False, thresholds=None, split=None, pins=None, items=None)
     assert _rust.analyzes(f, **base)
-    for k, v in (("mode", "select"), ("select", ["uart"]), ("alternatives", True), ("depth", "frames"),
-                 ("hints", {"devices": ["i2c/**"]})):
+    for k, v in (("hints", {"devices": ["i2c/**"]}), ("depth", "bits")):
         assert not _rust.analyzes(f, **{**base, k: v}), k
-    for k, v in (("segment", "x"), ("markers_hint", {"dialect": "heading"}), ("events", True),
+    for k, v in (("mode", "select"), ("select", ["uart"]), ("alternatives", True), ("depth", "frames"),
+                 ("depth", "device"), ("segment", "x"), ("markers_hint", {"dialect": "heading"}), ("events", True),
                  ("thresholds", {"A0": 1.5}), ("pins", ["D0"]), ("items", "x.ndjson")):
         assert _rust.analyzes(f, **{**base, k: v}), k
     assert _rust.analyzes(f, **{**base, "split": {"max_edges": 1000, "cuts": [5, 9]}})

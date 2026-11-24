@@ -221,8 +221,223 @@ impl J {
         }
     }
 
+    /// JSON text read as Python's `json.loads` reads it: dicts in their keys' order (a repeated key's last value in
+    /// its first place), floats correctly rounded (serde_json's default reading may be a unit off in the last place),
+    /// NaN and Infinity as Python writes them, an int too large for 64 bits as a float.
     pub fn parse(text: &str) -> Result<J, String> {
-        serde_json::from_str(text).map_err(|e| e.to_string())
+        let mut p = Parser {
+            s: text.as_bytes(),
+            i: 0,
+        };
+        p.ws();
+        let v = p.value(0)?;
+        p.ws();
+        if p.i < p.s.len() {
+            return Err(p.err("trailing characters"));
+        }
+        Ok(v)
+    }
+}
+
+/// A JSON reader for `J::parse`.
+struct Parser<'a> {
+    s: &'a [u8],
+    i: usize,
+}
+
+impl Parser<'_> {
+    fn err(&self, what: &str) -> String {
+        let head = &self.s[..self.i.min(self.s.len())];
+        let line = head.iter().filter(|&&b| b == b'\n').count() + 1;
+        let col = head.len() - head.iter().rposition(|&b| b == b'\n').map_or(0, |k| k + 1) + 1;
+        format!("{what} at line {line} column {col}")
+    }
+
+    fn ws(&mut self) {
+        while self.i < self.s.len() && matches!(self.s[self.i], b' ' | b'\t' | b'\n' | b'\r') {
+            self.i += 1;
+        }
+    }
+
+    fn eat(&mut self, lit: &str) -> bool {
+        if self.s[self.i..].starts_with(lit.as_bytes()) {
+            self.i += lit.len();
+            true
+        } else {
+            false
+        }
+    }
+
+    fn value(&mut self, depth: usize) -> Result<J, String> {
+        if depth > 512 {
+            return Err(self.err("recursion limit exceeded"));
+        }
+        match self.s.get(self.i) {
+            None => Err(self.err("EOF while parsing a value")),
+            Some(b'{') => {
+                self.i += 1;
+                let mut v: Vec<(String, J)> = vec![];
+                self.ws();
+                if self.eat("}") {
+                    return Ok(J::Dict(v));
+                }
+                loop {
+                    self.ws();
+                    if self.s.get(self.i) != Some(&b'"') {
+                        return Err(self.err("key must be a string"));
+                    }
+                    let k = self.string()?;
+                    self.ws();
+                    if !self.eat(":") {
+                        return Err(self.err("expected `:`"));
+                    }
+                    self.ws();
+                    let x = self.value(depth + 1)?;
+                    match v.iter_mut().find(|(a, _)| *a == k) {
+                        Some(e) => e.1 = x,
+                        None => v.push((k, x)),
+                    }
+                    self.ws();
+                    if self.eat(",") {
+                        continue;
+                    }
+                    if self.eat("}") {
+                        return Ok(J::Dict(v));
+                    }
+                    return Err(self.err("expected `,` or `}`"));
+                }
+            }
+            Some(b'[') => {
+                self.i += 1;
+                let mut v = vec![];
+                self.ws();
+                if self.eat("]") {
+                    return Ok(J::List(v));
+                }
+                loop {
+                    self.ws();
+                    v.push(self.value(depth + 1)?);
+                    self.ws();
+                    if self.eat(",") {
+                        continue;
+                    }
+                    if self.eat("]") {
+                        return Ok(J::List(v));
+                    }
+                    return Err(self.err("expected `,` or `]`"));
+                }
+            }
+            Some(b'"') => self.string().map(J::Str),
+            Some(_) if self.eat("true") => Ok(J::Bool(true)),
+            Some(_) if self.eat("false") => Ok(J::Bool(false)),
+            Some(_) if self.eat("null") => Ok(J::Null),
+            Some(_) if self.eat("NaN") => Ok(J::Float(f64::NAN)),
+            Some(_) if self.eat("Infinity") => Ok(J::Float(f64::INFINITY)),
+            Some(_) if self.eat("-Infinity") => Ok(J::Float(f64::NEG_INFINITY)),
+            Some(_) => self.number(),
+        }
+    }
+
+    fn number(&mut self) -> Result<J, String> {
+        let start = self.i;
+        let mut float = false;
+        if self.s.get(self.i) == Some(&b'-') {
+            self.i += 1;
+        }
+        let digits = |p: &mut Self| {
+            let k = p.i;
+            while p.i < p.s.len() && p.s[p.i].is_ascii_digit() {
+                p.i += 1;
+            }
+            p.i > k
+        };
+        if !digits(self) {
+            return Err(self.err("expected value"));
+        }
+        if self.s.get(self.i) == Some(&b'.') {
+            self.i += 1;
+            float = true;
+            if !digits(self) {
+                return Err(self.err("invalid number"));
+            }
+        }
+        if matches!(self.s.get(self.i), Some(b'e' | b'E')) {
+            self.i += 1;
+            float = true;
+            if matches!(self.s.get(self.i), Some(b'+' | b'-')) {
+                self.i += 1;
+            }
+            if !digits(self) {
+                return Err(self.err("invalid number"));
+            }
+        }
+        let t = std::str::from_utf8(&self.s[start..self.i]).map_err(|_| self.err("invalid number"))?;
+        if !float && let Ok(i) = t.parse::<i64>() {
+            return Ok(J::Int(i));
+        }
+        t.parse::<f64>().map(J::Float).map_err(|_| self.err("invalid number"))
+    }
+
+    fn string(&mut self) -> Result<String, String> {
+        self.i += 1; // the opening quote
+        let mut out: Vec<u8> = vec![];
+        loop {
+            let Some(&b) = self.s.get(self.i) else {
+                return Err(self.err("EOF while parsing a string"));
+            };
+            self.i += 1;
+            match b {
+                b'"' => return String::from_utf8(out).map_err(|_| self.err("invalid unicode")),
+                b'\\' => {
+                    let Some(&e) = self.s.get(self.i) else {
+                        return Err(self.err("EOF while parsing a string"));
+                    };
+                    self.i += 1;
+                    let c = match e {
+                        b'"' => '"',
+                        b'\\' => '\\',
+                        b'/' => '/',
+                        b'b' => '\u{8}',
+                        b'f' => '\u{c}',
+                        b'n' => '\n',
+                        b'r' => '\r',
+                        b't' => '\t',
+                        b'u' => {
+                            let mut u = self.hex4()?;
+                            if (0xD800..0xDC00).contains(&u) && self.s[self.i..].starts_with(b"\\u") {
+                                let save = self.i;
+                                self.i += 2;
+                                let lo = self.hex4()?;
+                                if (0xDC00..0xE000).contains(&lo) {
+                                    u = 0x10000 + ((u - 0xD800) << 10) + (lo - 0xDC00);
+                                } else {
+                                    self.i = save;
+                                }
+                            }
+                            char::from_u32(u).unwrap_or('\u{fffd}')
+                        }
+                        _ => return Err(self.err("invalid escape")),
+                    };
+                    let mut buf = [0u8; 4];
+                    out.extend_from_slice(c.encode_utf8(&mut buf).as_bytes());
+                }
+                b if b < 0x20 => {
+                    return Err(self.err("control character (\\u0000-\\u001F) found while parsing a string"));
+                }
+                b => out.push(b),
+            }
+        }
+    }
+
+    fn hex4(&mut self) -> Result<u32, String> {
+        let h = self
+            .s
+            .get(self.i..self.i + 4)
+            .and_then(|x| std::str::from_utf8(x).ok())
+            .and_then(|x| u32::from_str_radix(x, 16).ok())
+            .ok_or_else(|| self.err("invalid escape"))?;
+        self.i += 4;
+        Ok(h)
     }
 }
 

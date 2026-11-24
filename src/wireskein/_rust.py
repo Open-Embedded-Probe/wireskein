@@ -18,9 +18,9 @@ The parts:
              declared in them) or the engine's extra protocol tables (staged.PROTOCOL_TABLES) verify stays Python's
     analyze  wireskein.decode.analyze_file (and so `wireskein analyze`): the document from wireskein-analysis (the
              Rust engine, the Rust upper stage, the report beside each claim, a long part read in pieces, its items
-             written out; pins, analog channels read as logic at a threshold, a marker segment); options it does not
-             have (select, alternatives, another depth, device patterns, definitions directories, the engine's extra
-             protocol tables) stay Python's
+             written out; pins, analog channels read as logic at a threshold, a marker segment, select, depth,
+             alternatives - the Rust core keeps no runner-up); options it does not have (device patterns, definitions
+             directories, the engine's extra protocol tables) stay Python's
     decode   wireskein.decode.decode_file (and so `wireskein decode`): the document from wireskein-analysis, every bus
              read by the Rust engine (RVSWD / SWIO and buses sharing lines too, which Python reads with its own
              engine), a long part in pieces, the items written out; device patterns, definitions directories and
@@ -33,10 +33,13 @@ The parts:
     survey   wireskein.survey.survey_file (`wireskein survey`): wireskein-analysis, a WireSkein file of one part read a
              block at a time from the file, anything else read whole; a plan of no split stays Python's
     annotate wireskein.annotate.build_file (`wireskein annotate`): each part decoded by the Rust core (as analyze
-             with the Rust engine), its rows made in Rust; a step before decoding (analog read as logic), device
-             patterns, definitions directories and the engine's extra protocol tables stay Python's
+             with the Rust engine), its rows made in Rust (`wireskein annotate --threshold` too); another step before
+             decoding, device patterns, definitions directories and the engine's extra protocol tables stay Python's
     align    wireskein.align.find and between (`wireskein align`): the offset and scale of an analog channel, or of
              another capture, from the edges of one signal on both, by wireskein-analysis's align
+    segments `wireskein segments`: the marker segment tree (markers.find and describe) by wireskein-analysis, the
+             claims the Rust core's (Python reads them with its own engine); device patterns, definitions
+             directories and the engine's extra protocol tables stay Python's
 
 A part switched on whose Rust cannot do what was asked falls back to Python without a word (the result is the same
 kind); a part switched on without wireskein_core installed is an error."""
@@ -49,7 +52,7 @@ from pathlib import Path
 
 RUST_ENV = "WIRESKEIN_RUST"
 PARTS = ("engine", "io", "write", "verify", "analyze", "decode", "split", "mark", "states", "survey", "annotate",
-         "align")
+         "align", "segments")
 
 
 def parts() -> frozenset:
@@ -185,7 +188,7 @@ def analyzes(path, hints, mode, select, alternatives, depth, window_s, segment, 
         return False
     from . import plugins
     from ._engine import staged
-    return (mode in ("final", "all") and not select and not alternatives and depth == "protocol"
+    return (mode in ("final", "all", "select") and depth in ("transport", "frames", "protocol", "device")
             and not (hints or {}).get("devices") and _split_spec(split) is not False and Path(path).is_file()
             and not plugins.definitions() and not staged.PROTOCOL_TABLES)
 
@@ -198,8 +201,10 @@ def _dialects() -> str:
 
 
 def analyze_file(path, hints: dict | None, mode: str, window_s, part, split, pins=None, thresholds=None,
-                 items=None, segment=None, markers_hint=None, events=False) -> dict:
-    """The analysis document from wireskein-analysis (as decode.analyze_file gives it, with analysis_seconds)."""
+                 items=None, segment=None, markers_hint=None, events=False, select=None, alternatives=False,
+                 depth="protocol") -> dict:
+    """The analysis document from wireskein-analysis (as decode.analyze_file gives it, with analysis_seconds; select
+    makes the mode "select", alternatives adds nothing: the Rust core keeps no runner-up)."""
     import time
     from . import __version__
     t0 = time.perf_counter()
@@ -208,7 +213,8 @@ def analyze_file(path, hints: dict | None, mode: str, window_s, part, split, pin
         str(path), json.dumps(hints), part, mode, tuple(map(float, window_s)) if window_s else None,
         _split_spec(split), list(pins) if pins else None, json.dumps(th) if th else None,
         None if items is None else str(items), None if items is None else str(items), segment,
-        None if markers_hint is None else json.dumps(markers_hint), _dialects() if segment else None, bool(events)))
+        None if markers_hint is None else json.dumps(markers_hint), _dialects() if segment else None, bool(events),
+        list(select) if select else None, depth, bool(alternatives)))
     doc["wireskein"] = __version__
     doc["analysis_seconds"] = round(time.perf_counter() - t0, 3)
     return doc
@@ -453,11 +459,40 @@ def annotates(path, hints, prepare) -> bool:
             and not plugins.definitions() and not staged.PROTOCOL_TABLES)
 
 
-def annotations_file(path, hints: dict | None, part) -> dict:
-    """The annotations document from wireskein-analysis (as annotate.build_file gives it)."""
+def annotations_file(path, hints: dict | None, part, thresholds: dict | None = None) -> dict:
+    """The annotations document from wireskein-analysis (as annotate.build_file gives it); thresholds: analog
+    channels also read as logic first (`wireskein annotate --threshold`, {name: V | (LOW, HIGH)})."""
     from . import __version__
-    return json.loads(core().annotations_file(str(path), json.dumps(hints), part,
-                                              f"wireskein {__version__} analyze"))
+    return json.loads(core().annotations_file(str(path), json.dumps(hints), part, f"wireskein {__version__} analyze",
+                                              _thresholds_json(thresholds)))
+
+
+def _thresholds_json(thresholds: dict | None) -> str | None:
+    th = {k: list(map(float, v)) if isinstance(v, (list, tuple)) else float(v) for k, v in (thresholds or {}).items()}
+    return json.dumps(th) if th else None
+
+
+# ---------------- segments ----------------
+
+def segments_runs(path, hints) -> bool:
+    """Whether `wireskein segments` is Rust's: switched on, a file, nothing the Rust core does not read (device
+    patterns, definitions directories, the engine's extra protocol tables)."""
+    if not on("segments"):
+        return False
+    from . import plugins
+    from ._engine import staged
+    return (Path(path).is_file() and not (hints or {}).get("devices") and not plugins.definitions()
+            and not staged.PROTOCOL_TABLES)
+
+
+def segments_file(path, hints: dict | None, thresholds: dict | None, markers_hint: dict | None, results: bool,
+                  events: bool) -> dict | None:
+    """The marker segment tree from wireskein-analysis (as markers.describe gives it, the claims the Rust core's), or
+    None when no marker stream is found."""
+    got = core().segments_file(str(path), json.dumps(hints), _thresholds_json(thresholds),
+                               None if markers_hint is None else json.dumps(markers_hint), _dialects(), bool(results),
+                               bool(events))
+    return None if got is None else json.loads(got)
 
 
 # ---------------- align ----------------

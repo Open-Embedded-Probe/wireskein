@@ -336,8 +336,12 @@ def annotate_cmd(args) -> None:
     from . import annotate
     hints = parse_hint(args.hint)
     th = _thresholds(getattr(args, "threshold", None))
-    from .decode import as_logic
-    doc = annotate.build_file(args.file, hints, (lambda cap: as_logic(cap, th)) if th else None)
+    from . import _rust
+    if th and _rust.annotates(args.file, hints, None):        # WIRESKEIN_RUST=annotate (wireskein._rust)
+        doc = _rust.annotations_file(args.file, hints, None, th)
+    else:
+        from .decode import as_logic
+        doc = annotate.build_file(args.file, hints, (lambda cap: as_logic(cap, th)) if th else None)
     for r in doc["rows"]:
         bad = sum(i["level"] != "ok" for i in r["items"])
         part = f"part {r['part'] + 1}: " if "part" in r else ""
@@ -621,6 +625,19 @@ def convert(args) -> None:
 
 def segments(args) -> None:
     hints = parse_hint(args.hint)
+    from . import _rust
+    if _rust.segments_runs(args.capture, hints):              # WIRESKEIN_RUST=segments (wireskein._rust)
+        doc = _rust.segments_file(args.capture, hints, _thresholds(getattr(args, "threshold", None)),
+                                  json.loads(args.markers) if args.markers else None, args.results, args.events)
+        if doc is None:
+            sys.exit("no marker stream found (give --markers)")
+        text = export.dumps(doc)
+        if args.out:
+            args.out.write_text(text)
+            print(f"{len(text)} bytes -> {args.out}", file=sys.stderr)
+        else:
+            print(text)
+        return
     cap = _load_for_decoding(args.capture, args)
     from . import _engines
     _engines.python_only("segments")

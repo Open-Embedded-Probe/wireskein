@@ -1397,7 +1397,7 @@ def analyze_file(path: str | Path, hints: dict | None = None, mode: str = "final
     if _rust.analyzes(path, hints, mode, select, alternatives, depth, window_s, segment, markers_hint, events,
                       thresholds, split, pins, items):                # WIRESKEIN_RUST=analyze (wireskein._rust)
         return _rust.analyze_file(path, hints, mode, window_s, part, split, pins, thresholds, items, segment,
-                                  markers_hint, events)
+                                  markers_hint, events, select, alternatives, depth)
     from ._engine import markers
     path = Path(path)
     from . import split as _split

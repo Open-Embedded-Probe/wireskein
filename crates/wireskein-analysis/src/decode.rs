@@ -1180,8 +1180,10 @@ impl Items {
     }
 }
 
-/// line_faults over the pieces (Python's `decode._join_faults`).
-fn join_faults(per: &[(&Piece, &Map<String, Value>)]) -> Map<String, Value> {
+/// line_faults over the pieces (Python's `decode._join_faults`); order: the lines in the spec's order (each piece's
+/// line_changes is a map sorted by name here, a dict in the spec's order in Python).
+fn join_faults(per: &[(&Piece, &Map<String, Value>)], order: &[&str]) -> Map<String, Value> {
+    let rank = |n: &str| order.iter().position(|x| *x == n).unwrap_or(order.len());
     let mut out = Map::new();
     let mut lines: Vec<(String, i64, Option<i64>)> = vec![];
     let mut counts: Vec<(&Piece, Map<String, Value>)> = vec![];
@@ -1193,7 +1195,10 @@ fn join_faults(per: &[(&Piece, &Map<String, Value>)]) -> Map<String, Value> {
             .and_then(|v| v.as_object())
             .cloned()
             .unwrap_or_default();
-        for (n, v) in &ls {
+        let mut names: Vec<&String> = ls.keys().collect();
+        names.sort_by_key(|n| rank(n));
+        for n in names {
+            let v = &ls[n];
             let k = match lines.iter().position(|x| &x.0 == n) {
                 Some(k) => k,
                 None => {
@@ -1306,7 +1311,8 @@ fn join_speeds(groups: &[Value], rate: f64) -> Vec<Value> {
 }
 
 /// A bus's results from the pieces as one (Python's `decode._join_bus`).
-fn join_bus(per: &[(&Piece, &Map<String, Value>)], rate: f64, sunk: bool) -> Map<String, Value> {
+/// order: the bus's lines in its spec's order (the order its lines are told in, as Python's dicts keep it).
+fn join_bus(per: &[(&Piece, &Map<String, Value>)], rate: f64, sunk: bool, order: &[&str]) -> Map<String, Value> {
     let first = per
         .iter()
         .map(|x| x.1)
@@ -1521,7 +1527,7 @@ fn join_bus(per: &[(&Piece, &Map<String, Value>)], rate: f64, sunk: bool) -> Map
             }
             report::shares(&mut r);
         }
-        r.extend(join_faults(per));
+        r.extend(join_faults(per, order));
         out.insert("reading".into(), Value::Object(r));
     }
     out.insert("uninterpreted_summary".into(), split::unread_summary(&uninterpreted));
@@ -1656,7 +1662,8 @@ pub(crate) fn join_part(
                 .iter()
                 .map(|(p, o)| (p, o["buses"][j].as_object().unwrap()))
                 .collect();
-            Value::Object(join_bus(&per, rate, sunk))
+            let order: Vec<&str> = spec.buses[j].pins.iter().map(|(_, p)| p.as_str()).collect();
+            Value::Object(join_bus(&per, rate, sunk, &order))
         })
         .collect();
     out.insert("buses".into(), json!(buses));

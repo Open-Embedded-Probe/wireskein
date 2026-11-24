@@ -216,7 +216,11 @@ pub fn read(path: &Path) -> Result<Capture, String> {
             let t = std::fs::read(path).map_err(|e| at(e.to_string()))?;
             vcd::read(&String::from_utf8_lossy(&t)).map_err(at)
         }
-        None => Err(at("not a WireSkein file, a sigrok session (.sr) or a VCD".into())),
+        None => Err(at(
+            "not a WireSkein file, a sigrok session (.sr) or a VCD (another format: convert it to a WireSkein file \
+             with wireskein.capture)"
+                .into(),
+        )),
     }
 }
 

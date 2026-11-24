@@ -1,6 +1,6 @@
 [package]
 name = "wireskein-cli"
-description = "WireSkein's command line in plain Rust: analyze a capture file with the Rust core, verify a recorded run"
+description = "WireSkein's command line in plain Rust: the subcommands of `wireskein` (analyze, decode, segments, verify, survey, states, annotate, align, convert, info) with the Rust core"
 publish = false
 version.workspace = true
 edition.workspace = true

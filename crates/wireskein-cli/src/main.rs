@@ -1,151 +1,247 @@
-//! `wireskein-rs`: WireSkein's command line in plain Rust (bench/notes/2026-11-24-rust-plan.ja.md §3, R5).
+//! `wireskein-rs`: WireSkein's command line in plain Rust (bench/notes/2026-11-24-rust-plan.ja.md §3, R5), the
+//! subcommands of `wireskein` (src/wireskein/cli.py) with the same arguments, output, messages and exit codes:
 //!
-//!     wireskein-rs analyze FILE [--part K] [--hint NAMES|JSON|@FILE] [--mode final|all] [--window FROM TO]
-//!                  [--split S|off] [--pins A,B] [--threshold NAME=V|NAME=LOW,HIGH ...] [--items FILE]
-//!                  [--segment PATH [--markers JSON] [--events]] [--out FILE]
+//!     wireskein-rs analyze CAPTURE [--mode final|all|select] [--select PATH ...] [--hint NAMES|JSON|@FILE]
+//!                  [--alternatives] [--depth transport|frames|protocol|device] [--out FILE] [--threshold N=V ...]
+//!                  [--window FROM TO] [--segment PATH [--markers JSON] [--events]] [--split S|off] [--items FILE]
+//!                  [--pins A,B] [--part K]
+//!     wireskein-rs decode CAPTURE --spec JSON|@FILE|FILE [--out FILE] [--split S|off] [--items FILE] [--pins A,B]
+//!     wireskein-rs segments CAPTURE [--hint H] [--threshold N=V ...] [--markers JSON] [--results] [--events]
+//!                  [--out FILE]
+//!     wireskein-rs verify RUN_DIR [--junit FILE] [--json FILE] [--log] [--allow-unchecked] [-v] [--mark]
+//!     wireskein-rs survey CAPTURE [--pins A,B] [--bins N] [--top N] [--plan] [--split S] [--json] [--out FILE]
+//!     wireskein-rs convert IN OUT [--from S] [--to S] [--pins A,B] [--part K]
+//!     wireskein-rs info FILE.wireskein
+//!     wireskein-rs states FILE|RUN_DIR [--section GLOB] [--pin P ...] [--part K] [--tol X] [--min-periods N]
+//!                  [--max-odd N] [--json]
+//!     wireskein-rs annotate FILE [--save] [--hint H] [--threshold N=V ...]
+//!     wireskein-rs align FILE --reference LOGIC --via CH [--to OTHER] [--threshold V|LOW,HIGH] [--max-ppm X]
+//!                  [--max-offset T] [--apply-to A,B] [--save]
+//!     wireskein-rs --version
 //!
-//! prints what analyze finds as the analysis format's document (docs/analysis-format.md §4), as `wireskein analyze`
-//! does: the capture, then each part (a run of parts that follow on without a gap read as one) with its claims and
-//! the relations of its UART pairs. A WireSkein file, a sigrok session (.sr) or a VCD, told apart by content.
-//! --pins: only these channels; --threshold: an analog channel also read as logic (repeatable); --items: a part read
-//! in pieces writes its items to FILE as they are read; --segment: only the items inside a marker segment (the
-//! heading dialect; --markers {"pin", "dialect"} names the marker source, --events adds its text lines).
-//!
-//!     wireskein-rs verify RUN_DIR [--json FILE] [--junit FILE] [--log] [--allow-unchecked] [--mark] [-v]
-//!
-//! checks a recorded run against its expectations as `wireskein verify` does (wireskein-verify): a line a result,
-//! the summary, the report as JSON (--json FILE, `-` for stdout), JUnit XML; exit 1 when a check fails. --mark writes
-//! what the checks found into each capture file's markers.
-//!
-//!     wireskein-rs decode FILE SPEC [--split S|off] [--pins A,B] [--items FILE]
-//!
-//! decodes the buses a spec (JSON, or @a file of it) names with exactly those roles, as `wireskein decode` does
-//! (wireskein-analysis's decode).
+//! The analysis is the Rust core's (wireskein-core), the rest wireskein-analysis, wireskein-io and wireskein-verify.
+//! Not here (Python's only, `wireskein`): note, attach, capture, gui, analyze --devices, --definitions DIR.
 
-use serde_json::Value;
-use std::path::Path;
+mod analyze;
+mod files;
+mod views;
+
 use std::process::ExitCode;
-use wireskein_analysis::{analyze_file_asked, hints_of, seconds, split};
 
-fn usage() -> ExitCode {
-    eprintln!(
-        "usage: wireskein-rs analyze FILE [--part K] [--hint NAMES|JSON|@FILE] [--mode final|all] [--window FROM TO]"
-    );
-    eprintln!(
-        "                            [--split S|off] [--pins A,B] [--threshold NAME=V|NAME=LOW,HIGH ...] [--items FILE]"
-    );
-    eprintln!("                            [--segment PATH [--markers JSON] [--events]] [--out FILE]");
-    eprintln!(
-        "       wireskein-rs verify RUN_DIR [--json FILE] [--junit FILE] [--log] [--allow-unchecked] [--mark] [-v]"
-    );
-    eprintln!("       wireskein-rs decode FILE SPEC [--split S|off] [--pins A,B] [--items FILE]");
+const PROG: &str = "wireskein-rs";
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// The arguments of a subcommand: its positionals, the options with a value (each time given), the flags, the
+/// options with a list of values (nargs="*" / 2).
+#[derive(Debug, Default)]
+pub struct Args {
+    pub pos: Vec<String>,
+    vals: Vec<(String, String)>,
+    flags: Vec<String>,
+    lists: Vec<(String, Vec<String>)>,
+}
+
+/// What a subcommand takes: options with a value, flags, options with a list ("*": every value up to the next
+/// option; a number: that many).
+pub struct Takes {
+    pub values: &'static [&'static str],
+    pub flags: &'static [&'static str],
+    pub lists: &'static [(&'static str, Option<usize>)],
+}
+
+impl Args {
+    /// The last value given for an option.
+    pub fn get(&self, k: &str) -> Option<&str> {
+        self.vals.iter().rev().find(|(a, _)| a == k).map(|(_, v)| v.as_str())
+    }
+    /// Every value given for a repeatable option, in order.
+    pub fn all(&self, k: &str) -> Vec<&str> {
+        self.vals
+            .iter()
+            .filter(|(a, _)| a == k)
+            .map(|(_, v)| v.as_str())
+            .collect()
+    }
+    pub fn has(&self, k: &str) -> bool {
+        self.flags.iter().any(|f| f == k)
+    }
+    pub fn list(&self, k: &str) -> Option<&[String]> {
+        self.lists.iter().rev().find(|(a, _)| a == k).map(|(_, v)| v.as_slice())
+    }
+
+    /// The arguments as `takes` reads them (`--opt value` or `--opt=value`).
+    pub fn parse(args: &[String], takes: &Takes) -> Result<Args, String> {
+        let mut out = Args::default();
+        let mut i = 0;
+        let is_opt = |s: &str| s.starts_with('-') && s.len() > 1 && s.parse::<f64>().is_err();
+        while i < args.len() {
+            let a = &args[i];
+            i += 1;
+            if !is_opt(a) {
+                out.pos.push(a.clone());
+                continue;
+            }
+            let (name, inline) = match a.split_once('=') {
+                Some((n, v)) if n.starts_with("--") => (n.to_string(), Some(v.to_string())),
+                _ => (a.clone(), None),
+            };
+            if takes.flags.contains(&name.as_str()) {
+                if let Some(v) = inline {
+                    return Err(format!("argument {name}: ignored explicit argument {v:?}"));
+                }
+                out.flags.push(name);
+            } else if takes.values.contains(&name.as_str()) {
+                let v = match inline {
+                    Some(v) => v,
+                    None => {
+                        let Some(v) = args.get(i).filter(|v| !is_opt(v)) else {
+                            return Err(format!("argument {name}: expected one argument"));
+                        };
+                        i += 1;
+                        v.clone()
+                    }
+                };
+                out.vals.push((name, v));
+            } else if let Some((_, n)) = takes.lists.iter().find(|(k, _)| *k == name) {
+                let mut vs: Vec<String> = inline.into_iter().collect();
+                while i < args.len() && n.is_none_or(|n| vs.len() < n) && !is_opt(&args[i]) {
+                    vs.push(args[i].clone());
+                    i += 1;
+                }
+                if let Some(n) = n
+                    && vs.len() != *n
+                {
+                    return Err(format!("argument {name}: expected {n} arguments"));
+                }
+                out.lists.push((name, vs));
+            } else {
+                return Err(format!("unrecognized arguments: {a}"));
+            }
+        }
+        Ok(out)
+    }
+}
+
+/// A usage error (argparse's): exit 2.
+pub fn usage_error(cmd: &str, msg: &str) -> ExitCode {
+    eprintln!("usage: {PROG} {cmd} ... (see {PROG} --help)");
+    eprintln!("{PROG} {cmd}: error: {msg}");
     ExitCode::from(2)
 }
 
-/// `wireskein decode`: the decode document of a capture file with a spec's roles.
-fn decode_cmd(args: &[String]) -> ExitCode {
-    let (mut file, mut spec, mut pins, mut items) = (None, None, None, None);
-    let mut split_opts = Some(split::Options::default());
-    let mut it = args.iter();
-    while let Some(a) = it.next() {
-        match a.as_str() {
-            "--split" => match it.next().map(|v| split::Options::parse(v)) {
-                Some(Ok(o)) => split_opts = o,
-                Some(Err(e)) => {
-                    eprintln!("{e}");
-                    return ExitCode::from(2);
-                }
-                None => return usage(),
-            },
-            "--pins" => match it.next() {
-                Some(v) => pins = Some(names(v)),
-                None => return usage(),
-            },
-            "--items" => match it.next() {
-                Some(v) => items = Some(v.clone()),
-                None => return usage(),
-            },
-            f if !f.starts_with("--") && file.is_none() => file = Some(f.to_string()),
-            f if !f.starts_with("--") && spec.is_none() => spec = Some(f.to_string()),
-            _ => return usage(),
+/// A failure of the command (Python's `sys.exit(f"wireskein {cmd}: {e}")`): exit 1.
+pub fn fail(cmd: &str, msg: &str) -> ExitCode {
+    eprintln!("{PROG} {cmd}: {msg}");
+    ExitCode::FAILURE
+}
+
+/// A document written to FILE (its length in characters said on stderr, as Python's) or printed.
+pub fn emit(text: &str, out: Option<&str>) -> Result<(), String> {
+    match out {
+        Some(f) => {
+            std::fs::write(f, text).map_err(|e| format!("[Errno] {e}: {f:?}"))?;
+            eprintln!("{} bytes -> {f}", text.chars().count());
         }
+        None => println!("{text}"),
     }
-    let (Some(file), Some(spec)) = (file, spec) else {
-        return usage();
-    };
-    let text = match spec.strip_prefix('@') {
-        Some(p) => match std::fs::read_to_string(p) {
-            Ok(t) => t,
-            Err(e) => {
-                eprintln!("{p}: {e}");
-                return ExitCode::from(2);
-            }
-        },
-        None => spec,
-    };
-    let spec = match wireskein_analysis::decode::Spec::parse(&text) {
-        Ok(v) => v,
-        Err(e) => {
-            eprintln!("{e}");
-            return ExitCode::from(2);
-        }
-    };
-    let items = items.as_deref().map(|f| (Path::new(f), f));
-    match wireskein_analysis::decode::decode_file(Path::new(&file), &spec, split_opts.as_ref(), pins.as_deref(), items)
-    {
-        Ok(doc) => {
-            println!("{doc}");
-            ExitCode::SUCCESS
-        }
-        Err(e) => {
-            eprintln!("wireskein-rs decode: {e}");
-            ExitCode::FAILURE
-        }
+    Ok(())
+}
+
+/// "A,B" -> ["A", "B"] (blanks dropped); None when empty.
+pub fn names(v: Option<&str>) -> Option<Vec<String>> {
+    let out: Vec<String> = v?
+        .split(',')
+        .map(|x| x.trim().to_string())
+        .filter(|x| !x.is_empty())
+        .collect();
+    (!out.is_empty()).then_some(out)
+}
+
+/// --threshold NAME=V|NAME=LOW,HIGH (repeatable) -> (name, low, high).
+pub fn thresholds(items: &[&str]) -> Result<Vec<(String, f64, f64)>, String> {
+    let mut out = vec![];
+    for it in items {
+        let Some((name, v)) = it.split_once('=') else {
+            return Err(format!(
+                "--threshold {}: give NAME=V or NAME=LOW,HIGH",
+                wireskein_io::j::py_str_repr(it)
+            ));
+        };
+        let (lo, hi) = wireskein_analysis::analog::threshold_of(v)?;
+        out.push((name.to_string(), lo, hi));
     }
+    Ok(out)
+}
+
+/// --hint as Python's `parse_hint` reads it: JSON, @file.json, or protocol names ("rvswd", "uart,spi").
+pub fn hint(text: Option<&str>) -> Result<serde_json::Value, String> {
+    let Some(text) = text.filter(|t| !t.is_empty()) else {
+        return Ok(serde_json::Value::Null);
+    };
+    let body = match text.strip_prefix('@') {
+        Some(p) => std::fs::read_to_string(p).map_err(|e| format!("[Errno] {e}: {p:?}"))?,
+        None => text.to_string(),
+    };
+    let t = body.trim();
+    if t.starts_with('{') || t.starts_with('[') {
+        return serde_json::from_str(t)
+            .map_err(|e| format!("--hint: not JSON ({e}); give JSON, @file.json or protocol names"));
+    }
+    let names: Vec<&str> = t.split(',').map(|x| x.trim()).filter(|x| !x.is_empty()).collect();
+    if names.is_empty() || !names.iter().all(|x| x.chars().all(|c| c == '_' || c.is_alphanumeric())) {
+        return Err(format!(
+            "--hint: {} is neither JSON nor protocol names",
+            wireskein_io::j::py_str_repr(text)
+        ));
+    }
+    Ok(serde_json::json!({ "protocols": names }))
+}
+
+fn help() {
+    println!(
+        "usage: {PROG} [--version] {{analyze,decode,segments,verify,survey,convert,info,states,annotate,align}} ..."
+    );
+    println!();
+    println!("WireSkein's command line in Rust: the subcommands of `wireskein` with the same arguments and output.");
+    println!("Python's only (use `wireskein`): note, attach, capture, gui, analyze --devices, --definitions.");
 }
 
 /// `wireskein verify`: the lines, the summary, the report and JUnit when asked; 1 when the run fails.
 fn verify_cmd(args: &[String]) -> ExitCode {
-    let (mut run, mut json_out, mut junit_out) = (None, None, None);
-    let (mut log, mut allow, mut verbose, mut mark) = (false, false, false, false);
-    let mut it = args.iter();
-    while let Some(a) = it.next() {
-        match a.as_str() {
-            "--json" => match it.next() {
-                Some(f) => json_out = Some(f.clone()),
-                None => return usage(),
-            },
-            "--junit" => match it.next() {
-                Some(f) => junit_out = Some(f.clone()),
-                None => return usage(),
-            },
-            "--log" => log = true,
-            "--allow-unchecked" => allow = true,
-            "--mark" => mark = true,
-            "-v" | "--verbose" => verbose = true,
-            f if !f.starts_with('-') && run.is_none() => run = Some(f.to_string()),
-            _ => return usage(),
-        }
-    }
-    let Some(run) = run else { return usage() };
-    let mut rep = match wireskein_verify::verify(Path::new(&run)) {
+    let takes = Takes {
+        values: &["--json", "--junit"],
+        flags: &["--log", "--allow-unchecked", "--mark", "-v", "--verbose"],
+        lists: &[],
+    };
+    let a = match Args::parse(args, &takes) {
+        Ok(a) => a,
+        Err(e) => return usage_error("verify", &e),
+    };
+    let [run] = a.pos.as_slice() else {
+        return usage_error("verify", "give RUN_DIR (one)");
+    };
+    let run = std::path::Path::new(run);
+    let mut rep = match wireskein_verify::verify(run) {
         Ok(r) => r,
         Err(e) => {
             eprintln!("{e}");
             return ExitCode::from(2);
         }
     };
-    if mark && let Err(e) = wireskein_verify::mark(Path::new(&run), &rep) {
+    if a.has("--mark")
+        && let Err(e) = wireskein_verify::mark(run, &rep)
+    {
         eprintln!("{e}");
         return ExitCode::from(2);
     }
-    if !log {
+    if !a.has("--log") {
         rep.remove("log");
     }
-    for line in wireskein_verify::lines(&rep, true, verbose) {
+    for line in wireskein_verify::lines(&rep, true, a.has("-v") || a.has("--verbose")) {
         println!("{line}");
     }
     println!("{}", wireskein_verify::summary_line(&rep));
+    let allow = a.has("--allow-unchecked");
     let write = |f: &str, text: String| -> Result<(), String> {
         if f == "-" {
             println!("{text}");
@@ -154,14 +250,14 @@ fn verify_cmd(args: &[String]) -> ExitCode {
             std::fs::write(f, text).map_err(|e| format!("{f}: {e}"))
         }
     };
-    if let Some(f) = json_out
-        && let Err(e) = write(&f, rep.dumps())
+    if let Some(f) = a.get("--json")
+        && let Err(e) = write(f, rep.dumps())
     {
         eprintln!("{e}");
         return ExitCode::from(2);
     }
-    if let Some(f) = junit_out
-        && let Err(e) = write(&f, wireskein_verify::junit(&rep, allow))
+    if let Some(f) = a.get("--junit")
+        && let Err(e) = write(f, wireskein_verify::junit(&rep, allow))
     {
         eprintln!("{e}");
         return ExitCode::from(2);
@@ -175,134 +271,46 @@ fn verify_cmd(args: &[String]) -> ExitCode {
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    if args.first().map(|s| s.as_str()) == Some("verify") {
-        return verify_cmd(&args[1..]);
-    }
-    if args.first().map(|s| s.as_str()) == Some("decode") {
-        return decode_cmd(&args[1..]);
-    }
-    if args.first().map(|s| s.as_str()) != Some("analyze") {
-        return usage();
-    }
-    let (mut file, mut part, mut hints, mut mode) = (None, None, Value::Null, "final".to_string());
-    let mut window = None;
-    let mut split_opts = Some(split::Options::default());
-    let (mut pins, mut thresholds, mut items, mut out) = (None, vec![], None, None);
-    let (mut segment, mut markers, mut events) = (None, None, false);
-    let mut it = args[1..].iter();
-    while let Some(a) = it.next() {
-        match a.as_str() {
-            "--pins" => match it.next() {
-                Some(v) => pins = Some(names(v)),
-                None => return usage(),
-            },
-            "--threshold" => match it.next().map(|v| v.split_once('=')) {
-                Some(Some((name, v))) => match wireskein_analysis::analog::threshold_of(v) {
-                    Ok((lo, hi)) => thresholds.push((name.to_string(), lo, hi)),
-                    Err(e) => {
-                        eprintln!("--threshold: {e}");
-                        return ExitCode::from(2);
-                    }
-                },
-                _ => return usage(),
-            },
-            "--items" => match it.next() {
-                Some(v) => items = Some(v.clone()),
-                None => return usage(),
-            },
-            "--out" => match it.next() {
-                Some(v) => out = Some(v.clone()),
-                None => return usage(),
-            },
-            "--segment" => match it.next() {
-                Some(v) => segment = Some(v.clone()),
-                None => return usage(),
-            },
-            "--markers" => match it.next().map(|v| serde_json::from_str::<Value>(v)) {
-                Some(Ok(v)) => markers = Some(v),
-                Some(Err(e)) => {
-                    eprintln!("--markers: {e}");
-                    return ExitCode::from(2);
-                }
-                None => return usage(),
-            },
-            "--events" => events = true,
-            "--part" => match it.next().and_then(|v| v.parse().ok()) {
-                Some(k) => part = Some(k),
-                None => return usage(),
-            },
-            "--hint" | "--hints" => match it.next().map(|v| hints_of(v)) {
-                Some(Ok(h)) => hints = h,
-                Some(Err(e)) => {
-                    eprintln!("{e}");
-                    return ExitCode::from(2);
-                }
-                None => return usage(),
-            },
-            "--window" => match (it.next().and_then(|v| seconds(v)), it.next().and_then(|v| seconds(v))) {
-                (Some(a), Some(b)) => window = Some((a, b)),
-                _ => return usage(),
-            },
-            "--split" => match it.next().map(|v| split::Options::parse(v)) {
-                Some(Ok(o)) => split_opts = o,
-                Some(Err(e)) => {
-                    eprintln!("{e}");
-                    return ExitCode::from(2);
-                }
-                None => return usage(),
-            },
-            "--mode" => match it.next() {
-                Some(m) if m == "final" || m == "all" => mode = m.clone(),
-                _ => return usage(),
-            },
-            f if !f.starts_with("--") && file.is_none() => file = Some(f.to_string()),
-            _ => return usage(),
-        }
-    }
-    let Some(file) = file else { return usage() };
-    let asked = wireskein_analysis::Asked {
-        pins: pins.as_deref(),
-        thresholds: &thresholds,
-        items: items.as_deref().map(|f| (Path::new(f), f)),
-        segment: segment.as_deref(),
-        markers: markers.as_ref(),
-        dialects: None,
-        events,
+    let Some(cmd) = args.first().map(|s| s.as_str()) else {
+        help();
+        return ExitCode::from(2);
     };
-    match analyze_file_asked(
-        Path::new(&file),
-        &hints,
-        part,
-        &mode,
-        window,
-        split_opts.as_ref(),
-        &asked,
-    ) {
-        Ok(doc) => {
-            let text = doc.to_string();
-            match out {
-                Some(f) => {
-                    if let Err(e) = std::fs::write(&f, &text) {
-                        eprintln!("{f}: {e}");
-                        return ExitCode::from(2);
-                    }
-                    eprintln!("{} bytes -> {f}", text.len());
-                }
-                None => println!("{text}"),
-            }
+    let rest = &args[1..];
+    match cmd {
+        "--version" => {
+            println!("{PROG} {VERSION}");
             ExitCode::SUCCESS
         }
-        Err(e) => {
-            eprintln!("wireskein-rs analyze: {e}");
-            ExitCode::FAILURE
+        "-h" | "--help" => {
+            help();
+            ExitCode::SUCCESS
         }
+        "--definitions" => usage_error(
+            "",
+            "--definitions: definitions directories (declared protocols, device packs, marker dialects) are read by \
+             Python's wireskein only",
+        ),
+        "analyze" => analyze::analyze(rest),
+        "decode" => analyze::decode(rest),
+        "segments" => views::segments(rest),
+        "verify" => verify_cmd(rest),
+        "survey" => views::survey(rest),
+        "states" => views::states(rest),
+        "annotate" => views::annotate(rest),
+        "align" => views::align(rest),
+        "convert" => files::convert(rest),
+        "info" => files::info(rest),
+        "note" | "attach" | "capture" | "gui" => usage_error(
+            cmd,
+            &format!("{cmd} is not in the Rust command line yet: use `wireskein {cmd}`"),
+        ),
+        _ => usage_error(
+            "",
+            &format!(
+                "argument cmd: invalid choice: {} (choose from analyze, decode, segments, verify, survey, convert, \
+                 info, states, annotate, align)",
+                wireskein_io::j::py_str_repr(cmd)
+            ),
+        ),
     }
-}
-
-/// "A,B" -> ["A", "B"] (blanks dropped).
-fn names(v: &str) -> Vec<String> {
-    v.split(',')
-        .map(|x| x.trim().to_string())
-        .filter(|x| !x.is_empty())
-        .collect()
 }

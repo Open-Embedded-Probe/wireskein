@@ -613,7 +613,7 @@ pub enum Split {
 /// first piece that holds any taken as the buses' roles, every piece decoded with them as decode reads a spec's
 /// buses (`decode::piece`), the pieces joined (`decode::join_part`), each claim given its bus's joined result.
 /// items: the items written to this file as they are read (with its name in the document); head: the part's (its
-/// number); gf: the probe's glitch filter.
+/// number); gf: the probe's glitch filter; depth: how far up each bus is read (the spec's).
 #[allow(clippy::too_many_arguments)]
 pub fn analyze(
     src: &mut dyn wireskein_io::stream::Source,
@@ -623,6 +623,7 @@ pub fn analyze(
     items: Option<(&std::path::Path, &str)>,
     head: &Map<String, Value>,
     gf: Option<&Value>,
+    depth: &str,
 ) -> Result<Split, String> {
     use crate::decode;
     let n = src.n();
@@ -642,7 +643,13 @@ pub fn analyze(
         let (claims, _) = wireskein_core::analyze_full(&view, hints);
         let docs: Vec<Value> = claims
             .iter()
-            .map(|c| crate::claim_doc(c, "final", w, rate, p.b - p.a, None, false))
+            .filter_map(|c| {
+                let shape = crate::Shape {
+                    depth,
+                    ..crate::Shape::of("final")
+                };
+                crate::claim_doc_shaped(c, &shape, w, rate, p.b - p.a, None, false)
+            })
             .collect();
         keep = docs
             .iter()
@@ -670,7 +677,7 @@ pub fn analyze(
             json!({"protocol": c["protocol"], "pins": c["roles"], "params": params})
         })
         .collect();
-    let spec = decode::Spec::of(&json!({"buses": buses, "depth": "protocol"}))?;
+    let spec = decode::Spec::of(&json!({"buses": buses, "depth": depth}))?;
     // every piece on the edge the roles' piece read each bus on
     let edges: std::collections::BTreeMap<usize, String> = keep
         .iter()

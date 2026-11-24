@@ -223,6 +223,87 @@ fn segment_captures(ctx: &mut Ctx, doc: &J, t: &Tree, path: &str, seg: usize) ->
     Ok((out, String::new()))
 }
 
+/// A segment of a run with a capture that holds it, cut to it (`verify.sections`' entries): its path, the capture
+/// file, its label, its window (ticks of the capture part, or None for a capture assigned whole), its part and the
+/// stretch; without a capture, why.
+#[derive(Debug, Clone)]
+pub struct Section {
+    pub path: String,
+    pub file: Option<String>,
+    pub label: J,
+    pub window: J,
+    pub part: J,
+    pub cap: Option<Rc<Cap>>,
+    pub why: String,
+}
+
+/// Every segment of a run with the captures that hold it, cut to it (Python's `verify.sections`), for analysis
+/// without expectations (`wireskein states --section`).
+pub fn sections(run_dir: &Path) -> Result<Vec<Section>, String> {
+    let text = std::fs::read_to_string(run_dir.join("run.json")).map_err(|e| format!("{}: {e}", run_dir.display()))?;
+    let doc = J::parse(&text).map_err(|e| format!("{}/run.json: {e}", run_dir.display()))?;
+    if doc.get("format").s() != Some(RUN_FORMAT) {
+        return Err(format!(
+            "{}: format {}, expected {}",
+            run_dir.display(),
+            doc.get("format").repr(),
+            J::from(RUN_FORMAT).repr()
+        ));
+    }
+    let t = tree::segment_tree(&doc);
+    let mut ctx = Ctx {
+        run_dir,
+        cache: BTreeMap::new(),
+    };
+    let mut out = vec![];
+    for i in t.walk() {
+        if t.segs[i].root {
+            continue;
+        }
+        let path = t.path(i);
+        let (loaded, why) = segment_captures(&mut ctx, &doc, &t, &path, i)?;
+        if loaded.is_empty() {
+            out.push(Section {
+                path: path.clone(),
+                file: None,
+                label: J::Null,
+                window: J::Null,
+                part: J::Null,
+                cap: None,
+                why,
+            });
+        }
+        for l in loaded {
+            let span = l.cap.meta.get("parts");
+            let part = match span.list().first() {
+                Some(p) if span.truthy() => p.clone(),
+                _ if l.cap.meta.has("part") => l.cap.meta.get("part").clone(),
+                _ => J::Int(0),
+            };
+            let label = if l.cap.meta.has("label") {
+                l.cap.meta.get("label").clone()
+            } else {
+                J::from(l.file.as_str())
+            };
+            out.push(Section {
+                path: path.clone(),
+                file: Some(l.file.clone()),
+                label,
+                window: l.cap.meta.get("window").clone(),
+                part,
+                cap: Some(l.cap.clone()),
+                why: String::new(),
+            });
+        }
+    }
+    Ok(out)
+}
+
+/// A run directory as Python's `str(Path(p))` writes it.
+pub fn run_name(p: &Path) -> String {
+    py_path(p)
+}
+
 /// A path as Python's `str(Path(p))` writes it: no trailing separator, no "." parts.
 fn py_path(p: &Path) -> String {
     let c: std::path::PathBuf = p
