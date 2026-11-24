@@ -26,13 +26,22 @@ struct Clock {
 /// How a line is made to settle: pulses taken out (spikes, crosstalk) or bounces merged at their first change.
 type Clean = fn(&[i64], i64) -> Vec<i64>;
 
-fn clock_of(ch: &Channel, clean: Clean) -> Option<Clock> {
+pub const BOUNCE_MERGE_WIDE: i64 = 8;
+
+/// How wide a cleaning is at a clock of this half period: CLEAN of it; bounces merged over 8 samples at least where
+/// the half period is long enough to keep its edges (a bounced clock's own median interval is a bounce's)
+fn width(bounces: bool, half: f64) -> i64 {
+    let k = ((CLEAN * half) as i64).max(2);
+    if bounces { k.max(BOUNCE_MERGE_WIDE) } else { k }
+}
+
+fn clock_of(ch: &Channel, clean: Clean, bounces: bool) -> Option<Clock> {
     if ch.edges.len() < 8 {
         return None;
     }
     let d: Vec<f64> = ch.edges.windows(2).map(|w| (w[1] - w[0]) as f64).collect();
     let half = median(&d);
-    let c = clean(ch.edges, ((CLEAN * half) as i64).max(2));
+    let c = clean(ch.edges, width(bounces, half));
     if c.len() < 8 {
         return None;
     }
@@ -220,8 +229,10 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
     // as many words as the windows of whole bytes hold (a line's words: Python's q(words, 5))
     let words: usize = counts.iter().filter(|&&c| c % 8 == 0).map(|&c| c / 8).sum();
     let quantity = 1.0 - (-(words as f64) / SCALE).exp();
-    // a select frames every burst of the clock: one burst outside its windows is another target's, or no select
-    let framed = if cs.is_some() {
+    // a select frames every burst of the clock (one outside its windows is another target's, or it is no select),
+    // its windows hold the clock (a window with none is another target's selection) snugly (the margins before and
+    // after the clock's span no longer than the span)
+    let (framed, used, snug) = if cs.is_some() {
         let bs = crate::sync::bursts(&ck.edges);
         let inside_w = bs
             .iter()
@@ -230,14 +241,32 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
                 i > 0 && b < w[i - 1].1
             })
             .count();
-        inside_w as f64 / bs.len().max(1) as f64
+        let (mut held, mut tight) = (0usize, 0usize);
+        for &(a, b) in &w {
+            let lo = ck.edges.partition_point(|&x| x < a);
+            let hi = ck.edges.partition_point(|&x| x < b);
+            if hi > lo {
+                held += 1;
+                let (f, l) = (ck.edges[lo], ck.edges[hi - 1]);
+                if (f - a) + (b - l) <= (l - f).max(1) + (4.0 * ck.half) as i64 {
+                    tight += 1;
+                }
+            }
+        }
+        (
+            inside_w as f64 / bs.len().max(1) as f64,
+            held as f64 / w.len().max(1) as f64,
+            tight as f64 / held.max(1) as f64,
+        )
     } else {
-        1.0
+        (1.0, 1.0, 1.0)
     };
     let score = whole
         * (covered / 0.9).min(1.0)
         * framed
         * framed
+        * (0.5 + 0.5 * used)
+        * (0.5 + 0.5 * snug)
         * inside
         * (0.75 + 0.25 * once)
         * (0.5 + 0.5 * degenerate)
@@ -265,6 +294,8 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
         ("data_once_a_bit", once),
         ("degenerate", degenerate),
         ("select_frames", framed),
+        ("select_used", used),
+        ("select_snug", snug),
     ] {
         evidence.insert(k.into(), json!(x));
     }
@@ -289,9 +320,15 @@ pub fn candidates(view: &View) -> Vec<Candidate> {
     let cleans: [(Clean, i64); 2] = [(deglitch, 0), (crate::kernels::debounce, 1)];
     for (clean, how) in cleans {
         for clk in &act {
-            let Some(ck) = clock_of(clk, clean) else { continue };
+            let bounces = how == 1;
+            let Some(ck) = clock_of(clk, clean, bounces) else {
+                continue;
+            };
             // the other lines as they settle at this clock's pace: what is counted, kept to and read
-            let k = ((CLEAN * ck.half) as i64).max(2);
+            let k = width(bounces, ck.half);
+            if bounces && k as f64 > 0.6 * ck.half {
+                continue; // a clock too fast to merge its bounces without its own edges
+            }
             let settled: Vec<Vec<i64>> = act.iter().map(|c| clean(c.edges, k)).collect();
             let lines: Vec<Channel> = act
                 .iter()
