@@ -652,10 +652,33 @@ fn fd_reading(view: &View, ch: &Channel, u0: f64, idle: u8, inner: &[f64]) -> Op
 /// The CAN readings of a part: each line at its bit time (its units' candidates, refitted), under its idle level.
 pub fn candidates(view: &View) -> Vec<Candidate> {
     let mut out = vec![];
-    for ch in &view.channels {
-        if ch.edges.len() < 40 {
+    for ch0 in &view.channels {
+        if ch0.edges.len() < 40 {
             continue;
         }
+        // the line as it is, its short pulses out, its bounces merged (spikes and bounces are bits too short to be a
+        // node's: they break the stuffing and the CRC): the best reading of the line over them
+        let mut line_best: Option<Candidate> = None;
+        for (e, k) in crate::pulse::line_views(ch0.edges) {
+            let ch = Channel::new(ch0.name, ch0.initial, &e);
+            for mut c in read_line(view, &ch) {
+                if k != 0 {
+                    c.params.insert("deglitch".into(), json!(k));
+                }
+                if line_best.as_ref().is_none_or(|b| c.score > b.score) {
+                    line_best = Some(c);
+                }
+            }
+        }
+        out.extend(line_best);
+    }
+    out
+}
+
+/// The CAN readings of one line (a view of it): classic CAN at its bit time and CAN FD.
+fn read_line(view: &View, ch: &Channel) -> Vec<Candidate> {
+    let mut out = vec![];
+    {
         let f = features(ch, view.n_samples);
         let (_, length, _) = crate::kernels::runs(ch, view.n_samples);
         let inner: Vec<f64> = if length.len() > 2 {
