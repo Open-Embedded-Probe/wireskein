@@ -375,7 +375,7 @@ struct Reading {
 }
 
 /// The frames read by their layouts.
-fn read_frames(frames: &[Frame], delimited: bool, bits: &[u8], t: &[i64], rate: f64) -> Reading {
+fn read_frames(frames: &[Frame], delimited: bool, bits: &[u8], t: &[i64], rate: f64, dio: &Channel) -> Reading {
     let mut r = Reading {
         recs: vec![],
         checked: 0,
@@ -494,9 +494,67 @@ fn read_frames(frames: &[Frame], delimited: bool, bits: &[u8], t: &[i64], rate: 
         if !fr.ins.is_empty() {
             rec.insert("restored".into(), json!(fr.ins.iter().map(|x| x.2).collect::<Vec<_>>()));
         }
+        if form == "long" && answered && fr.plain() {
+            long_answer(&mut rec, &f, &t[fr.a..t.len().min(fr.b + 1)], dio, rate);
+        }
         r.recs.push(rec);
     }
     r
+}
+
+const LONG_TARGET: usize = 42; // the first clock of the target's phase in the long form
+
+/// When the target answered a long frame (`rvswd.long_answer`), from what it should send: the host's address echoed
+/// (and, after a write, the host's data). At each bit where that changes, DIO's change to it after the rising edge
+/// before that bit; its delay in that clock period (0 to 1: in time for the bit's rising edge; over 1: after it, the
+/// bit sampled late). `answer_delay`: the median and max over those changes, in periods; `answer_delay_ns` the same
+/// in ns; `late`: 1 when the median is over 1 (the answer slid a clock, as a CH32V103 does at times while it is
+/// reset: its echoed address then reads as another). `r`: the frame's rises and the one after.
+fn long_answer(rec: &mut Map<String, Value>, f: &[u8], r: &[i64], dio: &Channel, rate: f64) {
+    if f.len() < 83 {
+        return;
+    }
+    let op = f[39] * 2 + f[40];
+    let want: &[u8] = if op == 2 { &f[0..39] } else { &f[0..7] };
+    if r.len() < LONG_TARGET + want.len() + 1 {
+        return;
+    }
+    let de = dio.edges;
+    let level = |j: usize| dio.initial ^ ((j + 1) & 1) as u8; // the line after its change j
+    let (mut delays, mut ns) = (vec![], vec![]);
+    for i in 1..want.len() {
+        if want[i] == want[i - 1] {
+            continue;
+        }
+        let p = LONG_TARGET + i; // the bit that changes; its rising edge r[p], the one before r[p - 1]
+        let (r0, r1) = (r[p - 1], r[p]);
+        let mut j = de.partition_point(|&x| x <= r0);
+        while j < de.len() && level(j) != want[i] {
+            j += 1;
+        }
+        if j >= de.len() || de[j] > r[(p + 1).min(r.len() - 1)] {
+            continue; // not changed within two clocks: no answer to time
+        }
+        delays.push((de[j] - r0) as f64 / (r1 - r0) as f64);
+        ns.push((de[j] - r0) as f64 / rate * 1e9);
+    }
+    if delays.is_empty() {
+        return;
+    }
+    let round = |x: f64, k: f64| (x * k).round_ties_even() / k;
+    let most = |v: &[f64]| v.iter().copied().fold(f64::MIN, f64::max);
+    let med = median(&delays);
+    rec.insert(
+        "answer_delay".into(),
+        json!({"median": round(med, 1e3), "max": round(most(&delays), 1e3)}),
+    );
+    rec.insert(
+        "answer_delay_ns".into(),
+        json!({"median": round(median(&ns), 10.0), "max": round(most(&ns), 10.0)}),
+    );
+    if med > 1.0 {
+        rec.insert("late".into(), json!(1));
+    }
 }
 
 /// A frame's fields by name, as bit strings (MSB first), its checks one by one (`rvswd.frame_fields`).
@@ -566,7 +624,7 @@ fn read(view: &View, clk: &Channel, dio: &Channel) -> Option<Candidate> {
     // START and STOP seen: the frames are theirs; else the cuts at the clock's gaps
     let (reading, inside) = if !ss.is_empty() {
         let inside: usize = ss.iter().map(|f| f.b - f.a).sum();
-        (read_frames(&ss, true, &bits, &rises, rate), inside)
+        (read_frames(&ss, true, &bits, &rises, rate, dio), inside)
     } else {
         // no START or STOP: the cuts at the clock's gaps, on a line keeping to the clock as data only (as the survey
         // pairs a clock's data lines; a free clock beside lines that rarely change reads frames whose parities hold
@@ -575,7 +633,7 @@ fn read(view: &View, clk: &Channel, dio: &Channel) -> Option<Candidate> {
             return None;
         }
         let g = gap_frames(&rises);
-        let r = read_frames(&g, false, &bits, &rises, rate);
+        let r = read_frames(&g, false, &bits, &rises, rate, dio);
         if r.passed == 0 {
             return None;
         }
