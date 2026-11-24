@@ -12,14 +12,17 @@ use ws_core::{Channel, View};
 
 /// analyze(rate, n_samples, channels, hints_json="null") -> claims as JSON.
 /// channels: [(name, initial, edges as an int64 array)], hints_json: the hints as JSON (as wireskein's analyze takes).
+/// upper: the Rust upper stage after the engine's choice (false: the engine's claims alone, for an upper stage of the
+/// caller's own).
 #[pyfunction]
-#[pyo3(signature = (rate, n_samples, channels, hints_json="null"))]
+#[pyo3(signature = (rate, n_samples, channels, hints_json="null", upper=true))]
 fn analyze(
     py: Python<'_>,
     rate: f64,
     n_samples: i64,
     channels: Vec<(String, u8, PyReadonlyArray1<'_, i64>)>,
     hints_json: &str,
+    upper: bool,
 ) -> PyResult<String> {
     let hints: serde_json::Value =
         serde_json::from_str(hints_json).map_err(|e| PyValueError::new_err(format!("hints: {e}")))?;
@@ -45,7 +48,13 @@ fn analyze(
         })
         .collect();
     let view = View::new(rate, n_samples, chans).map_err(PyValueError::new_err)?;
-    let claims = py.detach(|| ws_core::analyze(&view, &hints));
+    let claims = py.detach(|| {
+        if upper {
+            ws_core::analyze(&view, &hints)
+        } else {
+            ws_core::analyze_engine(&view, &hints)
+        }
+    });
     Ok(ws_core::claim::to_json(&claims))
 }
 

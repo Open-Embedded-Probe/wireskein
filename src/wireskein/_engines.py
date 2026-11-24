@@ -108,7 +108,8 @@ def rust(view, hints: dict | None = None) -> ForeignResult:
     import numpy as np
     core = _core()
     chans = [(c.name, int(c.initial), np.ascontiguousarray(c.edges, dtype=np.int64)) for c in view.channels]
-    out = json.loads(core.analyze(float(view.rate), int(view.n_samples), chans, json.dumps(hints)))
+    # the engine's claims alone: the upper stage is Python's here (its device packs, definitions directories)
+    out = json.loads(core.analyze(float(view.rate), int(view.n_samples), chans, json.dumps(hints), upper=False))
     claims = []
     for d in out:
         n = ForeignNode(d["protocol"], dict(d.get("params") or {}), dict(d["roles"]), float(d["score"]),

@@ -402,9 +402,15 @@ pub fn analyze(view: &View, hints: &serde_json::Value) -> Vec<Claim> {
 
 /// The claims on a part's lines after the upper stage, and the relations it found (a UART pair's SCPI).
 pub fn analyze_full(view: &View, hints: &serde_json::Value) -> (Vec<Claim>, Vec<serde_json::Value>) {
+    upper::stage_with(analyze_engine(view, hints), view.rate)
+}
+
+/// The engine's claims under the hints, before the upper stage (for a caller with an upper stage of its own:
+/// Python's, with its device packs and definitions directories).
+pub fn analyze_engine(view: &View, hints: &serde_json::Value) -> Vec<Claim> {
     let h = Hints::from_json(hints);
     if h.protocols.is_empty() && h.pins.is_empty() && h.exclude.is_empty() {
-        return upper::stage_with(choose(candidates(view)), view.rate);
+        return choose(candidates(view));
     }
     let kept = View {
         rate: view.rate,
@@ -423,7 +429,7 @@ pub fn analyze_full(view: &View, hints: &serde_json::Value) -> (Vec<Claim>, Vec<
         .collect();
     let mut cands = candidates_with(&kept, &bauds);
     cands.retain(|c| h.allows(c));
-    upper::stage_with(choose(cands), view.rate)
+    choose(cands)
 }
 
 #[cfg(test)]
