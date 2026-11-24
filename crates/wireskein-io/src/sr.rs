@@ -210,6 +210,7 @@ pub fn read_from<R: Read + std::io::Seek>(r: R) -> Result<Capture, String> {
             meta,
             lines,
             events: vec![],
+            analog: vec![],
             skipped,
         }],
     })

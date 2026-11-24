@@ -49,6 +49,37 @@ pub struct Events {
     pub reduction: Option<String>,
 }
 
+/// An analog channel of a WireSkein file (wireskein-format §4.2, §4.3): sample k at tick t0_ticks + k * tick_hz /
+/// rate_hz; raw integers ("analog": volts are (raw - zero) * scale_nv * 1e-9 when both are known) or volts
+/// ("analog-f32").
+#[derive(Debug, Clone, PartialEq)]
+pub struct Analog {
+    pub name: String,
+    pub encoding: String,
+    /// samples a second, exact
+    pub rate_hz: (i64, i64),
+    /// the tick of the first sample, exact
+    pub t0_ticks: (i64, i64),
+    pub width: i64,
+    pub value_bits: Option<i64>,
+    pub zero: Option<f64>,
+    pub scale_nv: Option<f64>,
+    pub unit: String,
+    /// the raw integers, or volts
+    pub values: Vec<f64>,
+}
+
+impl Analog {
+    /// The samples in volts, or None without a conversion.
+    pub fn volts(&self) -> Option<Vec<f64>> {
+        if self.encoding == "analog-f32" {
+            return Some(self.values.clone());
+        }
+        let (z, s) = (self.zero?, self.scale_nv?);
+        Some(self.values.iter().map(|v| (v - z) * s * 1e-9).collect())
+    }
+}
+
 impl Events {
     /// Quanta holding more than one change.
     pub fn hidden(&self) -> usize {
@@ -71,6 +102,8 @@ pub struct Part {
     /// the lines kept as changes at a step of 2 or more (also in `lines` where no quantum hides a change); none in
     /// a run of parts joined
     pub events: Vec<Events>,
+    /// the analog channels (also named in `skipped`, as channels not read as logic)
+    pub analog: Vec<Analog>,
     /// channels not read as logic: [{"name", "encoding"}] (analog, an unknown encoding, events hiding changes)
     pub skipped: Vec<Value>,
 }

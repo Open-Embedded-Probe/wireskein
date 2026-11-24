@@ -5,6 +5,7 @@
 //! every capture of its section that holds its pins, as Python's verify does, and the report is its document
 //! (`wireskein verify --json`).
 
+pub mod analog;
 pub mod bus;
 pub mod cap;
 pub mod checks;

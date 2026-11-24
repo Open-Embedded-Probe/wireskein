@@ -1,7 +1,7 @@
 //! A WireSkein file (docs/wireskein-format.md): `wireskein.json`, `capture.json` (checked as §3.4 asks), each part's
 //! channels decoded to logic lines, the parts of a timeline that follow on without a gap joined.
 
-use crate::{Capture, Events, Kind, Line, Part, dense_edges, fraction};
+use crate::{Analog, Capture, Events, Kind, Line, Part, dense_edges, fraction};
 use serde_json::{Map, Value, json};
 use std::io::{Cursor, Read, Seek};
 
@@ -237,6 +237,50 @@ fn decode(c: &Value, data: &[u8], ticks: i64) -> Result<Decoded, String> {
     })
 }
 
+fn terms(v: &Value, what: &str) -> Result<(i64, i64), String> {
+    match v.as_array() {
+        Some(a) if a.len() == 2 => Ok(fraction(
+            a[0].as_i64().ok_or(format!("{what}: not an integer"))?,
+            a[1].as_i64().ok_or(format!("{what}: not an integer"))?,
+        )),
+        _ => v.as_i64().map(|n| (n, 1)).ok_or(format!("{what}: not [num, den]")),
+    }
+}
+
+/// An analog channel's samples (raw integers of its width, little-endian, or float32 volts).
+fn read_analog(c: &Value, data: &[u8]) -> Result<Analog, String> {
+    let name = c["name"].as_str().unwrap_or("").to_string();
+    let enc = c["encoding"].as_str().unwrap_or("").to_string();
+    let n = int(c, "n")? as usize;
+    let width = c.get("width").and_then(|v| v.as_i64()).unwrap_or(16);
+    let size = if enc == "analog-f32" { 4 } else { (width / 8) as usize };
+    if size == 0 || ![1, 2, 4].contains(&size) {
+        return Err(format!("{name}: an analog width of {width} bits"));
+    }
+    let values = data
+        .chunks_exact(size)
+        .take(n)
+        .map(|b| match (enc.as_str(), size) {
+            ("analog-f32", _) => f32::from_le_bytes([b[0], b[1], b[2], b[3]]) as f64,
+            (_, 1) => b[0] as f64,
+            (_, 2) => u16::from_le_bytes([b[0], b[1]]) as f64,
+            _ => u32::from_le_bytes([b[0], b[1], b[2], b[3]]) as f64,
+        })
+        .collect();
+    Ok(Analog {
+        name: name.clone(),
+        encoding: enc,
+        rate_hz: terms(&c["rate_hz"], &format!("{name} rate_hz"))?,
+        t0_ticks: terms(&c["t0_ticks"], &format!("{name} t0_ticks")).unwrap_or((0, 1)),
+        width,
+        value_bits: c.get("value_bits").and_then(|v| v.as_i64()),
+        zero: c.get("zero").and_then(|v| v.as_f64()),
+        scale_nv: c.get("scale_nv").and_then(|v| v.as_f64()),
+        unit: c.get("unit").and_then(|v| v.as_str()).unwrap_or("V").to_string(),
+        values,
+    })
+}
+
 /// A WireSkein file read: its parts, the runs of a timeline joined.
 pub fn read(bytes: &[u8]) -> Result<Capture, String> {
     read_from(Cursor::new(bytes))
@@ -272,11 +316,13 @@ pub fn read_from<R: Read + Seek>(r: R) -> Result<Capture, String> {
             meta.extend(m.clone());
         }
         let (mut lines, mut evs, mut skipped, mut coarse_ev, mut other) = (vec![], vec![], vec![], false, false);
+        let mut analog = vec![];
         for c in p["channels"].as_array().ok_or("a part without channels")? {
             let enc = c["encoding"].as_str().unwrap_or("");
             if enc == "analog" || enc == "analog-f32" {
                 other = true;
                 skipped.push(json!({"name": c["name"], "encoding": enc, "analog": true}));
+                analog.push(read_analog(c, &read_entry(&mut z, c["file"].as_str().unwrap_or(""))?)?);
                 continue;
             }
             let known = ["bits", "events", "any_high", "any_low", "change_latch"].contains(&enc);
@@ -312,6 +358,7 @@ pub fn read_from<R: Read + Seek>(r: R) -> Result<Capture, String> {
                 meta,
                 lines,
                 events: evs,
+                analog,
                 skipped,
             },
             coarse_ev,
@@ -411,6 +458,7 @@ fn join(run: Vec<(Part, bool, bool)>) -> Vec<Part> {
         meta,
         lines,
         events: vec![],
+        analog: vec![],
         skipped: first.skipped.clone(),
     }]
 }

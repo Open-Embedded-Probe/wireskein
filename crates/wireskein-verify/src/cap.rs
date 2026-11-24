@@ -1,6 +1,6 @@
 //! A capture part as the checks read it (Python's `_engine.model.Capture` as `fileio.load_runs` gives it): its lines
 //! (Channel: a level before tick 0 and the ticks it changes at, of a step), its lines kept as changes at a coarser
-//! step (EventTrace), the names of its analog channels, its meta; a window cut from a longer part keeps that part.
+//! step (EventTrace), its analog channels, its meta; a window cut from a longer part keeps that part.
 
 use crate::j::J;
 use std::path::Path;
@@ -75,8 +75,8 @@ pub struct Cap {
     pub n: i64,
     pub channels: Vec<Ch>,
     pub events: Vec<Events>,
-    /// the analog channels (not read by this version: named only)
-    pub analog: Vec<String>,
+    /// the analog channels
+    pub analog: Vec<wireskein_io::Analog>,
     pub meta: J,
     /// a window: the part it was cut from and where
     pub parent: Option<(Rc<Cap>, i64)>,
@@ -97,7 +97,7 @@ impl Cap {
             .iter()
             .map(|c| c.name.as_str())
             .chain(self.events.iter().map(|t| t.name.as_str()))
-            .chain(self.analog.iter().map(|s| s.as_str()))
+            .chain(self.analog.iter().map(|a| a.name.as_str()))
             .collect()
     }
 
@@ -169,7 +169,11 @@ pub fn window(cap: &Rc<Cap>, s0: i64, s1: i64) -> Cap {
         n: s1 - s0,
         channels,
         events,
-        analog: cap.analog.clone(),
+        analog: cap
+            .analog
+            .iter()
+            .map(|a| crate::analog::window(a, cap.tick_hz, s0, s1))
+            .collect(),
         meta,
         parent: Some((cap.clone(), s0)),
     }
@@ -217,12 +221,7 @@ pub fn load(run_dir: &Path, file: &str, host_ns: &J) -> Result<Vec<Rc<Cap>>, Str
         meta.set("file", file);
         meta.set("host_ns", host_ns.clone());
         meta.set("label", label);
-        let analog = p
-            .skipped
-            .iter()
-            .filter(|s| s.get("analog").is_some())
-            .filter_map(|s| s["name"].as_str().map(String::from))
-            .collect();
+        let analog = p.analog;
         out.push(Rc::new(Cap {
             rate: c.tick_hz.0 as f64 / c.tick_hz.1 as f64,
             tick_hz: c.tick_hz,

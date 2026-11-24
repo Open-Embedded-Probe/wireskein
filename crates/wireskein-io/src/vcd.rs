@@ -230,6 +230,7 @@ pub fn read(text: &str) -> Result<Capture, String> {
             meta,
             lines,
             events: vec![],
+            analog: vec![],
             skipped,
         }],
     })

@@ -270,7 +270,7 @@ fn run(kind: &str, cap: &Cap, x: &J) -> Out {
         "phase" => check_phase(cap, x),
         "skew" => check_skew(cap, x),
         "dead_time" => check_dead_time(cap, x),
-        "voltage" => check_voltage(cap, x),
+        "voltage" => crate::analog::check_voltage(cap, x),
         k => crate::bus::run(k, cap, x),
     }
 }
@@ -281,34 +281,43 @@ pub fn judge(cap: &Rc<Cap>, x: &J, pins: &BTreeSet<String>) -> Out {
     if !CHECKS.contains(&kind) {
         return out(V::Ng, J::dict(), format!("no check named {}", x.get("kind").repr()));
     }
-    if LOGIC.contains(&kind) {
-        let wanted: Vec<&str> = cap
+    let as_logic;
+    let cap = if LOGIC.contains(&kind) {
+        let wanted: Vec<&crate::analog::Analog> = cap
             .analog
             .iter()
-            .filter(|a| pins.contains(*a) && cap.ch(a).is_none())
-            .map(|a| a.as_str())
+            .filter(|a| pins.contains(&a.name) && cap.ch(&a.name).is_none())
             .collect();
-        if !wanted.is_empty() {
+        if wanted.is_empty() {
+            cap
+        } else {
             if x.get("threshold").is_null() {
+                let names: Vec<&str> = wanted.iter().map(|a| a.name.as_str()).collect();
                 return out(
                     V::Unchecked,
                     J::dict(),
                     format!(
                         "{} analog: give threshold= (volts) to read it as logic",
-                        wanted.join(", ")
+                        names.join(", ")
                     ),
                 );
             }
-            return out(
-                V::Unchecked,
-                J::dict(),
-                format!(
-                    "{} analog: analog channels are not read by the Rust verify yet",
-                    wanted.join(", ")
-                ),
-            );
+            let mut extra = vec![];
+            for a in wanted {
+                match crate::analog::to_logic(a, cap.tick_hz, x.get("threshold")) {
+                    Ok(c) => extra.push(c),
+                    Err(e) => return out(V::Unchecked, J::dict(), e),
+                }
+            }
+            let mut c = (**cap).clone();
+            c.channels.extend(extra);
+            c.parent = None;
+            as_logic = Rc::new(c);
+            &as_logic
         }
-    }
+    } else {
+        cap
+    };
     let hid: Vec<String> = cap
         .events
         .iter()
@@ -969,26 +978,6 @@ fn check_dead_time(cap: &Cap, x: &J) -> Out {
     }
     let (v, why) = verdicts(&parts);
     out(v, got, why)
-}
-
-fn check_voltage(cap: &Cap, x: &J) -> Out {
-    let pin = s(x, "pin");
-    if !cap.analog.iter().any(|a| a == pin) {
-        return out(
-            V::Unchecked,
-            J::dict(),
-            if cap.ch(pin).is_some() {
-                "not an analog channel in this capture"
-            } else {
-                "pin not captured"
-            },
-        );
-    }
-    out(
-        V::Unchecked,
-        J::dict(),
-        "analog channels are not read by the Rust verify yet",
-    )
 }
 
 // ---------------- becomes ----------------
