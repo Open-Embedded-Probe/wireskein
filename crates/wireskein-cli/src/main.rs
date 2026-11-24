@@ -6,6 +6,8 @@
 //! does: the capture, then each part (a run of parts that follow on without a gap read as one) with its claims and
 //! the relations of its UART pairs. A WireSkein file, a sigrok session (.sr) or a VCD, told apart by content.
 
+mod report;
+
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 use std::path::Path;
@@ -46,79 +48,9 @@ fn nonempty(v: &Value) -> bool {
     }
 }
 
-/// The layer a clocked bus reads frame by frame (Python's `export.LOWER`; RVSWD's and SWIO's DMI accesses).
-fn lower(protocol: &str) -> &'static str {
-    match protocol {
-        "i2c" | "swim" => "transactions",
-        "spi" => "transfers",
-        "uart" => "bytes",
-        "rvswd" | "swio" => "dmi",
-        "swd" | "usb_pd" | "dcc" | "usb" => "packets",
-        "dmx512" => "packets",
-        "cec" | "sent" => "messages",
-        "spdif" => "subframes",
-        "jtag" => "scans",
-        "dht" => "readings",
-        "sync_unknown" => "summary",
-        "onewire" => "resets",
-        _ => "frames",
-    }
-}
-
-/// Each frame of a clocked bus given its clock (Python's `decode.frame_clocks`): `period_ns` (the median of its
-/// clock's periods, kept when the reader gave it) and `high_ns` (the median of its highs), for a frame of 8 clocks
-/// or more; a clock of its own step left as it is.
-fn frame_clocks(lay: &mut Map<String, Value>, protocol: &str, clock: &wireskein_io::Line, rate: f64) {
-    if clock.step != 1 {
-        return;
-    }
-    let Some(items) = lay.get_mut(lower(protocol)).and_then(|v| v.as_array_mut()) else {
-        return;
-    };
-    let e = &clock.edges;
-    // the rises with a fall after them, and each one's high
-    let (mut t, mut high) = (vec![], vec![]);
-    for i in 0..e.len().saturating_sub(1) {
-        if clock.initial ^ (((i + 1) & 1) as u8) == 1 {
-            t.push(e[i]);
-            high.push((e[i + 1] - e[i]) as f64);
-        }
-    }
-    let ns = 1e9 / rate;
-    let median = |v: &mut Vec<f64>| {
-        v.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        let n = v.len();
-        if n % 2 == 1 {
-            v[n / 2]
-        } else {
-            (v[n / 2 - 1] + v[n / 2]) / 2.0
-        }
-    };
-    let r1 = |x: f64| ((x * 10.0).round_ties_even()) / 10.0;
-    for x in items.iter_mut() {
-        let (Some(s), Some(en)) = (x.get("s").and_then(|v| v.as_i64()), x.get("e").and_then(|v| v.as_i64())) else {
-            continue;
-        };
-        if en <= s {
-            continue;
-        }
-        let lo = t.partition_point(|&v| v < s);
-        let hi = t.partition_point(|&v| v <= en);
-        if hi >= lo + 8 {
-            let o = x.as_object_mut().unwrap();
-            if !o.contains_key("period_ns") {
-                let mut d: Vec<f64> = t[lo..hi].windows(2).map(|w| (w[1] - w[0]) as f64).collect();
-                o.insert("period_ns".into(), json!(r1(median(&mut d) * ns)));
-            }
-            let mut h: Vec<f64> = high[lo..hi - 1].to_vec();
-            o.insert("high_ns".into(), json!(r1(median(&mut h) * ns)));
-        }
-    }
-}
-
 /// A claim as the document gives it: in final mode its result (the final layer), in all mode its layers and
 /// evidence.
-fn claim_doc(c: &wireskein_core::Claim, mode: &str, lines: &[wireskein_io::Line], rate: f64) -> Value {
+fn claim_doc(c: &wireskein_core::Claim, mode: &str, lines: &[wireskein_io::Line], rate: f64, n: i64) -> Value {
     let mut out = Map::new();
     out.insert("protocol".into(), json!(c.protocol));
     out.insert("roles".into(), json!(c.roles));
@@ -127,9 +59,7 @@ fn claim_doc(c: &wireskein_core::Claim, mode: &str, lines: &[wireskein_io::Line]
     out.insert("margin".into(), json!(c.margin));
     out.insert("params".into(), Value::Object(c.params.clone()));
     let mut lay: Map<String, Value> = serde_json::from_str(c.layers.get()).unwrap_or_default();
-    if let Some(clk) = c.roles.get("clk").and_then(|n| lines.iter().find(|l| &l.name == n)) {
-        frame_clocks(&mut lay, &c.protocol, clk, rate);
-    }
+    let notes = note(c, &mut lay, lines, rate, n);
     if mode == "all" {
         out.insert("layers".into(), Value::Object(lay));
         out.insert("evidence".into(), Value::Object(c.evidence.clone()));
@@ -143,7 +73,60 @@ fn claim_doc(c: &wireskein_core::Claim, mode: &str, lines: &[wireskein_io::Line]
         }
         out.insert("result".into(), Value::Object(res));
     }
+    out.extend(notes);
     Value::Object(out)
+}
+
+/// What analyze tells beside a claim (Python's `decode._note_undersampled`): an RVSWD or SWIO claim's unread
+/// stretches and `reading`; a clocked claim's frames given their clock (`period_ns`, `high_ns`), its `reading`,
+/// `clock_speeds` and `undersampled`.
+fn note(
+    c: &wireskein_core::Claim,
+    lay: &mut Map<String, Value>,
+    lines: &[wireskein_io::Line],
+    rate: f64,
+    n: i64,
+) -> Map<String, Value> {
+    let mut out = Map::new();
+    let line = |name: &str| lines.iter().find(|l| l.name == name);
+    let pins: Vec<&wireskein_io::Line> = c.roles.values().filter_map(|p| line(p)).collect();
+    let clk = c.roles.get("clk").and_then(|p| line(p));
+    let data: Vec<&wireskein_io::Line> = c
+        .roles
+        .iter()
+        .filter(|(k, _)| *k != "clk")
+        .filter_map(|(_, p)| line(p))
+        .collect();
+    let un = if c.protocol == "rvswd" || c.protocol == "swio" {
+        let idle = (report::IDLE_S * rate).round_ties_even() as i64;
+        let mut empty = vec![];
+        let un = report::unread(&c.protocol, &pins, lay, idle, None, n, &mut empty);
+        if clk.is_none() {
+            let frames = report::frame_items(lay, &c.protocol).cloned().unwrap_or_default();
+            let r = report::reading(&frames, Some(&un), &[], &pins, None, &[], n);
+            out.insert("reading".into(), Value::Object(r));
+        }
+        Some(un)
+    } else {
+        None
+    };
+    let Some(clk) = clk else { return out };
+    let Some(frames) = report::frame_items(lay, &c.protocol) else {
+        let r = report::reading(&[], un.as_deref(), &[], &pins, Some(clk), &data, n);
+        out.insert("reading".into(), Value::Object(r));
+        return out;
+    };
+    report::frame_clocks(frames, clk, rate);
+    let speeds = report::clock_speeds(rate, frames);
+    let r = report::reading(frames, un.as_deref(), &speeds, &pins, Some(clk), &data, n);
+    out.insert("reading".into(), Value::Object(r));
+    if !speeds.is_empty() {
+        out.insert("clock_speeds".into(), json!(speeds));
+    }
+    if let Some(u) = report::undersampled(rate, &speeds, &clk.name) {
+        out.insert("undersampled".into(), u);
+    }
+    out
 }
 
 /// The hints of `--hint`: protocol names ("uart,spi"), JSON, or @a file of JSON.
@@ -205,7 +188,12 @@ pub fn analyze_file(path: &Path, hints: &Value, part: Option<usize>, mode: &str)
         d.extend(wireskein_io::wsk::part_keys(&p.meta));
         d.insert(
             "claims".into(),
-            Value::Array(claims.iter().map(|c| claim_doc(c, mode, &p.lines, rate)).collect()),
+            Value::Array(
+                claims
+                    .iter()
+                    .map(|c| claim_doc(c, mode, &p.lines, rate, p.ticks))
+                    .collect(),
+            ),
         );
         if !relations.is_empty() {
             d.insert("relations".into(), Value::Array(relations));
