@@ -551,21 +551,6 @@ fn extra_meta(cap: &Capture) -> J {
     m
 }
 
-/// A line's level at each tick of [s0, s1).
-fn tick_levels(l: &Line, s0: i64, s1: i64) -> Vec<u8> {
-    let mut j = l.edges.partition_point(|&x| x <= s0);
-    let mut lv = l.initial ^ (j & 1) as u8;
-    let mut out = Vec::with_capacity((s1 - s0) as usize);
-    for t in s0..s1 {
-        while j < l.edges.len() && l.edges[j] <= t {
-            j += 1;
-            lv ^= 1;
-        }
-        out.push(lv);
-    }
-    out
-}
-
 /// The lines kept as changes whose quanta hide changes (a .sr or a VCD has no form for them: wireskein-format §4.4).
 fn refuse_hidden(p: &Part, what: &str) -> Result<(), String> {
     let hid: Vec<String> = p
@@ -720,8 +705,23 @@ pub fn write_sr(path: &Path, cap: &Capture, extras: &[(String, Vec<u8>)]) -> Res
         if n_ch > 0 {
             let mut out = vec![0u32; (s1 - s0) as usize];
             for (k, l) in lines.iter().enumerate() {
-                for (x, lv) in out.iter_mut().zip(tick_levels(l, s0, s1)) {
-                    *x |= (lv as u32) << k;
+                // each stretch at 1 between the line's changes set at once
+                let mut j = l.edges.partition_point(|&x| x <= s0);
+                let mut lv = l.initial ^ (j & 1) as u8;
+                let mut t = s0;
+                while t < s1 {
+                    let next = l.edges.get(j).copied().unwrap_or(s1).clamp(t, s1);
+                    if lv == 1 {
+                        out[(t - s0) as usize..(next - s0) as usize]
+                            .iter_mut()
+                            .for_each(|x| *x |= 1 << k);
+                    }
+                    if next >= s1 {
+                        break;
+                    }
+                    t = next;
+                    j += 1;
+                    lv ^= 1;
                 }
             }
             let mut bytes = Vec::with_capacity(out.len() * unitsize);

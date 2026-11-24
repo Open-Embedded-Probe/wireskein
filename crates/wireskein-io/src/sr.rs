@@ -129,6 +129,8 @@ pub fn read_from<R: Read + std::io::Seek>(r: R) -> Result<Capture, String> {
         .collect();
     let mut state: Vec<(Option<u8>, u8, Vec<i64>)> = vec![(None, 0, vec![]); plan.len()];
     let mut first_sample: Option<u64> = None;
+    let every_tick = plan.iter().all(|&(_, _, step, phase)| step == 1 && phase == 0);
+    let mut last: Option<u64> = None;
     let mut idx: i64 = 0;
     let mut buf = vec![0u8; BLOCK * unitsize];
     let mut carry: Vec<u8> = vec![];
@@ -146,6 +148,12 @@ pub fn read_from<R: Read + std::io::Seek>(r: R) -> Result<Capture, String> {
                 if first_sample.is_none() {
                     first_sample = Some(v);
                 }
+                // the same sample as the one before: no line of one tick a sample changes (most of a capture)
+                if every_tick && last == Some(v) {
+                    idx += 1;
+                    continue;
+                }
+                last = Some(v);
                 for (st, &(b, _, step, phase)) in state.iter_mut().zip(&plan) {
                     if idx < phase || (idx - phase) % step != 0 {
                         continue;
