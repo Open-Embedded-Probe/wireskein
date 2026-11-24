@@ -47,9 +47,9 @@ from . import _fileformat as fileformat
 
 FORMAT = "wireskein-run/1"          # docs/run-format.ja.md
 
-__all__ = ["FORMAT", "Recorder", "becomes", "can", "qspi", "rs485", "dead_time", "ends", "i2c", "i2c_timing", "i2s", "ir", "level", "lin", "only_moving",
-           "onewire", "phase", "protocol", "pulses", "quadrature", "rgb_led", "sd_spi", "skew", "spi", "square", "starts", "trim", "uart",
-           "voltage"]
+__all__ = ["FORMAT", "Recorder", "becomes", "can", "qspi", "rs485", "dead_time", "ends", "i2c", "i2c_timing", "i2s",
+           "ir", "level", "lin", "only_moving", "onewire", "phase", "protocol", "pulses", "quadrature", "rgb_led",
+           "sd_spi", "skew", "spi", "square", "starts", "trim", "uart", "voltage", "spdif"]
 
 
 class Recorder:
@@ -653,6 +653,19 @@ def i2s(bclk: str, ws: str, sd: str, format: str = "i2s", bits: int | None = Non
     return _t({"kind": "i2s", "bclk": bclk, "ws": ws, "sd": sd, "format": format, "bits": bits, "fs_hz": fs_hz,
                "fs_rel": fs_rel, "samples": samples and [list(v) for v in samples], "slot_bits": slot_bits,
                "left_ws": left_ws}, threshold)
+
+
+def spdif(pin: str, audio: dict | None = None, status: int | None = None, status_b: int | None = None,
+          fs_hz: float | None = None, fs_rel: float = 0.01, errors_max: int = 0, threshold=None) -> dict:
+    """S/PDIF (IEC 60958) on one line, biphase mark coded: its subframes in order, channel A (preamble B or M) and B
+    (W) by turns, B every 192 frames, each subframe's parity even; errors_max of them may break that (a subframe
+    out of turn, a block not 192 frames, a parity that fails, a subframe missing between two). audio
+    {"A": value, "B": value}: every subframe of the channel carries the value (24 bits as read: the 4 auxiliary bits
+    and the 20 audio bits, LSB first; a list: those values found in a row); status: channel A's channel status, the C
+    bits of the first 32 frames of every whole block as an integer (bit k from frame k), status_b channel B's
+    (default status); fs_hz: the frame rate within fs_rel (relative). Nothing expected: measured."""
+    return _t({"kind": "spdif", "pin": pin, "audio": None if audio is None else dict(audio), "status": status,
+               "status_b": status_b, "fs_hz": fs_hz, "fs_rel": fs_rel, "errors_max": errors_max}, threshold)
 
 
 def quadrature(a: str, b: str, steps: int | None = None, cycles: float | None = None, direction: str | None = None,

@@ -221,6 +221,7 @@ WireSkein は、キャプチャを読み手に要るものに変えます。サ�
 | `qspi(clk, cs, io, transfers, mode, cs_active, freq_hz, freq_rel)` | 複数のデータ線の SPI（デュアル、クアッド、オクタル。§4.5）。CS がアクティブな窓ごとに、相ごとに読む: 命令、アドレス、ダミーのクロック、データ。相ごとに線が違ってよい |
 | `lin(pin, baud, frames, baud_rel, break_min_bits, checksum)` | LIN のフレーム（§4.7）。識別子とデータ、sync、識別子のパリティ、チェックサム、break と区切りの長さ、同期の欄から測ったボーレート |
 | `i2s(bclk, ws, sd, format, bits, fs_hz, fs_rel, samples, slot_bits, left_ws)` | I2S の類の音声（§4.7）。形式、サンプルの速さ、1 チャンネルの BCLK の数、続いて現れるサンプルの列 |
+| `spdif(pin, audio, status, status_b, fs_hz, fs_rel, errors_max)` | S/PDIF（§4.7）。サブフレームの並び（A / B が交互、B が 192 フレームごと、パリティ）、チャネルごとの音声、チャネル状態、フレームの速さ |
 | `quadrature(a, b, steps, cycles, direction, errors_max)` | 2 相のエンコーダ（§4.7）。数（ステップか周期）、向き、両方の線が同時に変わった回数 |
 | `sd_spi(clk, mosi, miso, cs, commands, mode, cs_active, ncr_max_bytes)` | SD カードの SPI のモード（§4.8）。コマンドの列（番号、引数、R1、R7 / R3 / R2、データのブロック）、NCR のうちの応答、CMD0 と CMD8 の CRC7、カードのブロックの CRC16 |
 
@@ -268,7 +269,7 @@ rs485("PA2", "PA1", 115200, lead_min_s=1e-6, tail_max_s=1 / 115200)
 
 ### 4.3 アナログの線にロジックの検査をかける（`threshold=`）
 
-ロジックの検査（`square`、`level`、`starts` / `ends`、`pulses`、`i2c`、`spi`、`uart`、`phase`、`skew`、`dead_time`、`i2c_timing`、`rgb_led`、`onewire`、`ir`、`lin`、`i2s`、`quadrature`、`sd_spi`）は、`threshold=` を与えると、アナログのチャンネルをその電圧でロジックとして読みます。
+ロジックの検査（`square`、`level`、`starts` / `ends`、`pulses`、`i2c`、`spi`、`uart`、`phase`、`skew`、`dead_time`、`i2c_timing`、`rgb_led`、`onewire`、`ir`、`lin`、`i2s`、`spdif`、`quadrature`、`sd_spi`）は、`threshold=` を与えると、アナログのチャンネルをその電圧でロジックとして読みます。
 
 - 1 つの値（例 `threshold=1.65`）か、ヒステリシスの組（例 `threshold=(1.0, 2.3)`: 2.3 V に達したら high、1.0 V まで下がったら low）。ノイズの乗った遅いエッジは、組にすると 1 本のエッジになります。
 - `threshold=` のないロジックの検査にアナログのチャンネルを渡すと、未検査になります。電圧への換算がファイルにないチャンネルも未検査です。
@@ -346,11 +347,12 @@ onewire("PD2", ["cc44", "ccbe"])                                  # Skip ROM + C
 ir("PB1", [{"addr": 0x04, "cmd": 0x08}, {"repeat": True}], carrier_hz=38e3)
 ```
 
-### 4.7 LIN、CAN、I2S、2 相のエンコーダ
+### 4.7 LIN、CAN、I2S、S/PDIF、2 相のエンコーダ
 
 - **`lin`**: 線は high で休みます。`baud` で 11 ビット以上の low を break とし、その後の high を区切りとします。次の break か、2 文字より長い休みまでの文字（8N1）が、sync、保護された識別子、データ、チェックサム（最後の文字）です。各フレームのビットの長さは、スレーブと同じく sync の欄（0x55 の 5 つの立ち下がりが 8 ビット）から測り、その長さで文字を読みます。break は `break_min_bits`（既定 13、LIN 2.x のマスタの下限）以上、区切りは 1 ビット以上です。チェックサムは `checksum="auto"` なら、診断の 0x3C / 0x3D は classic、ほかは enhanced です。
 - **`can`**: バスのレベルの 1 本の線で、レセッシブが `idle` です（コントローラの RX か、トランシーバの RXD。コントローラの TX だけには ACK が無いので `ack=False`）。受信するノードと同じに、11 ビットのレセッシブの後（フレームの終わりの後は 3 ビット）のドミナントのエッジでフレームを始め、各ビットをその `sample_point` で読み、レセッシブからドミナントへのエッジごとに同期し直します。フレームの始めから CRC の終わりまでで 6 つ目の同じビットはスタッフの誤り、CRC の区切り、ACK の区切り、フレームの終わりがドミナントなら形式の誤り、合わない CRC は CRC の誤りです。どれも NG です。わざと誤りを起こす試験は、種類ごとに「ちょうどこの数」を書きます: `errors={"stuff": 1}`。誤りの後は 11 ビットのレセッシブ（エラーフレームの区切りとインターミッション）を待つので、送り直されたフレームは読めます。フレームの中のエラーフラグは、スタッフの誤り（6 ビットのドミナント）と読みます。`frames` は正しいフレームを順に比べます（`ext` は書かなければ id が 0x7FF を超えるかで決まり、`rtr` はリモートフレーム）。ビットレートは、レセッシブからドミナントへのエッジの間隔から求めます（トランシーバの往復の遅れは打ち消されます）。ほかに `error_flags`（6 ビット以上のドミナント）、`unacked`、`errors_at` も測ります。
 - **`i2s`**: SD と WS を BCLK の立ち上がりで読みます。WS が変わるまでの立ち上がりが 1 チャンネル（スロット）です。`format` の `"i2s"`（Philips）は WS が変わった 1 BCLK 後に MSB、`"left"` は変わったところに MSB、`"right"` はスロットの最後のビットで語が終わります（`bits` が要る）。語は 2 の補数、MSB から。左のチャンネルは `"i2s"` で WS が low、ほかは high（違う相手は `left_ws`）。`samples` は、読んだフレームの中に続けて現れれば OK です（窓は音の途中で始まる）。WS と SD が BCLK の low のうちに変わった割合も出します（判定はしません）。
+- **`spdif`**: 1 本の線の S/PDIF（IEC 60958）。1 フレーム 128 半セルのバイフェーズマーク符号です。サブフレームは順に並ぶこと: チャネル A（前置き B か M）と B（W）が交互、抜けなし、B が 192 フレームごと、どのパリティも偶数。崩れは `errors_max` 個まで（時刻つきで報告）。`audio={"A": v, "B": v}`: そのチャネルのどのサブフレームも `v`（読んだままの 24 ビット: 補助の 4 ビットと音声の 20 ビット、LSB から）、またはリストを並びとして見つける。`status`: チャネル A のチャネル状態。どの完全なブロックでも、先頭 32 フレームの C ビットを整数にしたもの（ビット k がフレーム k。B は `status_b`、既定は同じ）。`fs_hz`: フレームの速さを `fs_rel` の中で。速さを量る長さは半セル（§4.11）。
 - **`quadrature`**: A が B より先に変わる向きを +1 とし、エッジごとに数えます（`steps`。`cycles` は 4 で割ったもの）。両方の線が同じ刻みで変わったら、状態を 1 つ飛ばしたとして誤りに数えます（エンコーダに対してサンプルが遅いか、故障）。
 
 ```python
@@ -358,6 +360,7 @@ lin("PA2", 19200, [{"id": 0x10, "data": "01020304"}])
 can("PB8", 500_000, [{"id": 0x123, "data": "112233"}, {"id": 0x18DAF110, "data": ""}])
 i2s("PB13", "PB12", "PB15", "i2s", 16, fs_hz=48000, samples=[(0, 0), (1000, -1000)])
 quadrature("PA0", "PA1", cycles=24, direction="forward")
+spdif("PD9", audio={"A": 0x123456, "B": 0x654321}, status=0x02000004, fs_hz=48000)
 ```
 
 ### 4.8 SD カードの SPI のモード

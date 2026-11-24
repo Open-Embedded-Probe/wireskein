@@ -43,7 +43,7 @@
 
 ### 2.3 検査
 
-`checks` の各要素は `{"kind": ..., ...}` のオブジェクトです。`kind` は `square`、`level`、`starts`、`ends`、`only_moving`、`pulses`、`i2c`、`spi`、`uart`、`voltage`、`phase`、`skew`、`dead_time`、`i2c_timing`、`rgb_led`、`onewire`、`ir`、`lin`、`i2s`、`quadrature`、`sd_spi` です。各検査のキーと意味は [キャプチャで試験する](capture-test-guide.ja.md) §4 にあります（Python の `wireskein.runlog` の同名の関数が、このオブジェクトを作ります）。
+`checks` の各要素は `{"kind": ..., ...}` のオブジェクトです。`kind` は `square`、`level`、`starts`、`ends`、`only_moving`、`pulses`、`i2c`、`spi`、`uart`、`voltage`、`phase`、`skew`、`dead_time`、`i2c_timing`、`rgb_led`、`onewire`、`ir`、`lin`、`i2s`、`spdif`、`quadrature`、`sd_spi` です。各検査のキーと意味は [キャプチャで試験する](capture-test-guide.ja.md) §4 にあります（Python の `wireskein.runlog` の同名の関数が、このオブジェクトを作ります）。
 
 検査が比べる値の名前（どの検査も同じ規則）:
 
@@ -56,7 +56,7 @@
 
 量は、期待の値と同じ語（`freq_hz` → `freq_rel`）。単位は最後（`_s`、`_hz`、`_v`、`_deg`、`_bits`、`_bytes`）。数と比には付けない。
 
-- `threshold`（V、または `(low, high)`）を与えると、ロジックの検査（`square`、`level`、`starts`、`ends`、`pulses`、`i2c`、`spi`、`uart`、`phase`、`skew`、`dead_time`、`i2c_timing`、`rgb_led`、`onewire`、`ir`、`lin`、`i2s`、`quadrature`、`sd_spi`）が、アナログのチャンネルをロジックとして読みます。
+- `threshold`（V、または `(low, high)`）を与えると、ロジックの検査（`square`、`level`、`starts`、`ends`、`pulses`、`i2c`、`spi`、`uart`、`phase`、`skew`、`dead_time`、`i2c_timing`、`rgb_led`、`onewire`、`ir`、`lin`、`i2s`、`spdif`、`quadrature`、`sd_spi`）が、アナログのチャンネルをロジックとして読みます。
 - `only_moving` は、ロジックのチャンネルだけを見ます。
 
 ### 2.4 プローブの時計の行

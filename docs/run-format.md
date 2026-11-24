@@ -43,7 +43,7 @@ The run is a directory, with each capture in a separate file, so that if the tes
 
 ### 2.3 Checks
 
-Each element of `checks` is an object `{"kind": ..., ...}`. `kind` is one of `square`, `level`, `starts`, `ends`, `only_moving`, `pulses`, `i2c`, `spi`, `uart`, `voltage`, `phase`, `skew`, `dead_time`, `i2c_timing`, `rgb_led`, `onewire`, `ir`, `lin`, `i2s`, `quadrature`, `sd_spi`. The keys and meaning of each check are in [Testing with captures](capture-test-guide.md) §4 (the functions of the same names in Python's `wireskein.runlog` build these objects).
+Each element of `checks` is an object `{"kind": ..., ...}`. `kind` is one of `square`, `level`, `starts`, `ends`, `only_moving`, `pulses`, `i2c`, `spi`, `uart`, `voltage`, `phase`, `skew`, `dead_time`, `i2c_timing`, `rgb_led`, `onewire`, `ir`, `lin`, `i2s`, `spdif`, `quadrature`, `sd_spi`. The keys and meaning of each check are in [Testing with captures](capture-test-guide.md) §4 (the functions of the same names in Python's `wireskein.runlog` build these objects).
 
 Names of the values a check compares (one rule for every check):
 
@@ -56,7 +56,7 @@ Names of the values a check compares (one rule for every check):
 
 The quantity is the same word as the expected value's (`freq_hz` → `freq_rel`). Units come last (`_s`, `_hz`, `_v`, `_deg`, `_bits`, `_bytes`); a count or a ratio has none.
 
-- When `threshold` (V, or `(low, high)`) is given, the logic checks (`square`, `level`, `starts`, `ends`, `pulses`, `i2c`, `spi`, `uart`, `phase`, `skew`, `dead_time`, `i2c_timing`, `rgb_led`, `onewire`, `ir`, `lin`, `i2s`, `quadrature`, `sd_spi`) read an analog channel as logic.
+- When `threshold` (V, or `(low, high)`) is given, the logic checks (`square`, `level`, `starts`, `ends`, `pulses`, `i2c`, `spi`, `uart`, `phase`, `skew`, `dead_time`, `i2c_timing`, `rgb_led`, `onewire`, `ir`, `lin`, `i2s`, `spdif`, `quadrature`, `sd_spi`) read an analog channel as logic.
 - `only_moving` looks at logic channels only.
 
 ### 2.4 Lines on the probe's clock

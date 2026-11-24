@@ -221,6 +221,7 @@ WireSkein turns a capture into what a reader needs, so the samples themselves do
 | `qspi(clk, cs, io, transfers, mode, cs_active, freq_hz, freq_rel)` | SPI on several data lines (dual, quad, octal; §4.5), per window of CS active, phase by phase: command, address, dummy clocks, data, each on its own lines |
 | `lin(pin, baud, frames, baud_rel, break_min_bits, checksum)` | LIN frames (§4.7): identifier and data, sync, identifier parity, checksum, break and delimiter lengths, the baud measured from the sync field |
 | `i2s(bclk, ws, sd, format, bits, fs_hz, fs_rel, samples, slot_bits, left_ws)` | I2S-like audio (§4.7): format, sample rate, BCLKs a channel, a run of samples found in a row |
+| `spdif(pin, audio, status, status_b, fs_hz, fs_rel, errors_max)` | S/PDIF (§4.7): the subframes in order (A / B by turns, B every 192 frames, parity), each channel's audio, the channel status, the frame rate |
 | `quadrature(a, b, steps, cycles, direction, errors_max)` | A quadrature encoder (§4.7): the count (steps or cycles), the direction, changes of both lines at once |
 | `sd_spi(clk, mosi, miso, cs, commands, mode, cs_active, ncr_max_bytes)` | An SD card in SPI mode (§4.8): the commands in order (index, argument, R1, R7 / R3 / R2, data blocks), answers within NCR, CMD0's and CMD8's CRC7, the card's blocks' CRC16 |
 
@@ -268,7 +269,7 @@ rs485("PA2", "PA1", 115200, lead_min_s=1e-6, tail_max_s=1 / 115200)
 
 ### 4.3 Applying logic checks to analog lines (`threshold=`)
 
-When given `threshold=`, the logic checks (`square`, `level`, `starts` / `ends`, `pulses`, `i2c`, `spi`, `uart`, `phase`, `skew`, `dead_time`, `i2c_timing`, `rgb_led`, `onewire`, `ir`, `lin`, `i2s`, `quadrature`, `sd_spi`) read an analog channel as logic at that voltage.
+When given `threshold=`, the logic checks (`square`, `level`, `starts` / `ends`, `pulses`, `i2c`, `spi`, `uart`, `phase`, `skew`, `dead_time`, `i2c_timing`, `rgb_led`, `onewire`, `ir`, `lin`, `i2s`, `spdif`, `quadrature`, `sd_spi`) read an analog channel as logic at that voltage.
 
 - Either a single value (e.g. `threshold=1.65`) or a hysteresis pair (e.g. `threshold=(1.0, 2.3)`: high on reaching 2.3 V, low on falling to 1.0 V). With a pair, a slow noisy edge becomes a single edge.
 - Passing an analog channel to a logic check without `threshold=` makes it unchecked. A channel whose voltage conversion is not in the file is also unchecked.
@@ -345,11 +346,12 @@ onewire("PD2", ["cc44", "ccbe"])                                  # Skip ROM + C
 ir("PB1", [{"addr": 0x04, "cmd": 0x08}, {"repeat": True}], carrier_hz=38e3)
 ```
 
-### 4.7 LIN, CAN, I2S, quadrature encoders
+### 4.7 LIN, CAN, I2S, S/PDIF, quadrature encoders
 
 - **`lin`**: the line idles high. A low of at least 11 bits at `baud` is a break, the high after it the delimiter. The characters (8N1) up to the next break or a pause longer than 2 characters are sync, protected identifier, data and checksum (the last). Each frame's bit time is measured from its sync field (0x55: its five falling edges span 8 bits), as a slave synchronizes, and its characters are read at that rate. A break must be at least `break_min_bits` (default 13, LIN 2.x's master minimum), a delimiter at least one bit. With `checksum="auto"` the diagnostic ids 0x3C / 0x3D take the classic checksum, the others the enhanced one.
 - **`can`**: one line at the bus level, recessive = `idle` (a controller's RX, or a transceiver's RXD; a controller's TX alone has no ACK, so `ack=False`). As a receiving node it starts a frame at a dominant edge after 11 recessive bits (3 after a frame's end), samples each bit at `sample_point` of it and resynchronizes at each recessive-to-dominant edge. A sixth equal bit from the start of frame to the end of the CRC is a stuff error, a dominant CRC delimiter, ACK delimiter or end of frame a form error, a CRC that does not match a CRC error. Any of them is NG; a test that makes errors on purpose names how many, exactly, per kind: `errors={"stuff": 1}`. After an error the reading waits for 11 recessive bits (the error frame's delimiter and the intermission), so the frame sent again reads. An error flag inside a frame reads as a stuff error (six dominant bits). `frames` compares the good frames in order (`ext` follows from an id above 0x7FF unless given; `rtr` for a remote frame). The bit rate is fitted from the intervals between recessive-to-dominant edges (a transceiver's loop delay cancels). Measured too: `error_flags` (dominant runs of six bits or more), `unacked`, `errors_at`.
 - **`i2s`**: SD and WS are read on BCLK's rising edges; the rising edges until WS changes are one channel (a slot). `format` `"i2s"` (Philips) puts the MSB one BCLK after WS changes, `"left"` at the change, `"right"` ends the word at the slot's last bit (`bits` needed). Words are two's complement, MSB first. The left channel is WS low in `"i2s"`, high otherwise (`left_ws` for others). `samples` is OK when found in a row among the frames read (the window starts mid-stream). The share of WS and SD changes made while BCLK is low is reported (not judged).
+- **`spdif`**: S/PDIF (IEC 60958) on one line, biphase mark coded at 128 half cells a frame. The subframes must come in order: channel A (preamble B or M) and B (W) by turns, none missing, B every 192 frames, each parity even; `errors_max` of them may break that (each reported with its time). `audio={"A": v, "B": v}`: every subframe of the channel carries `v`, the 24 bits as read (the 4 auxiliary bits and the 20 audio bits, LSB first), or a list found in a row. `status`: channel A's channel status, the C bits of the first 32 frames of every whole block as an integer (bit k from frame k; `status_b` for B, default the same). `fs_hz`: the frame rate within `fs_rel`. A half cell is the length the rate is weighed against (§4.11).
 - **`quadrature`**: +1 for each edge with A changing ahead of B (`steps`; `cycles` is that over 4). Both lines changing on one tick is counted as an error: a state skipped (sampled too slowly for the encoder, or a fault).
 
 ```python
@@ -357,6 +359,7 @@ lin("PA2", 19200, [{"id": 0x10, "data": "01020304"}])
 can("PB8", 500_000, [{"id": 0x123, "data": "112233"}, {"id": 0x18DAF110, "data": ""}])
 i2s("PB13", "PB12", "PB15", "i2s", 16, fs_hz=48000, samples=[(0, 0), (1000, -1000)])
 quadrature("PA0", "PA1", cycles=24, direction="forward")
+spdif("PD9", audio={"A": 0x123456, "B": 0x654321}, status=0x02000004, fs_hz=48000)
 ```
 
 ### 4.8 SD cards in SPI mode

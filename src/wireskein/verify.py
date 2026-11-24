@@ -1176,6 +1176,84 @@ def check_i2s(cap, x):
     return (ok if asked or ok is not True else MEASURED), got, why
 
 
+def check_spdif(cap, x):
+    """S/PDIF on one line (runlog.spdif): the subframes in order, the audio and channel status expected, the rate."""
+    from ._engine import spdif
+    ch = _ch(cap, x["pin"])
+    if ch is None:
+        return None, {}, "pin not captured"
+    sf = spdif.subframes(np.asarray(ch.edges, np.int64))
+    got = {"subframes": len(sf)}
+    if len(sf) < 2:
+        return False, got, "no S/PDIF subframes read"
+    span = float(np.median([f["e"] - f["s"] for f in sf]))
+    got["fs_hz"] = float(cap.rate) / (2 * span)
+    chan = ["B" if f["preamble"] == "W" else "A" for f in sf]
+    # the order: by turns, none missing (one subframe's time apart), B every 192 frames; parity
+    errors = []
+    for i in range(1, len(sf)):
+        gap = (sf[i]["s"] - sf[i - 1]["s"]) / span
+        if abs(gap - 1) > 0.25:
+            errors.append(("missing", sf[i]["s"]))
+        elif chan[i] == chan[i - 1]:
+            errors.append(("out of turn", sf[i]["s"]))
+    starts = [i for i, f in enumerate(sf) if f["preamble"] == "B"]
+    for a, b in zip(starts, starts[1:]):
+        frames = sum(1 for c in chan[a:b] if c == "A")
+        if frames != 192:
+            errors.append((f"a block of {frames} frames", sf[a]["s"]))
+    errors += [("parity", f["s"]) for f in sf if not f["ok"]]
+    got.update(blocks=len(starts), errors=len(errors), parity_errors=sum(1 for e in errors if e[0] == "parity"),
+               first_errors=[{"kind": k, "t_s": t / float(cap.rate)} for k, t in errors[:5]])
+    parts = []
+    if len(errors) > x.get("errors_max", 0):
+        k, t = errors[0]
+        parts.append((False, f"{len(errors)} subframes out of order or failing parity (at most "
+                             f"{x.get('errors_max', 0)}): first {k} at {_si(t / float(cap.rate))}"))
+    vals = {c: [f["audio"] for f, cc in zip(sf, chan) if cc == c and f["ok"]] for c in ("A", "B")}
+    got["audio"] = {c: v[:4] for c, v in vals.items()}
+    for c, want in (x.get("audio") or {}).items():
+        have = vals.get(c, [])
+        if isinstance(want, (list, tuple)):
+            want = list(want)
+            hit = any(have[i:i + len(want)] == want for i in range(len(have) - len(want) + 1))
+            if not hit:
+                parts.append((False, f"channel {c}: {want[:4]}... not in a row among the {len(have)} read"))
+        else:
+            bad = [v for v in have if v != want]
+            if not have or bad:
+                parts.append((False, f"channel {c}: {len(bad)} of {len(have)} samples not {want:#x}"
+                                     + (f" (first {bad[0]:#x})" if bad else "")))
+    # the channel status: the C bits of each whole block's first 32 frames, per channel
+    status = {"A": [], "B": []}
+    for a in starts:
+        bits = {"A": [], "B": []}
+        for f, c in zip(sf[a:], chan[a:]):
+            if len(bits[c]) < 32:
+                bits[c].append(f["c"])
+            if len(bits["A"]) >= 32 and len(bits["B"]) >= 32:
+                break
+        for c in ("A", "B"):
+            if len(bits[c]) == 32:
+                status[c].append(sum(b << k for k, b in enumerate(bits[c])))
+    got["status"] = {c: [f"{v:#010x}" for v in sorted(set(v))] for c, v in status.items()}
+    for c, want in (("A", x.get("status")), ("B", x.get("status_b") if x.get("status_b") is not None else x.get("status"))):
+        if want is None:
+            continue
+        have = status[c]
+        if not have:
+            parts.append((False, f"channel {c}: no whole block's channel status read"))
+        elif any(v != want for v in have):
+            bad = next(v for v in have if v != want)
+            parts.append((False, f"channel {c}: channel status {bad:#010x}, want {want:#010x}"))
+    if x.get("fs_hz") is not None:
+        parts.append((abs(got["fs_hz"] / x["fs_hz"] - 1) <= x.get("fs_rel", 0.01),
+                      f"frame rate {got['fs_hz']:.1f} Hz vs {x['fs_hz']}"))
+    ok, why = _verdicts(parts)
+    asked = any(x.get(k) is not None for k in ("audio", "status", "status_b", "fs_hz"))
+    return (ok if asked or ok is not True else MEASURED), got, why
+
+
 def check_quadrature(cap, x):
     a, b = _ch(cap, x["a"]), _ch(cap, x["b"])
     if a is None or b is None:
@@ -2047,6 +2125,8 @@ def _lengths(cap, x: dict, got: dict) -> list[tuple]:
         rows.append(("a bit", 1 / float(x.get("bitrate") or got["bitrate"]), True, None))
     elif k == "i2s":
         half(x["bclk"], "BCLK's shorter half")
+    elif k == "spdif" and (x.get("fs_hz") or got.get("fs_hz")):
+        rows.append(("half a cell", 1 / (128 * float(x.get("fs_hz") or got["fs_hz"])), True, None))
     elif k == "square":
         if x.get("duty") is not None and x.get("freq_hz"):
             d = float(x["duty"])
@@ -2144,7 +2224,7 @@ def _notices(ok, why: str, got: dict, x: dict, cap) -> tuple:
 
 
 LOGIC = {"protocol", "becomes", "square", "level", "ends", "starts", "pulses", "i2c", "spi", "uart", "phase", "skew", "dead_time",
-         "i2c_timing", "rgb_led", "onewire", "ir", "lin", "i2s", "quadrature", "sd_spi"}   # checks that read logic levels
+         "i2c_timing", "rgb_led", "onewire", "ir", "lin", "i2s", "quadrature", "sd_spi", "spdif"}   # checks that read logic levels
 
 
 def _as_logic(cap: Capture, x: dict) -> tuple[Capture | None, str]:
@@ -2170,7 +2250,7 @@ CHECKS = {"protocol": check_protocol, "becomes": check_becomes, "square": check_
           "only_moving": check_only_moving, "pulses": check_pulses, "i2c": check_i2c, "spi": check_spi,
           "uart": check_uart, "voltage": check_voltage, "phase": check_phase, "skew": check_skew,
           "dead_time": check_dead_time, "i2c_timing": check_i2c_timing, "rgb_led": check_rgb_led,
-          "onewire": check_onewire, "ir": check_ir, "lin": check_lin, "i2s": check_i2s,
+          "onewire": check_onewire, "ir": check_ir, "lin": check_lin, "i2s": check_i2s, "spdif": check_spdif,
           "quadrature": check_quadrature, "sd_spi": check_sd_spi, "can": check_can, "rs485": check_rs485, "qspi": check_qspi}
 
 
