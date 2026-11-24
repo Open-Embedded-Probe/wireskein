@@ -14,9 +14,9 @@ fn lsb(b: &[u8]) -> u64 {
     b.iter().enumerate().fold(0u64, |a, (i, &x)| a | ((x as u64) << i))
 }
 
-/// The packets in one burst's bits: (packets, bits of evidence their checks hold).
-fn packets(bits: &[u8], t: &[i64]) -> (Vec<Value>, f64) {
-    let (mut out, mut info) = (vec![], 0.0);
+/// The packets in one burst's bits: (packets, bits of evidence their checks hold, bits they cover).
+fn packets(bits: &[u8], t: &[i64]) -> (Vec<Value>, f64, usize) {
+    let (mut out, mut info, mut covered) = (vec![], 0.0, 0usize);
     let mut i = 0usize;
     while i + 12 <= bits.len() {
         let h = &bits[i..i + 8];
@@ -60,9 +60,28 @@ fn packets(bits: &[u8], t: &[i64]) -> (Vec<Value>, f64) {
                         "rnw": if rnw == 1 { "R" } else { "W" }, "a": a,
                         "ack": match ack { 1 => "OK", 2 => "WAIT", _ => "FAULT" }, "data": data}),
         );
+        covered += j - i;
         i = j;
     }
-    (out, info)
+    (out, info, covered)
+}
+
+/// The bits of a burst that carry something: those outside runs of 8 or more equal bits (the host's idle clocks, a
+/// line reset's ones).
+fn active(bits: &[u8]) -> usize {
+    let mut n = 0usize;
+    let mut i = 0usize;
+    while i < bits.len() {
+        let mut j = i;
+        while j < bits.len() && bits[j] == bits[i] {
+            j += 1;
+        }
+        if j - i < 8 {
+            n += j - i;
+        }
+        i = j;
+    }
+    n
 }
 
 fn read(view: &View, clk: &Channel, dio: &Channel) -> Option<Candidate> {
@@ -80,16 +99,18 @@ fn read(view: &View, clk: &Channel, dio: &Channel) -> Option<Candidate> {
         return None;
     }
     let rises = edges_to(&cc, 1);
-    let (mut all, mut info, mut clocked) = (vec![], 0.0, 0usize);
+    let (mut all, mut info, mut clocked, mut covered, mut busy) = (vec![], 0.0, 0usize, 0usize, 0usize);
     for (a, b) in bursts(&ce) {
         let lo = rises.partition_point(|&x| x < a);
         let hi = rises.partition_point(|&x| x <= b);
         let t = &rises[lo..hi];
         clocked += t.len();
         let bits: Vec<u8> = t.iter().map(|&x| dc.level_at(x)).collect();
-        let (p, i) = packets(&bits, t);
+        let (p, i, c) = packets(&bits, t);
         all.extend(p);
         info += i;
+        covered += c;
+        busy += active(&bits);
     }
     if all.len() < 2 {
         return None;
@@ -107,12 +128,16 @@ fn read(view: &View, clk: &Channel, dio: &Channel) -> Option<Candidate> {
             (1.0 - (top - 0.5) / 0.5).max(0.05)
         }
     };
-    let score = (1.0 - 0.5f64.powf(info / EVIDENCE_BITS)) * (0.5 + 0.5 * degenerate);
+    // a bus of SWD is its packets (and idle clocks, line resets): a long burst of other bits holds a few packets by
+    // chance anywhere it is searched, and leaves most of its bits to no packet
+    let coverage = (covered as f64 / busy.max(1) as f64).min(1.0);
+    let score = (1.0 - 0.5f64.powf(info / EVIDENCE_BITS)) * (0.5 + 0.5 * degenerate) * coverage;
     let mut params = serde_json::Map::new();
     params.insert("clock_hz".into(), json!(view.rate / (2.0 * half)));
     let mut evidence = serde_json::Map::new();
     evidence.insert("packets".into(), json!(all.len()));
     evidence.insert("clocks".into(), json!(clocked));
+    evidence.insert("coverage".into(), json!(coverage));
     evidence.insert("degenerate".into(), json!(degenerate));
     Some(Candidate {
         protocol: "swd".into(),

@@ -271,9 +271,28 @@ pub fn candidates(view: &View) -> Vec<Candidate> {
         };
         let mut best: Option<Candidate> = None;
         let mut tried: Vec<f64> = vec![];
-        for unit in f.units.iter().take(3) {
+        // the bit time from the shortest runs (a single bit is common on CAN: stuffing makes them) and from the
+        // commonest one, beside the line's own units (which fractions of a bit can fit as well)
+        let mut sorted = inner.clone();
+        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let mut bases: Vec<f64> = vec![];
+        if !sorted.is_empty() {
+            bases.push(crate::kernels::quantile(&sorted, 0.05));
+            let mut hist = std::collections::BTreeMap::new();
+            for &x in &sorted {
+                *hist.entry(x.round() as i64).or_insert(0usize) += 1;
+            }
+            if let Some((&m, _)) = hist.iter().max_by(|a, b| a.1.cmp(b.1).then(b.0.cmp(a.0))) {
+                bases.push(m as f64);
+            }
+        }
+        bases.extend(f.units.iter().take(3).map(|u| u.samples));
+        for base in bases {
             let idle = f.idle;
-            let Some(u) = bit_time(ch, unit.samples, idle) else {
+            if base < 2.0 {
+                continue;
+            }
+            let Some(u) = bit_time(ch, base, idle) else {
                 continue;
             };
             if u < 2.0 || view.rate / u > MAX_NOMINAL || tried.iter().any(|&v| (u / v - 1.0).abs() < 0.03) {
