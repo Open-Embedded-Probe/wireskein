@@ -114,46 +114,71 @@ pub fn covered(ch: &Channel, n: i64, rate: f64) -> f64 {
     inside as f64 / lows.len() as f64
 }
 
-/// The CEC readings of a part: each line idling high with complete messages.
+/// The CEC reading of one line as it is given, or None.
+fn read(ch: &Channel, n: i64, rate: f64, k: i64) -> Option<Candidate> {
+    let mut msgs = messages(ch, n, rate);
+    let done = msgs.iter().filter(|m| m["complete"] == json!(true)).count();
+    if done < 2 {
+        return None;
+    }
+    let info: f64 = msgs
+        .iter()
+        .filter(|m| m["complete"] == json!(true))
+        .map(|m| {
+            let b = m["blocks"].as_u64().unwrap_or(1) as f64;
+            4.0 + if m["acked"] == json!(true) { 3.0 } else { 2.0 } * b
+        })
+        .sum();
+    let score = done as f64 / msgs.len() as f64 * (1.0 - 0.5f64.powf(info / EVIDENCE_BITS));
+    for m in &mut msgs {
+        m.remove("blocks");
+    }
+    let mut evidence = Map::new();
+    evidence.insert("messages".into(), json!(msgs.len()));
+    evidence.insert("complete".into(), json!(done));
+    let mut params = Map::new();
+    params.insert("deglitch".into(), json!(k));
+    let layers = crate::claim::raw(serde_json::to_string(&json!({ "messages": msgs })).unwrap());
+    Some(Candidate {
+        protocol: "cec".into(),
+        roles: [("cec".to_string(), ch.name.to_string())].into(),
+        score,
+        alt: None,
+        params,
+        evidence,
+        layers,
+    })
+}
+
+pub const NOISE_S: f64 = 50e-6; // pulses shorter than this are no CEC bit's (its lows are 0.4 ms or more)
+
+/// The CEC readings of a part: each line with complete messages, read as it is, with pulses under NOISE_S taken out,
+/// and with bounces merged; the best of the three.
 pub fn candidates(view: &View) -> Vec<Candidate> {
     let mut out = vec![];
     if view.rate < 20e3 {
         return out;
     }
+    let k = ((NOISE_S * view.rate) as i64).max(2);
     for ch in &view.channels {
         if ch.edges.len() < 20 {
             continue;
         }
-        let mut msgs = messages(ch, view.n_samples, view.rate);
-        let done = msgs.iter().filter(|m| m["complete"] == json!(true)).count();
-        if done < 2 {
-            continue;
+        let views = [
+            (ch.edges.to_vec(), 0),
+            (crate::kernels::deglitch(ch.edges, k), k),
+            (crate::kernels::debounce(ch.edges, k), -k),
+        ];
+        let mut best: Option<Candidate> = None;
+        for (e, kk) in views {
+            let c = Channel::new(ch.name, ch.initial, &e);
+            if let Some(r) = read(&c, view.n_samples, view.rate, kk)
+                && best.as_ref().is_none_or(|b| r.score > b.score)
+            {
+                best = Some(r);
+            }
         }
-        let info: f64 = msgs
-            .iter()
-            .filter(|m| m["complete"] == json!(true))
-            .map(|m| {
-                let b = m["blocks"].as_u64().unwrap_or(1) as f64;
-                4.0 + if m["acked"] == json!(true) { 3.0 } else { 2.0 } * b
-            })
-            .sum();
-        let score = done as f64 / msgs.len() as f64 * (1.0 - 0.5f64.powf(info / EVIDENCE_BITS));
-        for m in &mut msgs {
-            m.remove("blocks");
-        }
-        let mut evidence = Map::new();
-        evidence.insert("messages".into(), json!(msgs.len()));
-        evidence.insert("complete".into(), json!(done));
-        let layers = crate::claim::raw(serde_json::to_string(&json!({ "messages": msgs })).unwrap());
-        out.push(Candidate {
-            protocol: "cec".into(),
-            roles: [("cec".to_string(), ch.name.to_string())].into(),
-            score,
-            alt: None,
-            params: Map::new(),
-            evidence,
-            layers,
-        });
+        out.extend(best);
     }
     out
 }
