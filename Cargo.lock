@@ -557,6 +557,7 @@ dependencies = [
  "serde_json",
  "wireskein-core",
  "wireskein-io",
+ "zip",
 ]
 
 [[package]]

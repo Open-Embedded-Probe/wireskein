@@ -13,3 +13,6 @@ wireskein-core = { path = "../wireskein-core" }
 wireskein-io = { path = "../wireskein-io" }
 serde = "1"
 serde_json = "1"
+
+[dev-dependencies]
+zip = { version = "2", default-features = false, features = ["deflate"] }
