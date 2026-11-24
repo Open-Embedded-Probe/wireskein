@@ -253,7 +253,7 @@ pub fn candidates_with(view: &View, bauds: &std::collections::BTreeMap<String, f
     specific.extend(jtag::candidates_of(&groups));
     specific.extend(cjtag::candidates(view));
     specific.extend(sdmmc::candidates_of(&groups));
-    specific.extend(i2s::candidates_of(&groups));
+    specific.extend(i2s::candidates_of(&groups, view));
     specific.extend(usb::candidates(view));
     let sure: Vec<(Option<&str>, std::collections::BTreeSet<&str>)> = specific
         .iter()

@@ -14,6 +14,7 @@ pub const CLEAN: f64 = 0.3; // a run under this share of the clock's half period
 pub const DATA_KEEPS: f64 = 0.5; // a data line keeps to the clock this well at least
 pub const SCALE: f64 = 5.0; // the words of whole-byte windows counted as 1 - exp(-n / SCALE)
 pub const CS_FEWER: usize = 8; // a select changes this many times less than the clock at least
+pub const SELECT_MIN_BITS: usize = 2; // sampling edges a select's window holds at least for a transfer
 
 pub(crate) struct Clock {
     pub(crate) edges: Vec<i64>,
@@ -186,11 +187,18 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
     let mode = cpol as i64 * 2 + if rise == leading_rise { 0 } else { 1 };
     let mut transfers = vec![];
     let mut counts = vec![];
+    let mut single = 0usize; // sampling edges in a select's windows of one
     let mut values = vec![];
     for &(a, b) in &w {
         let lo = take.partition_point(|&x| x < a);
         let hi = take.partition_point(|&x| x < b);
+        // (a select's window around a single sampling edge is no transfer: a select toggling with the clock, as
+        // lines float while a board powers down; Python's SELECT_MIN_BITS)
         if lo == hi {
+            continue;
+        }
+        if cs.is_some() && hi - lo < SELECT_MIN_BITS {
+            single += hi - lo;
             continue;
         }
         let t = &take[lo..hi];
@@ -218,7 +226,7 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
         return None;
     }
     let whole = counts.iter().filter(|&&c| c % 8 == 0).count() as f64 / counts.len() as f64;
-    let covered = counts.iter().sum::<usize>() as f64 / take.len().max(1) as f64;
+    let covered = counts.iter().sum::<usize>() as f64 / (take.len() - single).max(1) as f64;
     // the data's changes inside the windows, and at most one a clock period there
     let mut inside = vec![];
     let mut once = vec![];
@@ -273,8 +281,13 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
         let inside_w = bs
             .iter()
             .filter(|&&(a, b)| {
-                let i = w.partition_point(|&(s, _)| s <= a);
-                i > 0 && b < w[i - 1].1
+                // every edge of the burst inside a window (one, or several of a select toggling with it)
+                let lo = ck.edges.partition_point(|&x| x < a);
+                let hi = ck.edges.partition_point(|&x| x <= b);
+                ck.edges[lo..hi].iter().all(|&x| {
+                    let i = w.partition_point(|&(s, _)| s <= x);
+                    i > 0 && x < w[i - 1].1
+                })
             })
             .count();
         let (mut held, mut tight) = (0usize, 0usize);

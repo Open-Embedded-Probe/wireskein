@@ -99,13 +99,16 @@ fn read(view: &View, clk: &Channel, dio: &Channel) -> Option<Candidate> {
         return None;
     }
     let rises = edges_to(&cc, 1);
+    // SWDIO at each rise as the host latches it: where the target drives its bits on the rise itself (its changes
+    // on the rise's own sample, a share of them), the level before (`clocked::sample`, Python's sync_bits)
+    let sampled = crate::clocked::sample(dc.initial, &de, &rises, &edges_to(&cc, 0));
     let (mut all, mut info, mut clocked, mut covered, mut busy) = (vec![], 0.0, 0usize, 0usize, 0usize);
     for (a, b) in bursts(&ce) {
         let lo = rises.partition_point(|&x| x < a);
         let hi = rises.partition_point(|&x| x <= b);
         let t = &rises[lo..hi];
         clocked += t.len();
-        let bits: Vec<u8> = t.iter().map(|&x| dc.level_at(x)).collect();
+        let bits: Vec<u8> = sampled[lo..hi].to_vec();
         let (p, i, c) = packets(&bits, t);
         all.extend(p);
         info += i;

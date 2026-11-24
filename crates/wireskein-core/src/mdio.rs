@@ -73,6 +73,27 @@ fn frames_in(bits: &[u8], ticks: &[i64]) -> Vec<Value> {
     out
 }
 
+/// Clause 45's register addresses followed: ADDR sets a device's (port and device) address, a write or a read is at
+/// it (`addr`), a read-and-increment steps it after reading.
+fn follow_addresses(frames: &mut [Value]) {
+    let mut at: std::collections::HashMap<(i64, i64), i64> = Default::default();
+    for f in frames.iter_mut() {
+        if f["clause"] != json!(45) {
+            continue;
+        }
+        let key = (f["phy"].as_i64().unwrap_or(0), f["dev"].as_i64().unwrap_or(0));
+        let op = f["op"].as_str().unwrap_or("").to_string();
+        if op == "ADDR" {
+            at.insert(key, f["data"].as_i64().unwrap_or(0));
+        } else if let Some(a) = at.get_mut(&key) {
+            f["addr"] = json!(*a);
+            if op == "RINC" {
+                *a = (*a + 1) & 0xFFFF;
+            }
+        }
+    }
+}
+
 /// The MDIO reading of (mdc, mdio), or None.
 fn read(view: &View, mdc: &Channel, mdio: &Channel) -> Option<Candidate> {
     let d: Vec<f64> = mdc.edges.windows(2).map(|w| (w[1] - w[0]) as f64).collect();
@@ -107,6 +128,7 @@ fn read(view: &View, mdc: &Channel, mdio: &Channel) -> Option<Candidate> {
     if frames.is_empty() {
         return None;
     }
+    follow_addresses(&mut frames);
     let fit = (frames.len() as f64 / windows.max(1) as f64).min(1.0);
     let quantity = 1.0 - (-(frames.len() as f64) / SCALE).exp();
     let datas: Vec<i64> = frames.iter().filter_map(|f| f["data"].as_i64()).collect();

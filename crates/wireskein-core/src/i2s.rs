@@ -298,8 +298,49 @@ fn read_tdm(t: &[i64], fs: &[u8], sd: &[u8]) -> Option<Read> {
     })
 }
 
+pub const OTHER_CLOCK: f64 = 0.1; // a share off for each line whose changes meet another clock's edges, not this one's
+pub const COINCIDE_TICKS: i64 = 1;
+
+/// The share of a line's changes within COINCIDE_TICKS of one of a clock's (Python's survey `coincide`).
+fn coincide(line: &[i64], clock: &[i64]) -> f64 {
+    if line.is_empty() || clock.is_empty() {
+        return 0.0;
+    }
+    let near = line
+        .iter()
+        .filter(|&&x| {
+            let j = clock.partition_point(|&y| y < x - COINCIDE_TICKS);
+            j < clock.len() && clock[j] <= x + COINCIDE_TICKS
+        })
+        .count();
+    near as f64 / line.len() as f64
+}
+
+/// 1, less OTHER_CLOCK for each line meeting another line's edges (another clock's) more than this clock's by over
+/// a half (`i2s._own_clock`: two audio buses whose bit clocks are 1 : 2 each read the other's WS in step).
+fn own_clock(view: &View, clock: &str, lines: &[&str]) -> f64 {
+    let Some(ck) = view.channel(clock) else {
+        return 1.0;
+    };
+    let mut f = 1.0;
+    for &l in lines {
+        let Some(lc) = view.channel(l) else { continue };
+        let mine = coincide(lc.edges, ck.edges);
+        let other = view
+            .channels
+            .iter()
+            .filter(|c| c.name != clock && c.name != l && c.edges.len() >= 16)
+            .map(|c| coincide(lc.edges, c.edges))
+            .fold(0.0, f64::max);
+        if other - mine > 0.5 {
+            f *= 1.0 - OTHER_CLOCK;
+        }
+    }
+    f
+}
+
 /// The best I2S (or TDM) reading of a group: each data line as WS beside each other as SD.
-fn read(g: &Group) -> Option<Candidate> {
+fn read(g: &Group, view: &View) -> Option<Candidate> {
     let lines = &g.lines[..g.lines.len().min(LINES_MAX)];
     if lines.len() < 2 {
         return None;
@@ -334,7 +375,8 @@ fn read(g: &Group) -> Option<Candidate> {
             } else {
                 ODD_SLOT
             };
-            let score = r.regular * q * (0.5 + 0.5 * pair) * tv * runs_on * usual;
+            let own = own_clock(view, g.clock, &[lines[wi].name, lines[si].name]);
+            let score = r.regular * q * (0.5 + 0.5 * pair) * tv * runs_on * usual * own;
             if best.as_ref().is_some_and(|b| b.score >= score) {
                 continue;
             }
@@ -349,6 +391,7 @@ fn read(g: &Group) -> Option<Candidate> {
             evidence.insert("square_words".into(), json!(tv));
             evidence.insert("runs_on".into(), json!(runs_on));
             evidence.insert("usual_slot".into(), json!(usual));
+            evidence.insert("own_clock".into(), json!(own));
             let layers = crate::claim::raw(serde_json::to_string(&json!({ "frames": r.frames })).unwrap());
             best = Some(Candidate {
                 protocol: "i2s".into(),
@@ -369,10 +412,10 @@ fn read(g: &Group) -> Option<Candidate> {
     best
 }
 
-pub fn candidates_of(gs: &[Group]) -> Vec<Candidate> {
+pub fn candidates_of(gs: &[Group], view: &View) -> Vec<Candidate> {
     let mut best = Default::default();
     for g in gs {
-        if let Some(c) = read(g) {
+        if let Some(c) = read(g, view) {
             keep_best(&mut best, c);
         }
     }
@@ -381,7 +424,7 @@ pub fn candidates_of(gs: &[Group]) -> Vec<Candidate> {
 
 /// The I2S readings of a part.
 pub fn candidates(view: &View) -> Vec<Candidate> {
-    candidates_of(&crate::clocked::groups(view))
+    candidates_of(&crate::clocked::groups(view), view)
 }
 
 #[cfg(test)]
