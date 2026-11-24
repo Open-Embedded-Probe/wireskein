@@ -16,6 +16,7 @@ pub const SCALE: f64 = 5.0; // the words of whole-byte windows counted as 1 - ex
 pub const CS_FEWER: usize = 8; // a select changes this many times less than the clock at least
 pub const SELECT_USED: f64 = 0.5; // a select's windows holding the clock, this share for a whole score
 pub const SINGLE_WINDOW: f64 = 0.5; // a select of a single window, standing alone, weighs this much
+pub const SNUG_FREE: f64 = 0.25; // a select's margin before its first transfer this share of the transfer, whole snug
 pub const SELECT_MIN_BITS: usize = 2; // sampling edges a select's window holds at least for a transfer
 
 pub(crate) struct Clock {
@@ -362,24 +363,31 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
                 })
             })
             .count();
-        let (mut held, mut tight) = (0usize, 0usize);
+        let (mut held, mut started, mut tight) = (0usize, 0usize, 0.0f64);
         for &(a, b) in &w {
             let lo = ck.edges.partition_point(|&x| x < a);
             let hi = ck.edges.partition_point(|&x| x < b);
             if hi > lo {
                 held += 1;
-                // (snug at its start: a select is made active just before its clock runs; it may be held on after
-                // the transfers a while - a session's - so its end is not asked)
-                let (f, l) = (ck.edges[lo], ck.edges[hi - 1]);
-                if f - a <= (l - f).max(1) + (4.0 * ck.half) as i64 {
-                    tight += 1;
+                // (snug at its start: a select is made active just before its clock runs - its first transfer, the
+                // margin a quarter of that at most, none past its length, however many follow; it may be held on
+                // after the transfers a while - a session's - so its end is not asked; a window the capture starts
+                // in has no start to tell)
+                if a <= 0 {
+                    continue;
                 }
+                started += 1;
+                let (f, l) = (ck.edges[lo], ck.edges[hi - 1]);
+                let k = bs.partition_point(|&(_, e)| e < f);
+                let l = bs.get(k).filter(|&&(s, _)| s <= f).map_or(l, |&(_, e)| e.min(l));
+                let r = (f - a) as f64 / ((l - f).max(1) as f64 + 4.0 * ck.half);
+                tight += ((1.0 - r) / (1.0 - SNUG_FREE)).clamp(0.0, 1.0);
             }
         }
         (
             inside_w as f64 / bs.len().max(1) as f64,
             held as f64 / w.len().max(1) as f64,
-            tight as f64 / held.max(1) as f64,
+            if started == 0 { 1.0 } else { tight / started as f64 },
         )
     } else {
         (1.0, 1.0, 1.0)
