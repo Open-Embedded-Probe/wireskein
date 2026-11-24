@@ -664,7 +664,7 @@ fn read(view: &View, clk: &Channel, dio: &Channel) -> Option<Candidate> {
         ("bit_coverage", json!(cover)),
         ("delimited", json!(!ss.is_empty())),
     ]);
-    Some(candidate(
+    let mut c = candidate(
         "rvswd",
         &[("clk", clk.name), ("dio", dio.name)],
         score,
@@ -674,7 +674,15 @@ fn read(view: &View, clk: &Channel, dio: &Channel) -> Option<Candidate> {
         "dmi",
         &reading.recs,
         0,
-    ))
+    );
+    // the sampling edges and DIO at each (Python's `bits` layer: to time the clock inside a frame)
+    let lay = json!({
+        "dmi": reading.recs,
+        "bits": {"clock": clk.name, "data": [dio.name], "sample_edge": "rise", "t": rises, "values": [bits],
+                 "deglitch": 0},
+    });
+    c.layers = crate::claim::raw(serde_json::to_string(&lay).unwrap());
+    Some(c)
 }
 
 /// The RVSWD readings of a part: each line clocking another that changes no more often.
