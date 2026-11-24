@@ -592,7 +592,7 @@ fn read_buses(lines: &[Line], rate: f64, n: i64, buses: &[Bus], strict: bool) ->
             // its claim (the upper stage's layers and score), else the reading on its own through the upper stage
             let claim = claims
                 .iter()
-                .find(|c| c.protocol == best.protocol && c.roles == best.roles && !c.bus)
+                .find(|c| c.protocol == best.protocol && c.roles == best.roles && c.bus.is_none())
                 .cloned()
                 .or_else(|| {
                     wireskein_core::upper::stage_with(wireskein_core::choose(vec![best.clone()]), rate)
