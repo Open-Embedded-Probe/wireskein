@@ -8,17 +8,26 @@
 pub mod can;
 pub mod cec;
 pub mod claim;
+pub mod dali;
+pub mod dcc;
 pub mod features;
 pub mod i2c;
+pub mod j1850;
 pub mod kernels;
 pub mod mdio;
 pub mod ps2;
+pub mod pulse;
 pub mod rebuild;
+pub mod sent;
+pub mod spdif;
 pub mod spi;
 pub mod swd;
+pub mod swim;
 pub mod sync;
 pub mod uart;
+pub mod usbpd;
 pub mod view;
+pub mod wiegand;
 
 pub use claim::Claim;
 pub use view::{Channel, View};
@@ -200,6 +209,14 @@ pub fn candidates_with(view: &View, bauds: &std::collections::BTreeMap<String, f
     cands.extend(ps2::candidates(view));
     cands.extend(swd::candidates(view));
     cands.extend(can::candidates(view));
+    cands.extend(dali::candidates(view));
+    cands.extend(dcc::candidates(view));
+    cands.extend(j1850::candidates(view));
+    cands.extend(sent::candidates(view));
+    cands.extend(spdif::candidates(view));
+    cands.extend(swim::candidates(view));
+    cands.extend(usbpd::candidates(view));
+    cands.extend(wiegand::candidates(view));
     cands
 }
 
