@@ -34,6 +34,7 @@ fn width(how: usize, half: f64) -> i64 {
     match how {
         1 => ((CLEAN * half) as i64).max(2).max(BOUNCE_MERGE_WIDE),
         2 => ((SHORTEST * half).round() as i64).max(2),
+        3 | 4 => REBUILD_DATA,
         _ => ((CLEAN * half) as i64).max(2),
     }
 }
@@ -45,6 +46,26 @@ fn shortest(e: &[i64], k: i64) -> Vec<i64> {
 }
 
 pub const SHORTEST: f64 = 0.6;
+pub const REBUILD_DATA: i64 = 4; // ticks: the data and select lines' bounces merged beside a rebuilt clock
+pub const REBUILD_SHORT: f64 = 0.02; // a clock's runs half its median or less, this share or more ...
+pub const REBUILD_FEW: usize = 4; // ... and this many at least: views with the clock rebuilt from its period
+
+/// Whether a clock's short runs are a bounce's: enough of them, side by side (a spike's stand alone).
+fn bounced(e: &[i64]) -> bool {
+    let r: Vec<f64> = e.windows(2).map(|w| (w[1] - w[0]) as f64).collect();
+    if r.len() < 16 {
+        return false;
+    }
+    let m = median(&r);
+    let short: Vec<bool> = r.iter().map(|&x| x <= 0.5 * m).collect();
+    let n = short.iter().filter(|&&x| x).count();
+    if n < REBUILD_FEW || (n as f64) < REBUILD_SHORT * r.len() as f64 {
+        return false;
+    }
+    let s2: Vec<bool> = r.iter().map(|&x| x < 0.5 * m + 1.0).collect();
+    let pairs = s2.windows(2).filter(|w| w[0] && w[1]).count() as f64;
+    pairs * 2.0 >= 0.5 * s2.iter().filter(|&&x| x).count() as f64
+}
 
 fn clock_of(ch: &Channel, clean: Clean, how: usize) -> Option<Clock> {
     if ch.edges.len() < 8 {
@@ -52,7 +73,11 @@ fn clock_of(ch: &Channel, clean: Clean, how: usize) -> Option<Clock> {
     }
     let d: Vec<f64> = ch.edges.windows(2).map(|w| (w[1] - w[0]) as f64).collect();
     let half = median(&d);
-    let c = clean(ch.edges, width(how, half));
+    let c = match how {
+        3 => crate::rebuild::refused(ch.edges, ch.initial),
+        4 => crate::rebuild::followed(ch.edges, ch.initial),
+        _ => clean(ch.edges, width(how, half)),
+    };
     if c.len() < 8 {
         return None;
     }
@@ -328,9 +353,19 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
 pub fn candidates(view: &View) -> Vec<Candidate> {
     let mut best: std::collections::BTreeMap<Vec<(String, String)>, Candidate> = Default::default();
     let act: Vec<&Channel> = view.channels.iter().filter(|c| c.edges.len() >= 4).collect();
-    let cleans: [(Clean, usize); 3] = [(deglitch, 0), (crate::kernels::debounce, 1), (shortest, 2)];
+    let debounce: Clean = crate::kernels::debounce;
+    let cleans: [(Clean, usize); 5] = [
+        (deglitch, 0),
+        (debounce, 1),
+        (shortest, 2),
+        (debounce, 3),
+        (debounce, 4),
+    ];
     for (clean, how) in cleans {
         for clk in &act {
+            if how >= 3 && !bounced(clk.edges) {
+                continue; // the clock rebuilt from its period only where its short runs are a bounce's
+            }
             let Some(ck) = clock_of(clk, clean, how) else {
                 continue;
             };
@@ -379,8 +414,10 @@ pub fn candidates(view: &View) -> Vec<Candidate> {
                 }
                 for set in sets {
                     if let Some(mut c) = read(view, clk, &ck, cs, &set) {
-                        c.params
-                            .insert("clean".into(), json!(["pulses", "bounces", "shortest"][how]));
+                        c.params.insert(
+                            "clean".into(),
+                            json!(["pulses", "bounces", "shortest", "rebuilt_refused", "rebuilt_followed"][how]),
+                        );
                         let key: Vec<(String, String)> = c.roles.clone().into_iter().collect();
                         if best.get(&key).is_none_or(|b| c.score > b.score) {
                             best.insert(key, c);

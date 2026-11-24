@@ -9,6 +9,7 @@ pub mod claim;
 pub mod features;
 pub mod i2c;
 pub mod kernels;
+pub mod rebuild;
 pub mod spi;
 pub mod sync;
 pub mod uart;
