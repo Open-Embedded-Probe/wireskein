@@ -12,16 +12,21 @@ pub mod claim;
 pub mod clocked;
 pub mod dali;
 pub mod dcc;
+pub mod dht;
 pub mod features;
 pub mod i2c;
 pub mod i2s;
+pub mod irnec;
 pub mod j1850;
 pub mod jtag;
 pub mod kernels;
 pub mod mdio;
+pub mod onewire;
 pub mod ps2;
 pub mod pulse;
+pub mod pulsecode;
 pub mod rebuild;
+pub mod rgbled;
 pub mod sdmmc;
 pub mod sent;
 pub mod spdif;
@@ -223,7 +228,8 @@ pub fn candidates_with(view: &View, bauds: &std::collections::BTreeMap<String, f
             })
     });
     cands.extend(specific);
-    // the readers of a line's own timing, each reading checked (CRC, parity, fixed framing): a line one of them reads
+    // the readers of a line's own timing, each reading checked (CRC, parity, fixed framing, presence pulses, inverse
+    // bytes; not an LED string's, whose bits carry no check): a line one of them reads
     // surely carries that protocol, and a generic reading using it (a UART of its pulses, an I2C or SPI taking it as
     // data beside some clock) is left out, as SPI on MDIO's lines above
     let mut own = cec::candidates(view);
@@ -235,6 +241,9 @@ pub fn candidates_with(view: &View, bauds: &std::collections::BTreeMap<String, f
     own.extend(swim::candidates(view));
     own.extend(usbpd::candidates(view));
     own.extend(wiegand::candidates(view));
+    own.extend(onewire::candidates(view));
+    own.extend(irnec::candidates(view));
+    own.extend(dht::candidates(view));
     let taken: std::collections::BTreeSet<String> = own
         .iter()
         .filter(|c| c.score >= SPECIFIC)
@@ -242,6 +251,7 @@ pub fn candidates_with(view: &View, bauds: &std::collections::BTreeMap<String, f
         .collect();
     cands.retain(|c| !(GENERIC.contains(&c.protocol.as_str()) && c.roles.values().any(|l| taken.contains(l))));
     cands.extend(own);
+    cands.extend(rgbled::candidates(view));
     cands.extend(ps2::candidates(view));
     cands.extend(swd::candidates(view));
     cands.extend(can::candidates(view));
