@@ -199,7 +199,27 @@ pub fn read(view: &View, scl: &Channel, sda: &Channel) -> Option<Candidate> {
         v.dedup();
         if values.len() >= 4 && v.len() == 1 { 0.5 } else { 1.0 }
     };
-    let score = fit * soft(clearance) * soft(once) * varied;
+    let mut score = fit * soft(clearance) * soft(once) * varied;
+    // few addresses, repeatedly, acknowledged at least sometimes: a real bus's (Python's staged.i2c_addresses), its
+    // support raising the score
+    let addrs: Vec<(i64, bool)> = txs
+        .iter()
+        .filter_map(|t| Some((t["addr"].as_i64()?, t["addr_ack"].as_bool().unwrap_or(false))))
+        .collect();
+    let mut addresses = None;
+    if addrs.len() >= 3 {
+        let mut cnt = std::collections::HashMap::new();
+        for &(a, _) in &addrs {
+            *cnt.entry(a).or_insert(0usize) += 1;
+        }
+        let mut c: Vec<usize> = cnt.into_values().collect();
+        c.sort_unstable_by(|a, b| b.cmp(a));
+        let top2 = c.iter().take(2).sum::<usize>() as f64 / addrs.len() as f64;
+        let acked = addrs.iter().any(|&(_, k)| k);
+        let d = top2 * (1.0 - 0.5f64.powf(addrs.len() as f64 / 3.0)) * if acked { 1.0 } else { 0.3 };
+        score += 0.5 * (1.0 - score) * d * score;
+        addresses = Some(d);
+    }
     let mut evidence = Map::new();
     for (k_, x) in [
         ("fit", fit),
@@ -211,6 +231,9 @@ pub fn read(view: &View, scl: &Channel, sda: &Channel) -> Option<Candidate> {
     }
     evidence.insert("frames".into(), json!(n));
     evidence.insert("frames_fit".into(), json!(k));
+    if let Some(d) = addresses {
+        evidence.insert("addresses".into(), json!((d * 1e4).round() / 1e4));
+    }
     let layers = crate::claim::raw(serde_json::to_string(&json!({ "transactions": txs })).unwrap());
     Some(Candidate {
         protocol: "i2c".into(),
