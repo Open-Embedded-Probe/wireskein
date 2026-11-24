@@ -3,7 +3,7 @@
 
 use crate::{Capture, Kind, Line, Part, dense_edges, fraction};
 use serde_json::{Map, Value, json};
-use std::io::{Cursor, Read};
+use std::io::{Cursor, Read, Seek};
 
 pub const IDENT: &str = "wireskein.json";
 pub const CAPTURE: &str = "capture.json";
@@ -25,7 +25,7 @@ pub fn entry(bytes: &[u8], name: &str) -> Result<Vec<u8>, String> {
     read_entry(&mut z, name)
 }
 
-fn read_entry(z: &mut zip::ZipArchive<Cursor<&[u8]>>, name: &str) -> Result<Vec<u8>, String> {
+fn read_entry<R: Read + Seek>(z: &mut zip::ZipArchive<R>, name: &str) -> Result<Vec<u8>, String> {
     let mut f = z.by_name(name).map_err(|e| format!("{name}: {e}"))?;
     let mut out = Vec::with_capacity(f.size() as usize);
     f.read_to_end(&mut out).map_err(|e| format!("{name}: {e}"))?;
@@ -201,7 +201,12 @@ fn decode(c: &Value, data: &[u8], ticks: i64) -> Result<Decoded, String> {
 
 /// A WireSkein file read: its parts, the runs of a timeline joined.
 pub fn read(bytes: &[u8]) -> Result<Capture, String> {
-    let mut z = archive(bytes)?;
+    read_from(Cursor::new(bytes))
+}
+
+/// A WireSkein file read from a reader (a file on disk: its entries read as they are needed).
+pub fn read_from<R: Read + Seek>(r: R) -> Result<Capture, String> {
+    let mut z = zip::ZipArchive::new(r).map_err(|e| format!("not a zip: {e}"))?;
     let id: Value = serde_json::from_slice(&read_entry(&mut z, IDENT)?).map_err(|e| e.to_string())?;
     let fmt = id["format"].as_str().unwrap_or("");
     if fmt != FORMAT {
@@ -362,6 +367,88 @@ fn join(run: Vec<(Part, bool, bool)>) -> Vec<Part> {
         lines,
         skipped: first.skipped.clone(),
     }]
+}
+
+/// A WireSkein file's header alone (its parts without their lines), and whether each part can be read a block at a
+/// time (`stream::file_source`): parts that do not follow on, of lines all `bits` / `events` at one tick a sample.
+pub fn head_from<R: Read + Seek>(r: R) -> Result<(Capture, bool), String> {
+    let mut z = zip::ZipArchive::new(r).map_err(|e| format!("not a zip: {e}"))?;
+    let id: Value = serde_json::from_slice(&read_entry(&mut z, IDENT)?).map_err(|e| e.to_string())?;
+    if id["format"].as_str() != Some(FORMAT) {
+        return Err(format!("format {:?}; this reader reads {FORMAT:?} only", id["format"]));
+    }
+    let head: Value = serde_json::from_slice(&read_entry(&mut z, CAPTURE).map_err(|_| "holds no capture")?)
+        .map_err(|e| e.to_string())?;
+    check_head(&head)?;
+    let th = head["tick_hz"].as_array().ok_or("no tick_hz")?;
+    let tick_hz = fraction(
+        th.first().and_then(|v| v.as_i64()).ok_or("tick_hz")?,
+        th.get(1).and_then(|v| v.as_i64()).ok_or("tick_hz")?,
+    );
+    let cmeta = head
+        .get("meta")
+        .and_then(|v| v.as_object())
+        .cloned()
+        .unwrap_or_default();
+    let raw = head["parts"].as_array().unwrap();
+    let layout = head["layout"].as_str().unwrap_or("timeline").to_string();
+    let mut streamable = raw.iter().all(|p| {
+        p["channels"].as_array().is_some_and(|cs| {
+            !cs.is_empty()
+                && cs.iter().all(|c| {
+                    matches!(c["encoding"].as_str(), Some("bits" | "events"))
+                        && c["step"].as_i64() == Some(1)
+                        && c["phase"].as_i64().unwrap_or(0) == 0
+                })
+        })
+    });
+    if layout == "timeline" {
+        let t = |p: &Value, k: &str| p.get(k).and_then(|v| v.as_i64()).unwrap_or(0);
+        streamable &= raw
+            .windows(2)
+            .all(|w| t(&w[0], "tick0") + t(&w[0], "ticks") < t(&w[1], "tick0"));
+    }
+    let parts = raw
+        .iter()
+        .enumerate()
+        .map(|(k, p)| {
+            let mut meta = cmeta.clone();
+            if let Some(m) = p.get("meta").and_then(|v| v.as_object()) {
+                meta.extend(m.clone());
+            }
+            Part {
+                part: k,
+                parts: None,
+                ticks: p["ticks"].as_i64().unwrap_or(0),
+                tick0: p.get("tick0").and_then(|v| v.as_i64()),
+                meta,
+                lines: vec![],
+                skipped: vec![],
+            }
+        })
+        .collect();
+    Ok((
+        Capture {
+            kind: Kind::WireSkein,
+            tick_hz,
+            id: head.get("id").and_then(|v| v.as_str()).map(String::from),
+            complete: head["complete"].as_bool().unwrap_or(false),
+            lost: head.get("lost").and_then(|v| v.as_array()).cloned().unwrap_or_default(),
+            layout,
+            n_parts: raw.len(),
+            meta: cmeta,
+            parts,
+        },
+        streamable,
+    ))
+}
+
+/// A line kept as `events` at one tick a sample, decoded (each event one change at its tick).
+pub fn read_events_line(c: &Value, data: &[u8]) -> Result<Line, String> {
+    match decode(c, data, i64::MAX)? {
+        Decoded::Line(l, _) => Ok(l),
+        Decoded::Skip(_) => Err(format!("{}: not a line of changes", c["name"])),
+    }
 }
 
 /// The parts' meta keys copied into an analysis document's part (§2.1).

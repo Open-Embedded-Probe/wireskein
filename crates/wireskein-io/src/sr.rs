@@ -44,7 +44,12 @@ fn rate_of(text: &str) -> Result<f64, String> {
 
 /// A sigrok session read.
 pub fn read(bytes: &[u8]) -> Result<Capture, String> {
-    let mut z = zip::ZipArchive::new(Cursor::new(bytes)).map_err(|e| e.to_string())?;
+    read_from(Cursor::new(bytes))
+}
+
+/// A sigrok session read from a reader (a file on disk: its chunks decompressed as they are read).
+pub fn read_from<R: Read + std::io::Seek>(r: R) -> Result<Capture, String> {
+    let mut z = zip::ZipArchive::new(r).map_err(|e| e.to_string())?;
     let mut text = String::new();
     z.by_name("metadata")
         .map_err(|e| e.to_string())?

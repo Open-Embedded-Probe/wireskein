@@ -256,53 +256,123 @@ fn quiet(
     (qs, qe, usual, periodic)
 }
 
-/// The pieces a part is read in (Python's `split.run` over the part's changes).
-pub fn pieces(lines: &[Line], n: i64, o: &Options, noisy: &mut Map<String, Value>) -> Result<Vec<Piece>, String> {
-    let names: Vec<&str> = lines.iter().map(|l| l.name.as_str()).collect();
-    let unknown: Vec<&String> = o
-        .watch
-        .iter()
-        .chain(&o.ignore)
-        .filter(|x| !names.contains(&x.as_str()))
-        .collect();
-    if !unknown.is_empty() {
-        return Err(format!(
-            "split: no such channel: {}",
-            unknown.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
-        ));
-    }
-    let es: Vec<&[i64]> = lines.iter().map(|l| l.edges.as_slice()).collect();
-    let wes: Vec<(&str, &[i64])> = lines
-        .iter()
-        .filter(|l| (o.watch.is_empty() || o.watch.contains(&l.name)) && !o.ignore.contains(&l.name))
-        .map(|l| (l.name.as_str(), l.edges.as_slice()))
-        .collect();
-    let mut out = vec![];
-    if !o.cuts.is_empty() {
-        let mut cuts: Vec<i64> = o.cuts.iter().copied().filter(|&c| 0 < c && c < n).collect();
-        cuts.sort_unstable();
-        let mut bounds = vec![0];
-        bounds.extend(cuts);
-        bounds.push(n);
-        for w in bounds.windows(2) {
-            out.push(Piece {
-                s: w[0],
-                e: w[1],
-                a: w[0],
-                b: w[1],
-                edges: count(&es, w[0], w[1]),
-                cut: if w[1] < n { "given" } else { "end" },
-                ratio: None,
-            });
+/// The pieces of a source, each with the lines of the ticks it reads, as they are cut (Python's `split.run`): changes
+/// are held from the current piece on only.
+pub struct Splitter<'a> {
+    src: &'a mut dyn wireskein_io::stream::Source,
+    o: Options,
+    names: Vec<String>,
+    watched: Vec<usize>,
+    buf: Vec<Vec<i64>>,
+    lv0: Vec<u8>,
+    n: i64,
+    start: i64,
+    upto: i64,
+    eof: bool,
+    s: i64,
+    prev_cut: bool,
+    done: bool,
+    pending: std::collections::VecDeque<(Piece, Vec<Line>)>,
+    pub noisy: Map<String, Value>,
+}
+
+impl<'a> Splitter<'a> {
+    pub fn new(src: &'a mut dyn wireskein_io::stream::Source, o: &Options) -> Result<Self, String> {
+        let names: Vec<String> = src.names().to_vec();
+        let unknown: Vec<&String> = o.watch.iter().chain(&o.ignore).filter(|x| !names.contains(x)).collect();
+        if !unknown.is_empty() {
+            return Err(format!(
+                "split: no such channel: {}",
+                unknown.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
+            ));
         }
-        return Ok(out);
+        let watched = (0..names.len())
+            .filter(|&i| (o.watch.is_empty() || o.watch.contains(&names[i])) && !o.ignore.contains(&names[i]))
+            .collect();
+        let lv0 = src.initial().to_vec();
+        let n = src.n();
+        Ok(Splitter {
+            buf: vec![vec![]; names.len()],
+            src,
+            o: o.clone(),
+            names,
+            watched,
+            lv0,
+            n,
+            start: 0,
+            upto: 0,
+            eof: false,
+            s: 0,
+            prev_cut: false,
+            done: false,
+            pending: Default::default(),
+            noisy: Map::new(),
+        })
     }
-    let (mx, mn, ov) = (o.max_edges, o.min_edges, o.overlap_edges);
-    let (mut s, mut start, mut prev_cut) = (0i64, 0i64, false);
-    loop {
-        if count(&es, s, n) <= mx {
-            let a = if prev_cut { tick_before(&es, start, s, ov) } else { s };
-            out.push(Piece {
+
+    fn es(&self) -> Vec<&[i64]> {
+        self.buf.iter().map(|e| e.as_slice()).collect()
+    }
+
+    fn more(&mut self) {
+        match self.src.next_block() {
+            Some((t1, got)) => {
+                self.upto = t1;
+                for (b, g) in self.buf.iter_mut().zip(got) {
+                    b.extend(g);
+                }
+            }
+            None => {
+                self.eof = true;
+                self.upto = self.n;
+            }
+        }
+    }
+
+    /// The lines of ticks [a, b) (tick 0 at a): each line's changes inside, its level at a.
+    fn window(&self, a: i64, b: i64) -> Vec<Line> {
+        self.names
+            .iter()
+            .zip(&self.buf)
+            .zip(&self.lv0)
+            .map(|((name, e), &lv)| {
+                let i = e.partition_point(|&x| x <= a);
+                let j = e.partition_point(|&x| x < b);
+                Line {
+                    name: name.clone(),
+                    initial: lv ^ ((i & 1) as u8),
+                    edges: e[i..j.max(i)].iter().map(|&x| x - a).collect(),
+                    step: 1,
+                }
+            })
+            .collect()
+    }
+
+    /// Keep the changes from tick t on.
+    fn drop_before(&mut self, t: i64) {
+        for (e, lv) in self.buf.iter_mut().zip(self.lv0.iter_mut()) {
+            let i = e.partition_point(|&x| x <= t);
+            *lv ^= (i & 1) as u8;
+            e.drain(..i);
+        }
+        self.start = t;
+    }
+
+    fn step(&mut self) {
+        let (mx, mn, ov) = (self.o.max_edges, self.o.min_edges, self.o.overlap_edges);
+        let s = self.s;
+        while !self.eof && count(&self.es(), s, self.upto) < mx + ov {
+            self.more();
+        }
+        let n = self.n;
+        if self.eof && count(&self.es(), s, n) <= mx {
+            let es = self.es();
+            let a = if self.prev_cut {
+                tick_before(&es, self.start, s, ov)
+            } else {
+                s
+            };
+            let p = Piece {
                 s,
                 e: n,
                 a,
@@ -310,73 +380,89 @@ pub fn pieces(lines: &[Line], n: i64, o: &Options, noisy: &mut Map<String, Value
                 edges: count(&es, s, n),
                 cut: "end",
                 ratio: None,
-            });
-            return Ok(out);
+            };
+            let w = self.window(p.a, p.b);
+            self.pending.push_back((p, w));
+            self.done = true;
+            return;
         }
-        let t = tick_after(&es, s, mx, n);
-        let t0 = tick_after(&es, s, ((mx as f64 * o.search_from) as usize).max(1), n);
-        let (qs, qe, usual, periodic) = quiet(&wes, s, t, o, noisy);
-        let (mut ks, mut ke) = (vec![], vec![]);
-        for (&a, &b) in qs.iter().zip(&qe) {
-            if b > t0 && a >= s {
-                ks.push(a.max(t0));
-                ke.push(b);
+        let upto = self.upto;
+        let (cuts, start) = {
+            let es: Vec<&[i64]> = self.buf.iter().map(|e| e.as_slice()).collect();
+            let wes: Vec<(&str, &[i64])> = self
+                .watched
+                .iter()
+                .map(|&i| (self.names[i].as_str(), self.buf[i].as_slice()))
+                .collect();
+            let t = tick_after(&es, s, mx, upto);
+            let t0 = tick_after(&es, s, ((mx as f64 * self.o.search_from) as usize).max(1), upto);
+            let (qs, qe, usual, periodic) = quiet(&wes, s, t, &self.o, &mut self.noisy);
+            let (mut ks, mut ke) = (vec![], vec![]);
+            for (&a, &b) in qs.iter().zip(&qe) {
+                if b > t0 && a >= s {
+                    ks.push(a.max(t0));
+                    ke.push(b);
+                }
             }
-        }
-        let kind = if periodic { "data_quiet" } else { "quiet" };
-        let mut cuts: Vec<(i64, Option<f64>, &'static str)> = vec![];
-        match usual.filter(|&u| u != 0.0) {
-            Some(u) if !ks.is_empty() => {
-                let ratio: Vec<f64> = ks.iter().zip(&ke).map(|(a, b)| (b - a) as f64 / u).collect();
-                let best = ratio.iter().copied().fold(f64::NEG_INFINITY, f64::max);
-                let mut last = s;
-                for i in (0..ratio.len()).filter(|&i| ratio[i] >= o.similar * best) {
-                    let c = (ks[i] + ke[i]).div_euclid(2);
-                    if count(&es, last, c) >= mn {
-                        cuts.push((c, Some(ratio[i]), kind));
-                        last = c;
+            let kind = if periodic { "data_quiet" } else { "quiet" };
+            let mut cuts: Vec<(i64, Option<f64>, &'static str)> = vec![];
+            match usual.filter(|&u| u != 0.0) {
+                Some(u) if !ks.is_empty() => {
+                    let ratio: Vec<f64> = ks.iter().zip(&ke).map(|(a, b)| (b - a) as f64 / u).collect();
+                    let best = ratio.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+                    let mut last = s;
+                    for i in (0..ratio.len()).filter(|&i| ratio[i] >= self.o.similar * best) {
+                        let c = (ks[i] + ke[i]).div_euclid(2);
+                        if count(&es, last, c) >= mn {
+                            cuts.push((c, Some(ratio[i]), kind));
+                            last = c;
+                        }
+                    }
+                    if cuts.is_empty() {
+                        let i = (0..ratio.len()).fold(0, |b, i| if ratio[i] > ratio[b] { i } else { b });
+                        cuts.push(((ks[i] + ke[i]).div_euclid(2), Some(ratio[i]), kind));
                     }
                 }
-                if cuts.is_empty() {
-                    let i = (0..ratio.len()).fold(0, |b, i| if ratio[i] > ratio[b] { i } else { b });
-                    cuts.push(((ks[i] + ke[i]).div_euclid(2), Some(ratio[i]), kind));
-                }
+                _ => cuts.push((t, None, "forced")),
             }
-            _ => cuts.push((t, None, "forced")),
-        }
+            (cuts, self.start)
+        };
+        let mut s = s;
         for (c, r, k) in cuts {
-            let a = if prev_cut { tick_before(&es, start, s, ov) } else { s };
-            out.push(Piece {
+            let es = self.es();
+            let a = if self.prev_cut {
+                tick_before(&es, start, s, ov)
+            } else {
+                s
+            };
+            let p = Piece {
                 s,
                 e: c,
                 a,
-                b: tick_after(&es, c, ov, n).min(n),
+                b: tick_after(&es, c, ov, upto).min(upto),
                 edges: count(&es, s, c),
                 cut: k,
                 ratio: r,
-            });
+            };
+            let w = self.window(p.a, p.b);
+            self.pending.push_back((p, w));
             s = c;
-            prev_cut = true;
+            self.prev_cut = true;
         }
-        start = tick_before(&es, start, s, ov);
+        self.s = s;
+        let t = tick_before(&self.es(), self.start, s, ov);
+        self.drop_before(t);
     }
 }
 
-/// Ticks [a, b) of the lines as lines of their own (tick 0 at a): the changes inside, each line's level at a.
-pub fn window(lines: &[Line], a: i64, b: i64) -> Vec<Line> {
-    lines
-        .iter()
-        .map(|l| {
-            let i = l.edges.partition_point(|&x| x <= a);
-            let j = l.edges.partition_point(|&x| x < b);
-            Line {
-                name: l.name.clone(),
-                initial: l.initial ^ ((i & 1) as u8),
-                edges: l.edges[i..j.max(i)].iter().map(|&x| x - a).collect(),
-                step: l.step,
-            }
-        })
-        .collect()
+impl Iterator for Splitter<'_> {
+    type Item = (Piece, Vec<Line>);
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.pending.is_empty() && !self.done {
+            self.step();
+        }
+        self.pending.pop_front()
+    }
 }
 
 fn view_of<'a>(lines: &'a [Line], rate: f64, n: i64) -> Result<View<'a>, String> {
@@ -686,42 +772,54 @@ fn unread_summary(items: &[Value]) -> Value {
 const DOUBT: f64 = 0.3;
 const REANALYSES: i64 = 16;
 
-/// The claims and split of a long part, or None when it is one piece (read as usual).
-#[allow(clippy::too_many_arguments)]
+/// What a part read in pieces gives: its whole lines when it is one piece (read as usual), else its claims and split.
+pub enum Split {
+    Whole(Vec<Line>),
+    Pieces(Vec<Value>, Value),
+}
+
+/// A part read from a source in pieces (Python's `decode._analyze_split`).
 pub fn analyze(
-    lines: &[Line],
-    n: i64,
+    src: &mut dyn wireskein_io::stream::Source,
     rate: f64,
     hints: &Value,
     o: &Options,
     mode: &str,
-) -> Result<Option<(Vec<Value>, Value)>, String> {
-    let mut noisy = Map::new();
-    let ps = pieces(lines, n, o, &mut noisy)?;
-    if ps.len() == 1 && ps[0].a == 0 {
-        return Ok(None);
+) -> Result<Split, String> {
+    let n = src.n();
+    let mut sp = Splitter::new(src, o)?;
+    let Some(first) = sp.next() else {
+        return Ok(Split::Whole(vec![]));
+    };
+    if first.0.cut == "end" && first.0.a == 0 {
+        return Ok(Split::Whole(first.1));
     }
     // the roles from the first piece that holds any (up to roles_from pieces)
-    let (mut keep, mut first_claims, mut k0) = (vec![], vec![], 0);
-    for (k, p) in ps.iter().enumerate().take(o.roles_from.max(1)) {
-        let w = window(lines, p.a, p.b);
-        let view = view_of(&w, rate, p.b - p.a)?;
+    let mut tried = vec![first];
+    let (mut keep, mut first_claims);
+    loop {
+        let (p, w) = tried.last().unwrap();
+        let view = view_of(w, rate, p.b - p.a)?;
         let (claims, _) = wireskein_core::analyze_full(&view, hints);
         let docs: Vec<Value> = claims
             .iter()
-            .map(|c| crate::claim_doc(c, mode, &w, rate, p.b - p.a, None, false))
+            .map(|c| crate::claim_doc(c, mode, w, rate, p.b - p.a, None, false))
             .collect();
-        k0 = k;
         keep = docs
             .iter()
             .filter(|c| (c["verdict"] == "confirmed" || c["verdict"] == "likely") && c["protocol"] != "sync_unknown")
             .cloned()
-            .collect();
+            .collect::<Vec<_>>();
         first_claims = docs;
-        if !keep.is_empty() {
+        if !keep.is_empty() || tried.len() >= o.roles_from.max(1) {
             break;
         }
+        match sp.next() {
+            Some(x) => tried.push(x),
+            None => break,
+        }
     }
+    let k0 = tried.len() - 1;
     let buses: Vec<Bus> = keep
         .iter()
         .map(|c| Bus {
@@ -746,9 +844,10 @@ pub fn analyze(
     let whole = |p: &Piece| p.cut == "end" && p.a == 0;
     let mut reads: Vec<Vec<BusRead>> = vec![];
     let mut doubtful = vec![];
-    for p in &ps {
-        let w = window(lines, p.a, p.b);
-        let r = read_buses(&w, rate, p.b - p.a, &buses, !whole(p))?;
+    let mut ps: Vec<Piece> = vec![];
+    let roles_piece = (tried[k0].0.s, tried[k0].0.e);
+    for (p, w) in tried.into_iter().chain(&mut sp) {
+        let r = read_buses(&w, rate, p.b - p.a, &buses, !whole(&p))?;
         // why the roles read a piece badly
         let mut why = vec![];
         for (j, (b, br)) in buses.iter().zip(&r).enumerate() {
@@ -796,7 +895,7 @@ pub fn analyze(
                 let t = ((k as f64 + 0.5) * n as f64 / REANALYSES as f64) as i64;
                 p.s <= t && t < p.e
             });
-            if o.reanalyze && !whole(p) && sampled {
+            if o.reanalyze && !whole(&p) && sampled {
                 let view = view_of(&w, rate, p.b - p.a)?;
                 let (claims, _) = wireskein_core::analyze_full(&view, &Value::Null);
                 let holds: Vec<Value> = claims
@@ -816,7 +915,9 @@ pub fn analyze(
             doubtful.push(d);
         }
         reads.push(r);
+        ps.push(p);
     }
+    let noisy = std::mem::take(&mut sp.noisy);
     // each bus joined over the pieces
     let mut claims = vec![];
     for (j, (c, b)) in keep.iter().zip(&buses).enumerate() {
@@ -888,7 +989,7 @@ pub fn analyze(
     if !doubtful.is_empty() {
         split["doubtful"] = json!(doubtful);
     }
-    split["roles_from"] = json!([ps[k0].s, ps[k0].e]);
+    split["roles_from"] = json!([roles_piece.0, roles_piece.1]);
     if keep.is_empty() {
         split["no_roles"] = json!(format!(
             "no bus claimed in the first {} pieces (roles_from): analyse a stretch with --from / --to, or decode with a spec",
@@ -902,5 +1003,58 @@ pub fn analyze(
             .map(|c| json!({"protocol": c["protocol"], "roles": c["roles"], "verdict": c["verdict"]}))
             .collect::<Vec<_>>()
     );
-    Ok(Some((claims, split)))
+    Ok(Split::Pieces(claims, split))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A clock in bursts of 100 changes 10 ticks apart, 1000 ticks of quiet after each.
+    fn bursts(k: usize) -> Line {
+        let (mut e, mut t) = (vec![], 100i64);
+        for _ in 0..k {
+            for _ in 0..100 {
+                e.push(t);
+                t += 10;
+            }
+            t += 1000;
+        }
+        Line {
+            name: "CLK".into(),
+            initial: 0,
+            edges: e,
+            step: 1,
+        }
+    }
+
+    #[test]
+    fn cut_where_the_lines_are_quiet() {
+        let l = vec![bursts(20)];
+        let n = l[0].edges.last().unwrap() + 500;
+        let o = Options {
+            max_edges: 500,
+            min_edges: 100,
+            overlap_edges: 20,
+            ..Default::default()
+        };
+        let mut src = wireskein_io::stream::MemSource::new(&l, n);
+        let ps: Vec<(Piece, Vec<Line>)> = Splitter::new(&mut src, &o).unwrap().collect();
+        assert!(ps.len() >= 4, "{}", ps.len());
+        let cycle = 2000; // a burst (its first change to its last: 990) and the quiet to the next (1010)
+        for (p, w) in &ps[..ps.len() - 1] {
+            // each cut in the middle of a quiet stretch: 505 ticks after a burst's last change
+            assert_eq!(p.cut, "quiet");
+            assert_eq!((p.e - 100 - 990).rem_euclid(cycle), 505, "{p:?}");
+            assert!(p.edges <= 500 && p.edges >= 100);
+            // read past the cut by the overlap's changes
+            assert!(p.b > p.e);
+            assert_eq!(w[0].edges.len(), count(&[l[0].edges.as_slice()], p.a + 1, p.b));
+        }
+        let last = &ps[ps.len() - 1].0;
+        assert_eq!((last.cut, last.e), ("end", n));
+        // the pieces' own ticks are the part, without gaps
+        assert_eq!(ps[0].0.s, 0);
+        assert!(ps.windows(2).all(|w| w[0].0.e == w[1].0.s));
+    }
 }

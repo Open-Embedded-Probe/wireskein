@@ -207,20 +207,31 @@ pub fn analyze_file(
     window_s: Option<(f64, f64)>,
     split_opts: Option<&split::Options>,
 ) -> Result<Value, String> {
-    let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
-    let cap = wireskein_io::read_bytes(&bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+    let at = |e: String| format!("{}: {e}", path.display());
+    let splitting = split_opts.filter(|_| window_s.is_none() && part.is_none());
+    // a WireSkein file of parts each read a block at a time when it is split (its header only, now); else read whole
+    let kind = wireskein_io::sniff_path(path);
+    let (cap, streamed) = match (kind, splitting) {
+        (Some(wireskein_io::Kind::WireSkein), Some(_)) => {
+            let f = std::fs::File::open(path).map_err(|e| at(e.to_string()))?;
+            match wireskein_io::wsk::head_from(f).map_err(at)? {
+                (c, true) if !cfg!(target_family = "wasm") => (c, true),
+                _ => (wireskein_io::read(path)?, false),
+            }
+        }
+        _ => (wireskein_io::read(path)?, false),
+    };
     let rate = cap.rate();
     if window_s.is_some() && part.is_none() && cap.parts.len() > 1 {
-        return Err(format!(
-            "{}: {} parts: give the part a window is inside (--part)",
-            path.display(),
+        return Err(at(format!(
+            "{} parts: give the part a window is inside (--part)",
             cap.parts.len()
-        ));
+        )));
     }
     let window = window_s.map(|(a, b)| ((a * rate) as i64, (b * rate) as i64));
     let mut capture = Map::new();
     capture.insert("file".into(), json!(path.file_name().map(|s| s.to_string_lossy())));
-    capture.insert("sha256".into(), json!(format!("{:x}", Sha256::digest(&bytes))));
+    capture.insert("sha256".into(), json!(sha256_of(path).map_err(at)?));
     capture.insert("id".into(), json!(cap.id));
     capture.insert("tick_hz".into(), json!([cap.tick_hz.0, cap.tick_hz.1]));
     capture.insert("complete".into(), json!(cap.complete));
@@ -237,48 +248,61 @@ pub fn analyze_file(
                 continue;
             }
         }
-        let chans: Vec<Channel> = p
-            .lines
+        let mut head = Map::new();
+        head.insert("part".into(), json!(p.part));
+        head.insert("ticks".into(), json!(p.ticks));
+        if let Some((a, b)) = p.parts {
+            head.insert("parts".into(), json!([a, b]));
+        }
+        if cap.kind == wireskein_io::Kind::WireSkein {
+            if let Some(t0) = p.tick0 {
+                head.insert("tick0".into(), json!(t0));
+            }
+        } else {
+            head.insert("tick0".into(), json!(0));
+        }
+        head.extend(wireskein_io::wsk::part_keys(&p.meta));
+        // a long part read in pieces (a WireSkein file's part straight from the file, a block at a time)
+        let mut whole: Option<Vec<wireskein_io::Line>> = None;
+        if let Some(o) = splitting {
+            let got = if streamed {
+                let mut src = wireskein_io::stream::file_source(path, p.part)
+                    .map_err(at)?
+                    .ok_or_else(|| at(format!("part {}: not a part to read a block at a time", p.part)))?;
+                split::analyze(&mut src, rate, hints, o, mode)?
+            } else {
+                let mut src = wireskein_io::stream::MemSource::new(&p.lines, p.ticks);
+                split::analyze(&mut src, rate, hints, o, mode)?
+            };
+            match got {
+                split::Split::Pieces(claims, sp) => {
+                    let mut d = head;
+                    d.insert("claims".into(), Value::Array(claims));
+                    d.insert("split".into(), sp);
+                    parts.push(Value::Object(d));
+                    continue;
+                }
+                split::Split::Whole(lines) => {
+                    if streamed {
+                        whole = Some(lines);
+                    }
+                }
+            }
+        }
+        let lines: &[wireskein_io::Line] = whole.as_deref().unwrap_or(&p.lines);
+        let chans: Vec<Channel> = lines
             .iter()
             .map(|l| Channel::new(&l.name, l.initial, &l.edges))
             .collect();
         let view = View::new(rate, p.ticks, chans).map_err(|e| format!("part {}: {e}", p.part))?;
-        if let Some(o) = split_opts.filter(|_| window.is_none() && part.is_none())
-            && let Some((claims, sp)) = split::analyze(&p.lines, p.ticks, rate, hints, o, mode)?
-        {
-            let mut d = Map::new();
-            d.insert("part".into(), json!(p.part));
-            d.insert("ticks".into(), json!(p.ticks));
-            if let Some(t0) = p.tick0 {
-                d.insert("tick0".into(), json!(t0));
-            }
-            d.extend(wireskein_io::wsk::part_keys(&p.meta));
-            d.insert("claims".into(), Value::Array(claims));
-            d.insert("split".into(), sp);
-            parts.push(Value::Object(d));
-            continue;
-        }
         let (claims, relations) = wireskein_core::analyze_full(&view, hints);
-        let mut d = Map::new();
-        d.insert("part".into(), json!(p.part));
-        d.insert("ticks".into(), json!(p.ticks));
-        if let Some((a, b)) = p.parts {
-            d.insert("parts".into(), json!([a, b]));
-        }
-        if cap.kind == wireskein_io::Kind::WireSkein
-            && let Some(t0) = p.tick0
-        {
-            d.insert("tick0".into(), json!(t0));
-        } else if cap.kind != wireskein_io::Kind::WireSkein {
-            d.insert("tick0".into(), json!(0));
-        }
-        d.extend(wireskein_io::wsk::part_keys(&p.meta));
+        let mut d = head;
         d.insert(
             "claims".into(),
             Value::Array(
                 claims
                     .iter()
-                    .map(|c| claim_doc(c, mode, &p.lines, rate, p.ticks, window, true))
+                    .map(|c| claim_doc(c, mode, lines, rate, p.ticks, window, true))
                     .collect(),
             ),
         );
@@ -296,12 +320,28 @@ pub fn analyze_file(
     if let Some(k) = part
         && parts.is_empty()
     {
-        return Err(format!("{}: part {k} of {}", path.display(), cap.n_parts));
+        return Err(at(format!("part {k} of {}", cap.n_parts)));
     }
     Ok(
         json!({"format": FORMAT, "wireskein": env!("CARGO_PKG_VERSION"), "hints": hints,
               "capture": capture, "parts": parts}),
     )
+}
+
+/// A file's SHA-256, read a block at a time.
+fn sha256_of(path: &Path) -> Result<String, String> {
+    use std::io::Read;
+    let mut f = std::fs::File::open(path).map_err(|e| e.to_string())?;
+    let mut h = Sha256::new();
+    let mut buf = vec![0u8; 1 << 20];
+    loop {
+        let k = f.read(&mut buf).map_err(|e| e.to_string())?;
+        if k == 0 {
+            break;
+        }
+        h.update(&buf[..k]);
+    }
+    Ok(format!("{:x}", h.finalize()))
 }
 
 /// "300us", "1.5ms", "2s", "0.001" as seconds.

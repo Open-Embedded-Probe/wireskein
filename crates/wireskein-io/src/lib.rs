@@ -11,6 +11,7 @@
 //! core's.
 
 pub mod sr;
+pub mod stream;
 pub mod vcd;
 pub mod wsk;
 
@@ -104,10 +105,42 @@ pub fn read_bytes(bytes: &[u8]) -> Result<Capture, String> {
     }
 }
 
-/// A capture file read.
+/// What a file on disk is, by its content (its zip directory read, not the whole file).
+pub fn sniff_path(path: &Path) -> Option<Kind> {
+    use std::io::Read;
+    let mut head = vec![0u8; 4096];
+    let mut f = std::fs::File::open(path).ok()?;
+    let k = f.read(&mut head).ok()?;
+    head.truncate(k);
+    if !head.starts_with(b"PK\x03\x04") {
+        return sniff(&head);
+    }
+    let mut z = zip::ZipArchive::new(std::fs::File::open(path).ok()?).ok()?;
+    let names: Vec<String> = z.file_names().map(String::from).collect();
+    if names.iter().any(|n| n == wsk::IDENT) {
+        let mut s = String::new();
+        z.by_name(wsk::IDENT).ok()?.read_to_string(&mut s).ok()?;
+        let v: Value = serde_json::from_str(&s).ok()?;
+        if v["format"].as_str().is_some_and(|f| f.starts_with("wireskein/")) {
+            return Some(Kind::WireSkein);
+        }
+    }
+    (names.iter().any(|n| n == "version") && names.iter().any(|n| n == "metadata")).then_some(Kind::Sr)
+}
+
+/// A capture file read (a zip from the disk as its entries are needed, not loaded whole).
 pub fn read(path: &Path) -> Result<Capture, String> {
-    let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
-    read_bytes(&bytes).map_err(|e| format!("{}: {e}", path.display()))
+    let at = |e: String| format!("{}: {e}", path.display());
+    let file = || std::fs::File::open(path).map_err(|e| at(e.to_string()));
+    match sniff_path(path) {
+        Some(Kind::WireSkein) => wsk::read_from(file()?).map_err(at),
+        Some(Kind::Sr) => sr::read_from(file()?).map_err(at),
+        Some(Kind::Vcd) => {
+            let t = std::fs::read(path).map_err(|e| at(e.to_string()))?;
+            vcd::read(&String::from_utf8_lossy(&t)).map_err(at)
+        }
+        None => Err(at("not a WireSkein file, a sigrok session (.sr) or a VCD".into())),
+    }
 }
 
 /// (level at the first sample, the ticks of the changes) of samples at ticks phase + k * step.
