@@ -11,8 +11,10 @@ pub mod features;
 pub mod i2c;
 pub mod kernels;
 pub mod mdio;
+pub mod ps2;
 pub mod rebuild;
 pub mod spi;
+pub mod swd;
 pub mod sync;
 pub mod uart;
 pub mod view;
@@ -194,6 +196,8 @@ pub fn candidates_with(view: &View, bauds: &std::collections::BTreeMap<String, f
     });
     cands.extend(md);
     cands.extend(cec::candidates(view));
+    cands.extend(ps2::candidates(view));
+    cands.extend(swd::candidates(view));
     cands
 }
 
