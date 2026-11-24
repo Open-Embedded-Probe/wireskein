@@ -523,7 +523,7 @@ dependencies = [
 
 [[package]]
 name = "wireskein-core"
-version = "0.0.36"
+version = "0.0.37"
 dependencies = [
  "serde",
  "serde_json",
@@ -540,7 +540,7 @@ dependencies = [
 
 [[package]]
 name = "wireskein-py"
-version = "0.0.36"
+version = "0.0.37"
 dependencies = [
  "numpy",
  "pyo3",
