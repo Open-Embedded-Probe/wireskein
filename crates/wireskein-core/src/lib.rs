@@ -13,6 +13,7 @@ pub mod clocked;
 pub mod dali;
 pub mod dcc;
 pub mod dht;
+pub mod duplex;
 pub mod features;
 pub mod i2c;
 pub mod i2s;
@@ -30,6 +31,7 @@ pub mod rgbled;
 pub mod riscv_dm;
 pub mod rvswd;
 pub mod sdmmc;
+pub mod sdspi;
 pub mod sent;
 pub mod spdif;
 pub mod spi;
@@ -38,6 +40,7 @@ pub mod swim;
 pub mod swio;
 pub mod sync;
 pub mod syncunk;
+pub mod textup;
 pub mod uart;
 pub mod upper;
 pub mod usb;
@@ -394,9 +397,14 @@ impl Hints {
 
 /// The claims on a part's lines (built up protocol by protocol), under the hints.
 pub fn analyze(view: &View, hints: &serde_json::Value) -> Vec<Claim> {
+    analyze_full(view, hints).0
+}
+
+/// The claims on a part's lines after the upper stage, and the relations it found (a UART pair's SCPI).
+pub fn analyze_full(view: &View, hints: &serde_json::Value) -> (Vec<Claim>, Vec<serde_json::Value>) {
     let h = Hints::from_json(hints);
     if h.protocols.is_empty() && h.pins.is_empty() && h.exclude.is_empty() {
-        return upper::stage(choose(candidates(view)), view.rate);
+        return upper::stage_with(choose(candidates(view)), view.rate);
     }
     let kept = View {
         rate: view.rate,
@@ -415,7 +423,7 @@ pub fn analyze(view: &View, hints: &serde_json::Value) -> Vec<Claim> {
         .collect();
     let mut cands = candidates_with(&kept, &bauds);
     cands.retain(|c| h.allows(c));
-    upper::stage(choose(cands), view.rate)
+    upper::stage_with(choose(cands), view.rate)
 }
 
 #[cfg(test)]

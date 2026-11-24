@@ -49,6 +49,48 @@ fn analyze(
     Ok(ws_core::claim::to_json(&claims))
 }
 
+/// analyze_with_relations(rate, n_samples, channels, hints_json) -> {"claims": [...], "relations": [...]} as JSON.
+#[pyfunction]
+#[pyo3(signature = (rate, n_samples, channels, hints_json="null"))]
+fn analyze_with_relations(
+    py: Python<'_>,
+    rate: f64,
+    n_samples: i64,
+    channels: Vec<(String, u8, PyReadonlyArray1<'_, i64>)>,
+    hints_json: &str,
+) -> PyResult<String> {
+    let hints: serde_json::Value =
+        serde_json::from_str(hints_json).map_err(|e| PyValueError::new_err(format!("hints: {e}")))?;
+    let copies: Vec<Option<Vec<i64>>> = channels
+        .iter()
+        .map(|(_, _, a)| {
+            if a.as_slice().is_ok() {
+                None
+            } else {
+                Some(a.as_array().to_vec())
+            }
+        })
+        .collect();
+    let chans: Vec<Channel> = channels
+        .iter()
+        .zip(&copies)
+        .map(|((name, initial, a), copy)| {
+            Channel::new(
+                name,
+                *initial,
+                copy.as_deref().unwrap_or_else(|| a.as_slice().expect("contiguous")),
+            )
+        })
+        .collect();
+    let view = View::new(rate, n_samples, chans).map_err(PyValueError::new_err)?;
+    let (claims, rel) = py.detach(|| ws_core::analyze_full(&view, &hints));
+    Ok(format!(
+        r#"{{"claims":{},"relations":{}}}"#,
+        ws_core::claim::to_json(&claims),
+        serde_json::Value::Array(rel)
+    ))
+}
+
 /// candidates(rate, n_samples, channels) -> every reading before the claims are chosen, as JSON (for development:
 /// [{protocol, roles, score, alt, evidence}]).
 #[pyfunction]
@@ -80,6 +122,7 @@ fn candidates(
 fn wireskein_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_function(wrap_pyfunction!(analyze, m)?)?;
+    m.add_function(wrap_pyfunction!(analyze_with_relations, m)?)?;
     m.add_function(wrap_pyfunction!(candidates, m)?)?;
     Ok(())
 }

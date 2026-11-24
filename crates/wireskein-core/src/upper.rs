@@ -97,6 +97,88 @@ pub fn riscv_dm(lay: &Map<String, Value>) -> Option<(f64, Vec<Value>)> {
     Some((known * (0.5 + 0.5 * ctrl as u8 as f64), log))
 }
 
+/// A UART claim's bytes as the upper readings take them: values, start ticks.
+#[derive(serde::Deserialize)]
+struct UartLayers {
+    bytes: Option<UartBytes>,
+}
+
+#[derive(serde::Deserialize)]
+struct UartBytes {
+    s: Vec<i64>,
+    hex: String,
+}
+
+/// Upper layers on a UART's bytes: lines, NMEA, Modbus RTU (markers on the lines); the score raised by the best.
+fn bytes_upper(c: &Claim, rate: f64, up: &mut Upper) -> Option<crate::duplex::Line> {
+    let Ok(UartLayers { bytes: Some(b) }) = serde_json::from_str::<UartLayers>(c.layers.get()) else {
+        return None;
+    };
+    let baud = c.params.get("baud").and_then(|v| v.as_f64())?;
+    let v: Vec<i64> = (0..b.hex.len() / 2)
+        .map(|i| i64::from_str_radix(&b.hex[2 * i..2 * i + 2], 16).unwrap_or(0))
+        .collect();
+    let l = c.params.get("L").and_then(|v| v.as_f64()).unwrap_or(10.0);
+    let cs = rate / baud * l;
+    let ch = crate::textup::children(&v, &b.s, cs);
+    let best = ch.iter().map(|x| x.total).fold(0.0, f64::max);
+    up.score = support(c.total, best, c.total);
+    for x in ch {
+        if x.total >= crate::textup::SHOWN {
+            up.layers.insert(x.name.into(), x.items);
+        }
+    }
+    Some(crate::duplex::Line {
+        pin: c.roles.get("data").cloned().unwrap_or_default(),
+        baud,
+        l: c.params.get("L").and_then(|v| v.as_f64()),
+        values: v.iter().map(|&x| (x & 0xFF) as u8).collect(),
+        starts: b.s,
+        char_samples: cs,
+    })
+}
+
+/// SD in SPI mode on an SPI claim of two data lines: the score raised by its commands, the `sd` layer. Each byte's
+/// tick is taken in its transfer by the clock's steady pace (the transfers give their first and last bit's).
+fn sd_upper(c: &Claim, up: &mut Upper) {
+    let Ok(lay) = serde_json::from_str::<Map<String, Value>>(c.layers.get()) else {
+        return;
+    };
+    let Some(tr) = lay.get("transfers").and_then(|v| v.as_array()) else {
+        return;
+    };
+    let pins: Vec<String> = tr
+        .first()
+        .and_then(|x| x.as_object())
+        .map(|o| o.keys().filter(|k| *k != "s" && *k != "e").cloned().collect())
+        .unwrap_or_default();
+    if pins.len() != 2 {
+        return;
+    }
+    let bytes = |x: &Value, p: &str| -> Vec<u8> {
+        let h = x.get(p).and_then(|v| v.as_str()).unwrap_or("");
+        (0..h.len() / 2)
+            .map(|i| u8::from_str_radix(&h[2 * i..2 * i + 2], 16).unwrap_or(0))
+            .collect()
+    };
+    let (mut a, mut b): (Vec<crate::sdspi::Row>, Vec<crate::sdspi::Row>) = (vec![], vec![]);
+    for x in tr {
+        let (s0, e0) = (x["s"].as_i64().unwrap_or(0), x["e"].as_i64().unwrap_or(0));
+        let (p, q) = (bytes(x, &pins[0]), bytes(x, &pins[1]));
+        let n = p.len().min(q.len());
+        let span = (8 * n).saturating_sub(1).max(1) as f64;
+        for k in 0..n {
+            let t = s0 + ((e0 - s0) as f64 * (8 * k) as f64 / span).round() as i64;
+            a.push((t, p[k], q[k]));
+            b.push((t, q[k], p[k]));
+        }
+    }
+    if let Some((score, sd)) = crate::sdspi::sd_spi(&a, &b) {
+        up.layers.insert("sd".into(), Value::Array(sd));
+        up.score = support(c.total, score, c.total);
+    }
+}
+
 /// The upper stage on one claim's reading.
 pub fn read(protocol: &str, score: f64, lay: &Map<String, Value>) -> Upper {
     let mut up = Upper {
@@ -112,17 +194,91 @@ pub fn read(protocol: &str, score: f64, lay: &Map<String, Value>) -> Upper {
     up
 }
 
+/// Layers written as JSON with more added (spliced: a UART's characters are millions, no tree of them).
+fn with_layers(lay: &serde_json::value::RawValue, extra: Map<String, Value>) -> Box<serde_json::value::RawValue> {
+    let s = lay.get().trim_end();
+    let body = s.strip_suffix('}').unwrap_or(s);
+    let mut out = String::with_capacity(s.len() + 64);
+    out.push_str(body);
+    let mut first = body.trim_end().ends_with('{');
+    for (k, v) in extra {
+        if !first {
+            out.push(',');
+        }
+        first = false;
+        out.push_str(&serde_json::to_string(&k).unwrap());
+        out.push(':');
+        out.push_str(&serde_json::to_string(&v).unwrap());
+    }
+    out.push('}');
+    raw(out)
+}
+
+/// Every two UART lines paired: SCPI on the pair, its support flowing down to both lines (their scores in `ups`).
+/// -> the relations shown (score at SHOWN or more), as the analysis format has them.
+fn pairs(lines: &[(usize, crate::duplex::Line)], ups: &mut [Option<Upper>]) -> Vec<Value> {
+    let mut rel = vec![];
+    for i in 0..lines.len() {
+        for j in i + 1..lines.len() {
+            let ((ia, a), (ib, b)) = (&lines[i], &lines[j]);
+            let sa = ups[*ia].as_ref().map_or(0.0, |u| u.score);
+            let sb = ups[*ib].as_ref().map_or(0.0, |u| u.score);
+            if sa <= 0.3 || sb <= 0.3 || a.pin == b.pin {
+                continue;
+            }
+            let Some((msgs, m)) = crate::duplex::pair(a, b) else {
+                continue;
+            };
+            if m < 0.4 {
+                continue;
+            }
+            if let Some((s, host, ex)) = crate::duplex::scpi_of(&msgs, &a.pin, &b.pin) {
+                for k in [*ia, *ib] {
+                    if let Some(u) = ups[k].as_mut() {
+                        u.score = support(u.score, s, m);
+                    }
+                }
+                if s >= crate::textup::SHOWN {
+                    let dev = if host == a.pin { &b.pin } else { &a.pin };
+                    rel.push(json!({"protocol": "scpi", "roles": {"tx": host, "rx": dev},
+                                    "score": (s * 1e4).round() / 1e4, "exchanges": ex}));
+                }
+            }
+        }
+    }
+    rel
+}
+
 /// The stage over the engine's claims: each one's upper layers added to its layers, its score raised, its margin
-/// raised as much, its verdict made again.
-pub fn stage(mut claims: Vec<Claim>, _rate: f64) -> Vec<Claim> {
-    for c in claims.iter_mut().filter(|c| !c.bus) {
-        if !matches!(c.protocol.as_str(), "rvswd" | "swio") {
+/// raised as much, its verdict made again; the UART pairs' relations beside them.
+pub fn stage_with(mut claims: Vec<Claim>, rate: f64) -> (Vec<Claim>, Vec<Value>) {
+    let mut ups: Vec<Option<Upper>> = Vec::with_capacity(claims.len());
+    let mut lines = vec![];
+    for (i, c) in claims.iter().enumerate() {
+        if c.bus {
+            ups.push(None);
             continue;
         }
-        let Ok(mut lay) = serde_json::from_str::<Map<String, Value>>(c.layers.get()) else {
-            continue;
+        let mut up = Upper {
+            score: c.total,
+            layers: Map::new(),
         };
-        let up = read(&c.protocol, c.total, &lay);
+        if c.protocol == "uart" {
+            if let Some(l) = bytes_upper(c, rate, &mut up) {
+                lines.push((i, l));
+            }
+        } else if c.protocol == "spi" {
+            sd_upper(c, &mut up);
+        } else if matches!(c.protocol.as_str(), "rvswd" | "swio")
+            && let Ok(lay) = serde_json::from_str::<Map<String, Value>>(c.layers.get())
+        {
+            up = read(&c.protocol, c.total, &lay);
+        }
+        ups.push(Some(up));
+    }
+    let rel = pairs(&lines, &mut ups);
+    for (c, up) in claims.iter_mut().zip(ups) {
+        let Some(up) = up else { continue };
         let d = up.score - c.total;
         if d != 0.0 {
             c.total = up.score;
@@ -132,11 +288,15 @@ pub fn stage(mut claims: Vec<Claim>, _rate: f64) -> Vec<Claim> {
             c.verdict = crate::verdict(up.score, margin, c.rival).into();
         }
         if !up.layers.is_empty() {
-            lay.extend(up.layers);
-            c.layers = raw(serde_json::to_string(&lay).unwrap());
+            c.layers = with_layers(&c.layers, up.layers);
         }
     }
-    claims
+    (claims, rel)
+}
+
+/// The stage's claims (the relations left out).
+pub fn stage(claims: Vec<Claim>, rate: f64) -> Vec<Claim> {
+    stage_with(claims, rate).0
 }
 
 #[cfg(test)]
