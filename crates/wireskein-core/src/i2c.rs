@@ -14,6 +14,8 @@ pub const MAX_CLOCK_HZ: f64 = 5e6;
 pub const FREE_CLOCK: f64 = 0.5; // a free clock's edges inside chance "frames": about half of them (none counts) ...
 pub const HELD: f64 = 0.9; // ... a master's clock inside its frames, this share or more (whole)
 pub const CLEAR: f64 = 0.15; // a condition this share of the clock's local half from its edges at least is clear
+pub const TOLD: f64 = 3.0; // samples: a clear zone this wide at least tells a condition near an edge ...
+pub const TOLD_FRAMES: f64 = 8.0; // ... weighing whole over a few frames, less over many (e^-frames/this)
 
 /// P(X >= k) for X ~ Binomial(n, p), summed in logs (thousands of frames underflow the terms themselves).
 pub fn tail(n: usize, k: usize, p: f64) -> f64 {
@@ -49,8 +51,9 @@ fn soft(x: f64) -> f64 {
 }
 
 /// The frames on (scl, sda), and the side measures: (frames, conditions clear of SCL's edges, conditions, SCL lows
-/// with at most two SDA changes, SCL lows inside frames, SDA's changes while SCL is low inside frames).
-type Framed = (Vec<Frame>, usize, usize, usize, usize, usize);
+/// with at most two SDA changes, SCL lows inside frames, SDA's changes while SCL is low inside frames, conditions near
+/// SCL's edges where the clock's half is wide enough in samples to tell).
+type Framed = (Vec<Frame>, usize, usize, usize, usize, usize, usize);
 fn frames(scl: &Channel, sda: &Channel) -> Framed {
     let (ce, de) = (scl.edges, sda.edges);
     let (mut i, mut j) = (0usize, 0usize);
@@ -60,12 +63,13 @@ fn frames(scl: &Channel, sda: &Channel) -> Framed {
     let (mut clear, mut conds, mut quiet, mut lows) = (0usize, 0usize, 0usize, 0usize);
     let mut sda_in_low = 0usize;
     let mut moved = 0usize;
-    let near = |t: i64| -> bool {
+    let mut near_told = 0usize;
+    let near = |t: i64| -> (bool, bool) {
         // nearer one of SCL's edges than CLEAR of the clock's local half, or than a sample (Python's
         // startstop_clearance: a clock of a few samples a period has its conditions a sample from its edges)
         if ce.len() < 4 {
             let k = ce.partition_point(|&x| x < t - 1);
-            return k < ce.len() && ce[k] <= t + 1;
+            return (k < ce.len() && ce[k] <= t + 1, false);
         }
         let j = ce.partition_point(|&x| x < t).clamp(1, ce.len() - 1);
         let d = (t - ce[j - 1]).abs().min((ce[j] - t).abs());
@@ -73,7 +77,7 @@ fn frames(scl: &Channel, sda: &Channel) -> Framed {
         let half = (ce[jj] - ce[jj - 1])
             .min(ce[jj + 1] - ce[jj])
             .min(ce[jj - 1] - ce[jj - 2]);
-        (d as f64) < (CLEAR * half as f64).max(1.0)
+        ((d as f64) < (CLEAR * half as f64).max(1.0), CLEAR * half as f64 >= TOLD)
     };
     while i < ce.len() || j < de.len() {
         // at one tick, SCL's change first: SDA moving as SCL falls is data, not a condition
@@ -101,8 +105,10 @@ fn frames(scl: &Channel, sda: &Channel) -> Framed {
             if lc == 1 {
                 // SDA moves while SCL is high: a condition
                 conds += 1;
-                if !near(t) {
-                    clear += 1;
+                match near(t) {
+                    (false, _) => clear += 1,
+                    (true, true) => near_told += 1,
+                    _ => {}
                 }
                 if ld == 0 {
                     let sr = cur.is_some();
@@ -135,7 +141,7 @@ fn frames(scl: &Channel, sda: &Channel) -> Framed {
     if let Some(f) = cur.take() {
         out.push(f);
     }
-    (out, clear, conds, quiet, lows, moved)
+    (out, clear, conds, quiet, lows, moved, near_told)
 }
 
 pub const BUS_FREE_ALLOW: usize = 2; // SCL's changes after a STOP before the next START, at most (a spike)
@@ -174,7 +180,7 @@ fn fits(n: usize) -> bool {
 
 /// The I2C reading of (scl, sda), or None where nothing frames.
 pub fn read(view: &View, scl: &Channel, sda: &Channel) -> Option<Candidate> {
-    let (frs, clear, conds, quiet, lows, moved) = frames(scl, sda);
+    let (frs, clear, conds, quiet, lows, moved, near_told) = frames(scl, sda);
     // every frame counts, a START and a STOP with no clock between too: SDA moves while SCL is high only for its
     // conditions on I2C, where another line idling beside SCL makes them by the hundred
     let used: Vec<&Frame> = frs.iter().collect();
@@ -312,7 +318,15 @@ pub fn read(view: &View, scl: &Channel, sda: &Channel) -> Option<Candidate> {
             _ => 1.0,
         }
     };
-    let mut score = fit * soft(clearance) * soft(once) * varied * stat * rests * free;
+    // (a condition near SCL's edges where the clock's half is many samples wide - the clear zone told - is no
+    // condition's: those weigh whole, the rest softly, a capture's few samples a half putting true ones by an edge)
+    let clear_term = if conds > 0 {
+        let told = near_told as f64 / conds as f64;
+        (1.0 - (-(frs.len() as f64) / TOLD_FRAMES).exp() * told) * soft((clear + near_told) as f64 / conds as f64)
+    } else {
+        soft(clearance)
+    };
+    let mut score = fit * clear_term * soft(once) * varied * stat * rests * free;
     // few addresses, repeatedly, acknowledged at least sometimes: a real bus's (Python's staged.i2c_addresses), its
     // support raising the score
     let addrs: Vec<(i64, bool)> = txs

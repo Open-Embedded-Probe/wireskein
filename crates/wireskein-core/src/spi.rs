@@ -262,6 +262,7 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
     let mut counts = vec![];
     let mut cut = vec![];
     let mut single = 0usize; // sampling edges in a select's windows of one
+    let mut cut_windows = 0usize; // of those windows, the ones the capture starts or ends in
     let mut values = vec![];
     for (&(a, b), &(pa, pb)) in w.iter().zip(&ww) {
         let lo = take.partition_point(|&x| x < pa);
@@ -273,6 +274,14 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
         }
         if cs.is_some() && hi - lo < SELECT_MIN_BITS {
             single += hi - lo;
+            // (but a window the capture ends or starts in, its clock running on to that end - nearer it than the
+            // clock's gaps between bursts - is a transfer the capture cut: one more selection, Python's
+            // pair_relation cut, the burst in the window past the line's last change framed too)
+            let (first, last) = (take[lo], take[hi - 1]);
+            let near = 4.0 * ck.half;
+            if (a <= 0 && first as f64 <= near) || (b >= n && (n - last) as f64 <= near) {
+                cut_windows += 1;
+            }
             continue;
         }
         let t = &take[lo..hi];
@@ -387,14 +396,18 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
                 // (snug at its start: a select is made active just before its clock runs - its first transfer, the
                 // margin a quarter of that at most, none past its length, however many follow; it may be held on
                 // after the transfers a while - a session's - so its end is not asked; a window the capture starts
-                // in has no start to tell)
+                // in has no start to tell, nor one whose first transfer it cuts - the clock running on to its end -
+                // a length to tell the margin by)
                 if a <= 0 {
                     continue;
                 }
-                started += 1;
                 let (f, l) = (ck.edges[lo], ck.edges[hi - 1]);
                 let k = bs.partition_point(|&(_, e)| e < f);
                 let l = bs.get(k).filter(|&&(s, _)| s <= f).map_or(l, |&(_, e)| e.min(l));
+                if b >= n && (n - l) as f64 <= 4.0 * ck.half {
+                    continue;
+                }
+                started += 1;
                 let r = (f - a) as f64 / ((l - f).max(1) as f64 + 4.0 * ck.half);
                 tight += ((1.0 - r) / (1.0 - SNUG_FREE)).clamp(0.0, 1.0);
             }
@@ -412,7 +425,9 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
     // (unless it is snug round the clock at both its ends: a select made active just before its transfer and let go
     // just after - a lone transfer selected, as a capture holding one; a line changing by chance before and after the
     // traffic leaves margins of their own; an end the capture cuts tells nothing)
-    let single = if cs.is_some() && counts.len() < 2 {
+    // (a window the capture cut, holding a bit or so of its transfer, a selection of the select's as well: its
+    // windows two, no lone window)
+    let single = if cs.is_some() && counts.len() + cut_windows < 2 {
         let held: Vec<&(i64, i64)> = w
             .iter()
             .filter(|&&(a, b)| ck.edges.partition_point(|&x| x < b) > ck.edges.partition_point(|&x| x < a))
@@ -985,5 +1000,59 @@ mod tests {
         let lay: Value = serde_json::from_str(c.layers.get()).unwrap();
         assert_eq!(lay["transfers"][2]["MOSI"], json!("a55a"), "{lay}");
         assert!(c.score > 0.5, "{:?}", c.evidence);
+    }
+
+    #[test]
+    fn a_window_the_capture_ends_in_is_a_selection_too() {
+        // one transfer of 5 bytes selected, then the select made active again and the capture cut after a bit of the
+        // next: the select's windows two, no lone window (crop:0:0.25 of synth-mixed-179)
+        let (mut clk, mut mosi, mut cs) = (vec![], vec![], vec![]);
+        let (mut ld, mut t) = (0u8, 100i64);
+        cs.push(t);
+        t += 10;
+        for b in [0x9fu8, 0x12, 0x34, 0x56, 0x78] {
+            for k in 0..8 {
+                let x = (b >> (7 - k)) & 1;
+                if x != ld {
+                    mosi.push(t);
+                    ld = x;
+                }
+                t += 5;
+                clk.push(t);
+                t += 5;
+                clk.push(t);
+            }
+        }
+        t += 10;
+        cs.push(t);
+        t += 300;
+        cs.push(t);
+        t += 10;
+        clk.push(t + 5);
+        clk.push(t + 10);
+        let v = View::new(
+            1e6,
+            t + 20,
+            vec![
+                Channel::new("SCK", 0, &clk),
+                Channel::new("MOSI", 0, &mosi),
+                Channel::new("CS", 1, &cs),
+            ],
+        )
+        .unwrap();
+        let cands = candidates(&v);
+        let with = cands
+            .iter()
+            .find(|c| c.roles.contains_key("cs"))
+            .expect("read with its select");
+        assert_eq!(with.evidence["single_window"], json!(1.0), "{:?}", with.evidence);
+        let without = cands.iter().find(|c| !c.roles.contains_key("cs"));
+        assert!(
+            without.is_none_or(|w| w.score <= with.score),
+            "{:?} {} {:?}",
+            without.map(|w| w.score),
+            with.score,
+            with.evidence
+        );
     }
 }
