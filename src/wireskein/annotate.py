@@ -145,7 +145,9 @@ def build_file(path: str | Path, hints: dict | None = None, prepare=None, part: 
     """The annotations document of a file: each part decoded on its own (analysis never crosses parts,
     wireskein-format §3.4), its rows naming it (`part`, §5.3) when the file has several. part: that one only.
     prepare: a step from the loaded capture to the one decoded (e.g. analog read as logic)."""
-    from . import _fileformat as fileformat
+    from . import _fileformat as fileformat, _rust
+    if _rust.annotates(path, hints, prepare):          # WIRESKEIN_RUST=annotate (wireskein._rust)
+        return _rust.annotations_file(path, hints, part)
     from .decode import _load as load
     prepare = prepare or (lambda cap: cap)
     from ._engine import fileio

@@ -17,6 +17,7 @@ from pathlib import Path
 
 import numpy as np
 
+from .. import _rust
 from .model import AnalogTrace, Capture, Channel, edges_from_dense
 
 _UNITS = {"hz": 1, "khz": 1e3, "mhz": 1e6, "ghz": 1e9}
@@ -38,6 +39,8 @@ def metadata(z: zipfile.ZipFile) -> configparser.ConfigParser:
 
 
 def read_sr(path: Path) -> Capture:
+    if _rust.on("io"):                          # WIRESKEIN_RUST=io (wireskein._rust)
+        return _rust.read_sr(path)
     with zipfile.ZipFile(path) as z:
         cfg = metadata(z)
         dev = cfg["device 1"]
@@ -135,6 +138,8 @@ def write_sr(path: Path, cap: Capture, **meta) -> Path:
     written as volts when their samples land on ticks (repeated to the tick
     rate, NaN outside them); raw values and settings go into wireskein.json and
     wireskein/analog-K.raw, so reading the .sr back restores them."""
+    if _rust.on("write"):                       # WIRESKEIN_RUST=write (wireskein._rust)
+        return _rust.write(path, cap, meta, "sr")
     n_ch = len(cap.channels)
     unitsize = 1 if n_ch <= 8 else 2 if n_ch <= 16 else 4 if n_ch <= 32 else 0
     if not unitsize:

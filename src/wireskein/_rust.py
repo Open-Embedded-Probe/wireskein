@@ -7,9 +7,12 @@ implementation of a part, to compare the two and to try the Rust parts before an
 
 The parts:
     engine   the engine (the claims): the same as WIRESKEIN_ENGINE=rust (wireskein._engines), which stays
-    io       a WireSkein file's parts read into the changes view (wireskein._engine.fileio.load / load_parts, so
-             load_runs, decode, verify, annotate ... read through it); the header, its meta and the attachments are
-             still read by Python, so the views are the same objects; a .sr and a VCD stay Python's
+    io       a capture file read into the changes view: a WireSkein file's parts (wireskein._engine.fileio.load /
+             load_parts, so load_runs, decode, verify, annotate ... read through it; the header, its meta and the
+             attachments still read by Python, so the views are the same objects), a .sr (srio.read_sr: the
+             session's extra and the entries carried with it read by Python) and a VCD (vcdio.read_vcd)
+    write    a capture written: fileio.save (a WireSkein file), srio.write_sr, vcdio.write_vcd (so decode's and
+             wireskein.capture's saving, `wireskein convert` ...) by wireskein-io's writers, the readers' pair
     verify   wireskein.verify.verify: the whole report from wireskein-verify (its checks read with the Rust engine);
              mark=True writes the markers with Python's code as always; with definitions directories (protocols
              declared in them) or the engine's extra protocol tables (staged.PROTOCOL_TABLES) verify stays Python's
@@ -17,6 +20,12 @@ The parts:
              Rust engine, the Rust upper stage, the report beside each claim, a long part read in pieces); options it
              does not have (select, alternatives, another depth, segments, thresholds, pins, items, device patterns,
              definitions directories, the engine's extra protocol tables) stay Python's
+    states   wireskein.states.of_line (so of_capture, of_file, of_sections, `wireskein states`): wireskein-analysis
+    survey   wireskein.survey.survey_file (`wireskein survey`): wireskein-analysis, a WireSkein file of one part read a
+             block at a time from the file, anything else read whole; a plan of no split stays Python's
+    annotate wireskein.annotate.build_file (`wireskein annotate`): each part decoded by the Rust core (as analyze
+             with the Rust engine), its rows made in Rust; a step before decoding (analog read as logic), device
+             patterns, definitions directories and the engine's extra protocol tables stay Python's
 
 A part switched on whose Rust cannot do what was asked falls back to Python without a word (the result is the same
 kind); a part switched on without wireskein_core installed is an error."""
@@ -28,7 +37,7 @@ from fractions import Fraction
 from pathlib import Path
 
 RUST_ENV = "WIRESKEIN_RUST"
-PARTS = ("engine", "io", "verify", "analyze")
+PARTS = ("engine", "io", "write", "verify", "analyze", "states", "survey", "annotate")
 
 
 def parts() -> frozenset:
@@ -180,3 +189,171 @@ def analyze_file(path, hints: dict | None, mode: str, window_s, part, split) -> 
     doc["wireskein"] = __version__
     doc["analysis_seconds"] = round(time.perf_counter() - t0, 3)
     return doc
+
+
+# ---------------- io: a .sr and a VCD ----------------
+
+def read_sr(path):
+    """srio.read_sr through the Rust reader: the logic lines (each at its own step), the analog channels; what the
+    session's extra (wireskein/sr-extra.json) says of the capture and the entries carried with it read here, as
+    read_sr gives them in meta."""
+    import zipfile
+    import numpy as np
+    from ._engine.model import AnalogTrace, Capture, Channel
+    from ._engine.srio import EXTRA
+    got = core().read_file(str(path))
+    with zipfile.ZipFile(path) as z:
+        names = z.namelist()
+        extra = json.loads(z.read(EXTRA)) if EXTRA in names else {}
+        if extra.get("format") != "wireskein-sr-extra/1":
+            extra = {}
+        listed = set(extra.get("extras", []))
+        carried = {n: z.read(n) for n in names if n.startswith(("attach/", "notes/")) or n in listed}
+    p = got["parts"][0]
+    meta = {"sr_file": str(path), "unitsize": got["meta"]["unitsize"]}
+    rate = float(Fraction(*got["tick_hz"]))
+    if extra.get("tick_hz"):
+        meta["tick_hz"] = Fraction(*extra["tick_hz"])
+        rate = float(meta["tick_hz"])
+    meta.update(extra.get("meta", {}))
+    if extra.get("id"):
+        meta["capture_id"] = extra["id"]
+    if carried:
+        meta["extras"] = carried
+    channels = [Channel(x["name"], int(x["initial"]), x["edges"], int(x["step"]), int(x["phase"]), x["acquisition"])
+                for x in p["lines"]]
+    analog = []
+    for a in p["analog"]:
+        rate_hz, t0 = Fraction(*a["rate_hz"]), Fraction(*a["t0_ticks"])
+        if a["encoding"] == "analog":                       # written by write_sr: the raw values come back
+            dt = {8: np.uint8, 16: "<u2", 32: "<u4"}[a["width"]]
+            analog.append(AnalogTrace(a["name"], a["values"].astype(dt), rate_hz, t0, "analog", a["width"],
+                                      a["value_bits"], a["zero"], a["scale_nv"], "V", a["acquisition"]))
+        elif a["name"] in extra.get("analog", {}):          # analog-f32 written by write_sr: its own rate
+            analog.append(AnalogTrace(a["name"], a["values"].astype(np.float32), rate_hz, t0, "analog-f32",
+                                      unit=a["unit"], acquisition=a["acquisition"]))
+        else:
+            analog.append(AnalogTrace(a["name"], a["values"].astype(np.float32), rate_hz, Fraction(0), "analog-f32"))
+    return Capture(rate, int(p["ticks"]), channels, meta=meta, analog=analog)
+
+
+def read_vcd(path):
+    """vcdio.read_vcd through the Rust reader."""
+    import numpy as np
+    from ._engine.model import AnalogTrace, Capture, Channel
+    got = core().read_file(str(path))
+    p = got["parts"][0]
+    tick = Fraction(*got["tick_hz"])
+    own = dict(got["meta"])
+    late = {k: own.pop(k) for k in ("vcd_x_or_z", "vcd_not_read") if k in own}
+    meta = {"vcd_file": str(path), "tick_hz": tick, **own}
+    if got["id"]:
+        meta["capture_id"] = got["id"]
+    meta.update(late)
+    channels = [Channel(x["name"], int(x["initial"]), x["edges"], int(x["step"]), int(x["phase"]), x["acquisition"])
+                for x in p["lines"]]
+    analog = [AnalogTrace(a["name"], a["values"] if a["unit"] == "raw" else a["values"].astype(np.float32),
+                          Fraction(*a["rate_hz"]), Fraction(*a["t0_ticks"]), "analog-f32", unit=a["unit"],
+                          acquisition=a["acquisition"]) for a in p["analog"]]
+    return Capture(float(tick), int(p["ticks"]), channels, meta=meta, analog=analog)
+
+
+# ---------------- write ----------------
+
+def write(path, cap, meta: dict, form: str):
+    """fileio.save (form "wireskein"), srio.write_sr ("sr"), vcdio.write_vcd ("vcd") through wireskein-io's writers:
+    the same file as Python's for its readers. meta: the capture file's metadata (as the writer is given it)."""
+    import numpy as np
+    from . import _fileformat as fileformat
+    tick = cap.meta.get("tick_hz", cap.rate)
+    tick = fileformat._fraction(tick) if form == "wireskein" else Fraction(tick).limit_denominator(10**9)
+    meta = dict(meta)
+    meta.pop("capture_id", None)
+    if form == "wireskein":
+        for k in ("complete", "lost", "layout", "part", "n_parts"):
+            meta.pop(k, None)
+        kept = {t.name for t in cap.events}             # their Channel view is not written; the events are
+        lines = [c for c in cap.channels if c.name not in kept]
+        events, analog = list(cap.events), list(cap.analog)
+    else:
+        lines, events, analog = list(cap.channels), [], list(cap.analog)
+    info = {"tick_hz": [tick.numerator, tick.denominator], "ticks": int(cap.n_samples),
+            "id": cap.meta.get("capture_id"), "lost": (cap.meta.get("lost") or []) if form == "wireskein" else [],
+            "meta": meta,
+            # a .sr's or a VCD's extra keeps a reduced line's acquisition whole (its reduction named in it)
+            "lines": [{"step": int(c.step), "phase": int(c.phase),
+                       "reduction": c.acquisition.get("reduction") if form == "wireskein" else None,
+                       "acquisition": {k: v for k, v in c.acquisition.items()
+                                       if k != "reduction" or form != "wireskein"}} for c in lines],
+            "events": [{"step": int(t.step), "phase": int(t.phase), "n": int(t.n), "start_level": int(t.start_level),
+                        "reduction": t.acquisition.get("reduction"),
+                        "acquisition": {k: v for k, v in t.acquisition.items() if k != "reduction"}} for t in events],
+            "analog": [{"encoding": a.encoding, "rate_hz": [a.rate_hz.numerator, a.rate_hz.denominator],
+                        "t0_ticks": [a.t0_ticks.numerator, a.t0_ticks.denominator], "width": a.width,
+                        "value_bits": a.value_bits, "zero": a.zero, "scale_nv": a.scale_nv, "unit": a.unit,
+                        "acquisition": a.acquisition} for a in analog]}
+    extras = [(k, bytes(v)) for k, v in cap.meta.get("extras", {}).items()] if form != "vcd" else []
+    i64 = lambda x: np.ascontiguousarray(x, np.int64)               # noqa: E731
+    u8 = lambda x: np.ascontiguousarray(x, np.uint8)                # noqa: E731
+    core().write_file(str(path), json.dumps(info, default=str),
+                      [(c.name, int(c.initial), i64(c.edges)) for c in lines],
+                      [(t.name, i64(t.quanta), u8(t.levels), u8(t.counts)) for t in events],
+                      [(a.name, np.ascontiguousarray(a.values, np.float64)) for a in analog], extras, form)
+    return Path(path)
+
+
+# ---------------- states ----------------
+
+def states_of_line(edges, initial, n, rate, step, tol, min_periods, max_odd) -> list:
+    """states.of_line from wireskein-analysis (the stretches as Python gives them)."""
+    import numpy as np
+    return json.loads(core().states_of_line(np.ascontiguousarray(edges, np.int64), int(initial), int(n), float(rate),
+                                            int(step), float(tol), int(min_periods),
+                                            None if max_odd is None else int(max_odd)))
+
+
+# ---------------- survey ----------------
+
+def _plan_spec(plan) -> str | None | bool:
+    """A survey's plan as the Rust overview takes it (None: no plan; "": the split's defaults), False when it cannot
+    (a plan of no split)."""
+    if plan is None:
+        return None
+    s = _split_spec(plan)
+    if s is False or s == "off":
+        return False
+    return s or ""
+
+
+def surveys(plan) -> bool:
+    """Whether survey_file with this plan is Rust's: switched on, and a plan it can give."""
+    return on("survey") and _plan_spec(plan) is not False
+
+
+def survey_file(path, pins, bins: int, top: int, plan) -> dict:
+    """survey.survey_file from wireskein-analysis (its "wireskein" put by Python)."""
+    from . import __version__
+    doc = json.loads(core().survey_file(str(path), list(pins) if pins else None, int(bins), int(top),
+                                        _plan_spec(plan)))
+    cap = doc.pop("capture")
+    return {**doc, "wireskein": __version__, "capture": cap}
+
+
+# ---------------- annotate ----------------
+
+def annotates(path, hints, prepare) -> bool:
+    """Whether annotate.build_file is Rust's: switched on, a file, no step before decoding, nothing the Rust core
+    does not read (device patterns, definitions directories, the engine's extra protocol tables)."""
+    if not on("annotate"):
+        return False
+    from . import plugins
+    from ._engine import staged
+    return (prepare is None and Path(path).is_file() and not (hints or {}).get("devices")
+            and not plugins.definitions() and not staged.PROTOCOL_TABLES)
+
+
+def annotations_file(path, hints: dict | None, part) -> dict:
+    """The annotations document from wireskein-analysis (as annotate.build_file gives it)."""
+    from . import __version__
+    return json.loads(core().annotations_file(str(path), json.dumps(hints), part,
+                                              f"wireskein {__version__} analyze"))

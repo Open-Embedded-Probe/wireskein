@@ -233,6 +233,8 @@ def save(path: str | Path, cap: Capture, **meta) -> Path:
     if cap.meta.get("n_parts", 1) > 1:
         raise ValueError(f"not writing {path}: the capture has {cap.meta['n_parts']} parts and this is one of them "
                          f"(the others would be dropped)")
+    if _rust.on("write"):                            # WIRESKEIN_RUST=write (wireskein._rust)
+        return _rust.write(path, cap, meta, "wireskein")
     tick = cap.meta.get("tick_hz", cap.rate)
     meta.pop("capture_id", None)
     for k in ("complete", "lost", "layout", "part", "n_parts"):

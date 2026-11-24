@@ -36,6 +36,9 @@ def of_line(edges: np.ndarray, initial: int, n: int, rate: float, step: int = 1,
             min_periods: int = 3, max_odd: int | None = 3) -> list[dict]:
     """The stretches of one line over ticks [0, n), in order: levels, waves, and the odd pulses between them; more
     than max_odd odd pulses in a row are one stretch of activity (None: each pulse kept)."""
+    from . import _rust
+    if _rust.on("states"):                              # WIRESKEIN_RUST=states (wireskein._rust)
+        return _rust.states_of_line(edges, initial, n, rate, step, tol, min_periods, max_odd)
     edges = np.asarray(edges, np.int64)
     if not len(edges):
         return [{"t0": 0, "t1": n, "level": int(initial)}]

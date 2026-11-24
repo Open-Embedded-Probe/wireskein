@@ -26,6 +26,7 @@ from pathlib import Path
 
 import numpy as np
 
+from .. import _rust
 from .model import AnalogTrace, Capture, Channel
 
 MARK = "wireskein "
@@ -59,6 +60,8 @@ def _ids():
 
 
 def write_vcd(path: Path, cap: Capture, **meta) -> Path:
+    if _rust.on("write"):                       # WIRESKEIN_RUST=write (wireskein._rust)
+        return _rust.write(path, cap, meta, "vcd")
     tick = Fraction(cap.meta.get("tick_hz", cap.rate)).limit_denominator(10**9)
     scale_name, unit = _timescale(tick)
     per_tick = (1 / tick) / unit                     # timescale units per tick (a whole number when exact)
@@ -124,6 +127,8 @@ _TS = re.compile(r"\s*(\d+)\s*(s|ms|us|ns|ps|fs)\s*")
 
 
 def read_vcd(path: Path) -> Capture:
+    if _rust.on("io"):                          # WIRESKEIN_RUST=io (wireskein._rust)
+        return _rust.read_vcd(path)
     text = Path(path).read_text(errors="replace")
     head, sep, body = text.partition("$enddefinitions")
     if not sep:
