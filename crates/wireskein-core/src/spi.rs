@@ -17,6 +17,9 @@ pub const CS_FEWER: usize = 8; // a select changes this many times less than the
 pub const SELECT_USED: f64 = 0.5; // a select's windows holding the clock, this share for a whole score
 pub const SINGLE_WINDOW: f64 = 0.5; // a select of a single window, standing alone, weighs this much
 pub const SNUG_FREE: f64 = 0.25; // a select's margin before its first transfer this share of the transfer, whole snug
+pub const SELECTED: f64 = 0.95; // a line changing inside a select's windows this share or more is its data too ...
+pub const SELECTED_MIN: usize = 8; // ... with this many changes at least, ...
+pub const SELECTED_FAST: f64 = 3.0; // ... beside a clock of this half period at most (too few phases to keep to)
 pub const SELECT_MIN_BITS: usize = 2; // sampling edges a select's window holds at least for a transfer
 
 pub(crate) struct Clock {
@@ -257,6 +260,7 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
         .collect();
     let mut transfers = vec![];
     let mut counts = vec![];
+    let mut cut = vec![];
     let mut single = 0usize; // sampling edges in a select's windows of one
     let mut values = vec![];
     for (&(a, b), &(pa, pb)) in w.iter().zip(&ww) {
@@ -273,6 +277,10 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
         }
         let t = &take[lo..hi];
         counts.push(t.len());
+        // (a window the capture starts or ends in: its transfer cut, its bits no count of a transfer's - a select's
+        // window from the capture's start or to its end, a burst of the clock nearer either than its gaps)
+        let edge = if cs.is_some() { 0.0 } else { 4.0 * ck.half };
+        cut.push(a as f64 <= edge || b as f64 >= n as f64 - edge);
         let mut tr = Map::new();
         tr.insert("s".into(), json!(a));
         tr.insert("e".into(), json!(b));
@@ -297,7 +305,13 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
     if counts.len() < if cs.is_some() { 1 } else { 2 } {
         return None;
     }
-    let whole = counts.iter().filter(|&&c| c % 8 == 0).count() as f64 / counts.len() as f64;
+    // (whole bytes counted in the windows the capture holds whole, where there are any)
+    let kept: Vec<usize> = if cut.iter().all(|&c| c) {
+        counts.clone()
+    } else {
+        counts.iter().zip(&cut).filter(|(_, c)| !**c).map(|(&k, _)| k).collect()
+    };
+    let whole = kept.iter().filter(|&&c| c % 8 == 0).count() as f64 / kept.len() as f64;
     let covered = counts.iter().sum::<usize>() as f64 / (take.len() - single).max(1) as f64;
     // the data's changes inside the windows, and at most one a clock period there
     let mut inside = vec![];
@@ -357,9 +371,10 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
                 // every edge of the burst inside a window (one, or several of a select toggling with it)
                 let lo = ck.edges.partition_point(|&x| x < a);
                 let hi = ck.edges.partition_point(|&x| x <= b);
+                // (a window's half period of margin taken whole: a bounced clock's last edge rings on to it)
                 ck.edges[lo..hi].iter().all(|&x| {
                     let i = ww.partition_point(|&(s, _)| s <= x);
-                    i > 0 && x < ww[i - 1].1
+                    i > 0 && x <= ww[i - 1].1
                 })
             })
             .count();
@@ -394,8 +409,26 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
     };
     // a select of one window alone tells little (any line changing once before the traffic and once after frames
     // it all): a target of a shared bus, where its window is one of the bus's (shared undoes it)
+    // (unless it is snug round the clock at both its ends: a select made active just before its transfer and let go
+    // just after - a lone transfer selected, as a capture holding one; a line changing by chance before and after the
+    // traffic leaves margins of their own; an end the capture cuts tells nothing)
     let single = if cs.is_some() && counts.len() < 2 {
-        SINGLE_WINDOW
+        let held: Vec<&(i64, i64)> = w
+            .iter()
+            .filter(|&&(a, b)| ck.edges.partition_point(|&x| x < b) > ck.edges.partition_point(|&x| x < a))
+            .collect();
+        let both = match held.as_slice() {
+            &[&(a, b)] if a > 0 && b < n => {
+                let lo = ck.edges.partition_point(|&x| x < a);
+                let hi = ck.edges.partition_point(|&x| x < b);
+                let (f, l) = (ck.edges[lo], ck.edges[hi - 1]);
+                let span = (l - f).max(1) as f64 + 4.0 * ck.half;
+                let end = |m: i64| ((1.0 - m as f64 / span) / (1.0 - SNUG_FREE)).clamp(0.0, 1.0);
+                end(f - a) * end(b - l)
+            }
+            _ => 0.0,
+        };
+        SINGLE_WINDOW + (1.0 - SINGLE_WINDOW) * both
     } else {
         1.0
     };
@@ -586,6 +619,37 @@ pub fn candidates(view: &View) -> Vec<Candidate> {
                 .chain(once.iter().filter(|c| c.name != clk.name).map(Some))
                 .collect();
             for cs in selects {
+                // (and, under a select, the lines changing inside its windows only, where the clock is a few samples a
+                // period: its data's changes gather at no phase a bounce does not blur, but its select holds them)
+                let mut keep = keep.clone();
+                if let Some(c) = cs
+                    && ck.half <= SELECTED_FAST
+                    && let Some((w, _)) = windows(ck, Some(c), view.n_samples)
+                {
+                    for (i, d) in lines.iter().enumerate() {
+                        if d.name == clk.name
+                            || d.name == c.name
+                            || d.edges.len() < SELECTED_MIN
+                            || d.edges.len() as f64 > 1.5 * ck.edges.len() as f64
+                            || keep.iter().any(|(_, k)| k.name == d.name)
+                        {
+                            continue;
+                        }
+                        let inside = d
+                            .edges
+                            .iter()
+                            .filter(|&&x| {
+                                let j = w.partition_point(|&(a, _)| a <= x);
+                                j > 0 && x < w[j - 1].1
+                            })
+                            .count();
+                        if inside as f64 >= SELECTED * d.edges.len() as f64 {
+                            let k = if v == 0 { s.keeps[i] } else { keeping(d.edges, &cc) };
+                            keep.push((k, d));
+                        }
+                    }
+                    keep.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+                }
                 let ds: Vec<&Channel> = keep
                     .iter()
                     .map(|&(_, d)| d)
