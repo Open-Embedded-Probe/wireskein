@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Fixed: S/PDIF on a line of several transmissions at other rates (a test's sections at 48 kHz, then 44.1 kHz, the line quiet between) was read at one half cell for the whole line, the others read partly or not at all (2 of 3 stretches unread on a CH32H417's SAI). Each stretch, between silences of 64 half cells or more, is read at its own half cell, and its subframes chained by their own length.
+- (JA) 直した: 速さの違う送信がいくつもある線の S/PDIF（試験の区間ごとに 48 kHz、次に 44.1 kHz、その間は線が止まる）を、線全体で 1 つの半セルの長さで読み、ほかの区間を一部しか、または全く読めなかった（CH32H417 の SAI で 3 つのうち 2 つの区間が読み残し）。64 半セル以上の無音で区切った区間ごとに、その半セルで読み、サブフレームの並びはそれ自身の長さで確かめる。
 - (EN) A test's check of S/PDIF (`wireskein.runlog.spdif(pin, audio, status, status_b, fs_hz, fs_rel, errors_max)`): the subframes in order (channel A and B by turns, none missing, B every 192 frames, each parity even; errors_max allowed), each channel's audio (a value every subframe carries, or values in a row), the channel status of each whole block (its first 32 C bits as an integer), the frame rate. capture-test-guide §4.7.
 - (JA) 試験の S/PDIF の検査（`wireskein.runlog.spdif(pin, audio, status, status_b, fs_hz, fs_rel, errors_max)`）: サブフレームの並び（チャネル A と B が交互、抜けなし、B が 192 フレームごと、どのパリティも偶数。errors_max まで許す）、チャネルごとの音声（どのサブフレームも持つ値、または並ぶ値）、完全なブロックごとのチャネル状態（先頭 32 個の C ビットを整数に）、フレームの速さ。capture-test-guide §4.7。
 

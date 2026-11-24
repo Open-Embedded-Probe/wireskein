@@ -134,3 +134,19 @@ def test_through_a_run(tmp_path):
     rec.close()
     (r,) = verify.verify(tmp_path)["results"]
     assert r["status"] == "ok", (r["reason"], r["measured"])
+
+
+def test_stretches_at_two_rates_with_silence_between():
+    # a capture of two transmissions, 48 kHz then 44.1 kHz, the line quiet between (a test's sections): each read at
+    # its own half cell (one estimated for the whole line read the second as nothing)
+    from wireskein._engine import spdif
+    w = gen.Wave(0)
+    t = gen.spdif(w, 20e-6, [(0x5a3c96, 0x0f1e2d)] * 300, fs=48000)
+    t = gen.spdif(w, t + 2e-3, [(0x123456, 0x654321)] * 300, fs=44100)
+    cap = gen.quantize({"SPDIF": w}, 50e6, t + 20e-6, np.random.default_rng(1))
+    sf = spdif.subframes(np.asarray(cap.channels[0].edges, np.int64))
+    vals = [x["audio"] for x in sf if x["ok"]]
+    assert vals.count(0x5a3c96) >= 299 and vals.count(0x654321) >= 299, len(sf)
+    ex = decode.export(decode.analyze(cap), cap)
+    (c,) = [c for c in ex["claims"] if c["protocol"] == "spdif"]
+    assert c["verdict"] in ("confirmed", "likely") and len(c["result"]["subframes"]) >= 1196

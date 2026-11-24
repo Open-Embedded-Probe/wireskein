@@ -15,7 +15,30 @@ SPDIF_CHAIN = 0.9         # of them, this share in A / B turns a subframe apart
 SPDIF_SHARE = 0.01        # a run length this share of the runs at least to count as half a cell
 
 
+SPDIF_SILENCE = 64        # half cells: a stretch with no change this long ends a transmission (one is read at a time)
+
+
 def subframes(edges: np.ndarray) -> list[dict]:
+    """The subframes on a line, each stretch of transmission read on its own (its own half cell: the stretches
+    of one capture may be at other rates, 48 kHz then 44.1 kHz; a silence of SPDIF_SILENCE half cells or more ends a
+    stretch)."""
+    edges = np.asarray(edges, np.int64)
+    if len(edges) < 200:
+        return []
+    d = np.diff(edges)
+    # a silence: far longer than the line's runs (the shortest common run is half a cell at the fastest rate)
+    vals, cnt = np.unique(d, return_counts=True)
+    common = vals[cnt >= SPDIF_SHARE * len(d)]
+    if not len(common):
+        return []
+    cut = np.flatnonzero(d > SPDIF_SILENCE * max(1, int(common[0]))) + 1
+    out = []
+    for part in np.split(edges, cut):
+        out += _subframes(part)
+    return out
+
+
+def _subframes(edges: np.ndarray) -> list[dict]:
     if len(edges) < 200:
         return []
     d = np.diff(edges).astype(float)
@@ -82,9 +105,10 @@ class SpdifPlugin:
             return []
         # subframes in their order: channel A (B / M) and B (W) by turns, one subframe's time apart (32 cells);
         # preambles a line of other pulses shows by chance come in no such chain
-        span = float(np.median([x["e"] - x["s"] for x in good]))
+        # (each pair against its first subframe's own length: the stretches of one capture may be at other rates)
         chain = sum(1 for a, b in zip(good, good[1:])
-                    if ((a["preamble"] == "W") != (b["preamble"] == "W")) and abs((b["s"] - a["s"]) / span - 1) < 0.1)
+                    if ((a["preamble"] == "W") != (b["preamble"] == "W"))
+                    and abs((b["s"] - a["s"]) / max(1, a["e"] - a["s"]) - 1) < 0.1)
         if chain < SPDIF_CHAIN * (len(good) - 1):
             return []
         # evidence: each subframe's preamble (a coding violation of its own pattern: 3) and parity (1)
