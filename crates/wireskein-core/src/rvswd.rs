@@ -565,6 +565,12 @@ fn read(view: &View, clk: &Channel, dio: &Channel) -> Option<Candidate> {
         let inside: usize = ss.iter().map(|f| f.b - f.a).sum();
         (read_frames(&ss, true, &bits, &rises, rate), inside)
     } else {
+        // no START or STOP: the cuts at the clock's gaps, on a line keeping to the clock as data only (as the survey
+        // pairs a clock's data lines; a free clock beside lines that rarely change reads frames whose parities hold
+        // over bits all alike)
+        if crate::sync::keeping(dio.edges, clk) < crate::clocked::KEEPS_MIN {
+            return None;
+        }
         let g = gap_frames(&rises);
         let r = read_frames(&g, false, &bits, &rises, rate);
         if r.passed == 0 {
@@ -595,6 +601,7 @@ fn read(view: &View, clk: &Channel, dio: &Channel) -> Option<Candidate> {
         ("checked_frames", json!(reading.checked_frames)),
         ("parity_ok", json!(par)),
         ("bit_coverage", json!(cover)),
+        ("delimited", json!(!ss.is_empty())),
     ]);
     Some(candidate(
         "rvswd",
