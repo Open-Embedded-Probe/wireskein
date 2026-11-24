@@ -163,6 +163,16 @@ fn windows(ck: &Clock, cs: Option<&Channel>, n: i64) -> Option<Windows> {
     Some((w, None))
 }
 
+pub const TRANSFER_EDGES: usize = 4; // a burst of the clock with this many changes at least is a transfer (two bits)
+
+/// The clock's bursts that can be transfers: a lone pulse (a spike on a clock read as it is) holds no bit.
+fn transfers_of(ce: &[i64]) -> Vec<(i64, i64)> {
+    crate::sync::bursts(ce)
+        .into_iter()
+        .filter(|&(a, b)| ce.partition_point(|&x| x <= b) - ce.partition_point(|&x| x < a) >= TRANSFER_EDGES)
+        .collect()
+}
+
 fn level_at(e: &[i64], initial: u8, t: i64) -> u8 {
     initial ^ (e.partition_point(|&x| x <= t) as u8 & 1)
 }
@@ -307,7 +317,7 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
     // its windows hold the clock (a window with none is another target's selection) snugly (the margins before and
     // after the clock's span no longer than the span)
     let (framed, used, snug) = if cs.is_some() {
-        let bs = crate::sync::bursts(&ck.edges);
+        let bs = transfers_of(&ck.edges);
         let inside_w = bs
             .iter()
             .filter(|&&(a, b)| {
@@ -550,7 +560,7 @@ fn shared(view: &View, cands: &[Candidate]) -> Vec<Candidate> {
         } else {
             ce
         };
-        let mid: Vec<i64> = crate::sync::bursts(&ce)
+        let mid: Vec<i64> = transfers_of(&ce)
             .iter()
             .filter(|(a, b)| b > a)
             .map(|(a, b)| (a + b) / 2)
@@ -582,7 +592,7 @@ fn shared(view: &View, cands: &[Candidate]) -> Vec<Candidate> {
         };
         // a select never cuts a transfer: each burst of the clock its windows reach lies inside one of them (a line
         // toggling on its own cuts them anywhere), SHARED_CUT of them at most (a spike, a bounce)
-        let whole_bursts: Vec<(i64, i64)> = crate::sync::bursts(&ce).into_iter().filter(|(a, b)| b > a).collect();
+        let whole_bursts: Vec<(i64, i64)> = transfers_of(&ce);
         let cuts = |sp: &[(i64, i64)]| -> bool {
             let (mut reached, mut cut) = (0usize, 0usize);
             for &(a, b) in &whole_bursts {
