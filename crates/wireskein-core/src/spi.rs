@@ -15,6 +15,7 @@ pub const DATA_KEEPS: f64 = 0.5; // a data line keeps to the clock this well at 
 pub const SCALE: f64 = 5.0; // the words of whole-byte windows counted as 1 - exp(-n / SCALE)
 pub const CS_FEWER: usize = 8; // a select changes this many times less than the clock at least
 pub const SELECT_USED: f64 = 0.5; // a select's windows holding the clock (and snug round it), this share for a whole score
+pub const SINGLE_WINDOW: f64 = 0.5; // a select of a single window, standing alone, weighs this much
 pub const SELECT_MIN_BITS: usize = 2; // sampling edges a select's window holds at least for a transfer
 
 pub(crate) struct Clock {
@@ -326,6 +327,13 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
     } else {
         (1.0, 1.0, 1.0)
     };
+    // a select of one window alone tells little (any line changing once before the traffic and once after frames
+    // it all): a target of a shared bus, where its window is one of the bus's (shared undoes it)
+    let single = if cs.is_some() && counts.len() < 2 {
+        SINGLE_WINDOW
+    } else {
+        1.0
+    };
     let score = whole
         * (covered / 0.9).min(1.0)
         * framed
@@ -337,7 +345,8 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
         * inside
         * (0.75 + 0.25 * once)
         * (0.5 + 0.5 * degenerate)
-        * quantity;
+        * quantity
+        * single;
     let mut roles: std::collections::BTreeMap<String, String> = Default::default();
     roles.insert("clk".into(), clk.name.into());
     if let Some(cs) = cs {
@@ -363,6 +372,7 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
         ("select_frames", framed),
         ("select_used", used),
         ("select_snug", snug),
+        ("single_window", single),
     ] {
         evidence.insert(k.into(), json!(x));
     }
@@ -533,7 +543,7 @@ fn shared(view: &View, cands: &[Candidate]) -> Vec<Candidate> {
         let adjusted = |c: &Candidate| {
             let e = |k: &str| c.evidence.get(k).and_then(|x| x.as_f64()).unwrap_or(1.0);
             let f = e("select_frames");
-            let out = (f * f * (e("covered") / 0.9).min(1.0) * e("inside")).max(1e-12);
+            let out = (f * f * (e("covered") / 0.9).min(1.0) * e("inside") * e("single_window")).max(1e-12);
             (c.score / out).min(0.99)
         };
         let spans = |c: &Candidate| -> Vec<(i64, i64)> {
