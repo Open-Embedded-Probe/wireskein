@@ -513,7 +513,7 @@ dependencies = [
 
 [[package]]
 name = "wireskein-cli"
-version = "0.0.36"
+version = "0.0.37"
 dependencies = [
  "serde_json",
  "sha2",
@@ -533,7 +533,7 @@ dependencies = [
 
 [[package]]
 name = "wireskein-io"
-version = "0.0.36"
+version = "0.0.37"
 dependencies = [
  "serde_json",
  "zip",
@@ -551,7 +551,7 @@ dependencies = [
 
 [[package]]
 name = "wireskein-verify"
-version = "0.0.36"
+version = "0.0.37"
 dependencies = [
  "serde",
  "serde_json",
