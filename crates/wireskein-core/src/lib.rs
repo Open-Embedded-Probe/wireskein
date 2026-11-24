@@ -12,6 +12,7 @@ pub mod claim;
 pub mod clocked;
 pub mod dali;
 pub mod dcc;
+pub mod devices;
 pub mod dht;
 pub mod duplex;
 pub mod features;

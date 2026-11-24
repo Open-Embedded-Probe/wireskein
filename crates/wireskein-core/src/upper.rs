@@ -179,6 +179,69 @@ fn sd_upper(c: &Claim, up: &mut Upper) {
     }
 }
 
+/// Device packs on an I2C bus's transactions or an SPI bus's transfers: the `devices` layer (matches and
+/// candidates); a pack identified (its identity read, or its checks passed) raises the bus.
+fn devices_upper(c: &Claim, packs: &crate::devices::PackSet, up: &mut Upper) {
+    let Ok(lay) = serde_json::from_str::<Map<String, Value>>(c.layers.get()) else {
+        return;
+    };
+    let hex = |h: &str| -> Vec<u8> {
+        (0..h.len() / 2)
+            .map(|i| u8::from_str_radix(&h[2 * i..2 * i + 2], 16).unwrap_or(0))
+            .collect()
+    };
+    let ms = if c.protocol == "i2c" {
+        let txs: Vec<crate::devices::Tx> = lay
+            .get("transactions")
+            .and_then(|v| v.as_array())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|t| {
+                        Some(crate::devices::Tx {
+                            s: t.get("s").cloned().unwrap_or(Value::Null),
+                            addr: t.get("addr")?.as_i64()?,
+                            read: t.get("rw").and_then(|v| v.as_str()).map(|r| r == "read"),
+                            ack: t.get("addr_ack").and_then(|v| v.as_bool()).unwrap_or(false),
+                            bytes: hex(t.get("bytes").and_then(|v| v.as_str()).unwrap_or("")),
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        crate::devices::match_i2c(&txs, packs)
+    } else {
+        let tr = lay
+            .get("transfers")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default();
+        let pins: Vec<String> = tr
+            .first()
+            .and_then(|x| x.as_object())
+            .map(|o| o.keys().filter(|k| *k != "s" && *k != "e").cloned().collect())
+            .unwrap_or_default();
+        let lines: std::collections::BTreeMap<String, Vec<Vec<u8>>> = pins
+            .iter()
+            .map(|p| {
+                let v = tr
+                    .iter()
+                    .map(|x| hex(x.get(p).and_then(|v| v.as_str()).unwrap_or("")))
+                    .collect();
+                (p.clone(), v)
+            })
+            .collect();
+        crate::devices::match_spi(&lines, packs)
+    };
+    if ms.is_empty() {
+        return;
+    }
+    if ms.iter().any(|m| m.level == "identified") {
+        up.score = support(up.score, up.score, up.score);
+    }
+    up.layers
+        .insert("devices".into(), Value::Array(crate::devices::exported(&ms)));
+}
+
 /// The upper stage on one claim's reading.
 pub fn read(protocol: &str, score: f64, lay: &Map<String, Value>) -> Upper {
     let mut up = Upper {
@@ -254,6 +317,7 @@ fn pairs(lines: &[(usize, crate::duplex::Line)], ups: &mut [Option<Upper>]) -> V
 pub fn stage_with(mut claims: Vec<Claim>, rate: f64) -> (Vec<Claim>, Vec<Value>) {
     let mut ups: Vec<Option<Upper>> = Vec::with_capacity(claims.len());
     let mut lines = vec![];
+    let packs = crate::devices::PackSet::builtin(&["**".into()]);
     for (i, c) in claims.iter().enumerate() {
         if c.bus {
             ups.push(None);
@@ -267,7 +331,10 @@ pub fn stage_with(mut claims: Vec<Claim>, rate: f64) -> (Vec<Claim>, Vec<Value>)
             if let Some(l) = bytes_upper(c, rate, &mut up) {
                 lines.push((i, l));
             }
+        } else if c.protocol == "i2c" {
+            devices_upper(c, &packs, &mut up);
         } else if c.protocol == "spi" {
+            devices_upper(c, &packs, &mut up);
             sd_upper(c, &mut up);
         } else if matches!(c.protocol.as_str(), "rvswd" | "swio")
             && let Ok(lay) = serde_json::from_str::<Map<String, Value>>(c.layers.get())
