@@ -46,7 +46,12 @@ fn text(protocol: &str, it: &J) -> String {
     if it.has("addr") && it.has("rw") {
         // a bus transaction
         let rw: String = py_str(it.get("rw")).chars().take(1).collect::<String>().to_uppercase();
-        let mut s = format!("{rw} {}", hex(int_trunc(it.get("addr")), 4));
+        // an address not read (null): "?" (Python's int(None) stops the whole document there)
+        let addr = match it.get("addr") {
+            a @ (J::Int(_) | J::Float(_) | J::Bool(_)) => hex(int_trunc(a), 4),
+            _ => "?".into(),
+        };
+        let mut s = format!("{rw} {addr}");
         let data = it.get("bytes");
         if data.truthy() {
             let d = py_str(data);
@@ -379,6 +384,10 @@ mod tests {
                 &J::parse(r#"{"op": "rd", "reg": "0x10", "data": 255}"#).unwrap()
             ),
             "rd 0x10 0x000000ff"
+        );
+        assert_eq!(
+            text("i2c", &J::parse(r#"{"addr": null, "rw": "write"}"#).unwrap()),
+            "W ?"
         );
         assert_eq!(level(&J::parse(r#"{"ok": false}"#).unwrap()), "error");
         assert_eq!(level(&J::parse(r#"{"rw": "write", "acks": [1, 0]}"#).unwrap()), "warn");
