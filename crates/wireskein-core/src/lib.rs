@@ -408,9 +408,15 @@ pub fn analyze_full(view: &View, hints: &serde_json::Value) -> (Vec<Claim>, Vec<
 /// The engine's claims under the hints, before the upper stage (for a caller with an upper stage of its own:
 /// Python's, with its device packs and definitions directories).
 pub fn analyze_engine(view: &View, hints: &serde_json::Value) -> Vec<Claim> {
+    choose(readings(view, hints))
+}
+
+/// Every reading of a part's lines the hints allow, before the claims are chosen (a decode spec's bus is read
+/// whether or not it is claimed).
+pub fn readings(view: &View, hints: &serde_json::Value) -> Vec<Candidate> {
     let h = Hints::from_json(hints);
     if h.protocols.is_empty() && h.pins.is_empty() && h.exclude.is_empty() {
-        return choose(candidates(view));
+        return candidates(view);
     }
     let kept = View {
         rate: view.rate,
@@ -429,7 +435,7 @@ pub fn analyze_engine(view: &View, hints: &serde_json::Value) -> Vec<Claim> {
         .collect();
     let mut cands = candidates_with(&kept, &bauds);
     cands.retain(|c| h.allows(c));
-    choose(cands)
+    cands
 }
 
 #[cfg(test)]

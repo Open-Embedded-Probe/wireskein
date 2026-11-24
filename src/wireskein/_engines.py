@@ -27,10 +27,11 @@ def engine() -> str:
     return v
 
 
-def analyze(view, hints: dict | None = None):
-    """The engine's result after the upper stage."""
+def analyze(view, hints: dict | None = None, readings: bool = False):
+    """The engine's result after the upper stage. readings: every reading kept in res.roots, claimed or not (a decode
+    spec's buses; the Python engine keeps them always)."""
     if engine() == "rust":
-        return rust(view, hints)
+        return rust(view, hints, readings)
     return main(view, hints)
 
 
@@ -83,10 +84,11 @@ class ForeignResult:
     hints: dict | None = None
     relations: list = field(default_factory=list)
     engine: str = "rust"
+    others: list = field(default_factory=list)      # the readings not claimed (when asked for)
 
     @property
     def roots(self) -> list:
-        return [c.node for c in self.claims]
+        return [c.node for c in self.claims] + self.others
 
 
 _RANK = {"ambiguous": 0, "likely": 1, "confirmed": 2}
@@ -101,7 +103,7 @@ def _core():
     return wireskein_core
 
 
-def rust(view, hints: dict | None = None) -> ForeignResult:
+def rust(view, hints: dict | None = None, readings: bool = False) -> ForeignResult:
     """The Rust core's claims (wireskein_core.analyze, the analysis format), then the upper stage on them as main
     does: each claim's score raised by its upper readings, its margin as much, its verdict made again by the same rule
     (never lowered: the Rust core's rival readings are not told), the UART pairs' relations."""
@@ -117,6 +119,16 @@ def rust(view, hints: dict | None = None) -> ForeignResult:
         claims.append(staged.Claim(d["protocol"], dict(d["roles"]), dict(n.params), float(d["score"]),
                                    float(d["margin"]), d["verdict"], n, None))
     res = ForeignResult(claims, hints)
+    if readings:
+        # (the readings no claim is: each by its protocol and roles, the best one; a claim's own reading left out)
+        held = {(c.protocol, tuple(sorted(c.roles.items()))) for c in claims}
+        best: dict = {}
+        for d in json.loads(core.readings(float(view.rate), int(view.n_samples), chans, json.dumps(hints))):
+            key = (d["protocol"], tuple(sorted(d["roles"].items())))
+            if key not in held and (key not in best or d["score"] > best[key]["score"]):
+                best[key] = d
+        res.others = [ForeignNode(d["protocol"], dict(d.get("params") or {}), dict(d["roles"]), float(d["score"]),
+                                  dict(d.get("evidence") or {}), dict(d.get("layers") or {})) for d in best.values()]
     ups, res.relations = _upper.run([reading(c.node, c.total) for c in claims], float(view.rate), hints)
     for c, up in zip(claims, ups):
         c.upper = up

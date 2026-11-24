@@ -127,11 +127,48 @@ fn candidates(
     Ok(serde_json::to_string(&out).unwrap())
 }
 
+/// readings(rate, n_samples, channels, hints_json="null") -> every reading the hints allow, before the claims are
+/// chosen, as JSON ([{protocol, roles, score, params, evidence, layers}]): what a decode spec reads a bus from.
+#[pyfunction]
+#[pyo3(signature = (rate, n_samples, channels, hints_json="null"))]
+fn readings(
+    py: Python<'_>,
+    rate: f64,
+    n_samples: i64,
+    channels: Vec<(String, u8, PyReadonlyArray1<'_, i64>)>,
+    hints_json: &str,
+) -> PyResult<String> {
+    let hints: serde_json::Value =
+        serde_json::from_str(hints_json).map_err(|e| PyValueError::new_err(format!("hints: {e}")))?;
+    let edges: Vec<Vec<i64>> = channels.iter().map(|(_, _, a)| a.as_array().to_vec()).collect();
+    let chans: Vec<Channel> = channels
+        .iter()
+        .zip(&edges)
+        .map(|((name, initial, _), e)| Channel::new(name, *initial, e))
+        .collect();
+    let view = View::new(rate, n_samples, chans).map_err(PyValueError::new_err)?;
+    let cands = py.detach(|| ws_core::readings(&view, &hints));
+    let mut s = String::from("[");
+    for (i, c) in cands.iter().enumerate() {
+        let head = serde_json::json!({"protocol": c.protocol, "roles": c.roles, "score": c.score,
+                                      "params": c.params, "evidence": c.evidence});
+        let h = serde_json::to_string(&head).unwrap();
+        s.push_str(if i > 0 { "," } else { "" });
+        s.push_str(&h[..h.len() - 1]);
+        s.push_str(",\"layers\":");
+        s.push_str(c.layers.get());
+        s.push('}');
+    }
+    s.push(']');
+    Ok(s)
+}
+
 #[pymodule]
 fn wireskein_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_function(wrap_pyfunction!(analyze, m)?)?;
     m.add_function(wrap_pyfunction!(analyze_with_relations, m)?)?;
     m.add_function(wrap_pyfunction!(candidates, m)?)?;
+    m.add_function(wrap_pyfunction!(readings, m)?)?;
     Ok(())
 }

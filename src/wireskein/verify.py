@@ -369,8 +369,42 @@ def _decode(cap, hints, foreign: bool = False):
     from . import _engines
     if foreign:
         return _engines.analyze(cap, hints)
-    _engines.python_only("verify's bus checks")
+    _engines.python_only("verify's I2C checks and declared protocols")
     return _engines.main(cap, hints)
+
+
+def _items(n) -> list:
+    """An I2C reading's transactions as the Python engine keeps them (bytes as numbers), from its own items or from
+    another engine's claim (its transactions layer)."""
+    if n is None:
+        return []
+    if getattr(n, "own_layers", None) is None:
+        return n.output.items
+    return [{**t, "bytes": list(bytes.fromhex(t.get("bytes") or ""))} for t in n.own_layers.get("transactions", [])]
+
+
+def _spi_lines(n) -> dict:
+    """An SPI reading's frames per data line ({pin: [values of each transfer]}), from its own items or from another
+    engine's claim (its transfers layer)."""
+    if getattr(n, "own_layers", None) is None:
+        return n.output.items["lines"]
+    tr = n.own_layers.get("transfers", [])
+    pins = [v for k, v in sorted(n.roles.items()) if k.startswith("data")]
+    return {p: [list(bytes.fromhex(x.get(p, ""))) for x in tr] for p in pins}
+
+
+def _uart_node(n, rate: float):
+    """A UART reading as the pair's messages take it (its characters' values and starts), from another engine's claim
+    (its bytes layer); the Python engine's own node as it is."""
+    if n is None or getattr(n, "own_layers", None) is None:
+        return n
+    from ._engine.stack import Node, Stream
+    b = n.own_layers.get("bytes") or {"hex": "", "s": []}
+    v = np.frombuffer(bytes.fromhex(b["hex"]), np.uint8).astype(np.int64)
+    cs = rate / n.params["baud"] * (n.params.get("L") or 10)
+    items = {"value": v, "start": np.asarray(b["s"], np.int64), "char_samples": cs}
+    return Node("uart", dict(n.params), dict(n.roles), Stream("bytes", items, meta={"char_samples": cs}), {},
+                layer_score=float(n.total), total=float(n.total))
 
 
 def _best(res, analyzer, need: dict, also=None):
@@ -475,7 +509,7 @@ def check_i2c(cap, x):
     res = _decode(cap, {"protocols": ["i2c"], "pins": {x["scl"]: {"protocol": "i2c", "role": "scl", **lim},
                                                         x["sda"]: {"protocol": "i2c", "role": "sda"}}})
     n = _best(res, "i2c", {"scl": x["scl"], "sda": x["sda"]})
-    got = {"transactions": [_i2c_tx(t) for t in (n.output.items if n else []) if "addr" in t]}
+    got = {"transactions": [_i2c_tx(t) for t in _items(n) if "addr" in t]}
     ok, why = True, []
     if x.get("transactions") is not None:
         diff = _i2c_diff([_i2c_want(t) for t in x["transactions"]], got["transactions"])
@@ -485,7 +519,7 @@ def check_i2c(cap, x):
     hz = _burst_hz(read.channel(x["scl"]), cap.rate)   # on the lines as an input sees them, as the bytes are
     got["scl_hz"] = hz
     got["notices"] = _i2c_notices(cap, scl, sda, x.get("spike_max_s", 50e-9), x.get("stretch_min", 2.0), w)
-    for t in (n.output.items if n else []):        # a clock clipped shorter than a sample, restored (timing.i2c_restore)
+    for t in _items(n):        # a clock clipped shorter than a sample, restored (timing.i2c_restore)
         got["notices"] += [{"kind": "clock_restored", "tick": int(at)} for at in t.get("restored", [])]
     got["notices"].sort(key=lambda k: k["tick"])
     got["stretches"] = sum(1 for k in got["notices"] if k["kind"] == "scl_stretch")
@@ -571,7 +605,8 @@ def check_spi(cap, x):
     cs_sample_s = None
     if x.get("cs"):
         cap, cs_sample_s = _cs_coarse(cap, x)
-    res = _decode(cap, {"protocols": ["spi"], "pins": {p: {"protocol": "spi", "role": r} for r, p in pins.items()}})
+    res = _decode(cap, {"protocols": ["spi"], "pins": {p: {"protocol": "spi", "role": r} for r, p in pins.items()}},
+                  foreign=True)
     need = {"clk": x["clk"], **({"cs": x["cs"]} if x.get("cs") else {})}
     # the mode read from the lines themselves (timing.spi_mode): SCK's level as CS becomes active, the edge MOSI
     # (else MISO) changes after. It picks the sampling edge of the decode; the decoder's own choice is kept as
@@ -619,7 +654,7 @@ def check_spi(cap, x):
         return False, {}, "nothing decoded as SPI on these pins"
     else:
         hexes = {pin: bytes(rev(int(v) & 0xFF) for fr in frs for v in fr).hex()
-                 for pin, frs in n.output.items["lines"].items()}
+                 for pin, frs in _spi_lines(n).items()}
     got = {"mode": n.metrics.get("mode") if n is not None else None, "bytes": hexes,
            "sck_hz": _burst_hz(cap.channel(x["clk"]), cap.rate)}
     if cs_sample_s is not None:
@@ -740,8 +775,8 @@ def _pair_protocol(cap, x, proto):
         return False, {}, f"uart_pair takes roles a and b, not {sorted(roles)}"
     pins = {p: {"protocol": "uart", "role": "data", **({"baud": x["baud"]} if x.get("baud") else {})}
             for p in roles.values()}
-    res = _decode(cap, {"protocols": ["uart"], "pins": pins})
-    na, nb = (_best(res, "uart", {"data": roles[k]}) for k in ("a", "b"))
+    res = _decode(cap, {"protocols": ["uart"], "pins": pins}, foreign=True)
+    na, nb = (_uart_node(_best(res, "uart", {"data": roles[k]}), float(cap.rate)) for k in ("a", "b"))
     if na is None or nb is None:
         return False, {}, "nothing decoded as uart on " + ", ".join(roles[k] for k, n in (("a", na), ("b", nb)) if n is None)
     ma, mb = duplex.messages(na), duplex.messages(nb)

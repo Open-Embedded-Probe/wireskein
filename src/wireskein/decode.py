@@ -799,6 +799,20 @@ def _apart(buses: list[dict]) -> list[list[dict]]:
     return groups or [[]]
 
 
+PYTHON_SPEC = ("rvswd", "swio")
+
+
+def _python_spec(spec: dict) -> bool:
+    """Whether a spec's buses need the Python engine's readings: RVSWD or SWIO buses, or buses sharing a line."""
+    seen: set = set()
+    for b in spec["buses"]:
+        pins = set(b["pins"].values())
+        if b["protocol"] in PYTHON_SPEC or pins & seen:
+            return True
+        seen |= pins
+    return False
+
+
 def _part(cap: Capture, spec: dict, head: dict, strict: bool = False) -> dict:
     names = {c.name for c in cap.channels}
     for b in spec["buses"]:
@@ -811,8 +825,14 @@ def _part(cap: Capture, spec: dict, head: dict, strict: bool = False) -> dict:
     # a pin named by buses of two protocols (one line read as RVSWD and as SWIO) is hinted once a reading: each set
     # of buses that names no pin under two protocols is analyzed on its own
     groups = _apart(spec["buses"])
-    _engines.python_only("a decode spec's buses")     # (each bus's reading is the Python engine's)
-    reads = [_engines.main(cap, _hints({**spec, "buses": g}, strict, [c.name for c in cap.channels])) for g in groups]
+    if _engines.engine() == "rust" and _python_spec(spec):
+        # RVSWD's and SWIO's buses are told from the Python engine's layers (SWIO's pulses, the Debug Module's
+        # accesses as frames); buses sharing lines from its targets of one bus (shared_buses)
+        _engines.python_only("a decode spec of RVSWD / SWIO buses or of buses sharing lines")
+        engine = _engines.main
+    else:
+        engine = lambda c_, h_: _engines.analyze(c_, h_, readings=True)    # noqa: E731
+    reads = [engine(cap, _hints({**spec, "buses": g}, strict, [c.name for c in cap.channels])) for g in groups]
     res_of = {id(b): r for g, r in zip(groups, reads) for b in g}
     res = reads[0]
     out = {"part": head.get("part", 0), "ticks": cap.n_samples,
