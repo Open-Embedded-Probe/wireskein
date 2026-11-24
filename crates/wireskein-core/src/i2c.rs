@@ -122,6 +122,7 @@ fn frames(scl: &Channel, sda: &Channel) -> (Vec<Frame>, usize, usize, usize, usi
     (out, clear, conds, quiet, lows)
 }
 
+pub const BUS_FREE_ALLOW: usize = 2; // SCL's changes after a STOP before the next START, at most (a spike)
 pub const REST: f64 = 8.0; // half periods: a high run this long is a rest (a bounced clock's runs merge to a few)
 
 /// Whether a clock has a high run of REST times its half period or more (the capture's ends included).
@@ -153,10 +154,9 @@ pub fn read(view: &View, scl: &Channel, sda: &Channel) -> Option<Candidate> {
     }
     let n = used.len();
     let k = used.iter().filter(|f| fits(f.bits.len())).count();
-    if k == 0 {
-        return None;
-    }
-    let fit = 1.0 - tail(n, k, CHANCE);
+    // (no frame fitting: a reading of no weight, kept for what reads a named bus whatever its score - a decode
+    // spec's, its lines told stopped or oscillating)
+    let fit = if k == 0 { 0.0 } else { 1.0 - tail(n, k, CHANCE) };
     // SCL's rate inside the frames
     let mut per: Vec<f64> = vec![];
     for f in &used {
@@ -171,9 +171,8 @@ pub fn read(view: &View, scl: &Channel, sda: &Channel) -> Option<Candidate> {
         per.extend(rises.windows(2).map(|w| (w[1] - w[0]) as f64));
     }
     let hz = if per.is_empty() { 0.0 } else { view.rate / median(&per) };
-    if hz > MAX_CLOCK_HZ * 1.2 {
-        return None;
-    }
+    // (no I2C runs this fast: no weight, the reading kept as above)
+    let fit = if hz > MAX_CLOCK_HZ * 1.2 { 0.0 } else { fit };
     let clearance = if conds > 0 { clear as f64 / conds as f64 } else { 0.0 };
     let once = if lows > 0 { quiet as f64 / lows as f64 } else { 0.0 };
     // the transactions
@@ -206,7 +205,9 @@ pub fn read(view: &View, scl: &Channel, sda: &Channel) -> Option<Candidate> {
         t.insert("start_cond".into(), json!(f.start_cond));
         t.insert("end_cond".into(), f.end_cond.map_or(Value::Null, |c| json!(c)));
         if f.end_cond.is_none() {
+            // (a transfer the capture ends in: its bits after the last whole word, as they came)
             t.insert("complete".into(), json!(false));
+            t.insert("pending_bits".into(), json!(f.bits[words * 9..]));
         }
         txs.push(Value::Object(t));
     }
@@ -231,7 +232,27 @@ pub fn read(view: &View, scl: &Channel, sda: &Channel) -> Option<Candidate> {
     } else {
         ((held - FREE_CLOCK) / (HELD - FREE_CLOCK)).clamp(0.0, 1.0)
     };
-    let mut score = fit * soft(clearance) * soft(once) * varied * rests;
+    // the bus free between a STOP and the next START (Python's bus_free): of the STOPs, the share after which SCL
+    // stays still (BUS_FREE_ALLOW changes at most: a spike) until the next START; a clock going on after them is
+    // no master's (a free clock, or clocks with SDA high: no START, nothing to read)
+    let stops: Vec<(i64, i64)> = frs
+        .iter()
+        .enumerate()
+        .filter(|(_, f)| f.end_cond == Some("P"))
+        .map(|(i, f)| (f.e, frs.get(i + 1).map_or(view.n_samples, |g| g.s)))
+        .collect();
+    let free = if stops.is_empty() {
+        1.0
+    } else {
+        stops
+            .iter()
+            .filter(|&&(a, b)| {
+                scl.edges.partition_point(|&x| x < b) - scl.edges.partition_point(|&x| x <= a) <= BUS_FREE_ALLOW
+            })
+            .count() as f64
+            / stops.len() as f64
+    };
+    let mut score = fit * soft(clearance) * soft(once) * varied * rests * free;
     // few addresses, repeatedly, acknowledged at least sometimes: a real bus's (Python's staged.i2c_addresses), its
     // support raising the score
     let addrs: Vec<(i64, bool)> = txs
@@ -259,6 +280,7 @@ pub fn read(view: &View, scl: &Channel, sda: &Channel) -> Option<Candidate> {
         ("data_once_a_bit", once),
         ("scl_hz", hz),
         ("clock_in_frames", held),
+        ("bus_free", free),
     ] {
         evidence.insert(k_.into(), json!(x));
     }
@@ -301,8 +323,8 @@ fn views(scl: &Channel, sda: &Channel) -> Vec<(i64, Vec<i64>, Vec<i64>)> {
     out
 }
 
-/// The I2C readings of a part: every two lines both idling high, SCL changing no less than SDA, each read on its
-/// views, the best kept.
+/// The I2C readings of a part: every two lines both idling high, SCL changing no less than half as often as SDA (a
+/// clock stopped part way: a glitch filter locked), each read on its views, the best kept.
 pub fn candidates(view: &View) -> Vec<Candidate> {
     let mut out = vec![];
     let act: Vec<&Channel> = view.channels.iter().filter(|c| c.edges.len() >= 4).collect();
@@ -318,7 +340,12 @@ pub fn candidates(view: &View) -> Vec<Candidate> {
         .collect();
     for (ia, a) in act.iter().enumerate() {
         for (ib, b) in act.iter().enumerate() {
-            if ia == ib || settled[ia].0 < settled[ib].0 || settled[ia].1 != 1 || settled[ib].1 != 1 {
+            // (counted as the lines settle and as they are: a clock of a few samples a half loses its own runs to
+            // the settling)
+            let fewer = 2 * settled[ia].0 < settled[ib].0 && 2 * a.edges.len() < b.edges.len();
+            // (idling high, or high as the capture starts: a bus left held low at its end - a target stopped mid byte)
+            let high = |i: usize, c: &Channel| settled[i].1 == 1 || c.initial == 1;
+            if ia == ib || fewer || !high(ia, a) || !high(ib, b) {
                 continue;
             }
             let mut best: Option<Candidate> = None;

@@ -368,8 +368,8 @@ def _decode(cap, hints, foreign: bool = False):
     by the upper stage from the claim's layers), else the Python engine's readings (their items as it keeps them)."""
     from . import _engines
     if foreign:
-        return _engines.analyze(cap, hints)
-    _engines.python_only("verify's I2C checks and declared protocols")
+        return _engines.analyze(cap, hints, readings=True)
+    _engines.python_only("verify's declared protocols")
     return _engines.main(cap, hints)
 
 
@@ -506,8 +506,23 @@ def check_i2c(cap, x):
     # decoded from the lines as captured: the analysis reads them as an input does itself (one pass, with this
     # check's spike_max_s and freq_hz); `read` is for the measures below
     lim = {"spike_max_s": x.get("spike_max_s", timing.I2C_SPIKE_S), **({"freq_hz": w} if w else {})}
-    res = _decode(cap, {"protocols": ["i2c"], "pins": {x["scl"]: {"protocol": "i2c", "role": "scl", **lim},
-                                                        x["sda"]: {"protocol": "i2c", "role": "sda"}}})
+    hints = {"protocols": ["i2c"], "pins": {x["scl"]: {"protocol": "i2c", "role": "scl", **lim},
+                                            x["sda"]: {"protocol": "i2c", "role": "sda"}}}
+    from . import _engines
+    foreign = _engines.engine() != "python"
+    if foreign:
+        # another engine reads the lines as the input sees them (its spike filter, its hysteresis, a clock clipped
+        # shorter than a sample restored: timing.i2c_input, again while that changes something), what the Python
+        # engine's I2C does itself
+        seen = read
+        from ._engine.staged import I2C_INPUT_PASSES
+        for _ in range(I2C_INPUT_PASSES - 1):
+            seen, more = timing.i2c_input(seen, x["scl"], x["sda"], lim["spike_max_s"], w)
+            if not more:
+                break
+        res = _decode(seen, hints, foreign=True)
+    else:
+        res = _decode(cap, hints)
     n = _best(res, "i2c", {"scl": x["scl"], "sda": x["sda"]})
     got = {"transactions": [_i2c_tx(t) for t in _items(n) if "addr" in t]}
     ok, why = True, []
@@ -521,6 +536,8 @@ def check_i2c(cap, x):
     got["notices"] = _i2c_notices(cap, scl, sda, x.get("spike_max_s", 50e-9), x.get("stretch_min", 2.0), w)
     for t in _items(n):        # a clock clipped shorter than a sample, restored (timing.i2c_restore)
         got["notices"] += [{"kind": "clock_restored", "tick": int(at)} for at in t.get("restored", [])]
+    if foreign:                # (restored in the input view the other engine read)
+        got["notices"] += [{"kind": "clock_restored", "tick": int(at)} for at in seen.meta.get("i2c_restored", [])]
     got["notices"].sort(key=lambda k: k["tick"])
     got["stretches"] = sum(1 for k in got["notices"] if k["kind"] == "scl_stretch")
     got["spikes"] = sum(1 for k in got["notices"] if k["kind"] == "bus_glitch")
