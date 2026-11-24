@@ -49,8 +49,9 @@ fn soft(x: f64) -> f64 {
 }
 
 /// The frames on (scl, sda), and the side measures: (frames, conditions clear of SCL's edges, conditions, SCL lows
-/// with at most two SDA changes, SCL lows inside frames).
-fn frames(scl: &Channel, sda: &Channel) -> (Vec<Frame>, usize, usize, usize, usize) {
+/// with at most two SDA changes, SCL lows inside frames, SDA's changes while SCL is low inside frames).
+type Framed = (Vec<Frame>, usize, usize, usize, usize, usize);
+fn frames(scl: &Channel, sda: &Channel) -> Framed {
     let (ce, de) = (scl.edges, sda.edges);
     let (mut i, mut j) = (0usize, 0usize);
     let (mut lc, mut ld) = (scl.initial, sda.initial);
@@ -58,6 +59,7 @@ fn frames(scl: &Channel, sda: &Channel) -> (Vec<Frame>, usize, usize, usize, usi
     let mut cur: Option<Frame> = None;
     let (mut clear, mut conds, mut quiet, mut lows) = (0usize, 0usize, 0usize, 0usize);
     let mut sda_in_low = 0usize;
+    let mut moved = 0usize;
     let near = |t: i64| -> bool {
         // nearer one of SCL's edges than CLEAR of the clock's local half, or than a sample (Python's
         // startstop_clearance: a clock of a few samples a period has its conditions a sample from its edges)
@@ -124,13 +126,16 @@ fn frames(scl: &Channel, sda: &Channel) -> (Vec<Frame>, usize, usize, usize, usi
                 }
             } else {
                 sda_in_low += 1;
+                if cur.is_some() {
+                    moved += 1;
+                }
             }
         }
     }
     if let Some(f) = cur.take() {
         out.push(f);
     }
-    (out, clear, conds, quiet, lows)
+    (out, clear, conds, quiet, lows, moved)
 }
 
 pub const BUS_FREE_ALLOW: usize = 2; // SCL's changes after a STOP before the next START, at most (a spike)
@@ -146,6 +151,7 @@ fn rests_at_high(c: &Channel, n: i64) -> bool {
 
 pub const STATIC_SHARE: f64 = 0.95; // one value this share of the words at least ...
 pub const STATIC_DATA: f64 = 0.1; // ... all 0s or all 1s: the reading keeps this share of its score
+pub const STATIC_BITS: usize = 20; // or SDA changing less than once in this many bits inside the frames
 pub const REST: f64 = 8.0; // half periods: a high run this long is a rest (a bounced clock's runs merge to a few)
 
 /// Whether a clock has a high run of REST times its half period or more (the capture's ends included).
@@ -168,7 +174,7 @@ fn fits(n: usize) -> bool {
 
 /// The I2C reading of (scl, sda), or None where nothing frames.
 pub fn read(view: &View, scl: &Channel, sda: &Channel) -> Option<Candidate> {
-    let (frs, clear, conds, quiet, lows) = frames(scl, sda);
+    let (frs, clear, conds, quiet, lows, moved) = frames(scl, sda);
     // every frame counts, a START and a STOP with no clock between too: SDA moves while SCL is high only for its
     // conditions on I2C, where another line idling beside SCL makes them by the hundred
     let used: Vec<&Frame> = frs.iter().collect();
@@ -297,6 +303,9 @@ pub fn read(view: &View, scl: &Channel, sda: &Channel) -> Option<Candidate> {
             {
                 STATIC_DATA
             }
+            // (however the words go: SDA hardly moving while SCL is low inside the frames - less than once in
+            // STATIC_BITS bits, the address and the acknowledges with them - is a line held, no data)
+            _ if lows >= 9 && moved * STATIC_BITS < lows => STATIC_DATA,
             _ => 1.0,
         }
     };
