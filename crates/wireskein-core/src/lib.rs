@@ -6,15 +6,19 @@
 //! the bench against the Python one (equal or better, not the same), and only then made the product's default.
 
 pub mod claim;
+pub mod features;
+pub mod kernels;
+pub mod sync;
+pub mod uart;
 pub mod view;
 
 pub use claim::Claim;
 pub use view::{Channel, View};
 
-/// The claims on a part's lines: none yet (the engine is built up protocol by protocol, R1 on).
+/// The claims on a part's lines (built up protocol by protocol: UART so far).
 pub fn analyze(view: &View, hints: &serde_json::Value) -> Vec<Claim> {
-    let _ = (view, hints);
-    Vec::new()
+    let _ = hints;
+    uart::claims(view)
 }
 
 #[cfg(test)]

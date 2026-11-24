@@ -14,3 +14,9 @@ dependencies = ["numpy>=2.0"]
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
+
+[tool.uv]
+# rebuilt when the Rust changes (uv run --with ./crates/wireskein-py keeps a build until one of these does)
+cache-keys = [{ file = "pyproject.toml" }, { file = "Cargo.toml" }, { file = "src/**/*.rs" },
+              { file = "../wireskein-core/Cargo.toml" }, { file = "../wireskein-core/src/**/*.rs" },
+              { file = "../../Cargo.toml" }, { file = "../../Cargo.lock" }]
