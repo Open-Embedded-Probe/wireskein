@@ -262,7 +262,10 @@ pub fn read(view: &View, scl: &Channel, sda: &Channel) -> Option<Candidate> {
             .count() as f64
             / stops.len() as f64
     };
-    let mut score = fit * soft(clearance) * soft(once) * varied * rests * free;
+    // SDA keeping to SCL as its data (Python's pair term, softened): a line of another kind meeting a clock's
+    // highs by chance (a select beside a free clock: one "frame" of a START and a STOP) keeps to it poorly
+    let pair = crate::sync::keeping(sda.edges, scl);
+    let mut score = fit * soft(clearance) * soft(once) * soft(pair) * varied * rests * free;
     // few addresses, repeatedly, acknowledged at least sometimes: a real bus's (Python's staged.i2c_addresses), its
     // support raising the score
     let addrs: Vec<(i64, bool)> = txs
@@ -291,6 +294,7 @@ pub fn read(view: &View, scl: &Channel, sda: &Channel) -> Option<Candidate> {
         ("scl_hz", hz),
         ("clock_in_frames", held),
         ("bus_free", free),
+        ("pair", pair),
     ] {
         evidence.insert(k_.into(), json!(x));
     }
