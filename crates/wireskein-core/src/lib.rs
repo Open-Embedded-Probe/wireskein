@@ -5,10 +5,12 @@
 //! Built up beside the Python engine a part at a time (bench/notes/2026-11-24-rust-plan.ja.md): each part is judged on
 //! the bench against the Python one (equal or better, not the same), and only then made the product's default.
 
+pub mod cec;
 pub mod claim;
 pub mod features;
 pub mod i2c;
 pub mod kernels;
+pub mod mdio;
 pub mod rebuild;
 pub mod spi;
 pub mod sync;
@@ -162,15 +164,35 @@ pub fn choose(mut cands: Vec<Candidate>) -> Vec<Claim> {
     out
 }
 
-/// Every reading of a part's lines, before the claims are chosen.
+pub const SPECIFIC: f64 = 0.6; // a reading of fixed framing this sure stands for a generic one of the same lines
+
+/// Every reading of a part's lines, before the claims are chosen. A generic reading of the same lines as a more
+/// specific one is left out where the specific one is sure: an SPI reading (no select) of MDC and MDIO, whose 64-bit
+/// frames are whole bytes as well, is MDIO's frames told without their preamble and start.
 pub fn candidates(view: &View) -> Vec<Candidate> {
     let mut cands = uart::candidates(view);
     cands.extend(i2c::candidates(view));
     cands.extend(spi::candidates(view));
+    let md = mdio::candidates(view);
+    let specific: Vec<(String, String)> = md
+        .iter()
+        .filter(|c| c.score >= SPECIFIC)
+        .map(|c| (c.roles["mdc"].clone(), c.roles["mdio"].clone()))
+        .collect();
+    cands.retain(|c| {
+        !(c.protocol == "spi"
+            && !c.roles.contains_key("cs")
+            && c.roles.len() == 2
+            && specific
+                .iter()
+                .any(|(k, d)| c.roles.get("clk") == Some(k) && c.roles.get("data0") == Some(d)))
+    });
+    cands.extend(md);
+    cands.extend(cec::candidates(view));
     cands
 }
 
-/// The claims on a part's lines (built up protocol by protocol: UART, I2C and SPI so far).
+/// The claims on a part's lines (built up protocol by protocol: UART, I2C, SPI, MDIO and CEC so far).
 pub fn analyze(view: &View, hints: &serde_json::Value) -> Vec<Claim> {
     let _ = hints;
     choose(candidates(view))

@@ -26,6 +26,7 @@ pub const UART_REST_BITS: f64 = 11.0;
 pub const UART_RESTS: usize = 2;
 pub const TWO_VALUES: f64 = 0.6;
 pub const UART_SYNC: f64 = 0.2;
+pub const UART_CEC: f64 = 0.5; // a line's low pulses inside CEC's messages past this share: no UART's
 pub const SYNC_MIN_PERIOD: f64 = 4.0;
 pub const CLOCKS_A_BUS: f64 = 0.8;
 pub const CLOCKS_A_BUS_ASYNC: f64 = 0.6;
@@ -640,6 +641,14 @@ fn read(
         * (1.0 - framed)
         * if paced { UART_PACED } else { 1.0 };
     let baud = view.rate / u;
+    // an HDMI CEC line reads as characters too (each of its bits a 6-bit character of about 2000 baud): where CEC's
+    // messages hold the line's low pulses, those are no UART's (Python's cec.covered)
+    let mut cec_cov = 0.0;
+    let mut score = score;
+    if idle == 1 && 1500.0 < baud && baud < 3000.0 {
+        cec_cov = crate::cec::covered(ch, n, view.rate);
+        score *= 1.0 - ((cec_cov - UART_CEC) / (1.0 - UART_CEC)).clamp(0.0, 1.0);
+    }
     let mut params = Map::new();
     params.insert("baud".into(), json!(baud));
     params.insert("idle".into(), json!(idle));
@@ -661,6 +670,7 @@ fn read(
         ("framed_by_breaks", framed_raw),
         ("sync_with_clock", sync),
         ("tight_windows", tight),
+        ("cec", cec_cov),
     ] {
         evidence.insert(k.into(), json!(x));
     }
