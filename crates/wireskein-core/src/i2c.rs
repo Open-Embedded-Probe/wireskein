@@ -133,6 +133,8 @@ fn rests_at_high(c: &Channel, n: i64) -> bool {
         .is_some_and(|(_, &v)| v == 1)
 }
 
+pub const STATIC_SHARE: f64 = 0.95; // one value this share of the words at least ...
+pub const STATIC_DATA: f64 = 0.1; // ... all 0s or all 1s: the reading keeps this share of its score
 pub const REST: f64 = 8.0; // half periods: a high run this long is a rest (a bounced clock's runs merge to a few)
 
 /// Whether a clock has a high run of REST times its half period or more (the capture's ends included).
@@ -162,8 +164,13 @@ pub fn read(view: &View, scl: &Channel, sda: &Channel) -> Option<Candidate> {
     if used.iter().all(|f| f.bits.is_empty()) {
         return None;
     }
-    let n = used.len();
-    let k = used.iter().filter(|f| fits(f.bits.len())).count();
+    // (a transfer the capture ends in counts beside ended ones only: alone, a START and a line held low after it -
+    // a select beside a free clock - is no evidence of a length)
+    let any_ended = used.iter().any(|f| f.end_cond.is_some());
+    let ended: Vec<&&Frame> = used.iter().filter(|f| any_ended || f.end_cond.is_some()).collect();
+    let ended: Vec<&&Frame> = if any_ended { ended } else { vec![] };
+    let n = ended.len();
+    let k = ended.iter().filter(|f| fits(f.bits.len())).count();
     // (no frame fitting: a reading of no weight, kept for what reads a named bus whatever its score - a decode
     // spec's, its lines told stopped or oscillating)
     let fit = if k == 0 { 0.0 } else { 1.0 - tail(n, k, CHANCE) };
@@ -262,10 +269,24 @@ pub fn read(view: &View, scl: &Channel, sda: &Channel) -> Option<Candidate> {
             .count() as f64
             / stops.len() as f64
     };
-    // SDA keeping to SCL as its data (Python's pair term, softened): a line of another kind meeting a clock's
-    // highs by chance (a select beside a free clock: one "frame" of a START and a STOP) keeps to it poorly
-    let pair = crate::sync::keeping(sda.edges, scl);
-    let mut score = fit * soft(clearance) * soft(once) * soft(pair) * varied * rests * free;
+    // every word one value, all 0s or all 1s (Python's static_data): a data line held low or high while a clock
+    // runs - a select beside a free clock, one long "frame" of a START and a STOP - reads nothing
+    let stat = {
+        let mut c = std::collections::HashMap::new();
+        for &v in &values {
+            *c.entry(v).or_insert(0usize) += 1;
+        }
+        let top = c.iter().max_by_key(|(_, n)| **n).map(|(&v, &n)| (v, n));
+        match top {
+            Some((v, n))
+                if values.len() >= 4 && n as f64 >= STATIC_SHARE * values.len() as f64 && (v == 0 || v == 0xFF) =>
+            {
+                STATIC_DATA
+            }
+            _ => 1.0,
+        }
+    };
+    let mut score = fit * soft(clearance) * soft(once) * varied * stat * rests * free;
     // few addresses, repeatedly, acknowledged at least sometimes: a real bus's (Python's staged.i2c_addresses), its
     // support raising the score
     let addrs: Vec<(i64, bool)> = txs
@@ -294,7 +315,7 @@ pub fn read(view: &View, scl: &Channel, sda: &Channel) -> Option<Candidate> {
         ("scl_hz", hz),
         ("clock_in_frames", held),
         ("bus_free", free),
-        ("pair", pair),
+        ("static_data", stat),
     ] {
         evidence.insert(k_.into(), json!(x));
     }

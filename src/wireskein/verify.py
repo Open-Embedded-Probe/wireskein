@@ -380,7 +380,9 @@ def _items(n) -> list:
         return []
     if getattr(n, "own_layers", None) is None:
         return n.output.items
-    return [{**t, "bytes": list(bytes.fromhex(t.get("bytes") or ""))} for t in n.own_layers.get("transactions", [])]
+    # (a START and a STOP with no word between: no transaction, as the Python engine keeps none)
+    return [{**t, "bytes": list(bytes.fromhex(t.get("bytes") or ""))} for t in n.own_layers.get("transactions", [])
+            if t.get("addr") is not None]
 
 
 def _spi_lines(n) -> dict:

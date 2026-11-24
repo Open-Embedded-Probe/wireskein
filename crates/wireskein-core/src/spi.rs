@@ -14,7 +14,7 @@ pub const CLEAN: f64 = 0.3; // a run under this share of the clock's half period
 pub const DATA_KEEPS: f64 = 0.5; // a data line keeps to the clock this well at least
 pub const SCALE: f64 = 5.0; // the words of whole-byte windows counted as 1 - exp(-n / SCALE)
 pub const CS_FEWER: usize = 8; // a select changes this many times less than the clock at least
-pub const SELECT_USED: f64 = 0.5; // a select's windows holding the clock (and snug round it), this share for a whole score
+pub const SELECT_USED: f64 = 0.5; // a select's windows holding the clock, this share for a whole score
 pub const SINGLE_WINDOW: f64 = 0.5; // a select of a single window, standing alone, weighs this much
 pub const SELECT_MIN_BITS: usize = 2; // sampling edges a select's window holds at least for a transfer
 
@@ -340,10 +340,10 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
         * (covered / 0.9).min(1.0)
         * framed
         * framed
-        // (a select's windows: whole where half of them or more hold the clock and are snug round it, as Python's
-        // SELECT_USED: a selection with no clock in it, or one held on after its transfers, is a select's as well)
+        // (a select's windows: whole where half of them or more hold the clock, as Python's SELECT_USED: a
+        // selection with no clock in it is a select's as well; snug round it at their start)
         * (used / SELECT_USED).min(1.0)
-        * (snug / SELECT_USED).min(1.0)
+        * (0.5 + 0.5 * snug)
         * inside
         * (0.75 + 0.25 * once)
         * (0.5 + 0.5 * degenerate)
