@@ -257,6 +257,9 @@ pub fn read(view: &View, scl: &Channel, sda: &Channel) -> Option<Candidate> {
         .enumerate()
         .filter(|(_, f)| f.end_cond == Some("P"))
         .map(|(i, f)| (f.e, frs.get(i + 1).map_or(view.n_samples, |g| g.s)))
+        // (a STOP the bus stays free after: SDA high until the next START - a bounce of SDA while SCL is high is a
+        // "STOP" SDA leaves at once, no bus going free)
+        .filter(|&(a, b)| sda.edges.partition_point(|&x| x < b) == sda.edges.partition_point(|&x| x <= a))
         .collect();
     let free = if stops.is_empty() {
         1.0
