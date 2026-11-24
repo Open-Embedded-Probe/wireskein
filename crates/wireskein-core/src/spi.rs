@@ -313,8 +313,10 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
             let hi = ck.edges.partition_point(|&x| x < b);
             if hi > lo {
                 held += 1;
+                // (snug at its start: a select is made active just before its clock runs; it may be held on after
+                // the transfers a while - a session's - so its end is not asked)
                 let (f, l) = (ck.edges[lo], ck.edges[hi - 1]);
-                if (f - a) + (b - l) <= (l - f).max(1) + (4.0 * ck.half) as i64 {
+                if f - a <= (l - f).max(1) + (4.0 * ck.half) as i64 {
                     tight += 1;
                 }
             }
