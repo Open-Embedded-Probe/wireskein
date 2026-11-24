@@ -702,6 +702,207 @@ fn rests_at(ch: &Channel, n: i64, level: u8, u: f64) -> bool {
         >= UART_RESTS
 }
 
+pub const LIN_MIN_BAUD: f64 = 900.0;
+pub const LIN_MAX_BAUD: f64 = 21000.0;
+pub const EVIDENCE_BITS: f64 = 8.0;
+pub const DMX_BREAK_S: f64 = 88e-6;
+pub const DMX_MIN_BITS: f64 = 3.0;
+pub const DMX_SLOT_ACTIVE: f64 = 9.0;
+pub const DMX_CHAR_BITS: usize = 10;
+pub const DMX_SHORT_RUNS: f64 = 0.1;
+pub const DMX_SQUARE: f64 = 0.9;
+pub const DMX_MIN_SLOTS: f64 = 8.0;
+pub const DMX_RATE_BITS: f64 = 5.0;
+
+fn q4(n: f64) -> f64 {
+    1.0 - (-n / 4.0).exp()
+}
+
+/// LIN on a UART reading's characters (`staged.LinPlugin`): break, sync 0x55, the PID's parity, the enhanced
+/// checksum; scored by the bits of evidence they hold, frames of 0x55 alone (a clock's bursts) none.
+fn lin_of(view: &View, line: &str, chs: &Chars, u: f64, idle: u8, k: i64) -> Option<crate::Candidate> {
+    if chs.breaks.len() < 2 {
+        return None;
+    }
+    let baud = view.rate / u;
+    if !(LIN_MIN_BAUD..=LIN_MAX_BAUD).contains(&baud) {
+        return None;
+    }
+    let mut b = chs.breaks.clone();
+    b.push(i64::MAX);
+    let (mut frames, mut sync, mut par, mut cks, mut alt) = (vec![], 0usize, 0usize, 0usize, 0usize);
+    for w in b.windows(2) {
+        let lo = chs.start.partition_point(|&s| s <= w[0]);
+        let hi = chs.start.partition_point(|&s| s < w[1]);
+        if hi < lo + 3 {
+            continue;
+        }
+        let v: Vec<i64> = chs.values[lo..hi].iter().map(|&x| x & 0xFF).collect();
+        alt += v.iter().all(|&x| x == 0x55) as usize;
+        let (pid, cs) = (v[1], v[v.len() - 1]);
+        let data = &v[2..v.len() - 1];
+        let good = (v[0] == 0x55, lin_pid(pid & 0x3F) == pid, lin_checksum(data, pid) == cs);
+        sync += good.0 as usize;
+        par += good.1 as usize;
+        cks += good.2 as usize;
+        let hex: String = data.iter().map(|x| format!("{x:02x}")).collect();
+        frames.push(json!({"s": w[0], "id": pid & 0x3F, "data": hex, "ok": good.0 && good.1 && good.2}));
+    }
+    let n = frames.len();
+    if n < 2 {
+        return None;
+    }
+    let passed = (sync + par + cks) as f64 / (3 * n) as f64;
+    let info = 8.0 * sync as f64 + 2.0 * par as f64 + 8.0 * cks as f64;
+    let score = passed * (1.0 - 0.5f64.powf(info / EVIDENCE_BITS)) * (1.0 - alt as f64 / n as f64);
+    let mut params = Map::new();
+    params.insert("baud".into(), json!(baud));
+    params.insert("idle".into(), json!(idle));
+    params.insert("deglitch".into(), json!(k));
+    let mut evidence = Map::new();
+    for (key, x) in [
+        ("frames", n),
+        ("sync", sync),
+        ("pid_parity", par),
+        ("checksum", cks),
+        ("alternating", alt),
+    ] {
+        evidence.insert(key.into(), json!(x));
+    }
+    Some(crate::Candidate {
+        protocol: "lin".into(),
+        roles: [("data".to_string(), line.to_string())].into(),
+        score,
+        alt: None,
+        params,
+        evidence,
+        layers: crate::claim::raw(serde_json::to_string(&json!({ "frames": frames })).unwrap()),
+    })
+}
+
+/// Runs (in bits) of a square wave (`staged._square`).
+fn square(hi: &[f64], lo: &[f64]) -> bool {
+    let hi: Vec<f64> = hi.iter().copied().filter(|&x| x >= 0.5).collect();
+    let lo: Vec<f64> = lo.iter().copied().filter(|&x| x >= 0.5).collect();
+    if hi.len() < 8 || lo.len() < 8 {
+        return false;
+    }
+    let (mh, ml) = (median(&hi), median(&lo));
+    let share = |v: &[f64], m: f64| v.iter().filter(|&&x| (x - m).abs() < 0.5).count() as f64 / v.len() as f64;
+    (mh - ml).abs() < 0.5 && share(&hi, mh) >= DMX_SQUARE && share(&lo, ml) >= DMX_SQUARE
+}
+
+/// DMX512 on a line's characters at a bit time (`staged.DmxPlugin`): breaks, a start code of 0, slots; read as a
+/// receiver does (start, 8 data bits, the first stop).
+fn dmx_of(view: &View, ch: &Channel, idle: u8, u: f64, k: i64) -> Option<crate::Candidate> {
+    let n = view.n_samples;
+    let (start, length, level) = runs(ch, n);
+    let chs = chars(&start, &length, &level, idle, 0, n, u, DMX_CHAR_BITS);
+    if chs.breaks.is_empty() {
+        return None;
+    }
+    let mut b = chs.breaks.clone();
+    b.push(i64::MAX);
+    let (mut packets, mut zero, mut framing_ok, mut nchars) = (vec![], 0usize, 0usize, 0usize);
+    let mut slots = vec![];
+    for w in b.windows(2) {
+        let lo = chs.start.partition_point(|&s| s <= w[0]);
+        let hi = chs.start.partition_point(|&s| s < w[1]);
+        if hi < lo + 2 {
+            continue;
+        }
+        let v: Vec<i64> = chs.values[lo..hi].iter().map(|&x| x & 0xFF).collect();
+        zero += (v[0] == 0) as usize;
+        framing_ok += chs.ok[lo..hi].iter().filter(|&&o| o).count();
+        nchars += hi - lo;
+        slots.push((v.len() - 1) as f64);
+        let hex: String = v[1..].iter().map(|x| format!("{x:02x}")).collect();
+        packets.push(json!({"s": w[0], "start_code": v[0], "data": hex}));
+    }
+    if slots.is_empty() || median(&slots) < DMX_MIN_SLOTS {
+        return None;
+    }
+    let baud = view.rate / u;
+    let rate_ok = if (baud / DMX_BAUD - 1.0).abs() < DMX_RATE_TOL {
+        1.0
+    } else {
+        0.3
+    };
+    let np = packets.len();
+    if np < 2 && !(np == 1 && rate_ok == 1.0 && nchars >= DMX_ONE_PACKET) {
+        return None;
+    }
+    let brk = DMX_BREAK_S * DMX_BAUD * 0.97;
+    let inner = 1..length.len().saturating_sub(1);
+    let hi: Vec<f64> = inner
+        .clone()
+        .filter(|&i| level[i] == 1)
+        .map(|i| length[i] as f64 / u)
+        .filter(|&x| x < brk)
+        .collect();
+    let lo: Vec<f64> = inner
+        .clone()
+        .filter(|&i| level[i] == 0)
+        .map(|i| length[i] as f64 / u)
+        .filter(|&x| x < brk)
+        .collect();
+    if square(&hi, &lo) {
+        return None;
+    }
+    let between = inner
+        .filter(|&i| level[i] != idle)
+        .map(|i| length[i] as f64 / u)
+        .filter(|&a| a > DMX_SLOT_ACTIVE + 0.5 && a < brk)
+        .count();
+    let info = 8.0 * zero as f64 + if rate_ok == 1.0 { DMX_RATE_BITS } else { 0.0 };
+    let score = (zero as f64 / np as f64)
+        * (framing_ok.saturating_sub(between) as f64 / nchars.max(1) as f64)
+        * rate_ok
+        * (1.0 - 0.5f64.powf(info / EVIDENCE_BITS))
+        * q4(nchars as f64);
+    let mut params = Map::new();
+    params.insert("baud".into(), json!(baud));
+    params.insert("idle".into(), json!(idle));
+    params.insert("deglitch".into(), json!(k));
+    let mut evidence = Map::new();
+    for (key, x) in [
+        ("packets", np),
+        ("start_code_0", zero),
+        ("framing_ok", framing_ok),
+        ("chars", nchars),
+        ("between", between),
+    ] {
+        evidence.insert(key.into(), json!(x));
+    }
+    Some(crate::Candidate {
+        protocol: "dmx512".into(),
+        roles: [("data".to_string(), ch.name.to_string())].into(),
+        score,
+        alt: None,
+        params,
+        evidence,
+        layers: crate::claim::raw(serde_json::to_string(&json!({ "packets": packets })).unwrap()),
+    })
+}
+
+/// The idle levels under which a line has a DMX512 break (a run at the other level 88 us to a second long).
+fn dmx_idles(view: &View, ch: &Channel) -> Vec<u8> {
+    if view.rate / DMX_BAUD < DMX_MIN_BITS {
+        return vec![];
+    }
+    let (_, length, level) = runs(ch, view.n_samples);
+    let inner = 1..length.len().saturating_sub(1);
+    [1u8, 0]
+        .into_iter()
+        .filter(|&idle| {
+            inner.clone().any(|i| {
+                let l = length[i] as f64;
+                level[i] != idle && l >= DMX_BREAK_S * view.rate && l <= view.rate
+            })
+        })
+        .collect()
+}
+
 pub const BOUNCE_TICKS: i64 = 4;
 pub const BOUNCE_MERGE_WIDE: i64 = 2 * BOUNCE_TICKS;
 pub const BOUNCE_PAIRED: f64 = 0.5;
@@ -822,6 +1023,7 @@ pub fn candidates(view: &View) -> Vec<crate::Candidate> {
             })
             .fold(0.0, f64::max);
         let mut readings: Vec<Reading> = vec![];
+        let mut extra: Vec<crate::Candidate> = vec![];
         for (edges, k) in views(ch, &f, n) {
             let vch = Channel::new(ch.name, ch.initial, &edges);
             let mut clock_like = raw_clock;
@@ -841,7 +1043,40 @@ pub fn candidates(view: &View) -> Vec<crate::Candidate> {
                 }
             }
             readings.push(r);
+            // DMX512 at its own 250 kbaud too, where the line has its breaks (slots of one value give no bit time)
+            let u_dmx = view.rate / DMX_BAUD;
+            let (_, length, _) = runs(&vch, n);
+            let short = if length.len() > 2 {
+                length[1..length.len() - 1]
+                    .iter()
+                    .filter(|&&l| (l as f64) < 0.5 * u_dmx)
+                    .count() as f64
+                    / (length.len() - 2) as f64
+            } else {
+                1.0
+            };
+            if short <= DMX_SHORT_RUNS {
+                for idle in dmx_idles(view, &vch) {
+                    extra.extend(dmx_of(view, &vch, idle, u_dmx, k));
+                }
+            }
         }
+        // LIN and DMX512 on the characters of each reading
+        for r in &readings {
+            let idle = r.params["idle"].as_u64().unwrap_or(1) as u8;
+            let k = r.params["deglitch"].as_i64().unwrap_or(0);
+            extra.extend(lin_of(view, ch.name, &r.chars, r.unit, idle, k));
+        }
+        for kind in ["lin", "dmx512"] {
+            if let Some(b) = extra
+                .iter()
+                .filter(|c| c.protocol == kind)
+                .max_by(|a, b| a.score.partial_cmp(&b.score).unwrap())
+            {
+                out.push(b.clone());
+            }
+        }
+        extra.clear();
         let Some(best) = readings.iter().max_by(|a, b| a.score.partial_cmp(&b.score).unwrap()) else {
             continue;
         };
