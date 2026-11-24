@@ -122,6 +122,26 @@ fn frames(scl: &Channel, sda: &Channel) -> (Vec<Frame>, usize, usize, usize, usi
     (out, clear, conds, quiet, lows)
 }
 
+pub const REST: f64 = 4.0;
+
+/// Whether a clock has a high run of REST times its median run or more (the capture's ends included).
+fn rests_high(scl: &Channel, n: i64) -> bool {
+    let (_, length, level) = crate::kernels::runs(scl, n);
+    if length.len() < 3 {
+        return true;
+    }
+    let med = median(
+        &length[1..length.len() - 1]
+            .iter()
+            .map(|&x| x as f64)
+            .collect::<Vec<_>>(),
+    );
+    length
+        .iter()
+        .zip(&level)
+        .any(|(&l, &v)| v == 1 && l as f64 >= REST * med)
+}
+
 fn fits(n: usize) -> bool {
     n >= 9 && (n.is_multiple_of(9) || n % 9 == 1)
 }
@@ -201,14 +221,20 @@ pub fn read(view: &View, scl: &Channel, sda: &Channel) -> Option<Candidate> {
         v.dedup();
         if values.len() >= 4 && v.len() == 1 { 0.5 } else { 1.0 }
     };
-    // SCL rests high between a STOP and the next START (a master clocks only its transfers): a clock running on
-    // between the "frames" is a free clock, its conditions another line's chance changes while it is high
+    // SCL rests high between a STOP and the next START (a master clocks only its transfers): a clock that never rests
+    // high (no high run of REST of its median run, the capture's ends included) and runs on between the "frames" is
+    // a free clock, its conditions another line's chance changes while it is high (a bounced bus's SDA ending frames
+    // early leaves its clock outside them too, but it rests)
     let inside: usize = frs
         .iter()
         .map(|f| scl.edges.partition_point(|&x| x <= f.e) - scl.edges.partition_point(|&x| x < f.s))
         .sum();
     let held = inside as f64 / scl.edges.len().max(1) as f64;
-    let rests = ((held - FREE_CLOCK) / (HELD - FREE_CLOCK)).clamp(0.0, 1.0);
+    let rests = if rests_high(scl, view.n_samples) {
+        1.0
+    } else {
+        ((held - FREE_CLOCK) / (HELD - FREE_CLOCK)).clamp(0.0, 1.0)
+    };
     let mut score = fit * soft(clearance) * soft(once) * varied * rests;
     // few addresses, repeatedly, acknowledged at least sometimes: a real bus's (Python's staged.i2c_addresses), its
     // support raising the score
