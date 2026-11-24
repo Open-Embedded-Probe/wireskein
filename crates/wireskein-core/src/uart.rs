@@ -4,7 +4,6 @@
 //! switches inside a line (one block), views with spikes or bounces taken out, other lines' evidence (keeping to a
 //! clock, a select's windows), the LIN / DMX512 / USB / CEC rivals.
 
-use crate::claim::Claim;
 use crate::features::{Features, estimate_units, features};
 use crate::kernels::{chain, debounce, deglitch, gated, last_at_or_before, median, quantile, runs, shortest_first};
 use crate::view::{Channel, View};
@@ -746,10 +745,10 @@ fn views(ch: &Channel, f: &Features, n: i64) -> Vec<(Vec<i64>, i64)> {
     out
 }
 
-/// The UART claims of a part. Each line is read on each of its views under its idle level (and the other, where
-/// few characters frame and the line rests there); the best reading is claimed where its score is past the claim's
-/// cost, its margin over the best reading that is no same one (another idle level, or a rate 3 % off or more).
-pub fn claims(view: &View) -> Vec<Claim> {
+/// The UART readings of a part. Each line is read on each of its views under its idle level (and the other, where
+/// few characters frame and the line rests there); the best reading is the line's candidate, with the best reading
+/// that is no same one (another idle level, or a rate 3 % off or more) as its own alternative.
+pub fn candidates(view: &View) -> Vec<crate::Candidate> {
     let mut out = Vec::new();
     let n = view.n_samples;
     let feats: Vec<Features> = view.channels.iter().map(|c| features(c, n)).collect();
@@ -821,27 +820,16 @@ pub fn claims(view: &View) -> Vec<Claim> {
                 && (a.params["baud"].as_f64().unwrap() / b.params["baud"].as_f64().unwrap() - 1.0).abs()
                     < EQUIVALENT_BAUD
         };
-        let rival = readings
+        let alt = readings
             .iter()
             .filter(|r| !same(r, best) && r.score > CLAIM_COST)
             .map(|r| r.score)
             .fold(None, |m: Option<f64>, s| Some(m.map_or(s, |m| m.max(s))));
-        let margin = best.score - rival.unwrap_or(CLAIM_COST);
-        let confirmed = (best.score >= 0.85 && margin >= 0.15)
-            || (rival.is_some() && ((best.score >= 0.80 && margin >= 0.25) || (best.score >= 0.60 && margin >= 0.50)));
-        let verdict = if confirmed {
-            "confirmed"
-        } else if best.score >= 0.6 && margin >= 0.05 {
-            "likely"
-        } else {
-            "ambiguous"
-        };
-        out.push(Claim {
+        out.push(crate::Candidate {
             protocol: "uart".into(),
             roles: [("data".to_string(), ch.name.to_string())].into(),
-            verdict: verdict.into(),
-            score: (best.score * 1e4).round() / 1e4,
-            margin: (margin * 1e4).round() / 1e4,
+            score: best.score,
+            alt,
             params: best.params.clone(),
             evidence: best.evidence.clone(),
             layers: layers(best),
@@ -879,7 +867,7 @@ mod tests {
         let text = b"Hello, WireSkein! The quick brown fox jumps over the lazy dog.\r\n".repeat(3);
         let (e, n) = uart(&text, 17, 100, 1);
         let v = View::new(2e6, n, vec![Channel::new("TX", 1, &e)]).unwrap();
-        let cs = claims(&v);
+        let cs = crate::choose(candidates(&v));
         assert_eq!(cs.len(), 1, "{cs:?}");
         let c = &cs[0];
         assert_eq!(c.verdict, "confirmed", "{:?}", c.evidence);
@@ -894,6 +882,6 @@ mod tests {
     fn a_clock_is_no_uart() {
         let e: Vec<i64> = (1..2000).map(|i| i * 7).collect();
         let v = View::new(1e6, 15000, vec![Channel::new("C", 0, &e)]).unwrap();
-        assert!(claims(&v).iter().all(|c| c.verdict != "confirmed"));
+        assert!(crate::choose(candidates(&v)).iter().all(|c| c.verdict != "confirmed"));
     }
 }

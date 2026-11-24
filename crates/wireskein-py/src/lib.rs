@@ -49,9 +49,37 @@ fn analyze(
     Ok(ws_core::claim::to_json(&claims))
 }
 
+/// candidates(rate, n_samples, channels) -> every reading before the claims are chosen, as JSON (for development:
+/// [{protocol, roles, score, alt, evidence}]).
+#[pyfunction]
+fn candidates(
+    py: Python<'_>,
+    rate: f64,
+    n_samples: i64,
+    channels: Vec<(String, u8, PyReadonlyArray1<'_, i64>)>,
+) -> PyResult<String> {
+    let edges: Vec<Vec<i64>> = channels.iter().map(|(_, _, a)| a.as_array().to_vec()).collect();
+    let chans: Vec<Channel> = channels
+        .iter()
+        .zip(&edges)
+        .map(|((name, initial, _), e)| Channel::new(name, *initial, e))
+        .collect();
+    let view = View::new(rate, n_samples, chans).map_err(PyValueError::new_err)?;
+    let cands = py.detach(|| ws_core::candidates(&view));
+    let out: Vec<serde_json::Value> = cands
+        .iter()
+        .map(|c| {
+            serde_json::json!({"protocol": c.protocol, "roles": c.roles, "score": c.score, "alt": c.alt,
+                               "evidence": c.evidence})
+        })
+        .collect();
+    Ok(serde_json::to_string(&out).unwrap())
+}
+
 #[pymodule]
 fn wireskein_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_function(wrap_pyfunction!(analyze, m)?)?;
+    m.add_function(wrap_pyfunction!(candidates, m)?)?;
     Ok(())
 }
