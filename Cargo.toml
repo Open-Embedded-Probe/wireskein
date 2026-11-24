@@ -6,7 +6,7 @@
 #                   now (crates/wireskein-py/pyproject.toml), used by the bench
 [workspace]
 resolver = "3"
-members = ["crates/wireskein-core", "crates/wireskein-py", "crates/wireskein-io", "crates/wireskein-cli"]
+members = ["crates/wireskein-core", "crates/wireskein-py", "crates/wireskein-io", "crates/wireskein-cli", "crates/wireskein-verify"]
 
 [workspace.package]
 version = "0.0.37"

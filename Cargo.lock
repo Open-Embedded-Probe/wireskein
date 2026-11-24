@@ -519,6 +519,7 @@ dependencies = [
  "sha2",
  "wireskein-core",
  "wireskein-io",
+ "wireskein-verify",
 ]
 
 [[package]]
@@ -546,6 +547,16 @@ dependencies = [
  "pyo3",
  "serde_json",
  "wireskein-core",
+]
+
+[[package]]
+name = "wireskein-verify"
+version = "0.0.36"
+dependencies = [
+ "serde",
+ "serde_json",
+ "wireskein-core",
+ "wireskein-io",
 ]
 
 [[package]]

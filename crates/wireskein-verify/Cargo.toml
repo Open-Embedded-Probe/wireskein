@@ -1,0 +1,15 @@
+[package]
+name = "wireskein-verify"
+description = "WireSkein's verify in plain Rust: a recorded test run's expectations judged on its captures"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+wireskein-core = { path = "../wireskein-core" }
+wireskein-io = { path = "../wireskein-io" }
+serde = "1"
+serde_json = "1"

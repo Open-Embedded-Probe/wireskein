@@ -179,6 +179,8 @@ pub fn read_from<R: Read + std::io::Seek>(r: R) -> Result<Capture, String> {
             initial,
             edges: st.2,
             step,
+            phase,
+            reduction: None,
         });
     }
     let tick_hz = match extra["tick_hz"].as_array() {
@@ -207,6 +209,7 @@ pub fn read_from<R: Read + std::io::Seek>(r: R) -> Result<Capture, String> {
             tick0: Some(0),
             meta,
             lines,
+            events: vec![],
             skipped,
         }],
     })

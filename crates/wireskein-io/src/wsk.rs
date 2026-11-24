@@ -1,7 +1,7 @@
 //! A WireSkein file (docs/wireskein-format.md): `wireskein.json`, `capture.json` (checked as §3.4 asks), each part's
 //! channels decoded to logic lines, the parts of a timeline that follow on without a gap joined.
 
-use crate::{Capture, Kind, Line, Part, dense_edges, fraction};
+use crate::{Capture, Events, Kind, Line, Part, dense_edges, fraction};
 use serde_json::{Map, Value, json};
 use std::io::{Cursor, Read, Seek};
 
@@ -61,10 +61,10 @@ fn check_head(head: &Value) -> Result<(), String> {
     Ok(())
 }
 
-/// A channel decoded: a line (of its step), or skipped (with why); `events`: kept as changes at a coarser step.
+/// A channel decoded: a line (of its step), or skipped (with why); with the changes it was kept as at a coarser step.
 enum Decoded {
-    Line(Line, bool),
-    Skip(Value),
+    Line(Line, Option<Events>),
+    Skip(Value, Option<Events>),
 }
 
 /// The bits of `data`, `width` bits a value, n values.
@@ -81,9 +81,9 @@ fn values(data: &[u8], n: usize, width: usize) -> Vec<u8> {
 
 /// An events channel's (quanta, levels after, counts).
 /// (quanta, levels after, counts) of a line's events.
-type Events = (Vec<i64>, Vec<u8>, Vec<u8>);
+type Changes = (Vec<i64>, Vec<u8>, Vec<u8>);
 
-fn events(data: &[u8], count: usize) -> Result<Events, String> {
+fn events(data: &[u8], count: usize) -> Result<Changes, String> {
     let (mut ks, mut lv, mut cn) = (vec![], vec![], vec![]);
     let (mut k, mut i) = (-1i64, 0usize);
     while i < data.len() {
@@ -110,58 +110,63 @@ fn events(data: &[u8], count: usize) -> Result<Events, String> {
     Ok((ks, lv, cn))
 }
 
-#[allow(clippy::too_many_arguments)]
 /// Events at a step of 2 or more as a line of that step, where no quantum holds more than one change: each change
-/// at its quantum's last tick (cut at the part's end).
-fn coarse(name: &str, step: i64, phase: i64, start: u8, ks: &[i64], counts: &[u8], ticks: i64, enc: &str) -> Decoded {
-    if counts.iter().any(|&c| c > 1) {
-        let hidden = counts.iter().filter(|&&c| c > 1).count();
-        return Decoded::Skip(json!({"name": name, "encoding": enc, "hidden": hidden}));
+/// at its quantum's last tick (cut at the part's end); kept as the events too.
+fn coarse(ev: Events, ticks: i64, enc: &str) -> Decoded {
+    if ev.hidden() > 0 {
+        let hidden = ev.hidden();
+        return Decoded::Skip(json!({"name": ev.name, "encoding": enc, "hidden": hidden}), Some(ev));
     }
-    let edges = ks
+    let (step, phase) = (ev.step, ev.phase);
+    let edges = ev
+        .quanta
         .iter()
         .map(|&k| (phase + k * step + (step - 1)).min((ticks - 1).max(0)))
         .collect();
     Decoded::Line(
         Line {
-            name: name.into(),
-            initial: start,
+            name: ev.name.clone(),
+            initial: ev.start_level,
             edges,
             step,
+            phase: phase + step - 1,
+            reduction: ev.reduction.clone(),
         },
-        true,
+        Some(ev),
     )
 }
 
 fn decode(c: &Value, data: &[u8], ticks: i64) -> Result<Decoded, String> {
     let name = c["name"].as_str().unwrap_or("").to_string();
     let enc = c["encoding"].as_str().unwrap_or("");
-    let line = |initial, edges, step| {
+    let line = |initial, edges, step, phase, reduction: Option<&str>| {
         Decoded::Line(
             Line {
                 name: name.clone(),
                 initial,
                 edges,
                 step,
+                phase,
+                reduction: reduction.map(String::from),
             },
-            false,
+            None,
         )
     };
     Ok(match enc {
         "bits" => {
             let (n, step, phase) = (int(c, "n")? as usize, int(c, "step")?, int(c, "phase")?);
             let (init, e) = dense_edges(values(data, n, 1), step, phase);
-            line(init, e, step)
+            line(init, e, step, phase, None)
         }
         "any_high" | "any_low" => {
             let (n, step, phase) = (int(c, "n")? as usize, int(c, "step")?, int(c, "phase")?);
             let (init, e) = dense_edges(values(data, n, 1), step, phase);
-            line(init, e, step)
+            line(init, e, step, phase, Some(enc))
         }
         "events" => {
             let (step, phase) = (int(c, "step")?, int(c, "phase")?);
             let start = int(c, "start_level")? as u8;
-            let (ks, _, counts) = events(data, int(c, "events")? as usize)?;
+            let (ks, levels, counts) = events(data, int(c, "events")? as usize)?;
             if step == 1 {
                 // lossless: each event one change at its tick (one at the first tick: the line starts after it)
                 let (mut init, mut ks) = (start, ks.as_slice());
@@ -169,16 +174,34 @@ fn decode(c: &Value, data: &[u8], ticks: i64) -> Result<Decoded, String> {
                     init ^= 1;
                     ks = &ks[1..];
                 }
-                line(init, ks.iter().map(|&k| phase + k).collect(), 1)
+                line(init, ks.iter().map(|&k| phase + k).collect(), 1, phase, None)
             } else {
-                coarse(&name, step, phase, start, &ks, &counts, ticks, enc)
+                let n = c
+                    .get("n")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or((ticks - phase + step - 1).div_euclid(step));
+                coarse(
+                    Events {
+                        name: name.clone(),
+                        step,
+                        phase,
+                        n,
+                        start_level: start,
+                        quanta: ks,
+                        levels,
+                        counts,
+                        reduction: None,
+                    },
+                    ticks,
+                    enc,
+                )
             }
         }
         "change_latch" => {
             let (n, step, phase) = (int(c, "n")? as usize, int(c, "step")?, int(c, "phase")?);
             let start = c.get("start_level").and_then(|v| v.as_i64()).unwrap_or(0) as u8;
             let v = values(data, n, 2);
-            let (mut ks, mut counts) = (vec![], vec![]);
+            let (mut ks, mut levels, mut counts) = (vec![], vec![], vec![]);
             let mut before = start;
             for (k, &x) in v.iter().enumerate() {
                 let (lv, ch) = (x & 1, x >> 1);
@@ -189,13 +212,28 @@ fn decode(c: &Value, data: &[u8], ticks: i64) -> Result<Decoded, String> {
                 }
                 if ch == 1 {
                     ks.push(k as i64);
+                    levels.push(lv);
                     counts.push(if lv != before { 1 } else { 2 });
                 }
                 before = lv;
             }
-            coarse(&name, step, phase, start, &ks, &counts, ticks, enc)
+            coarse(
+                Events {
+                    name: name.clone(),
+                    step,
+                    phase,
+                    n: n as i64,
+                    start_level: start,
+                    quanta: ks,
+                    levels,
+                    counts,
+                    reduction: Some("change_latch".into()),
+                },
+                ticks,
+                enc,
+            )
         }
-        _ => Decoded::Skip(json!({"name": name, "encoding": enc})),
+        _ => Decoded::Skip(json!({"name": name, "encoding": enc}), None),
     })
 }
 
@@ -233,7 +271,7 @@ pub fn read_from<R: Read + Seek>(r: R) -> Result<Capture, String> {
         if let Some(m) = p.get("meta").and_then(|v| v.as_object()) {
             meta.extend(m.clone());
         }
-        let (mut lines, mut skipped, mut coarse_ev, mut other) = (vec![], vec![], false, false);
+        let (mut lines, mut evs, mut skipped, mut coarse_ev, mut other) = (vec![], vec![], vec![], false, false);
         for c in p["channels"].as_array().ok_or("a part without channels")? {
             let enc = c["encoding"].as_str().unwrap_or("");
             if enc == "analog" || enc == "analog-f32" {
@@ -249,13 +287,17 @@ pub fn read_from<R: Read + Seek>(r: R) -> Result<Capture, String> {
             };
             match decode(c, &data, ticks)? {
                 Decoded::Line(l, ev) => {
-                    coarse_ev |= ev;
+                    if let Some(ev) = ev {
+                        coarse_ev = true;
+                        evs.push(ev);
+                    }
                     lines.push(l);
                 }
-                Decoded::Skip(s) => {
-                    if s.get("hidden").is_some() {
+                Decoded::Skip(s, ev) => {
+                    if let Some(ev) = ev {
                         coarse_ev = true;
                         other = true;
+                        evs.push(ev);
                     }
                     skipped.push(s);
                 }
@@ -269,6 +311,7 @@ pub fn read_from<R: Read + Seek>(r: R) -> Result<Capture, String> {
                 tick0: p.get("tick0").and_then(|v| v.as_i64()),
                 meta,
                 lines,
+                events: evs,
                 skipped,
             },
             coarse_ev,
@@ -346,6 +389,8 @@ fn join(run: Vec<(Part, bool, bool)>) -> Vec<Part> {
             initial: l0.initial,
             edges,
             step: l0.step,
+            phase: l0.phase,
+            reduction: l0.reduction.clone(),
         });
     }
     let last = &run[run.len() - 1].0;
@@ -365,6 +410,7 @@ fn join(run: Vec<(Part, bool, bool)>) -> Vec<Part> {
         tick0: first.tick0,
         meta,
         lines,
+        events: vec![],
         skipped: first.skipped.clone(),
     }]
 }

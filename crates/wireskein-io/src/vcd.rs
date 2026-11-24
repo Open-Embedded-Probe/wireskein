@@ -174,6 +174,8 @@ pub fn read(text: &str) -> Result<Capture, String> {
             initial,
             edges: e,
             step,
+            phase: 0,
+            reduction: None,
         });
     };
     for (k, (_, vtype, width, name)) in vars.iter().enumerate() {
@@ -227,6 +229,7 @@ pub fn read(text: &str) -> Result<Capture, String> {
             tick0: Some(0),
             meta,
             lines,
+            events: vec![],
             skipped,
         }],
     })

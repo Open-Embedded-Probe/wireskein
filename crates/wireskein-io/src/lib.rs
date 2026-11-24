@@ -25,6 +25,35 @@ pub struct Line {
     pub initial: u8,
     pub edges: Vec<i64>,
     pub step: i64,
+    /// the tick of its first sample
+    pub phase: i64,
+    /// a reduced line (wireskein-format §4.5): "any_high", "any_low" or "change_latch"
+    pub reduction: Option<String>,
+}
+
+/// A line kept as its changes at a step of 2 or more (an `events` or `change_latch` channel, Python's EventTrace):
+/// quantum k is ticks [phase + k * step, phase + (k + 1) * step); in each quantum listed the line changed counts[i]
+/// times (127: at least; change_latch: 1 an odd number, 2 an even one) and ended at levels[i].
+#[derive(Debug, Clone, PartialEq)]
+pub struct Events {
+    pub name: String,
+    pub step: i64,
+    pub phase: i64,
+    /// quanta covered
+    pub n: i64,
+    pub start_level: u8,
+    pub quanta: Vec<i64>,
+    pub levels: Vec<u8>,
+    pub counts: Vec<u8>,
+    /// "change_latch" for a reduced line
+    pub reduction: Option<String>,
+}
+
+impl Events {
+    /// Quanta holding more than one change.
+    pub fn hidden(&self) -> usize {
+        self.counts.iter().filter(|&&c| c > 1).count()
+    }
 }
 
 /// A part (or a run of parts read as one): its ticks, where it starts, its lines, what it left out.
@@ -39,6 +68,9 @@ pub struct Part {
     /// the capture's and the part's meta together
     pub meta: Map<String, Value>,
     pub lines: Vec<Line>,
+    /// the lines kept as changes at a step of 2 or more (also in `lines` where no quantum hides a change); none in
+    /// a run of parts joined
+    pub events: Vec<Events>,
     /// channels not read as logic: [{"name", "encoding"}] (analog, an unknown encoding, events hiding changes)
     pub skipped: Vec<Value>,
 }
