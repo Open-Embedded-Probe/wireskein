@@ -160,11 +160,35 @@ fn read(view: &View, clk: &Channel, dio: &Channel) -> Option<Candidate> {
 /// The SWD readings of a part: each clock of 24 changes or more with each other line keeping to it.
 pub fn candidates(view: &View) -> Vec<Candidate> {
     let mut out = vec![];
-    for c in &view.channels {
-        for d in &view.channels {
-            if c.name != d.name && d.edges.len() >= 4 && d.edges.len() <= c.edges.len() {
-                out.extend(read(view, c, d));
+    // each line as it is and with its pulses of a tick out (crosstalk, spikes: a clock's median half period taken
+    // from them otherwise), each pair read on both, the better kept
+    let quiet: Vec<Vec<i64>> = view.channels.iter().map(|c| deglitch(c.edges, 2)).collect();
+    for (i, c) in view.channels.iter().enumerate() {
+        for (j, d) in view.channels.iter().enumerate() {
+            if c.name == d.name {
+                continue;
             }
+            // (the clock the line changing more, as it is or as it settles)
+            let mut best = if d.edges.len() >= 4 && d.edges.len() <= c.edges.len() {
+                read(view, c, d)
+            } else {
+                None
+            };
+            if (quiet[i].len() != c.edges.len() || quiet[j].len() != d.edges.len())
+                && quiet[j].len() >= 4
+                && quiet[j].len() <= quiet[i].len()
+            {
+                let (qc, qd) = (
+                    Channel::new(c.name, c.initial, &quiet[i]),
+                    Channel::new(d.name, d.initial, &quiet[j]),
+                );
+                if let Some(q) = read(view, &qc, &qd)
+                    && best.as_ref().is_none_or(|b| q.score > b.score)
+                {
+                    best = Some(q);
+                }
+            }
+            out.extend(best);
         }
     }
     out
