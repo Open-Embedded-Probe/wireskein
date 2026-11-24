@@ -7,7 +7,10 @@
 //! run verified (`verify`), a capture file's analysis document (`analyze_file`), a line's states (`states_of_line`), a
 //! capture's overview (`survey_file`), a capture written (`write_file`), a file's annotations (`annotations_file`),
 //! a decode spec's document (`decode_file`), a part's lines a block at a time (`file_blocks`, `sr_blocks`), verify's
-//! markers written (`mark`), a note or an attachment stored (`note`, `attach`), each switched on in the wireskein package by WIRESKEIN_RUST (src/wireskein/_rust.py).
+//! markers written (`mark`), a note or an attachment stored (`note`, `attach`), a capture from an OEP probe
+//! (`oep_capture`, wireskein-oep), each switched on in the wireskein package by WIRESKEIN_RUST (src/wireskein/_rust.py).
+
+mod oep;
 
 use numpy::{PyArray1, PyReadonlyArray1};
 use pyo3::exceptions::PyValueError;
@@ -899,6 +902,8 @@ fn attach(py: Python<'_>, path: std::path::PathBuf, name: &str, data: &[u8], rep
 fn wireskein_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(note, m)?)?;
     m.add_function(wrap_pyfunction!(attach, m)?)?;
+    m.add_function(wrap_pyfunction!(oep::oep_capture, m)?)?;
+    m.add_function(wrap_pyfunction!(oep::oep_assemble, m)?)?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_function(wrap_pyfunction!(read_file, m)?)?;
     m.add_function(wrap_pyfunction!(verify, m)?)?;

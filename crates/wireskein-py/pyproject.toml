@@ -22,4 +22,5 @@ cache-keys = [{ file = "pyproject.toml" }, { file = "Cargo.toml" }, { file = "sr
               { file = "../wireskein-io/Cargo.toml" }, { file = "../wireskein-io/src/**/*.rs" },
               { file = "../wireskein-analysis/Cargo.toml" }, { file = "../wireskein-analysis/src/**/*.rs" },
               { file = "../wireskein-verify/Cargo.toml" }, { file = "../wireskein-verify/src/**/*.rs" },
+              { file = "../wireskein-oep/Cargo.toml" }, { file = "../wireskein-oep/src/**/*.rs" },
               { file = "../../Cargo.toml" }, { file = "../../Cargo.lock" }]

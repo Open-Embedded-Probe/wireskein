@@ -8,9 +8,13 @@ intervals (`any_high`, `any_low`, `change_latch`), `Analog` as raw values (`anal
 reduced line's last interval may run past the part's end by less than an interval).
 <address> is what the client opens (an OEP address such as oep://30eda0ea068b?via=usb, or a short form: a serial
 port, tcp://HOST:PORT); the rates a UART link is raised to are this source's own option (Request.fast).
+With WIRESKEIN_RUST=capture (wireskein._rust) a logic capture from a probe on USB or TCP is wireskein-oep's (the Rust
+client) in place of oep-client-python's acquire; the result is the same kind.
 """
 
 from __future__ import annotations
+
+from fractions import Fraction
 
 from .. import _fileformat as fileformat
 from . import Request, Result
@@ -18,6 +22,14 @@ from .. import capture as wc
 
 
 def capture(target: str, req: Request) -> Result:
+    from .. import _rust
+    if _rust.captures(target, req):                     # WIRESKEIN_RUST=capture (wireskein._rust): wireskein-oep
+        try:
+            return _from_rust(*_rust.oep_capture(target, req))
+        except FileNotFoundError:
+            if _rust.oep_route(target) != "usb" or "?" in target:
+                raise
+            # an OEP address without a route whose probe is not on USB: oep-client-python looks for it (DNS-SD)
     try:
         from oep_client import acquire
     except ImportError as e:
@@ -42,6 +54,41 @@ def capture(target: str, req: Request) -> Result:
         parts = [wc.Part(_ticks(res.all_parts[0], res.tick_hz, acquire), [_channel(c, acquire) for c in res.channels],
                          {k: v for k, v in res.meta.items() if k in fileformat.PART_META}, 0)]
     return Result(res.tick_hz, [], meta, parts, list(res.lost), res.layout, res.temp_dir)
+
+
+def _from_rust(doc: dict, datas: list) -> Result:
+    """wireskein-oep's capture (wireskein._rust.oep_capture) as the source's Result, as capture() makes it of
+    oep-client-python's: the same channels, parts, losses and meta."""
+    tick = Fraction(*doc["tick_hz"])
+
+    def chan(c):
+        acq = {"pin": c["pin"]}
+        if c["kind"] == "bits":
+            bits = fileformat.OnDisk(c["path"]) if c.get("path") else datas[c["data"]]
+            return fileformat.Channel(c["name"], bits, c["n"], c["step"], 0, acq)
+        return fileformat.ReducedChannel(c["name"], c["reduction"], datas[c["data"]], c["n"], c["step"], 0,
+                                         c["start_level"], acq)
+
+    def ticks(p):                  # as _ticks: the probe's length when a line runs at a coarser step
+        if not any(c["step"] > 1 for c in p["channels"]):
+            return None
+        if p.get("samples") is not None:
+            return int(p["samples"])
+        whole = [c["n"] for c in p["channels"] if c["kind"] == "bits" and c["step"] == 1]
+        return max(whole) if whole else None
+
+    lost, meta = list(doc["lost"]), dict(doc["meta"])
+    parts = doc["parts"]
+    if doc["one_part"] and ticks(parts[0]) is None:
+        return Result(tick, [chan(c) for c in parts[0]["channels"]], meta, None, lost, doc["layout"], doc["temp_dir"])
+    if doc["one_part"]:
+        p = parts[0]
+        part = wc.Part(ticks(p), [chan(c) for c in p["channels"]], {k: v for k, v in meta.items()
+                                                                     if k in fileformat.PART_META}, 0)
+        return Result(tick, [], {k: v for k, v in meta.items() if k not in fileformat.PART_META}, [part], lost,
+                      doc["layout"], doc["temp_dir"])
+    out = [wc.Part(ticks(p), [chan(c) for c in p["channels"]], dict(p["meta"]), p["tick0"]) for p in parts]
+    return Result(tick, [], meta, out, lost, doc["layout"], doc["temp_dir"])
 
 
 def capture_of(res):

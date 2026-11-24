@@ -1,0 +1,17 @@
+[package]
+name = "wireskein-oep"
+description = "The part of an OEP client a capture needs, in plain Rust: find the probe, open it (USB vendor bulk, TCP), take its lease, run a logic capture and put it together as WireSkein's capture"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde_json = "1"
+wireskein-io = { path = "../wireskein-io" }
+nusb = "0.2.9"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+rustix = { version = "1", default-features = false, features = ["std", "time"] }

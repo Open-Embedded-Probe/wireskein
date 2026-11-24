@@ -44,6 +44,11 @@ The parts:
              log by wireskein-io, its time the local time with its offset from UTC
     attach   wireskein._fileformat.attach (`wireskein attach`, an alignment saved, ...): the file stored as
              attach/NAME by wireskein-io (the data encoded by Python as before)
+    capture  the oep source (wireskein.sources.oep, so `wireskein capture --source oep:...`): the probe opened, its
+             lease taken and the logic capture run and put together by wireskein-oep (USB vendor bulk with many IN
+             transfers queued, or TCP) in place of oep-client-python's acquire; analog channels, a serial port, HID,
+             CDC, DNS-SD, a broker and a line named by its label stay oep-client-python's (an OEP address without a
+             route whose probe is not on USB too)
 
 A part switched on whose Rust cannot do what was asked falls back to Python without a word (the result is the same
 kind); a part switched on without wireskein_core installed is an error."""
@@ -56,7 +61,7 @@ from pathlib import Path
 
 RUST_ENV = "WIRESKEIN_RUST"
 PARTS = ("engine", "io", "write", "verify", "analyze", "decode", "split", "mark", "states", "survey", "annotate",
-         "align", "segments", "note", "attach")
+         "align", "segments", "note", "attach", "capture")
 
 
 def parts() -> frozenset:
@@ -592,3 +597,65 @@ def align_between(ref_cap, reference: str, cap, via: str, threshold, window_tick
                                        reference, via, tick_ref, tick, int(ref_cap.n_samples),
                                        window_ticks=None if window_ticks is None else float(window_ticks),
                                        max_ppm=float(max_ppm), **kw))
+
+
+# ---------------- capture: the oep source ----------------
+
+def _broker(unit: str) -> bool:
+    """Whether a broker serves this probe (host guide §7.2: OEP_BROKER, or the user's file for it): then
+    oep-client-python reaches it."""
+    import sys
+    import tempfile
+    if os.environ.get("OEP_BROKER"):
+        return True
+    if sys.platform == "win32":
+        base = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / "oep" / "brokers"
+    elif sys.platform == "darwin":
+        base = Path(os.environ.get("TMPDIR") or tempfile.gettempdir()) / "oep" / "brokers"
+    elif os.environ.get("XDG_RUNTIME_DIR"):
+        base = Path(os.environ["XDG_RUNTIME_DIR"]) / "oep" / "brokers"
+    else:
+        base = Path(os.environ.get("TMPDIR") or "/tmp") / f"oep-{os.getuid()}" / "brokers"
+    return (base / f"{unit.lower()}.json").exists()
+
+
+def oep_route(target: str) -> str | None:
+    """How the Rust OEP client reaches `target`: "usb" (an OEP address by its unit_id as the USB serial), "tcp" (a
+    route over TCP), or None when it does not (a serial port, HID, CDC, DNS-SD, a broker: oep-client-python's)."""
+    t = target.strip()
+    if t.startswith("tcp://"):
+        return "tcp" if ":" in t[len("tcp://"):].rstrip("/") else None
+    if not t.lower().startswith("oep://"):
+        return None
+    place, _, query = t[len("oep://"):].partition("?")
+    unit = place.split("/")[0]
+    if not unit or _broker(unit):
+        return None
+    if not query or query in ("via=usb", "via=bulk"):
+        return "usb"
+    if query.startswith("via=tcp:") and query.count(":") >= 2:
+        return "tcp"
+    return None
+
+
+def captures(target: str, req) -> bool:
+    """Whether the oep source's capture is Rust's: switched on, and nothing asked the Rust client does not do (analog
+    channels, an analog trigger, a line named by its label, a probe it does not open)."""
+    if not on("capture"):
+        return False
+    if req.analog or (req.trigger is not None and len(req.trigger) != 2):
+        return False
+    if any("." in cid or "@" in cid for _, cid in req.channels):
+        return False
+    return oep_route(target) is not None
+
+
+def oep_capture(target: str, req) -> tuple[dict, list]:
+    """One capture by wireskein-oep (as oep-client-python's acquire.capture_at): (the document, the channels' data)."""
+    doc = {"channels": [list(c) for c in req.channels], "rate_hz": int(req.rate_hz), "samples": int(req.samples or 0),
+           "trigger": list(req.trigger) if req.trigger else None, "pretrigger": req.pretrigger, "arm": req.arm,
+           "timeout_s": float(req.timeout_s), "resolution": {k: [m, int(d)] for k, (m, d) in req.resolution.items()},
+           "mode": req.mode, "duration_s": req.duration_s, "segments": req.segments, "on_loss": req.on_loss,
+           "spool_dir": req.spool_dir, "glitch_filter_ns": req.glitch_filter_ns}
+    text, datas = core().oep_capture(target, json.dumps(doc), "wireskein capture")
+    return json.loads(text), datas

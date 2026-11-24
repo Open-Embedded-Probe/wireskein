@@ -19,12 +19,18 @@
 //!                  [--max-offset T] [--apply-to A,B] [--save]
 //!     wireskein-rs note FILE.wireskein TEXT [--json] [--kind K]
 //!     wireskein-rs attach FILE.wireskein NAME [SRC | --text TEXT] [--replace]
+//!     wireskein-rs capture --source oep:ADDRESS --channels NAME=ID[/MODE:D],... --rate R (--samples N |
+//!                  --mode stream --duration T | --mode repeat --segments K --samples N) [--trigger NAME:KIND]
+//!                  [--pretrigger N] [--arm pretrigger|now] [--timeout S] [--on-loss stop|continue]
+//!                  [--glitch-filter NS] [--note TEXT] -o OUT
 //!     wireskein-rs --version
 //!
 //! The analysis is the Rust core's (wireskein-core), the rest wireskein-analysis, wireskein-io and wireskein-verify.
-//! Not here (Python's only, `wireskein`): capture, gui, analyze --devices, --definitions DIR.
+//! Not here (Python's only, `wireskein`): gui, analyze --devices, --definitions DIR; capture from sigrok, of analog
+//! channels, or from a probe the Rust OEP client does not open (a serial port, HID, a line label).
 
 mod analyze;
+mod capture;
 mod files;
 mod notes;
 mod views;
@@ -215,11 +221,11 @@ pub fn hint_j(text: Option<&str>, hints: &serde_json::Value) -> wireskein_io::j:
 
 fn help() {
     println!(
-        "usage: {PROG} [--version] {{analyze,decode,segments,verify,survey,convert,info,states,annotate,align,note,attach}} ..."
+        "usage: {PROG} [--version] {{analyze,decode,segments,verify,survey,convert,info,states,annotate,align,note,attach,capture}} ..."
     );
     println!();
     println!("WireSkein's command line in Rust: the subcommands of `wireskein` with the same arguments and output.");
-    println!("Python's only (use `wireskein`): capture, gui, analyze --devices, --definitions.");
+    println!("Python's only (use `wireskein`): gui, analyze --devices, --definitions; capture of analog or sigrok.");
 }
 
 /// `wireskein verify`: the lines, the summary, the report and JUnit when asked; 1 when the run fails.
@@ -318,7 +324,8 @@ fn main() -> ExitCode {
         "info" => files::info(rest),
         "note" => notes::note(rest),
         "attach" => notes::attach(rest),
-        "capture" | "gui" => usage_error(
+        "capture" => capture::capture(rest),
+        "gui" => usage_error(
             cmd,
             &format!("{cmd} is not in the Rust command line yet: use `wireskein {cmd}`"),
         ),
@@ -326,7 +333,7 @@ fn main() -> ExitCode {
             "",
             &format!(
                 "argument cmd: invalid choice: {} (choose from analyze, decode, segments, verify, survey, convert, \
-                 info, states, annotate, align, note, attach)",
+                 info, states, annotate, align, note, attach, capture)",
                 wireskein_io::j::py_str_repr(cmd)
             ),
         ),
