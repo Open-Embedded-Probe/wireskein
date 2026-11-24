@@ -1,7 +1,7 @@
 //! A WireSkein file (docs/wireskein-format.md): `wireskein.json`, `capture.json` (checked as §3.4 asks), each part's
 //! channels decoded to logic lines, the parts of a timeline that follow on without a gap joined.
 
-use crate::{Analog, Capture, Events, Kind, Line, Part, dense_edges, fraction};
+use crate::{Analog, Capture, Events, Kind, Line, Part, fraction, packed_edges};
 use serde_json::{Map, Value, json};
 use std::io::{Cursor, Read, Seek};
 
@@ -155,12 +155,12 @@ fn decode(c: &Value, data: &[u8], ticks: i64) -> Result<Decoded, String> {
     Ok(match enc {
         "bits" => {
             let (n, step, phase) = (int(c, "n")? as usize, int(c, "step")?, int(c, "phase")?);
-            let (init, e) = dense_edges(values(data, n, 1), step, phase);
+            let (init, e) = packed_edges(data, n, step, phase);
             line(init, e, step, phase, None)
         }
         "any_high" | "any_low" => {
             let (n, step, phase) = (int(c, "n")? as usize, int(c, "step")?, int(c, "phase")?);
-            let (init, e) = dense_edges(values(data, n, 1), step, phase);
+            let (init, e) = packed_edges(data, n, step, phase);
             line(init, e, step, phase, Some(enc))
         }
         "events" => {
@@ -288,6 +288,16 @@ pub fn read(bytes: &[u8]) -> Result<Capture, String> {
 
 /// A WireSkein file read from a reader (a file on disk: its entries read as they are needed).
 pub fn read_from<R: Read + Seek>(r: R) -> Result<Capture, String> {
+    read_with(r, true, None)
+}
+
+/// A WireSkein file's parts each read on its own, none joined (Python's `fileio.load_parts`), or only part `only`
+/// (`fileio.load`: the other parts' channels not read).
+pub fn read_parts_from<R: Read + Seek>(r: R, only: Option<usize>) -> Result<Capture, String> {
+    read_with(r, false, only)
+}
+
+fn read_with<R: Read + Seek>(r: R, join: bool, only: Option<usize>) -> Result<Capture, String> {
     let mut z = zip::ZipArchive::new(r).map_err(|e| format!("not a zip: {e}"))?;
     let id: Value = serde_json::from_slice(&read_entry(&mut z, IDENT)?).map_err(|e| e.to_string())?;
     let fmt = id["format"].as_str().unwrap_or("");
@@ -309,7 +319,15 @@ pub fn read_from<R: Read + Seek>(r: R) -> Result<Capture, String> {
         .unwrap_or_default();
     let raw_parts = head["parts"].as_array().unwrap();
     let mut parts: Vec<(Part, bool, bool)> = vec![]; // (part, holds coarse events, holds analog or hidden lines)
+    if let Some(k) = only
+        && k >= raw_parts.len()
+    {
+        return Err(format!("part {k} of {}", raw_parts.len()));
+    }
     for (k, p) in raw_parts.iter().enumerate() {
+        if only.is_some_and(|o| o != k) {
+            continue;
+        }
         let ticks = p["ticks"].as_i64().ok_or("a part without its ticks")?;
         let mut meta = cmeta.clone();
         if let Some(m) = p.get("meta").and_then(|v| v.as_object()) {
@@ -366,8 +384,8 @@ pub fn read_from<R: Read + Seek>(r: R) -> Result<Capture, String> {
         ));
     }
     let layout = head["layout"].as_str().unwrap_or("timeline").to_string();
-    let n_parts = parts.len();
-    let joined = if layout == "timeline" && n_parts > 1 {
+    let n_parts = raw_parts.len();
+    let joined = if join && layout == "timeline" && n_parts > 1 {
         runs(parts)
     } else {
         parts.into_iter().map(|p| p.0).collect()

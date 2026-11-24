@@ -27,15 +27,16 @@ def update_pyproject(version: str) -> None:
 
 
 def update_cargo(version: str) -> None:
-    """The Rust crates share wireskein's version: the workspace's, and every wireskein-* crate's line in Cargo.lock."""
+    """The Rust core's crates share wireskein's version: the workspace's, and the crates' lines in Cargo.lock."""
     text = CARGO.read_text(encoding="utf-8")
     new, n = re.subn(r'(?ms)^(\[workspace\.package\]\s*\nversion = )"[^"]+"', rf'\1"{version}"', text)
     if n != 1:
         raise RuntimeError("Failed to update [workspace.package] version in Cargo.toml")
     CARGO.write_text(new, encoding="utf-8")
     lock = CARGO_LOCK.read_text(encoding="utf-8")
-    lock, n = re.subn(r'(?m)^(name = "wireskein-[a-z-]+"\nversion = )"[^"]+"', rf'\1"{version}"', lock)
-    if n < 2:
+    crates = len(re.findall(r'"crates/wireskein-[a-z]+"', text))       # the workspace's members
+    lock, n = re.subn(r'(?m)^(name = "wireskein-[a-z]+"\nversion = )"[^"]+"', rf'\1"{version}"', lock)
+    if n != crates:
         raise RuntimeError("Failed to update the crates' versions in Cargo.lock")
     CARGO_LOCK.write_text(lock, encoding="utf-8")
 

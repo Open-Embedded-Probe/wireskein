@@ -512,11 +512,21 @@ dependencies = [
 ]
 
 [[package]]
-name = "wireskein-cli"
+name = "wireskein-analysis"
 version = "0.0.37"
 dependencies = [
  "serde_json",
  "sha2",
+ "wireskein-core",
+ "wireskein-io",
+]
+
+[[package]]
+name = "wireskein-cli"
+version = "0.0.37"
+dependencies = [
+ "serde_json",
+ "wireskein-analysis",
  "wireskein-core",
  "wireskein-io",
  "wireskein-verify",
@@ -546,7 +556,10 @@ dependencies = [
  "numpy",
  "pyo3",
  "serde_json",
+ "wireskein-analysis",
  "wireskein-core",
+ "wireskein-io",
+ "wireskein-verify",
 ]
 
 [[package]]

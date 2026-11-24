@@ -208,6 +208,17 @@ pub fn read(path: &Path) -> Result<Capture, String> {
     }
 }
 
+/// A capture file read with a WireSkein file's parts each on its own (none joined: Python's `fileio.load_parts`), or
+/// only part `only` of it; a .sr or a VCD (one part) as `read` reads it.
+pub fn read_parts(path: &Path, only: Option<usize>) -> Result<Capture, String> {
+    if sniff_path(path) != Some(Kind::WireSkein) {
+        return read(path);
+    }
+    let at = |e: String| format!("{}: {e}", path.display());
+    let f = std::fs::File::open(path).map_err(|e| at(e.to_string()))?;
+    wsk::read_parts_from(f, only).map_err(at)
+}
+
 /// (level at the first sample, the ticks of the changes) of samples at ticks phase + k * step.
 pub fn dense_edges(samples: impl IntoIterator<Item = u8>, step: i64, phase: i64) -> (u8, Vec<i64>) {
     let mut it = samples.into_iter();
@@ -219,6 +230,32 @@ pub fn dense_edges(samples: impl IntoIterator<Item = u8>, step: i64, phase: i64)
         if v != last {
             out.push(phase + (k as i64 + 1) * step);
             last = v;
+        }
+    }
+    (first, out)
+}
+
+/// `dense_edges` of n samples packed a bit each (sample k at bit k % 8 of byte k / 8; bytes past the data read as
+/// 0), a byte the line holds its level through passed over whole (no sample list made).
+pub fn packed_edges(data: &[u8], n: usize, step: i64, phase: i64) -> (u8, Vec<i64>) {
+    if n == 0 {
+        return (0, vec![]);
+    }
+    let byte = |b: usize| data.get(b).copied().unwrap_or(0);
+    let first = byte(0) & 1;
+    let (mut level, mut out) = (first, vec![]);
+    for b in 0..n.div_ceil(8) {
+        let v = byte(b);
+        let k0 = b * 8;
+        if k0 + 8 <= n && v == if level == 1 { 0xFF } else { 0 } {
+            continue;
+        }
+        for i in 0..8.min(n - k0) {
+            let s = (v >> i) & 1;
+            if s != level {
+                out.push(phase + (k0 + i) as i64 * step);
+                level = s;
+            }
         }
     }
     (first, out)
@@ -296,6 +333,18 @@ mod tests {
     #[test]
     fn dense_and_fractions() {
         assert_eq!(dense_edges([1, 1, 0, 0, 1], 2, 3), (1, vec![7, 11]));
+        // packed: the same as the samples unpacked, over runs of whole bytes, a short last byte, missing bytes
+        let mut x = 12345u64;
+        let data: Vec<u8> = (0..400)
+            .map(|i| {
+                x = x.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                if i % 7 < 3 { [0u8, 0xFF][i % 2] } else { (x >> 33) as u8 }
+            })
+            .collect();
+        for n in [0, 1, 7, 8, 9, 100, 3199, 3200, 3205] {
+            let unpacked = (0..n).map(|k| (data.get(k / 8).copied().unwrap_or(0) >> (k % 8)) & 1);
+            assert_eq!(packed_edges(&data, n, 3, 2), dense_edges(unpacked, 3, 2), "n {n}");
+        }
         assert_eq!(fraction(200_000_000, 2), (100_000_000, 1));
         assert_eq!(limit_denominator(1e8), (100_000_000, 1));
         // as Python's Fraction(x).limit_denominator(10**9)

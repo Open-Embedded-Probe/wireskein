@@ -2,11 +2,13 @@
 # each part compared on the bench (equal or better), and made the default only then. Until a part is, nothing in the
 # product calls it: the Python package stays pure Python.
 #   wireskein-core: the core in plain Rust (no Python), to be shared with a native app and the web (WASM)
+#   wireskein-io / wireskein-analysis / wireskein-verify: capture files, the analysis document, verify (no Python)
 #   wireskein-py:   the Python module wireskein_core (PyO3, abi3 for CPython 3.11 and later), a package of its own for
 #                   now (crates/wireskein-py/pyproject.toml), used by the bench
 [workspace]
 resolver = "3"
-members = ["crates/wireskein-core", "crates/wireskein-py", "crates/wireskein-io", "crates/wireskein-cli", "crates/wireskein-verify"]
+members = ["crates/wireskein-core", "crates/wireskein-py", "crates/wireskein-io", "crates/wireskein-analysis",
+           "crates/wireskein-cli", "crates/wireskein-verify"]
 
 [workspace.package]
 version = "0.0.37"

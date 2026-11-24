@@ -14,6 +14,9 @@ crate-type = ["cdylib"]
 
 [dependencies]
 ws_core = { package = "wireskein-core", path = "../wireskein-core" }
+wireskein-io = { path = "../wireskein-io" }
+wireskein-analysis = { path = "../wireskein-analysis" }
+wireskein-verify = { path = "../wireskein-verify" }
 serde_json = "1"
 pyo3 = { version = "0.30", features = ["abi3-py311"] }
 numpy = "0.30"

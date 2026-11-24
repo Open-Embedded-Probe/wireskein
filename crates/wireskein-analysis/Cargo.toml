@@ -1,0 +1,15 @@
+[package]
+name = "wireskein-analysis"
+description = "WireSkein's analysis document in plain Rust: a capture file analyzed by the core, what analyze tells beside each claim, a long part read in pieces"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+wireskein-core = { path = "../wireskein-core" }
+wireskein-io = { path = "../wireskein-io" }
+serde_json = "1"
+sha2 = "0.10"
