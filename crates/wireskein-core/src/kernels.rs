@@ -101,6 +101,22 @@ pub fn deglitch_allow(e: &[i64], k: i64, allow: Option<&[bool]>) -> Vec<i64> {
     e.iter().zip(&keep).filter(|&(_, &k)| k).map(|(&x, _)| x).collect()
 }
 
+/// A change and the changes within `w` ticks of it (not of each other) are one edge with its bounces: an odd number a
+/// change at the first, an even number none. Where bounces ring on close to the next change (a clock of a few samples
+/// more than its bounces a half), `debounce`'s chain runs into it; a window from the first change does not.
+pub fn settled(e: &[i64], w: i64) -> Vec<i64> {
+    let mut out = Vec::with_capacity(e.len());
+    let mut i = 0;
+    while i < e.len() {
+        let j = i + e[i..].partition_point(|&x| x <= e[i] + w);
+        if (j - i) % 2 == 1 {
+            out.push(e[i]);
+        }
+        i = j;
+    }
+    out
+}
+
 /// Changes each within `w` of the one before are one edge with its bounces: an odd number a change at the first, an
 /// even number none (`kernels.debounce`).
 pub fn debounce(e: &[i64], w: i64) -> Vec<i64> {
@@ -195,6 +211,10 @@ mod tests {
         assert_eq!(shortest_first(&[0, 10, 11, 12, 20], 2), vec![0, 12, 20]);
         assert_eq!(deglitch(&[0, 1, 10, 20, 21, 22], 3), vec![10, 22]);
         assert_eq!(debounce(&[0, 1, 2, 10, 20, 21], 4), vec![0, 10]);
+        // a change ringing on to its next one 10 ticks on: chained it is lost, from its first change it is kept
+        let e = [0, 3, 5, 10, 13, 15];
+        assert_eq!(debounce(&e, 7), Vec::<i64>::new());
+        assert_eq!(settled(&e, 7), vec![0, 10]);
     }
 
     #[test]

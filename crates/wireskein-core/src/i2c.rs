@@ -366,16 +366,25 @@ pub fn read(view: &View, scl: &Channel, sda: &Channel) -> Option<Candidate> {
     })
 }
 
+pub const SETTLE: i64 = 7; // ticks: a change's bounces within this of it (`kernels::settled`)
+
 /// The views a pair is read on: as captured, pulses under 2 and under 4 samples taken out (spikes, crosstalk), and
-/// bounces merged at their first change; each (k, scl's edges, sda's edges), those that change nothing left out.
+/// bounces merged at their first change - each chained to the one before (`debounce`), or within SETTLE ticks of the
+/// first (`settled`: a fast clock, its bounces ringing on near its next change, where SCL's half is longer than
+/// that); each (k, scl's edges, sda's edges), those that change nothing left out.
 fn views(scl: &Channel, sda: &Channel) -> Vec<(i64, Vec<i64>, Vec<i64>)> {
-    use crate::kernels::{debounce, deglitch};
+    use crate::kernels::{debounce, deglitch, settled};
     let mut out = vec![(0, scl.edges.to_vec(), sda.edges.to_vec())];
     for (k, a, b) in [
         (2, deglitch(scl.edges, 2), deglitch(sda.edges, 2)),
         (4, deglitch(scl.edges, 4), deglitch(sda.edges, 4)),
         (8, debounce(scl.edges, 8), debounce(sda.edges, 8)),
+        (SETTLE, settled(scl.edges, SETTLE), settled(sda.edges, SETTLE)),
     ] {
+        // (a window from each change no shorter than SCL's half period takes its own next change with the bounces)
+        if k == SETTLE && crate::rebuild::half(scl.edges) <= SETTLE as f64 {
+            continue;
+        }
         if out.iter().any(|(_, x, y)| *x == a && *y == b) {
             continue;
         }
@@ -399,6 +408,30 @@ pub fn candidates(view: &View) -> Vec<Candidate> {
             )
         })
         .collect();
+    // each line rebuilt as a clock from its period where its short runs are a bounce's (each way, those that differ),
+    // and each with its bounces merged as beside a rebuilt clock
+    let rebuilt: Vec<Vec<(&str, Vec<i64>)>> = act
+        .iter()
+        .map(|c| {
+            let mut v: Vec<(&str, Vec<i64>)> = vec![];
+            if crate::spi::bounced(c.edges) {
+                for (name, e) in [
+                    ("rebuilt_refused", crate::rebuild::refused(c.edges, c.initial)),
+                    ("rebuilt_followed", crate::rebuild::followed(c.edges, c.initial)),
+                    ("rebuilt_gridded", crate::rebuild::gridded(c.edges, c.initial)),
+                ] {
+                    if e.len() >= 16 && !v.iter().any(|(_, x)| *x == e) {
+                        v.push((name, e));
+                    }
+                }
+            }
+            v
+        })
+        .collect();
+    let merged: Vec<Vec<i64>> = act
+        .iter()
+        .map(|c| crate::kernels::debounce(c.edges, crate::spi::REBUILD_DATA))
+        .collect();
     for (ia, a) in act.iter().enumerate() {
         for (ib, b) in act.iter().enumerate() {
             // (counted as the lines settle and as they are: a clock of a few samples a half loses its own runs to
@@ -420,6 +453,21 @@ pub fn candidates(view: &View) -> Vec<Candidate> {
                     && best.as_ref().is_none_or(|x| c.score > x.score)
                 {
                     c.params.insert("deglitch".into(), json!(k));
+                    best = Some(c);
+                }
+            }
+            // SCL rebuilt from its period, SDA's bounces merged (Python's rebuilt views of a group, SPI's here): a
+            // clock of a few samples a half bouncing through it has no width a filter tells from its own runs
+            for (name, ea) in &rebuilt[ia] {
+                let (ca, cb) = (
+                    Channel::new(a.name, a.initial, ea),
+                    Channel::new(b.name, b.initial, &merged[ib]),
+                );
+                if let Some(mut c) = read(view, &ca, &cb)
+                    && best.as_ref().is_none_or(|x| c.score > x.score)
+                {
+                    c.params.insert("deglitch".into(), json!(crate::spi::REBUILD_DATA));
+                    c.params.insert("clean".into(), json!(name));
                     best = Some(c);
                 }
             }
