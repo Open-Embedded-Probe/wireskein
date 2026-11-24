@@ -1,6 +1,10 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Experimental: `WIRESKEIN_RUST=io,write,verify,analyze,states,survey,annotate,engine` (or `all`) does those parts with WireSkein's Rust core (the package `wireskein-core`, built from `crates/wireskein-py`; not a dependency of wireskein): reading and writing WireSkein files, .sr and VCD, `verify`, `analyze_file` / `wireskein analyze`, `states`, `survey`, `annotate`. What a part does not do in Rust yet falls back to Python. `engine` is `WIRESKEIN_ENGINE=rust`. Unset: as before, and `wireskein_core` is not imported.
+- (JA) 試し: `WIRESKEIN_RUST=io,write,verify,analyze,states,survey,annotate,engine`（`all` で全部）で、その部品を WireSkein の Rust のコア（パッケージ `wireskein-core`。`crates/wireskein-py` から作る。wireskein は依存しない）で行う。対象は WireSkein ファイル・.sr・VCD の読み書き、`verify`、`analyze_file` / `wireskein analyze`、`states`、`survey`、`annotate`。Rust でまだできないことは Python に戻る。`engine` は `WIRESKEIN_ENGINE=rust` と同じ。未設定なら今までどおりで、`wireskein_core` も読み込まない。
+- (EN) Fixed: annotations stopped with a TypeError on a transaction whose address was not read (null); it is written `?`.
+- (JA) 直した: アドレスが読めなかった（null）転送で、annotations が TypeError で止まっていた。`?` と書く。
 
 ## 0.0.37
 - (EN) Experimental: `WIRESKEIN_ENGINE=rust` reads parts with WireSkein's Rust core (the package `wireskein-core`, built from `crates/wireskein-py`; not a dependency of wireskein, not on PyPI yet) in place of the Python engine, the upper stage still Python's: `decode.analyze` / `analyze_file`, `export`, `annotations`, `wireskein analyze`, split reads, and verify's checks of protocols of one's own. A decode spec's buses, segments, and verify's I2C / SPI / UART-pair and declared-protocol checks stay Python's (said once on stderr). Unset or `python`: the Python engine, as before.

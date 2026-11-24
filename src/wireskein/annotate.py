@@ -29,7 +29,8 @@ def _text(protocol: str, it: dict) -> str:
     if "text" in it:
         return str(it["text"])
     if "addr" in it and "rw" in it:                             # a bus transaction
-        s = f"{str(it['rw'])[:1].upper()} {int(it['addr']):#04x}"
+        a = it["addr"]                                          # (an address not read: "?")
+        s = f"{str(it['rw'])[:1].upper()} {'?' if a is None else format(int(a), '#04x')}"
         data = it.get("bytes") or ""
         if data:
             s += " " + " ".join(data[i:i + 2] for i in range(0, len(data), 2))

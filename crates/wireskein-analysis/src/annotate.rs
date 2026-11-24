@@ -46,7 +46,7 @@ fn text(protocol: &str, it: &J) -> String {
     if it.has("addr") && it.has("rw") {
         // a bus transaction
         let rw: String = py_str(it.get("rw")).chars().take(1).collect::<String>().to_uppercase();
-        // an address not read (null): "?" (Python's int(None) stops the whole document there)
+        // an address not read (null): "?" as Python's annotate writes it
         let addr = match it.get("addr") {
             a @ (J::Int(_) | J::Float(_) | J::Bool(_)) => hex(int_trunc(a), 4),
             _ => "?".into(),
