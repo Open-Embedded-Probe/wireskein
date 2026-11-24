@@ -8,6 +8,7 @@
 use crate::Candidate;
 use crate::clocked::keep_best;
 use crate::jtag::{CAPTURES, EVIDENCE_BITS, SCANS, mode, scan_items, scans, walk};
+use crate::spi::Clean;
 use crate::sync::edges_to;
 use crate::view::{Channel, View};
 use serde_json::{Map, json};
@@ -18,6 +19,7 @@ pub const ESC_RESET: usize = 8;
 pub const OAC_OSCAN1: u32 = 0b1100;
 pub const OTHER: f64 = 0.02; // TCKC intervals with 2-3 TMSC changes, this share at most
 pub const OAC_BITS: usize = 12;
+pub const QUARTER: f64 = 0.25; // pulses under this share of TCKC's half period are noise (an escape's toggles are 0.4 of it)
 
 /// The JTAG cycles of a cJTAG pair.
 #[derive(Default)]
@@ -201,16 +203,22 @@ fn read(view: &View, kc: &Channel, kd: &Channel, k: i64) -> Option<Candidate> {
     })
 }
 
-/// The cJTAG readings of a part: each pair of lines as TCKC and TMSC, as they are and with pulses under a quarter of
-/// TCKC's median run taken out of both (a spike on TMSC while TCKC is high is an escape's toggle, a bounce on TCKC a
-/// cycle more).
+pub const MERGE: f64 = 0.15; // changes closer than this share of TCKC's half period are one change's bounces
+
+/// The cJTAG readings of a part: each pair of lines as TCKC and TMSC, as they are, with pulses under a quarter of
+/// TCKC's half period taken out of both (a spike on TMSC while TCKC is high is an escape's toggle, a bounce on TCKC a
+/// cycle more), and with changes closer than MERGE of it merged at the first (a bounce beside an escape's toggle,
+/// which a pulse filter takes out with the next toggle); the half period from TCKC's longer runs (a bounced clock's
+/// median run is a bounce's).
 pub fn candidates(view: &View) -> Vec<Candidate> {
     let mut best = Default::default();
     let act: Vec<&Channel> = view.channels.iter().filter(|c| c.edges.len() >= 8).collect();
     for kc in &act {
-        let runs: Vec<f64> = kc.edges.windows(2).map(|w| (w[1] - w[0]) as f64).collect();
-        let k = ((0.25 * crate::kernels::median(&runs)) as i64).clamp(2, 64);
-        let ke = crate::kernels::shortest_first(kc.edges, k);
+        let half = crate::rebuild::half(kc.edges);
+        let k = ((QUARTER * half) as i64).clamp(2, 64);
+        let w = ((MERGE * half).round() as i64).max(2);
+        let cleans: [(Clean, i64); 2] = [(crate::kernels::shortest_first, k), (crate::kernels::debounce, w)];
+        let kes: Vec<Vec<i64>> = cleans.iter().map(|(f, x)| f(kc.edges, *x)).collect();
         for kd in &act {
             if kd.name == kc.name || kd.edges.len() < ESC_SELECT {
                 continue;
@@ -218,16 +226,18 @@ pub fn candidates(view: &View) -> Vec<Candidate> {
             if let Some(c) = read(view, kc, kd, 0) {
                 keep_best(&mut best, c);
             }
-            let de = crate::kernels::shortest_first(kd.edges, k);
-            if ke.len() == kc.edges.len() && de.len() == kd.edges.len() {
-                continue;
-            }
-            let (c2, d2) = (
-                Channel::new(kc.name, kc.initial, &ke),
-                Channel::new(kd.name, kd.initial, &de),
-            );
-            if let Some(c) = read(view, &c2, &d2, k) {
-                keep_best(&mut best, c);
+            for ((f, x), ke) in cleans.iter().zip(&kes) {
+                let de = f(kd.edges, *x);
+                if ke.len() == kc.edges.len() && de.len() == kd.edges.len() {
+                    continue;
+                }
+                let (c2, d2) = (
+                    Channel::new(kc.name, kc.initial, ke),
+                    Channel::new(kd.name, kd.initial, &de),
+                );
+                if let Some(c) = read(view, &c2, &d2, *x) {
+                    keep_best(&mut best, c);
+                }
             }
         }
     }
