@@ -123,6 +123,16 @@ fn frames(scl: &Channel, sda: &Channel) -> (Vec<Frame>, usize, usize, usize, usi
 }
 
 pub const BUS_FREE_ALLOW: usize = 2; // SCL's changes after a STOP before the next START, at most (a spike)
+/// Whether a line's longest run is at its high level.
+fn rests_at_high(c: &Channel, n: i64) -> bool {
+    let (_, length, level) = crate::kernels::runs(c, n);
+    length
+        .iter()
+        .zip(&level)
+        .max_by_key(|(l, _)| **l)
+        .is_some_and(|(_, &v)| v == 1)
+}
+
 pub const REST: f64 = 8.0; // half periods: a high run this long is a rest (a bounced clock's runs merge to a few)
 
 /// Whether a clock has a high run of REST times its half period or more (the capture's ends included).
@@ -343,8 +353,9 @@ pub fn candidates(view: &View) -> Vec<Candidate> {
             // (counted as the lines settle and as they are: a clock of a few samples a half loses its own runs to
             // the settling)
             let fewer = 2 * settled[ia].0 < settled[ib].0 && 2 * a.edges.len() < b.edges.len();
-            // (idling high, or high as the capture starts: a bus left held low at its end - a target stopped mid byte)
-            let high = |i: usize, c: &Channel| settled[i].1 == 1 || c.initial == 1;
+            // (idling high, or high as the capture starts - a bus left held low at its end: a target stopped mid
+            // byte - or resting high at its longest run - a piece of a busy bus, SDA low more than high)
+            let high = |i: usize, c: &Channel| settled[i].1 == 1 || c.initial == 1 || rests_at_high(c, view.n_samples);
             if ia == ib || fewer || !high(ia, a) || !high(ib, b) {
                 continue;
             }
