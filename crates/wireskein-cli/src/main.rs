@@ -50,7 +50,55 @@ fn nonempty(v: &Value) -> bool {
 
 /// A claim as the document gives it: in final mode its result (the final layer), in all mode its layers and
 /// evidence.
-fn claim_doc(c: &wireskein_core::Claim, mode: &str, lines: &[wireskein_io::Line], rate: f64, n: i64) -> Value {
+/// Only the items inside ticks [s0, s1) (Python's `export._window`: what a GUI needs for the visible range).
+fn windowed(lay: Map<String, Value>, s0: i64, s1: i64) -> Map<String, Value> {
+    let inside = |v: &Value| v.as_i64().is_some_and(|s| s0 <= s && s < s1);
+    lay.into_iter()
+        .map(|(k, v)| {
+            let w = match v {
+                Value::Array(a) if a.first().is_some_and(|x| x.get("s").is_some()) => {
+                    Value::Array(a.into_iter().filter(|x| x.get("s").is_some_and(inside)).collect())
+                }
+                Value::Object(o) if o.get("s").is_some_and(|x| x.is_array()) => {
+                    let sel: Vec<bool> = o["s"].as_array().unwrap().iter().map(inside).collect();
+                    let n = sel.len();
+                    let mut w = Map::new();
+                    for (kk, vv) in &o {
+                        let x = match vv {
+                            Value::Array(a) if a.len() == n => Value::Array(
+                                a.iter()
+                                    .zip(&sel)
+                                    .filter(|(_, k)| **k)
+                                    .map(|(x, _)| x.clone())
+                                    .collect(),
+                            ),
+                            Value::String(h) if kk == "hex" => Value::String(
+                                (0..h.len() / 2)
+                                    .filter(|&i| sel.get(i).copied().unwrap_or(false))
+                                    .map(|i| &h[2 * i..2 * i + 2])
+                                    .collect(),
+                            ),
+                            x => x.clone(),
+                        };
+                        w.insert(kk.clone(), x);
+                    }
+                    Value::Object(w)
+                }
+                v => v,
+            };
+            (k, w)
+        })
+        .collect()
+}
+
+fn claim_doc(
+    c: &wireskein_core::Claim,
+    mode: &str,
+    lines: &[wireskein_io::Line],
+    rate: f64,
+    n: i64,
+    window: Option<(i64, i64)>,
+) -> Value {
     let mut out = Map::new();
     out.insert("protocol".into(), json!(c.protocol));
     out.insert("roles".into(), json!(c.roles));
@@ -60,6 +108,9 @@ fn claim_doc(c: &wireskein_core::Claim, mode: &str, lines: &[wireskein_io::Line]
     out.insert("params".into(), Value::Object(c.params.clone()));
     let mut lay: Map<String, Value> = serde_json::from_str(c.layers.get()).unwrap_or_default();
     let notes = note(c, &mut lay, lines, rate, n);
+    if let Some((s0, s1)) = window {
+        lay = windowed(lay, s0, s1);
+    }
     if mode == "all" {
         out.insert("layers".into(), Value::Object(lay));
         out.insert("evidence".into(), Value::Object(c.evidence.clone()));
@@ -142,10 +193,24 @@ fn hints_of(arg: &str) -> Result<Value, String> {
 }
 
 /// The document of what analyze finds in a capture file.
-pub fn analyze_file(path: &Path, hints: &Value, part: Option<usize>, mode: &str) -> Result<Value, String> {
+pub fn analyze_file(
+    path: &Path,
+    hints: &Value,
+    part: Option<usize>,
+    mode: &str,
+    window_s: Option<(f64, f64)>,
+) -> Result<Value, String> {
     let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let cap = wireskein_io::read_bytes(&bytes).map_err(|e| format!("{}: {e}", path.display()))?;
     let rate = cap.rate();
+    if window_s.is_some() && part.is_none() && cap.parts.len() > 1 {
+        return Err(format!(
+            "{}: {} parts: give the part a window is inside (--part)",
+            path.display(),
+            cap.parts.len()
+        ));
+    }
+    let window = window_s.map(|(a, b)| ((a * rate) as i64, (b * rate) as i64));
     let mut capture = Map::new();
     capture.insert("file".into(), json!(path.file_name().map(|s| s.to_string_lossy())));
     capture.insert("sha256".into(), json!(format!("{:x}", Sha256::digest(&bytes))));
@@ -191,10 +256,13 @@ pub fn analyze_file(path: &Path, hints: &Value, part: Option<usize>, mode: &str)
             Value::Array(
                 claims
                     .iter()
-                    .map(|c| claim_doc(c, mode, &p.lines, rate, p.ticks))
+                    .map(|c| claim_doc(c, mode, &p.lines, rate, p.ticks, window))
                     .collect(),
             ),
         );
+        if let Some((a, b)) = window {
+            d.insert("window".into(), json!([a, b]));
+        }
         if !relations.is_empty() {
             d.insert("relations".into(), Value::Array(relations));
         }
@@ -214,8 +282,24 @@ pub fn analyze_file(path: &Path, hints: &Value, part: Option<usize>, mode: &str)
     )
 }
 
+/// "300us", "1.5ms", "2s", "0.001" as seconds.
+fn seconds(t: &str) -> Option<f64> {
+    let t = t.trim();
+    let k = t.find(|c: char| !(c.is_ascii_digit() || c == '.')).unwrap_or(t.len());
+    let mult = match t[k..].trim() {
+        "ns" => 1e-9,
+        "us" | "µs" => 1e-6,
+        "ms" => 1e-3,
+        "s" | "" => 1.0,
+        _ => return None,
+    };
+    Some(t[..k].parse::<f64>().ok()? * mult)
+}
+
 fn usage() -> ExitCode {
-    eprintln!("usage: wireskein-rs analyze FILE [--part K] [--hint NAMES|JSON|@FILE] [--mode final|all]");
+    eprintln!(
+        "usage: wireskein-rs analyze FILE [--part K] [--hint NAMES|JSON|@FILE] [--mode final|all] [--window FROM TO]"
+    );
     ExitCode::from(2)
 }
 
@@ -225,6 +309,7 @@ fn main() -> ExitCode {
         return usage();
     }
     let (mut file, mut part, mut hints, mut mode) = (None, None, Value::Null, "final".to_string());
+    let mut window = None;
     let mut it = args[1..].iter();
     while let Some(a) = it.next() {
         match a.as_str() {
@@ -240,6 +325,10 @@ fn main() -> ExitCode {
                 }
                 None => return usage(),
             },
+            "--window" => match (it.next().and_then(|v| seconds(v)), it.next().and_then(|v| seconds(v))) {
+                (Some(a), Some(b)) => window = Some((a, b)),
+                _ => return usage(),
+            },
             "--mode" => match it.next() {
                 Some(m) if m == "final" || m == "all" => mode = m.clone(),
                 _ => return usage(),
@@ -249,7 +338,7 @@ fn main() -> ExitCode {
         }
     }
     let Some(file) = file else { return usage() };
-    match analyze_file(Path::new(&file), &hints, part, &mode) {
+    match analyze_file(Path::new(&file), &hints, part, &mode, window) {
         Ok(doc) => {
             println!("{doc}");
             ExitCode::SUCCESS
