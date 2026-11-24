@@ -638,7 +638,8 @@ fn lengths(cap: &Cap, x: &J, got: &J) -> Vec<(String, f64, bool, Option<&'static
         }
         "pulses" => half(&mut rows, x.get("pin"), "the pulses' shorter half"),
         "i2c_timing" => {
-            let lim = crate::timing::i2c_limits(x);
+            let mut lim = crate::timing::i2c_limits(x);
+            lim.sort_by(|a, b| a.0.cmp(&b.0));
             for (name, (lo, hi)) in &lim {
                 if name != "f_scl" {
                     for (side, v) in [("min", lo), ("max", hi)] {

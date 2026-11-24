@@ -397,3 +397,94 @@ pub fn short_half(ch: &Ch, n: i64) -> Option<f64> {
     }
     Some(median(&hi).min(median(&lo)))
 }
+
+// ---------------- SPI ----------------
+
+/// A data line's votes for CPHA (`timing.spi_mode`).
+#[derive(Debug, Clone)]
+pub struct Votes {
+    pub after_leading: i64,
+    pub after_trailing: i64,
+    pub before_first: i64,
+    pub cpha: Option<u8>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SpiMode {
+    pub windows: usize,
+    pub cpol: Option<u8>,
+    pub cpol_votes: Vec<u8>,
+    pub lines: Vec<(String, Votes)>,
+}
+
+/// CPOL from SCK's level as CS becomes active (without CS: over its longest pause), CPHA per data line from the SCK
+/// edge each change follows (`timing.spi_mode`).
+pub fn spi_mode(clk: &Ch, data: &[&Ch], n: i64, cs: Option<&Ch>, cs_active: u8) -> SpiMode {
+    let none = |w| SpiMode {
+        windows: w,
+        cpol: None,
+        cpol_votes: vec![],
+        lines: vec![],
+    };
+    let (wins, cpols): (Vec<(i64, i64)>, Vec<u8>) = match cs {
+        Some(cs) => {
+            let w = crate::coded::cs_windows(cs, n, cs_active);
+            let cpols = w.iter().filter(|w| w.2).map(|w| clk.level_at(w.0)).collect();
+            (w.into_iter().map(|w| (w.0, w.1)).collect(), cpols)
+        }
+        None => {
+            let (_, ln, lvl) = clk.runs(n);
+            if ln.len() < 2 {
+                return none(0);
+            }
+            let (a, b) = if ln.len() > 2 { (1, ln.len() - 1) } else { (0, ln.len()) };
+            let k = crate::checks::argmax(ln[a..b].iter().map(|&v| v as f64)) + a;
+            (vec![(0, n)], vec![lvl[k]])
+        }
+    };
+    if cpols.is_empty() {
+        return none(wins.len());
+    }
+    // the commonest (max over the set {0, 1}: on a tie the one the set gives first, 0)
+    let c0 = cpols.iter().filter(|&&v| v == 0).count();
+    let c1 = cpols.len() - c0;
+    let cpol = if c0 > 0 && c0 >= c1 { 0 } else { 1 };
+    let ce = &clk.edges;
+    let leading: Vec<bool> = (0..ce.len()).map(|i| clk.after(i) != cpol).collect();
+    let mut lines = vec![];
+    for ch in data {
+        let (mut lead, mut trail, mut before) = (0i64, 0i64, 0i64);
+        for &(a, b) in &wins {
+            for &x in ch.edges.iter().filter(|&&x| x > a && x < b) {
+                let j = ce.partition_point(|&c| c <= x) as isize - 1;
+                if j >= 0 && ce[j as usize] > a {
+                    if leading[j as usize] { lead += 1 } else { trail += 1 }
+                } else {
+                    before += 1;
+                }
+            }
+        }
+        let cpha = if lead != trail {
+            Some(if lead > trail { 1 } else { 0 })
+        } else if before > 0 && lead == 0 {
+            Some(0)
+        } else {
+            None
+        };
+        lines.push((
+            ch.name.clone(),
+            Votes {
+                after_leading: lead,
+                after_trailing: trail,
+                before_first: before,
+                cpha,
+            },
+        ));
+    }
+    SpiMode {
+        windows: wins.len(),
+        cpol: Some(cpol),
+        cpol_votes: cpols,
+        lines,
+    }
+}

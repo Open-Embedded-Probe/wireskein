@@ -65,7 +65,7 @@ pub fn verdicts(parts: &[(Option<bool>, String)]) -> (V, String) {
 /// Every instance of a time against [lo, hi] seconds: the worst one decides (`_limit_of`).
 pub fn limit_of(
     name: &str,
-    ticks: &[(i64, i64)],
+    ticks: &[(f64, f64)],
     res: i64,
     lo: Option<f64>,
     hi: Option<f64>,
@@ -77,8 +77,8 @@ pub fn limit_of(
     }
     let res = res as f64;
     if let Some(lo) = lo {
-        let k = argmin(ticks.iter().map(|t| t.1 as f64));
-        let v = ticks[k].1 as f64;
+        let k = argmin(ticks.iter().map(|t| t.1));
+        let v = ticks[k].1;
         let j = timing::judge(v, res, Some(lo * rate), None);
         out.push((
             j,
@@ -87,13 +87,13 @@ pub fn limit_of(
                 si(v / rate),
                 if j == Some(false) { "<" } else { "near" },
                 si(lo),
-                si(ticks[k].0 as f64 / rate)
+                si(ticks[k].0 / rate)
             ),
         ));
     }
     if let Some(hi) = hi {
-        let k = argmax(ticks.iter().map(|t| t.1 as f64));
-        let v = ticks[k].1 as f64;
+        let k = argmax(ticks.iter().map(|t| t.1));
+        let v = ticks[k].1;
         let j = timing::judge(v, res, None, Some(hi * rate));
         out.push((
             j,
@@ -102,7 +102,7 @@ pub fn limit_of(
                 si(v / rate),
                 if j == Some(false) { ">" } else { "near" },
                 si(hi),
-                si(ticks[k].0 as f64 / rate)
+                si(ticks[k].0 / rate)
             ),
         ));
     }
@@ -132,13 +132,18 @@ pub fn argmax(v: impl Iterator<Item = f64>) -> usize {
 }
 
 /// `_times`: count, min, max and median of the times in seconds.
-pub fn times(ticks: &[(i64, i64)], rate: f64) -> J {
+pub fn times(ticks: &[(f64, f64)], rate: f64) -> J {
     if ticks.is_empty() {
         return jd! {"count" => 0};
     }
-    let v: Vec<f64> = ticks.iter().map(|t| t.1 as f64).collect();
+    let v: Vec<f64> = ticks.iter().map(|t| t.1).collect();
     jd! {"count" => v.len(), "min_s" => v.iter().cloned().fold(f64::INFINITY, f64::min) / rate,
     "max_s" => v.iter().cloned().fold(f64::NEG_INFINITY, f64::max) / rate, "median_s" => median(&v) / rate}
+}
+
+/// (tick, length) pairs as floats.
+pub fn fp(v: &[(i64, i64)]) -> Vec<(f64, f64)> {
+    v.iter().map(|&(a, b)| (a as f64, b as f64)).collect()
 }
 
 /// A line reduced to any_high / any_low: the level an interval reads when the line was at it anywhere in it.
@@ -920,8 +925,8 @@ fn check_dead_time(cap: &Cap, x: &J) -> Out {
     };
     let r = timing::dead_time(hi, lo, cap.n, x.get("active").i().unwrap_or(1) as u8);
     let res = timing::res_of(&[hi, lo]);
-    let got = jd! {"hi_to_lo" => times(&r.hi_to_lo, cap.rate), "lo_to_hi" => times(&r.lo_to_hi, cap.rate),
-    "overlaps" => times(&r.overlaps, cap.rate), "resolution_s" => res as f64 / cap.rate};
+    let got = jd! {"hi_to_lo" => times(&fp(&r.hi_to_lo), cap.rate), "lo_to_hi" => times(&fp(&r.lo_to_hi), cap.rate),
+    "overlaps" => times(&fp(&r.overlaps), cap.rate), "resolution_s" => res as f64 / cap.rate};
     if r.hi_to_lo.is_empty() && r.lo_to_hi.is_empty() && r.overlaps.is_empty() {
         return out(V::Ng, got, "the outputs never switched from one to the other");
     }
@@ -940,6 +945,7 @@ fn check_dead_time(cap: &Cap, x: &J) -> Out {
     }
     for (side, v) in [("hi_to_lo", &r.hi_to_lo), ("lo_to_hi", &r.lo_to_hi)] {
         if !v.is_empty() {
+            let v = &fp(v);
             parts.extend(limit_of(
                 side,
                 v,

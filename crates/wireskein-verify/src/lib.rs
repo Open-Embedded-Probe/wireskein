@@ -8,6 +8,8 @@
 pub mod bus;
 pub mod cap;
 pub mod checks;
+pub mod coded;
+pub mod decoded;
 pub mod j;
 pub mod pyfmt;
 pub mod report;

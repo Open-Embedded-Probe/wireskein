@@ -226,6 +226,30 @@ impl J {
     }
 }
 
+/// Python's `==`: dicts whatever their keys' order, 1 == 1.0 == True.
+pub fn py_eq(a: &J, b: &J) -> bool {
+    match (a, b) {
+        (J::Dict(x), J::Dict(y)) => {
+            x.len() == y.len() && x.iter().all(|(k, v)| y.iter().any(|(k2, v2)| k == k2 && py_eq(v, v2)))
+        }
+        (J::List(x), J::List(y)) => x.len() == y.len() && x.iter().zip(y).all(|(p, q)| py_eq(p, q)),
+        (J::Null, J::Null) => true,
+        (J::Str(x), J::Str(y)) => x == y,
+        (x, y) => match (x.f(), y.f()) {
+            (Some(p), Some(q)) => p == q,
+            _ => false,
+        },
+    }
+}
+
+/// Python's `str()`: a str as it is, anything else as its repr.
+pub fn py_str(v: &J) -> String {
+    match v {
+        J::Str(s) => s.clone(),
+        _ => v.repr(),
+    }
+}
+
 /// Python's repr of a str.
 pub fn py_str_repr(s: &str) -> String {
     let q = if s.contains('\'') && !s.contains('"') {
