@@ -477,10 +477,11 @@ fn read_frames(frames: &[Frame], delimited: bool, bits: &[u8], t: &[i64], rate: 
             let d: Vec<f64> = ft.windows(2).map(|w| (w[1] - w[0]) as f64).collect();
             rec.insert("period_ns".into(), json!((median(&d) / rate * 1e10).round() / 10.0));
         }
-        rec.insert(
-            "bits".into(),
-            json!(f.iter().map(|&b| if b == 1 { '1' } else { '0' }).collect::<String>()),
-        );
+        let bs: String = f.iter().map(|&b| if b == 1 { '1' } else { '0' }).collect();
+        if let Some(fl) = frame_fields(&bs, form, rec["op"] == json!("BURST")) {
+            rec.insert("fields".into(), Value::Object(fl));
+        }
+        rec.insert("bits".into(), json!(bs));
         if !fr.skip.is_empty() {
             rec.insert(
                 "repaired".into(),
@@ -493,6 +494,54 @@ fn read_frames(frames: &[Frame], delimited: bool, bits: &[u8], t: &[i64], rate: 
         r.recs.push(rec);
     }
     r
+}
+
+/// A frame's fields by name, as bit strings (MSB first), its checks one by one (`rvswd.frame_fields`).
+fn frame_fields(b: &str, form: &str, burst: bool) -> Option<Map<String, Value>> {
+    let par = |x: &str| x.bytes().filter(|&c| c == b'1').count() & 1;
+    let bit = |i: usize| &b[i..i + 1];
+    if form == "short" && b.len() == 53 {
+        return Some(obj(vec![
+            ("addr", json!(&b[0..7])),
+            ("rw", json!(bit(7))),
+            ("header_parity", json!(bit(8))),
+            ("park", json!(bit(9))),
+            ("ctl", json!(&b[10..14])),
+            ("data", json!(&b[14..46])),
+            ("data_parity", json!(bit(46))),
+            ("park2", json!(bit(47))),
+            ("status", json!(&b[48..50])),
+            ("pad", json!(&b[50..52])),
+            ("stop", json!(bit(52))),
+            ("header_parity_ok", json!(par(&b[0..8]) == (bit(8) == "1") as usize)),
+            ("data_parity_ok", json!(par(&b[14..46]) == (bit(46) == "1") as usize)),
+        ]));
+    }
+    if burst && burst_length(b.len()) {
+        let n = (b.len() - 15) / 38;
+        return Some(obj(vec![
+            ("header", json!(&b[0..14])),
+            (
+                "aux",
+                json!((0..n - 1).map(|i| &b[46 + 38 * i..52 + 38 * i]).collect::<Vec<_>>()),
+            ),
+            ("trailer", json!(&b[14 + 38 * n - 6..])),
+        ]));
+    }
+    if form == "long" && b.len() == 85 {
+        return Some(obj(vec![
+            ("host_addr", json!(&b[0..7])),
+            ("host_data", json!(&b[7..39])),
+            ("op", json!(&b[39..41])),
+            ("bit41", json!(bit(41))),
+            ("target_addr", json!(&b[42..49])),
+            ("target_data", json!(&b[49..81])),
+            ("status", json!(&b[81..83])),
+            ("bit83", json!(bit(83))),
+            ("last", json!(bit(84))),
+        ]));
+    }
+    None
 }
 
 /// The RVSWD reading of SWCLK and DIO, or None.

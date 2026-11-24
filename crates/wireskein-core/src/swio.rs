@@ -144,12 +144,55 @@ fn symbols(ch: &Channel, idle: u8) -> Option<Symbols> {
     })
 }
 
+/// How a frame's pulses sat against the split (ns): the longest short one, the shortest long one, their medians,
+/// the space between pulses and the pitch after a 1 and after a 0, and the R/W bit's own low and gap.
+fn widths(ps: &Symbols, short: &[bool], a: usize, b: usize, rw: Option<usize>, ns: f64) -> Map<String, Value> {
+    let r1 = |x: f64| json!((x * ns * 10.0).round() / 10.0);
+    let pick = |want: bool| -> Vec<f64> {
+        (a..b)
+            .filter(|&i| short[i] == want)
+            .map(|i| ps.width[i] as f64)
+            .collect()
+    };
+    let (sh, lo) = (pick(true), pick(false));
+    let opt = |v: &[f64], f: &dyn Fn(&[f64]) -> f64| if v.is_empty() { Value::Null } else { r1(f(v)) };
+    let mut m = obj(vec![
+        (
+            "short_max_ns",
+            opt(&sh, &|v| v.iter().copied().fold(f64::MIN, f64::max)),
+        ),
+        ("long_min_ns", opt(&lo, &|v| v.iter().copied().fold(f64::MAX, f64::min))),
+        ("short_median_ns", opt(&sh, &median)),
+        ("long_median_ns", opt(&lo, &median)),
+    ]);
+    if b - a >= 2 {
+        let d: Vec<f64> = (a..b - 1).map(|i| (ps.lead[i + 1] - ps.lead[i]) as f64).collect();
+        let sp: Vec<f64> = (a..b - 1).map(|i| d[i - a] - ps.width[i] as f64).collect();
+        m.insert("space_ns".into(), r1(median(&sp)));
+        for (key, want) in [("pitch_1_ns", true), ("pitch_0_ns", false)] {
+            let x: Vec<f64> = (a..b - 1).filter(|&i| short[i] == want).map(|i| d[i - a]).collect();
+            m.insert(key.into(), opt(&x, &median));
+        }
+    }
+    if let Some(rw) = rw {
+        m.insert("rw_low_ns".into(), r1(ps.width[rw] as f64));
+        if rw + 1 < b {
+            m.insert(
+                "rw_gap_ns".into(),
+                r1((ps.lead[rw + 1] - ps.lead[rw] - ps.width[rw]) as f64),
+            );
+        }
+    }
+    m
+}
+
 fn read(ch: &Channel, n: i64, rate: f64) -> Option<Candidate> {
     let idle = features(ch, n).idle;
     let ps = symbols(ch, idle)?;
     let short: Vec<bool> = ps.width.iter().map(|&w| (w as f64) < ps.split).collect();
     let (mut tx, mut lens): (Vec<Map<String, Value>>, Vec<usize>) = (vec![], vec![]);
     let mut last: Option<(bool, u32)> = None; // (a read, its address) of the access before
+    let ns = 1e9 / rate;
     for z in ps.bounds.windows(2) {
         let (a, b) = (z[0], z[1]);
         let f = &short[a..b];
@@ -166,6 +209,9 @@ fn read(ch: &Channel, n: i64, rate: f64) -> Option<Candidate> {
                 ("data", json!(msb(&f[9..]))),
                 ("ok", json!(true)),
             ]));
+            tx.last_mut()
+                .unwrap()
+                .extend(widths(&ps, &short, a, b, Some(a + 8), ns));
             last = Some((!write, addr));
         } else if b - a == 33 && !f[0] && last == Some((true, 0x04)) {
             // a continuation of reading data0 (autoexec): only after a read of it
@@ -179,6 +225,7 @@ fn read(ch: &Channel, n: i64, rate: f64) -> Option<Candidate> {
                 ("ok", json!(true)),
                 ("fast", json!(true)),
             ]));
+            tx.last_mut().unwrap().extend(widths(&ps, &short, a, b, None, ns));
         }
     }
     if tx.len() < 2 {

@@ -27,6 +27,7 @@ pub mod pulse;
 pub mod pulsecode;
 pub mod rebuild;
 pub mod rgbled;
+pub mod riscv_dm;
 pub mod rvswd;
 pub mod sdmmc;
 pub mod sent;
@@ -38,6 +39,7 @@ pub mod swio;
 pub mod sync;
 pub mod syncunk;
 pub mod uart;
+pub mod upper;
 pub mod usb;
 pub mod usbpd;
 pub mod view;
@@ -167,16 +169,11 @@ pub fn choose(mut cands: Vec<Candidate>) -> Vec<Claim> {
             margin = margin.min(c.score - a.max(CLAIM_COST));
             rival = true;
         }
-        let confirmed = (c.score >= 0.85 && margin >= 0.15)
-            || (rival && ((c.score >= 0.80 && margin >= 0.25) || (c.score >= 0.60 && margin >= 0.50)));
+        // (unknown-sync: a kind of its own, never a known protocol's verdict)
         let verdict = if c.protocol == "sync_unknown" {
-            "unknown-sync" // a kind of its own, never a known protocol's verdict
-        } else if confirmed {
-            "confirmed"
-        } else if c.score >= 0.6 && margin >= 0.05 {
-            "likely"
+            "unknown-sync"
         } else {
-            "ambiguous"
+            verdict(c.score, margin, rival)
         };
         // a bus of several targets (an SPI with a select per device) comes out as its targets' claims, each its own
         // reading under the bus's verdict
@@ -194,6 +191,9 @@ pub fn choose(mut cands: Vec<Candidate>) -> Vec<Claim> {
                     params: t["params"].as_object().cloned().unwrap_or_default(),
                     evidence: t["evidence"].as_object().cloned().unwrap_or_default(),
                     layers: claim::raw(serde_json::to_string(&t["layers"]).unwrap()),
+                    total: t["score"].as_f64().unwrap_or(c.score),
+                    rival,
+                    bus: true,
                 });
             }
             continue;
@@ -207,9 +207,25 @@ pub fn choose(mut cands: Vec<Candidate>) -> Vec<Claim> {
             params: c.params.clone(),
             evidence: c.evidence.clone(),
             layers: c.layers.clone(),
+            total: c.score,
+            rival,
+            bus: false,
         });
     }
     out
+}
+
+/// The verdict at a score and margin, by the engine's rule (over a rival reading, lower bars).
+pub fn verdict(score: f64, margin: f64, rival: bool) -> &'static str {
+    let confirmed = (score >= 0.85 && margin >= 0.15)
+        || (rival && ((score >= 0.80 && margin >= 0.25) || (score >= 0.60 && margin >= 0.50)));
+    if confirmed {
+        "confirmed"
+    } else if score >= 0.6 && margin >= 0.05 {
+        "likely"
+    } else {
+        "ambiguous"
+    }
 }
 
 pub const GENERIC: [&str; 3] = ["uart", "i2c", "spi"]; // readers of any lines' bits, of no framing of their own
@@ -380,7 +396,7 @@ impl Hints {
 pub fn analyze(view: &View, hints: &serde_json::Value) -> Vec<Claim> {
     let h = Hints::from_json(hints);
     if h.protocols.is_empty() && h.pins.is_empty() && h.exclude.is_empty() {
-        return choose(candidates(view));
+        return upper::stage(choose(candidates(view)), view.rate);
     }
     let kept = View {
         rate: view.rate,
@@ -399,7 +415,7 @@ pub fn analyze(view: &View, hints: &serde_json::Value) -> Vec<Claim> {
         .collect();
     let mut cands = candidates_with(&kept, &bauds);
     cands.retain(|c| h.allows(c));
-    choose(cands)
+    upper::stage(choose(cands), view.rate)
 }
 
 #[cfg(test)]

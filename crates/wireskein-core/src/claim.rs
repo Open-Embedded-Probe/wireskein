@@ -18,6 +18,15 @@ pub struct Claim {
     pub evidence: Map<String, Value>,
     /// the layers as JSON, written once for the claim (a capture's characters are millions: no tree of values)
     pub layers: Box<RawValue>,
+    /// the score before rounding, as the upper stage raises it
+    #[serde(skip)]
+    pub total: f64,
+    /// another reading on some of its lines was in the best set without it (the verdict's rule over a rival)
+    #[serde(skip)]
+    pub rival: bool,
+    /// one target of a bus of several (its bus read above it as a whole, not alone)
+    #[serde(skip)]
+    pub bus: bool,
 }
 
 /// Layers written as JSON text.
