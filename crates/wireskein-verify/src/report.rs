@@ -223,6 +223,16 @@ fn segment_captures(ctx: &mut Ctx, doc: &J, t: &Tree, path: &str, seg: usize) ->
     Ok((out, String::new()))
 }
 
+/// A path as Python's `str(Path(p))` writes it: no trailing separator, no "." parts.
+fn py_path(p: &Path) -> String {
+    let c: std::path::PathBuf = p
+        .components()
+        .filter(|c| !matches!(c, std::path::Component::CurDir))
+        .collect();
+    let s = c.display().to_string();
+    if s.is_empty() { ".".into() } else { s }
+}
+
 /// The report of a run directory.
 pub fn verify(run_dir: &Path) -> Result<J, String> {
     let text = std::fs::read_to_string(run_dir.join("run.json")).map_err(|e| format!("{}: {e}", run_dir.display()))?;
@@ -516,7 +526,7 @@ pub fn verify(run_dir: &Path) -> Result<J, String> {
             d
         })
         .collect();
-    Ok(jd! {"format" => REPORT_FORMAT, "run" => run_dir.display().to_string(),
+    Ok(jd! {"format" => REPORT_FORMAT, "run" => py_path(run_dir),
     "meta" => if doc.has("meta") { doc.get("meta").clone() } else { J::dict() },
     "results" => results.iter().map(Res::to_j).collect::<Vec<_>>(), "summary" => summary,
     "tree_issues" => t.segs[0].issues.clone(), "log" => log})
