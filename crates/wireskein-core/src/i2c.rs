@@ -68,7 +68,9 @@ fn frames(scl: &Channel, sda: &Channel) -> (Vec<Frame>, usize, usize, usize, usi
         let j = ce.partition_point(|&x| x < t).clamp(1, ce.len() - 1);
         let d = (t - ce[j - 1]).abs().min((ce[j] - t).abs());
         let jj = j.clamp(2, ce.len() - 2);
-        let half = (ce[jj] - ce[jj - 1]).min(ce[jj + 1] - ce[jj]).min(ce[jj - 1] - ce[jj - 2]);
+        let half = (ce[jj] - ce[jj - 1])
+            .min(ce[jj + 1] - ce[jj])
+            .min(ce[jj - 1] - ce[jj - 2]);
         (d as f64) < (CLEAR * half as f64).max(1.0)
     };
     while i < ce.len() || j < de.len() {
