@@ -75,6 +75,11 @@ pub fn shortest_first(edges: &[i64], k: i64) -> Vec<i64> {
 
 /// Pulses shorter than `k` dropped: an edge within `k` of the previous kept edge cancels it (`kernels.deglitch`).
 pub fn deglitch(e: &[i64], k: i64) -> Vec<i64> {
+    deglitch_allow(e, k, None)
+}
+
+/// `deglitch`, where `allow[i]` says whether edge i may cancel.
+pub fn deglitch_allow(e: &[i64], k: i64, allow: Option<&[bool]>) -> Vec<i64> {
     if e.len() < 2 {
         return e.to_vec();
     }
@@ -85,7 +90,7 @@ pub fn deglitch(e: &[i64], k: i64) -> Vec<i64> {
             stack.clear();
         }
         match stack.last() {
-            Some(&j) if e[i] - e[j] < k => {
+            Some(&j) if e[i] - e[j] < k && allow.is_none_or(|a| a[i]) => {
                 stack.pop();
                 keep[j] = false;
                 keep[i] = false;

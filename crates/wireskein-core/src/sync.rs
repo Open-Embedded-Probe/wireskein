@@ -9,6 +9,47 @@ pub const DATA_DENSE: f64 = 1.5;
 pub const DATA_DENSE_SPREAD: f64 = 0.9;
 pub const DATA_FASTER: f64 = 0.25;
 pub const DATA_DENSE_PERIODS: usize = 16;
+pub const RING: i64 = 3;
+
+/// The clock's period around a tick: the shorter of the lower quartiles of the 8 intervals of `ticks` before the one
+/// it falls in and the 8 after (`kernels.local_period`). `iv`: the intervals of `ticks`.
+fn local_period(ticks: &[i64], iv: &[f64], at: i64) -> f64 {
+    if iv.is_empty() {
+        return 0.0;
+    }
+    let j = ticks.partition_point(|&t| t <= at) as isize - 1;
+    let q = |a: isize, b: isize| -> f64 {
+        let (a, b) = (a.max(0) as usize, (b.max(0) as usize).min(iv.len()));
+        if a >= b {
+            return f64::INFINITY;
+        }
+        let mut v = iv[a..b].to_vec();
+        v.sort_by(|x, y| x.partial_cmp(y).unwrap());
+        crate::kernels::quantile(&v, 0.25)
+    };
+    let p = q(j - 8, j.max(0)).min(q(j + 1, j + 9));
+    if p.is_finite() {
+        p
+    } else {
+        iv.iter().copied().fold(f64::INFINITY, f64::min)
+    }
+}
+
+/// Pulses shorter than `k` taken out where the clock's period around is 3 k or more (`kernels.deglitch_slow`): a
+/// reflection ringing at the clock's edges, crosstalk from it, where no bit is that short.
+pub fn spikes_out_where_slow(e: &[i64], k: i64, clock_rises: &[i64]) -> Vec<i64> {
+    if e.len() < 2 {
+        return e.to_vec();
+    }
+    let iv: Vec<f64> = clock_rises.windows(2).map(|w| (w[1] - w[0]) as f64).collect();
+    let mut allow = vec![false; e.len()];
+    for i in 1..e.len() {
+        if e[i] - e[i - 1] < k {
+            allow[i] = local_period(clock_rises, &iv, e[i]) >= 3.0 * k as f64;
+        }
+    }
+    crate::kernels::deglitch_allow(e, k, Some(&allow))
+}
 
 /// The edges of a clock after which it is at `level`.
 pub fn edges_to(ch: &Channel, level: u8) -> Vec<i64> {
@@ -59,6 +100,9 @@ pub fn phase_concentration(x: &[i64], r: &[i64]) -> f64 {
 pub fn keeping(line: &[i64], clock: &Channel) -> f64 {
     let rise = edges_to(clock, 1);
     let fall = edges_to(clock, 0);
+    // as the line settles: ringing and crosstalk at the clock's edges taken out where the clock is slow
+    let settled = spikes_out_where_slow(&spikes_out_where_slow(line, RING, &rise), 2, &rise);
+    let line: &[i64] = &settled;
     if rise.len() < 3 || line.len() < 2 {
         return 0.0;
     }
