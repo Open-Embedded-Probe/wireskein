@@ -427,7 +427,178 @@ pub fn candidates(view: &View) -> Vec<Candidate> {
             }
         }
     }
-    best.into_values().collect()
+    let mut out: Vec<Candidate> = best.into_values().collect();
+    out.extend(shared(view, &out));
+    out
+}
+
+/// A target of a shared bus: its reading, its selections' spans, its score with the others' transfers not counted.
+type Target<'a> = (&'a Candidate, Vec<(i64, i64)>, f64);
+
+pub const SHARED_COVER: f64 = 0.95; // the targets' selections together hold this share of the clock's bursts or more
+pub const SHARED_SNUG: f64 = 0.5; // each target's select snug round its bursts this share at least
+pub const SHARED_MAX: usize = 8; // select lines on one clock tried in sets for one bus of targets
+
+/// One clocked bus with a target on each select line (Python's `staged.shared_buses`): CLK and the data lines
+/// shared, each select's own reading counting the other targets' transfers against it. Selections that never
+/// overlap and hold the clock's bursts between them are the bus: one candidate of all its lines, its targets'
+/// readings in its layers (`targets`), each a claim of its own when the bus is chosen.
+fn shared(view: &View, cands: &[Candidate]) -> Vec<Candidate> {
+    let mut by: std::collections::BTreeMap<(String, Vec<String>), Vec<&Candidate>> = Default::default();
+    for c in cands {
+        let Some(cs) = c.roles.get("cs") else { continue };
+        let _ = cs;
+        let data: Vec<String> = c
+            .roles
+            .iter()
+            .filter(|(k, _)| k.starts_with("data"))
+            .map(|(_, v)| v.clone())
+            .collect();
+        by.entry((c.roles["clk"].clone(), data)).or_default().push(c);
+    }
+    let mut out = vec![];
+    for ((clk, data), per) in by {
+        // each select line once (its best reading)
+        let mut by_cs: std::collections::BTreeMap<&str, &Candidate> = Default::default();
+        for c in per {
+            let cs = c.roles["cs"].as_str();
+            if by_cs.get(cs).is_none_or(|b| c.score > b.score) {
+                by_cs.insert(cs, c);
+            }
+        }
+        if by_cs.len() < 2 {
+            continue;
+        }
+        let Some(ch) = view.channel(&clk) else { continue };
+        let ce = deglitch(ch.edges, 2);
+        let mid: Vec<i64> = crate::sync::bursts(&ce)
+            .iter()
+            .filter(|(a, b)| b > a)
+            .map(|(a, b)| (a + b) / 2)
+            .collect();
+        if mid.is_empty() {
+            continue;
+        }
+        // a target's score with the other targets' transfers not counted against it (its select framing them)
+        let adjusted = |c: &Candidate| {
+            let f = c.evidence.get("select_frames").and_then(|x| x.as_f64()).unwrap_or(1.0);
+            (c.score / (f * f).max(1e-3)).min(0.99)
+        };
+        let spans = |c: &Candidate| -> Vec<(i64, i64)> {
+            let v: Value = serde_json::from_str(c.layers.get()).unwrap_or(Value::Null);
+            let mut s: Vec<(i64, i64)> = v["transfers"]
+                .as_array()
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|t| Some((t["s"].as_i64()?, t["e"].as_i64()?)))
+                        .collect()
+                })
+                .unwrap_or_default();
+            s.sort();
+            s
+        };
+        let mut list: Vec<Target> = by_cs
+            .values()
+            .map(|&c| (c, spans(c), adjusted(c)))
+            .filter(|x| !x.1.is_empty())
+            .collect();
+        list.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap());
+        list.truncate(SHARED_MAX);
+        let holds = |sp: &[(i64, i64)]| -> Vec<bool> {
+            mid.iter()
+                .map(|&m| {
+                    let k = sp.partition_point(|&(a, _)| a <= m);
+                    k > 0 && m <= sp[k - 1].1
+                })
+                .collect()
+        };
+        let held_by: Vec<Vec<bool>> = list.iter().map(|x| holds(&x.1)).collect();
+        let apart =
+            |a: &[(i64, i64)], b: &[(i64, i64)]| !b.iter().any(|&(s, e)| a.iter().any(|&(x, y)| x <= e && y >= s));
+        // every set of targets whose selections never overlap: the one holding the most bursts, then scoring best
+        let mut best: ((usize, f64), Vec<usize>) = ((0, -1.0), vec![]);
+        let n = list.len();
+        for mask in 1u32..(1u32 << n) {
+            let set: Vec<usize> = (0..n).filter(|&i| mask & (1 << i) != 0).collect();
+            if set.len() < 2 {
+                continue;
+            }
+            if set
+                .iter()
+                .enumerate()
+                .any(|(a, &i)| set[a + 1..].iter().any(|&j| !apart(&list[i].1, &list[j].1)))
+            {
+                continue;
+            }
+            let held = (0..mid.len()).filter(|&k| set.iter().any(|&i| held_by[i][k])).count();
+            let sum: f64 = set.iter().map(|&i| list[i].2).sum();
+            if (held, sum) > best.0 {
+                best = ((held, sum), set);
+            }
+        }
+        if best.1.len() < 2 {
+            continue;
+        }
+        let cover = best.0.0 as f64 / mid.len() as f64;
+        let snug = best.1.iter().all(|&i| {
+            list[i]
+                .0
+                .evidence
+                .get("select_snug")
+                .and_then(|x| x.as_f64())
+                .unwrap_or(0.0)
+                >= SHARED_SNUG
+        });
+        if cover < SHARED_COVER || !snug {
+            continue;
+        }
+        let w: Vec<f64> = best
+            .1
+            .iter()
+            .map(|&i| {
+                list[i]
+                    .0
+                    .evidence
+                    .get("windows")
+                    .and_then(|x| x.as_f64())
+                    .unwrap_or(1.0)
+                    .max(1.0)
+            })
+            .collect();
+        let total = best.1.iter().zip(&w).map(|(&i, w)| w * list[i].2).sum::<f64>() / w.iter().sum::<f64>() * cover;
+        let mut roles: std::collections::BTreeMap<String, String> = Default::default();
+        roles.insert("clk".into(), clk.clone());
+        for (i, d) in data.iter().enumerate() {
+            roles.insert(format!("data{i}"), d.clone());
+        }
+        let mut targets = vec![];
+        for (k, &i) in best.1.iter().enumerate() {
+            let c = list[i].0;
+            roles.insert(
+                if k == 0 { "cs".to_string() } else { format!("cs{k}") },
+                c.roles["cs"].clone(),
+            );
+            let lay: Value = serde_json::from_str(c.layers.get()).unwrap_or(Value::Null);
+            targets.push(
+                json!({"roles": c.roles, "score": list[i].2, "params": c.params, "evidence": c.evidence,
+                                "layers": lay}),
+            );
+        }
+        let mut params = Map::new();
+        params.insert("bus".into(), json!(format!("spi:{clk}")));
+        params.insert("targets".into(), json!(targets.len()));
+        params.insert("cover".into(), json!(cover));
+        out.push(Candidate {
+            protocol: "spi".into(),
+            roles,
+            score: total,
+            alt: None,
+            params,
+            evidence: Map::new(),
+            layers: crate::claim::raw(serde_json::to_string(&json!({ "targets": targets })).unwrap()),
+        });
+    }
+    out
 }
 
 #[cfg(test)]

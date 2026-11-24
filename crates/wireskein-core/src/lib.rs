@@ -173,6 +173,26 @@ pub fn choose(mut cands: Vec<Candidate>) -> Vec<Claim> {
         } else {
             "ambiguous"
         };
+        // a bus of several targets (an SPI with a select per device) comes out as its targets' claims, each its own
+        // reading under the bus's verdict
+        if c.params.contains_key("targets")
+            && let Ok(v) = serde_json::from_str::<serde_json::Value>(c.layers.get())
+            && let Some(ts) = v["targets"].as_array()
+        {
+            for t in ts {
+                out.push(Claim {
+                    protocol: c.protocol.clone(),
+                    roles: serde_json::from_value(t["roles"].clone()).unwrap_or_default(),
+                    verdict: verdict.into(),
+                    score: (t["score"].as_f64().unwrap_or(c.score) * 1e4).round() / 1e4,
+                    margin: (margin * 1e4).round() / 1e4,
+                    params: t["params"].as_object().cloned().unwrap_or_default(),
+                    evidence: t["evidence"].as_object().cloned().unwrap_or_default(),
+                    layers: claim::raw(serde_json::to_string(&t["layers"]).unwrap()),
+                });
+            }
+            continue;
+        }
         out.push(Claim {
             protocol: c.protocol.clone(),
             roles: c.roles.clone(),
