@@ -7,6 +7,25 @@ on:
   pull_request:
 
 jobs:
+  rust:
+    # the Rust core (crates/, bench/notes/2026-11-24-rust-plan.ja.md): format, lints, its tests, the oldest Rust promised
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: fmt / clippy / test
+        run: |
+          rustup component add rustfmt clippy
+          cargo fmt --all --check
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          cargo test -p wireskein-core --locked
+
+      - name: Build with the oldest Rust (rust-version 1.88)
+        run: |
+          rustup toolchain install 1.88 --profile minimal
+          cargo +1.88 check --workspace --locked
+
   test:
     runs-on: ubuntu-latest
     strategy:

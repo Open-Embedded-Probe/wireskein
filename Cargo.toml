@@ -1,0 +1,21 @@
+# WireSkein's core in Rust (bench/notes/2026-11-24-rust-plan.ja.md): built up beside the Python one a part at a time,
+# each part compared on the bench (equal or better), and made the default only then. Until a part is, nothing in the
+# product calls it: the Python package stays pure Python.
+#   wireskein-core: the core in plain Rust (no Python), to be shared with a native app and the web (WASM)
+#   wireskein-py:   the Python module wireskein_core (PyO3, abi3 for CPython 3.11 and later), a package of its own for
+#                   now (crates/wireskein-py/pyproject.toml), used by the bench
+[workspace]
+resolver = "3"
+members = ["crates/wireskein-core", "crates/wireskein-py"]
+
+[workspace.package]
+version = "0.0.35"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT"
+repository = "https://github.com/Open-Embedded-Probe/wireskein"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

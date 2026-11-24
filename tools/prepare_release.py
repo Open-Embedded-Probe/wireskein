@@ -9,6 +9,8 @@ ROOT = Path(__file__).resolve().parents[1]
 PYPROJECT = ROOT / "pyproject.toml"
 INIT_FILE = ROOT / "src" / "wireskein" / "__init__.py"
 CHANGELOG = ROOT / "CHANGELOG.md"
+CARGO = ROOT / "Cargo.toml"
+CARGO_LOCK = ROOT / "Cargo.lock"
 
 
 def update_pyproject(version: str) -> None:
@@ -22,6 +24,20 @@ def update_pyproject(version: str) -> None:
     if not re.search(r'(?m)^version = "[^"]+"$', text):
         raise RuntimeError("Failed to update version in pyproject.toml")
     PYPROJECT.write_text(updated, encoding="utf-8")
+
+
+def update_cargo(version: str) -> None:
+    """The Rust core's crates share wireskein's version: the workspace's, and the crates' lines in Cargo.lock."""
+    text = CARGO.read_text(encoding="utf-8")
+    new, n = re.subn(r'(?ms)^(\[workspace\.package\]\s*\nversion = )"[^"]+"', rf'\1"{version}"', text)
+    if n != 1:
+        raise RuntimeError("Failed to update [workspace.package] version in Cargo.toml")
+    CARGO.write_text(new, encoding="utf-8")
+    lock = CARGO_LOCK.read_text(encoding="utf-8")
+    lock, n = re.subn(r'(?m)^(name = "wireskein-(?:core|py)"\nversion = )"[^"]+"', rf'\1"{version}"', lock)
+    if n != 2:
+        raise RuntimeError("Failed to update the crates' versions in Cargo.lock")
+    CARGO_LOCK.write_text(lock, encoding="utf-8")
 
 
 def update_init(version: str) -> None:
@@ -105,6 +121,7 @@ def main() -> None:
         raise SystemExit("Version must be X.Y.Z or X.Y.Z{a|b|rc}N")
 
     update_pyproject(version)
+    update_cargo(version)
     update_init(version)
     update_changelog(version)
     if args.github_output:

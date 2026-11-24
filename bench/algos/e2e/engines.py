@@ -12,7 +12,8 @@ from wsbench import algorithm
                      "nulled": {"name": "nulled"}, "open": {"name": "open"},
                      "views_upper": {"name": "views_upper"},
                      **{f"{k}_open": {"name": f"{k}_open"} for k in ("light", "declarative", "synth", "learned")},
-                     "cascade": {"name": "cascade"}, "light_surveyed": {"name": "light_surveyed"}})
+                     "cascade": {"name": "cascade"}, "light_surveyed": {"name": "light_surveyed"},
+                     "rust": {"name": "rust"}})
 def engine(cap, name):
     import engines
     return engines.ENGINES[name](cap)

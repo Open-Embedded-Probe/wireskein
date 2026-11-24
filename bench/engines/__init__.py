@@ -21,6 +21,7 @@ engine is (bench/algos/e2e/engines.py registers them as trials).
 - light_main_<protocol>: light with WireSkein's own engine as its reader of that protocol (the candidates light's)
 - cascade:  light_open first, WireSkein's own engine where it leaves an active line without a confirmed claim
 - views_upper: the views engine's claims through WireSkein's upper stage (wireskein._upper), as the main engine's
+- rust:     WireSkein's core in Rust (crates/), built up a part at a time (rust.py; needs wireskein_core)
 - open:     the views engine with shapes that explain a line without naming a protocol (a pulse code) among the
             candidates: they take lines and are not shown (shapes.py)
 """
@@ -261,7 +262,12 @@ def _synth_gated(cap):
     return importlib.import_module(__name__ + ".synth").engine(cap, gate_prob=0.3)
 
 
-ENGINES = {"light": light, "views": views, "declarative": _declarative, "learned": _learned, "synth": _synth,
+def _rust(cap):
+    import importlib
+    return importlib.import_module(__name__ + ".rust").engine(cap)
+
+
+ENGINES = {"light": light, "rust": _rust, "views": views, "declarative": _declarative, "learned": _learned, "synth": _synth,
            "synth_gated": _synth_gated,
            "nulled": _nulled, "open": _open, "views_upper": _views_upper, "open2": _open2,
            "cascade": cascade, "light_surveyed": light_surveyed, "light_main_i2c": light_with("i2c"),

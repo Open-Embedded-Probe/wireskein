@@ -1,0 +1,91 @@
+# Wheels of the Rust core for Python (crates/wireskein-py: the package wireskein-core, module wireskein_core), abi3
+# for CPython 3.11 and later, one per target, and its sdist.
+#
+# Run by hand only (bench/notes/2026-11-24-rust-plan.ja.md, R0): the wheels are kept as the run's artifacts and
+# nothing is published. They become part of wireskein's release when a part of the core is made the default. The
+# targets are those of ch32rv's release on GitHub's hosted runners; the x86_64 macOS wheel is cross-built on Apple
+# Silicon and not run here.
+name: Wheels
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  wheels:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # smoke: the wheel runs on this runner, so it is installed and called
+          - { os: ubuntu-24.04,     target: x86_64-unknown-linux-gnu,  manylinux: auto, smoke: true }
+          - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, manylinux: auto, smoke: true }
+          - { os: macos-15,         target: aarch64-apple-darwin,      smoke: true }
+          - { os: macos-15,         target: x86_64-apple-darwin }   # cross-built on Apple Silicon: not run here
+          - { os: windows-latest,   target: x86_64-pc-windows-msvc,    smoke: true }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"   # the oldest the abi3 wheel serves
+
+      - name: Build the wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          working-directory: crates/wireskein-py
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.manylinux }}
+          args: --release --locked --out dist
+
+      - name: Smoke test (install, import, call)
+        if: matrix.smoke
+        shell: bash
+        run: |
+          python -m venv .smoke
+          if [ "$RUNNER_OS" = Windows ]; then PY=.smoke/Scripts/python; else PY=.smoke/bin/python; fi
+          "$PY" -m pip install --upgrade pip
+          "$PY" -m pip install crates/wireskein-py/dist/*.whl
+          cd "$RUNNER_TEMP"
+          "$PY" -c "import numpy as np, wireskein_core as c; print(c.__version__, c.__file__); assert c.analyze(1e6, 100, [('A', 1, np.array([10, 20], np.int64))]) == '[]'"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wheel-${{ matrix.target }}
+          path: crates/wireskein-py/dist/*.whl
+          if-no-files-found: error
+
+  sdist:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Build the sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          working-directory: crates/wireskein-py
+          command: sdist
+          args: --out dist
+
+      # the sdist builds the Rust core itself (Rust is on the runner)
+      - name: Build and import from the sdist
+        run: |
+          python -m venv .smoke
+          .smoke/bin/python -m pip install crates/wireskein-py/dist/*.tar.gz
+          cd "$RUNNER_TEMP"
+          "$GITHUB_WORKSPACE/.smoke/bin/python" -c "import wireskein_core as c; print(c.__version__)"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sdist
+          path: crates/wireskein-py/dist/*.tar.gz
+          if-no-files-found: error

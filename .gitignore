@@ -17,3 +17,4 @@ src/wireskein/web/
 
 # the bench: every item of a run (the ledger, bench/results/ledger.jsonl, is in git)
 bench/results/runs/
+target/

@@ -24,7 +24,7 @@ on:
         description: "Algorithms (wireskein alone runs no gate; engine: every engine of bench/engines; (status ...): every algorithm of those statuses; (other): those in other)"
         type: choice
         options: ["wireskein", "engine", "wireskein engine", "engine.light", "engine.views", "engine.declarative",
-                  "engine.learned", "engine.synth", "engine.open", "engine.light_open engine.declarative_open engine.synth_open engine.learned_open",
+                  "engine.learned", "engine.synth", "engine.open", "engine.rust", "engine.light_open engine.declarative_open engine.synth_open engine.learned_open",
                   "(status main,trial)", "(status main,trial,retired)", "(other)"]
         default: "wireskein"
       other:
@@ -104,17 +104,20 @@ jobs:
           elif [ "$ALGOS" = "(other)" ]; then ALGOS="$OTHER"; fi
           STATUS="main,trial"
           case "$ALGOS" in "(status "*) STATUS="${ALGOS#(status }"; STATUS="${STATUS%)}"; ALGOS="";; esac
+          # the Rust core (crates/) for the engine rust, built where an engine may run (bench/engines/rust.py)
+          RUSTW=()
+          case "$ALGOS" in ""|*engine*|*rust*) RUSTW=(--with ./crates/wireskein-py);; esac
           args=()
           for s in $STAGES; do args+=(--stage "$s"); done
           for a in $ALGOS; do args+=(--algo "$a"); done
           # the gate leaves out only algorithms other than a stage's main one: a run of main ones alone (e2e of
           # wireskein, the check of a commit on main) needs no cost run, which took 22 minutes before the shards
           rc=0
-          uv run --python 3.13 --with-requirements bench/requirements.txt python bench/run.py "${args[@]}" \
+          uv run --python 3.13 "${RUSTW[@]}" --with-requirements bench/requirements.txt python bench/run.py "${args[@]}" \
             --suite scale --status "$STATUS" --has-trials || rc=$?
           if [ "$rc" -gt 1 ]; then exit "$rc"; fi
           if [ "$rc" -eq 0 ]; then
-            uv run --python 3.13 --with-requirements bench/requirements.txt python bench/run.py "${args[@]}" \
+            uv run --python 3.13 "${RUSTW[@]}" --with-requirements bench/requirements.txt python bench/run.py "${args[@]}" \
               --suite scale --status "$STATUS" --timeout 120 --note "gate" -j "$(nproc)"
             uv run --python 3.13 --with-requirements bench/requirements.txt python bench/gate.py --out skip.json
           else
@@ -166,13 +169,16 @@ jobs:
           elif [ "$ALGOS" = "(other)" ]; then ALGOS="$OTHER"; fi
           STATUS="main,trial"
           case "$ALGOS" in "(status "*) STATUS="${ALGOS#(status }"; STATUS="${STATUS%)}"; ALGOS="";; esac
+          # the Rust core (crates/) for the engine rust, built where an engine may run (bench/engines/rust.py)
+          RUSTW=()
+          case "$ALGOS" in ""|*engine*|*rust*) RUSTW=(--with ./crates/wireskein-py);; esac
           args=()
           for s in $STAGES; do args+=(--stage "$s"); done
           for s in $SUITES; do args+=(--suite "$s"); done
           for a in $ALGOS; do args+=(--algo "$a"); done
           if [ "$MEMORY" = "true" ]; then args+=(--memory); fi
           if [ -n "$SKIP" ]; then printf '%s' "$SKIP" > "$RUNNER_TEMP/skip.json"; args+=(--skip-from "$RUNNER_TEMP/skip.json"); fi
-          uv run --python 3.13 --with-requirements bench/requirements.txt python bench/run.py "${args[@]}" \
+          uv run --python 3.13 "${RUSTW[@]}" --with-requirements bench/requirements.txt python bench/run.py "${args[@]}" \
             --status "$STATUS" --note "$NOTE" --shard "$SHARD/$N" --run-id "$RUN_ID" --timeout "$TIMEOUT" -j "$(nproc)"
 
       - name: Keep the shard's items
