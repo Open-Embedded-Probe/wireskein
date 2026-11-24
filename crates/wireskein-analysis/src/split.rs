@@ -497,193 +497,6 @@ pub(crate) fn view_of<'a>(lines: &'a [Line], rate: f64, n: i64) -> Result<View<'
     )
 }
 
-/// A bus the roles name: its protocol, its pins (role -> line), the params carried (baud, mode), the edge sampled.
-#[derive(Debug, Clone)]
-pub struct Bus {
-    pub protocol: String,
-    pub pins: std::collections::BTreeMap<String, String>,
-    pub params: Map<String, Value>,
-    pub edge: Option<String>,
-}
-
-/// A bus read in one piece (decode's `_bus`): its result (the final layer and the lower one), its fit, what it
-/// did not read.
-struct BusRead {
-    decoded: bool,
-    result: Map<String, Value>,
-    fit: Option<f64>,
-    uninterpreted: Vec<Value>,
-}
-
-/// The hints a piece is read with: the buses' pins, roles and params, only their protocols, the other pins left out.
-fn hints_of(buses: &[&Bus], names: &[String], strict: bool) -> Value {
-    let mut pins = Map::new();
-    for b in buses {
-        for (role, pin) in &b.pins {
-            let mut h = json!({"protocol": b.protocol, "role": role});
-            for (k, v) in &b.params {
-                h[k] = v.clone();
-            }
-            pins.insert(pin.clone(), h);
-        }
-    }
-    let mut out = json!({"pins": pins,
-                         "buses": buses.iter().map(|b| json!({"protocol": b.protocol, "pins": b.pins})).collect::<Vec<_>>()});
-    if strict && !buses.is_empty() {
-        let protos: std::collections::BTreeSet<&str> = buses.iter().map(|b| b.protocol.as_str()).collect();
-        out["protocols"] = json!(protos);
-        let named: std::collections::BTreeSet<&String> = buses.iter().flat_map(|b| b.pins.values()).collect();
-        out["exclude_pins"] = json!(names.iter().filter(|n| !named.contains(n)).collect::<Vec<_>>());
-    }
-    out
-}
-
-/// The buses in sets that name no pin under two protocols (each read on its own).
-fn apart(buses: &[Bus]) -> Vec<Vec<usize>> {
-    let mut groups: Vec<Vec<usize>> = vec![];
-    'b: for (i, b) in buses.iter().enumerate() {
-        for g in groups.iter_mut() {
-            let owner: std::collections::BTreeMap<&str, &str> = g
-                .iter()
-                .flat_map(|&j| {
-                    buses[j]
-                        .pins
-                        .values()
-                        .map(move |p| (p.as_str(), buses[j].protocol.as_str()))
-                })
-                .collect();
-            if b.pins
-                .values()
-                .all(|p| owner.get(p.as_str()).is_none_or(|x| *x == b.protocol))
-            {
-                g.push(i);
-                continue 'b;
-            }
-        }
-        groups.push(vec![i]);
-    }
-    groups
-}
-
-/// The final layer of a protocol's result (Python's `export.FINAL`).
-fn finals(protocol: &str) -> &'static [&'static str] {
-    crate::final_layers(protocol)
-}
-
-/// The buses read in one piece's lines.
-fn read_buses(lines: &[Line], rate: f64, n: i64, buses: &[Bus], strict: bool) -> Result<Vec<BusRead>, String> {
-    let view = view_of(lines, rate, n)?;
-    let names: Vec<String> = lines.iter().map(|l| l.name.clone()).collect();
-    let mut out: Vec<Option<BusRead>> = (0..buses.len()).map(|_| None).collect();
-    for g in apart(buses) {
-        let bs: Vec<&Bus> = g.iter().map(|&i| &buses[i]).collect();
-        let hints = hints_of(&bs, &names, strict);
-        let cands = wireskein_core::readings(&view, &hints);
-        let (claims, _) = wireskein_core::upper::stage_with(wireskein_core::choose(cands.clone()), rate);
-        for &i in &g {
-            let b = &buses[i];
-            let pins: std::collections::BTreeSet<&String> = b.pins.values().collect();
-            let mut cs: Vec<&wireskein_core::Candidate> = cands
-                .iter()
-                .filter(|c| {
-                    c.protocol == b.protocol && c.roles.values().collect::<std::collections::BTreeSet<_>>() == pins
-                })
-                .collect();
-            if let Some(e) = &b.edge {
-                let same: Vec<&wireskein_core::Candidate> = cs
-                    .iter()
-                    .copied()
-                    .filter(|c| c.params.get("sample_edge") == Some(&json!(e)))
-                    .collect();
-                if !same.is_empty() {
-                    cs = same;
-                }
-            }
-            let Some(best) = cs.into_iter().max_by(|a, b| a.score.partial_cmp(&b.score).unwrap()) else {
-                out[i] = Some(BusRead {
-                    decoded: false,
-                    result: Map::new(),
-                    fit: None,
-                    uninterpreted: unread_of(b, lines, &Map::new(), rate, n),
-                });
-                continue;
-            };
-            // its claim (the upper stage's layers and score), else the reading on its own through the upper stage
-            let claim = claims
-                .iter()
-                .find(|c| c.protocol == best.protocol && c.roles == best.roles && c.bus.is_none())
-                .cloned()
-                .or_else(|| {
-                    wireskein_core::upper::stage_with(wireskein_core::choose(vec![best.clone()]), rate)
-                        .0
-                        .into_iter()
-                        .next()
-                });
-            let (mut lay, fit): (Map<String, Value>, f64) = match &claim {
-                Some(c) => (serde_json::from_str(c.layers.get()).unwrap_or_default(), c.total),
-                None => (serde_json::from_str(best.layers.get()).unwrap_or_default(), best.score),
-            };
-            // each frame given its clock (decode's frame_clocks)
-            if let Some(clk) = b.pins.get("clk").and_then(|p| lines.iter().find(|l| &l.name == p))
-                && let Some(frames) = report::frame_items(&mut lay, &b.protocol)
-            {
-                report::frame_clocks(frames, clk, rate);
-            }
-            let mut result = Map::new();
-            if let Some(k) = finals(&b.protocol)
-                .iter()
-                .find(|k| lay.get(**k).is_some_and(crate::nonempty))
-            {
-                result.insert(k.to_string(), lay[*k].clone());
-            }
-            let low = report::lower(&b.protocol);
-            if let Some(v) = lay.get(low)
-                && !result.contains_key(low)
-            {
-                result.insert(low.into(), v.clone());
-            }
-            out[i] = Some(BusRead {
-                decoded: true,
-                uninterpreted: unread_of(b, lines, &lay, rate, n),
-                result,
-                fit: Some(fit),
-            });
-        }
-    }
-    Ok(out.into_iter().map(|x| x.unwrap()).collect())
-}
-
-fn unread_of(b: &Bus, lines: &[Line], lay: &Map<String, Value>, rate: f64, n: i64) -> Vec<Value> {
-    let ls: Vec<&Line> = b
-        .pins
-        .values()
-        .filter_map(|p| lines.iter().find(|l| &l.name == p))
-        .collect();
-    let sel = (b.protocol == "spi")
-        .then(|| b.pins.get("cs"))
-        .flatten()
-        .and_then(|p| lines.iter().find(|l| &l.name == p));
-    // a clocked bus: 16 of its bit times (the median interval of its clock's sampling edges); else 1 ms
-    let clk = b.pins.get("clk").and_then(|p| lines.iter().find(|l| &l.name == p));
-    let idle = match clk {
-        Some(c) if c.edges.len() > 2 => {
-            let want = if b.edge.as_deref() == Some("fall") { 0 } else { 1 };
-            let t: Vec<i64> = (0..c.edges.len())
-                .filter(|&i| c.initial ^ (((i + 1) & 1) as u8) == want)
-                .map(|i| c.edges[i])
-                .collect();
-            let mut d: Vec<f64> = t.windows(2).map(|w| (w[1] - w[0]) as f64).collect();
-            if d.is_empty() {
-                (report::IDLE_S * rate).round_ties_even() as i64
-            } else {
-                (report::IDLE_BITS as f64 * report::median(&mut d)) as i64
-            }
-        }
-        _ => (report::IDLE_S * rate).round_ties_even() as i64,
-    };
-    report::unread(&b.protocol, &ls, lay, idle, sel, n, &mut vec![])
-}
-
 /// Items shifted to the part's ticks, each kept by the piece whose own ticks it starts in.
 pub(crate) fn join_items(per: &[(&Piece, &Value)]) -> Vec<Value> {
     let mut out = vec![];
@@ -790,23 +603,28 @@ pub(crate) fn unread_summary(items: &[Value]) -> Value {
     d
 }
 
-const DOUBT: f64 = 0.3;
-const REANALYSES: i64 = 16;
-
 /// What a part read in pieces gives: its whole lines when it is one piece (read as usual), else its claims and split.
 pub enum Split {
     Whole(Vec<Line>),
     Pieces(Vec<Value>, Value),
 }
 
-/// A part read from a source in pieces (Python's `decode._analyze_split`).
+/// A part read from a source in pieces (Python's `decode._analyze_split`): the claims (confirmed or likely) of the
+/// first piece that holds any taken as the buses' roles, every piece decoded with them as decode reads a spec's
+/// buses (`decode::piece`), the pieces joined (`decode::join_part`), each claim given its bus's joined result.
+/// items: the items written to this file as they are read (with its name in the document); head: the part's (its
+/// number); gf: the probe's glitch filter.
+#[allow(clippy::too_many_arguments)]
 pub fn analyze(
     src: &mut dyn wireskein_io::stream::Source,
     rate: f64,
     hints: &Value,
     o: &Options,
-    mode: &str,
+    items: Option<(&std::path::Path, &str)>,
+    head: &Map<String, Value>,
+    gf: Option<&Value>,
 ) -> Result<Split, String> {
+    use crate::decode;
     let n = src.n();
     let mut sp = Splitter::new(src, o)?;
     let Some(first) = sp.next() else {
@@ -815,7 +633,7 @@ pub fn analyze(
     if first.0.cut == "end" && first.0.a == 0 {
         return Ok(Split::Whole(first.1));
     }
-    // the roles from the first piece that holds any (up to roles_from pieces)
+    // the roles from the first piece that holds any (up to roles_from pieces: the start may be before the bus)
     let mut tried = vec![first];
     let (mut keep, mut first_claims);
     loop {
@@ -824,7 +642,7 @@ pub fn analyze(
         let (claims, _) = wireskein_core::analyze_full(&view, hints);
         let docs: Vec<Value> = claims
             .iter()
-            .map(|c| crate::claim_doc(c, mode, w, rate, p.b - p.a, None, false))
+            .map(|c| crate::claim_doc(c, "final", w, rate, p.b - p.a, None, false))
             .collect();
         keep = docs
             .iter()
@@ -841,175 +659,76 @@ pub fn analyze(
         }
     }
     let k0 = tried.len() - 1;
-    let buses: Vec<Bus> = keep
+    let roles_piece = (tried[k0].0.s, tried[k0].0.e);
+    let buses: Vec<Value> = keep
         .iter()
-        .map(|c| Bus {
-            protocol: c["protocol"].as_str().unwrap().into(),
-            pins: c["roles"]
-                .as_object()
-                .unwrap()
-                .iter()
-                .map(|(k, v)| (k.clone(), v.as_str().unwrap().to_string()))
-                .collect(),
-            params: ["baud", "mode"]
+        .map(|c| {
+            let params: Map<String, Value> = ["baud", "mode"]
                 .iter()
                 .filter_map(|k| c["params"].get(*k).map(|v| (k.to_string(), v.clone())))
-                .collect(),
-            edge: c["params"]["sample_edge"]
-                .as_str()
-                .filter(|e| *e == "rise" || *e == "fall")
-                .map(String::from),
+                .collect();
+            json!({"protocol": c["protocol"], "pins": c["roles"], "params": params})
         })
         .collect();
-    // every piece read with the roles
-    let whole = |p: &Piece| p.cut == "end" && p.a == 0;
-    let mut reads: Vec<Vec<BusRead>> = vec![];
-    let mut doubtful = vec![];
-    let mut ps: Vec<Piece> = vec![];
-    let roles_piece = (tried[k0].0.s, tried[k0].0.e);
+    let spec = decode::Spec::of(&json!({"buses": buses, "depth": "protocol"}))?;
+    // every piece on the edge the roles' piece read each bus on
+    let edges: std::collections::BTreeMap<usize, String> = keep
+        .iter()
+        .enumerate()
+        .filter_map(|(j, c)| {
+            c["params"]["sample_edge"]
+                .as_str()
+                .filter(|e| *e == "rise" || *e == "fall")
+                .map(|e| (j, e.to_string()))
+        })
+        .collect();
+    let part_no = head.get("part").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+    let mut sink = match items {
+        Some((f, _)) => Some(decode::Items::new(f, &spec, part_no)?),
+        None => None,
+    };
+    let mut outs = vec![];
     for (p, w) in tried.into_iter().chain(&mut sp) {
-        let r = read_buses(&w, rate, p.b - p.a, &buses, !whole(&p))?;
-        // why the roles read a piece badly
-        let mut why = vec![];
-        for (j, (b, br)) in buses.iter().zip(&r).enumerate() {
-            let owned: usize = br
-                .result
-                .values()
-                .map(|v| match v {
-                    Value::Array(a) => a
-                        .iter()
-                        .filter(|x| {
-                            x.get("s")
-                                .and_then(|s| s.as_i64())
-                                .is_some_and(|s| p.s <= s + p.a && s + p.a < p.e)
-                                && x.get("ok") != Some(&json!(false))
-                        })
-                        .count(),
-                    Value::Object(o) => o.get("s").and_then(|s| s.as_array()).map_or(0, |a| {
-                        a.iter()
-                            .filter_map(|s| s.as_i64())
-                            .filter(|s| p.s <= s + p.a && s + p.a < p.e)
-                            .count()
-                    }),
-                    _ => 0,
-                })
-                .sum();
-            if !br.decoded {
-                why.push(format!("bus {j} ({}) not decoded", b.protocol));
-            } else if br.fit.unwrap_or(1.0) < DOUBT {
-                why.push(format!(
-                    "bus {j} ({}) fits {}",
-                    b.protocol,
-                    (br.fit.unwrap() * 1e4).round() / 1e4
-                ));
-            } else if owned == 0 {
-                why.push(format!(
-                    "bus {j} ({}) read nothing well in this piece's own ticks",
-                    b.protocol
-                ));
-            }
+        let mut d = decode::piece(&p, &w, rate, &spec, head, o.reanalyze, &edges, n, gf)?;
+        if let Some(s) = sink.as_mut() {
+            s.take(&p, &mut d)?;
         }
-        if !why.is_empty() && p.edges > 0 {
-            let mut d = json!({"s": p.s, "e": p.e, "seconds": [p.s as f64 / rate, p.e as f64 / rate],
-                               "why": why.join("; ")});
-            let sampled = (0..REANALYSES).any(|k| {
-                let t = ((k as f64 + 0.5) * n as f64 / REANALYSES as f64) as i64;
-                p.s <= t && t < p.e
-            });
-            if o.reanalyze && !whole(&p) && sampled {
-                let view = view_of(&w, rate, p.b - p.a)?;
-                let (claims, _) = wireskein_core::analyze_full(&view, &Value::Null);
-                let holds: Vec<Value> = claims
-                    .iter()
-                    .filter(|c| c.verdict == "confirmed" || c.verdict == "likely")
-                    .map(|c| {
-                        let mut h =
-                            json!({"protocol": c.protocol, "roles": c.roles, "verdict": c.verdict, "score": c.score});
-                        if !c.params.is_empty() {
-                            h["params"] = Value::Object(c.params.clone());
-                        }
-                        h
-                    })
-                    .collect();
-                d["holds"] = json!(holds);
-            }
-            doubtful.push(d);
-        }
-        reads.push(r);
-        ps.push(p);
+        outs.push((p, d));
+    }
+    if let Some(s) = sink.as_mut() {
+        s.close()?;
     }
     let noisy = std::mem::take(&mut sp.noisy);
-    // each bus joined over the pieces
-    let mut claims = vec![];
-    for (j, (c, b)) in keep.iter().zip(&buses).enumerate() {
-        let per: Vec<(&Piece, &BusRead)> = ps.iter().zip(reads.iter().map(|r| &r[j])).collect();
-        let mut keys: Vec<String> = vec![];
-        for (_, r) in &per {
-            for k in r.result.keys() {
-                if !keys.contains(k) {
-                    keys.push(k.clone());
-                }
+    let mut joined = decode::join_part(outs, &spec, n, rate, Some(o), noisy, sink.is_some());
+    if let (Some(s), Some((_, name))) = (&sink, items) {
+        decode::sunk(&mut joined, s, name);
+    }
+    let buses = joined
+        .get("buses")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let claims: Vec<Value> = keep
+        .iter()
+        .zip(&buses)
+        .map(|(c, b)| {
+            let mut d = c.as_object().unwrap().clone();
+            d.insert("result".into(), b.get("result").cloned().unwrap_or(json!({})));
+            d.insert(
+                "fit_pieces".into(),
+                b["fit"].get("pieces").cloned().unwrap_or(Value::Null),
+            );
+            if let Some(u) = b.get("uninterpreted").filter(|u| crate::nonempty(u)) {
+                d.insert("uninterpreted".into(), u.clone());
             }
-        }
-        let mut res = Map::new();
-        for k in keys {
-            let vals: Vec<(&Piece, &Value)> = per
-                .iter()
-                .filter_map(|(p, r)| r.result.get(&k).map(|v| (*p, v)))
-                .collect();
-            let v0 = vals[0].1;
-            let joined = if v0.is_array() {
-                Value::Array(join_items(&vals))
-            } else if v0
-                .as_object()
-                .is_some_and(|o| o.values().any(|x| x.is_array()) && (o.contains_key("t") || o.contains_key("s")))
-            {
-                join_columns(&vals)
-            } else {
-                v0.clone()
-            };
-            res.insert(k, joined);
-        }
-        if (b.protocol == "rvswd" || b.protocol == "swio") && res.contains_key("dmi") {
-            // the Debug Module keeps state across frames: read again over the pieces' accesses joined
-            let mut m = Map::new();
-            m.insert("dmi".into(), res["dmi"].clone());
-            if let Some((_, dm)) = wireskein_core::upper::riscv_dm(&m) {
-                res.insert("dm".into(), Value::Array(dm));
-            }
-        }
-        let un = join_items(
-            &per.iter()
-                .map(|(p, r)| (*p, Value::Array(r.uninterpreted.clone())))
-                .collect::<Vec<_>>()
-                .iter()
-                .map(|(p, v)| (*p, v))
-                .collect::<Vec<_>>(),
-        );
-        let mut d = c.as_object().unwrap().clone();
-        d.insert("result".into(), Value::Object(res));
-        let fits: Vec<f64> = per
-            .iter()
-            .filter_map(|(_, r)| r.fit)
-            .map(|f| (f * 1e4).round() / 1e4)
-            .collect();
-        d.insert("fit_pieces".into(), json!(fits));
-        if !un.is_empty() {
-            d.insert("uninterpreted".into(), json!(un));
-        }
-        d.insert("uninterpreted_summary".into(), unread_summary(&un));
-        for k in ["reading", "clock_speeds", "undersampled"] {
-            d.remove(k);
-        }
-        claims.push(Value::Object(d));
-    }
-    let mut split = json!({"options": o.doc(), "pieces": ps.iter().map(|p| p.doc()).collect::<Vec<_>>()});
-    if !noisy.is_empty() {
-        split["trembling"] = Value::Object(noisy);
-    }
-    if !doubtful.is_empty() {
-        split["doubtful"] = json!(doubtful);
-    }
+            d.insert(
+                "uninterpreted_summary".into(),
+                b.get("uninterpreted_summary").cloned().unwrap_or(Value::Null),
+            );
+            Value::Object(d)
+        })
+        .collect();
+    let mut split = joined.get("split").cloned().unwrap_or(json!({}));
     split["roles_from"] = json!([roles_piece.0, roles_piece.1]);
     if keep.is_empty() {
         split["no_roles"] = json!(format!(

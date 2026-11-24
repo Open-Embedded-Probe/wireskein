@@ -79,6 +79,15 @@ def find(cap: Capture, reference: str, via: str, threshold, window_ticks: float 
     trace = next((a for a in cap.analog if a.name == via), None)
     if trace is None:
         raise ValueError(f"{via}: not an analog channel in this capture")
+    names = apply_to if apply_to is not None else [a.name for a in cap.analog]
+    missing = [n for n in names if n not in {a.name for a in cap.analog}]
+    from . import _rust
+    if _rust.on("align"):                                     # WIRESKEIN_RUST=align (wireskein._rust)
+        entry = _rust.align_find(cap, reference, via, threshold, window_ticks, max_ppm,
+                                 _uncertainty_ticks(cap, trace, tick))
+        if missing:
+            raise ValueError(f"not analog channels here: {', '.join(missing)}")
+        return {"format": FORMAT, "channels": {n: dict(entry) for n in names}}
     per = float(Fraction(tick_hz) / trace.rate_hz)            # ticks per analog sample
     # the reference edge happened somewhere in the step before the tick it is stored at: take the middle
     r_t = ref.edges.astype(float) - ref.step / 2
@@ -162,8 +171,6 @@ def find(cap: Capture, reference: str, via: str, threshold, window_ticks: float 
              "threshold_v": [low, high], "window_ticks": float(window_ticks),
              "offset_us": off / tick * 1e6, "scale_ppm": (scale - 1) * 1e6,
              "start_shift_us": (off + (scale - 1) * float(trace.t0_ticks)) / tick * 1e6}   # how far its start moved
-    names = apply_to if apply_to is not None else [a.name for a in cap.analog]
-    missing = [n for n in names if n not in {a.name for a in cap.analog}]
     if missing:
         raise ValueError(f"not analog channels here: {', '.join(missing)}")
     return {"format": FORMAT, "channels": {n: dict(entry) for n in names}}
@@ -197,6 +204,9 @@ def between(ref_cap: Capture, reference: str, cap: Capture, via: str, threshold=
     capture_id). The start may be off by anything within window_ticks (reference
     ticks; default: the reference capture's length); the two clocks by max_ppm.
     Raises ValueError when the edges do not tell one answer."""
+    from . import _rust
+    if _rust.on("align"):                                     # WIRESKEIN_RUST=align (wireskein._rust)
+        return _rust.align_between(ref_cap, reference, cap, via, threshold, window_ticks, max_ppm)
     r_t, r_pol, r_w = _edges(ref_cap, reference, None)
     t, pol, w = _edges(cap, via, threshold)
     if len(r_t) < 2 or len(t) < 2:

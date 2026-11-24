@@ -121,8 +121,9 @@ wireskein survey long.sr --json --plan         # 文書（wireskein-survey/1）�
 ```
 
 `part` は区間、`bus` は spec のバス（または主張）、`layer` は結果の層（`dmi`、`dm`、`transactions`、`uninterpreted` など）、
-残りは [analysis-format](analysis-format.ja.md) §3.2 のとおりの項目で、tick は区間のものです。文書では、バスごとに
-`result.items`: `{"file", "counts"}` になります。
+残りは [analysis-format](analysis-format.ja.md) §3.2 のとおりの項目で、tick は区間のものです（オブジェクトでない項目、
+テキストの行は `item` に入れます）。文書では、バスごとに `result.items`: `{"file", "counts"}` になり、`reading` は
+区切りごとの数の和になります。
 
 ## 5. 要らない線
 

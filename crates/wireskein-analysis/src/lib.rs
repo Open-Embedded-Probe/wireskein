@@ -6,9 +6,12 @@
 //! decoded with exactly those roles (`decode`, Python's `decode.decode_file`).
 //! Shared by the command line (wireskein-cli) and the Python module (wireskein-py).
 
+pub mod align;
+pub mod analog;
 pub mod annotate;
 pub mod decode;
 pub mod report;
+pub mod segments;
 pub mod split;
 pub mod states;
 pub mod survey;
@@ -218,6 +221,26 @@ pub fn hints_of(arg: &str) -> Result<Value, String> {
     Ok(json!({"protocols": text.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect::<Vec<_>>()}))
 }
 
+/// What analyze is asked beyond the file, the part, the mode and the window (Python's `decode.analyze_file`'s
+/// other arguments; the defaults: none of them).
+#[derive(Debug, Default, Clone)]
+pub struct Asked<'a> {
+    /// only these channels read (the others dropped before anything reads them)
+    pub pins: Option<&'a [String]>,
+    /// analog channels also read as logic: (name, low, high) in volts
+    pub thresholds: &'a [(String, f64, f64)],
+    /// a part read in pieces: its items written to this file as they are read (ndjson), with the name the
+    /// document gives it
+    pub items: Option<(&'a Path, &'a str)>,
+    /// only the items inside the first marker segment whose path matches this glob
+    pub segment: Option<&'a str>,
+    /// the marker source ({"pin", "dialect"}), the dialects ({name: {"dialect", "marker"}}), and whether the
+    /// segment's text lines go in as events
+    pub markers: Option<&'a Value>,
+    pub dialects: Option<&'a Value>,
+    pub events: bool,
+}
+
 /// The document of what analyze finds in a capture file.
 pub fn analyze_file(
     path: &Path,
@@ -227,12 +250,70 @@ pub fn analyze_file(
     window_s: Option<(f64, f64)>,
     split_opts: Option<&split::Options>,
 ) -> Result<Value, String> {
+    analyze_file_asked(path, hints, part, mode, window_s, split_opts, &Asked::default())
+}
+
+/// The lines of a part as analyze reads them: the analog channels asked read as logic too (after the part's own),
+/// then only the pins asked (Python's `as_logic`, then `only`).
+pub fn lines_asked(
+    p: &wireskein_io::Part,
+    tick_hz: (i64, i64),
+    asked: &Asked,
+) -> Result<Vec<wireskein_io::Line>, String> {
+    let mut extra = vec![];
+    for (name, lo, hi) in asked.thresholds {
+        let a = p
+            .analog
+            .iter()
+            .find(|a| &a.name == name)
+            .ok_or_else(|| format!("{name}: not an analog channel in this capture"))?;
+        if p.lines.iter().any(|l| &l.name == name) {
+            return Err(format!("{name}: already a logic channel"));
+        }
+        extra.push(analog::to_logic(a, tick_hz, *lo, *hi)?);
+    }
+    let Some(pins) = asked.pins.filter(|x| !x.is_empty()) else {
+        let mut out = p.lines.clone();
+        out.extend(extra);
+        return Ok(out);
+    };
+    let names: std::collections::BTreeSet<&str> = p
+        .lines
+        .iter()
+        .map(|l| l.name.as_str())
+        .chain(p.analog.iter().map(|a| a.name.as_str()))
+        .chain(p.skipped.iter().filter_map(|x| x["name"].as_str()))
+        .chain(p.events.iter().map(|e| e.name.as_str()))
+        .collect();
+    let miss: Vec<&str> = pins.iter().map(|x| x.as_str()).filter(|x| !names.contains(x)).collect();
+    if !miss.is_empty() {
+        return Err(format!("pins not in the capture: {}", miss.join(", ")));
+    }
+    Ok(p.lines
+        .iter()
+        .cloned()
+        .chain(extra)
+        .filter(|l| pins.contains(&l.name))
+        .collect())
+}
+
+/// The document of what analyze finds in a capture file, with what else was asked (`Asked`).
+#[allow(clippy::too_many_arguments)]
+pub fn analyze_file_asked(
+    path: &Path,
+    hints: &Value,
+    part: Option<usize>,
+    mode: &str,
+    window_s: Option<(f64, f64)>,
+    split_opts: Option<&split::Options>,
+    asked: &Asked,
+) -> Result<Value, String> {
     let at = |e: String| format!("{}: {e}", path.display());
-    let splitting = split_opts.filter(|_| window_s.is_none() && part.is_none());
+    let splitting = split_opts.filter(|_| window_s.is_none() && asked.segment.is_none() && part.is_none());
     // a WireSkein file of parts each read a block at a time when it is split (its header only, now); else read whole
     let kind = wireskein_io::sniff_path(path);
     let (cap, streamed) = match (kind, splitting) {
-        (Some(wireskein_io::Kind::WireSkein), Some(_)) => {
+        (Some(wireskein_io::Kind::WireSkein), Some(_)) if asked.thresholds.is_empty() => {
             let f = std::fs::File::open(path).map_err(|e| at(e.to_string()))?;
             match wireskein_io::wsk::head_from(f).map_err(at)? {
                 (c, true) if !cfg!(target_family = "wasm") => (c, true),
@@ -241,10 +322,13 @@ pub fn analyze_file(
         }
         _ => (wireskein_io::read(path)?, false),
     };
+    if let Some((f, _)) = asked.items {
+        std::fs::write(f, b"").map_err(|e| format!("{}: {e}", f.display()))?; // written part after part
+    }
     let rate = cap.rate();
-    if window_s.is_some() && part.is_none() && cap.parts.len() > 1 {
+    if (window_s.is_some() || asked.segment.is_some()) && part.is_none() && cap.parts.len() > 1 {
         return Err(at(format!(
-            "{} parts: give the part a window is inside (--part)",
+            "{} parts: give the part a window or segment is inside (--part)",
             cap.parts.len()
         )));
     }
@@ -285,14 +369,16 @@ pub fn analyze_file(
         // a long part read in pieces (a WireSkein file's part straight from the file, a block at a time)
         let mut whole: Option<Vec<wireskein_io::Line>> = None;
         if let Some(o) = splitting {
+            let gf = decode::glitch_filter(&p.meta);
             let got = if streamed {
-                let mut src = wireskein_io::stream::file_source(path, p.part)
+                let mut src = wireskein_io::stream::file_source_of(path, p.part, asked.pins.filter(|x| !x.is_empty()))
                     .map_err(at)?
                     .ok_or_else(|| at(format!("part {}: not a part to read a block at a time", p.part)))?;
-                split::analyze(&mut src, rate, hints, o, mode)?
+                split::analyze(&mut src, rate, hints, o, asked.items, &head, gf.as_ref())?
             } else {
-                let mut src = wireskein_io::stream::MemSource::new(&p.lines, p.ticks);
-                split::analyze(&mut src, rate, hints, o, mode)?
+                let lines = lines_asked(p, cap.tick_hz, asked)?;
+                let mut src = wireskein_io::stream::MemSource::new(&lines, p.ticks);
+                split::analyze(&mut src, rate, hints, o, asked.items, &head, gf.as_ref())?
             };
             match got {
                 split::Split::Pieces(claims, sp) => {
@@ -309,13 +395,39 @@ pub fn analyze_file(
                 }
             }
         }
-        let lines: &[wireskein_io::Line] = whole.as_deref().unwrap_or(&p.lines);
+        let whole = match whole {
+            Some(w) => w,
+            None => lines_asked(p, cap.tick_hz, asked)?,
+        };
+        let lines: &[wireskein_io::Line] = &whole;
         let chans: Vec<Channel> = lines
             .iter()
             .map(|l| Channel::new(&l.name, l.initial, &l.edges))
             .collect();
         let view = View::new(rate, p.ticks, chans).map_err(|e| format!("part {}: {e}", p.part))?;
         let (claims, relations) = wireskein_core::analyze_full(&view, hints);
+        // a marker segment: its window, the text lines in it
+        let (mut window, mut seg, mut events) = (window, None, None);
+        if let Some(pat) = asked.segment {
+            let own = segments::heading();
+            let ds = segments::dialects(asked.dialects.unwrap_or(&own))?;
+            let us = segments::uarts(&claims);
+            let f = segments::find(&us, &ds, rate, p.ticks, asked.markers)
+                .ok_or("no marker stream found (give --markers)")?;
+            let Some(&h) = f.tree.select(pat).first() else {
+                return Err(format!(
+                    "no segment matches {}; see: wireskein segments CAPTURE",
+                    wireskein_io::j::py_str_repr(pat)
+                ));
+            };
+            let s = &f.tree.segs[h];
+            let w = (s.begin, s.end.unwrap_or(p.ticks));
+            window = Some(w);
+            seg = Some(json!({"path": f.tree.path(h), "raw": s.raw, "issues": s.issues}));
+            if asked.events || mode == "all" {
+                events = Some(segments::events_in(&us, &f, &ds, rate, w));
+            }
+        }
         let mut d = head;
         d.insert(
             "claims".into(),
@@ -332,8 +444,28 @@ pub fn analyze_file(
         if !relations.is_empty() {
             d.insert("relations".into(), Value::Array(relations));
         }
-        if !p.skipped.is_empty() {
-            d.insert("skipped_channels".into(), Value::Array(p.skipped.clone()));
+        if let Some(x) = seg {
+            d.insert("segment".into(), x);
+        }
+        if let Some(x) = events {
+            d.insert("events".into(), Value::Array(x));
+        }
+        // the channels not read as logic (an analog one read at a threshold is; those not asked for are not told)
+        let skipped: Vec<Value> = p
+            .skipped
+            .iter()
+            .filter(|x| {
+                let name = x["name"].as_str().unwrap_or("");
+                !asked.thresholds.iter().any(|(t, _, _)| t == name)
+                    && asked
+                        .pins
+                        .filter(|ps| !ps.is_empty())
+                        .is_none_or(|ps| ps.iter().any(|q| q == name))
+            })
+            .cloned()
+            .collect();
+        if !skipped.is_empty() {
+            d.insert("skipped_channels".into(), Value::Array(skipped));
         }
         parts.push(Value::Object(d));
     }

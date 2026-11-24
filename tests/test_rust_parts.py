@@ -95,9 +95,11 @@ def test_options_rust_does_not_have_stay_python(clean):
                 segment=None, markers_hint=None, events=False, thresholds=None, split=None, pins=None, items=None)
     assert _rust.analyzes(f, **base)
     for k, v in (("mode", "select"), ("select", ["uart"]), ("alternatives", True), ("depth", "frames"),
-                 ("segment", "x"), ("thresholds", {"A0": 1.5}), ("pins", ["D0"]), ("items", "x.ndjson"),
                  ("hints", {"devices": ["i2c/**"]})):
         assert not _rust.analyzes(f, **{**base, k: v}), k
+    for k, v in (("segment", "x"), ("markers_hint", {"dialect": "heading"}), ("events", True),
+                 ("thresholds", {"A0": 1.5}), ("pins", ["D0"]), ("items", "x.ndjson")):
+        assert _rust.analyzes(f, **{**base, k: v}), k
     assert _rust.analyzes(f, **{**base, "split": {"max_edges": 1000, "cuts": [5, 9]}})
     assert _rust._split_spec({"max_edges": 1000, "cuts": [5, 9]}) == "max_edges=1000,cuts=5;9"
     assert _rust._split_spec(False) == "off"
@@ -449,27 +451,30 @@ def test_decode_spec_options_as_python(clean, variant):
     assert _decode({"WIRESKEIN_RUST": "decode"}, f, spec, **kw) == _decode({"WIRESKEIN_ENGINE": "rust"}, f, spec, **kw)
 
 
+def _rows(p):
+    return sorted(json.dumps(json.loads(x), sort_keys=True) for x in p.read_text().splitlines())
+
+
 @rust_only
 @pytest.mark.parametrize("split", [None, PIECES])
 def test_decode_items_written_out_as_python(clean, tmp_path, split):
-    """Items written out as the pieces go: the same rows; the reading's counts are the pieces' summed (Python's are
-    0 there: its frames went to the file before they were counted)."""
+    """Items written out as the pieces go: the same rows, the same document - the reading's counts the pieces'
+    summed (Python's were 0 before it was fixed: its frames went to the file before they were counted; and it left its
+    internal _owned on the buses of a part of one piece)."""
     f = DATA / "examples" / "mixed-0.wireskein"
     spec = _spec_of(f)
     rs = _decode({"WIRESKEIN_RUST": "decode"}, f, spec, split=split, items=tmp_path / "rs.ndjson")
     py = _decode({"WIRESKEIN_ENGINE": "rust"}, f, spec, split=split, items=tmp_path / "py.ndjson")
-
-    def rows(p):
-        return sorted(json.dumps(json.loads(x), sort_keys=True) for x in p.read_text().splitlines())
-    assert rows(tmp_path / "rs.ndjson") == rows(tmp_path / "py.ndjson")
+    assert _rows(tmp_path / "rs.ndjson") == _rows(tmp_path / "py.ndjson")
     for d in (rs, py):
         for b in d["parts"][0]["buses"]:
             b["result"]["items"]["file"] = "-"
-            b.pop("_owned", None)                        # (Python leaves it in when the part is one piece)
-            if split:
-                for k in ("frames", "ok", "unread", "unread_edges", "unanswered", "restored", "repaired"):
-                    b["reading"].pop(k)
     assert rs == py
+    held = _decode({"WIRESKEIN_ENGINE": "rust"}, f, spec, split=split)
+    for a, b in zip(py["parts"][0]["buses"], held["parts"][0]["buses"]):
+        assert "_owned" not in a
+        assert a["reading"]["frames"] >= b["reading"]["frames"] > 0      # (pieces overlap: counted in each)
+        assert sum(a["result"]["items"]["counts"].values()) > 0
 
 
 @rust_only
@@ -587,3 +592,211 @@ def test_mark_writes_the_markers_as_python(clean, tmp_path, run):
         _with(env, lambda: verify.verify(d, mark=True))
         assert {f: ff.markers(d / f) for f in files} == {f: [m for m in ms if m["by"] != "me"]
                                                           for f, ms in out[False].items()}
+
+
+# ---------------- round 4: analyze's pins, items, thresholds and segments; align ----------------
+
+def _adoc(env, f, **kw):
+    d = _with(env, lambda: json.loads(dumps(decode.analyze_file(f, **kw))))
+    d.pop("analysis_seconds")
+    d.pop("wireskein")
+    return d
+
+
+def _confirmed_pins(f):
+    doc = _adoc({"WIRESKEIN_ENGINE": "rust"}, f)
+    return sorted({p for c in doc["parts"][0]["claims"] if c["verdict"] == "confirmed" for p in c["roles"].values()})
+
+
+@rust_only
+@pytest.mark.parametrize("split", [None, PIECES])
+@pytest.mark.parametrize("f", EXAMPLES, ids=lambda f: f.name)
+def test_analyze_pins_and_items_as_python(clean, tmp_path, f, split):
+    """analyze with pins (only those channels read) and with items (a part read in pieces writing them out as it
+    goes): the document Python makes around the Rust engine, the same rows written; whole and in short pieces (the
+    pieces read as decode reads a spec's buses, as Python's _analyze_split does; a piece's fit may differ in its last
+    digit, the upper stage's text reading of a UART piece, as decode's)."""
+    pins = _confirmed_pins(f)[:3]
+    assert _differ(_adoc({"WIRESKEIN_RUST": "analyze"}, f, pins=pins, split=split),
+                   _adoc({"WIRESKEIN_ENGINE": "rust"}, f, pins=pins, split=split)) == []
+    assert _differ(_adoc({"WIRESKEIN_RUST": "analyze"}, f, split=split),
+                   _adoc({"WIRESKEIN_ENGINE": "rust"}, f, split=split)) == []
+    rs = _adoc({"WIRESKEIN_RUST": "analyze"}, f, split=split, items=tmp_path / "rs.ndjson")
+    py = _adoc({"WIRESKEIN_ENGINE": "rust"}, f, split=split, items=tmp_path / "py.ndjson")
+    for d in (rs, py):
+        for c in d["parts"][0]["claims"]:
+            if "items" in c.get("result", {}):
+                c["result"]["items"]["file"] = "-"
+    assert _differ(rs, py) == []
+    assert _rows(tmp_path / "rs.ndjson") == _rows(tmp_path / "py.ndjson")
+
+
+def _adc_uart(tmp_path):
+    """A UART seen only by an ADC (and a copy of it backwards on another, its first sample half a tick late)."""
+    from fractions import Fraction
+    from wireskein import _fileformat as ff
+    rng = np.random.default_rng(7)
+    rate, baud = 1_000_000, 57_600
+    bits = [1] * 400
+    for byte in b"hello adc\n" * 6:
+        bits += [0] + [(byte >> k) & 1 for k in range(8)] + [1, 1]
+    bits += [1] * 400
+    per = rate / baud
+    idx = (np.arange(int(len(bits) * per)) / per).astype(int)
+    v = np.array(bits)[idx] * 3.3 + rng.normal(0, 0.05, len(idx))
+    p = tmp_path / "a.wireskein"
+    ff.write(p, rate, [ff.Channel("IDLE", ff.pack(bytes(1000)), 1000), ff.analog_volts("TX", v.tolist(), rate),
+                       ff.analog_volts("TX2", v[::-1].tolist(), rate, t0_ticks=Fraction(7, 2))])
+    return p
+
+
+@rust_only
+@pytest.mark.parametrize("th", [{"TX": 1.65}, {"TX": (1.0, 2.3)}, {"TX": (1.0, 2.3), "TX2": 1.5}], ids=str)
+@pytest.mark.parametrize("pins", [None, ["TX"]], ids=str)
+def test_analyze_thresholds_as_python(clean, tmp_path, th, pins):
+    """Analog channels read as logic at a threshold (as_logic): the same document as Python's around the Rust
+    engine (Rust's also names the channels it did not read as logic, skipped_channels); the same errors."""
+    p = _adc_uart(tmp_path)
+    rs = _adoc({"WIRESKEIN_RUST": "analyze"}, p, thresholds=th, pins=pins)
+    py = _adoc({"WIRESKEIN_ENGINE": "rust"}, p, thresholds=th, pins=pins)
+    skipped = rs["parts"][0].pop("skipped_channels", [])
+    assert rs == py
+    assert {c["name"] for c in skipped} == ({"TX", "TX2"} - set(th)) & set(pins or {"TX", "TX2"})
+    assert any("hello adc" in json.dumps(c["result"]) for c in rs["parts"][0]["claims"])
+    for bad in ({"NOPE": 1.0}, {"IDLE": 1.0}, {"TX": (2.0, 1.0)}):
+        errs = []
+        for env in ({"WIRESKEIN_RUST": "analyze"}, {"WIRESKEIN_ENGINE": "rust"}):
+            with pytest.raises(ValueError) as e:
+                _adoc(env, p, thresholds=bad)
+            errs.append(str(e.value))
+        assert errs[0] == errs[1]
+
+
+def _uart_edges(text, baud=115_200, rate=2_000_000, t=200.0):
+    bit = rate / baud
+    edges, lv = [], 1
+    for b in text:
+        for x in [0] + [(b >> i) & 1 for i in range(8)] + [1, 1]:
+            if x != lv:
+                edges.append(int(round(t)))
+                lv = x
+            t += bit
+        t += 3 * bit
+    return edges, t
+
+
+def _marked(tmp_path):
+    """A UART with heading markers (a level skipped, a heading that only closes, text between) beside another UART
+    of text lines."""
+    from fractions import Fraction
+    from wireskein import capture
+    e, t = _uart_edges(b"boot\n# session\n## pwm\nPING\nPONG\n### deep\n##\n## pwm\nOK\n#### skip\n# end\nbye\n")
+    other, t2 = _uart_edges(b"x=1\ny=2\nz=3\nw=4\n" * 3, baud=9600, t=500.0)
+    n = int(max(t, t2)) + 400
+    cap = capture.Capture(Fraction(2_000_000), [capture.Part(n, [capture.logic("TX", 1, e, n),
+                                                                 capture.logic("LOG", 1, other, n)])])
+    return capture.write(tmp_path / "s.wireskein", cap)
+
+
+@rust_only
+@pytest.mark.parametrize("segment", ["session", "session/pwm", "session/pwm[1]", "*deep", "*skip", "end"])
+@pytest.mark.parametrize("kw", [{}, {"events": True}, {"mode": "all"}, {"markers_hint": {"pin": "TX"}}], ids=str)
+def test_analyze_segment_as_python(clean, tmp_path, segment, kw):
+    """A marker segment (Python reads it with its own engine): the same segment (path, raw marker, issues), window,
+    events and claims (a margin in its last digit, 0.6999 / 0.7; in mode all the engines' evidence differs: compared on
+    the bench); the same errors."""
+    p = _marked(tmp_path)
+    a = _adoc({"WIRESKEIN_RUST": "analyze"}, p, segment=segment, **kw)["parts"][0]
+    b = _adoc({}, p, segment=segment, **kw)["parts"][0]
+    if kw.get("mode") == "all":
+        for x in (a, b):
+            for c in x["claims"]:
+                c.pop("evidence")
+    assert _differ(a, b) == []
+    assert a["segment"]["path"] in ("session", "session/pwm", "session/pwm[1]", "session/pwm/deep",
+                                    "session/pwm[1]/skip", "end")
+    if segment == "*skip":
+        assert a["segment"]["issues"] == [{"kind": "level_skip", "from": 2, "to": 4}]
+    for bad in ({"segment": "nope"}, {"segment": "x", "markers_hint": {"pin": "LOG"}}):
+        errs = []
+        for env in ({"WIRESKEIN_RUST": "analyze"}, {}):
+            with pytest.raises(ValueError) as e:
+                _adoc(env, p, **bad)
+            errs.append(str(e.value))
+        assert errs[0] == errs[1]
+
+
+def _near(a: dict, b: dict, rel=1e-9, abs_=1e-8):
+    """Where two alignment entries differ beyond rounding (a least squares fit by numpy's lstsq and by its centered
+    form)."""
+    out = []
+    for k in sorted(set(a) | set(b)):
+        x, y = a.get(k), b.get(k)
+        if isinstance(x, float) and isinstance(y, float):
+            if not (x == y or abs(x - y) <= abs_ + rel * max(abs(x), abs(y))):
+                out.append(f"{k}: {x!r} / {y!r}")
+        elif x != y:
+            out.append(f"{k}: {x!r} / {y!r}")
+    return out
+
+
+@rust_only
+@pytest.mark.parametrize("off, ppm", [(200, 0), (-150, 1500), (37.3, -800), (201.25, 1500)])
+def test_align_find_as_python(clean, tmp_path, off, ppm):
+    """align.find by wireskein-analysis (WIRESKEIN_RUST=align): the same matched edges and counts, the offset, scale
+    and their uncertainty as Python's to rounding (numpy's lstsq against the centered least squares)."""
+    import test_align as ta
+    from wireskein import align
+    cap = fileio.load(ta.make(tmp_path, off, ppm))
+    for kw in ({"threshold": (1.0, 2.3)}, {"threshold": 1.65}, {"threshold": 1.65, "window_ticks": 3000},
+               {"threshold": 1.65, "apply_to": ["SYNC_A"]}):
+        py = _with({}, lambda: align.find(cap, "SYNC", "SYNC_A", **kw))
+        rs = _with({"WIRESKEIN_RUST": "align"}, lambda: align.find(cap, "SYNC", "SYNC_A", **kw))
+        assert py["format"] == rs["format"] and list(py["channels"]) == list(rs["channels"])
+        for k in py["channels"]:
+            assert _near(py["channels"][k], rs["channels"][k]) == [], kw
+
+
+@rust_only
+def test_align_errors_as_python(clean, tmp_path):
+    import test_align as ta
+    from wireskein import align
+    cap = fileio.load(ta.make(tmp_path, 200, 0, periodic=True, uncertainty_ns=5_000_000))
+    for kw in ({"threshold": 1.65}, {"threshold": 1.65, "apply_to": ["NOPE"]}, {"threshold": 9.0}):
+        errs = []
+        for env in ({}, {"WIRESKEIN_RUST": "align"}):
+            with pytest.raises(ValueError) as e:
+                _with(env, lambda: align.find(cap, "SYNC", "SYNC_A", **kw))
+            errs.append(str(e.value))
+        assert errs[0] == errs[1], kw
+    py = _with({}, lambda: align.find(cap, "SYNC", "SYNC_A", threshold=1.65, window_ticks=3_000))
+    rs = _with({"WIRESKEIN_RUST": "align"}, lambda: align.find(cap, "SYNC", "SYNC_A", threshold=1.65,
+                                                                window_ticks=3_000))
+    assert _near(py["channels"]["SYNC_A"], rs["channels"]["SYNC_A"]) == []
+
+
+@rust_only
+@pytest.mark.parametrize("start, ppm", [(3700.0, 80.0), (-1200.0, -40.0)])
+def test_align_between_as_python(clean, tmp_path, start, ppm):
+    """align.between (another probe's capture onto this one's ticks): as Python's to rounding; an analog via too."""
+    import test_align as ta
+    from wireskein import align
+    a, b = ta.two_probes(tmp_path, start_us=start, ppm=ppm)
+    A, B = fileio.load(a), fileio.load(b)
+    py = _with({}, lambda: align.between(A, "SYNC", B, "SYNC"))
+    rs = _with({"WIRESKEIN_RUST": "align"}, lambda: align.between(A, "SYNC", B, "SYNC"))
+    assert _near(py, rs) == []
+    d = tmp_path / "an"
+    d.mkdir()
+    cap = fileio.load(ta.make(d, 200, 1500))
+    kw = {"threshold": 1.65, "max_ppm": 2000}
+    py = _with({}, lambda: align.between(cap, "SYNC", cap, "SYNC_A", **kw))
+    rs = _with({"WIRESKEIN_RUST": "align"}, lambda: align.between(cap, "SYNC", cap, "SYNC_A", **kw))
+    assert _near(py, rs) == []
+    for args in (("SYNC_A", "SYNC"), ("SYNC", "SYNC_A"), ("SYNC", "NOPE")):
+        errs = []
+        for env in ({}, {"WIRESKEIN_RUST": "align"}):
+            with pytest.raises(ValueError) as e:
+                _with(env, lambda: align.between(cap, args[0], cap, args[1]))
+            errs.append(str(e.value))
+        assert errs[0] == errs[1], args

@@ -775,7 +775,7 @@ def _analyze_split(source, hints, opts, depth: str, head: dict, items=None) -> d
     finally:
         if sink is not None:
             sink.f.close()
-    joined = _join_part(outs, spec, source, opts, noisy)
+    joined = _join_part(outs, spec, source, opts, noisy, sunk=sink is not None)
     if sink is not None:
         for j, b in enumerate(joined["buses"]):
             b["result"] = {"items": {"file": str(items), "counts": sink.counts[j]}}
@@ -1034,7 +1034,7 @@ def _part_split(source, spec: dict, head: dict, opts, items=None) -> dict:
     finally:
         if sink is not None:
             sink.f.close()
-    out = _join_part(outs, spec, source, opts, noisy)
+    out = _join_part(outs, spec, source, opts, noisy, sunk=sink is not None)
     if sink is not None:
         for j, b in enumerate(out["buses"]):
             b["result"] = {"items": {"file": str(items), "counts": sink.counts[j]}}
@@ -1079,8 +1079,9 @@ class _Items:
         self.dm = {j: Across() for j, b in enumerate(spec["buses"]) if b["protocol"] in ("rvswd", "swio")}
 
     def _write(self, j: int, layer: str, rows) -> None:
-        for r in rows:
-            self.f.write(dumps({"part": self.part, "bus": j, "layer": layer, **r}) + "\n")
+        for r in rows:                               # (an item that is not an object, a text line: as "item")
+            self.f.write(dumps({"part": self.part, "bus": j, "layer": layer,
+                                **(r if isinstance(r, dict) else {"item": r})}) + "\n")
         self.counts[j][layer] = self.counts[j].get(layer, 0) + len(rows)
 
     def _dm(self, j: int, entries) -> None:
@@ -1236,15 +1237,18 @@ def _join_faults(per: list) -> dict:
     return out
 
 
-def _join_part(outs: list, spec: dict, source, opts, noisy: dict) -> dict:
-    """The pieces' part documents as one (the whole's when there was one piece)."""
+def _join_part(outs: list, spec: dict, source, opts, noisy: dict, sunk: bool = False) -> dict:
+    """The pieces' part documents as one (the whole's when there was one piece). sunk: the pieces' items went to a
+    file as they were read (their readings counted before)."""
     if len(outs) == 1 and outs[0][0].a == 0:
+        for b in outs[0][1]["buses"]:
+            b.pop("_owned", None)                    # the items' count of _Items.take: the pieces' own
         return outs[0][1]
     pieces = [p for p, _ in outs]
     o0 = outs[0][1]
     out = {k: v for k, v in o0.items() if k not in ("buses", "lines", "undeclared", "claims", "_reanalysis")}
     out["ticks"] = source.n
-    out["buses"] = [_join_bus([(p, o["buses"][j]) for p, o in outs], float(source.rate))
+    out["buses"] = [_join_bus([(p, o["buses"][j]) for p, o in outs], float(source.rate), sunk)
                     for j in range(len(spec["buses"]))]
     lines = []
     for j, ln in enumerate(o0["lines"]):
@@ -1294,8 +1298,10 @@ def _join_speeds(groups: list[dict], rate: float) -> list[dict]:
             for h in out]
 
 
-def _join_bus(per: list, rate: float) -> dict:
-    """A bus's results from the pieces, as one: items in the capture's ticks, each from the piece it starts in."""
+def _join_bus(per: list, rate: float, sunk: bool = False) -> dict:
+    """A bus's results from the pieces, as one: items in the capture's ticks, each from the piece it starts in.
+    sunk: the items went to a file as the pieces were read (the lists left empty), the reading's counts the pieces'
+    summed."""
     from . import split as _split
     first = next((b for _, b in per if b.get("decoded")), per[0][1])
     out = {k: v for k, v in first.items() if k not in ("result", "uninterpreted", "fit", "_owned")}
@@ -1342,15 +1348,21 @@ def _join_bus(per: list, rate: float) -> dict:
     out.pop("reading", None)
     rs = [b["reading"] for _, b in per if b.get("reading")]
     if rs:
-        fr = res.get("dmi") if isinstance(res.get("dmi"), list) else next(
+        fr = None if sunk else res.get("dmi") if isinstance(res.get("dmi"), list) else next(
             (v for k, v in res.items() if k == _exp.LOWER.get(out.get("protocol")) and isinstance(v, list)), None)
         if fr is not None:
             r = reading(out, fr, SimpleNamespace(rate=rate), {"pins": {}})
         else:                                    # the items went to a file: the pieces' counts summed
             r = {k: sum(x.get(k, 0) for x in rs) for k in ("frames", "ok", "unanswered", "restored", "repaired")}
-            r.update(unread=len(out["uninterpreted"]),
-                     unread_edges=int(sum(u.get("edges", 0) for u in out["uninterpreted"])),
-                     rate_ok=all(g["rate_ok"] for g in out.get("clock_speeds", [])))
+            r["rate_ok"] = all(g["rate_ok"] for g in out.get("clock_speeds", []))
+            if sunk:
+                r.update(unread=sum(x.get("unread", 0) for x in rs),
+                         unread_edges=sum(x.get("unread_edges", 0) for x in rs))
+            else:
+                r.update(unread=len(out["uninterpreted"]),
+                         unread_edges=int(sum(u.get("edges", 0) for u in out["uninterpreted"])))
+            if out.get("empty_selections"):
+                r["empty_selections"] = len(out["empty_selections"])
         if any("same_sample" in x for x in rs):
             r["same_sample"] = sum(x.get("same_sample", 0) for x in rs)
         if any("glitches" in x for x in rs):
@@ -1384,7 +1396,8 @@ def analyze_file(path: str | Path, hints: dict | None = None, mode: str = "final
     from . import _rust
     if _rust.analyzes(path, hints, mode, select, alternatives, depth, window_s, segment, markers_hint, events,
                       thresholds, split, pins, items):                # WIRESKEIN_RUST=analyze (wireskein._rust)
-        return _rust.analyze_file(path, hints, mode, window_s, part, split)
+        return _rust.analyze_file(path, hints, mode, window_s, part, split, pins, thresholds, items, segment,
+                                  markers_hint, events)
     from ._engine import markers
     path = Path(path)
     from . import split as _split

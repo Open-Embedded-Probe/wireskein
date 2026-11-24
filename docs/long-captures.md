@@ -120,8 +120,9 @@ What a long capture decodes is more than memory holds (1.28 million DMI accesses
 ```
 
 `part` is the part, `bus` the spec's bus (or the claim), `layer` the result's layer (`dmi`, `dm`, `transactions`, `uninterpreted`,
-...), the rest the item as in [analysis-format](analysis-format.md) §3.2, its ticks the part's. The document then gives
-each bus `result.items`: `{"file", "counts"}`.
+...), the rest the item as in [analysis-format](analysis-format.md) §3.2, its ticks the part's (an item that is not an
+object, a text line, as `item`). The document then gives each bus `result.items`: `{"file", "counts"}`, and its
+`reading` the pieces' counts summed.
 
 ## 5. Lines that are not wanted
 

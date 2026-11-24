@@ -287,12 +287,21 @@ fn verify(py: Python<'_>, run_dir: std::path::PathBuf) -> PyResult<String> {
         .map_err(PyValueError::new_err)
 }
 
-/// analyze_file(path, hints_json="null", part=None, mode="final", window=None, split=None) -> the analysis document
-/// as JSON (wireskein-analysis: what `wireskein analyze` prints), the GIL released while the file is read and analyzed.
-/// part: only the part (or the run of parts) holding it; mode: "final" or "all"; window: (from, to) in seconds, only
-/// the items inside; split: a long part read in pieces, "key=value,..." (the defaults when None) or "off".
+/// analyze_file(path, hints_json="null", part=None, mode="final", window=None, split=None, pins=None,
+/// thresholds_json=None, items=None, items_name=None, segment=None, markers_json=None, dialects_json=None,
+/// events=False) -> the analysis document as JSON (wireskein-analysis: what `wireskein analyze` prints), the GIL
+/// released while the file is read and analyzed. part: only the part (or the run of parts) holding it; mode: "final"
+/// or "all"; window: (from, to) in seconds, only the items inside; split: a long part read in pieces,
+/// "key=value,..." (the defaults when None) or "off"; pins: only these channels; thresholds_json: analog channels
+/// also read as logic ({name: V | [LOW, HIGH]}); items: a part read in pieces writes its items here (ndjson; named
+/// items_name in the document); segment: only the items inside the first marker segment matching this glob (the
+/// marker source markers_json {"pin", "dialect"}, the dialects dialects_json, WireSkein's heading when None; events:
+/// its text lines too).
 #[pyfunction]
-#[pyo3(signature = (path, hints_json="null", part=None, mode="final", window=None, split=None))]
+#[pyo3(signature = (path, hints_json="null", part=None, mode="final", window=None, split=None, pins=None,
+                    thresholds_json=None, items=None, items_name=None, segment=None, markers_json=None,
+                    dialects_json=None, events=false))]
+#[allow(clippy::too_many_arguments)]
 fn analyze_file(
     py: Python<'_>,
     path: std::path::PathBuf,
@@ -301,9 +310,19 @@ fn analyze_file(
     mode: &str,
     window: Option<(f64, f64)>,
     split: Option<&str>,
+    pins: Option<Vec<String>>,
+    thresholds_json: Option<&str>,
+    items: Option<std::path::PathBuf>,
+    items_name: Option<String>,
+    segment: Option<String>,
+    markers_json: Option<&str>,
+    dialects_json: Option<&str>,
+    events: bool,
 ) -> PyResult<String> {
-    let hints: serde_json::Value =
-        serde_json::from_str(hints_json).map_err(|e| PyValueError::new_err(format!("hints: {e}")))?;
+    let json_of = |what: &str, t: &str| -> PyResult<serde_json::Value> {
+        serde_json::from_str(t).map_err(|e| PyValueError::new_err(format!("{what}: {e}")))
+    };
+    let hints = json_of("hints", hints_json)?;
     if mode != "final" && mode != "all" {
         return Err(PyValueError::new_err(format!("mode {mode:?}: final or all")));
     }
@@ -311,8 +330,30 @@ fn analyze_file(
         None => Some(wireskein_analysis::split::Options::default()),
         Some(s) => wireskein_analysis::split::Options::parse(s).map_err(PyValueError::new_err)?,
     };
+    let thresholds = match thresholds_json {
+        Some(t) => {
+            wireskein_analysis::analog::thresholds_of(&json_of("thresholds", t)?).map_err(PyValueError::new_err)?
+        }
+        None => vec![],
+    };
+    let markers = markers_json.map(|t| json_of("markers", t)).transpose()?;
+    let dialects = dialects_json.map(|t| json_of("dialects", t)).transpose()?;
+    let name = items_name
+        .or_else(|| items.as_ref().map(|p| p.display().to_string()))
+        .unwrap_or_default();
     let doc = py
-        .detach(|| wireskein_analysis::analyze_file(&path, &hints, part, mode, window, opts.as_ref()))
+        .detach(|| {
+            let asked = wireskein_analysis::Asked {
+                pins: pins.as_deref(),
+                thresholds: &thresholds,
+                items: items.as_deref().map(|p| (p, name.as_str())),
+                segment: segment.as_deref(),
+                markers: markers.as_ref(),
+                dialects: dialects.as_ref(),
+                events,
+            };
+            wireskein_analysis::analyze_file_asked(&path, &hints, part, mode, window, opts.as_ref(), &asked)
+        })
         .map_err(PyValueError::new_err)?;
     Ok(doc.to_string())
 }
@@ -618,12 +659,143 @@ fn decode_file(
     Ok(doc.to_string())
 }
 
+/// An analog channel as Python gives it: (name, encoding, values as float64 (raw integers or volts), rate_hz as
+/// (num, den), t0_ticks as (num, den), width, value_bits, zero, scale_nv).
+type AnalogArgs<'py> = (
+    String,
+    String,
+    PyReadonlyArray1<'py, f64>,
+    (i64, i64),
+    (i64, i64),
+    i64,
+    Option<i64>,
+    Option<f64>,
+    Option<f64>,
+);
+
+fn analog_of(a: &AnalogArgs) -> wireskein_io::Analog {
+    wireskein_io::Analog {
+        name: a.0.clone(),
+        encoding: a.1.clone(),
+        values: a.2.as_array().to_vec(),
+        rate_hz: a.3,
+        t0_ticks: a.4,
+        width: a.5,
+        value_bits: a.6,
+        zero: a.7,
+        scale_nv: a.8,
+        unit: "V".into(),
+        acquisition: Default::default(),
+    }
+}
+
+/// align_find(ref_edges, ref_initial, ref_step, reference, analog, tick_hz, low, high, window_ticks=None,
+/// uncertainty_ticks=None, n_samples=0, max_ppm=5000) -> the alignment of the analog channel against the logic
+/// channel `reference` as JSON (Python's `wireskein.align.find`, its entry for a channel; an infinite uncertainty as
+/// the string "Infinity"). analog: see AnalogArgs; tick_hz: the capture's (num, den).
+#[pyfunction]
+#[pyo3(signature = (ref_edges, ref_initial, ref_step, reference, analog, tick_hz, low, high, window_ticks=None,
+                    uncertainty_ticks=None, n_samples=0, max_ppm=5000.0))]
+#[allow(clippy::too_many_arguments)]
+fn align_find(
+    py: Python<'_>,
+    ref_edges: PyReadonlyArray1<'_, i64>,
+    ref_initial: u8,
+    ref_step: i64,
+    reference: &str,
+    analog: AnalogArgs<'_>,
+    tick_hz: (i64, i64),
+    low: f64,
+    high: f64,
+    window_ticks: Option<f64>,
+    uncertainty_ticks: Option<f64>,
+    n_samples: i64,
+    max_ppm: f64,
+) -> PyResult<String> {
+    let rf = wireskein_analysis::align::logic_edges(&i64s(&ref_edges), ref_initial, ref_step);
+    let a = analog_of(&analog);
+    py.detach(|| {
+        wireskein_analysis::align::find(
+            &rf,
+            reference,
+            &a,
+            tick_hz,
+            low,
+            high,
+            window_ticks,
+            uncertainty_ticks,
+            n_samples,
+            max_ppm,
+        )
+    })
+    .map(|e| serde_json::Value::Object(e).to_string())
+    .map_err(PyValueError::new_err)
+}
+
+/// align_between(ref_edges, ref_initial, ref_step, reference, via, tick_ref, tick, ref_n, logic=None, analog=None,
+/// tick_hz=None, threshold=None, window_ticks=None, max_ppm=200) -> how this capture's ticks map onto the
+/// reference capture's as JSON (Python's `wireskein.align.between`). via: the channel of this capture, logic
+/// (edges, initial, step) or analog (AnalogArgs, read at threshold (low, high) on this capture's tick_hz (num, den)).
+#[pyfunction]
+#[pyo3(signature = (ref_edges, ref_initial, ref_step, reference, via, tick_ref, tick, ref_n, logic=None, analog=None,
+                    tick_hz=None, threshold=None, window_ticks=None, max_ppm=200.0))]
+#[allow(clippy::too_many_arguments)]
+fn align_between(
+    py: Python<'_>,
+    ref_edges: PyReadonlyArray1<'_, i64>,
+    ref_initial: u8,
+    ref_step: i64,
+    reference: &str,
+    via: &str,
+    tick_ref: f64,
+    tick: f64,
+    ref_n: i64,
+    logic: Option<(PyReadonlyArray1<'_, i64>, u8, i64)>,
+    analog: Option<AnalogArgs<'_>>,
+    tick_hz: Option<(i64, i64)>,
+    threshold: Option<(f64, f64)>,
+    window_ticks: Option<f64>,
+    max_ppm: f64,
+) -> PyResult<String> {
+    use wireskein_analysis::align;
+    let rf = align::logic_edges(&i64s(&ref_edges), ref_initial, ref_step);
+    let t = match (&logic, &analog) {
+        (Some((e, i, s)), _) => align::logic_edges(&i64s(e), *i, *s),
+        (None, Some(a)) => {
+            let (Some(th), Some(tk)) = (threshold, tick_hz) else {
+                return Err(PyValueError::new_err(format!("{via} is analog: give a threshold")));
+            };
+            align::analog_edges(&analog_of(a), tk, th.0, th.1).map_err(PyValueError::new_err)?
+        }
+        _ => return Err(PyValueError::new_err(format!("{via}: no such channel"))),
+    };
+    let th = if analog.is_some() { threshold } else { None };
+    py.detach(|| {
+        align::between(
+            &rf,
+            reference,
+            &t,
+            via,
+            tick_ref,
+            tick,
+            ref_n,
+            window_ticks,
+            max_ppm,
+            th,
+        )
+    })
+    .map(|e| serde_json::Value::Object(e).to_string())
+    .map_err(PyValueError::new_err)
+}
+
 #[pymodule]
 fn wireskein_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_function(wrap_pyfunction!(read_file, m)?)?;
     m.add_function(wrap_pyfunction!(verify, m)?)?;
     m.add_function(wrap_pyfunction!(analyze_file, m)?)?;
+    m.add_function(wrap_pyfunction!(align_find, m)?)?;
+    m.add_function(wrap_pyfunction!(align_between, m)?)?;
     m.add_function(wrap_pyfunction!(decode_file, m)?)?;
     m.add_function(wrap_pyfunction!(mark, m)?)?;
     m.add_class::<Blocks>()?;

@@ -967,7 +967,7 @@ fn doubt_why(p: &Piece, o: &Map<String, Value>) -> Vec<String> {
 
 /// One piece read with the spec's roles (Python's `decode._piece`).
 #[allow(clippy::too_many_arguments)]
-fn piece(
+pub(crate) fn piece(
     p: &Piece,
     w: &[Line],
     rate: f64,
@@ -1086,13 +1086,14 @@ fn piece(
 pub struct Items {
     f: std::io::BufWriter<std::fs::File>,
     part: usize,
-    counts: Vec<Map<String, Value>>,
-    unread: Vec<Vec<Value>>,
+    pub(crate) counts: Vec<Map<String, Value>>,
+    pub(crate) unread: Vec<Vec<Value>>,
     dmi: BTreeMap<usize, Vec<Value>>,
 }
 
 impl Items {
-    fn new(path: &Path, spec: &Spec, part: usize) -> Result<Items, String> {
+    pub(crate) fn new(path: &Path, spec: &Spec, part: usize) -> Result<Items, String> {
+        let protocols: Vec<&str> = spec.buses.iter().map(|b| b.protocol.as_str()).collect();
         let f = std::fs::OpenOptions::new()
             .append(true)
             .create(true)
@@ -1101,13 +1102,12 @@ impl Items {
         Ok(Items {
             f: std::io::BufWriter::new(f),
             part,
-            counts: vec![Map::new(); spec.buses.len()],
-            unread: vec![vec![]; spec.buses.len()],
-            dmi: spec
-                .buses
+            counts: vec![Map::new(); protocols.len()],
+            unread: vec![vec![]; protocols.len()],
+            dmi: protocols
                 .iter()
                 .enumerate()
-                .filter(|(_, b)| b.protocol == "rvswd" || b.protocol == "swio")
+                .filter(|(_, b)| **b == "rvswd" || **b == "swio")
                 .map(|(j, _)| (j, vec![]))
                 .collect(),
         })
@@ -1119,8 +1119,11 @@ impl Items {
             d.insert("part".into(), json!(self.part));
             d.insert("bus".into(), json!(j));
             d.insert("layer".into(), json!(layer));
-            if let Some(o) = r.as_object() {
-                d.extend(o.clone());
+            match r.as_object() {
+                Some(o) => d.extend(o.clone()),
+                None => {
+                    d.insert("item".into(), r.clone()); // an item that is not an object (a text line)
+                }
             }
             writeln!(self.f, "{}", Value::Object(d)).map_err(|e| e.to_string())?;
         }
@@ -1129,7 +1132,7 @@ impl Items {
         Ok(())
     }
 
-    fn take(&mut self, p: &Piece, o: &mut Map<String, Value>) -> Result<(), String> {
+    pub(crate) fn take(&mut self, p: &Piece, o: &mut Map<String, Value>) -> Result<(), String> {
         let Some(Value::Array(bs)) = o.get_mut("buses") else {
             return Ok(());
         };
@@ -1165,7 +1168,7 @@ impl Items {
         Ok(())
     }
 
-    fn close(&mut self) -> Result<(), String> {
+    pub(crate) fn close(&mut self) -> Result<(), String> {
         let dmi = std::mem::take(&mut self.dmi);
         for (j, rows) in dmi {
             let mut m = Map::new();
@@ -1606,9 +1609,15 @@ pub fn part_split(
         s.close()?;
     }
     let mut out = join_part(outs, spec, n, rate, o, noisy, sink.is_some());
-    if let (Some(s), Some((_, name))) = (sink, items)
-        && let Some(Value::Array(bs)) = out.get_mut("buses")
-    {
+    if let (Some(s), Some((_, name))) = (&sink, items) {
+        sunk(&mut out, s, name);
+    }
+    Ok(out)
+}
+
+/// The buses of a part whose items went to a file: each one's result their counts, its unread stretches summed up.
+pub(crate) fn sunk(out: &mut Map<String, Value>, s: &Items, name: &str) {
+    if let Some(Value::Array(bs)) = out.get_mut("buses") {
         for (j, b) in bs.iter_mut().enumerate() {
             let b = b.as_object_mut().unwrap();
             b.insert("result".into(), json!({"items": {"file": name, "counts": s.counts[j]}}));
@@ -1617,11 +1626,10 @@ pub fn part_split(
             b.insert("uninterpreted_summary".into(), split::unread_summary(&s.unread[j]));
         }
     }
-    Ok(out)
 }
 
 /// The pieces' part documents as one (Python's `decode._join_part`).
-fn join_part(
+pub(crate) fn join_part(
     outs: Vec<(Piece, Map<String, Value>)>,
     spec: &Spec,
     n: i64,
@@ -1761,7 +1769,7 @@ fn head_of(cap: &wireskein_io::Capture, p: &wireskein_io::Part) -> Map<String, V
     head
 }
 
-fn glitch_filter(meta: &Map<String, Value>) -> Option<Value> {
+pub(crate) fn glitch_filter(meta: &Map<String, Value>) -> Option<Value> {
     meta.get("probe")
         .and_then(|p| p.get("glitch_filter_ns"))
         .filter(|v| crate::nonempty(v) && **v != json!(0) && **v != json!(false))

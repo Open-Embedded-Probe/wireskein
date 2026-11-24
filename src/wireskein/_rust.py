@@ -17,9 +17,10 @@ The parts:
              mark=True writes the markers with Python's code unless `mark` is on too; with definitions directories (protocols
              declared in them) or the engine's extra protocol tables (staged.PROTOCOL_TABLES) verify stays Python's
     analyze  wireskein.decode.analyze_file (and so `wireskein analyze`): the document from wireskein-analysis (the
-             Rust engine, the Rust upper stage, the report beside each claim, a long part read in pieces); options it
-             does not have (select, alternatives, another depth, segments, thresholds, pins, items, device patterns,
-             definitions directories, the engine's extra protocol tables) stay Python's
+             Rust engine, the Rust upper stage, the report beside each claim, a long part read in pieces, its items
+             written out; pins, analog channels read as logic at a threshold, a marker segment); options it does not
+             have (select, alternatives, another depth, device patterns, definitions directories, the engine's extra
+             protocol tables) stay Python's
     decode   wireskein.decode.decode_file (and so `wireskein decode`): the document from wireskein-analysis, every bus
              read by the Rust engine (RVSWD / SWIO and buses sharing lines too, which Python reads with its own
              engine), a long part in pieces, the items written out; device patterns, definitions directories and
@@ -34,6 +35,8 @@ The parts:
     annotate wireskein.annotate.build_file (`wireskein annotate`): each part decoded by the Rust core (as analyze
              with the Rust engine), its rows made in Rust; a step before decoding (analog read as logic), device
              patterns, definitions directories and the engine's extra protocol tables stay Python's
+    align    wireskein.align.find and between (`wireskein align`): the offset and scale of an analog channel, or of
+             another capture, from the edges of one signal on both, by wireskein-analysis's align
 
 A part switched on whose Rust cannot do what was asked falls back to Python without a word (the result is the same
 kind); a part switched on without wireskein_core installed is an error."""
@@ -45,7 +48,8 @@ from fractions import Fraction
 from pathlib import Path
 
 RUST_ENV = "WIRESKEIN_RUST"
-PARTS = ("engine", "io", "write", "verify", "analyze", "decode", "split", "mark", "states", "survey", "annotate")
+PARTS = ("engine", "io", "write", "verify", "analyze", "decode", "split", "mark", "states", "survey", "annotate",
+         "align")
 
 
 def parts() -> frozenset:
@@ -181,19 +185,30 @@ def analyzes(path, hints, mode, select, alternatives, depth, window_s, segment, 
         return False
     from . import plugins
     from ._engine import staged
-    return (mode in ("final", "all") and not select and not alternatives and depth == "protocol" and segment is None
-            and markers_hint is None and not events and not thresholds and not pins and items is None
+    return (mode in ("final", "all") and not select and not alternatives and depth == "protocol"
             and not (hints or {}).get("devices") and _split_spec(split) is not False and Path(path).is_file()
             and not plugins.definitions() and not staged.PROTOCOL_TABLES)
 
 
-def analyze_file(path, hints: dict | None, mode: str, window_s, part, split) -> dict:
+def _dialects() -> str:
+    """The marker dialects (markers.load_dialects: WireSkein's and the definitions directories') as JSON."""
+    from ._engine import markers
+    return json.dumps({name: {k: ([{x: y for x, y in m.items() if x != "_re"} for m in v] if k == "marker" else v)
+                              for k, v in d.items()} for name, d in markers.load_dialects().items()}, default=str)
+
+
+def analyze_file(path, hints: dict | None, mode: str, window_s, part, split, pins=None, thresholds=None,
+                 items=None, segment=None, markers_hint=None, events=False) -> dict:
     """The analysis document from wireskein-analysis (as decode.analyze_file gives it, with analysis_seconds)."""
     import time
     from . import __version__
     t0 = time.perf_counter()
-    doc = json.loads(core().analyze_file(str(path), json.dumps(hints), part, mode,
-                                         tuple(map(float, window_s)) if window_s else None, _split_spec(split)))
+    th = {k: list(map(float, v)) if isinstance(v, (list, tuple)) else float(v) for k, v in (thresholds or {}).items()}
+    doc = json.loads(core().analyze_file(
+        str(path), json.dumps(hints), part, mode, tuple(map(float, window_s)) if window_s else None,
+        _split_spec(split), list(pins) if pins else None, json.dumps(th) if th else None,
+        None if items is None else str(items), None if items is None else str(items), segment,
+        None if markers_hint is None else json.dumps(markers_hint), _dialects() if segment else None, bool(events)))
     doc["wireskein"] = __version__
     doc["analysis_seconds"] = round(time.perf_counter() - t0, 3)
     return doc
@@ -443,3 +458,74 @@ def annotations_file(path, hints: dict | None, part) -> dict:
     from . import __version__
     return json.loads(core().annotations_file(str(path), json.dumps(hints), part,
                                               f"wireskein {__version__} analyze"))
+
+
+# ---------------- align ----------------
+
+def _ratio(x) -> tuple[int, int]:
+    """A rate or a tick as (num, den) in 64 bits (exact where it fits)."""
+    f = Fraction(x)
+    if max(abs(f.numerator), f.denominator) >= 2 ** 62:
+        f = f.limit_denominator(10 ** 9)
+    return f.numerator, f.denominator
+
+
+def _analog_args(a) -> tuple:
+    import numpy as np
+    return (a.name, a.encoding, np.ascontiguousarray(a.values, np.float64), _ratio(a.rate_hz), _ratio(a.t0_ticks),
+            int(a.width), a.value_bits, None if a.zero is None else float(a.zero),
+            None if a.scale_nv is None else float(a.scale_nv))
+
+
+def _entry(text: str) -> dict:
+    return {k: (float("inf") if v == "Infinity" else v) for k, v in json.loads(text).items()}
+
+
+def align_find(cap, reference: str, via: str, threshold, window_ticks, max_ppm: float, uncertainty) -> dict:
+    """align.find's entry for a channel from wireskein-analysis (the reference's channel and the analog trace found
+    by the caller; uncertainty: the probe's start uncertainties in ticks, or None)."""
+    import numpy as np
+    from ._engine import analog
+    ref = cap.channel(reference)
+    trace = next(a for a in cap.analog if a.name == via)
+    low, high = analog.thresholds(threshold)
+    return _entry(core().align_find(np.ascontiguousarray(ref.edges, np.int64), int(ref.initial), int(ref.step),
+                                    reference, _analog_args(trace), _ratio(cap.meta.get("tick_hz", cap.rate)),
+                                    low, high, None if window_ticks is None else float(window_ticks),
+                                    None if uncertainty is None else float(uncertainty), int(cap.n_samples),
+                                    float(max_ppm)))
+
+
+def align_between(ref_cap, reference: str, cap, via: str, threshold, window_ticks, max_ppm: float) -> dict:
+    """align.between from wireskein-analysis: `reference` a logic channel of ref_cap, `via` one of cap (analog read at
+    threshold)."""
+    import numpy as np
+    from ._engine import analog
+    try:
+        ref = ref_cap.channel(reference)
+    except KeyError:
+        ref = None
+    if ref is None:
+        if any(a.name == reference for a in ref_cap.analog):
+            raise ValueError(f"{reference} is analog: give a threshold")
+        raise ValueError(f"{reference}: no such channel")
+    try:
+        ch = cap.channel(via)
+    except KeyError:
+        ch = None
+    kw = {}
+    if ch is not None:
+        kw["logic"] = (np.ascontiguousarray(ch.edges, np.int64), int(ch.initial), int(ch.step))
+    else:
+        trace = next((a for a in cap.analog if a.name == via), None)
+        if trace is None:
+            raise ValueError(f"{via}: no such channel")
+        if threshold is None:
+            raise ValueError(f"{via} is analog: give a threshold")
+        kw.update(analog=_analog_args(trace), tick_hz=_ratio(cap.meta.get("tick_hz", cap.rate)),
+                  threshold=analog.thresholds(threshold))
+    tick_ref, tick = float(ref_cap.meta.get("tick_hz", ref_cap.rate)), float(cap.meta.get("tick_hz", cap.rate))
+    return _entry(core().align_between(np.ascontiguousarray(ref.edges, np.int64), int(ref.initial), int(ref.step),
+                                       reference, via, tick_ref, tick, int(ref_cap.n_samples),
+                                       window_ticks=None if window_ticks is None else float(window_ticks),
+                                       max_ppm=float(max_ppm), **kw))

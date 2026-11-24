@@ -1,10 +1,15 @@
 //! `wireskein-rs`: WireSkein's command line in plain Rust (bench/notes/2026-11-24-rust-plan.ja.md §3, R5).
 //!
-//!     wireskein-rs analyze FILE [--part K] [--hint NAMES|JSON|@FILE] [--mode final|all]
+//!     wireskein-rs analyze FILE [--part K] [--hint NAMES|JSON|@FILE] [--mode final|all] [--window FROM TO]
+//!                  [--split S|off] [--pins A,B] [--threshold NAME=V|NAME=LOW,HIGH ...] [--items FILE]
+//!                  [--segment PATH [--markers JSON] [--events]] [--out FILE]
 //!
 //! prints what analyze finds as the analysis format's document (docs/analysis-format.md §4), as `wireskein analyze`
 //! does: the capture, then each part (a run of parts that follow on without a gap read as one) with its claims and
 //! the relations of its UART pairs. A WireSkein file, a sigrok session (.sr) or a VCD, told apart by content.
+//! --pins: only these channels; --threshold: an analog channel also read as logic (repeatable); --items: a part read
+//! in pieces writes its items to FILE as they are read; --segment: only the items inside a marker segment (the
+//! heading dialect; --markers {"pin", "dialect"} names the marker source, --events adds its text lines).
 //!
 //!     wireskein-rs verify RUN_DIR [--json FILE] [--junit FILE] [--log] [--allow-unchecked] [--mark] [-v]
 //!
@@ -20,12 +25,16 @@
 use serde_json::Value;
 use std::path::Path;
 use std::process::ExitCode;
-use wireskein_analysis::{analyze_file, hints_of, seconds, split};
+use wireskein_analysis::{analyze_file_asked, hints_of, seconds, split};
 
 fn usage() -> ExitCode {
     eprintln!(
         "usage: wireskein-rs analyze FILE [--part K] [--hint NAMES|JSON|@FILE] [--mode final|all] [--window FROM TO]"
     );
+    eprintln!(
+        "                            [--split S|off] [--pins A,B] [--threshold NAME=V|NAME=LOW,HIGH ...] [--items FILE]"
+    );
+    eprintln!("                            [--segment PATH [--markers JSON] [--events]] [--out FILE]");
     eprintln!(
         "       wireskein-rs verify RUN_DIR [--json FILE] [--junit FILE] [--log] [--allow-unchecked] [--mark] [-v]"
     );
@@ -49,14 +58,7 @@ fn decode_cmd(args: &[String]) -> ExitCode {
                 None => return usage(),
             },
             "--pins" => match it.next() {
-                Some(v) => {
-                    pins = Some(
-                        v.split(',')
-                            .map(|x| x.trim().to_string())
-                            .filter(|x| !x.is_empty())
-                            .collect::<Vec<_>>(),
-                    )
-                }
+                Some(v) => pins = Some(names(v)),
                 None => return usage(),
             },
             "--items" => match it.next() {
@@ -185,9 +187,46 @@ fn main() -> ExitCode {
     let (mut file, mut part, mut hints, mut mode) = (None, None, Value::Null, "final".to_string());
     let mut window = None;
     let mut split_opts = Some(split::Options::default());
+    let (mut pins, mut thresholds, mut items, mut out) = (None, vec![], None, None);
+    let (mut segment, mut markers, mut events) = (None, None, false);
     let mut it = args[1..].iter();
     while let Some(a) = it.next() {
         match a.as_str() {
+            "--pins" => match it.next() {
+                Some(v) => pins = Some(names(v)),
+                None => return usage(),
+            },
+            "--threshold" => match it.next().map(|v| v.split_once('=')) {
+                Some(Some((name, v))) => match wireskein_analysis::analog::threshold_of(v) {
+                    Ok((lo, hi)) => thresholds.push((name.to_string(), lo, hi)),
+                    Err(e) => {
+                        eprintln!("--threshold: {e}");
+                        return ExitCode::from(2);
+                    }
+                },
+                _ => return usage(),
+            },
+            "--items" => match it.next() {
+                Some(v) => items = Some(v.clone()),
+                None => return usage(),
+            },
+            "--out" => match it.next() {
+                Some(v) => out = Some(v.clone()),
+                None => return usage(),
+            },
+            "--segment" => match it.next() {
+                Some(v) => segment = Some(v.clone()),
+                None => return usage(),
+            },
+            "--markers" => match it.next().map(|v| serde_json::from_str::<Value>(v)) {
+                Some(Ok(v)) => markers = Some(v),
+                Some(Err(e)) => {
+                    eprintln!("--markers: {e}");
+                    return ExitCode::from(2);
+                }
+                None => return usage(),
+            },
+            "--events" => events = true,
             "--part" => match it.next().and_then(|v| v.parse().ok()) {
                 Some(k) => part = Some(k),
                 None => return usage(),
@@ -221,14 +260,49 @@ fn main() -> ExitCode {
         }
     }
     let Some(file) = file else { return usage() };
-    match analyze_file(Path::new(&file), &hints, part, &mode, window, split_opts.as_ref()) {
+    let asked = wireskein_analysis::Asked {
+        pins: pins.as_deref(),
+        thresholds: &thresholds,
+        items: items.as_deref().map(|f| (Path::new(f), f)),
+        segment: segment.as_deref(),
+        markers: markers.as_ref(),
+        dialects: None,
+        events,
+    };
+    match analyze_file_asked(
+        Path::new(&file),
+        &hints,
+        part,
+        &mode,
+        window,
+        split_opts.as_ref(),
+        &asked,
+    ) {
         Ok(doc) => {
-            println!("{doc}");
+            let text = doc.to_string();
+            match out {
+                Some(f) => {
+                    if let Err(e) = std::fs::write(&f, &text) {
+                        eprintln!("{f}: {e}");
+                        return ExitCode::from(2);
+                    }
+                    eprintln!("{} bytes -> {f}", text.len());
+                }
+                None => println!("{text}"),
+            }
             ExitCode::SUCCESS
         }
         Err(e) => {
-            eprintln!("{e}");
+            eprintln!("wireskein-rs analyze: {e}");
             ExitCode::FAILURE
         }
     }
+}
+
+/// "A,B" -> ["A", "B"] (blanks dropped).
+fn names(v: &str) -> Vec<String> {
+    v.split(',')
+        .map(|x| x.trim().to_string())
+        .filter(|x| !x.is_empty())
+        .collect()
 }
