@@ -23,10 +23,10 @@ on:
       algos:
         description: "Algorithms (wireskein alone runs no gate; engine: every engine of bench/engines; (status ...): every algorithm of those statuses; (other): those in other)"
         type: choice
-        options: ["wireskein", "engine", "wireskein engine", "engine.light", "engine.views", "engine.declarative",
+        options: ["wireskein engine.rust", "wireskein", "engine", "wireskein engine", "engine.light", "engine.views", "engine.declarative",
                   "engine.learned", "engine.synth", "engine.open", "engine.rust", "engine.light_open engine.declarative_open engine.synth_open engine.learned_open",
                   "(status main,trial)", "(status main,trial,retired)", "(other)"]
-        default: "wireskein"
+        default: "wireskein engine.rust"
       other:
         description: "With (other): suites or algorithms by name, space separated (both (other): suites | algorithms)"
         default: ""

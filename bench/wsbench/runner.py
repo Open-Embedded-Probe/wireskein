@@ -203,7 +203,7 @@ def plan_work(stage_names: list[str], algos_by_stage: dict[str, list], dsets: li
     lists all. A suite with trials_in_all = false that came in by "all" / "tune" (not in `named`) runs the main
     algorithms only: trials run on it when it is named."""
     plan = [(s, [a.name for a in algos_by_stage[s]]) for s in stage_names]
-    mains = [(s, [a.name for a in algos_by_stage[s] if a.status == "main"]) for s in stage_names]
+    mains = [(s, [a.name for a in algos_by_stage[s] if a.status == "main" or a.everywhere]) for s in stage_names]
     mains = [(s, n) for s, n in mains if n]
     defs = suites()
     work, meta_ds = [], {}

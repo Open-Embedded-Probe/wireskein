@@ -99,7 +99,8 @@ def main() -> None:
     if not stages:
         ap.error("no algorithm to run")
     if args.has_trials:
-        sys.exit(0 if any(a.status != "main" for s in stages for a in by_stage[s]) else 1)
+        # (a trial run everywhere as the main ones are, as fast as they or faster - the Rust core - is no cost run's)
+        sys.exit(0 if any(a.status != "main" and not a.everywhere for s in stages for a in by_stage[s]) else 1)
     dsets = runner.datasets_of(args.suite)
     if args.dry_run:
         for s in stages:

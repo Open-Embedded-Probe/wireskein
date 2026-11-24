@@ -45,6 +45,7 @@ class Algo:
     src_sha: str = ""
     reason: str = ""                  # retired: why
     engine: Callable | None = None    # (**params) -> {wireskein._engine.methods step: function}
+    everywhere: bool = False          # a trial that runs on every suite, as the main ones do (trials_in_all = false too)
 
     def engine_steps(self) -> dict:
         if self.engine is None:
@@ -60,7 +61,8 @@ _LOADING: list[Path] = []
 
 
 def algorithm(stage: str, name: str, status: str = "trial", about: str = "", variants: dict | None = None,
-              reason: str = "", engine: Callable | None = None):
+              reason: str = "", engine: Callable | None = None, everywhere: tuple = ()):
+    """everywhere: the variants (by suffix) that run on every suite as the main algorithms do, though trials."""
     if status not in STATUSES:
         raise ValueError(f"{name}: status {status!r} (one of {STATUSES})")
 
@@ -74,7 +76,7 @@ def algorithm(stage: str, name: str, status: str = "trial", about: str = "", var
             if key in _ALGOS and _ALGOS[key].path != str(path):
                 raise ValueError(f"{stage}/{full}: registered twice ({_ALGOS[key].path}, {path})")
             _ALGOS[key] = Algo(stage, full, fn, status, about or (fn.__doc__ or "").strip().split("\n")[0],
-                               dict(params), str(path), sha, reason, engine)
+                               dict(params), str(path), sha, reason, engine, suffix in everywhere)
         return fn
     return deco
 
