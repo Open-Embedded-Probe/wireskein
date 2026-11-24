@@ -250,9 +250,19 @@ fn views(scl: &Channel, sda: &Channel) -> Vec<(i64, Vec<i64>, Vec<i64>)> {
 pub fn candidates(view: &View) -> Vec<Candidate> {
     let mut out = vec![];
     let act: Vec<&Channel> = view.channels.iter().filter(|c| c.edges.len() >= 4).collect();
-    for a in &act {
-        for b in &act {
-            if a.name == b.name || a.edges.len() < b.edges.len() || a.initial != 1 || b.initial != 1 {
+    // each line as it settles (pulses under 4 samples out: spikes, crosstalk) and its idle level, for the pairing
+    let settled: Vec<(usize, u8)> = act
+        .iter()
+        .map(|c| {
+            (
+                crate::kernels::deglitch(c.edges, 4).len(),
+                crate::features::features(c, view.n_samples).idle,
+            )
+        })
+        .collect();
+    for (ia, a) in act.iter().enumerate() {
+        for (ib, b) in act.iter().enumerate() {
+            if ia == ib || settled[ia].0 < settled[ib].0 || settled[ia].1 != 1 || settled[ib].1 != 1 {
                 continue;
             }
             let mut best: Option<Candidate> = None;
