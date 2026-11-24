@@ -524,7 +524,16 @@ fn layers(r: &Reading) -> Box<serde_json::value::RawValue> {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn read(view: &View, ch: &Channel, f: &Features, idle: u8, k: i64, clock_like: f64, sync: f64) -> Option<Reading> {
+fn read(
+    view: &View,
+    ch: &Channel,
+    f: &Features,
+    idle: u8,
+    k: i64,
+    clock_like: f64,
+    sync: f64,
+    tight: f64,
+) -> Option<Reading> {
     let n = view.n_samples;
     let (start, length, level) = runs(ch, n);
     let inner = length.len().saturating_sub(2);
@@ -617,6 +626,7 @@ fn read(view: &View, ch: &Channel, f: &Features, idle: u8, k: i64, clock_like: f
     let framed = ((framed_raw - UART_FRAMED) / (1.0 - UART_FRAMED)).max(0.0);
     let clock_off = 0.5 * ((clock_like - UART_CLOCK_LIKE) / (0.7 - UART_CLOCK_LIKE)).clamp(0.0, 1.0);
     let sync_off = ((sync - UART_SYNC) / 0.3).clamp(0.0, 1.0);
+    let tight_off = ((tight - 0.5) / 0.3).clamp(0.0, 1.0);
     let score = framing
         * coverage
         * q(ok_n as f64)
@@ -624,6 +634,7 @@ fn read(view: &View, ch: &Channel, f: &Features, idle: u8, k: i64, clock_like: f
         * tv
         * (1.0 - clock_off)
         * (1.0 - sync_off)
+        * (1.0 - tight_off)
         * resolvable
         * gridded
         * (1.0 - framed)
@@ -649,6 +660,7 @@ fn read(view: &View, ch: &Channel, f: &Features, idle: u8, k: i64, clock_like: f
         ("fixed_bits", fixed),
         ("framed_by_breaks", framed_raw),
         ("sync_with_clock", sync),
+        ("tight_windows", tight),
     ] {
         evidence.insert(k.into(), json!(x));
     }
@@ -788,6 +800,17 @@ pub fn candidates(view: &View) -> Vec<crate::Candidate> {
             .filter(|&&(k, _)| k != ci)
             .map(|&(k, s)| crate::sync::keeping(ch.edges, &view.channels[k]) * s)
             .fold(0.0, f64::max);
+        // a select's windows each hold a clock's burst snugly: no UART's
+        let tight = clocks
+            .iter()
+            .filter(|&&(k, _)| k != ci)
+            .map(|&(k, _)| {
+                let c = &view.channels[k];
+                let r = crate::sync::edges_to(c, 1);
+                let iv: Vec<f64> = r.windows(2).map(|w| (w[1] - w[0]) as f64).collect();
+                crate::sync::tight_windows(ch, f.idle, c.edges, crate::kernels::median(&iv))
+            })
+            .fold(0.0, f64::max);
         let mut readings: Vec<Reading> = vec![];
         for (edges, k) in views(ch, &f, n) {
             let vch = Channel::new(ch.name, ch.initial, &edges);
@@ -796,13 +819,13 @@ pub fn candidates(view: &View) -> Vec<crate::Candidate> {
                 let fv = features(&vch, n);
                 clock_like = clock_like.min(fv.clock.max(fv.clock_local));
             }
-            let Some(r) = read(view, &vch, &f, f.idle, k, clock_like, sync) else {
+            let Some(r) = read(view, &vch, &f, f.idle, k, clock_like, sync, tight) else {
                 continue;
             };
             if r.framing < UART_OTHER_IDLE {
                 let u = r.params["baud"].as_f64().map_or(0.0, |b| view.rate / b);
                 if rests_at(&vch, n, 1 - f.idle, u)
-                    && let Some(r2) = read(view, &vch, &f, 1 - f.idle, k, clock_like, sync)
+                    && let Some(r2) = read(view, &vch, &f, 1 - f.idle, k, clock_like, sync, tight)
                 {
                     readings.push(r2);
                 }

@@ -148,6 +148,58 @@ pub fn keeping(line: &[i64], clock: &Channel) -> f64 {
     co * quantity * pr.max(pf) * (1.0 - crowded)
 }
 
+/// A clock's bursts: its edges split where a gap is over 4 times the median one; (first edge, last edge).
+pub fn bursts(clock: &[i64]) -> Vec<(i64, i64)> {
+    if clock.len() < 2 {
+        return vec![];
+    }
+    let gaps: Vec<f64> = clock.windows(2).map(|w| (w[1] - w[0]) as f64).collect();
+    let m = crate::kernels::median(&gaps);
+    let mut out = vec![];
+    let mut a = clock[0];
+    for i in 0..gaps.len() {
+        if gaps[i] > 4.0 * m {
+            out.push((a, clock[i]));
+            a = clock[i + 1];
+        }
+    }
+    out.push((a, clock[clock.len() - 1]));
+    out
+}
+
+/// Of the line's whole windows away from its idle level, the share holding one of the clock's bursts snugly (the
+/// margins before and after it together no longer than the burst; `staged._tight_windows`): a select's windows, no
+/// UART's.
+pub fn tight_windows(line: &Channel, idle: u8, clock: &[i64], period: f64) -> f64 {
+    let e = line.edges;
+    if e.len() < 3 {
+        return 0.0;
+    }
+    let mut ws = vec![];
+    for i in 0..e.len() - 1 {
+        let after = line.initial ^ (((i + 1) & 1) as u8);
+        if after != idle && (e[i + 1] - e[i]) as f64 >= period {
+            ws.push((e[i], e[i + 1]));
+        }
+    }
+    if ws.len() < 2 {
+        return 0.0;
+    }
+    let starts: Vec<i64> = ws.iter().map(|w| w.0).collect();
+    let mut held = std::collections::BTreeSet::new();
+    for (bs, be) in bursts(clock) {
+        let j = starts.partition_point(|&x| x as f64 <= bs as f64 + period) as isize - 1;
+        if j < 0 {
+            continue;
+        }
+        let (a, b) = ws[j as usize];
+        if (be as f64 - period) <= b as f64 && (bs - a).max(0) + (b - be).max(0) <= be - bs {
+            held.insert(j);
+        }
+    }
+    held.len() as f64 / ws.len() as f64
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
