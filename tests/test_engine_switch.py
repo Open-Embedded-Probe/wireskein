@@ -14,6 +14,14 @@ HAS_CORE = importlib.util.find_spec("wireskein_core") is not None
 rust_only = pytest.mark.skipif(not HAS_CORE, reason="wireskein_core (crates/wireskein-py) not installed")
 
 
+@pytest.fixture(autouse=True)
+def _only_engine_env(monkeypatch):
+    """These tests name the engine by WIRESKEIN_ENGINE alone: WIRESKEIN_RUST (whose part `engine` is the same switch,
+    and contradicts WIRESKEIN_ENGINE=python) is cleared, as when the whole suite runs under WIRESKEIN_RUST=all."""
+    from wireskein import _rust
+    monkeypatch.delenv(_rust.RUST_ENV, raising=False)
+
+
 def _uart(text: bytes = b"hello, engines\r\nsecond line\r\n" * 4):
     w = gen.Wave(1)
     end = gen.uart(w, 50e-6, text, 115200, gap_bits=2.0)

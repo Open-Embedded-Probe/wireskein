@@ -34,8 +34,9 @@ def engine() -> str:
 
 def analyze(view, hints: dict | None = None, readings: bool = False):
     """The engine's result after the upper stage. readings: every reading kept in res.roots, claimed or not (a decode
-    spec's buses; the Python engine keeps them always)."""
-    if engine() == "rust":
+    spec's buses; the Python engine keeps them always). Protocol tables besides decl/ (staged.PROTOCOL_TABLES) are
+    the Python engine's: with them it reads, whatever the engine named."""
+    if engine() == "rust" and not staged.PROTOCOL_TABLES:
         return rust(view, hints, readings)
     return main(view, hints)
 
