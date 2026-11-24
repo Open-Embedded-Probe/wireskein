@@ -7,6 +7,7 @@
 //! the relations of its UART pairs. A WireSkein file, a sigrok session (.sr) or a VCD, told apart by content.
 
 mod report;
+mod split;
 
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
@@ -17,7 +18,7 @@ use wireskein_core::{Channel, View};
 const FORMAT: &str = "wireskein-analysis/1";
 
 /// The layer a claim's result gives in final mode, the first of these that has items (Python's `export.FINAL`).
-fn final_layers(protocol: &str) -> &'static [&'static str] {
+pub(crate) fn final_layers(protocol: &str) -> &'static [&'static str] {
     match protocol {
         "i2c" => &["transactions"],
         "spi" => &["sd", "transfers"],
@@ -38,7 +39,7 @@ fn final_layers(protocol: &str) -> &'static [&'static str] {
     }
 }
 
-fn nonempty(v: &Value) -> bool {
+pub(crate) fn nonempty(v: &Value) -> bool {
     match v {
         Value::Null => false,
         Value::Array(a) => !a.is_empty(),
@@ -91,13 +92,14 @@ fn windowed(lay: Map<String, Value>, s0: i64, s1: i64) -> Map<String, Value> {
         .collect()
 }
 
-fn claim_doc(
+pub(crate) fn claim_doc(
     c: &wireskein_core::Claim,
     mode: &str,
     lines: &[wireskein_io::Line],
     rate: f64,
     n: i64,
     window: Option<(i64, i64)>,
+    notes: bool,
 ) -> Value {
     let mut out = Map::new();
     out.insert("protocol".into(), json!(c.protocol));
@@ -107,7 +109,11 @@ fn claim_doc(
     out.insert("margin".into(), json!(c.margin));
     out.insert("params".into(), Value::Object(c.params.clone()));
     let mut lay: Map<String, Value> = serde_json::from_str(c.layers.get()).unwrap_or_default();
-    let notes = note(c, &mut lay, lines, rate, n);
+    let notes = if notes {
+        note(c, &mut lay, lines, rate, n)
+    } else {
+        Map::new()
+    };
     if let Some((s0, s1)) = window {
         lay = windowed(lay, s0, s1);
     }
@@ -199,6 +205,7 @@ pub fn analyze_file(
     part: Option<usize>,
     mode: &str,
     window_s: Option<(f64, f64)>,
+    split_opts: Option<&split::Options>,
 ) -> Result<Value, String> {
     let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let cap = wireskein_io::read_bytes(&bytes).map_err(|e| format!("{}: {e}", path.display()))?;
@@ -236,6 +243,21 @@ pub fn analyze_file(
             .map(|l| Channel::new(&l.name, l.initial, &l.edges))
             .collect();
         let view = View::new(rate, p.ticks, chans).map_err(|e| format!("part {}: {e}", p.part))?;
+        if let Some(o) = split_opts.filter(|_| window.is_none() && part.is_none())
+            && let Some((claims, sp)) = split::analyze(&p.lines, p.ticks, rate, hints, o, mode)?
+        {
+            let mut d = Map::new();
+            d.insert("part".into(), json!(p.part));
+            d.insert("ticks".into(), json!(p.ticks));
+            if let Some(t0) = p.tick0 {
+                d.insert("tick0".into(), json!(t0));
+            }
+            d.extend(wireskein_io::wsk::part_keys(&p.meta));
+            d.insert("claims".into(), Value::Array(claims));
+            d.insert("split".into(), sp);
+            parts.push(Value::Object(d));
+            continue;
+        }
         let (claims, relations) = wireskein_core::analyze_full(&view, hints);
         let mut d = Map::new();
         d.insert("part".into(), json!(p.part));
@@ -256,7 +278,7 @@ pub fn analyze_file(
             Value::Array(
                 claims
                     .iter()
-                    .map(|c| claim_doc(c, mode, &p.lines, rate, p.ticks, window))
+                    .map(|c| claim_doc(c, mode, &p.lines, rate, p.ticks, window, true))
                     .collect(),
             ),
         );
@@ -310,6 +332,7 @@ fn main() -> ExitCode {
     }
     let (mut file, mut part, mut hints, mut mode) = (None, None, Value::Null, "final".to_string());
     let mut window = None;
+    let mut split_opts = Some(split::Options::default());
     let mut it = args[1..].iter();
     while let Some(a) = it.next() {
         match a.as_str() {
@@ -329,6 +352,14 @@ fn main() -> ExitCode {
                 (Some(a), Some(b)) => window = Some((a, b)),
                 _ => return usage(),
             },
+            "--split" => match it.next().map(|v| split::Options::parse(v)) {
+                Some(Ok(o)) => split_opts = o,
+                Some(Err(e)) => {
+                    eprintln!("{e}");
+                    return ExitCode::from(2);
+                }
+                None => return usage(),
+            },
             "--mode" => match it.next() {
                 Some(m) if m == "final" || m == "all" => mode = m.clone(),
                 _ => return usage(),
@@ -338,7 +369,7 @@ fn main() -> ExitCode {
         }
     }
     let Some(file) = file else { return usage() };
-    match analyze_file(Path::new(&file), &hints, part, &mode, window) {
+    match analyze_file(Path::new(&file), &hints, part, &mode, window, split_opts.as_ref()) {
         Ok(doc) => {
             println!("{doc}");
             ExitCode::SUCCESS

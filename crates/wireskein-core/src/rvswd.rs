@@ -475,7 +475,10 @@ fn read_frames(frames: &[Frame], delimited: bool, bits: &[u8], t: &[i64], rate: 
         }
         if ft.len() > 1 {
             let d: Vec<f64> = ft.windows(2).map(|w| (w[1] - w[0]) as f64).collect();
-            rec.insert("period_ns".into(), json!((median(&d) / rate * 1e10).round() / 10.0));
+            rec.insert(
+                "period_ns".into(),
+                json!((median(&d) / rate * 1e9 * 10.0).round_ties_even() / 10.0),
+            );
         }
         let bs: String = f.iter().map(|&b| if b == 1 { '1' } else { '0' }).collect();
         if let Some(fl) = frame_fields(&bs, form, rec["op"] == json!("BURST")) {

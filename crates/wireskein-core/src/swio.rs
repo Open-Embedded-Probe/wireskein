@@ -147,7 +147,7 @@ fn symbols(ch: &Channel, idle: u8) -> Option<Symbols> {
 /// How a frame's pulses sat against the split (ns): the longest short one, the shortest long one, their medians,
 /// the space between pulses and the pitch after a 1 and after a 0, and the R/W bit's own low and gap.
 fn widths(ps: &Symbols, short: &[bool], a: usize, b: usize, rw: Option<usize>, ns: f64) -> Map<String, Value> {
-    let r1 = |x: f64| json!((x * ns * 10.0).round() / 10.0);
+    let r1 = |x: f64| json!(((x * ns) * 10.0).round_ties_even() / 10.0);
     let pick = |want: bool| -> Vec<f64> {
         (a..b)
             .filter(|&i| short[i] == want)
@@ -242,7 +242,7 @@ fn read(ch: &Channel, n: i64, rate: f64) -> Option<Candidate> {
         pulses
     };
     let score = known * (0.5 + 0.5 * dilute) * (1.0 - 0.5f64.powf(tx.len() as f64 / 4.0));
-    let split_ns = (ps.split / rate * 1e10).round() / 10.0;
+    let split_ns = (ps.split / rate * 1e9 * 10.0).round_ties_even() / 10.0;
     let ev = obj(vec![
         ("frames", json!(lens.len())),
         ("structured", json!(structured)),
