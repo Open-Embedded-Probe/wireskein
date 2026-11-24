@@ -303,6 +303,9 @@ pub fn read(view: &View, scl: &Channel, sda: &Channel) -> Option<Candidate> {
             {
                 STATIC_DATA
             }
+            // (a word or a few, each 0x00 or each 0xFF: no address but the general call's or a reserved one, written
+            // to with nothing - a select framing a data line's run of a sample or two by chance)
+            Some((v, n)) if n == values.len() && (v == 0 || v == 0xFF) => STATIC_DATA,
             // (however the words go: SDA hardly moving while SCL is low inside the frames - less than once in
             // STATIC_BITS bits, the address and the acknowledges with them - is a line held, no data)
             _ if lows >= 9 && moved * STATIC_BITS < lows => STATIC_DATA,
