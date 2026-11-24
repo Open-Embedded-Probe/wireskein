@@ -1378,6 +1378,10 @@ def analyze_file(path: str | Path, hints: dict | None = None, mode: str = "final
     is analysed part by part (analysis never crosses a gap); a .sr or a VCD is one part.
     window_s / segment pick a time range inside one part: `part` names it when the file has several."""
     import time
+    from . import _rust
+    if _rust.analyzes(path, hints, mode, select, alternatives, depth, window_s, segment, markers_hint, events,
+                      thresholds, split, pins, items):                # WIRESKEIN_RUST=analyze (wireskein._rust)
+        return _rust.analyze_file(path, hints, mode, window_s, part, split)
     from ._engine import markers
     path = Path(path)
     from . import split as _split

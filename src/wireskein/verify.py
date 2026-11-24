@@ -2366,10 +2366,14 @@ def verify(run_dir: str | Path, mark: bool = False) -> dict:
     """The report of a run (docs/run-format.ja.md §3). mark=True also writes what the checks found into each
     capture file's markers (by "verify", wireskein-format §5.2): every notice, and every change becomes found, at
     its tick, so a viewer shows them on the waveform; the markers of others are kept, verify's earlier ones replaced."""
-    try:
-        rep = _verify(Path(run_dir))
-    finally:
-        _LOADED.clear()                                  # the captures are read once per verify, then let go
+    from . import _rust
+    if _rust.verifies():                                 # WIRESKEIN_RUST=verify (wireskein._rust)
+        rep = _rust.verify(run_dir)
+    else:
+        try:
+            rep = _verify(Path(run_dir))
+        finally:
+            _LOADED.clear()                              # the captures are read once per verify, then let go
     if mark:
         _mark(Path(run_dir), rep)
     return rep

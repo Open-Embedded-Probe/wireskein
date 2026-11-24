@@ -1,7 +1,7 @@
 """The analysis: WireSkein's engine reads the buses, then the upper stage (wireskein._upper) reads what rides on the
 claims it chose (bench/notes/2026-11-23-extension-spec.ja.md).
 
-The engine is Python's unless WIRESKEIN_ENGINE=rust names the Rust core (the package wireskein-core, module
+The engine is Python's unless WIRESKEIN_ENGINE=rust (or WIRESKEIN_RUST=engine, wireskein._rust) names the Rust core (the package wireskein-core, module
 wireskein_core, installed apart: bench/notes/2026-11-24-rust-plan.ja.md §2), to compare the two and as a way out. The
 Rust core's claims, in the analysis format, go through the same upper stage; what needs the Python engine's own
 readings (a decode spec's buses, segments, verify's I2C / SPI / UART checks) stays Python's, said once on stderr."""
@@ -12,7 +12,7 @@ import os
 import sys
 from dataclasses import dataclass, field
 
-from . import _upper
+from . import _rust, _upper
 from ._engine import staged
 
 ENGINE_ENV = "WIRESKEIN_ENGINE"
@@ -20,11 +20,16 @@ ENGINES = ("python", "rust")
 
 
 def engine() -> str:
-    """The engine WIRESKEIN_ENGINE names: "python" (the default) or "rust"."""
-    v = os.environ.get(ENGINE_ENV, "").strip().lower() or "python"
-    if v not in ENGINES:
+    """The engine WIRESKEIN_ENGINE names: "python" (the default) or "rust"; WIRESKEIN_RUST=engine (one of the parts
+    wireskein._rust switches) is the same as WIRESKEIN_ENGINE=rust, and contradicts WIRESKEIN_ENGINE=python."""
+    v = os.environ.get(ENGINE_ENV, "").strip().lower()
+    if v and v not in ENGINES:
         raise ValueError(f"{ENGINE_ENV}={v!r}: one of {', '.join(ENGINES)}")
-    return v
+    if _rust.on("engine"):
+        if v == "python":
+            raise ValueError(f"{ENGINE_ENV}=python and {_rust.RUST_ENV}=engine: name one engine")
+        return "rust"
+    return v or "python"
 
 
 def analyze(view, hints: dict | None = None, readings: bool = False):

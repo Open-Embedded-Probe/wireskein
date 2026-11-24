@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .. import _fileformat as fileformat
+from .. import _fileformat as fileformat, _rust
 from .model import AnalogTrace, Capture, Channel, EventTrace, edges_from_dense
 
 
@@ -72,12 +72,16 @@ def load(path: str | Path, part: int | None = None) -> Capture:
     """One part of a WireSkein file (a capture of several parts needs `part`, wireskein-format §3.4). meta carries
     whether the capture is complete and what was lost (a loss makes the whole capture a failure), the layout, and
     which part of how many."""
+    if _rust.on("io"):
+        return _rust.load(path, part)
     head, chans = fileformat.read(path, part=part)
     return view(head, [decode(c) for c in chans], path)
 
 
 def load_parts(path: str | Path) -> list[Capture]:
     """Every part of a WireSkein file, in order (wireskein-format §3.4: analysis never crosses them)."""
+    if _rust.on("io"):
+        return _rust.load_parts(path)
     ex = fileformat.extras(path)                     # read once for every part
     return [view(head, [decode(c) for c in chans], path, ex) for head, chans in fileformat.read_parts(path)]
 
