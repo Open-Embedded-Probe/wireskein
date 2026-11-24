@@ -310,8 +310,9 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
             (1.0 - (top - 0.5) / 0.5).max(0.05)
         }
     };
-    // as many words as the windows of whole bytes hold (a line's words: Python's q(words, 5))
-    let words: usize = counts.iter().filter(|&&c| c % 8 == 0).map(|&c| c / 8).sum();
+    // as many words as the windows of whole bytes hold, on each data line (Python's q(words, 5), its words counted per
+    // data pin: two lines read together are twice the evidence)
+    let words: usize = counts.iter().filter(|&&c| c % 8 == 0).map(|&c| c / 8).sum::<usize>() * datas.len();
     let quantity = 1.0 - (-(words as f64) / SCALE).exp();
     // a select frames every burst of the clock (one outside its windows is another target's, or it is no select),
     // its windows hold the clock (a window with none is another target's selection) snugly (the margins before and
