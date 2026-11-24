@@ -5,6 +5,7 @@
 //! Built up beside the Python engine a part at a time (bench/notes/2026-11-24-rust-plan.ja.md): each part is judged on
 //! the bench against the Python one (equal or better, not the same), and only then made the product's default.
 
+pub mod can;
 pub mod cec;
 pub mod claim;
 pub mod features;
@@ -198,6 +199,7 @@ pub fn candidates_with(view: &View, bauds: &std::collections::BTreeMap<String, f
     cands.extend(cec::candidates(view));
     cands.extend(ps2::candidates(view));
     cands.extend(swd::candidates(view));
+    cands.extend(can::candidates(view));
     cands
 }
 
