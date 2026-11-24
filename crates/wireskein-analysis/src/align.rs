@@ -7,6 +7,7 @@
 use crate::analog;
 use serde_json::{Map, Value, json};
 use wireskein_io::Analog;
+use wireskein_io::j::J;
 
 /// A channel's edges: times in the capture's ticks, the level after each, the resolution in ticks.
 #[derive(Debug, Clone)]
@@ -508,6 +509,81 @@ pub fn between(
         e.insert("threshold_v".into(), json!([lo, hi]));
     }
     Ok(e)
+}
+
+/// The entries' keys in Python's order (align.find, align.between).
+const ENTRY_KEYS: [&str; 16] = [
+    "offset_ticks",
+    "scale",
+    "reference",
+    "via",
+    "method",
+    "matched",
+    "edges",
+    "overlap_edges",
+    "overlap_s",
+    "residual_ticks",
+    "scale_ppm",
+    "scale_ppm_uncertainty",
+    "threshold_v",
+    "window_ticks",
+    "offset_us",
+    "start_shift_us",
+];
+
+/// An entry of the Rust align as Python's (its keys in Python's order, "Infinity" a float again).
+pub fn entry_of(m: &Map<String, Value>, between: bool) -> J {
+    let order: Vec<&str> = if between {
+        vec![
+            "offset_ticks",
+            "scale",
+            "reference",
+            "via",
+            "method",
+            "matched",
+            "edges",
+            "overlap_edges",
+            "residual_ticks",
+            "scale_ppm",
+            "scale_ppm_uncertainty",
+            "offset_us",
+            "threshold_v",
+        ]
+    } else {
+        vec![
+            "offset_ticks",
+            "scale",
+            "reference",
+            "via",
+            "method",
+            "matched",
+            "edges",
+            "overlap_edges",
+            "overlap_s",
+            "residual_ticks",
+            "scale_ppm_uncertainty",
+            "threshold_v",
+            "window_ticks",
+            "offset_us",
+            "scale_ppm",
+            "start_shift_us",
+        ]
+    };
+    let mut out = J::dict();
+    let keys = order
+        .iter()
+        .map(|k| k.to_string())
+        .chain(m.keys().filter(|k| !ENTRY_KEYS.contains(&k.as_str())).cloned());
+    for k in keys {
+        if let Some(v) = m.get(&k) {
+            let j = match v {
+                Value::String(s) if s == "Infinity" => J::Float(f64::INFINITY),
+                v => wireskein_io::write::j_of(v),
+            };
+            out.set(&k, j);
+        }
+    }
+    out
 }
 
 #[cfg(test)]

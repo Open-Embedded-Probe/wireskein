@@ -17,13 +17,16 @@
 //!     wireskein-rs annotate FILE [--save] [--hint H] [--threshold N=V ...]
 //!     wireskein-rs align FILE --reference LOGIC --via CH [--to OTHER] [--threshold V|LOW,HIGH] [--max-ppm X]
 //!                  [--max-offset T] [--apply-to A,B] [--save]
+//!     wireskein-rs note FILE.wireskein TEXT [--json] [--kind K]
+//!     wireskein-rs attach FILE.wireskein NAME [SRC | --text TEXT] [--replace]
 //!     wireskein-rs --version
 //!
 //! The analysis is the Rust core's (wireskein-core), the rest wireskein-analysis, wireskein-io and wireskein-verify.
-//! Not here (Python's only, `wireskein`): note, attach, capture, gui, analyze --devices, --definitions DIR.
+//! Not here (Python's only, `wireskein`): capture, gui, analyze --devices, --definitions DIR.
 
 mod analyze;
 mod files;
+mod notes;
 mod views;
 
 use std::process::ExitCode;
@@ -197,13 +200,26 @@ pub fn hint(text: Option<&str>) -> Result<serde_json::Value, String> {
     Ok(serde_json::json!({ "protocols": names }))
 }
 
+/// The hints `hint` read, as the document gives them: JSON in its own keys' order.
+pub fn hint_j(text: Option<&str>, hints: &serde_json::Value) -> wireskein_io::j::J {
+    let body = match text.and_then(|t| t.strip_prefix('@')) {
+        Some(p) => std::fs::read_to_string(p).ok(),
+        None => text.map(String::from),
+    };
+    body.and_then(|b| {
+        let t = b.trim();
+        (t.starts_with('{') || t.starts_with('[')).then(|| wireskein_io::j::J::parse(t).ok())?
+    })
+    .unwrap_or_else(|| wireskein_io::write::j_of(hints))
+}
+
 fn help() {
     println!(
-        "usage: {PROG} [--version] {{analyze,decode,segments,verify,survey,convert,info,states,annotate,align}} ..."
+        "usage: {PROG} [--version] {{analyze,decode,segments,verify,survey,convert,info,states,annotate,align,note,attach}} ..."
     );
     println!();
     println!("WireSkein's command line in Rust: the subcommands of `wireskein` with the same arguments and output.");
-    println!("Python's only (use `wireskein`): note, attach, capture, gui, analyze --devices, --definitions.");
+    println!("Python's only (use `wireskein`): capture, gui, analyze --devices, --definitions.");
 }
 
 /// `wireskein verify`: the lines, the summary, the report and JUnit when asked; 1 when the run fails.
@@ -300,7 +316,9 @@ fn main() -> ExitCode {
         "align" => views::align(rest),
         "convert" => files::convert(rest),
         "info" => files::info(rest),
-        "note" | "attach" | "capture" | "gui" => usage_error(
+        "note" => notes::note(rest),
+        "attach" => notes::attach(rest),
+        "capture" | "gui" => usage_error(
             cmd,
             &format!("{cmd} is not in the Rust command line yet: use `wireskein {cmd}`"),
         ),
@@ -308,7 +326,7 @@ fn main() -> ExitCode {
             "",
             &format!(
                 "argument cmd: invalid choice: {} (choose from analyze, decode, segments, verify, survey, convert, \
-                 info, states, annotate, align)",
+                 info, states, annotate, align, note, attach)",
                 wireskein_io::j::py_str_repr(cmd)
             ),
         ),

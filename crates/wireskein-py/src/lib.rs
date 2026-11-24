@@ -7,7 +7,7 @@
 //! run verified (`verify`), a capture file's analysis document (`analyze_file`), a line's states (`states_of_line`), a
 //! capture's overview (`survey_file`), a capture written (`write_file`), a file's annotations (`annotations_file`),
 //! a decode spec's document (`decode_file`), a part's lines a block at a time (`file_blocks`, `sr_blocks`), verify's
-//! markers written (`mark`), each switched on in the wireskein package by WIRESKEIN_RUST (src/wireskein/_rust.py).
+//! markers written (`mark`), a note or an attachment stored (`note`, `attach`), each switched on in the wireskein package by WIRESKEIN_RUST (src/wireskein/_rust.py).
 
 use numpy::{PyArray1, PyReadonlyArray1};
 use pyo3::exceptions::PyValueError;
@@ -364,7 +364,9 @@ fn analyze_file(
             wireskein_analysis::analyze_file_asked(&path, &hints, part, mode, window, opts.as_ref(), &asked)
         })
         .map_err(PyValueError::new_err)?;
-    Ok(doc.to_string())
+    // (its keys in Python's order; the hints as given)
+    let given = wireskein_io::j::J::parse(hints_json).ok();
+    Ok(wireskein_analysis::order::analysis(&doc, given.as_ref()).dumps())
 }
 
 /// A C-contiguous int64 array's values (borrowed), or a copy of another's.
@@ -719,7 +721,7 @@ fn decode_file(
             )
         })
         .map_err(PyValueError::new_err)?;
-    Ok(doc.to_string())
+    Ok(spec.ordered(&doc).dumps())
 }
 
 /// An analog channel as Python gives it: (name, encoding, values as float64 (raw integers or volts), rate_hz as
@@ -791,7 +793,7 @@ fn align_find(
             max_ppm,
         )
     })
-    .map(|e| serde_json::Value::Object(e).to_string())
+    .map(|e| wireskein_analysis::align::entry_of(&e, false).dumps())
     .map_err(PyValueError::new_err)
 }
 
@@ -847,12 +849,56 @@ fn align_between(
             th,
         )
     })
-    .map(|e| serde_json::Value::Object(e).to_string())
+    .map(|e| wireskein_analysis::align::entry_of(&e, true).dumps())
     .map_err(PyValueError::new_err)
+}
+
+/// A note's or an attachment's error as the Python exception it is there (FileExistsError, FileNotFoundError,
+/// OSError, zipfile.BadZipFile, ValueError).
+fn file_error(py: Python<'_>, e: wireskein_io::attach::FileError) -> PyErr {
+    use pyo3::exceptions::{PyFileExistsError, PyFileNotFoundError, PyOSError};
+    use wireskein_io::attach::FileError as F;
+    match e {
+        F::Exists(m) => PyFileExistsError::new_err(m),
+        F::NotFound(m) => PyFileNotFoundError::new_err(m),
+        F::Os(m) => PyOSError::new_err(m),
+        F::Invalid(m) => PyValueError::new_err(m),
+        F::BadZip(m) => match py
+            .import("zipfile")
+            .and_then(|z| z.getattr("BadZipFile"))
+            .and_then(|c| c.call1((m.clone(),)))
+        {
+            Ok(v) => PyErr::from_value(v),
+            Err(_) => PyValueError::new_err(m),
+        },
+    }
+}
+
+/// note(path, content_json, fields_json) -> the note's number: an entry appended to a WireSkein file's log
+/// (Python's `_fileformat.note`): {"time": the local time with its offset from UTC, "content": ..., **fields}.
+#[pyfunction]
+fn note(py: Python<'_>, path: std::path::PathBuf, content_json: &str, fields_json: &str) -> PyResult<usize> {
+    let content = wireskein_io::j::J::parse(content_json).map_err(PyValueError::new_err)?;
+    let fields = wireskein_io::j::J::parse(fields_json).map_err(PyValueError::new_err)?;
+    let fields = fields.items().to_vec();
+    py.detach(|| wireskein_io::attach::note(&path, &content, &fields))
+        .map_err(|e| file_error(py, e))
+}
+
+/// attach(path, name, data, replace=False) -> None: a free-form file stored in a WireSkein file as attach/NAME
+/// (Python's `_fileformat.attach`, the data as it is to be stored).
+#[pyfunction]
+#[pyo3(signature = (path, name, data, replace=false))]
+fn attach(py: Python<'_>, path: std::path::PathBuf, name: &str, data: &[u8], replace: bool) -> PyResult<()> {
+    let data = data.to_vec();
+    py.detach(|| wireskein_io::attach::attach(&path, name, &data, replace))
+        .map_err(|e| file_error(py, e))
 }
 
 #[pymodule]
 fn wireskein_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(note, m)?)?;
+    m.add_function(wrap_pyfunction!(attach, m)?)?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_function(wrap_pyfunction!(read_file, m)?)?;
     m.add_function(wrap_pyfunction!(verify, m)?)?;

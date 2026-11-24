@@ -2,7 +2,7 @@
 //! `align` / `segments`): views of a capture made without a spec.
 
 use crate::{Args, Takes, emit, fail, hint, names, thresholds, usage_error};
-use serde_json::{Map, Value};
+use serde_json::Value;
 use std::path::Path;
 use std::process::ExitCode;
 use wireskein_analysis::{align, split, states};
@@ -398,80 +398,6 @@ pub fn annotate(args: &[String]) -> ExitCode {
 
 const ALIGN_FORMAT: &str = "wireskein-alignment/1";
 const ALIGN_NAME: &str = "alignment.json";
-/// The entries' keys in Python's order (align.find, align.between).
-const ENTRY_KEYS: [&str; 16] = [
-    "offset_ticks",
-    "scale",
-    "reference",
-    "via",
-    "method",
-    "matched",
-    "edges",
-    "overlap_edges",
-    "overlap_s",
-    "residual_ticks",
-    "scale_ppm",
-    "scale_ppm_uncertainty",
-    "threshold_v",
-    "window_ticks",
-    "offset_us",
-    "start_shift_us",
-];
-
-/// An entry of the Rust align as Python's (its keys in Python's order, "Infinity" a float again).
-fn entry_of(m: &Map<String, Value>, between: bool) -> J {
-    let order: Vec<&str> = if between {
-        vec![
-            "offset_ticks",
-            "scale",
-            "reference",
-            "via",
-            "method",
-            "matched",
-            "edges",
-            "overlap_edges",
-            "residual_ticks",
-            "scale_ppm",
-            "scale_ppm_uncertainty",
-            "offset_us",
-            "threshold_v",
-        ]
-    } else {
-        vec![
-            "offset_ticks",
-            "scale",
-            "reference",
-            "via",
-            "method",
-            "matched",
-            "edges",
-            "overlap_edges",
-            "overlap_s",
-            "residual_ticks",
-            "scale_ppm_uncertainty",
-            "threshold_v",
-            "window_ticks",
-            "offset_us",
-            "scale_ppm",
-            "start_shift_us",
-        ]
-    };
-    let mut out = J::dict();
-    let keys = order
-        .iter()
-        .map(|k| k.to_string())
-        .chain(m.keys().filter(|k| !ENTRY_KEYS.contains(&k.as_str())).cloned());
-    for k in keys {
-        if let Some(v) = m.get(&k) {
-            let j = match v {
-                Value::String(s) if s == "Infinity" => J::Float(f64::INFINITY),
-                v => wireskein_io::write::j_of(v),
-            };
-            out.set(&k, j);
-        }
-    }
-    out
-}
 
 /// The alignment stored in a WireSkein file, or None (Python's `align.load`).
 fn align_load(path: &Path) -> Result<Option<J>, String> {
@@ -623,7 +549,7 @@ fn align_file(path: &Path, reference: &str, via: &str, a: &Args, max_ppm: f64) -
             max_ppm,
             thv,
         )?;
-        let e = entry_of(&e, true);
+        let e = wireskein_analysis::align::entry_of(&e, true);
         let f = |k: &str| e.get(k).f().unwrap_or(f64::NAN);
         let to_name = to
             .file_name()
@@ -694,7 +620,7 @@ fn align_file(path: &Path, reference: &str, via: &str, a: &Args, max_ppm: f64) -
     if !missing.is_empty() {
         return Err(format!("not analog channels here: {}", missing.join(", ")));
     }
-    let c = entry_of(&e, false);
+    let c = wireskein_analysis::align::entry_of(&e, false);
     let f = |k: &str| c.get(k).f().unwrap_or(f64::NAN);
     println!(
         "{via} against {reference}: start {:+.3} us, scale {:+.1} +- {:.1} ppm, {}/{} edges matched, residual {:.3} us",

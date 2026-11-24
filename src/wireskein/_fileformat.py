@@ -670,6 +670,9 @@ def attach(path: str | Path, name: str, data: str | bytes | dict | list, replace
     """Store a free-form file in an existing .wireskein as attach/<name>: str as
     UTF-8 text, dict / list as JSON, bytes as they are. The channel data is
     not rewritten unless an existing attachment is replaced (replace=True)."""
+    from . import _rust
+    if _rust.on("attach"):
+        return _rust.attach(path, name, _encode(data), replace)
     entry = _attach_name(name)
     with zipfile.ZipFile(path) as z:
         _check(z, path)
@@ -685,6 +688,9 @@ def attach(path: str | Path, name: str, data: str | bytes | dict | list, replace
 def note(path: str | Path, content: str | dict | list, **fields) -> int:
     """Append one entry to the capture's log (never rewrites the others):
     {"time": ISO 8601, "content": ..., **fields}. Returns its number."""
+    from . import _rust
+    if _rust.on("note"):
+        return _rust.note(path, content, fields)
     with zipfile.ZipFile(path) as z:
         _check(z, path)
         n = sum(1 for x in z.namelist() if x.startswith(NOTES)) + 1

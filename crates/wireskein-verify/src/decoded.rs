@@ -667,6 +667,110 @@ fn i2c_notices(cap: &Cap, scl: &Ch, sda: &Ch, spike_s: f64, stretch: f64, burst:
     out
 }
 
+const BOUNCE_TICKS: i64 = 4; // staged's: a clock's typical run also with its pulses under this taken out
+const GLITCH_SHARE: f64 = 0.6; // a clock's runs this short a share or less: views with them taken out
+const GLITCH_SHARE_CLEANED: f64 = 0.9; // ... where its typical run is its cleaned one's
+
+/// The glitch views of an I2C pair (Python's `staged.glitch_views` for a group of SCL and SDA): where SCL has short
+/// pulses, rare beside its own runs (or SDA has, SCL clean), the two lines with their pulses under k taken out, for
+/// a few k under half SCL's typical run (2, 3 and 5 samples, and one from the pulses seen); those that take out
+/// nothing more than a smaller k left out. Lines of a step of their own are left as they are.
+fn i2c_glitch_views(cap: &Cap, scl: &str, sda: &str) -> Vec<Cap> {
+    let (Some(c), Some(d)) = (cap.ch(scl), cap.ch(sda)) else {
+        return vec![];
+    };
+    if c.step != 1 || d.step != 1 {
+        return vec![];
+    }
+    let (_, length, _) = c.runs(cap.n);
+    if length.len() < 18 {
+        return vec![];
+    }
+    let inner: Vec<i64> = length[1..length.len() - 1].to_vec();
+    let mut med = median_i(&inner);
+    let clean: Vec<i64> = wireskein_core::kernels::deglitch(&c.edges, BOUNCE_TICKS)
+        .windows(2)
+        .map(|w| w[1] - w[0])
+        .collect();
+    let mut cleaned = false;
+    if clean.len() >= 16 && 4 * clean.len() >= inner.len() {
+        let m = median_i(&clean);
+        cleaned = m > med;
+        med = med.max(m);
+    }
+    let share_max = if cleaned { GLITCH_SHARE_CLEANED } else { GLITCH_SHARE };
+    let lim = (0.25 * med).max(1.0);
+    let short = inner.iter().filter(|&&r| r as f64 <= lim).count();
+    let mut seen: Vec<f64> = inner.iter().filter(|&&r| r as f64 <= lim).map(|&r| r as f64).collect();
+    if short == 0 && d.edges.len() > 2 {
+        // a clean clock, SDA with short pulses (crosstalk: a pulse while SCL is high reads as a START or STOP)
+        let r: Vec<f64> = d.edges.windows(2).map(|w| (w[1] - w[0]) as f64).collect();
+        let s: Vec<f64> = r.iter().copied().filter(|&x| x <= lim).collect();
+        let share = s.len() as f64 / r.len() as f64;
+        if share > 0.0 && share < GLITCH_SHARE {
+            seen = s;
+        }
+    }
+    if med < 3.0 || seen.is_empty() || short as f64 >= share_max * inner.len() as f64 {
+        return vec![];
+    }
+    seen.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let q = wireskein_core::kernels::quantile(&seen, 0.95);
+    let k_rel = (0.3 * med).min(q + 1.0).max(2.0) as i64;
+    let mut ks = vec![2, 3, 5, k_rel];
+    ks.sort();
+    ks.dedup();
+    let mut made: Vec<(Vec<i64>, Vec<i64>)> = vec![(c.edges.clone(), d.edges.clone())];
+    let mut out = vec![];
+    for k in ks {
+        if k as f64 > 0.5 * med {
+            continue;
+        }
+        let lines = (
+            wireskein_core::kernels::deglitch(&c.edges, k),
+            wireskein_core::kernels::deglitch(&d.edges, k),
+        );
+        if made.contains(&lines) {
+            continue;
+        }
+        let mut v = cap.clone();
+        for ch in v.channels.iter_mut() {
+            if ch.name == scl {
+                ch.edges = lines.0.clone();
+            } else if ch.name == sda {
+                ch.edges = lines.1.clone();
+            }
+        }
+        made.push(lines);
+        out.push(v);
+    }
+    out
+}
+
+/// The view of an I2C pair read best: the input view (`input`), the lines as they are and their glitch views, each
+/// scored by the Rust core's I2C reading of the pair (the first of the best kept: the input view where they tie).
+fn i2c_best_view(cap: &Cap, input: Cap, scl: &str, sda: &str) -> Cap {
+    let score = |v: &Cap| -> f64 {
+        let (Some(c), Some(d)) = (v.ch(scl), v.ch(sda)) else {
+            return f64::NEG_INFINITY;
+        };
+        let Ok(view) = wireskein_core::View::new(v.rate, v.n, vec![c.core(), d.core()]) else {
+            return f64::NEG_INFINITY;
+        };
+        wireskein_core::i2c::read(&view, &view.channels[0], &view.channels[1]).map_or(f64::NEG_INFINITY, |r| r.score)
+    };
+    let mut best = score(&input);
+    let mut keep = input;
+    for v in std::iter::once(cap.clone()).chain(i2c_glitch_views(cap, scl, sda)) {
+        let s = score(&v);
+        if s > best {
+            best = s;
+            keep = v;
+        }
+    }
+    keep
+}
+
 fn check_i2c(cap: &Cap, x: &J) -> Out {
     let (Some(scl), Some(sda)) = (cap.ch(s(x, "scl")), cap.ch(s(x, "sda"))) else {
         return out(V::Unchecked, J::dict(), "pins not captured");
@@ -695,6 +799,11 @@ fn check_i2c(cap: &Cap, x: &J) -> Out {
         }
         view = v2;
         changed = more;
+    }
+    // at a rate that does not show t_SP (under 2 samples in it) the lines as they are and their glitch views are
+    // read beside the input view, the best kept (Python's engine reads the group so: staged's views, i2c_only)
+    if spike_e * cap.rate < 2.0 {
+        view = i2c_best_view(cap, view, &scl.name, &sda.name);
     }
     let items = i2c_transactions(&view, &scl.name, &sda.name);
     let txs: Vec<J> = items.iter().map(i2c_tx).collect();

@@ -800,3 +800,127 @@ def test_align_between_as_python(clean, tmp_path, start, ppm):
                 _with(env, lambda: align.between(cap, args[0], cap, args[1]))
             errs.append(str(e.value))
         assert errs[0] == errs[1], args
+
+
+# ---------------- note, attach ----------------
+
+def _stored(f) -> dict:
+    """A file's entries, a note's time (the local time with its offset from UTC) checked and taken out."""
+    import re
+    import zipfile
+    with zipfile.ZipFile(f) as z:
+        out = {n: z.read(n) for n in z.namelist()}
+    for n in [n for n in out if n.startswith("notes/")]:
+        d = json.loads(out[n])
+        if d["time"] != "mine":                           # (one note gives its own)
+            assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d[+-]\d\d:\d\d", d["time"]), d
+            out[n] = out[n].replace(d["time"].encode(), b"T")
+    return out
+
+
+@rust_only
+def test_note_and_attach_as_python(clean, tmp_path):
+    """_fileformat.note and attach with WIRESKEIN_RUST=note,attach: the same entries as Python's (str, dict and bytes
+    data, a note's fields, an attachment replaced), the same numbers, the same exceptions."""
+    import shutil
+    import zipfile
+    from wireskein import _fileformat as ff
+    files = {}
+    for env in ({}, {"WIRESKEIN_RUST": "note,attach"}):
+        f = tmp_path / f"{len(files)}.wireskein"
+        shutil.copy(EXAMPLES[0], f)
+        got = _with(env, lambda: [ff.note(f, "plain"), ff.note(f, {"k": [1, 2.5, None, "\u00e9"]}, kind="analysis"),
+                                  ff.note(f, ["x"], time="mine", extra=Path("p"))])
+        assert got == [1, 2, 3]
+        _with(env, lambda: ff.attach(f, "a.txt", "text \u00e9"))
+        _with(env, lambda: ff.attach(f, "dir/b.json", {"b": [1, 2]}))
+        _with(env, lambda: ff.attach(f, "c.bin", bytes(range(256))))
+        _with(env, lambda: ff.attach(f, "a.txt", b"again", replace=True))
+        errs = []
+        for call, kind in ((lambda: ff.attach(f, "a.txt", "no"), FileExistsError),
+                           (lambda: ff.attach(f, "../x", "no"), ValueError),
+                           (lambda: ff.note(tmp_path / "none.wireskein", "x"), FileNotFoundError),
+                           (lambda: ff.note(tmp_path / "plain.txt", "x"), zipfile.BadZipFile)):
+            (tmp_path / "plain.txt").write_text("not a zip")
+            with pytest.raises(kind) as e:
+                _with(env, call)
+            errs.append(str(e.value).replace(str(f), "F"))
+        files[len(files)] = (f, errs)
+    (a, ea), (b, eb) = files[0], files[1]
+    assert ea == eb
+    assert _stored(a) == _stored(b)
+    assert ff.notes(b)[2]["time"] == "mine" and ff.notes(b)[2]["extra"] == "p"
+    assert fileio.load(b).n_samples == fileio.load(a).n_samples
+
+
+# ---------------- verify: I2C at a rate that does not show t_SP ----------------
+
+def _i2c_run(tmp_path, rate: float, crosstalk: bool):
+    """A recorded run of I2C at `rate` (test_i2c_slow_rate_views' transactions), with pulses of one sample on both
+    lines away from their edges (crosstalk) where asked, and a check of its transactions."""
+    from wireskein._engine import gen
+    from wireskein.runlog import Recorder, i2c
+    scl, sda = gen.Wave(1), gen.Wave(1)
+    txs = [{"addr": 0x48, "rw": "write", "bytes": bytes([1, 2, 3])}, {"addr": 0x48, "rw": "read", "bytes": bytes([7, 8])},
+           {"addr": 0x50, "rw": "write", "bytes": bytes([0x10, 0x20, 0x30, 0x40])}] * 3
+    t = gen.i2c(scl, sda, 1e-4, txs, 100e3)
+    cap = gen.quantize({"SCL": scl, "SDA": sda}, rate, t + 1e-4, np.random.default_rng(0))
+    lv = np.zeros(cap.n_samples, np.uint8)
+    r = np.random.default_rng(1)
+    for k, ch in enumerate(cap.channels):
+        e = np.asarray(ch.edges, np.int64)
+        if crosstalk:
+            s = np.sort(r.integers(5, cap.n_samples - 5, len(e) // 3))
+            s = s[np.min(np.abs(s[:, None] - e[None, :]), axis=1) >= 3]
+            s = s[np.concatenate(([True], np.diff(s) >= 3))]
+            e = np.unique(np.concatenate([e, s, s + 1]))
+        level = (ch.initial ^ (np.searchsorted(e, np.arange(cap.n_samples), side="right") & 1)).astype(np.uint8)
+        lv |= level << k
+    want = [{"addr": x["addr"], "rw": x["rw"], "bytes": list(x["bytes"]), "ack": True} for x in txs]
+    for x in want:
+        if x["rw"] == "read":
+            x["acks"] = [True] * (len(x["bytes"]) - 1) + [False]
+    rec = Recorder(tmp_path / "run")
+    with rec.section(1, "t", expect=[i2c("SCL", "SDA", transactions=want)]):
+        rec.capture(rec.armed(), rate, interleaved=lv.tobytes(), names=["SCL", "SDA"])
+    rec.close()
+    return tmp_path / "run"
+
+
+@rust_only
+@pytest.mark.parametrize("rate,crosstalk", [(8e6, True), (8e6, False), (50e6, False)])
+def test_verify_i2c_glitch_views(clean, tmp_path, rate, crosstalk):
+    """Under 2 samples in t_SP (8 MS/s) the Rust verify reads the lines as they are and their glitch views beside the
+    input view, the best kept, as Python's engine does: crosstalk of a sample on both lines read through, the same
+    status and transactions as Python's; a clean capture, and one at a rate that shows t_SP, read as before."""
+    run = _i2c_run(tmp_path, rate, crosstalk)
+    py = verify.verify(run)["results"]
+    rs = _with({"WIRESKEIN_RUST": "verify"}, lambda: verify.verify(run))["results"]
+    assert [(r["status"], r["measured"]["transactions"]) for r in py] == \
+        [(r["status"], r["measured"]["transactions"]) for r in rs], (py[0]["reason"], rs[0]["reason"])
+    assert rs[0]["status"] == "ok", rs[0]["reason"]
+
+
+@rust_only
+def test_verify_a_protocol_declared_in_wireskein_is_pythons(clean, tmp_path):
+    """A protocol WireSkein declares (decl/: i2c read on the wire as declared, its frames the messages) is read by
+    Python's engine's declared readers; the Rust verify leaves it unchecked, so with WIRESKEIN_RUST=verify the report
+    is Python's whole (the same, not an unchecked one)."""
+    from wireskein._engine import gen
+    from wireskein.runlog import Recorder, protocol
+    scl, sda = gen.Wave(1), gen.Wave(1)
+    t = gen.i2c(scl, sda, 1e-4, [{"addr": 0x48, "rw": "write", "bytes": bytes([1, 2, 3])}], 100e3)
+    cap = gen.quantize({"SCL": scl, "SDA": sda}, 50e6, t + 1e-4, np.random.default_rng(0))
+    lv = np.zeros(cap.n_samples, np.uint8)
+    for k, ch in enumerate(cap.channels):
+        lv |= ch.level_at(np.arange(cap.n_samples)).astype(np.uint8) << k
+    rec = Recorder(tmp_path / "run")
+    with rec.section(1, "t", expect=[protocol("i2c", None, {"scl": "SCL", "sda": "SDA"})]):
+        rec.capture(rec.armed(), 50e6, interleaved=lv.tobytes(), names=["SCL", "SDA"])
+    rec.close()
+    import wireskein_core
+    raw = json.loads(wireskein_core.verify(str(tmp_path / "run")))
+    assert raw["results"][0]["status"] == "unchecked" and _rust.left_to_python(raw)
+    py = verify.dumps(verify.verify(tmp_path / "run"))
+    rs = verify.dumps(_with({"WIRESKEIN_RUST": "verify"}, lambda: verify.verify(tmp_path / "run")))
+    assert rs == py and json.loads(py)["results"][0]["status"] == "ok"

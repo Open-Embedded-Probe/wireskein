@@ -2367,9 +2367,12 @@ def verify(run_dir: str | Path, mark: bool = False) -> dict:
     capture file's markers (by "verify", wireskein-format §5.2): every notice, and every change becomes found, at
     its tick, so a viewer shows them on the waveform; the markers of others are kept, verify's earlier ones replaced."""
     from . import _rust
+    rep = None
     if _rust.verifies():                                 # WIRESKEIN_RUST=verify (wireskein._rust)
         rep = _rust.verify(run_dir)
-    else:
+        if _rust.left_to_python(rep):                    # (a check it leaves unchecked that Python's reads)
+            rep = None
+    if rep is None:
         try:
             rep = _verify(Path(run_dir))
         finally:

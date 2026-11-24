@@ -10,6 +10,7 @@ pub mod align;
 pub mod analog;
 pub mod annotate;
 pub mod decode;
+pub mod order;
 pub mod report;
 pub mod segments;
 pub mod split;
@@ -192,7 +193,7 @@ pub fn claim_doc_shaped(
     out.insert("score".into(), json!(c.score));
     out.insert("margin".into(), json!(c.margin));
     out.insert("params".into(), Value::Object(c.params.clone()));
-    let mut lay: Map<String, Value> = serde_json::from_str(c.layers.get()).unwrap_or_default();
+    let mut lay: Map<String, Value> = order::layers(&c.layers);
     let notes = if notes {
         note(c, &mut lay, lines, rate, n)
     } else {

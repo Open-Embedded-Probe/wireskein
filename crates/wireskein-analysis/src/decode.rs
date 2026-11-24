@@ -13,6 +13,8 @@ use std::io::Write;
 use std::path::Path;
 use wireskein_core::{Candidate, Claim};
 use wireskein_io::Line;
+use wireskein_io::j::J;
+use wireskein_io::write::j_of;
 
 /// The depths a spec reads to (Python's `export.DEPTHS`).
 pub const DEPTHS: [&str; 4] = ["transport", "frames", "protocol", "device"];
@@ -125,6 +127,53 @@ impl Spec {
             })
             .collect();
         json!({"buses": buses, "lines": self.lines, "devices": self.devices, "depth": self.depth})
+    }
+
+    /// As the document gives it, its keys in Python's order (`decode._spec`) and each bus's pins in the spec's.
+    pub fn doc_j(&self) -> J {
+        let buses: Vec<J> = self
+            .buses
+            .iter()
+            .map(|b| {
+                let mut d = J::Dict(vec![
+                    ("protocol".into(), J::from(b.protocol.as_str())),
+                    (
+                        "pins".into(),
+                        J::Dict(b.pins.iter().map(|(r, p)| (r.clone(), J::from(p.as_str()))).collect()),
+                    ),
+                    ("params".into(), j_of(&Value::Object(b.params.clone()))),
+                ]);
+                if let Some(x) = b.idle_s {
+                    d.set("idle_s", x);
+                }
+                if let Some(l) = &b.layers {
+                    d.set("layers", J::List(l.iter().map(|x| J::from(x.as_str())).collect()));
+                }
+                d
+            })
+            .collect();
+        J::Dict(vec![
+            ("buses".into(), J::List(buses)),
+            (
+                "lines".into(),
+                J::List(self.lines.iter().map(|x| J::from(x.as_str())).collect()),
+            ),
+            ("devices".into(), j_of(&self.devices)),
+            ("depth".into(), J::from(self.depth.as_str())),
+        ])
+    }
+
+    /// Each bus's roles in the spec's order.
+    pub fn roles_order(&self) -> Vec<Vec<String>> {
+        self.buses
+            .iter()
+            .map(|b| b.pins.iter().map(|(r, _)| r.clone()).collect())
+            .collect()
+    }
+
+    /// A decode document of this spec in Python's order (`order::decoding`).
+    pub fn ordered(&self, doc: &Value) -> J {
+        crate::order::decoding(doc, Some(&self.doc_j()), &self.roles_order())
     }
 }
 
@@ -296,7 +345,7 @@ fn alone(
     };
     let (up, _) = wireskein_core::upper::stage_with(vec![c], rate);
     let c = &up[0];
-    (serde_json::from_str(c.layers.get()).unwrap_or_default(), c.total)
+    (crate::order::layers(&c.layers), c.total)
 }
 
 /// The decode with exactly the bus's pins, the best one (on the edge it samples on, when there is one).
@@ -337,7 +386,7 @@ fn node(r: &Reads, b: &SpecBus, edge: Option<&str>, rate: f64) -> Option<Node> {
     if claimed {
         let c = &r.up[i];
         let (lay, score) = if c.bus.is_none() {
-            (serde_json::from_str(c.layers.get()).unwrap_or_default(), c.total)
+            (crate::order::layers(&c.layers), c.total)
         } else {
             // a target of a bus of several: the upper stage passed it by; read on its own
             alone(&c.protocol, &c.roles, r.pre[i].total, &r.pre[i].layers, rate)
@@ -1086,6 +1135,7 @@ pub(crate) fn piece(
 pub struct Items {
     f: std::io::BufWriter<std::fs::File>,
     part: usize,
+    protocols: Vec<String>,
     pub(crate) counts: Vec<Map<String, Value>>,
     pub(crate) unread: Vec<Vec<Value>>,
     dmi: BTreeMap<usize, Vec<Value>>,
@@ -1102,6 +1152,7 @@ impl Items {
         Ok(Items {
             f: std::io::BufWriter::new(f),
             part,
+            protocols: protocols.iter().map(|p| p.to_string()).collect(),
             counts: vec![Map::new(); protocols.len()],
             unread: vec![vec![]; protocols.len()],
             dmi: protocols
@@ -1115,17 +1166,27 @@ impl Items {
 
     fn write(&mut self, j: usize, layer: &str, rows: &[Value]) -> Result<(), String> {
         for r in rows {
-            let mut d = Map::new();
-            d.insert("part".into(), json!(self.part));
-            d.insert("bus".into(), json!(j));
-            d.insert("layer".into(), json!(layer));
-            match r.as_object() {
-                Some(o) => d.extend(o.clone()),
-                None => {
-                    d.insert("item".into(), r.clone()); // an item that is not an object (a text line)
+            // {"part", "bus", "layer", **item} as Python writes it (the item's keys in its own order after)
+            let mut d = J::Dict(vec![
+                ("part".into(), J::Int(self.part as i64)),
+                ("bus".into(), J::Int(j as i64)),
+                ("layer".into(), J::from(layer)),
+            ]);
+            match crate::order::core_j(r, crate::order::frame_added(&self.protocols[j])) {
+                J::Dict(mut o) => {
+                    if layer == "dm" {
+                        // (Python's `_dm`: the Debug Module's accesses as it lists them)
+                        let dm = crate::order::DM;
+                        let at = |k: &str| dm.iter().position(|x| *x == k).unwrap_or(dm.len());
+                        o.sort_by_key(|(k, _)| at(k));
+                    }
+                    for (k, v) in o {
+                        d.set(&k, v);
+                    }
                 }
+                x => d.set("item", x), // an item that is not an object (a text line)
             }
-            writeln!(self.f, "{}", Value::Object(d)).map_err(|e| e.to_string())?;
+            writeln!(self.f, "{}", d.dumps()).map_err(|e| e.to_string())?;
         }
         let c = self.counts[j].entry(layer.to_string()).or_insert(json!(0));
         *c = json!(c.as_u64().unwrap_or(0) + rows.len() as u64);

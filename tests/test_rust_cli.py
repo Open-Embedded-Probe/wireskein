@@ -4,13 +4,14 @@ they write compared (bench/notes/2026-11-24-rust-plan.ja.md §34). Skipped where
 -p wireskein-cli; WIRESKEIN_RS names the binary); the subcommands that analyze run only where wireskein_core is
 installed too (Python's side reads with the Rust engine there, WIRESKEIN_ENGINE=rust).
 
-A JSON document on stdout is compared as data (the Rust command line writes its keys sorted: serde_json's map; the
-values, floats as Python writes them, are the same); "analysis_seconds" is a time and left out."""
+A JSON document on stdout is compared as data and in its keys' order (the Rust command line writes them as Python
+does: wireskein-analysis's order); "analysis_seconds" is a time and left out."""
 import contextlib
 import importlib.util
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -43,7 +44,7 @@ def _binary() -> str | None:
 RS = _binary()
 pytestmark = pytest.mark.skipif(RS is None, reason="wireskein-rs not built (cargo build -p wireskein-cli)")
 engine = pytest.mark.skipif(not HAS_CORE, reason="wireskein_core (crates/wireskein-py) not installed")
-CMDS = ("analyze", "decode", "segments", "survey", "states", "convert", "info", "annotate", "align")
+CMDS = ("analyze", "decode", "segments", "survey", "states", "convert", "info", "annotate", "align", "note", "attach")
 
 
 @pytest.fixture
@@ -89,13 +90,23 @@ def _json(text):
     return d
 
 
+def _keys(d):
+    """A JSON value with each dict as the list of its items: equal only in the same keys' order."""
+    if isinstance(d, dict):
+        return [(k, _keys(v)) for k, v in d.items()]
+    if isinstance(d, list):
+        return [_keys(x) for x in d]
+    return d
+
+
 def same(*args, stdout_json=False):
-    """Both commands' stdout (bytes, or as JSON data), stderr and exit code the same."""
+    """Both commands' stdout (bytes, or as JSON data in the same keys' order), stderr and exit code the same."""
     p, r = py(*args), rs(*args)
     assert p[2] == r[2], (p, r)
     assert p[1] == r[1]
     if p[0] != r[0]:
         assert stdout_json and _json(p[0]) is not None and _json(p[0]) == _json(r[0]), (p[0][:2000], r[0][:2000])
+        assert _keys(_json(p[0])) == _keys(_json(r[0]))
     return p
 
 
@@ -295,6 +306,55 @@ def test_align(tmp_path):
                   json.loads(fileformat.attachments(b2)["alignment.json"]))
 
 
+TIME = re.compile(r'"time": "(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d[+-]\d\d:\d\d)"')
+
+
+def _entries(f: Path) -> dict:
+    """A file's entries, a note's time (the local time with its offset, Python's isoformat) taken out."""
+    import zipfile
+    with zipfile.ZipFile(f) as z:
+        out = {n: z.read(n) for n in z.namelist()}
+    for n, v in out.items():
+        if n.startswith("notes/"):
+            text = v.decode()
+            assert TIME.search(text), text
+            out[n] = TIME.sub('"time": "T"', text)
+    return out
+
+
+def test_note_and_attach(tmp_path):
+    """note and attach on copies of one file, one by Python and one by Rust: the same output, errors and exit codes,
+    and the same entries (a note's time as Python writes it, the local time with its offset from UTC)."""
+    a, b = tmp_path / "a.wireskein", tmp_path / "b.wireskein"
+    shutil.copy(EXAMPLES[0], a)
+    shutil.copy(EXAMPLES[0], b)
+    src = tmp_path / "blob.bin"
+    src.write_bytes(bytes(range(256)) * 3)
+    for args in (["note", "F", "first note"], ["note", "F", '{"x": [1, 2.5, "\u00e9"], "y": null}', "--json"],
+                 ["note", "F", "set up", "--kind", "setup"], ["note", "F", "no kind", "--kind", ""],
+                 ["attach", "F", "readme.txt", "--text", "hello \u00e9"], ["attach", "F", "readme.txt", "--text", "again"],
+                 ["attach", "F", "readme.txt", "--text", "replaced", "--replace"], ["attach", "F", "d/blob.bin", src],
+                 ["attach", "F", "../up", "--text", "x"], ["attach", "F", "", "--text", "x"], ["attach", "F", "x"],
+                 ["attach", "F", "x", src, "--text", "y"], ["attach", "F", "x", tmp_path / "missing"],
+                 ["note", tmp_path / "missing.wireskein", "x"], ["note", src, "x"]):
+        p = py(*[a if x == "F" else x for x in args])
+        r = rs(*[b if x == "F" else x for x in args])
+        assert (p[0], p[1].replace(str(a), "F"), p[2]) == (r[0], r[1].replace(str(b), "F"), r[2]), (args, p, r)
+    ea, eb = _entries(a), _entries(b)
+    assert ea == eb
+    assert len([n for n in ea if n.startswith("notes/")]) == 4
+    assert fileformat.notes(b)[2]["kind"] == "setup" and fileformat.attachments(b)["readme.txt"] == b"replaced"
+    assert _view(b) == _view(a)
+
+
+def test_note_bad_json(tmp_path):
+    f = tmp_path / "a.wireskein"
+    shutil.copy(EXAMPLES[0], f)
+    p, r = py("note", f, "{oops", "--json"), rs("note", f, "{oops", "--json")
+    assert p[2] == r[2] == 1 and "JSONDecodeError" in p[1] and "JSONDecodeError" in r[1]
+    assert not fileformat.notes(f)
+
+
 def test_errors_and_usage():
     f = EXAMPLES[0].relative_to(ROOT)
     for args in (["survey", "tests/data/examples/missing.wireskein"], ["states", "tests/data/nothing"],
@@ -331,7 +391,7 @@ def test_analyze(env, f, args):
     for part in a["parts"]:
         for c in part["claims"]:
             c["evidence"].pop("_support", None)
-    assert a == b
+    assert _keys(a) == _keys(b)
 
 
 @engine
@@ -349,10 +409,10 @@ def test_analyze_split_out_and_items(env, tmp_path):
         for part in d["parts"]:
             for c in part["claims"]:
                 c["result"].get("items", {}).pop("file", None)
-    assert a == b
-    # the same items (Rust writes each line's keys sorted)
+    assert _keys(a) == _keys(b)
+    # the same items, each line's keys in the same order
     rows = [[json.loads(x) for x in (tmp_path / f).read_text().splitlines()] for f in ("p.ndjson", "r.ndjson")]
-    assert rows[0] == rows[1]
+    assert _keys(rows[0]) == _keys(rows[1])
 
 
 def _spec(f) -> dict:
@@ -379,7 +439,7 @@ def test_decode(env, tmp_path, f):
     r = rs("decode", rel, "--spec", json.dumps(spec), "--out", tmp_path / "r.json")
     assert p[2] == r[2] == 0 and p[0] == r[0] == ""
     assert p[1].splitlines()[:-1] == r[1].splitlines()[:-1]                  # (its last: the paths differ)
-    assert _json((tmp_path / "p.json").read_text()) == _json((tmp_path / "r.json").read_text())
+    assert _keys(_json((tmp_path / "p.json").read_text())) == _keys(_json((tmp_path / "r.json").read_text()))
 
 
 @engine

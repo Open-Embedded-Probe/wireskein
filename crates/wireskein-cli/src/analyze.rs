@@ -1,14 +1,13 @@
 //! `analyze` and `decode`: the analysis document of a capture (Python's `wireskein analyze` / `decode`), what each
 //! claim or bus read said on stderr (`_warn_undersampled`).
 
-use crate::{Args, Takes, emit, fail, hint, names, thresholds, usage_error};
+use crate::{Args, Takes, emit, fail, hint, hint_j, names, thresholds, usage_error};
 use serde_json::Value;
 use std::path::Path;
 use std::process::ExitCode;
 use wireskein_analysis::split;
 use wireskein_io::j::{J, py_str};
 use wireskein_io::pyfmt::{g, round_n};
-use wireskein_io::write::j_of;
 
 /// A share as Python's `{x:.1%}`.
 fn pct(x: f64, prec: usize) -> String {
@@ -285,7 +284,7 @@ pub fn analyze(args: &[String]) -> ExitCode {
         Ok(d) => d,
         Err(e) => return fail("analyze", &e),
     };
-    let mut doc = j_of(&doc);
+    let mut doc = wireskein_analysis::order::analysis(&doc, Some(&hint_j(a.get("--hint"), &hints)));
     doc.set("analysis_seconds", round_n(t0.elapsed().as_secs_f64(), 3));
     let claims: Vec<J> = doc
         .get("parts")
@@ -343,7 +342,7 @@ pub fn decode(args: &[String]) -> ExitCode {
         pins.as_deref(),
         items,
     ) {
-        Ok(d) => j_of(&d),
+        Ok(d) => spec.ordered(&d),
         Err(e) => return fail("decode", &e),
     };
     // a bus's pins as its spec gave them (the document's are sorted by role)

@@ -40,6 +40,10 @@ The parts:
     segments `wireskein segments`: the marker segment tree (markers.find and describe) by wireskein-analysis, the
              claims the Rust core's (Python reads them with its own engine); device patterns, definitions
              directories and the engine's extra protocol tables stay Python's
+    note     wireskein._fileformat.note (`wireskein note`, a capture's --note): the entry appended to the capture's
+             log by wireskein-io, its time the local time with its offset from UTC
+    attach   wireskein._fileformat.attach (`wireskein attach`, an alignment saved, ...): the file stored as
+             attach/NAME by wireskein-io (the data encoded by Python as before)
 
 A part switched on whose Rust cannot do what was asked falls back to Python without a word (the result is the same
 kind); a part switched on without wireskein_core installed is an error."""
@@ -52,7 +56,7 @@ from pathlib import Path
 
 RUST_ENV = "WIRESKEIN_RUST"
 PARTS = ("engine", "io", "write", "verify", "analyze", "decode", "split", "mark", "states", "survey", "annotate",
-         "align", "segments")
+         "align", "segments", "note", "attach")
 
 
 def parts() -> frozenset:
@@ -157,6 +161,16 @@ def verifies() -> bool:
     from . import plugins
     from ._engine import staged
     return not plugins.definitions() and not staged.PROTOCOL_TABLES
+
+
+RUST_LEAVES = "not read on the wire by the Rust verify yet"
+
+
+def left_to_python(rep: dict) -> bool:
+    """Whether the Rust report left a check unchecked that Python's verify reads (a protocol declared in WireSkein
+    itself, read on the wire by the Python engine's declared readers): then the whole report is Python's."""
+    return any(r.get("status") == "unchecked" and RUST_LEAVES in (r.get("reason") or "")
+               for r in rep.get("results", []))
 
 
 def verify(run_dir) -> dict:
@@ -493,6 +507,20 @@ def segments_file(path, hints: dict | None, thresholds: dict | None, markers_hin
                                None if markers_hint is None else json.dumps(markers_hint), _dialects(), bool(results),
                                bool(events))
     return None if got is None else json.loads(got)
+
+
+# ---------------- note, attach ----------------
+
+def note(path, content, fields: dict) -> int:
+    """_fileformat.note by wireskein-io: the entry appended to the capture's log, its time the local time with its
+    offset from UTC (written there), the content and fields as Python's json.dumps gives them (default=str)."""
+    return int(core().note(str(path), json.dumps(content, ensure_ascii=False, default=str),
+                           json.dumps(fields, ensure_ascii=False, default=str)))
+
+
+def attach(path, name: str, data: bytes, replace: bool) -> None:
+    """_fileformat.attach by wireskein-io (the data as Python stores it: _fileformat._encode)."""
+    core().attach(str(path), name, bytes(data), bool(replace))
 
 
 # ---------------- align ----------------

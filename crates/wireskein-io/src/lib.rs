@@ -14,6 +14,7 @@
 //! it. JSON as Python holds it (`j`: dicts in their keys' order) and numbers as Python writes them (`pyfmt`), shared
 //! by the crates that answer as Python does.
 
+pub mod attach;
 pub mod j;
 pub mod markers;
 pub mod pyfmt;
