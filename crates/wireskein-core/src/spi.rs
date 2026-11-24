@@ -578,7 +578,7 @@ fn shared(view: &View, cands: &[Candidate]) -> Vec<Candidate> {
         let apart =
             |a: &[(i64, i64)], b: &[(i64, i64)]| !b.iter().any(|&(s, e)| a.iter().any(|&(x, y)| x <= e && y >= s));
         // every set of targets whose selections never overlap: the one holding the most bursts, then scoring best
-        let mut best: ((usize, f64), Vec<usize>) = ((0, -1.0), vec![]);
+        let mut best: ((f64, f64), Vec<usize>) = ((0.0, -1.0), vec![]);
         let n = list.len();
         for mask in 1u32..(1u32 << n) {
             let set: Vec<usize> = (0..n).filter(|&i| mask & (1 << i) != 0).collect();
@@ -592,7 +592,16 @@ fn shared(view: &View, cands: &[Candidate]) -> Vec<Candidate> {
             {
                 continue;
             }
-            let held = (0..mid.len()).filter(|&k| set.iter().any(|&i| held_by[i][k])).count();
+            // the bursts held, each weighed by the best score of the targets holding it (a decoy line whose wide
+            // windows hold many bursts by chance, its reading poor, weighs little)
+            let held: f64 = (0..mid.len())
+                .map(|k| {
+                    set.iter()
+                        .filter(|&&i| held_by[i][k])
+                        .map(|&i| list[i].2)
+                        .fold(0.0, f64::max)
+                })
+                .sum();
             let sum: f64 = set.iter().map(|&i| list[i].2).sum();
             if (held, sum) > best.0 {
                 best = ((held, sum), set);
@@ -601,7 +610,10 @@ fn shared(view: &View, cands: &[Candidate]) -> Vec<Candidate> {
         if best.1.len() < least {
             continue;
         }
-        let mut cover = best.0.0 as f64 / mid.len() as f64;
+        let mut cover = (0..mid.len())
+            .filter(|&k| best.1.iter().any(|&i| held_by[i][k]))
+            .count() as f64
+            / mid.len() as f64;
         let snug = best.1.iter().all(|&i| {
             list[i]
                 .0
