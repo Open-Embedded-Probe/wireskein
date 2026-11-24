@@ -435,6 +435,16 @@ pub fn candidates(view: &View) -> Vec<Candidate> {
         (debounce, 4),
         (deglitch, AS_IS),
     ];
+    // every view of each clock: the clock as it takes it, and the other lines as they settle at the clock's pace (what
+    // is counted, kept to and read); each line's keeping to the clock there
+    struct Seen<'a> {
+        how: usize,
+        clk: &'a Channel<'a>,
+        ck: Clock,
+        settled: Vec<Vec<i64>>,
+        keeps: Vec<f64>,
+    }
+    let mut seen: Vec<Seen> = vec![];
     for (clean, how) in cleans {
         for clk in &act {
             if (how == 3 || how == 4) && !bounced(clk.edges) {
@@ -443,23 +453,74 @@ pub fn candidates(view: &View) -> Vec<Candidate> {
             let Some(ck) = clock_of(clk, clean, how) else {
                 continue;
             };
-            // the other lines as they settle at this clock's pace: what is counted, kept to and read
             let k = width(how, ck.half);
             if how == 1 && k as f64 > 0.6 * ck.half {
                 continue; // a clock too fast to merge its bounces without its own edges
             }
+            let cc = Channel::new(clk.name, clk.initial, &ck.edges);
             let settled: Vec<Vec<i64>> = act.iter().map(|c| clean(c.edges, k)).collect();
-            let lines: Vec<Channel> = act
+            let keeps = act
                 .iter()
                 .zip(&settled)
+                .map(|(c, e)| if c.name == clk.name { 0.0 } else { keeping(e, &cc) })
+                .collect();
+            seen.push(Seen {
+                how,
+                clk,
+                ck,
+                settled,
+                keeps,
+            });
+        }
+    }
+    // a line keeps to a clock line where it does in some view of it: a rebuilt clock's edges, placed by its period,
+    // gather a fast bus's data changes less well than the clock as it is, though its reading is the right one
+    let mut kmax: std::collections::BTreeMap<(&str, usize), f64> = Default::default();
+    for s in &seen {
+        for (i, &x) in s.keeps.iter().enumerate() {
+            let e = kmax.entry((s.clk.name, i)).or_insert(0.0);
+            *e = e.max(x);
+        }
+    }
+    for s in &seen {
+        let (how, clk, ck) = (s.how, s.clk, &s.ck);
+        // the data lines as this view settles them, and with only their pulses of a tick out: a line beside the
+        // clock takes crosstalk's pulses at the clock's very edges, which a wide merging of bounces (a rebuilt
+        // clock's) takes out with the data's own changes near them; both read, the better reading kept
+        let mut variants: Vec<Vec<Vec<i64>>> = vec![s.settled.clone()];
+        if how != 0 {
+            let alt: Vec<Vec<i64>> = act
+                .iter()
+                .zip(&s.settled)
+                .map(|(c, own)| {
+                    if c.name == clk.name {
+                        own.clone()
+                    } else {
+                        deglitch(c.edges, 2)
+                    }
+                })
+                .collect();
+            if alt != s.settled {
+                variants.push(alt);
+            }
+        }
+        let cc = Channel::new(clk.name, clk.initial, &ck.edges);
+        for (v, settled) in variants.iter().enumerate() {
+            let lines: Vec<Channel> = act
+                .iter()
+                .zip(settled)
                 .map(|(c, e)| Channel::new(c.name, c.initial, e))
                 .collect();
-            let cc = Channel::new(clk.name, clk.initial, &ck.edges);
+            // (in the order they keep to the clock in this view: the best two read)
             let mut keep: Vec<(f64, &Channel)> = lines
                 .iter()
-                .filter(|d| d.name != clk.name && d.edges.len() as f64 <= 1.5 * ck.edges.len() as f64)
-                .map(|d| (keeping(d.edges, &cc), d))
-                .filter(|&(k, _)| k >= DATA_KEEPS)
+                .enumerate()
+                .filter(|(i, d)| {
+                    d.name != clk.name
+                        && d.edges.len() as f64 <= 1.5 * ck.edges.len() as f64
+                        && kmax[&(clk.name, *i)] >= DATA_KEEPS
+                })
+                .map(|(i, d)| (if v == 0 { s.keeps[i] } else { keeping(d.edges, &cc) }, d))
                 .collect();
             if keep.is_empty() {
                 continue;
@@ -489,7 +550,7 @@ pub fn candidates(view: &View) -> Vec<Candidate> {
                     sets.push(ds.clone());
                 }
                 for set in sets {
-                    if let Some(mut c) = read(view, clk, &ck, cs, &set) {
+                    if let Some(mut c) = read(view, clk, ck, cs, &set) {
                         c.params.insert("clean".into(), json!(CLEAN_NAMES[how]));
                         let key: Vec<(String, String)> = c.roles.clone().into_iter().collect();
                         if best.get(&key).is_none_or(|b| c.score > b.score) {
