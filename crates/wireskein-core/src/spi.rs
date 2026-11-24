@@ -235,7 +235,9 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
         }
         transfers.push(Value::Object(tr));
     }
-    if counts.len() < 2 {
+    // (a select's single window is a target's one transfer: a member of a shared bus, its own reading weighed by
+    // the select's framing; without a select, two bursts at least)
+    if counts.len() < if cs.is_some() { 1 } else { 2 } {
         return None;
     }
     let whole = counts.iter().filter(|&&c| c % 8 == 0).count() as f64 / counts.len() as f64;
@@ -379,6 +381,12 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
 pub fn candidates(view: &View) -> Vec<Candidate> {
     let mut best: std::collections::BTreeMap<Vec<(String, String)>, Candidate> = Default::default();
     let act: Vec<&Channel> = view.channels.iter().filter(|c| c.edges.len() >= 4).collect();
+    let once: Vec<Channel> = view
+        .channels
+        .iter()
+        .filter(|c| (2..4).contains(&c.edges.len()))
+        .copied()
+        .collect();
     let debounce: Clean = crate::kernels::debounce;
     let cleans: [(Clean, usize); 5] = [
         (deglitch, 0),
@@ -426,6 +434,8 @@ pub fn candidates(view: &View) -> Vec<Candidate> {
                         })
                         .map(Some),
                 )
+                // (and a select of a single window: a target selected once, its two changes)
+                .chain(once.iter().filter(|c| c.name != clk.name).map(Some))
                 .collect();
             for cs in selects {
                 let ds: Vec<&Channel> = keep
@@ -464,6 +474,7 @@ type Target<'a> = (&'a Candidate, Vec<(i64, i64)>, f64);
 pub const SHARED_COVER: f64 = 0.95; // the targets' selections together hold this share of the clock's bursts or more
 pub const SHARED_SNUG: f64 = 0.5; // each target's select snug round its bursts this share at least
 pub const SHARED_MAX: usize = 8; // select lines on one clock tried in sets for one bus of targets
+pub const SHARED_FREE: usize = 2; // transfers outside every captured select: a target of its own, read without its CS
 
 /// One clocked bus with a target on each select line (Python's `staged.shared_buses`): CLK and the data lines
 /// shared, each select's own reading counting the other targets' transfers against it. Selections that never
@@ -471,19 +482,27 @@ pub const SHARED_MAX: usize = 8; // select lines on one clock tried in sets for 
 /// readings in its layers (`targets`), each a claim of its own when the bus is chosen.
 fn shared(view: &View, cands: &[Candidate]) -> Vec<Candidate> {
     let mut by: std::collections::BTreeMap<(String, Vec<String>), Vec<&Candidate>> = Default::default();
+    // the lines read without a select: a target whose CS is not captured (Python's `free` member)
+    let mut nocs: std::collections::BTreeMap<(String, Vec<String>), &Candidate> = Default::default();
     for c in cands {
-        let Some(cs) = c.roles.get("cs") else { continue };
-        let _ = cs;
-        let data: Vec<String> = c
+        let mut data: Vec<String> = c
             .roles
             .iter()
             .filter(|(k, _)| k.starts_with("data"))
             .map(|(_, v)| v.clone())
             .collect();
-        by.entry((c.roles["clk"].clone(), data)).or_default().push(c);
+        data.sort();
+        let key = (c.roles["clk"].clone(), data);
+        if c.roles.contains_key("cs") {
+            by.entry(key).or_default().push(c);
+        } else if nocs.get(&key).is_none_or(|b| c.score > b.score) {
+            nocs.insert(key, c);
+        }
     }
     let mut out = vec![];
     for ((clk, data), per) in by {
+        let free = nocs.get(&(clk.clone(), data.clone())).copied();
+        let least = if free.is_some() { 1 } else { 2 };
         // each select line once (its best reading)
         let mut by_cs: std::collections::BTreeMap<&str, &Candidate> = Default::default();
         for c in per {
@@ -492,7 +511,7 @@ fn shared(view: &View, cands: &[Candidate]) -> Vec<Candidate> {
                 by_cs.insert(cs, c);
             }
         }
-        if by_cs.len() < 2 {
+        if by_cs.len() < least {
             continue;
         }
         let Some(ch) = view.channel(&clk) else { continue };
@@ -511,7 +530,7 @@ fn shared(view: &View, cands: &[Candidate]) -> Vec<Candidate> {
         let adjusted = |c: &Candidate| {
             let e = |k: &str| c.evidence.get(k).and_then(|x| x.as_f64()).unwrap_or(1.0);
             let f = e("select_frames");
-            let out = (f * f * (e("covered") / 0.9).min(1.0) * e("inside")).max(1e-3);
+            let out = (f * f * (e("covered") / 0.9).min(1.0) * e("inside")).max(1e-12);
             (c.score / out).min(0.99)
         };
         let spans = |c: &Candidate| -> Vec<(i64, i64)> {
@@ -550,7 +569,7 @@ fn shared(view: &View, cands: &[Candidate]) -> Vec<Candidate> {
         let n = list.len();
         for mask in 1u32..(1u32 << n) {
             let set: Vec<usize> = (0..n).filter(|&i| mask & (1 << i) != 0).collect();
-            if set.len() < 2 {
+            if set.len() < least {
                 continue;
             }
             if set
@@ -566,10 +585,10 @@ fn shared(view: &View, cands: &[Candidate]) -> Vec<Candidate> {
                 best = ((held, sum), set);
             }
         }
-        if best.1.len() < 2 {
+        if best.1.len() < least {
             continue;
         }
-        let cover = best.0.0 as f64 / mid.len() as f64;
+        let mut cover = best.0.0 as f64 / mid.len() as f64;
         let snug = best.1.iter().all(|&i| {
             list[i]
                 .0
@@ -579,39 +598,53 @@ fn shared(view: &View, cands: &[Candidate]) -> Vec<Candidate> {
                 .unwrap_or(0.0)
                 >= SHARED_SNUG
         });
-        if cover < SHARED_COVER || !snug {
+        if !snug {
             continue;
         }
-        let w: Vec<f64> = best
-            .1
+        // the bursts no captured select holds, read by the lines without one: a target whose CS is not on the probe
+        // (SHARED_FREE of its transfers or more, all of them framed by that reading)
+        let mut members: Vec<(&Candidate, f64)> = best.1.iter().map(|&i| (list[i].0, list[i].2)).collect();
+        if cover < SHARED_COVER
+            && let Some(f) = free
+        {
+            let held: Vec<bool> = (0..mid.len()).map(|k| best.1.iter().any(|&i| held_by[i][k])).collect();
+            let fh = holds(&spans(f));
+            let rest = (0..mid.len()).filter(|&k| !held[k] && fh[k]).count();
+            let both = (0..mid.len()).filter(|&k| held[k] || fh[k]).count() as f64 / mid.len() as f64;
+            if rest >= SHARED_FREE && both >= SHARED_COVER {
+                members.push((f, f.score));
+                cover = both;
+            }
+        }
+        if cover < SHARED_COVER || members.len() < 2 {
+            continue;
+        }
+        let w: Vec<f64> = members
             .iter()
-            .map(|&i| {
-                list[i]
-                    .0
-                    .evidence
+            .map(|&(c, _)| {
+                c.evidence
                     .get("windows")
                     .and_then(|x| x.as_f64())
                     .unwrap_or(1.0)
                     .max(1.0)
             })
             .collect();
-        let total = best.1.iter().zip(&w).map(|(&i, w)| w * list[i].2).sum::<f64>() / w.iter().sum::<f64>() * cover;
+        let total = members.iter().zip(&w).map(|(m, w)| w * m.1).sum::<f64>() / w.iter().sum::<f64>() * cover;
         let mut roles: std::collections::BTreeMap<String, String> = Default::default();
         roles.insert("clk".into(), clk.clone());
         for (i, d) in data.iter().enumerate() {
             roles.insert(format!("data{i}"), d.clone());
         }
         let mut targets = vec![];
-        for (k, &i) in best.1.iter().enumerate() {
-            let c = list[i].0;
-            roles.insert(
-                if k == 0 { "cs".to_string() } else { format!("cs{k}") },
-                c.roles["cs"].clone(),
-            );
+        let mut k = 0;
+        for &(c, score) in &members {
+            if let Some(cs) = c.roles.get("cs") {
+                roles.insert(if k == 0 { "cs".to_string() } else { format!("cs{k}") }, cs.clone());
+                k += 1;
+            }
             let lay: Value = serde_json::from_str(c.layers.get()).unwrap_or(Value::Null);
             targets.push(
-                json!({"roles": c.roles, "score": list[i].2, "params": c.params, "evidence": c.evidence,
-                                "layers": lay}),
+                json!({"roles": c.roles, "score": score, "params": c.params, "evidence": c.evidence, "layers": lay}),
             );
         }
         let mut params = Map::new();
