@@ -4,7 +4,7 @@
 
 use crate::Candidate;
 use crate::kernels::median;
-use crate::pulse::{best_of_views, candidate, hex, obj};
+use crate::pulse::{best_of_line_views, candidate, hex, obj};
 use crate::pulsecode::{pulses, q, split, ticks_k, to_bytes, views};
 use crate::view::{Channel, View};
 use serde_json::{Map, Value, json};
@@ -202,7 +202,7 @@ pub fn candidates(view: &View) -> Vec<Candidate> {
     view.channels
         .iter()
         .filter(|ch| ch.edges.len() >= 16)
-        .filter_map(|ch| best_of_views(ch, |c, k| read_line(c, view.rate, k)))
+        .filter_map(|ch| best_of_line_views(ch, |c, k| read_line(c, view.rate, k)))
         .collect()
 }
 

@@ -19,6 +19,12 @@ pub fn evidence(info: f64) -> f64 {
 /// A lone line as it is and, where it has pulses far shorter than its usual runs (spikes, bounces at its edges), with
 /// those taken out and with its bounces merged: (changes, k; k < 0 for bounces merged).
 pub fn line_views(e: &[i64]) -> Vec<(Vec<i64>, i64)> {
+    line_views_of(e, true)
+}
+
+/// `line_views`, with bounces merged or not (Python's own `_line_views` has not: readers that merge them in views of
+/// their own take it so).
+pub fn line_views_of(e: &[i64], bounces: bool) -> Vec<(Vec<i64>, i64)> {
     let mut out = vec![(e.to_vec(), 0)];
     if e.len() < 8 {
         return out;
@@ -33,7 +39,7 @@ pub fn line_views(e: &[i64]) -> Vec<(Vec<i64>, i64)> {
         out.push((d, k));
     }
     let b = debounce(e, k);
-    if b.len() != e.len() && b.len() >= 8 {
+    if bounces && b.len() != e.len() && b.len() >= 8 {
         out.push((b, -k));
     }
     out
@@ -111,8 +117,17 @@ pub fn candidate(
 
 /// The best of a line's readings over its views.
 pub fn best_of_views(ch: &Channel, read: impl Fn(&Channel, i64) -> Option<Candidate>) -> Option<Candidate> {
+    best_of(ch, true, read)
+}
+
+/// The best of a line's readings over Python's own views (as captured, short pulses out: no bounces merged).
+pub fn best_of_line_views(ch: &Channel, read: impl Fn(&Channel, i64) -> Option<Candidate>) -> Option<Candidate> {
+    best_of(ch, false, read)
+}
+
+fn best_of(ch: &Channel, bounces: bool, read: impl Fn(&Channel, i64) -> Option<Candidate>) -> Option<Candidate> {
     let mut best: Option<Candidate> = None;
-    for (e, k) in line_views(ch.edges) {
+    for (e, k) in line_views_of(ch.edges, bounces) {
         let c = Channel::new(ch.name, ch.initial, &e);
         if let Some(r) = read(&c, k)
             && best.as_ref().is_none_or(|b| r.score > b.score)
