@@ -1266,6 +1266,7 @@ pub fn candidates_with(view: &View, bauds: &std::collections::BTreeMap<String, f
             let Some(r) = read(view, &vch, &f, f.idle, k, clock_like, sync, tight, given) else {
                 continue;
             };
+            let at = readings.len();
             if r.framing < UART_OTHER_IDLE {
                 let u = r.params["baud"].as_f64().map_or(0.0, |b| view.rate / b);
                 if rests_at(&vch, n, 1 - f.idle, u)
@@ -1275,6 +1276,14 @@ pub fn candidates_with(view: &View, bauds: &std::collections::BTreeMap<String, f
                 }
             }
             readings.push(r);
+            // DMX512 at the bit time of each reading of this view with breaks (Python's DmxPlugin on the UART's
+            // blocks: a run of a tick - crosstalk - is no bit there, where it is a short run at 250 kbaud below)
+            for r in &readings[at..] {
+                if !r.chars.breaks.is_empty() {
+                    let idle = r.params["idle"].as_u64().unwrap_or(1) as u8;
+                    extra.extend(dmx_of(view, &vch, idle, r.unit, k));
+                }
+            }
             // DMX512 at its own 250 kbaud too, where the line has its breaks (slots of one value give no bit time)
             let u_dmx = view.rate / DMX_BAUD;
             let (_, length, _) = runs(&vch, n);
