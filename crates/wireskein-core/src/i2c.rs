@@ -13,6 +13,7 @@ pub const SOFT: f64 = 0.25; // the side terms weigh this much
 pub const MAX_CLOCK_HZ: f64 = 5e6;
 pub const FREE_CLOCK: f64 = 0.5; // a free clock's edges inside chance "frames": about half of them (none counts) ...
 pub const HELD: f64 = 0.9; // ... a master's clock inside its frames, this share or more (whole)
+pub const CLEAR: f64 = 0.15; // a condition this share of the clock's local half from its edges at least is clear
 
 /// P(X >= k) for X ~ Binomial(n, p), summed in logs (thousands of frames underflow the terms themselves).
 pub fn tail(n: usize, k: usize, p: f64) -> f64 {
@@ -58,9 +59,17 @@ fn frames(scl: &Channel, sda: &Channel) -> (Vec<Frame>, usize, usize, usize, usi
     let (mut clear, mut conds, mut quiet, mut lows) = (0usize, 0usize, 0usize, 0usize);
     let mut sda_in_low = 0usize;
     let near = |t: i64| -> bool {
-        // within a sample of one of SCL's edges
-        let k = ce.partition_point(|&x| x < t - 1);
-        k < ce.len() && ce[k] <= t + 1
+        // nearer one of SCL's edges than CLEAR of the clock's local half, or than a sample (Python's
+        // startstop_clearance: a clock of a few samples a period has its conditions a sample from its edges)
+        if ce.len() < 4 {
+            let k = ce.partition_point(|&x| x < t - 1);
+            return k < ce.len() && ce[k] <= t + 1;
+        }
+        let j = ce.partition_point(|&x| x < t).clamp(1, ce.len() - 1);
+        let d = (t - ce[j - 1]).abs().min((ce[j] - t).abs());
+        let jj = j.clamp(2, ce.len() - 2);
+        let half = (ce[jj] - ce[jj - 1]).min(ce[jj + 1] - ce[jj]).min(ce[jj - 1] - ce[jj - 2]);
+        (d as f64) < (CLEAR * half as f64).max(1.0)
     };
     while i < ce.len() || j < de.len() {
         // at one tick, SCL's change first: SDA moving as SCL falls is data, not a condition
