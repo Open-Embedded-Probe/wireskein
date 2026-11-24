@@ -24,9 +24,10 @@ pub struct Claim {
     /// another reading on some of its lines was in the best set without it (the verdict's rule over a rival)
     #[serde(skip)]
     pub rival: bool,
-    /// one target of a bus of several (its bus read above it as a whole, not alone)
-    #[serde(skip)]
-    pub bus: bool,
+    /// one target of a bus of several (its bus read above it as a whole, not alone): the bus's name ("spi:CLK"),
+    /// told with the claim (the claims of one bus share its lines)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bus: Option<String>,
 }
 
 /// Layers written as JSON text.

@@ -319,7 +319,7 @@ pub fn stage_with(mut claims: Vec<Claim>, rate: f64) -> (Vec<Claim>, Vec<Value>)
     let mut lines = vec![];
     let packs = crate::devices::PackSet::builtin(&["**".into()]);
     for (i, c) in claims.iter().enumerate() {
-        if c.bus {
+        if c.bus.is_some() {
             ups.push(None);
             continue;
         }

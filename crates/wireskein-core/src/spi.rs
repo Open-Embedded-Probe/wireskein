@@ -109,12 +109,25 @@ fn windows(ck: &Clock, cs: Option<&Channel>, n: i64) -> Option<Windows> {
         let mut bounds = vec![0];
         bounds.extend(&ke);
         bounds.push(n);
+        // the active level: the one whose windows hold the clock's bursts one by one, snugly (the margins before and
+        // after its edges no longer than their span and a few half periods); where both do as well, the one holding
+        // more of the clock (a select of a target among several: the others' transfers fall in its idle level)
         let mut cnt = [0usize; 2];
+        let mut snug = [0usize; 2];
         for i in 0..bounds.len() - 1 {
             let lv = (cs.initial as usize + i) & 1;
-            cnt[lv] += ce.partition_point(|&x| x < bounds[i + 1]) - ce.partition_point(|&x| x < bounds[i]);
+            let (a, b) = (bounds[i], bounds[i + 1]);
+            let lo = ce.partition_point(|&x| x < a);
+            let hi = ce.partition_point(|&x| x < b);
+            cnt[lv] += hi - lo;
+            if hi > lo && i > 0 && i + 2 < bounds.len() {
+                let (f, l) = (ce[lo], ce[hi - 1]);
+                if (f - a) + (b - l) <= (l - f).max(1) + (4.0 * ck.half) as i64 {
+                    snug[lv] += 1;
+                }
+            }
         }
-        let act = if cnt[1] > cnt[0] { 1 } else { 0 };
+        let act = if (snug[1], cnt[1]) > (snug[0], cnt[0]) { 1 } else { 0 };
         let w = (0..bounds.len() - 1)
             .filter(|&i| (cs.initial as usize + i) & 1 == act)
             .map(|i| (bounds[i], bounds[i + 1]))
@@ -492,10 +505,14 @@ fn shared(view: &View, cands: &[Candidate]) -> Vec<Candidate> {
         if mid.is_empty() {
             continue;
         }
-        // a target's score with the other targets' transfers not counted against it (its select framing them)
+        // a target's score with the other targets' transfers not counted against it: the clock's bursts outside its
+        // windows (select_frames), the sampling edges outside them (covered) and the data's changes outside them
+        // (inside) are the other targets' (the set below is held to hold the clock's bursts between them)
         let adjusted = |c: &Candidate| {
-            let f = c.evidence.get("select_frames").and_then(|x| x.as_f64()).unwrap_or(1.0);
-            (c.score / (f * f).max(1e-3)).min(0.99)
+            let e = |k: &str| c.evidence.get(k).and_then(|x| x.as_f64()).unwrap_or(1.0);
+            let f = e("select_frames");
+            let out = (f * f * (e("covered") / 0.9).min(1.0) * e("inside")).max(1e-3);
+            (c.score / out).min(0.99)
         };
         let spans = |c: &Candidate| -> Vec<(i64, i64)> {
             let v: Value = serde_json::from_str(c.layers.get()).unwrap_or(Value::Null);

@@ -267,6 +267,14 @@ def _idle(cap: Capture, b: dict, n) -> int:
     sb = (getattr(n, "layers", None) or {}).get("bits") if n is not None else None
     if sb is not None and len(sb.t) > 1:
         return int(IDLE_BITS * float(np.median(np.diff(sb.t))))
+    clk = (b.get("pins") or {}).get("clk") or (getattr(n, "roles", None) or {}).get("clk")
+    if getattr(n, "own_layers", None) is not None and clk and clk in {c.name for c in cap.channels}:
+        # another engine's reading (no sampled bits kept): the clock's period, from its rises
+        ch = cap.channel(clk)
+        e = np.asarray(ch.edges, np.int64)
+        rises = e[(ch.initial ^ ((np.arange(len(e)) + 1) & 1)) == 1]
+        if len(rises) > 1:
+            return int(IDLE_BITS * float(np.median(np.diff(rises))))
     return int(round(IDLE_S * cap.rate))
 
 

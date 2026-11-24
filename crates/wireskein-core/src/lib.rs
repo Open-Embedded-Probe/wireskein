@@ -197,7 +197,7 @@ pub fn choose(mut cands: Vec<Candidate>) -> Vec<Claim> {
                     layers: claim::raw(serde_json::to_string(&t["layers"]).unwrap()),
                     total: t["score"].as_f64().unwrap_or(c.score),
                     rival,
-                    bus: true,
+                    bus: c.params.get("bus").and_then(|b| b.as_str()).map(String::from),
                 });
             }
             continue;
@@ -213,7 +213,7 @@ pub fn choose(mut cands: Vec<Candidate>) -> Vec<Claim> {
             layers: c.layers.clone(),
             total: c.score,
             rival,
-            bus: false,
+            bus: None,
         });
     }
     out

@@ -117,7 +117,7 @@ def rust(view, hints: dict | None = None, readings: bool = False) -> ForeignResu
         n = ForeignNode(d["protocol"], dict(d.get("params") or {}), dict(d["roles"]), float(d["score"]),
                         dict(d.get("evidence") or {}), dict(d.get("layers") or {}))
         claims.append(staged.Claim(d["protocol"], dict(d["roles"]), dict(n.params), float(d["score"]),
-                                   float(d["margin"]), d["verdict"], n, None))
+                                   float(d["margin"]), d["verdict"], n, None, bus=d.get("bus")))
     res = ForeignResult(claims, hints)
     if readings:
         # (the readings no claim is: each by its protocol and roles, the best one; a claim's own reading left out)
@@ -129,8 +129,9 @@ def rust(view, hints: dict | None = None, readings: bool = False) -> ForeignResu
                 best[key] = d
         res.others = [ForeignNode(d["protocol"], dict(d.get("params") or {}), dict(d["roles"]), float(d["score"]),
                                   dict(d.get("evidence") or {}), dict(d.get("layers") or {})) for d in best.values()]
-    ups, res.relations = _upper.run([reading(c.node, c.total) for c in claims], float(view.rate), hints)
-    for c, up in zip(claims, ups):
+    mine = [c for c in claims if not c.bus]          # (a target of a bus of several: as main leaves it)
+    ups, res.relations = _upper.run([reading(c.node, c.total) for c in mine], float(view.rate), hints)
+    for c, up in zip(mine, ups):
         c.upper = up
         d = up.score - c.total
         if d:
