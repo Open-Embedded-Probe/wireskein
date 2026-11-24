@@ -216,20 +216,47 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
     }
     let rise = dr >= df;
     let take = if rise { &ck.rises } else { &ck.falls };
-    let cpol = if w[0].0 > 0 {
-        level_at(&ck.edges, ck.initial, w[0].0 - 1)
+    // the clock's idle level: where it rests before most windows (a capture starting inside a transfer has the
+    // clock anywhere before its first)
+    let before: Vec<u8> = w
+        .iter()
+        .filter(|&&(a, _)| a > 0)
+        .map(|&(a, _)| level_at(&ck.edges, ck.initial, a - 1))
+        .collect();
+    let highs = before.iter().filter(|&&l| l == 1).count();
+    let cpol = if before.is_empty() || 2 * highs == before.len() {
+        if w[0].0 > 0 {
+            level_at(&ck.edges, ck.initial, w[0].0 - 1)
+        } else {
+            ck.initial
+        }
     } else {
-        ck.initial
+        (2 * highs > before.len()) as u8
     };
     let leading_rise = cpol == 0;
     let mode = cpol as i64 * 2 + if rise == leading_rise { 0 } else { 1 };
+    // a select's windows as the clock is counted in them: half a clock period wider each side, where they hold a
+    // transfer as they are (a bounced clock's last edge rings on a little after the select lets go; a select
+    // toggling with the clock keeps its windows of a sampling edge as they are)
+    let pad = if cs.is_some() { ck.half.round() as i64 } else { 0 };
+    let ww: Vec<(i64, i64)> = w
+        .iter()
+        .map(|&(a, b)| {
+            let n = take.partition_point(|&x| x < b) - take.partition_point(|&x| x < a);
+            if n >= SELECT_MIN_BITS {
+                (a - pad, b + pad)
+            } else {
+                (a, b)
+            }
+        })
+        .collect();
     let mut transfers = vec![];
     let mut counts = vec![];
     let mut single = 0usize; // sampling edges in a select's windows of one
     let mut values = vec![];
-    for &(a, b) in &w {
-        let lo = take.partition_point(|&x| x < a);
-        let hi = take.partition_point(|&x| x < b);
+    for (&(a, b), &(pa, pb)) in w.iter().zip(&ww) {
+        let lo = take.partition_point(|&x| x < pa);
+        let hi = take.partition_point(|&x| x < pb);
         // (a select's window around a single sampling edge is no transfer: a select toggling with the clock, as
         // lines float while a board powers down; Python's SELECT_MIN_BITS)
         if lo == hi {
@@ -277,8 +304,8 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
         let mut k = 0usize;
         let mut per_period = std::collections::HashMap::new();
         for &x in de {
-            let i = w.partition_point(|&(a, _)| a <= x);
-            if i > 0 && x < w[i - 1].1 {
+            let i = ww.partition_point(|&(a, _)| a <= x);
+            if i > 0 && x < ww[i - 1].1 {
                 k += 1;
                 let p = take.partition_point(|&y| y <= x);
                 *per_period.entry(p).or_insert(0usize) += 1;
@@ -326,8 +353,8 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
                 let lo = ck.edges.partition_point(|&x| x < a);
                 let hi = ck.edges.partition_point(|&x| x <= b);
                 ck.edges[lo..hi].iter().all(|&x| {
-                    let i = w.partition_point(|&(s, _)| s <= x);
-                    i > 0 && x < w[i - 1].1
+                    let i = ww.partition_point(|&(s, _)| s <= x);
+                    i > 0 && x < ww[i - 1].1
                 })
             })
             .count();
@@ -573,6 +600,7 @@ pub const SHARED_COVER: f64 = 0.95; // the targets' selections together hold thi
 pub const SHARED_SNUG: f64 = 0.5; // each target's select snug round its bursts this share at least
 pub const SHARED_MAX: usize = 8; // select lines on one clock tried in sets for one bus of targets
 pub const SHARED_CUT: f64 = 0.1; // a target's select cutting this share of the bursts it reaches at most
+pub const SHARED_END: f64 = 16.0; // half periods: a select ends this soon after its last transfer (a byte's time)
 pub const SHARED_FREE: usize = 2; // transfers outside every captured select: a target of its own, read without its CS
 
 /// One clocked bus with a target on each select line (Python's `staged.shared_buses`): CLK and the data lines
@@ -742,8 +770,29 @@ fn shared(view: &View, cands: &[Candidate]) -> Vec<Candidate> {
         // the bursts no captured select holds, read by the lines without one: a target whose CS is not on the probe
         // (SHARED_FREE of its transfers or more, all of them framed by that reading)
         let mut members: Vec<(&Candidate, f64)> = best.1.iter().map(|&i| (list[i].0, list[i].2)).collect();
+        // (the bursts outside the selections another target's only where the selections end with their transfers:
+        // a select held on after them - or a line changing at random, whose windows hold a few bursts by chance - says
+        // nothing of the bursts beyond; each window's margin after the clock's last edge in it no longer than a
+        // byte's time)
+        let gaps: Vec<f64> = ce.windows(2).map(|w| (w[1] - w[0]) as f64).collect();
+        let half = median(&gaps);
+        let ends_snug = |sp: &[(i64, i64)]| -> bool {
+            let (mut held, mut snug) = (0usize, 0usize);
+            for &(a, b) in sp {
+                let lo = ce.partition_point(|&x| x < a);
+                let hi = ce.partition_point(|&x| x < b);
+                if hi > lo {
+                    held += 1;
+                    if b - ce[hi - 1] <= (SHARED_END * half) as i64 {
+                        snug += 1;
+                    }
+                }
+            }
+            snug as f64 >= SHARED_SNUG * held.max(1) as f64
+        };
         if cover < SHARED_COVER
             && let Some(f) = free
+            && best.1.iter().all(|&i| ends_snug(&list[i].1))
         {
             let held: Vec<bool> = (0..mid.len()).map(|k| best.1.iter().any(|&i| held_by[i][k])).collect();
             let fh = holds(&spans(f));
