@@ -366,6 +366,7 @@ pub fn read(view: &View, scl: &Channel, sda: &Channel) -> Option<Candidate> {
     })
 }
 
+pub const REBUILD_BELOW: f64 = 0.85; // a pair read under this on the width views: read on SCL rebuilt too
 pub const SETTLE: i64 = 7; // ticks: a change's bounces within this of it (`kernels::settled`)
 
 /// The views a pair is read on: as captured, pulses under 2 and under 4 samples taken out (spikes, crosstalk), and
@@ -457,8 +458,10 @@ pub fn candidates(view: &View) -> Vec<Candidate> {
                 }
             }
             // SCL rebuilt from its period, SDA's bounces merged (Python's rebuilt views of a group, SPI's here): a
-            // clock of a few samples a half bouncing through it has no width a filter tells from its own runs
-            for (name, ea) in &rebuilt[ia] {
+            // clock of a few samples a half bouncing through it has no width a filter tells from its own runs (read
+            // only where the width views read the pair under REBUILD_BELOW, as Python's)
+            let below = best.as_ref().is_none_or(|x| x.score < REBUILD_BELOW);
+            for (name, ea) in rebuilt[ia].iter().filter(|_| below) {
                 let (ca, cb) = (
                     Channel::new(a.name, a.initial, ea),
                     Channel::new(b.name, b.initial, &merged[ib]),
