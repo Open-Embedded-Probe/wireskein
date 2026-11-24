@@ -11,6 +11,8 @@ use serde_json::{Map, Value, json};
 pub const CHANCE: f64 = 0.3; // a frame's chance to fit
 pub const SOFT: f64 = 0.25; // the side terms weigh this much
 pub const MAX_CLOCK_HZ: f64 = 5e6;
+pub const FREE_CLOCK: f64 = 0.5; // a free clock's edges inside chance "frames": about half of them (none counts) ...
+pub const HELD: f64 = 0.9; // ... a master's clock inside its frames, this share or more (whole)
 
 /// P(X >= k) for X ~ Binomial(n, p), summed in logs (thousands of frames underflow the terms themselves).
 pub fn tail(n: usize, k: usize, p: f64) -> f64 {
@@ -199,7 +201,15 @@ pub fn read(view: &View, scl: &Channel, sda: &Channel) -> Option<Candidate> {
         v.dedup();
         if values.len() >= 4 && v.len() == 1 { 0.5 } else { 1.0 }
     };
-    let mut score = fit * soft(clearance) * soft(once) * varied;
+    // SCL rests high between a STOP and the next START (a master clocks only its transfers): a clock running on
+    // between the "frames" is a free clock, its conditions another line's chance changes while it is high
+    let inside: usize = frs
+        .iter()
+        .map(|f| scl.edges.partition_point(|&x| x <= f.e) - scl.edges.partition_point(|&x| x < f.s))
+        .sum();
+    let held = inside as f64 / scl.edges.len().max(1) as f64;
+    let rests = ((held - FREE_CLOCK) / (HELD - FREE_CLOCK)).clamp(0.0, 1.0);
+    let mut score = fit * soft(clearance) * soft(once) * varied * rests;
     // few addresses, repeatedly, acknowledged at least sometimes: a real bus's (Python's staged.i2c_addresses), its
     // support raising the score
     let addrs: Vec<(i64, bool)> = txs
@@ -226,6 +236,7 @@ pub fn read(view: &View, scl: &Channel, sda: &Channel) -> Option<Candidate> {
         ("clearance", clearance),
         ("data_once_a_bit", once),
         ("scl_hz", hz),
+        ("clock_in_frames", held),
     ] {
         evidence.insert(k_.into(), json!(x));
     }

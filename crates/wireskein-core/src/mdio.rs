@@ -10,6 +10,7 @@ use crate::view::{Channel, View};
 use serde_json::{Map, Value, json};
 
 pub const DATA_KEEPS: f64 = 0.5; // MDIO keeps to MDC this well at least
+pub const STEP_CHANGES: u64 = 2; // a frame's bits changing this often at most: a step, no fields
 pub const SCALE: f64 = 2.0; // frames counted as 1 - exp(-n / SCALE): each holds 34 fixed bits
 
 fn bits_msb(b: &[u8]) -> u32 {
@@ -59,6 +60,7 @@ fn frames_in(bits: &[u8], ticks: &[i64]) -> Vec<Value> {
                 m.insert("phy".into(), json!(phy));
                 m.insert(if st == 1 { "reg" } else { "dev" }.into(), json!(reg));
                 m.insert("data".into(), json!(data));
+                m.insert("_changes".into(), json!(f.windows(2).filter(|w| w[0] != w[1]).count()));
                 out.push(Value::Object(m));
                 i = st0 + 32;
                 continue;
@@ -120,8 +122,23 @@ fn read(view: &View, mdc: &Channel, mdio: &Channel) -> Option<Candidate> {
             (1.0 - (top - 0.5) / 0.5).max(0.05)
         }
     };
-    let score = fit * quantity * (0.5 + 0.5 * degenerate);
+    // a frame whose 32 bits after the preamble change at most twice is a run of zeros (or a step) after a run of ones:
+    // a square wave's halves (an I2S word select's slots of 32 clocks), no frame's fields; nearly all such frames, no
+    // MDIO (as I2S's square words)
+    let steps = frames
+        .iter_mut()
+        .filter_map(|f| f.as_object_mut()?.remove("_changes")?.as_u64())
+        .filter(|&c| c <= STEP_CHANGES)
+        .count() as f64
+        / frames.len() as f64;
+    let square = if frames.len() < 4 || steps <= 0.9 {
+        1.0
+    } else {
+        (1.0 - (steps - 0.9) / 0.1).max(0.05)
+    };
+    let score = fit * quantity * (0.5 + 0.5 * degenerate) * square;
     let mut evidence = Map::new();
+    evidence.insert("square_frames".into(), json!(steps));
     evidence.insert("frames".into(), json!(frames.len()));
     evidence.insert("bursts".into(), json!(windows));
     evidence.insert("degenerate".into(), json!(degenerate));
