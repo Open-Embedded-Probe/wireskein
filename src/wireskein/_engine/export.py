@@ -78,6 +78,9 @@ def layers_of(n, up=None) -> dict:
     wireskein._upper)."""
     if up is not None:
         return {**layers_of(n), **up.layers}
+    own = getattr(n, "own_layers", None)
+    if own is not None:                     # another engine's reading: its layers as the format has them
+        return dict(own)
     a = n.analyzer
     out = {}
     if a in ("i2c", "spi", "sync_unknown", "rvswd"):

@@ -363,8 +363,13 @@ def check_pulses(cap, x):
     return ok, got, "; ".join(why)
 
 
-def _decode(cap, hints):
+def _decode(cap, hints, foreign: bool = False):
+    """The analysis a check reads. foreign: the check takes any engine's claims (a protocol of others on a bus, read
+    by the upper stage from the claim's layers), else the Python engine's readings (their items as it keeps them)."""
     from . import _engines
+    if foreign:
+        return _engines.analyze(cap, hints)
+    _engines.python_only("verify's bus checks")
     return _engines.main(cap, hints)
 
 
@@ -713,7 +718,7 @@ def check_protocol(cap, x):
         return _pair_protocol(cap, x, proto)
     pins = {p: {"protocol": x["bus"], "role": r, **({"baud": x["baud"]} if x.get("baud") else {})}
             for r, p in x["roles"].items()}
-    res = _decode(cap, {"protocols": [x["bus"]], "pins": pins})
+    res = _decode(cap, {"protocols": [x["bus"]], "pins": pins}, foreign=True)
     n = _best(res, x["bus"], {r: p for r, p in x["roles"].items()})
     if n is None:
         return False, {}, f"nothing decoded as {x['bus']} on these pins"

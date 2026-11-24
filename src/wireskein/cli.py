@@ -623,6 +623,7 @@ def segments(args) -> None:
     hints = parse_hint(args.hint)
     cap = _load_for_decoding(args.capture, args)
     from . import _engines
+    _engines.python_only("segments")
     res = _engines.main(cap, hints)
     found = markers.find(res, cap, hint=json.loads(args.markers) if args.markers else None)
     if found is None:

@@ -811,6 +811,7 @@ def _part(cap: Capture, spec: dict, head: dict, strict: bool = False) -> dict:
     # a pin named by buses of two protocols (one line read as RVSWD and as SWIO) is hinted once a reading: each set
     # of buses that names no pin under two protocols is analyzed on its own
     groups = _apart(spec["buses"])
+    _engines.python_only("a decode spec's buses")     # (each bus's reading is the Python engine's)
     reads = [_engines.main(cap, _hints({**spec, "buses": g}, strict, [c.name for c in cap.channels])) for g in groups]
     res_of = {id(b): r for g, r in zip(groups, reads) for b in g}
     res = reads[0]
@@ -1400,7 +1401,11 @@ def analyze_file(path: str | Path, hints: dict | None = None, mode: str = "final
             if got is not None:                    # long: roles from the first piece, then every piece read with them
                 doc["parts"].append({**_part_head(heads[k], firsts[k], cap.n_samples, spans[k]), **got})
                 continue
-        res = _engines.analyze(cap, hints)
+        if segment:
+            _engines.python_only("segments")             # (the marker streams are read from its UART readings)
+            res = _engines.main(cap, hints)
+        else:
+            res = _engines.analyze(cap, hints)
         window = (int(window_s[0] * cap.rate), int(window_s[1] * cap.rate)) if window_s else None
         seg_events = hit = None
         if segment:
