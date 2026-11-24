@@ -649,6 +649,29 @@ struct Reading {
     starts: Vec<i64>,
 }
 
+/// A UART of 9 data bits: each character's ninth bit ("0" / "1", in order) beside `hex`'s low eight (in multidrop
+/// use the address flag; Python's `export._ninth_bits`). 9 data bits where the parity check says so, or characters of
+/// 11 bits without parity whose ninth bit varies (one always 1 is an 8N2's second stop bit); None otherwise.
+fn ninth_bits(r: &Reading) -> Option<String> {
+    if r.bytes.is_empty() {
+        return None;
+    }
+    let nine = match r.params.get("data_bits").and_then(|d| d.as_i64()) {
+        Some(d) => d == 9,
+        None => {
+            r.params.get("L").and_then(|l| l.as_i64()) == Some(11)
+                && r.bytes.iter().any(|&v| (v >> 8) & 1 == 1)
+                && r.bytes.iter().any(|&v| (v >> 8) & 1 == 0)
+        }
+    };
+    nine.then(|| {
+        r.bytes
+            .iter()
+            .map(|&v| if (v >> 8) & 1 == 1 { '1' } else { '0' })
+            .collect()
+    })
+}
+
 /// The layers of a UART reading as JSON (blocks, chars, breaks, bytes), written straight to text.
 fn layers(r: &Reading) -> Box<serde_json::value::RawValue> {
     use std::fmt::Write;
@@ -679,7 +702,11 @@ fn layers(r: &Reading) -> Box<serde_json::value::RawValue> {
     for &x in &r.bytes {
         let _ = write!(s, "{:02x}", x & 0xFF);
     }
-    s.push_str("\"}}");
+    s.push('"');
+    if let Some(ninth) = ninth_bits(r) {
+        let _ = write!(s, r#","bit8":"{ninth}""#);
+    }
+    s.push_str("}}");
     crate::claim::raw(s)
 }
 
