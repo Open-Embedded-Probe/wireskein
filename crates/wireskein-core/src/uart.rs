@@ -183,19 +183,27 @@ fn char_length(ch: &Channel, n: i64, idle: u8, unit: f64, s0: i64, s1: i64) -> V
     if starts.len() < 4 {
         return vec![];
     }
-    let level = |s: f64, k: usize| -> u8 {
-        let pos = ((s + (k as f64 + 0.5) * unit).floor() as i64).min(n - 1);
-        let lv = ch.level_at(pos);
-        if idle == 0 { 1 - lv } else { lv }
-    };
+    // the level at each start's (k + 0.5) bits, k < 14: the positions rise with the starts, so one walk each
+    let grid: Vec<Vec<u8>> = (0..14)
+        .map(|k| {
+            let lv = crate::kernels::levels_at_sorted(
+                ch,
+                starts
+                    .iter()
+                    .map(|&s| ((s + (k as f64 + 0.5) * unit).floor() as i64).min(n - 1)),
+            );
+            if idle == 0 {
+                lv.into_iter().map(|x| 1 - x).collect()
+            } else {
+                lv
+            }
+        })
+        .collect();
     let mut rates: Vec<(usize, f64)> = (8..14)
         .map(|l| {
             let busy: Vec<f64> = starts.iter().map(|&s| s + (l as f64 - 0.5) * unit).collect();
             let idx = chain(&starts, &busy);
-            let ok = idx
-                .iter()
-                .filter(|&&i| level(starts[i], 0) == 0 && level(starts[i], l - 1) == 1)
-                .count();
+            let ok = idx.iter().filter(|&&i| grid[0][i] == 0 && grid[l - 1][i] == 1).count();
             (
                 l,
                 if idx.is_empty() {
@@ -473,8 +481,47 @@ struct Reading {
     score: f64,
     params: Map<String, Value>,
     evidence: Map<String, Value>,
-    layers: Map<String, Value>,
     framing: f64,
+    // what the layers are written from, for the reading claimed only
+    unit: f64,
+    n: i64,
+    chars: Chars,
+    bytes: Vec<i64>,
+    starts: Vec<i64>,
+}
+
+/// The layers of a UART reading as JSON (blocks, chars, breaks, bytes), written straight to text.
+fn layers(r: &Reading) -> Box<serde_json::value::RawValue> {
+    use std::fmt::Write;
+    let c = &r.chars;
+    let mut s = String::with_capacity(64 + c.start.len() * 40 + r.bytes.len() * 12);
+    let _ = write!(
+        s,
+        r#"{{"blocks":[{{"s":0,"e":{},"unit_samples":{}}}],"chars":["#,
+        r.n,
+        json!(r.unit)
+    );
+    for (i, ((&st, &x), &o)) in c.start.iter().zip(&c.values).zip(&c.ok).enumerate() {
+        let _ = write!(
+            s,
+            r#"{}{{"s":{st},"value":{x},"ok":{o}}}"#,
+            if i > 0 { "," } else { "" }
+        );
+    }
+    s.push_str(r#"],"breaks":["#);
+    for (i, b) in c.breaks.iter().enumerate() {
+        let _ = write!(s, "{}{b}", if i > 0 { "," } else { "" });
+    }
+    s.push_str(r#"],"bytes":{"s":["#);
+    for (i, st) in r.starts.iter().enumerate() {
+        let _ = write!(s, "{}{st}", if i > 0 { "," } else { "" });
+    }
+    s.push_str(r#"],"hex":""#);
+    for &x in &r.bytes {
+        let _ = write!(s, "{:02x}", x & 0xFF);
+    }
+    s.push_str("\"}}");
+    crate::claim::raw(s)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -608,29 +655,17 @@ fn read(view: &View, ch: &Channel, f: &Features, idle: u8, k: i64, clock_like: f
     }
     evidence.insert("chars".into(), json!(ok_n));
     evidence.insert("on_grid".into(), grid.map_or(Value::Null, |g| json!(g)));
-    let (_, _, _, chs) = &blocks[0];
-    let mut layers = Map::new();
-    layers.insert("blocks".into(), json!([{"s": 0, "e": n, "unit_samples": u}]));
-    layers.insert(
-        "chars".into(),
-        Value::Array(
-            chs.start
-                .iter()
-                .zip(&chs.values)
-                .zip(&chs.ok)
-                .map(|((&s, &x), &o)| json!({"s": s, "value": x, "ok": o}))
-                .collect(),
-        ),
-    );
-    layers.insert("breaks".into(), json!(chs.breaks));
-    let hex: String = v.iter().map(|&x| format!("{:02x}", x & 0xFF)).collect();
-    layers.insert("bytes".into(), json!({"s": starts, "hex": hex}));
+    let (_, _, _, chs) = blocks.into_iter().next().expect("one block");
     Some(Reading {
         score,
         params,
         evidence,
-        layers,
         framing,
+        unit: u,
+        n,
+        chars: chs,
+        bytes: v,
+        starts,
     })
 }
 
@@ -809,7 +844,7 @@ pub fn claims(view: &View) -> Vec<Claim> {
             margin: (margin * 1e4).round() / 1e4,
             params: best.params.clone(),
             evidence: best.evidence.clone(),
-            layers: best.layers.clone(),
+            layers: layers(best),
         });
     }
     out
@@ -849,7 +884,8 @@ mod tests {
         let c = &cs[0];
         assert_eq!(c.verdict, "confirmed", "{:?}", c.evidence);
         let hex: String = text.iter().map(|b| format!("{b:02x}")).collect();
-        assert_eq!(c.layers["bytes"]["hex"], json!(hex));
+        let lay: Value = serde_json::from_str(c.layers.get()).unwrap();
+        assert_eq!(lay["bytes"]["hex"], json!(hex));
         let baud = c.params["baud"].as_f64().unwrap();
         assert!((baud / (2e6 / 17.0) - 1.0).abs() < 0.01, "{baud}");
     }

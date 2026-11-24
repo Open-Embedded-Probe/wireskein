@@ -136,16 +136,35 @@ pub fn level_at(ch: &Channel, tick: i64) -> u8 {
     ch.level_at(tick)
 }
 
-/// Greedy non-overlapping chain: take start i, then the first start >= busy_until[i]. (`kernels.chain`)
+/// Greedy non-overlapping chain: take start i, then the first start >= busy_until[i]. (`kernels.chain`) The starts
+/// are sorted; the walk only moves forward.
 pub fn chain(starts: &[f64], busy_until: &[f64]) -> Vec<usize> {
     let mut out = Vec::new();
     let mut i = 0usize;
     while i < starts.len() {
         out.push(i);
         let b = busy_until[i];
-        i = starts.partition_point(|&s| s < b);
+        let mut j = i + 1;
+        while j < starts.len() && starts[j] < b {
+            j += 1;
+        }
+        i = j;
     }
     out
+}
+
+/// The level of a line at each of the sorted ticks, walking its changes once.
+pub fn levels_at_sorted(ch: &crate::view::Channel, ticks: impl Iterator<Item = i64>) -> Vec<u8> {
+    let e = ch.edges;
+    let mut j = 0usize;
+    ticks
+        .map(|t| {
+            while j < e.len() && e[j] <= t {
+                j += 1;
+            }
+            ch.initial ^ (j as u8 & 1)
+        })
+        .collect()
 }
 
 pub fn quantile(sorted: &[f64], q: f64) -> f64 {

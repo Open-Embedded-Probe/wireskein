@@ -152,8 +152,13 @@ pub fn features(ch: &Channel, n: i64) -> Features {
         }
     }
     let mut order: Vec<usize> = (0..pool_len.len()).collect();
-    order.sort_by_key(|&i| pool_len[i]); // stable: argsort's ties may differ, the sums rarely
-    let top = &order[order.len().saturating_sub(20)..];
+    let top: &[usize] = if order.len() > 20 {
+        let k = order.len() - 20;
+        order.select_nth_unstable_by_key(k, |&i| pool_len[i]);
+        &order[k..]
+    } else {
+        &order
+    };
     let (mut hi, mut lo) = (0i64, 0i64);
     for &i in top {
         if pool_lev[i] == 1 {
