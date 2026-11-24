@@ -27,12 +27,14 @@ pub mod pulse;
 pub mod pulsecode;
 pub mod rebuild;
 pub mod rgbled;
+pub mod rvswd;
 pub mod sdmmc;
 pub mod sent;
 pub mod spdif;
 pub mod spi;
 pub mod swd;
 pub mod swim;
+pub mod swio;
 pub mod sync;
 pub mod uart;
 pub mod usb;
@@ -264,6 +266,8 @@ pub fn candidates_with(view: &View, bauds: &std::collections::BTreeMap<String, f
     own.extend(onewire::candidates(view));
     own.extend(irnec::candidates(view));
     own.extend(dht::candidates(view));
+    own.extend(rvswd::candidates(view));
+    own.extend(swio::candidates(view));
     let taken: std::collections::BTreeSet<String> = own
         .iter()
         .filter(|c| c.score >= SPECIFIC)
