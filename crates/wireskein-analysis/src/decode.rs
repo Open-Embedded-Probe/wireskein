@@ -1829,7 +1829,7 @@ pub fn decode_file(
                 parts.push(Value::Object(part_split(
                     &mut src,
                     cap.rate(),
-                    &spec,
+                    spec,
                     &head,
                     split_opts,
                     items,
@@ -1850,9 +1850,9 @@ pub fn decode_file(
         let gf = glitch_filter(&p.meta);
         let mut out = if split_opts.is_some() || items.is_some() {
             let mut src = wireskein_io::stream::MemSource::new(&lines, p.ticks);
-            part_split(&mut src, rate, &spec, &head, split_opts, items, gf.as_ref())?
+            part_split(&mut src, rate, spec, &head, split_opts, items, gf.as_ref())?
         } else {
-            part(&lines, rate, p.ticks, &spec, &head, false, gf.as_ref())?
+            part(&lines, rate, p.ticks, spec, &head, false, gf.as_ref())?
         };
         if let Some((a, b)) = p.parts {
             out.insert("parts".into(), json!([a, b]));

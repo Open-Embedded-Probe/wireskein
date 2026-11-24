@@ -6,7 +6,8 @@
 //! as the analysis format's JSON. Beside the engine, the parts around it: a capture file read (`read_file`), a recorded
 //! run verified (`verify`), a capture file's analysis document (`analyze_file`), a line's states (`states_of_line`), a
 //! capture's overview (`survey_file`), a capture written (`write_file`), a file's annotations (`annotations_file`),
-//! each switched on in the wireskein package by WIRESKEIN_RUST (src/wireskein/_rust.py).
+//! a decode spec's document (`decode_file`), a part's lines a block at a time (`file_blocks`, `sr_blocks`), verify's
+//! markers written (`mark`), each switched on in the wireskein package by WIRESKEIN_RUST (src/wireskein/_rust.py).
 
 use numpy::{PyArray1, PyReadonlyArray1};
 use pyo3::exceptions::PyValueError;
