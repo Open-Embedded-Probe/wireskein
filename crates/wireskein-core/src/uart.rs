@@ -171,6 +171,165 @@ fn unit_of(start: &[i64], length: &[i64], level: &[u8], idle: u8, s0: i64, s1: i
     Some(unfold(&r, ok.unwrap_or(cands[0].samples)))
 }
 
+/// The idle run with the fewest bad runs around it (`typed._fewest_bad`): of those the nearest the cut found, then
+/// the longest, the first; None with no idle run.
+fn fewest_bad(bad: &[usize], length: &[i64], idle: &[bool], away: &[i64]) -> Option<usize> {
+    let min_bad = (0..bad.len()).filter(|&i| idle[i]).map(|i| bad[i]).min()?;
+    let mut cand: Vec<usize> = (0..bad.len()).filter(|&i| idle[i] && bad[i] == min_bad).collect();
+    let near = cand.iter().map(|&i| away[i]).min()?;
+    let longest = cand.iter().map(|&i| length[i]).max()?;
+    cand.retain(|&i| away[i] <= near + longest);
+    let lmax = cand.iter().map(|&i| length[i]).max()?;
+    cand.into_iter().find(|&i| length[i] == lmax)
+}
+
+fn median_of(v: &[f64]) -> f64 {
+    median(v)
+}
+
+/// Where a line's bit time changes (a bootloader switching its baud): the local bit time the shortest run among
+/// its neighbours, a switch where the medians of the next and the previous window differ by `change` or more, cut
+/// in an idle run (`typed.async_segments`). [(start, end, unit)].
+fn segments(start: &[i64], length: &[i64], level: &[u8], idle: u8, n: i64, unit0: Option<f64>) -> Vec<(i64, i64, f64)> {
+    const HALF: usize = 10;
+    const CHANGE: f64 = 1.5;
+    let inner: Vec<f64> = if length.len() > 2 {
+        length[1..length.len() - 1].iter().map(|&x| x as f64).collect()
+    } else {
+        vec![]
+    };
+    if inner.len() < 4 * HALF {
+        return unit0.map(|u| vec![(0, n, u)]).unwrap_or_default();
+    }
+    let w = 2 * HALF + 1;
+    let x: Vec<f64> = inner.iter().map(|&r| if r > 1.0 { r } else { f64::INFINITY }).collect();
+    // the minimum of each window of w around (padded with the edge values)
+    let pad = |i: isize| -> f64 { x[i.clamp(0, x.len() as isize - 1) as usize] };
+    let mut loc: Vec<f64> = (0..x.len())
+        .map(|i| {
+            (0..w)
+                .map(|d| pad(i as isize + d as isize - HALF as isize))
+                .fold(f64::INFINITY, f64::min)
+        })
+        .collect();
+    if loc.iter().all(|v| !v.is_finite()) {
+        return unit0.map(|u| vec![(0, n, u)]).unwrap_or_default();
+    }
+    // windows of spikes only carry the neighbour before (or the median of the rest)
+    let finite: Vec<f64> = loc.iter().copied().filter(|v| v.is_finite()).collect();
+    let mid = median_of(&finite);
+    let mut last: Option<f64> = None;
+    for v in loc.iter_mut() {
+        if v.is_finite() {
+            last = Some(*v);
+        } else {
+            *v = last.unwrap_or(mid);
+        }
+    }
+    let lr: Vec<f64> = loc.iter().map(|v| v.ln()).collect();
+    let m = lr.len();
+    let med_next: Vec<f64> = (0..m)
+        .map(|i| median_of(&(0..w).map(|d| lr[(i + d).min(m - 1)]).collect::<Vec<_>>()))
+        .collect();
+    let med_prev: Vec<f64> = if m > w {
+        (0..m).map(|i| if i < w { lr[0] } else { med_next[i - w] }).collect()
+    } else {
+        vec![lr[0]; m]
+    };
+    let jump: Vec<bool> = (0..m)
+        .map(|i| (med_next[i] - med_prev[i]).abs() >= CHANGE.ln())
+        .collect();
+    let mut cuts: Vec<i64> = vec![];
+    let mut cand: Vec<usize> = if m > 2 * w {
+        (w..m - w).filter(|&i| jump[i]).collect()
+    } else {
+        vec![]
+    };
+    let mut ci = 0usize;
+    while ci < cand.len() {
+        let i = cand[ci];
+        let j = i
+            + (0..w.min(m - i))
+                .max_by(|&a, &b| {
+                    let da = (med_next[i + a] - med_prev[i + a]).abs();
+                    let db = (med_next[i + b] - med_prev[i + b]).abs();
+                    da.partial_cmp(&db).unwrap().then(b.cmp(&a))
+                })
+                .unwrap_or(0);
+        let (lo, hi) = (1.max(j.saturating_sub(HALF)), inner.len().min(j + HALF));
+        // (the walk goes on in the idle runs found here, as Python's does: in effect the first switch only)
+        cand = (lo..hi).filter(|&k| level[k + 1] == idle).collect();
+        let k = cand
+            .iter()
+            .copied()
+            .max_by(|&a, &b| inner[a].partial_cmp(&inner[b]).unwrap().then(b.cmp(&a)))
+            .unwrap_or(j);
+        cuts.push(start[k + 1] + length[k + 1] / 2);
+        let nxt = j + w;
+        ci = cand.partition_point(|&c| c < nxt);
+    }
+    let unit_in = |s0: i64, s1: i64| unit_of(start, length, level, idle, s0, s1);
+    let mut bounds: Vec<i64> = std::iter::once(0).chain(cuts).chain(std::iter::once(n)).collect();
+    for ci in 1..bounds.len().saturating_sub(1) {
+        let (Some(ua), Some(ub)) = (unit_in(bounds[ci - 1], bounds[ci]), unit_in(bounds[ci], bounds[ci + 1])) else {
+            continue;
+        };
+        let idx: Vec<usize> = (0..start.len())
+            .filter(|&i| start[i] >= bounds[ci - 1] && start[i] < bounds[ci + 1])
+            .collect();
+        let r: Vec<f64> = idx.iter().map(|&i| length[i] as f64).collect();
+        // (the capture's first and last runs are cut by its ends, of no length of their own: not counted - one at
+        // the start, shorter than a bit of the slower side, made the start the best place for a switch)
+        let cut = |i: usize| idx[i] == 0 || idx[i] + 1 == start.len();
+        let sa: Vec<usize> = (0..r.len())
+            .map(|i| (!cut(i) && r[i] < 0.8 * ua && r[i] > 1.0) as usize)
+            .collect();
+        let sb: Vec<usize> = (0..r.len())
+            .map(|i| (!cut(i) && r[i] < 0.8 * ub && r[i] > 1.0) as usize)
+            .collect();
+        let mut ca = vec![0usize; r.len() + 1];
+        for i in 0..r.len() {
+            ca[i + 1] = ca[i] + sa[i];
+        }
+        let mut cb = vec![0usize; r.len() + 1];
+        for i in (0..r.len()).rev() {
+            cb[i] = cb[i + 1] + sb[i];
+        }
+        let bad: Vec<usize> = (0..r.len()).map(|i| ca[i] + cb[i]).collect();
+        let lens: Vec<i64> = idx.iter().map(|&i| length[i]).collect();
+        let idles: Vec<bool> = idx.iter().map(|&i| level[i] == idle).collect();
+        let away: Vec<i64> = idx.iter().map(|&i| (start[i] - bounds[ci]).abs()).collect();
+        if let Some(j) = fewest_bad(&bad, &lens, &idles, &away) {
+            bounds[ci] = start[idx[j]] + length[idx[j]] / 2;
+        }
+    }
+    let count = |a: i64, b: i64| start.iter().filter(|&&s| s >= a && s < b).count();
+    let mut merged = vec![bounds[0]];
+    for i in 1..bounds.len().saturating_sub(1) {
+        let (x, y) = (bounds[i], bounds[i + 1]);
+        if count(*merged.last().unwrap(), x) >= 2 * w && count(x, y) >= 2 * w {
+            merged.push(x);
+        }
+    }
+    merged.push(*bounds.last().unwrap());
+    let mut out: Vec<(i64, i64, f64)> = vec![];
+    for b in merged.windows(2) {
+        let (s0, s1) = (b[0], b[1]);
+        if let Some(u) = unit_in(s0, s1) {
+            if let Some(last) = out.last_mut()
+                && u.max(last.2) / u.min(last.2) < CHANGE
+                && last.1 == s0
+            {
+                let a0 = last.0;
+                *last = (a0, s1, unit_in(a0, s1).unwrap_or(last.2));
+            } else {
+                out.push((s0, s1, u));
+            }
+        }
+    }
+    out
+}
+
 /// Character lengths by the stop-bit test (`survey.char_length`): [(L, pass rate)] best first, 4 at most.
 fn char_length(ch: &Channel, n: i64, idle: u8, unit: f64, s0: i64, s1: i64) -> Vec<(usize, f64)> {
     let e = ch.edges;
@@ -484,7 +643,7 @@ struct Reading {
     framing: f64,
     // what the layers are written from, for the reading claimed only
     unit: f64,
-    n: i64,
+    spans: Vec<(i64, i64, f64)>,
     chars: Chars,
     bytes: Vec<i64>,
     starts: Vec<i64>,
@@ -495,12 +654,12 @@ fn layers(r: &Reading) -> Box<serde_json::value::RawValue> {
     use std::fmt::Write;
     let c = &r.chars;
     let mut s = String::with_capacity(64 + c.start.len() * 40 + r.bytes.len() * 12);
-    let _ = write!(
-        s,
-        r#"{{"blocks":[{{"s":0,"e":{},"unit_samples":{}}}],"chars":["#,
-        r.n,
-        json!(r.unit)
-    );
+    let blocks: Vec<Value> = r
+        .spans
+        .iter()
+        .map(|&(a, b, u)| json!({"s": a, "e": b, "unit_samples": u}))
+        .collect();
+    let _ = write!(s, r#"{{"blocks":{},"chars":["#, Value::Array(blocks));
     for (i, ((&st, &x), &o)) in c.start.iter().zip(&c.values).zip(&c.ok).enumerate() {
         let _ = write!(
             s,
@@ -539,34 +698,59 @@ fn read(
     let n = view.n_samples;
     let (start, length, level) = runs(ch, n);
     let inner = length.len().saturating_sub(2);
-    // a bit time given (a hint's baud) replaces the line's own estimate
-    let u0 = if let Some(u) = given {
-        u
+    // the line's blocks, each at its own bit time (a bit time given, a hint's baud, replaces the estimate)
+    let spans: Vec<(i64, i64, f64)> = if let Some(u) = given {
+        vec![(0, n, u)]
     } else if inner < 40 {
-        f.units.first()?.samples
+        vec![(0, n, f.units.first()?.samples)]
     } else {
-        unit_of(&start, &length, &level, idle, 0, n)?
+        segments(&start, &length, &level, idle, n, f.units.first().map(|x| x.samples))
     };
-    if u0 < ASYNC_MIN_UNIT {
-        return None;
-    }
-    // one block (rate switches are not read yet)
-    let cands = char_length(ch, n, idle, u0, 0, n);
-    if cands.is_empty() {
-        return None;
-    }
-    let best = cands[0].1;
-    let l = cands.iter().filter(|c| c.1 >= best - 0.02).map(|c| c.0).min()?;
-    let mut u = u0;
-    let mut chs = chars(&start, &length, &level, idle, 0, n, u, l);
-    if let Some(u2) = refit_unit(ch.edges, &chs, u)
-        && (u2 / u - 1.0).abs() > REFIT_MIN
-    {
-        let ch2 = chars(&start, &length, &level, idle, 0, n, u2, l);
-        if ch2.ok.iter().filter(|&&o| o).count() >= chs.ok.iter().filter(|&&o| o).count() {
-            u = u2;
-            chs = ch2;
+    let mut blocks: Vec<(i64, i64, f64, Chars)> = vec![];
+    for (s0, s1, u0) in spans {
+        if u0 < ASYNC_MIN_UNIT {
+            continue;
         }
+        let cands = char_length(ch, n, idle, u0, s0, s1);
+        if cands.is_empty() {
+            continue;
+        }
+        let best = cands[0].1;
+        let Some(l) = cands.iter().filter(|c| c.1 >= best - 0.02).map(|c| c.0).min() else {
+            continue;
+        };
+        let mut u = u0;
+        let mut chs = chars(&start, &length, &level, idle, s0, s1, u, l);
+        if let Some(u2) = refit_unit(ch.edges, &chs, u)
+            && (u2 / u - 1.0).abs() > REFIT_MIN
+        {
+            let ch2 = chars(&start, &length, &level, idle, s0, s1, u2, l);
+            if ch2.ok.iter().filter(|&&o| o).count() >= chs.ok.iter().filter(|&&o| o).count() {
+                u = u2;
+                chs = ch2;
+            }
+        }
+        blocks.push((s0, s1, u, chs));
+    }
+    if blocks.is_empty() {
+        return None;
+    }
+    // the main block: the one of the most characters; the characters of all, in order
+    let main = blocks.iter().max_by_key(|b| b.3.ok.len()).map(|b| b.2)?;
+    let u = main;
+    let l = blocks[0].3.bits;
+    let mut chs = Chars {
+        bits: l,
+        values: vec![],
+        ok: vec![],
+        start: vec![],
+        breaks: vec![],
+    };
+    for b in &blocks {
+        chs.values.extend(&b.3.values);
+        chs.ok.extend(&b.3.ok);
+        chs.start.extend(&b.3.start);
+        chs.breaks.extend(&b.3.breaks);
     }
     let total = chs.ok.len();
     if total < 2 {
@@ -593,7 +777,16 @@ fn read(
     }
     let framing = ok_n as f64 / total as f64;
     // edges explained: inside a well-formed character
-    let mut wins: Vec<(i64, i64)> = starts.iter().map(|&s| (s, s + (l as f64 * u) as i64)).collect();
+    let mut wins: Vec<(i64, i64)> = blocks
+        .iter()
+        .flat_map(|(_, _, ub, c)| {
+            c.start
+                .iter()
+                .zip(&c.ok)
+                .filter(|&(_, &o)| o)
+                .map(move |(&s, _)| (s, s + (c.bits as f64 * ub) as i64))
+        })
+        .collect();
     wins.sort();
     let ws: Vec<i64> = wins.iter().map(|w| w.0).collect();
     let inside = ch
@@ -606,7 +799,6 @@ fn read(
         .count();
     let coverage = inside as f64 / ch.edges.len().max(1) as f64;
     let resolvable = (u - 2.0).clamp(0.0, 1.0);
-    let blocks = vec![(0i64, n, u, chs)];
     let grid = on_grid(ch.edges, &blocks);
     let gridded = grid.map_or(1.0, |g| ((g - GRID_LOW) / GRID_SPAN).clamp(0.0, 1.0));
     let v8: Vec<i64> = v.iter().map(|&x| x & 0xFF).collect();
@@ -626,8 +818,11 @@ fn read(
             .count() as f64
             / nb as f64
     };
-    let paced = l % 3 == 0 && fixed >= UART_FIXED_BITS;
-    let framed_raw = framed_by_breaks(&blocks[0].3, view.rate / u);
+    let paced = l.is_multiple_of(3) && fixed >= UART_FIXED_BITS;
+    let framed_raw = blocks
+        .iter()
+        .map(|b| framed_by_breaks(&b.3, view.rate / b.2))
+        .fold(0.0, f64::max);
     let framed = ((framed_raw - UART_FRAMED) / (1.0 - UART_FRAMED)).max(0.0);
     let clock_off = 0.5 * ((clock_like - UART_CLOCK_LIKE) / (0.7 - UART_CLOCK_LIKE)).clamp(0.0, 1.0);
     let sync_off = ((sync - UART_SYNC) / 0.3).clamp(0.0, 1.0);
@@ -657,7 +852,7 @@ fn read(
     params.insert("baud".into(), json!(baud));
     params.insert("idle".into(), json!(idle));
     params.insert("L".into(), json!(l));
-    params.insert("blocks".into(), json!(1));
+    params.insert("blocks".into(), json!(blocks.len()));
     if let Some((p, d)) = par {
         params.insert("parity".into(), json!(p));
         params.insert("data_bits".into(), json!(d));
@@ -680,14 +875,14 @@ fn read(
     }
     evidence.insert("chars".into(), json!(ok_n));
     evidence.insert("on_grid".into(), grid.map_or(Value::Null, |g| json!(g)));
-    let (_, _, _, chs) = blocks.into_iter().next().expect("one block");
+    let spans: Vec<(i64, i64, f64)> = blocks.iter().map(|b| (b.0, b.1, b.2)).collect();
     Some(Reading {
         score,
         params,
         evidence,
         framing,
         unit: u,
-        n,
+        spans,
         chars: chs,
         bytes: v,
         starts,
@@ -1171,6 +1366,23 @@ mod tests {
             .expect("a UART reading at the baud given");
         let lay: Value = serde_json::from_str(c.layers.get()).unwrap();
         let hex: String = text.iter().map(|b| format!("{b:02x}")).collect();
+        assert_eq!(lay["bytes"]["hex"], json!(hex));
+    }
+
+    #[test]
+    fn a_rate_switch_reads_as_two_blocks() {
+        // a bootloader's 9600 baud, then 115200 after an idle (2 MS/s: 208 and 17 samples a bit)
+        let a = b"Bootloader v1.2 ready. Switching to 115200 baud now.\r\n".repeat(2);
+        let b = b"Application started; the quick brown fox jumps over the lazy dog.\r\n".repeat(4);
+        let (mut e, t) = uart(&a, 208, 100, 1);
+        let (e2, n) = uart(&b, 17, t + 20_000, 1);
+        e.extend(e2);
+        let v = View::new(2e6, n, vec![Channel::new("TX", 1, &e)]).unwrap();
+        let cs = crate::choose(candidates(&v));
+        let c = cs.iter().find(|c| c.protocol == "uart").expect("a UART");
+        assert_eq!(c.params["blocks"], json!(2), "{:?}", c.params);
+        let lay: Value = serde_json::from_str(c.layers.get()).unwrap();
+        let hex: String = a.iter().chain(b.iter()).map(|x| format!("{x:02x}")).collect();
         assert_eq!(lay["bytes"]["hex"], json!(hex));
     }
 
