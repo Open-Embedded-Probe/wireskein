@@ -15,22 +15,22 @@ pub const DATA_KEEPS: f64 = 0.5; // a data line keeps to the clock this well at 
 pub const SCALE: f64 = 5.0; // the words of whole-byte windows counted as 1 - exp(-n / SCALE)
 pub const CS_FEWER: usize = 8; // a select changes this many times less than the clock at least
 
-struct Clock {
-    edges: Vec<i64>,
-    rises: Vec<i64>,
-    falls: Vec<i64>,
-    half: f64,
-    initial: u8,
+pub(crate) struct Clock {
+    pub(crate) edges: Vec<i64>,
+    pub(crate) rises: Vec<i64>,
+    pub(crate) falls: Vec<i64>,
+    pub(crate) half: f64,
+    pub(crate) initial: u8,
 }
 
 /// How a line is made to settle: pulses taken out (spikes, crosstalk) or bounces merged at their first change.
-type Clean = fn(&[i64], i64) -> Vec<i64>;
+pub(crate) type Clean = fn(&[i64], i64) -> Vec<i64>;
 
 pub const BOUNCE_MERGE_WIDE: i64 = 8;
 
 /// How wide a cleaning is at a clock of this half period: CLEAN of it; bounces merged over 8 samples at least where
 /// the half period is long enough to keep its edges (a bounced clock's own median interval is a bounce's)
-fn width(how: usize, half: f64) -> i64 {
+pub(crate) fn width(how: usize, half: f64) -> i64 {
     match how {
         1 => ((CLEAN * half) as i64).max(2).max(BOUNCE_MERGE_WIDE),
         2 => ((SHORTEST * half).round() as i64).max(2),
@@ -41,7 +41,7 @@ fn width(how: usize, half: f64) -> i64 {
 
 /// The runs shorter than k taken out, the shortest first, each with its own two changes (`views.pulses_out`): a
 /// fast clock's bounces, too wide for a pulse filter of a third of its half and too near its edges to merge.
-fn shortest(e: &[i64], k: i64) -> Vec<i64> {
+pub(crate) fn shortest(e: &[i64], k: i64) -> Vec<i64> {
     crate::kernels::shortest_first(e, k)
 }
 
@@ -51,7 +51,7 @@ pub const REBUILD_SHORT: f64 = 0.02; // a clock's runs half its median or less, 
 pub const REBUILD_FEW: usize = 4; // ... and this many at least: views with the clock rebuilt from its period
 
 /// Whether a clock's short runs are a bounce's: enough of them, side by side (a spike's stand alone).
-fn bounced(e: &[i64]) -> bool {
+pub(crate) fn bounced(e: &[i64]) -> bool {
     let r: Vec<f64> = e.windows(2).map(|w| (w[1] - w[0]) as f64).collect();
     if r.len() < 16 {
         return false;
@@ -67,7 +67,7 @@ fn bounced(e: &[i64]) -> bool {
     pairs * 2.0 >= 0.5 * s2.iter().filter(|&&x| x).count() as f64
 }
 
-fn clock_of(ch: &Channel, clean: Clean, how: usize) -> Option<Clock> {
+pub(crate) fn clock_of(ch: &Channel, clean: Clean, how: usize) -> Option<Clock> {
     if ch.edges.len() < 8 {
         return None;
     }

@@ -7,17 +7,22 @@
 
 pub mod can;
 pub mod cec;
+pub mod cjtag;
 pub mod claim;
+pub mod clocked;
 pub mod dali;
 pub mod dcc;
 pub mod features;
 pub mod i2c;
+pub mod i2s;
 pub mod j1850;
+pub mod jtag;
 pub mod kernels;
 pub mod mdio;
 pub mod ps2;
 pub mod pulse;
 pub mod rebuild;
+pub mod sdmmc;
 pub mod sent;
 pub mod spdif;
 pub mod spi;
@@ -25,6 +30,7 @@ pub mod swd;
 pub mod swim;
 pub mod sync;
 pub mod uart;
+pub mod usb;
 pub mod usbpd;
 pub mod view;
 pub mod wiegand;
@@ -179,9 +185,11 @@ pub fn choose(mut cands: Vec<Candidate>) -> Vec<Claim> {
 pub const GENERIC: [&str; 3] = ["uart", "i2c", "spi"]; // readers of any lines' bits, of no framing of their own
 pub const SPECIFIC: f64 = 0.6; // a reading of fixed framing this sure stands for a generic one of the same lines
 
-/// Every reading of a part's lines, before the claims are chosen. A generic reading of the same lines as a more
-/// specific one is left out where the specific one is sure: an SPI reading (no select) of MDC and MDIO, whose 64-bit
-/// frames are whole bytes as well, is MDIO's frames told without their preamble and start.
+/// Every reading of a part's lines, before the claims are chosen. A generic reading (UART, I2C, SPI) of lines a
+/// reading of fixed framing explains is left out where that one is sure: an SPI reading of MDC and MDIO (whose
+/// 64-bit frames are whole bytes as well) is MDIO's frames told without their preamble and start, an SPI reading of
+/// JTAG's, SD's or I2S's lines (on their clock) their scans, commands or slots told as bytes, an I2C or UART reading
+/// of a USB pair its packets' changes.
 pub fn candidates(view: &View) -> Vec<Candidate> {
     candidates_with(view, &Default::default())
 }
@@ -191,21 +199,30 @@ pub fn candidates_with(view: &View, bauds: &std::collections::BTreeMap<String, f
     let mut cands = uart::candidates_with(view, bauds);
     cands.extend(i2c::candidates(view));
     cands.extend(spi::candidates(view));
-    let md = mdio::candidates(view);
-    let specific: Vec<(String, String)> = md
+    let groups = clocked::groups(view);
+    let mut specific = mdio::candidates(view);
+    specific.extend(jtag::candidates_of(&groups));
+    specific.extend(cjtag::candidates(view));
+    specific.extend(sdmmc::candidates_of(&groups));
+    specific.extend(i2s::candidates_of(&groups));
+    specific.extend(usb::candidates(view));
+    let sure: Vec<(Option<&str>, std::collections::BTreeSet<&str>)> = specific
         .iter()
         .filter(|c| c.score >= SPECIFIC)
-        .map(|c| (c.roles["mdc"].clone(), c.roles["mdio"].clone()))
+        .map(|c| {
+            let clock = ["mdc", "tck", "tckc", "clk", "sck"]
+                .iter()
+                .find_map(|r| c.roles.get(*r).map(|s| s.as_str()));
+            (clock, lines(c))
+        })
         .collect();
     cands.retain(|c| {
-        !(c.protocol == "spi"
-            && !c.roles.contains_key("cs")
-            && c.roles.len() == 2
-            && specific
-                .iter()
-                .any(|(k, d)| c.roles.get("clk") == Some(k) && c.roles.get("data0") == Some(d)))
+        !GENERIC.contains(&c.protocol.as_str())
+            || !sure.iter().any(|(clock, ls)| {
+                lines(c).is_subset(ls) && (c.protocol != "spi" || c.roles.get("clk").map(|s| s.as_str()) == *clock)
+            })
     });
-    cands.extend(md);
+    cands.extend(specific);
     // the readers of a line's own timing, each reading checked (CRC, parity, fixed framing): a line one of them reads
     // surely carries that protocol, and a generic reading using it (a UART of its pulses, an I2C or SPI taking it as
     // data beside some clock) is left out, as SPI on MDIO's lines above
