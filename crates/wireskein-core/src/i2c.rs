@@ -122,20 +122,16 @@ fn frames(scl: &Channel, sda: &Channel) -> (Vec<Frame>, usize, usize, usize, usi
     (out, clear, conds, quiet, lows)
 }
 
-pub const REST: f64 = 4.0;
+pub const REST: f64 = 8.0; // half periods: a high run this long is a rest (a bounced clock's runs merge to a few)
 
-/// Whether a clock has a high run of REST times its median run or more (the capture's ends included).
+/// Whether a clock has a high run of REST times its half period or more (the capture's ends included).
 fn rests_high(scl: &Channel, n: i64) -> bool {
     let (_, length, level) = crate::kernels::runs(scl, n);
     if length.len() < 3 {
         return true;
     }
-    let med = median(
-        &length[1..length.len() - 1]
-            .iter()
-            .map(|&x| x as f64)
-            .collect::<Vec<_>>(),
-    );
+    // (its half period from its longer runs: a bounced clock's median run is a bounce's)
+    let med = crate::rebuild::half(scl.edges);
     length
         .iter()
         .zip(&level)
