@@ -668,7 +668,8 @@ fn read(view: &View, clk: &Channel, dio: &Channel) -> Option<Candidate> {
         "rvswd",
         &[("clk", clk.name), ("dio", dio.name)],
         score,
-        obj(vec![("sample_edge", json!("rise"))]),
+        // (the definition Python's engine reads RVSWD by, as its readings name it)
+        obj(vec![("sample_edge", json!("rise")), ("declared", json!("rvswd.toml"))]),
         ev,
         "dmi",
         &reading.recs,

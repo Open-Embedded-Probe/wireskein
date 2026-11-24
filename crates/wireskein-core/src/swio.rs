@@ -251,7 +251,7 @@ fn read(ch: &Channel, n: i64, rate: f64) -> Option<Candidate> {
         ("dm_addr", json!(known)),
         ("split_ns", json!(split_ns)),
     ]);
-    Some(candidate(
+    let mut c = candidate(
         "swio",
         &[("dio", ch.name)],
         score,
@@ -260,7 +260,15 @@ fn read(ch: &Channel, n: i64, rate: f64) -> Option<Candidate> {
         "dmi",
         &tx,
         0,
-    ))
+    );
+    // the pin's pulses as read (Python's `pulses` layer: each pulse's start and width in ticks, short or long, and
+    // the split between them)
+    let lay = json!({
+        "dmi": tx,
+        "pulses": {"s": ps.lead, "width": ps.width, "short": short, "split": ps.split},
+    });
+    c.layers = crate::claim::raw(serde_json::to_string(&lay).unwrap());
+    Some(c)
 }
 
 /// The SWIO readings of a part: each line of 82 changes or more (two accesses).

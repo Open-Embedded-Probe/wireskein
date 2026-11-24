@@ -246,6 +246,63 @@ pub fn candidates(view: &View) -> Vec<Candidate> {
 
 /// Every reading, UART lines in `bauds` read at the baud given.
 pub fn candidates_with(view: &View, bauds: &std::collections::BTreeMap<String, f64>) -> Vec<Candidate> {
+    candidates_of(view, bauds, &Default::default())
+}
+
+/// The protocols whose readings stand alone: no other reading leaves them out (the generic readers and the unknown
+/// framing are left out where others read their lines, so they are read with every other).
+pub const ALONE: [&str; 23] = [
+    "mdio", "jtag", "sdmmc", "i2s", "usb", "cec", "dali", "dcc", "j1850", "sent", "spdif", "swim", "usb_pd", "wiegand",
+    "onewire", "ir_nec", "dht", "rvswd", "swio", "rgb_led", "ps2", "swd", "can",
+];
+
+/// The readings of the protocols named (none: all). Where every one named stands alone, only their readers read (a
+/// decode spec of one RVSWD bus reads no UART on its two million changes); else every reader does.
+pub fn candidates_of(
+    view: &View,
+    bauds: &std::collections::BTreeMap<String, f64>,
+    only: &std::collections::BTreeSet<String>,
+) -> Vec<Candidate> {
+    if !only.is_empty() && only.iter().all(|p| ALONE.contains(&p.as_str())) {
+        let want = |p: &str| only.contains(p);
+        // (the clocked groups only for the readers of them)
+        let groups = if ["jtag", "sdmmc", "i2s"].iter().any(|p| want(p)) {
+            clocked::groups(view)
+        } else {
+            vec![]
+        };
+        let readers: [(&str, &dyn Fn() -> Vec<Candidate>); 24] = [
+            ("mdio", &|| mdio::candidates(view)),
+            ("jtag", &|| jtag::candidates_of(&groups)),
+            ("jtag", &|| cjtag::candidates(view)),
+            ("sdmmc", &|| sdmmc::candidates_of(&groups)),
+            ("i2s", &|| i2s::candidates_of(&groups, view)),
+            ("usb", &|| usb::candidates(view)),
+            ("cec", &|| cec::candidates(view)),
+            ("dali", &|| dali::candidates(view)),
+            ("dcc", &|| dcc::candidates(view)),
+            ("j1850", &|| j1850::candidates(view)),
+            ("sent", &|| sent::candidates(view)),
+            ("spdif", &|| spdif::candidates(view)),
+            ("swim", &|| swim::candidates(view)),
+            ("usb_pd", &|| usbpd::candidates(view)),
+            ("wiegand", &|| wiegand::candidates(view)),
+            ("onewire", &|| onewire::candidates(view)),
+            ("ir_nec", &|| irnec::candidates(view)),
+            ("dht", &|| dht::candidates(view)),
+            ("rvswd", &|| rvswd::candidates(view)),
+            ("swio", &|| swio::candidates(view)),
+            ("rgb_led", &|| rgbled::candidates(view)),
+            ("ps2", &|| ps2::candidates(view)),
+            ("swd", &|| swd::candidates(view)),
+            ("can", &|| can::candidates(view)),
+        ];
+        return readers
+            .iter()
+            .filter(|(p, _)| want(p))
+            .flat_map(|(_, read)| read())
+            .collect();
+    }
     let mut cands = uart::candidates_with(view, bauds);
     cands.extend(i2c::candidates(view));
     cands.extend(spi::candidates(view));
@@ -437,7 +494,7 @@ pub fn readings(view: &View, hints: &serde_json::Value) -> Vec<Candidate> {
         .iter()
         .filter_map(|(p, i)| i.baud.map(|b| (p.clone(), b)))
         .collect();
-    let mut cands = candidates_with(&kept, &bauds);
+    let mut cands = candidates_of(&kept, &bauds, &h.protocols);
     cands.retain(|c| h.allows(c));
     cands
 }
