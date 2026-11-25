@@ -157,6 +157,12 @@ def _devices(r: dict, up: Upper, hints) -> None:
                       else dev.match_spi(_spi_lines(r), packs))
     except (KeyError, TypeError):
         up.devices = []
+    if up.devices:
+        # every match as an upper layer, as the other upper readings (registry.toml: i2c_devices, spi_devices);
+        # --depth device's final keeps only the self-verified ones (export.devices_of)
+        up.layers["devices"] = [{"device": m.device, "level": m.level, "evidence": m.evidence,
+                                 **({"messages": m.messages} if m.level != "address_only" else {})}
+                                for m in up.devices]
     if any(m.level == "identified" for m in up.devices):
         up.score = _support(up.score, up.score)
 

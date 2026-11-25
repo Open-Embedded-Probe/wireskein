@@ -256,6 +256,11 @@ kind = "upper"
 over = ["i2c"]
 layers = ["devices"]
 
+[protocols.spi_devices]
+kind = "upper"
+over = ["spi"]
+layers = ["devices"]
+
 [protocols.sd]
 kind = "upper"
 over = ["spi"]

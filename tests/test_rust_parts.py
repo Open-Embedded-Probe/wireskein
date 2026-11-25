@@ -975,6 +975,11 @@ def _analyzes(f, hints) -> bool:
         f, hints, "final", None, False, "device", None, None, None, False, None, None, None, None))
 
 
+def want_any(devices) -> bool:
+    """Whether the packs picked match something on device_capture's buses."""
+    return devices != ["!**"]
+
+
 @rust_only
 @pytest.mark.parametrize("devices", DEVICES, ids=lambda d: "none" if d is None else " ".join(d) or "empty")
 def test_analyze_devices_as_python(clean, tmp_path, devices):
@@ -988,13 +993,12 @@ def test_analyze_devices_as_python(clean, tmp_path, devices):
         rs = _adoc({"WIRESKEIN_RUST": "analyze"}, f, hints=hints, **kw)
         py = _adoc({"WIRESKEIN_ENGINE": "rust"}, f, hints=hints, **kw)
         if kw.get("mode") == "all":
-            # the evidence's _support is Python's upper stage's (§34); the device packs' matches are a layer of the
-            # Rust upper stage's (registry.toml's i2c_devices: layers ["devices"]), Python's keeps them apart
-            # (Upper.devices, told at depth device only): §39
+            # the evidence's _support is Python's upper stage's (§34); the device packs' matches are the layer
+            # devices of both (registry.toml: i2c_devices, spi_devices)
             for c in (c for p in py["parts"] for c in p["claims"]):
                 c["evidence"].pop("_support", None)
-            for c in (c for p in rs["parts"] for c in p["claims"]):
-                c["layers"].pop("devices", None)
+            assert any("devices" in c["layers"] for p in py["parts"] for c in p["claims"]) is bool(
+                want_any(devices)), "the layer devices in --mode all"
         assert _differ(rs, py) == [], kw
     want = {None: {"SPI NOR flash", "QMP6988", "SHT30"}, "i2c/**": {"QMP6988", "SHT30"}, "spi/**": {"SPI NOR flash"},
             "!**": set()}

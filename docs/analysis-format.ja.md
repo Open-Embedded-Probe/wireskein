@@ -162,7 +162,9 @@ analyze の書き出し（`--mode final`、`depth` まで）の層。刻みは�
 | ほか | `analyze` の書き出しと同じ |
 
 上の層を読めても、下の層は横に残す（`sd` と `transfers`）。`depth: "device"` では、`devices` にバスの上で
-合ったデバイスを出す（`analyze --depth device` と同じ）。
+合ったデバイスを出す（`analyze --depth device` と同じ）。I2C と SPI のバスでは、`--mode all` で、デバイスパックの
+一致をすべて層 `devices` に出す（`device`、`level`: `identified` / `consistent` / `address_only`、`evidence`、
+`address_only` 以外は `messages`）。ほかの上の段と同じく、バスの層の横に置く（台帳: `i2c_devices`、`spi_devices`）。
 
 ### 3.3 uninterpreted
 

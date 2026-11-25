@@ -166,7 +166,10 @@ The layers of analyze's export (`--mode final`, at `depth`), with ticks from the
 | others | as `analyze`'s export |
 
 A higher reading keeps its lower one beside it (`sd` and `transfers`). With `depth: "device"`, `devices` lists the
-devices matched on the bus (as `analyze --depth device`).
+devices matched on the bus (as `analyze --depth device`). On an I2C or SPI bus, `--mode all` has every device pack's
+match as the layer `devices` (`device`, `level`: `identified` / `consistent` / `address_only`, `evidence`, and
+`messages` but for `address_only`), beside the bus's own layers as any upper reading (registry: `i2c_devices`,
+`spi_devices`).
 
 ### 3.3 uninterpreted
 
