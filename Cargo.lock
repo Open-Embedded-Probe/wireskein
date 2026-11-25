@@ -915,7 +915,7 @@ dependencies = [
 
 [[package]]
 name = "wireskein-analysis"
-version = "0.0.38"
+version = "0.0.39"
 dependencies = [
  "regex",
  "serde_json",
@@ -927,7 +927,7 @@ dependencies = [
 
 [[package]]
 name = "wireskein-cli"
-version = "0.0.38"
+version = "0.0.39"
 dependencies = [
  "serde_json",
  "wireskein-analysis",
@@ -939,7 +939,7 @@ dependencies = [
 
 [[package]]
 name = "wireskein-core"
-version = "0.0.38"
+version = "0.0.39"
 dependencies = [
  "serde",
  "serde_json",
@@ -948,7 +948,7 @@ dependencies = [
 
 [[package]]
 name = "wireskein-io"
-version = "0.0.38"
+version = "0.0.39"
 dependencies = [
  "chrono",
  "flate2",
@@ -959,7 +959,7 @@ dependencies = [
 
 [[package]]
 name = "wireskein-oep"
-version = "0.0.38"
+version = "0.0.39"
 dependencies = [
  "nusb",
  "rustix",
@@ -969,7 +969,7 @@ dependencies = [
 
 [[package]]
 name = "wireskein-py"
-version = "0.0.38"
+version = "0.0.39"
 dependencies = [
  "numpy",
  "pyo3",
@@ -983,7 +983,7 @@ dependencies = [
 
 [[package]]
 name = "wireskein-verify"
-version = "0.0.38"
+version = "0.0.39"
 dependencies = [
  "serde",
  "serde_json",

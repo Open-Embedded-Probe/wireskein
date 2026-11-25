@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 0.0.39
 - (EN) `--mode all` has a bus's device pack matches as its layer `devices` on I2C and SPI (`device`, `level`, `evidence`, and `messages` but for `address_only`), as the other upper readings (`sd`, `dm`) and as the registry says (`i2c_devices`; `spi_devices` added). They were told only at `--depth device` (final), which is unchanged.
 - (JA) `--mode all` で、I2C と SPI のバスのデバイスパックの一致を、層 `devices` として出す（`device`、`level`、`evidence`、`address_only` 以外は `messages`）。ほかの上の段（`sd`、`dm`）と同じで、台帳のとおり（`i2c_devices`。`spi_devices` を足した）。今までは `--depth device`（final）でだけ出していた。そちらは変わらない。
 - (EN) Fixed: verify's `spi` without CS gave a data line the test names as `None` (failing "mosi None vs ...") where the decoder's own reading took the other data line alone (a line of few changes, such as MOSI held high after a byte or two of shiftOut). A named line the reading left out is read at the sampling edge the lines say (else the asked mode's), as given.
