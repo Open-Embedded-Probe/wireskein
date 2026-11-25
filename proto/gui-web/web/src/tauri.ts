@@ -12,7 +12,7 @@ import { Channel, convertFileSrc, invoke } from '@tauri-apps/api/core';
 export const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 const q = new URLSearchParams(typeof location !== 'undefined' ? location.search : '');
 export const nativeEngine = isTauri && q.get('engine') === 'native';
-export const ipcMode = q.get('ipc') ?? 'raw';
+export const ipcMode = q.get('ipc') ?? 'chunk';
 export const frameIpc = nativeEngine && q.get('frameipc') === '1';
 
 /** A capture's URL as the workers fetch it: in the shell, through its `wskfile` scheme. */

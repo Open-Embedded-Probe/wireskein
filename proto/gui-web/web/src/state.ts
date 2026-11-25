@@ -202,11 +202,14 @@ let drawQueued = false;
 let lastFrame = 0;
 const frameHooks: ((now: number, dt: number) => void)[] = [];
 /** Every waveform view drawn on the next animation frame. */
-export function requestDraw() {
+export function requestDraw(isTrailing = false) {
   if (drawQueued) return;
   drawQueued = true;
   requestAnimationFrame((now) => {
     drawQueued = false;
+    // WebKitGTK (Tauri on Linux, prototype 2b) leaves the WebGL canvas one frame behind once the drawing stops: the
+    // last frame drawn once more on the next animation frame (only once, not again after that one)
+    const again = isTrailing !== true;
     const dt = lastFrame ? now - lastFrame : 0;
     lastFrame = now;
     // hooks first (the bench sets the view it measures)
@@ -223,6 +226,7 @@ export function requestDraw() {
     // (a frame after an idle while is not counted in the frame times)
     if (dt > 0 && dt < 250) logFrame(now, dt, w, m);
     if (continuous()) requestDraw();
+    else if (again) requestDraw(true);
   });
 }
 export function addDrawer(f: Drawer) {
