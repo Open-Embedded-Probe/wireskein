@@ -147,7 +147,7 @@ libjavascriptcoregtk-4.1-dev libgtk-3-dev librsvg2-dev libssl-dev libxdo-dev`）
 cd proto/gui-web
 ./build.sh                                   # wasm と web/dist（殻はこれを埋め込む。画面を変えたら先にこれ）
 cd tauri
-cargo build --release -j1                    # 初回 -j1 で約 40 分（依存 280 個ほど）、2 回目からは 10 分ほど（thin LTO と埋め込み）
+cargo build --release -j1                    # 初回 -j1 で約 30 分（依存 280 個ほど）、2 回目からは 5〜11 分（thin LTO と埋め込み）
 cd ../web                                    # files/ の既定は上の階層の tests/data
 ../tauri/target/release/wsk-gui-tauri "file=files/examples/mixed-1.wireskein&engine=native"
 ../tauri/target/release/wsk-gui-tauri --mount scratch=/path/to/dir "file=scratch/i2c-100k.wireskein&engine=native&ipc=raw&bench=1&report=1&exit=1"
