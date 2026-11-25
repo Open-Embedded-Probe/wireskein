@@ -812,7 +812,7 @@ impl eframe::App for App {
             let sh = &mut self.sh;
             let close = ctx.show_viewport_immediate(
                 vid,
-                egui::ViewportBuilder::default().with_title(format!("結果の一覧 {}", l.id)).with_inner_size([620.0, 760.0]),
+                egui::ViewportBuilder::default().with_title(format!("結果の一覧 {}", l.id)).with_inner_size([620.0, 760.0]).with_position([1420.0, 40.0]),
                 |ui, _class| {
                     egui::CentralPanel::default().show(ui, |ui| {
                         ui.horizontal(|ui| {
