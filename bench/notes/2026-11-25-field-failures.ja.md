@@ -22,6 +22,7 @@
 | --- | --- | --- | --- | --- |
 | 2026-11-24 | [core] | v103r8t6-evt/softspi test_shift（11-24_11-42-05） | spi、CS なしで mode 3 vs 0（CPOL の読み違い、間欠） | 直した（verify の CPOL、v0.0.38） |
 | 2026-11-25 | [core] | v203c8t6/signals test_pwm_sequence（v203sig-1125-1） | convert で VCD に書くと TypeError（60 MS/s）。道具の不具合で、読みの問題ではない | 直した（vcdio、v0.0.38） |
+| 2026-11-25 | [core] | v006k8u6/softspi test_shift（softspi-ws038-2、11-25_04-29-39。通った回は softspi-ws038-1） | spi、CS なしで「mosi None vs f0fac0ffffff」（解析の読みが変化の少ない MOSI を外した、間欠） | 直した（verify が名指しの線を標本の辺で読む、次の版） |
 | 2026-11-20 | [EmbedBench] | DeviceData の sht30-modes 5 件（下） | 待ちきれずに止めたストレッチの後の 1 バイトが 61 / b0 / 60 と揺れる | 直した（読まない印 clock_lost、次の版） |
 
 **正しく NG を出した例**（読みが疑わしい側ではない。「NG が正解」の組に使える）:
