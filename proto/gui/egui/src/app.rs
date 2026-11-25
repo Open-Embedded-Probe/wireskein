@@ -20,16 +20,7 @@ use web_time::Instant;
 
 pub type TileCacheT = TileCache<(u64, usize), Vec<Seg>>;
 
-pub fn rss_mb() -> Option<f64> {
-    #[cfg(target_os = "linux")]
-    {
-        std::fs::read_to_string("/proc/self/statm").ok().and_then(|s| s.split_whitespace().nth(1).and_then(|x| x.parse::<f64>().ok())).map(|p| p * 4096.0 / 1e6)
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        None
-    }
-}
+pub use crate::meter::{rss_mb, thread_cpu_ms};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Sel {
@@ -74,6 +65,8 @@ pub struct Perf {
     pub acc: [f64; P_N],
     /// the waveform's mesh of the last frame: its vertices
     pub wave_vertices: usize,
+    /// waveform panels drawn with the capture since it was opened
+    pub drawn: u64,
 }
 
 /// The parts of a frame timed by the app itself (inside eframe's `App::ui`).
@@ -85,24 +78,9 @@ pub const P_OTHER_TABS: usize = 4;
 pub const P_BARS: usize = 5;
 pub const P_DOCK: usize = 6;
 pub const P_APP: usize = 7;
-/// the main thread's CPU time (not the wall clock: a busy machine's other work is not in it; Linux only)
+/// the main thread's CPU time (not the wall clock: a busy machine's other work is not in it; meter.rs: Linux and Windows)
 pub const P_CPU: usize = 8;
 pub const P_N: usize = 9;
-
-/// The CPU time of this thread, ms (Linux; elsewhere NaN).
-pub fn thread_cpu_ms() -> f64 {
-    #[cfg(target_os = "linux")]
-    {
-        let mut t = libc::timespec { tv_sec: 0, tv_nsec: 0 };
-        // SAFETY: a valid timespec to fill
-        unsafe { libc::clock_gettime(libc::CLOCK_THREAD_CPUTIME_ID, &mut t) };
-        t.tv_sec as f64 * 1e3 + t.tv_nsec as f64 / 1e6
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        f64::NAN
-    }
-}
 
 impl Perf {
     pub fn frame(&mut self, now: f64, dt_ms: f32) {
@@ -327,6 +305,8 @@ struct Bench {
     whole: Option<Prof>,
     /// count the shapes at the end of this frame's App::ui
     want_count: bool,
+    /// the main thread's CPU from the first zoom on, by both clocks (meter.rs)
+    cpu_check: Option<crate::meter::Check>,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -451,6 +431,8 @@ pub struct App {
     font: Option<String>,
     /// the GPU and the drawing set up (for the bench's header)
     gpu: String,
+    /// the present mode asked for, the one the surface gets (wgpu's rule) and the surface's modes (the bench's header)
+    present: String,
     add_kind: u8,
     zoom_done: bool,
     frames: u64,
@@ -488,32 +470,76 @@ fn default_layout(kind: &str, next: &mut u32) -> DockState<Tab> {
 
 const PRESETS: [&str; 3] = ["標準", "一覧を大きく", "波形 2 つ"];
 
+/// The present mode asked for and the one the surface gets. wgpu takes the mode asked for if the surface has it, an
+/// automatic one by its rule (AutoVsync: FifoRelaxed, Fifo; AutoNoVsync: Immediate, Mailbox, Fifo). The surface's modes
+/// are read from a second surface on the same window (not on GL, where a second surface on one window is not safe).
+#[cfg(not(target_arch = "wasm32"))]
+fn present_info(cc: &eframe::CreationContext, rs: &eframe::egui_wgpu::RenderState, asked: eframe::wgpu::PresentMode, latency: u32) -> String {
+    use eframe::wgpu::{self, PresentMode as P};
+    let modes = if rs.adapter.get_info().backend == wgpu::Backend::Gl {
+        None
+    } else {
+        // SAFETY: the window (cc's) outlives the surface, dropped at the end of this expression
+        unsafe { wgpu::SurfaceTargetUnsafe::from_display_and_window(cc, cc) }
+            .ok()
+            .and_then(|t| unsafe { rs.instance.create_surface_unsafe(t) }.ok())
+            .map(|s| s.get_capabilities(&rs.adapter).present_modes)
+    };
+    let got = modes.as_ref().map(|m| {
+        if m.contains(&asked) {
+            Some(asked)
+        } else {
+            let rule: &[P] = match asked {
+                P::AutoVsync => &[P::FifoRelaxed, P::Fifo],
+                P::AutoNoVsync => &[P::Immediate, P::Mailbox, P::Fifo],
+                _ => &[],
+            };
+            rule.iter().copied().find(|x| m.contains(x))
+        }
+    });
+    let held = match got {
+        Some(Some(P::Fifo | P::FifoRelaxed)) => "vsync ON: frames held to the screen's refresh",
+        Some(Some(P::Immediate)) => "vsync off, tearing allowed",
+        Some(Some(P::Mailbox)) => "vsync off, the newest frame shown without tearing",
+        Some(None) => "the surface has no such mode: wgpu cannot configure it",
+        _ => "not known",
+    };
+    format!(
+        "asked {asked:?} -> {} ({held}); the surface's modes {}; frame latency {latency} (eframe's desired_maximum_frame_latency)",
+        match got {
+            Some(Some(m)) => format!("{m:?}"),
+            Some(None) => "none".into(),
+            None => "?".into(),
+        },
+        modes.map(|m| format!("{m:?}")).unwrap_or("? (GL: not asked)".into())
+    )
+}
+
 impl App {
     pub fn new(cc: &eframe::CreationContext, args: Args) -> Self {
         let ctx = &cc.egui_ctx;
         let font = theme::install_fonts(ctx);
         #[cfg(not(target_arch = "wasm32"))]
-        let gpu = cc
+        let (gpu, present) = cc
             .wgpu_render_state
             .as_ref()
             .map(|rs| {
                 let i = rs.adapter.get_info();
-                format!(
-                    "{} ({:?}, {:?}, driver {} {}), target {:?}, present {}, frame latency {}, drawing {}",
+                let gpu = format!(
+                    "{} ({:?}, {:?}, driver {} {}), target {:?}, drawing {}",
                     i.name,
                     i.backend,
                     i.device_type,
                     i.driver,
                     i.driver_info,
                     rs.target_format,
-                    args.present.as_deref().unwrap_or(if args.bench.is_some() { "novsync" } else { "auto" }),
-                    args.latency.unwrap_or(1),
                     if crate::wave::OLD_DRAW.load(std::sync::atomic::Ordering::Relaxed) { "old (--old-draw)" } else { "new" }
-                )
+                );
+                (gpu, present_info(cc, rs, crate::present_mode(args.present.as_deref(), args.bench.is_some()), args.latency.unwrap_or(1)))
             })
             .unwrap_or_default();
         #[cfg(target_arch = "wasm32")]
-        let gpu = String::new();
+        let (gpu, present) = (String::new(), String::new());
         let dark = !args.light;
         ctx.set_theme(if dark { egui::Theme::Dark } else { egui::Theme::Light });
         let mut layouts = BTreeMap::new();
@@ -567,6 +593,7 @@ impl App {
             counts: None,
             whole: None,
             want_count: false,
+            cpu_check: None,
         });
         let mut app = App {
             sh,
@@ -585,6 +612,7 @@ impl App {
             shot_done: Arc::new(Mutex::new(false)),
             font,
             gpu,
+            present,
             add_kind: 0,
             zoom_done: false,
             frames: 0,
@@ -605,6 +633,7 @@ impl App {
         self.sh.analysis = None;
         self.sh.sel = None;
         self.sh.perf.first_paint = None;
+        self.sh.perf.drawn = 0;
         self.started = Instant::now();
         if let Some(total) = self.args.synth {
             let c = model::open_synth(ctx, total);
@@ -849,9 +878,12 @@ impl App {
                         w
                     ));
                     b.lines.push(format!("# gpu: {}", self.gpu));
+                    b.lines.push(format!("# present: {}", self.present));
+                    b.lines.push(format!("# meter: {}; this program built {}", crate::meter::method(), crate::meter::exe_time()));
                     b.lines.push("| ticks/px | fps (median) | frame ms p50 / p95 | waveform CPU ms |".into());
                     b.lines.push("|---|---|---|---|".into());
                     b.whole = Some(prof_now());
+                    b.cpu_check = Some(crate::meter::check());
                     b.phase = Phase::Zoom(0, 0);
                 }
             }
@@ -921,6 +953,9 @@ impl App {
                         b.parts.push(parts_row("sweep", s.len(), dt, &pa, &pb, &acc0, &perf.acc, b.counts.take()));
                     }
                     b.lines.push(format!("memory: model {:.0} MB, rss {:.0} MB", cap.mem_bytes() as f64 / 1e6, rss_mb().unwrap_or(f64::NAN)));
+                    if let Some(c) = &b.cpu_check {
+                        b.lines.push(c.report());
+                    }
                     b.lines.push(String::new());
                     b.lines.push(
                         "## the frame's parts (ms a frame, mean; dt = between frames; gap = dt - frame: the event loop and waits outside eframe's paint)"
@@ -1003,8 +1038,8 @@ impl eframe::App for App {
         self.frames += 1;
         self.sh.perf.frame(ui.input(|i| i.time), dt_ms);
         self.poll();
-        // the first frame with the capture drawn
-        if self.sh.perf.first_paint.is_none() && self.sh.cap.is_some() && self.frames > 1 {
+        // the first paint: the start of the frame after the one whose waveform drew the capture (that frame shown)
+        if self.sh.perf.first_paint.is_none() && self.sh.cap.is_some() && self.sh.perf.drawn > 0 {
             self.sh.perf.first_paint = Some(self.started.elapsed().as_secs_f64());
             if let Some(c) = &self.sh.cap {
                 eprintln!("first paint: {:.0} ms (read {:.0} ms)", self.sh.perf.first_paint.unwrap() * 1e3, c.read_s * 1e3);

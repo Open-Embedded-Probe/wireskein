@@ -2,10 +2,11 @@
 //!
 //! wsk-egui [FILE] [--part K] [--synth N [--items M]] [--light] [--layout NAME] [--zoom Z --at F] [--search Q]
 //!          [--select ROW] [--no-analysis] [--detach-list] [--bench OUT.txt] [--shot OUT.png] [--size WxH]
-//!          [--present auto|novsync|fifo|immediate|mailbox] [--latency N] [--old-draw]
+//!          [--present auto|novsync|fifo|immediate|mailbox] [--latency N] [--old-draw] [--backend dx12|vulkan|gl]
 
 mod app;
 mod list;
+mod meter;
 mod model;
 mod panels;
 mod png;
@@ -60,6 +61,9 @@ fn parse() -> app::Args {
             "--detach-list" => a.detach_list = true,
             "--present" => a.present = Some(next(&mut i)),
             "--latency" => a.latency = next(&mut i).parse().ok(),
+            // the same as the environment's WGPU_BACKEND (dx12 / vulkan / gl / metal), for a command line that sets no variable
+            // SAFETY: at the start, before any other thread runs
+            "--backend" => unsafe { std::env::set_var("WGPU_BACKEND", next(&mut i)) },
             "--old-draw" => wave::OLD_DRAW.store(true, std::sync::atomic::Ordering::Relaxed),
             "--size" => {
                 let s = next(&mut i);
@@ -71,7 +75,7 @@ fn parse() -> app::Args {
                 println!(
                     "wsk-egui [FILE] [--part K] [--synth N [--items M]] [--light] [--layout 標準|一覧を大きく|波形 2 つ]\n\
                      [--zoom Z --at F] [--search Q] [--select ROW] [--no-analysis] [--detach-list]\n\
-                     [--bench OUT.txt] [--shot OUT.png] [--size WxH] [--present auto|novsync|fifo|immediate|mailbox] [--latency N] [--old-draw]\n\
+                     [--bench OUT.txt] [--shot OUT.png] [--size WxH] [--present auto|novsync|fifo|immediate|mailbox] [--latency N] [--old-draw] [--backend dx12|vulkan|gl]\n\
                      (the backend: the environment's WGPU_BACKEND=dx12|vulkan|gl|metal)"
                 );
                 std::process::exit(0);
@@ -87,7 +91,7 @@ fn parse() -> app::Args {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn present_mode(name: Option<&str>, unthrottled: bool) -> eframe::wgpu::PresentMode {
+pub(crate) fn present_mode(name: Option<&str>, unthrottled: bool) -> eframe::wgpu::PresentMode {
     use eframe::wgpu::PresentMode as P;
     match name {
         Some("fifo") => P::Fifo,
@@ -103,6 +107,8 @@ fn present_mode(name: Option<&str>, unthrottled: bool) -> eframe::wgpu::PresentM
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
     let args = parse();
+    // what has to be measured before the frames (meter.rs: Windows' cycle rate)
+    meter::init();
     let unthrottled = args.bench.is_some();
     if unthrottled {
         prof::install();

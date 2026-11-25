@@ -3582,7 +3582,7 @@ dependencies = [
 
 [[package]]
 name = "wireskein-analysis"
-version = "0.0.38"
+version = "0.0.39"
 dependencies = [
  "regex",
  "serde_json",
@@ -3594,7 +3594,7 @@ dependencies = [
 
 [[package]]
 name = "wireskein-core"
-version = "0.0.38"
+version = "0.0.39"
 dependencies = [
  "serde",
  "serde_json",
@@ -3603,7 +3603,7 @@ dependencies = [
 
 [[package]]
 name = "wireskein-io"
-version = "0.0.38"
+version = "0.0.39"
 dependencies = [
  "chrono",
  "flate2",
@@ -3614,7 +3614,7 @@ dependencies = [
 
 [[package]]
 name = "wireskein-verify"
-version = "0.0.38"
+version = "0.0.39"
 dependencies = [
  "serde",
  "serde_json",

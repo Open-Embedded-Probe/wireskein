@@ -827,6 +827,8 @@ pub fn ui(ui: &mut egui::Ui, tab: &mut WaveTab, sh: &mut Shared, cache: &mut Til
         jump_bad(tab, sh, fwd);
     }
     sh.perf.wave(t_start.elapsed().as_secs_f32() * 1e3, n_shapes);
+    // the capture drawn (the first paint is taken at the start of the next frame, after this one is shown)
+    sh.perf.drawn += 1;
     sh.perf.acc[crate::app::P_WAVE] += t_start.elapsed().as_secs_f64() * 1e3;
 }
 

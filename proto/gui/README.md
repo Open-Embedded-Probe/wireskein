@@ -39,8 +39,8 @@ cargo run --release -j1 --bin wsk-egui -- /tmp/i2c-100k.wireskein
 `--search 'Q'`、`--select ROW`、`--detach-list`（一覧を最初から別の窓に）、`--no-analysis`、`--size WxH`、
 `--bench OUT.txt`（倍率ごとに最大 96 フレーム流して fps と 1 フレームの内訳を測り、結果を書いて終わる。vsync を切る。下の「--bench の内訳」）、
 `--shot OUT.png`（画面の写真を撮って終わる）、`--present auto|novsync|fifo|immediate|mailbox`（表示の仕方）、`--latency N`（GPU を待たずに
-先に作るフレームの数。既定 1）、`--old-draw`（§9.6 の手直しの前の描き方。同じ機械で前後を比べる）。描画の API は環境変数 `WGPU_BACKEND`
-（`dx12` / `vulkan` / `gl` / `metal`）。
+先に作るフレームの数。既定 1）、`--old-draw`（§9.6 の手直しの前の描き方。同じ機械で前後を比べる）、`--backend dx12|vulkan|gl`（描画の API。
+環境変数 `WGPU_BACKEND` と同じ）。
 
 ### 操作
 
@@ -73,15 +73,20 @@ web ではファイルを開けない（例を 1 つ中に持つ）。スレッ�
 
 `--bench OUT.txt` の結果は 3 つの表を持つ。
 
-1. 倍率ごとの fps（中央値）、1 フレーム p50 / p95、波形 CPU（今までと同じ）。頭に GPU（アダプタの名前・API・ドライバ）、表示の仕方
-   （present）、フレームの遅れ（latency）、描き方（new / old）を書く。
+1. 倍率ごとの fps（中央値）、1 フレーム p50 / p95、波形 CPU（今までと同じ）。頭に GPU（アダプタの名前・API・ドライバ・描き方 new / old）、
+   `# present:`（頼んだ表示の仕方 → 面が実際に受けるもの〔wgpu の決まり: 頼んだものを面が持てばそれ、AutoNoVsync は Immediate → Mailbox →
+   Fifo の順〕、垂直同期で止まるか、面の持つ形の一覧〔同じ窓に 2 つ目の面を作って問い合わせる。GL では問わない〕、フレームの遅れ）、
+   `# meter:`（メモリと CPU 時間の取り方、この exe を作った時刻: 古い exe で流していないかを見る）を書く。最初の絵は「波形のパネルが記録を
+   描いたフレームの次のフレームの始め」（そのフレームが表示された後）。
 2. **1 フレームの内訳**（ms / フレームの平均。倍率ごとと、拡大の掃引）:
    - `dt`: フレームの間隔。`frame`: eframe の 1 フレームの処理（`run_ui_and_paint`）。`gap = dt - frame`（イベントループなど外の待ち）。
    - `prepare`: 窓の情報を集める（eframe）。`egui`: egui の組み立て全体（`Context::run`）。
    - `tessellate`: 三角形にする。`paint`: GPU に渡す全体（egui-wgpu）。その中の `upload`（頂点・添字のバッファの更新）、`texture`、
      `encode`（描画の命令を作る）、`finish`、`acquire`（次の画面を貰う。垂直同期の待ちはここか present に出る）、`submit`（提出）、
      `present`（表示）、`maintain`（wgpu が前のフレームの終わりを待つ所。submit の中）。
-   - アプリが自分で測る所: `main CPU`（メインスレッドの CPU 時間。Linux だけ。忙しい機械でも比べやすい）、`App::ui`、パネルごと
+   - アプリが自分で測る所: `main CPU`（メインスレッドの CPU 時間。忙しい機械でも比べやすく、垂直同期で fps が頭打ちでも 1 フレームの
+     仕事の量が分かる。取り方は 3 つの試作で同じ `egui/src/meter.rs`: Linux は `clock_gettime(CLOCK_THREAD_CPUTIME_ID)`、Windows は
+     `QueryThreadCycleTime` を起動時に測った速さで時間に直す。流しの全体の値を `GetThreadTimes` と並べて結果の終わりに出す）、`App::ui`、パネルごと
      （`wave` 波形〔ミニマップを含む〕・`minimap`・`list` 一覧・`measure` 測定・`other tabs`）、`bars`（上下の帯）。
    - 1 フレームを数える: `shapes`（egui の図形）、`vertices` / `triangles`（三角形にした後）、`prims`（描画の単位。だいたい draw call）、
      `wave vertices`（波形の線の Mesh の頂点）、`tess (own)`（数えるために自分で三角形にした時間。上の時間からは除いてある）。
@@ -93,22 +98,27 @@ web ではファイルを開けない（例を 1 つ中に持つ）。スレッ�
 
 ### 利用者の機械で流すコマンド（Windows の PowerShell / cmd でそのまま。`proto\gui` で）
 
+2026-11-25 の 2 回目（ノート §14）。iced・Makepad と同じ記録を、API を変えて並べる（試作 3 の iced は Windows で Vulkan を選んでいた）。
+
 ```sh
 cd proto\gui
-cargo run --release -j1 --bin wsk-egui -- --synth 1e8 --bench synth1e8.txt
-cargo run --release -j1 --bin wsk-egui -- --synth 1e8 --old-draw --bench synth1e8-old.txt
-cargo run --release -j1 --bin wsk-egui -- --synth 1e8 --latency 2 --bench synth1e8-lat2.txt
-cargo run --release -j1 --bin wsk-egui -- --synth 1e8 --present immediate --bench synth1e8-immediate.txt
-cargo run --release -j1 --bin wsk-egui -- --synth 1e9 --bench synth1e9.txt
-cargo run --release -j1 --bin wsk-egui -- ../../tests/data/examples/mixed-1.wireskein --bench mixed1.txt
-cargo run --release -j1 --bin wsk-egui -- ../../tests/data/p4x-i1/i2c-controller-400k-nack.vcd --bench vcd.txt
+cargo run --release -j1 --bin wsk-egui -- ../../tests/data/p4x-i1/i2c-controller-400k-nack.vcd --bench egui-vcd.txt
+cargo run --release -j1 --bin wsk-egui -- --synth 1e8 --backend dx12 --bench egui-synth1e8-dx12.txt
+cargo run --release -j1 --bin wsk-egui -- --synth 1e8 --backend dx12 --present immediate --bench egui-synth1e8-dx12-immediate.txt
+cargo run --release -j1 --bin wsk-egui -- --synth 1e8 --backend dx12 --present mailbox --bench egui-synth1e8-dx12-mailbox.txt
+cargo run --release -j1 --bin wsk-egui -- --synth 1e8 --backend vulkan --bench egui-synth1e8-vulkan.txt
+cargo run --release -j1 --bin wsk-egui -- --synth 1e9 --backend vulkan --bench egui-synth1e9-vulkan.txt
+cargo run --release -j1 --bin wsk-egui -- ../../tests/data/examples/mixed-1.wireskein --backend vulkan --bench egui-mixed1-vulkan.txt
 ```
 
-- 1 行目が今の描き方、2 行目が手直しの前（同じ機械で前後を比べる）。3〜4 行目は表示の待ちを変える（`--present immediate` は
-  その GPU・API が対応していないと起動で落ちる。そのときは飛ばしてよい）。
-- API を変えるとき: PowerShell は `$env:WGPU_BACKEND="vulkan"`（戻すのは `Remove-Item Env:WGPU_BACKEND`）、cmd は `set WGPU_BACKEND=vulkan`
-  （戻すのは `set WGPU_BACKEND=`）。どの API で動いたかは結果の頭の `# gpu:` に出る。
+- 1 行目は最初の絵の確かめ（頭の `first paint` に数字が出る。`# meter:` の行の「built」の時刻が取り込んだ後なら新しい exe）。
+- 2〜4 行目は DX12 で表示の仕方を変える、5〜7 行目は Vulkan（iced と同じ API）。どの回も頭の `# present:` に「頼んだもの → 面が受けたもの
+  （vsync ON / off）」と面の持つ形の一覧が出る。`--present immediate` を面が持たないと wgpu が設定できずに落ちる（そのときは飛ばしてよい）。
+- 垂直同期で頭打ちの回でも、内訳の `main CPU`（メインスレッドの CPU 時間 / フレーム）で仕事の量を比べられる（Windows でも出るようにした）。
+- `--backend` は環境変数 `WGPU_BACKEND` と同じ（PowerShell の `$env:WGPU_BACKEND="vulkan"` でもよい）。
 - 窓は流している間そのままにしておく（隠れたり最小化されたりすると描かない）。
+
+1 回目（2026-11-25、ノート §9.6.1）のコマンド: `--synth 1e8`（`--old-draw` / `--latency 2` / `--present immediate`）、`--synth 1e9`、mixed-1、VCD。
 
 ## 測った数字（2026-11-25、Intel N100 系 4 コア、Xvfb）
 
