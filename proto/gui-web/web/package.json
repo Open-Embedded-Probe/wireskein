@@ -1,0 +1,25 @@
+{
+  "name": "wsk-gui-web",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Prototype 2 of WireSkein's screens: TypeScript + Solid + dockview + WebGPU (WebGL2) + wasm in Web Workers (a throwaway)",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "serve": "node tools/serve.mjs --files ../../../tests/data",
+    "bench": "node tools/bench.mjs"
+  },
+  "dependencies": {
+    "dockview-core": "^8.9.1",
+    "solid-js": "^1.9.20"
+  },
+  "devDependencies": {
+    "@webgpu/types": "^0.1.74",
+    "puppeteer-core": "^25.18.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vite-plugin-solid": "^2.11.17"
+  }
+}

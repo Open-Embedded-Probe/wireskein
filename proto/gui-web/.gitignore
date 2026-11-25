@@ -1,0 +1,4 @@
+web/node_modules/
+web/dist/
+# made by build.sh (wasm-bindgen's JS glue and the .wasm)
+web/src/wasm-pkg/

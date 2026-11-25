@@ -1,0 +1,15 @@
+[package]
+name = "wsk-web-view"
+description = "Prototype 2: the waveform's frame for the screen's thread (view-core in wasm), shapes for WebGPU / WebGL2"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wasm-bindgen.workspace = true
+view-core.workspace = true

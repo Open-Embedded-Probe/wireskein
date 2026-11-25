@@ -1,0 +1,19 @@
+[package]
+name = "wsk-web-engine"
+description = "Prototype 2: what the Web Workers run (capture files read, summaries built, the analysis and the search)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wasm-bindgen.workspace = true
+view-core.workspace = true
+wireskein-io = { path = "../../../../crates/wireskein-io" }
+wireskein-core = { path = "../../../../crates/wireskein-core" }
+wireskein-analysis = { path = "../../../../crates/wireskein-analysis" }
+serde_json = "1"

@@ -24,6 +24,19 @@ pub enum Status {
     Unread = 4,
 }
 
+impl Status {
+    /// From its number (`as u8`); unknown numbers read as Unread.
+    pub fn from_u8(v: u8) -> Status {
+        match v {
+            0 => Status::Ok,
+            1 => Status::Note,
+            2 => Status::Warn,
+            3 => Status::Error,
+            _ => Status::Unread,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Item {
     pub s: Tick,
@@ -84,6 +97,27 @@ impl Track {
         t.off.push(t.buf.len() as u32);
         t.buf.shrink_to_fit();
         t
+    }
+    /// The track's parts, to move it to another thread or wasm instance (`from_parts` makes it again): the items in
+    /// order of start, every item's full and short text one after another, their offsets (2 an item and the end).
+    pub fn parts(&self) -> (&[Item], &str, &[u32]) {
+        (&self.items, &self.buf, &self.off)
+    }
+    /// A track from the parts `parts` gave (items already in order of start); the running ends and the bad index
+    /// made again (one pass).
+    pub fn from_parts(name: &str, items: Vec<Item>, buf: String, off: Vec<u32>) -> Self {
+        assert_eq!(off.len(), 2 * items.len() + 1, "two text offsets an item and one at the end");
+        let mut m = Tick::MIN;
+        let mut max_e = Vec::with_capacity(items.len());
+        let mut bad = vec![];
+        for (i, it) in items.iter().enumerate() {
+            m = m.max(it.e);
+            max_e.push(m);
+            if it.status >= Status::Warn {
+                bad.push(i as u32);
+            }
+        }
+        Track { name: name.into(), items, buf, off, max_e, bad }
     }
     pub fn len(&self) -> usize {
         self.items.len()
