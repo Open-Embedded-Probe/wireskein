@@ -1,0 +1,29 @@
+[package]
+name = "proto-makepad"
+description = "Prototype 4 of the app's screens: Makepad (its Dock, a waveform drawn as instances in its own shader, PortalList)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "wsk-makepad"
+path = "src/main.rs"
+
+[dependencies]
+view-core = { path = "../../gui/view-core" }
+wireskein-io = { path = "../../../crates/wireskein-io" }
+wireskein-analysis = { path = "../../../crates/wireskein-analysis" }
+wireskein-core = { path = "../../../crates/wireskein-core" }
+makepad-widgets = "1.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
+
+# the made-up I2C capture (prototype 1's tool, the same file)
+[[bin]]
+name = "wsk_synth"
+path = "../../gui/egui/src/bin/wsk_synth.rs"
