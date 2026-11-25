@@ -19,6 +19,9 @@ import { startBench } from './bench';
 import { mb } from './fmt';
 
 const q = new URLSearchParams(location.search);
+window.addEventListener('error', (e) => report('error', { message: String(e.message), at: `${e.filename}:${e.lineno}` }));
+window.addEventListener('unhandledrejection', (e) => report('error', { message: String(e.reason) }));
+report('start', {});
 
 const EXAMPLES: [string, string][] = [
   ['mixed-1（例）', 'files/examples/mixed-1.wireskein'],

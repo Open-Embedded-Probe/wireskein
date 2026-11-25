@@ -6,7 +6,7 @@
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 import {
   analysis, addDrawer, cap, capGen, markers, measure, openedAt, pal, palFloats, perf, requestDraw, scene, select,
-  sel, setMarkers, setMeasure, setPerf, tilesOn, viewMemory, lod,
+  sel, setMarkers, setMeasure, setPerf, tilesOn, viewMemory, lod, report,
 } from './state';
 import { type Renderer, makeRenderer, verdictColor, PALETTE_KEYS, gpuInfo, addGpuShot } from './gpu';
 import { type Viewport, clamped, fit, tOf, xOf, zoomed } from './viewport';
@@ -214,6 +214,7 @@ export function WavePanel(props: { id: number; params: WaveParams; onParams: (p:
       const ms = performance.now() - openedAt.t;
       setPerf('firstPaint', ms);
       console.log(`first paint: ${ms.toFixed(0)} ms (${renderer.kind})`);
+      report('first-paint', { ms, renderer: renderer.kind + (gpuInfo ? ` (${gpuInfo})` : '') });
     }
     if ((frameNo++ & 15) === 0) setPerf({ shapes: sc.shapes, inst: ni, tiles: Array.from(sc.tiles()) as [number, number, number] });
     if (st.vel !== 0 || lod().ms === null) requestDraw();
@@ -626,6 +627,7 @@ export function WavePanel(props: { id: number; params: WaveParams; onParams: (p:
       setPerf('renderer', renderer.kind + (renderer.kind === 'WebGPU' && gpuInfo ? ` (${gpuInfo})` : ''));
     } catch (e) {
       setErr(String(e));
+      report('error', { message: `renderer: ${e}` });
     }
     const g = over.getContext('2d')!;
     g.font = LABEL_FONT;
