@@ -417,8 +417,8 @@ pub struct SpiMode {
     pub lines: Vec<(String, Votes)>,
 }
 
-/// CPOL from SCK's level as CS becomes active (without CS: over its longest pause), CPHA per data line from the SCK
-/// edge each change follows (`timing.spi_mode`).
+/// CPOL from SCK's level as CS becomes active (without CS: before its first edge and after its last where they agree,
+/// else over its longest pause), CPHA per data line from the SCK edge each change follows (`timing.spi_mode`).
 pub fn spi_mode(clk: &Ch, data: &[&Ch], n: i64, cs: Option<&Ch>, cs_active: u8) -> SpiMode {
     let none = |w| SpiMode {
         windows: w,
@@ -437,9 +437,15 @@ pub fn spi_mode(clk: &Ch, data: &[&Ch], n: i64, cs: Option<&Ch>, cs_active: u8) 
             if ln.len() < 2 {
                 return none(0);
             }
-            let (a, b) = if ln.len() > 2 { (1, ln.len() - 1) } else { (0, ln.len()) };
-            let k = crate::checks::argmax(ln[a..b].iter().map(|&v| v as f64)) + a;
-            (vec![(0, n)], vec![lvl[k]])
+            if ln.len() > 2 && lvl[0] == lvl[ln.len() - 1] {
+                // its level before its first edge and after its last: the idle level, whatever the pauses between
+                // the transfers (a bit-banged clock may hold its active level longer than it rests between bytes)
+                (vec![(0, n)], vec![lvl[0]])
+            } else {
+                let (a, b) = if ln.len() > 2 { (1, ln.len() - 1) } else { (0, ln.len()) };
+                let k = crate::checks::argmax(ln[a..b].iter().map(|&v| v as f64)) + a;
+                (vec![(0, n)], vec![lvl[k]])
+            }
         }
     };
     if cpols.is_empty() {

@@ -298,7 +298,8 @@ def spi_modes_ok(clk: Channel, data: list[Channel], cpol: int, rate: float, cs: 
 
 
 def spi_mode(clk: Channel, data: list[Channel], n: int, cs: Channel | None = None, cs_active: int = 0) -> dict:
-    """CPOL: SCK's level when CS becomes active (without CS: its level over the longest pause). CPHA, per data line:
+    """CPOL: SCK's level when CS becomes active (without CS: its level before its first edge and after its last where
+    they agree, else over the longest pause). CPHA, per data line:
     the SCK edge each change of the line follows (the last one at or before it) inside a CS window: after a leading
     edge (leaving the idle level) it was shifted out there and is sampled on the trailing one (CPHA 1); after a
     trailing edge, CPHA 0. Changes before the first edge of a window decide only when there are no others (CPHA 0:
@@ -319,9 +320,15 @@ def spi_mode(clk: Channel, data: list[Channel], n: int, cs: Channel | None = Non
         st, ln, lvl = clk.runs(n)
         if len(ln) < 2:
             return {"windows": 0}
-        inner = slice(1, len(ln) - 1) if len(ln) > 2 else slice(0, len(ln))
-        k = int(np.argmax(ln[inner])) + inner.start
-        cpols = [int(lvl[k])]
+        if len(ln) > 2 and lvl[0] == lvl[-1]:
+            # the level SCK rests at before its first edge and after its last (the window holds the transfers): its
+            # idle level, whatever the pauses between them (a bit-banged clock, shiftOut / shiftIn, may hold its
+            # active level longer than it rests between bytes)
+            cpols = [int(lvl[0])]
+        else:
+            inner = slice(1, len(ln) - 1) if len(ln) > 2 else slice(0, len(ln))
+            k = int(np.argmax(ln[inner])) + inner.start
+            cpols = [int(lvl[k])]
         wins = [(0, n, False)]
     if not cpols:
         return {"windows": len(wins)}

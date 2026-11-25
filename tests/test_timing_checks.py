@@ -180,3 +180,22 @@ def test_the_spi_mode_from_the_lines(mode):
     # a mode of the other CPOL never reads it
     ok, got, why = _judge(cap, spi("SCK", "MOSI", "MISO", "CS", mode=mode ^ 2))
     assert ok is False and "does not read it" in why
+
+
+def test_the_spi_cpol_without_cs_is_the_level_sck_rests_at_around_the_transfers():
+    # shiftOut / shiftIn bit-banged (mode 0, no CS): SCK rests low before and after, but between bytes it rests
+    # low for less than it is held high on some bits (the longest pause inside is a high one)
+    clk, mosi = gen.Wave(0), gen.Wave(0)
+    t, rng = 5e-6, np.random.default_rng(1)
+    for byte in b"\x3c\x9e\xa4":
+        for i in range(8):
+            mosi.set(t, (byte >> (7 - i)) & 1)            # data out while SCK is low
+            t += 0.4e-6
+            clk.set(t, 1)
+            t += 0.9e-6 + (1.5e-6 if rng.random() < 0.3 else 0.0)   # held high, now and then longer
+            clk.set(t, 0)
+            t += 0.4e-6
+        t += 0.6e-6                                     # the pause between bytes, shorter than a long high
+    cap = _cap({"SCK": clk, "MOSI": mosi}, t + 5e-6, 20e6)
+    ok, got, why = _judge(cap, spi("SCK", "MOSI", None, None, mode=0, mosi_bytes="3c9ea4"))
+    assert ok is True and (got["cpol"], got["cpha"], got["mode"]) == (0, 0, 0), (why, got)
