@@ -92,7 +92,9 @@ def layers_of(n, up=None) -> dict:
                                 "acks": [bool(x) for x in t.get("acks", [])],
                                 **{k: t[k] for k in ("start_cond", "end_cond", "scl_low_ticks", "scl_waits", "restored")
                                    if k in t},
-                                **({"complete": False, "pending_bits": t.get("pending_bits", [])} if t.get("complete") is False else {})}
+                                **({"complete": False, "pending_bits": t.get("pending_bits", []),
+                                    **({"clock_lost": t["clock_lost"]} if "clock_lost" in t else {})}
+                                   if t.get("complete") is False else {})}
                                for t in n.output.items if "addr" in t]
     elif a == "spi":
         out["words"] = _words(n, 8)

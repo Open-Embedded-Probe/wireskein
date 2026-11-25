@@ -133,7 +133,7 @@ analyze の書き出し（`--mode final`、`depth` まで）の層。刻みは�
 
 | 方式 | 層 |
 | --- | --- |
-| `i2c` | `transactions`: `s`、`e`、`addr`、`rw`、`addr_ack`、`bytes`（16 進）、`acks`、`start_cond`（S / Sr）、`end_cond`（P / Sr / null: 区間の終わりで開いたまま）、`scl_low_ticks`、`restored`（補ったクロックの tick: 遅い立ち上がりで 1 サンプルより短く切られたもの。読みが 1 つに決まる所に置く）、`scl_waits`（`[{after_word, bit, ticks, s}]`）。区間の終わりで切れたものは `complete: false` と `pending_bits` |
+| `i2c` | `transactions`: `s`、`e`、`addr`、`rw`、`addr_ack`、`bytes`（16 進）、`acks`、`start_cond`（S / Sr）、`end_cond`（P / Sr / null: 区間の終わりで開いたまま）、`scl_low_ticks`、`restored`（補ったクロックの tick: 遅い立ち上がりで 1 サンプルより短く切られたもの。読みが 1 つに決まる所に置く）、`scl_waits`（`[{after_word, bit, ticks, s}]`）。区間の終わりで切れたものは `complete: false` と `pending_bits`。1 クロック足りず、中に SCL の待ちがある取引も同じで、`clock_lost`（待ちの tick: クロックを引き延ばすターゲットを待ちきれずに諦めたコントローラが、見えないクロックを打った。待ちのどこかは分からず、その後のビットを両者が別々に数えたかもしれない）を付ける: 待ちの入る語（または待ちの直後の語）から後は読まず、そのビットをサンプルしたまま `pending_bits` に置く。`end_cond` はそのまま |
 | 独自のプロトコル（[独自のプロトコル](protocols.ja.md)） | バスの下に、その名前で: `{"messages", "checks_passed", "checks_failed"}`。チェックが通ったときに出て、そのときはバスの最終の読み |
 | `spi` | `transfers`: `s`、`e`（最初と最後の標本のビット）と、データのピンごとのバイト（16 進、チャンネルの名前の下）。SD のコマンドを読めたら、横に `sd`（capture-test-guide §4.8）。CS があれば `modes`: SCK の待機のレベルに合う 2 つのモードそれぞれの `readable`（そのサンプルの辺でどのデータ線も変わらない）と、そのモードで読んだ `bytes`（MSB から）。`modes_ok` は読めるもの。読めるモードが 1 つならモードが決まる。読めるモードのバイトが同じなら、見分けなくてよい |
 | `uart` | `nmea`、`modbus_rtu`（チェックサム / CRC が通ったもの）、`lines` か `bytes`（`{"s": [...], "hex"}`。9 データビットなら `hex` は文字ごとの下位 8 ビット、`bit8` は 9 ビット目を `"0"` / `"1"` で順に。マルチドロップではアドレスの印）: 最終の読みは、読めたもののうちこの順で最初のもの（GPS の文は、テキストの行ではなく `nmea`） |

@@ -435,6 +435,8 @@ def _i2c_tx(t: dict) -> dict:
            "start": t.get("start_cond"), "end": t.get("end_cond")}   # S / Sr, and P / Sr (None: still open)
     if not out["complete"]:
         out["pending_bits"] = list(t.get("pending_bits", []))
+    if "clock_lost" in t:                                         # cut where a clock was lost in an SCL wait
+        out["clock_lost"] = int(t["clock_lost"])
     return out
 
 
@@ -481,20 +483,44 @@ def _i2c_fmt(t: dict) -> str:
         f"0x{t['addr']:02x} {t['rw']} [{_i2c_bytes(t)}]" + ("" if t["ack"] else " NACK") + \
         (f" {t['end']}" if t.get("end") else "")
     if not t["complete"]:
-        s += f" incomplete (pending bits {t.get('pending_bits', [])})"
+        s += (f" not read from a clock lost in the SCL wait at tick {t['clock_lost']} (bits {t.get('pending_bits', [])})"
+              if "clock_lost" in t else f" incomplete (pending bits {t.get('pending_bits', [])})")
     return s
 
 
-def _i2c_diff(want: list[dict], got: list[dict]) -> str:
-    """The first transaction that differs, both sides written out ("" if equal).
+def _i2c_read_part(w: dict, g: dict) -> dict:
+    """What of an expected transaction a reading cut at a clock lost in an SCL wait can be compared with: the words
+    before the cut (the address, the bytes and ACKs read), how it began and ended; not the bytes after it, nor whether
+    it is complete."""
+    if g.get("addr") is None:
+        return {k: w[k] for k in ("start", "end") if k in w}
+    n = len(g["bytes"])
+    out = {k: v for k, v in w.items() if k not in ("bytes", "acks", "complete", "pending_bits")}
+    out["bytes"] = w["bytes"][:n]
+    if "acks" in w:
+        out["acks"] = w["acks"][:n]
+    return out
+
+
+def _i2c_diff(want: list[dict], got: list[dict]) -> tuple[str, list[str]]:
+    """The first transaction that differs, both sides written out ("" if equal), and the transactions neither equal
+    nor different: cut where a clock was lost in an SCL wait (clock_lost), their words from there not read, where the
+    expectation does not say it is cut (complete False) - each compared on what was read before the cut.
     pending_bits is compared only when the expectation names it."""
+    open_ = []
     for i, (w, g) in enumerate(zip(want, got)):
+        if "clock_lost" in g and w.get("complete", True):
+            r = _i2c_read_part(w, g)
+            if r != {k: g.get(k) for k in r}:
+                return f"#{i} want {_i2c_fmt(w)}, got {_i2c_fmt(g)}", open_
+            open_.append(f"#{i} want {_i2c_fmt(w)}, got {_i2c_fmt(g)}")
+            continue
         if w != {k: g.get(k) for k in w}:
-            return f"#{i} want {_i2c_fmt(w)}, got {_i2c_fmt(g)}"
+            return f"#{i} want {_i2c_fmt(w)}, got {_i2c_fmt(g)}", open_
     if len(want) != len(got):
         extra = f"missing {_i2c_fmt(want[len(got)])}" if len(want) > len(got) else f"extra {_i2c_fmt(got[len(want)])}"
-        return f"{len(want)} expected, {len(got)} decoded; #{min(len(want), len(got))} {extra}"
-    return ""
+        return f"{len(want)} expected, {len(got)} decoded; #{min(len(want), len(got))} {extra}", open_
+    return "", open_
 
 
 def check_i2c(cap, x):
@@ -529,15 +555,25 @@ def check_i2c(cap, x):
     got = {"transactions": [_i2c_tx(t) for t in _items(n) if "addr" in t]}
     ok, why = True, []
     if x.get("transactions") is not None:
-        diff = _i2c_diff([_i2c_want(t) for t in x["transactions"]], got["transactions"])
+        diff, open_ = _i2c_diff([_i2c_want(t) for t in x["transactions"]], got["transactions"])
         if diff:
             ok = False
             why.append("transactions differ: " + diff)
+        elif open_:
+            # a clock lost in a wait: the controller and the target may have read the bytes after it apart, and the
+            # lines do not tell which - neither a match nor a difference
+            ok = None
+            why.append("bytes not read where a clock was lost in an SCL wait (a controller that gave up waiting for "
+                       "a target stretching the clock): " + "; ".join(open_))
     hz = _burst_hz(read.channel(x["scl"]), cap.rate)   # on the lines as an input sees them, as the bytes are
     got["scl_hz"] = hz
     got["notices"] = _i2c_notices(cap, scl, sda, x.get("spike_max_s", 50e-9), x.get("stretch_min", 2.0), w)
     for t in _items(n):        # a clock clipped shorter than a sample, restored (timing.i2c_restore)
         got["notices"] += [{"kind": "clock_restored", "tick": int(at)} for at in t.get("restored", [])]
+    for t in got["transactions"]:      # a clock lost in an SCL wait: the words after it not read (typed._lost_in_wait)
+        if "clock_lost" in t:
+            got["notices"].append({"kind": "clock_lost", "tick": t["clock_lost"],
+                                   "bits": len(t.get("pending_bits", []))})
     if foreign:                # (restored in the input view the other engine read)
         got["notices"] += [{"kind": "clock_restored", "tick": int(at)} for at in seen.meta.get("i2c_restored", [])]
     got["notices"].sort(key=lambda k: k["tick"])
@@ -2119,6 +2155,9 @@ NOTICES = {
             "bus_glitch": "a pulse on SCL or SDA shorter than spike_max_s, which inputs suppress (line, width_ticks)",
             "clock_restored": "a transaction a clock short, its clock restored where one reading is left: a clock "
                               "clipped shorter than a sample by a slow rise (tick: where it was put)",
+            "clock_lost": "a transaction a clock short with SCL held low in it: a controller that gave up waiting "
+                          "for a target stretching the clock clocked on unseen, the words from the wait on not read "
+                          "(tick: the wait's start; bits: those clocked from there)",
             "slow_edge": "an edge on SCL or SDA crossing the threshold more than once within a third of SCL's half and t_r (1 us): the "
                          "line's own problem, a slow rise through a weak pull-up or ringing, read as one edge at its "
                          "last change as an input with hysteresis does (line, changes, span_ticks, to: 1 a rise)"},

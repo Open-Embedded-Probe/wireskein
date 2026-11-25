@@ -458,7 +458,8 @@ def i2c_from_words(fr: Frames, w: Words, scl=None) -> list[dict]:
     An open last frame (no STOP) gives complete=False, with the bits clocked after
     its last whole byte in pending_bits. start_cond / end_cond: how it began ("S" / "Sr") and ended ("P" / "Sr" /
     None: still open at the window's end). With the SCL channel, scl_low_ticks (the median SCL low) and scl_waits
-    (_scl_waits)."""
+    (_scl_waits); and a closed frame a clock short (9n bits, one short of the 9n + 1 its STOP or repeated START
+    makes) with an SCL wait in it is cut there (_lost_in_wait)."""
     out = []
     fof = w.frame_of
     cut = np.searchsorted(fof, np.arange(len(fr.bounds) + 1)) if np.all(np.diff(fof) >= 0) else None
@@ -482,7 +483,27 @@ def i2c_from_words(fr: Frames, w: Words, scl=None) -> list[dict]:
             n = int(w.leftover_bits[i])
             out[-1]["complete"] = False
             out[-1]["pending_bits"] = [int(x) for x in fr.source.bits[0][b - n:b]] if n else []
+        elif int(w.leftover_bits[i]) == 0 and out[-1].get("scl_waits"):
+            _lost_in_wait(out[-1], fr.source.bits[0][a:b])
     return out
+
+
+def _lost_in_wait(tx: dict, bits: np.ndarray) -> None:
+    """A transaction a clock short with SCL held low in it: a controller that gave up waiting for a target stretching
+    the clock clocks on while SCL is still held, and that clock is not on the lines; where in the wait it fell is not
+    seen (timing.i2c_restore does not put it back), so from the word the first wait falls in (or before) the
+    controller and the target count the bits apart - the two may have read different bytes, and neither is told.
+    Those words are not read: the transaction is complete=False with their bits as sampled in pending_bits and
+    clock_lost (the wait's tick), as one cut by the capture's end; its end_cond is kept."""
+    w = tx["scl_waits"][0]
+    k = int(w["after_word"]) + 1                       # the first word the lost clock may belong to
+    tx["complete"] = False
+    tx["pending_bits"] = [int(x) for x in bits[9 * k:]]
+    tx["clock_lost"] = int(w["s"])
+    if k == 0:                                         # in the address: nothing read
+        tx.update(addr=None, rw=None, addr_ack=False, bytes=[], acks=[])
+    else:
+        tx["bytes"], tx["acks"] = tx["bytes"][:k - 1], tx["acks"][:k - 1]
 
 
 def _conds(tx: dict, fr: Frames, i: int, scl, t: np.ndarray, a: int, b: int) -> None:

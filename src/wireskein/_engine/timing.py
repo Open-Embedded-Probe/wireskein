@@ -491,13 +491,20 @@ def clipped_clocks(e: np.ndarray, initial: int, k: int) -> np.ndarray:
     return allow
 
 
+RESTORE_LOW_MAX = 2 * CLIPPED_LOW_MAX   # a clipped clock's low and the low after it, each at most CLIPPED_LOW_MAX of the
+                                        # usual low: an SCL low longer than this is a wait, no clock is restored in it
+
+
 def i2c_restore(cap: Capture, scl: str, sda: str) -> tuple[Capture, list[int]]:
     """A clock clipped shorter than a sample is not in the capture at all: its transaction is a clock short. It is
     restored only where one reading is left: a transaction (START to STOP or a repeated START) whose SCL rises are a
     multiple of 9, one short of the 9n + 1 a whole one has (its STOP's included), with one SCL low longer than 1.5 of
     the usual - the clock vanished in it - and SDA not moving from 0.6 to 0.9 of the usual low into it. A controller
     releases SCL a usual low into its low and moves SDA on as soon as the clipped clock falls, so the bit is SDA's
-    level just before 0.9 of the usual low; it is put there, a tick long. -> (the capture, the ticks restored)."""
+    level just before 0.9 of the usual low; it is put there, a tick long. That low is two lows of a train of clocks
+    (RESTORE_LOW_MAX): a longer one is a wait (a target stretching the clock), and a clock lost in a wait - a controller
+    that gave up waiting clocked on while the target held SCL low - may have been anywhere in it, the bits after it
+    counted apart by the two (typed.i2c_from_words leaves them unread). -> (the capture, the ticks restored)."""
     from . import kernels as K
     s, d = cap.channel(scl), cap.channel(sda)
     e = np.asarray(s.edges, np.int64)
@@ -527,6 +534,7 @@ def i2c_restore(cap: Capture, scl: str, sda: str) -> tuple[Capture, list[int]]:
     ok = (end < big) & (rises >= 9) & (rises % 9 == 0) & (longs == 1)
     where = np.flatnonzero(long_low)
     i = where[np.searchsorted(where, ia[ok])]                                  # the one long low in each
+    i = i[gaps[i] <= RESTORE_LOW_MAX * usual]                                  # (a wait's: not restored)
     at = (e[i] + 0.9 * usual).astype(np.int64)
     lo_t = e[i] + 0.6 * usual
     still = np.searchsorted(de, at, "right") == np.searchsorted(de, lo_t, "right")   # SDA not moving in (0.6, 0.9]

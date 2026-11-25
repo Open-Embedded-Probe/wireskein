@@ -249,7 +249,7 @@ pub const CHECKS: [&str; 27] = [
 pub fn notice_kinds(kind: &str) -> &'static [&'static str] {
     match kind {
         "rgb_led" => &["latch_short"],
-        "i2c" => &["scl_stretch", "bus_glitch", "clock_restored", "slow_edge"],
+        "i2c" => &["scl_stretch", "bus_glitch", "clock_restored", "clock_lost", "slow_edge"],
         "spi" => &["sck_outside_cs", "empty_cs_window", "mode_ambiguous"],
         "uart" => &["baud_near_limit", "glitch", "break"],
         "rs485" => &["baud_near_limit", "glitch", "break", "empty_de_window"],

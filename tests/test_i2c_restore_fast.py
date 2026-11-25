@@ -11,7 +11,8 @@ from wireskein._engine.model import Capture, Channel
 
 
 def reference(cap, scl, sda):
-    """i2c_restore as first written (wireskein 0.0.28): the ticks it restores."""
+    """i2c_restore as first written (wireskein 0.0.28), with the long low no wait's (0.0.38: RESTORE_LOW_MAX): the
+    ticks it restores."""
     s, d = cap.channel(scl), cap.channel(sda)
     e = np.asarray(s.edges, np.int64)
     de = np.asarray(d.edges, np.int64)
@@ -37,6 +38,8 @@ def reference(cap, scl, sda):
         if len(long) != 1:
             continue
         i = long[0]
+        if e[i + 1] - e[i] > timing.RESTORE_LOW_MAX * usual:
+            continue
         at = int(e[i] + 0.9 * usual)
         if np.any((de > e[i] + 0.6 * usual) & (de <= at)):
             continue

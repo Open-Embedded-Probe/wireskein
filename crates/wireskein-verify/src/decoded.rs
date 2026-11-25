@@ -68,6 +68,8 @@ pub const I2C_SPIKE_S: f64 = 50e-9;
 pub const I2C_RISE_S: f64 = 1000e-9;
 const CLIPPED_LOW: f64 = 0.7;
 const CLIPPED_LOW_MAX: f64 = 4.0;
+const RESTORE_LOW_MAX: f64 = 2.0 * CLIPPED_LOW_MAX; // a longer SCL low is a wait: no clock restored in it
+const SCL_WAIT: f64 = 4.0; // an SCL low longer than this many times the frame's median low is a wait (`typed.SCL_WAIT`)
 const I2C_INPUT_PASSES: usize = 3;
 
 /// numpy's percentile of a short row (its `_lerp`).
@@ -278,6 +280,9 @@ fn i2c_restore(cap: &Cap, scl: &str, sda: &str) -> (Option<Cap>, Vec<i64>) {
             continue;
         }
         let i = where_[where_.partition_point(|&w| w < ia)];
+        if gaps[i] as f64 > RESTORE_LOW_MAX * usual {
+            continue; // (a wait's: a clock lost in it may have been anywhere, i2c_transactions leaves it unread)
+        }
         let at = (e[i] as f64 + 0.9 * usual) as i64;
         let lo_t = e[i] as f64 + 0.6 * usual;
         if de.partition_point(|&x| x <= at) == de.partition_point(|&x| (x as f64) <= lo_t) {
@@ -395,6 +400,29 @@ fn sync_bits(scl: &Ch, sda: &Ch) -> (Vec<i64>, Vec<u8>) {
     (t, bits)
 }
 
+/// The first SCL wait among a frame's sampling rises `t` (`typed._scl_waits`: a low longer than SCL_WAIT times the
+/// frame's median low, strictly inside its rises): (the word it falls in or before, its start), or None.
+fn lost_in_wait(c: &Ch, t: &[i64]) -> Option<(usize, i64)> {
+    if t.len() < 2 {
+        return None;
+    }
+    let e = &c.edges;
+    let (a, b) = (
+        e.partition_point(|&x| x <= t[0]),
+        e.partition_point(|&x| x < t[t.len() - 1]),
+    );
+    let lows: Vec<(i64, i64)> = (a..b)
+        .filter(|&q| c.after(q) == 0)
+        .map(|q| (e[q], e[(q + 1).min(e.len() - 1)] - e[q]))
+        .collect();
+    if lows.is_empty() {
+        return None;
+    }
+    let med = median(&lows.iter().map(|&(_, n)| n as f64).collect::<Vec<_>>());
+    let &(s, _) = lows.iter().find(|&&(_, n)| n as f64 > SCL_WAIT * med)?;
+    Some((t.partition_point(|&x| x < s) / 9, s))
+}
+
 /// The transactions on the lines (`typed.frames_startstop`, `words`, `i2c_from_words`), and the ticks restored.
 fn i2c_transactions(view: &Cap, scl: &str, sda: &str) -> Vec<J> {
     let (Some(c), Some(d)) = (view.ch(scl), view.ch(sda)) else {
@@ -468,6 +496,33 @@ fn i2c_transactions(view: &Cap, scl: &str, sda: &str) -> Vec<J> {
                 "pending_bits",
                 bits[b - left..b].iter().map(|&v| v as i64).collect::<Vec<_>>(),
             );
+        } else if !last_open
+            && (b - a).is_multiple_of(9)
+            && let Some((k, s)) = lost_in_wait(c, &t[a..b])
+        {
+            // a clock short with SCL held low in it (`typed._lost_in_wait`): the words from the wait on not read
+            tx.set("complete", false);
+            tx.set(
+                "pending_bits",
+                bits[a + 9 * k..b].iter().map(|&v| v as i64).collect::<Vec<_>>(),
+            );
+            tx.set("clock_lost", s);
+            if k == 0 {
+                for (key, v) in [
+                    ("addr", J::Null),
+                    ("rw", J::Null),
+                    ("addr_ack", J::Bool(false)),
+                    ("bytes", J::List(vec![])),
+                    ("acks", J::List(vec![])),
+                ] {
+                    tx.set(key, v);
+                }
+            } else {
+                let keep = |v: &J| J::List(v.list()[..k - 1].to_vec());
+                let (bs, ac) = (keep(tx.get("bytes")), keep(tx.get("acks")));
+                tx.set("bytes", bs);
+                tx.set("acks", ac);
+            }
         }
         let (st, en) = (tx.get("start").i().unwrap(), tx.get("end").i().unwrap());
         let r: Vec<i64> = restored.iter().copied().filter(|&at| st <= at && at <= en).collect();
@@ -499,6 +554,9 @@ fn i2c_tx(t: &J) -> J {
     "start" => t.get("start_cond"), "end" => t.get("end_cond")};
     if !o.get("complete").truthy() {
         o.set("pending_bits", t.get("pending_bits").clone());
+    }
+    if t.has("clock_lost") {
+        o.set("clock_lost", t.get("clock_lost").clone());
     }
     o
 }
@@ -579,19 +637,63 @@ fn i2c_fmt(t: &J) -> String {
         s += &format!(" {}", py_str(t.get("end")));
     }
     if !t.get("complete").truthy() {
-        s += &format!(" incomplete (pending bits {})", pend());
+        if t.has("clock_lost") {
+            s += &format!(
+                " not read from a clock lost in the SCL wait at tick {} (bits {})",
+                t.get("clock_lost").repr(),
+                pend()
+            );
+        } else {
+            s += &format!(" incomplete (pending bits {})", pend());
+        }
     }
     s
 }
 
-fn i2c_diff(want: &[J], got: &[J]) -> String {
-    for (i, (w, g)) in want.iter().zip(got).enumerate() {
+/// What of an expected transaction a reading cut at a clock lost in an SCL wait can be compared with
+/// (`verify._i2c_read_part`): the words before the cut, how it began and ended.
+fn i2c_read_part(w: &J, g: &J) -> J {
+    let mut out = J::dict();
+    if g.get("addr").is_null() {
+        for k in ["start", "end"] {
+            if w.has(k) {
+                out.set(k, w.get(k).clone());
+            }
+        }
+        return out;
+    }
+    let n = g.get("bytes").list().len();
+    for (k, v) in w.items() {
+        match k.as_str() {
+            "complete" | "pending_bits" => {}
+            "bytes" | "acks" => out.set(k, J::List(v.list().iter().take(n).cloned().collect())),
+            _ => out.set(k, v.clone()),
+        }
+    }
+    out
+}
+
+/// The first transaction that differs ("" if equal), and those neither equal nor different (`verify._i2c_diff`).
+fn i2c_diff(want: &[J], got: &[J]) -> (String, Vec<String>) {
+    let mut open = vec![];
+    let differs = |w: &J, g: &J| {
         let mut sub = J::dict();
         for (k, _) in w.items() {
             sub.set(k, g.get(k).clone());
         }
-        if !py_eq(w, &sub) {
-            return format!("#{i} want {}, got {}", i2c_fmt(w), i2c_fmt(g));
+        !py_eq(w, &sub)
+    };
+    for (i, (w, g)) in want.iter().zip(got).enumerate() {
+        let line = || format!("#{i} want {}, got {}", i2c_fmt(w), i2c_fmt(g));
+        if g.has("clock_lost") && (!w.has("complete") || w.get("complete").truthy()) {
+            if differs(&i2c_read_part(w, g), g) {
+                return (line(), open);
+            }
+            open.push(line());
+            continue;
+        }
+        if differs(w, g) {
+            return (line(), open);
         }
     }
     if want.len() != got.len() {
@@ -601,9 +703,12 @@ fn i2c_diff(want: &[J], got: &[J]) -> String {
         } else {
             format!("extra {}", i2c_fmt(&got[want.len()]))
         };
-        return format!("{} expected, {} decoded; #{k} {extra}", want.len(), got.len());
+        return (
+            format!("{} expected, {} decoded; #{k} {extra}", want.len(), got.len()),
+            open,
+        );
     }
-    String::new()
+    (String::new(), open)
 }
 
 /// SCL stretched, SDA changing in the same sample as an SCL edge, spikes, slow edges (`verify._i2c_notices`).
@@ -808,13 +913,21 @@ fn check_i2c(cap: &Cap, x: &J) -> Out {
     let items = i2c_transactions(&view, &scl.name, &sda.name);
     let txs: Vec<J> = items.iter().map(i2c_tx).collect();
     let mut got = jd! {"transactions" => txs.clone()};
-    let (mut ok, mut why) = (true, vec![]);
+    let (mut ok, mut why) = (Some(true), vec![]);
     if !x.get("transactions").is_null() {
         let want: Vec<J> = x.get("transactions").list().iter().map(i2c_want).collect();
-        let diff = i2c_diff(&want, &txs);
+        let (diff, open) = i2c_diff(&want, &txs);
         if !diff.is_empty() {
-            ok = false;
+            ok = Some(false);
             why.push(format!("transactions differ: {diff}"));
+        } else if !open.is_empty() {
+            // a clock lost in a wait: neither a match nor a difference
+            ok = None;
+            why.push(format!(
+                "bytes not read where a clock was lost in an SCL wait (a controller that gave up waiting for a \
+                 target stretching the clock): {}",
+                open.join("; ")
+            ));
         }
     }
     let hz = read.ch(&scl.name).and_then(|c| burst_hz(c, cap.rate));
@@ -828,6 +941,12 @@ fn check_i2c(cap: &Cap, x: &J) -> Out {
     for t in &items {
         for at in t.get("restored").list() {
             notices.push(jd! {"kind" => "clock_restored", "tick" => at});
+        }
+    }
+    for t in &txs {
+        if t.has("clock_lost") {
+            notices.push(jd! {"kind" => "clock_lost", "tick" => t.get("clock_lost").clone(),
+            "bits" => t.get("pending_bits").list().len()});
         }
     }
     notices.sort_by_key(|m| m.get("tick").i().unwrap_or(0));
@@ -858,7 +977,7 @@ fn check_i2c(cap: &Cap, x: &J) -> Out {
     if let Some(f) = x.get("freq_hz").f()
         && hz.is_none_or(|h| (h / f - 1.0).abs() > x.get("freq_rel").f().unwrap_or(0.1))
     {
-        ok = false;
+        ok = Some(false);
         why.push(format!(
             "SCL {} Hz vs {}",
             match hz {
@@ -873,11 +992,11 @@ fn check_i2c(cap: &Cap, x: &J) -> Out {
         let (es, ed) = (scl.level_at(cap.n - 1), sda.level_at(cap.n - 1));
         got.set("end_levels", jd! {"scl" => es, "sda" => ed});
         if (es, ed) != (1, 1) {
-            ok = false;
+            ok = Some(false);
             why.push(format!("bus not released at the end (SCL={es}, SDA={ed})"));
         }
     }
-    out(V::of(Some(ok)), got, why.join("; "))
+    out(V::of(ok), got, why.join("; "))
 }
 
 // ---------------- SPI ----------------

@@ -42,6 +42,7 @@ struct Frame {
     s: i64,
     e: i64,
     bits: Vec<u8>,
+    rises: Vec<i64>, // SCL's rise of each bit
     start_cond: &'static str,
     end_cond: Option<&'static str>,
 }
@@ -89,6 +90,7 @@ fn frames(scl: &Channel, sda: &Channel) -> Framed {
             if let Some(f) = cur.as_mut() {
                 if lc == 1 {
                     f.bits.push(ld); // a bit at each rise
+                    f.rises.push(t);
                     lows += 1;
                     if sda_in_low <= 2 {
                         quiet += 1;
@@ -121,6 +123,7 @@ fn frames(scl: &Channel, sda: &Channel) -> Framed {
                         s: t,
                         e: t,
                         bits: vec![],
+                        rises: vec![],
                         start_cond: if sr { "Sr" } else { "S" },
                         end_cond: None,
                     });
@@ -174,6 +177,33 @@ fn rests_high(scl: &Channel, n: i64) -> bool {
         .any(|(&l, &v)| v == 1 && l as f64 >= REST * med)
 }
 
+pub const SCL_WAIT: f64 = 4.0; // an SCL low longer than this many times the frame's median low is a wait
+
+/// A frame a clock short (9n bits, one short of the 9n + 1 its STOP or repeated START makes) with an SCL wait in it
+/// (Python's `typed._lost_in_wait`): a controller that gave up waiting for a target stretching the clock clocks on
+/// while SCL is held, that clock not on the lines and where in the wait not seen, so from the word the first wait
+/// falls in (or before) the two count the bits apart. -> (that word, the wait's start), or None.
+fn lost_in_wait(scl: &Channel, f: &Frame) -> Option<(usize, i64)> {
+    if f.end_cond.is_none() || f.bits.is_empty() || !f.bits.len().is_multiple_of(9) || f.rises.len() < 2 {
+        return None;
+    }
+    let (r0, r1) = (f.rises[0], f.rises[f.rises.len() - 1]);
+    let e = scl.edges;
+    let (a, b) = (e.partition_point(|&x| x <= r0), e.partition_point(|&x| x < r1));
+    // SCL's falls strictly inside the frame's rises, each with the rise after it
+    let lows: Vec<(i64, i64)> = (a..b)
+        .filter(|&q| scl.initial ^ (((q + 1) & 1) as u8) == 0)
+        .map(|q| (e[q], e[(q + 1).min(e.len() - 1)] - e[q]))
+        .collect();
+    if lows.is_empty() {
+        return None;
+    }
+    let med = median(&lows.iter().map(|&(_, n)| n as f64).collect::<Vec<_>>());
+    let &(s, _) = lows.iter().find(|&&(_, n)| n as f64 > SCL_WAIT * med)?;
+    // (the sampling rises before it: its word is the next after the last whole one)
+    Some((f.rises.partition_point(|&x| x < s) / 9, s))
+}
+
 fn fits(n: usize) -> bool {
     n >= 9 && (n.is_multiple_of(9) || n % 9 == 1)
 }
@@ -219,7 +249,9 @@ pub fn read(view: &View, scl: &Channel, sda: &Channel) -> Option<Candidate> {
     let mut txs = vec![];
     let mut values = vec![];
     for f in &frs {
-        let words = f.bits.len() / 9;
+        let lost = lost_in_wait(scl, f);
+        // (cut at a clock lost in a wait: the words from there not read)
+        let words = lost.map_or(f.bits.len() / 9, |(k, _)| k);
         let bytes: Vec<u8> = (0..words)
             .map(|w| f.bits[w * 9..w * 9 + 8].iter().fold(0u8, |a, &b| (a << 1) | b))
             .collect();
@@ -244,10 +276,14 @@ pub fn read(view: &View, scl: &Channel, sda: &Channel) -> Option<Candidate> {
         }
         t.insert("start_cond".into(), json!(f.start_cond));
         t.insert("end_cond".into(), f.end_cond.map_or(Value::Null, |c| json!(c)));
-        if f.end_cond.is_none() {
-            // (a transfer the capture ends in: its bits after the last whole word, as they came)
+        if f.end_cond.is_none() || lost.is_some() {
+            // (a transfer the capture ends in: its bits after the last whole word, as they came; or those from the
+            // word a clock was lost in a wait before)
             t.insert("complete".into(), json!(false));
             t.insert("pending_bits".into(), json!(f.bits[words * 9..]));
+        }
+        if let Some((_, s)) = lost {
+            t.insert("clock_lost".into(), json!(s));
         }
         txs.push(Value::Object(t));
     }
