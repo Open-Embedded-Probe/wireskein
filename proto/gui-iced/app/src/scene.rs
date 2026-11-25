@@ -51,7 +51,8 @@ impl Out {
         let [cx0, cy0, cx1, cy1] = self.clip;
         let (x0, x1, y0, y1) = (x0.max(cx0), x1.min(cx1), y0.max(cy0), y1.min(cy1));
         if x1 > x0 && y1 > y0 {
-            self.inst.extend_from_slice(&[x0, y0, x1, y1, color as f32, alpha, 0.0, 0.0]);
+            self.inst
+                .extend_from_slice(&[x0, y0, x1, y1, color as f32, alpha, 0.0, 0.0]);
         }
     }
     #[allow(clippy::too_many_arguments)]
@@ -71,7 +72,8 @@ impl Out {
         if b.0 > cx1 {
             b = at(a, b, cx1);
         }
-        self.inst.extend_from_slice(&[a.0, a.1, b.0, b.1, color as f32, alpha, 1.0, w]);
+        self.inst
+            .extend_from_slice(&[a.0, a.1, b.0, b.1, color as f32, alpha, 1.0, w]);
     }
     pub fn outline(&mut self, x0: f32, y0: f32, x1: f32, y1: f32, color: usize, w: f32) {
         self.rect(x0, y0, x1, y0 + w, color, 1.0);
@@ -82,7 +84,13 @@ impl Out {
     pub fn label(&mut self, x: f32, y: f32, color: usize, text: &str) {
         let a = self.text.len() as u32;
         self.text.push_str(text);
-        self.labels.push(Label { x, y, color, a, b: self.text.len() as u32 });
+        self.labels.push(Label {
+            x,
+            y,
+            color,
+            a,
+            b: self.text.len() as u32,
+        });
     }
     pub fn label_text(&self, l: &Label) -> &str {
         &self.text[l.a as usize..l.b as usize]
@@ -125,7 +133,17 @@ pub struct Hits<'a> {
 
 /// One frame of a view into `sc.out`. `lanes`: (lane, y, h, alternate shade).
 #[allow(clippy::too_many_arguments)]
-pub fn frame(sc: &mut SceneCache, cap: &Capture, an: Option<&Analysis>, hits: &Hits, lanes: &[(Lane, f32, f32, bool)], vp: &Viewport, g: &Geo, sel: Option<Sel>, grid: &[f32]) {
+pub fn frame(
+    sc: &mut SceneCache,
+    cap: &Capture,
+    an: Option<&Analysis>,
+    hits: &Hits,
+    lanes: &[(Lane, f32, f32, bool)],
+    vp: &Viewport,
+    g: &Geo,
+    sel: Option<Sel>,
+    grid: &[f32],
+) {
     sc.out.clear();
     let mut n_shapes = 0usize;
     if g.mm[2] > 0.0 {
@@ -161,7 +179,14 @@ pub fn frame(sc: &mut SceneCache, cap: &Capture, an: Option<&Analysis>, hits: &H
                         let (x0, x1) = match *s {
                             AnnShape::Box { x0, x1, .. } | AnnShape::Busy { x0, x1, .. } => (x0, x1),
                         };
-                        sc.out.rect(g.px + x0, y + 1.0, (g.px + x1).max(g.px + x0 + 1.0), y + h - 1.0, ERROR, 0.8);
+                        sc.out.rect(
+                            g.px + x0,
+                            y + 1.0,
+                            (g.px + x1).max(g.px + x0 + 1.0),
+                            y + h - 1.0,
+                            ERROR,
+                            0.8,
+                        );
                     }
                 }
             }
@@ -172,7 +197,16 @@ pub fn frame(sc: &mut SceneCache, cap: &Capture, an: Option<&Analysis>, hits: &H
 }
 
 #[allow(clippy::too_many_arguments)]
-fn digital_lane(sc: &mut SceneCache, cap: &Capture, i: usize, vp: &Viewport, px: f32, y: f32, h: f32, tiles_on: bool) -> usize {
+fn digital_lane(
+    sc: &mut SceneCache,
+    cap: &Capture,
+    i: usize,
+    vp: &Viewport,
+    px: f32,
+    y: f32,
+    h: f32,
+    tiles_on: bool,
+) -> usize {
     let n = cap.n_ticks;
     let (y_hi, y_lo) = (y + 5.0, y + h - 5.0);
     let line = &cap.lines[i];
@@ -217,7 +251,8 @@ fn analog_lane(sc: &mut SceneCache, cap: &Capture, i: usize, vp: &Viewport, px: 
     match a.read_view(vp) {
         AnalogView::Points(pts) => {
             for w in pts.windows(2) {
-                sc.out.seg(px + w[0].0, ymap(w[0].1), px + w[1].0, ymap(w[1].1), ANALOG, 1.0, 1.5);
+                sc.out
+                    .seg(px + w[0].0, ymap(w[0].1), px + w[1].0, ymap(w[1].1), ANALOG, 1.0, 1.5);
             }
             pts.len()
         }
@@ -226,7 +261,8 @@ fn analog_lane(sc: &mut SceneCache, cap: &Capture, i: usize, vp: &Viewport, px: 
             for (x, b) in bs.iter().enumerate() {
                 if let Some(b) = b {
                     let x = px + x as f32;
-                    sc.out.rect(x, ymap(b.max) - 0.5, x + 1.0, ymap(b.min) + 0.5, ANALOG, 0.45);
+                    sc.out
+                        .rect(x, ymap(b.max) - 0.5, x + 1.0, ymap(b.min) + 0.5, ANALOG, 0.45);
                     let p = (x + 0.5, ymap(b.mean));
                     if let Some(q) = prev {
                         sc.out.seg(q.0, q.1, p.0, p.1, ANALOG, 1.0, 1.0);
@@ -246,8 +282,21 @@ fn status_color(s: Status) -> usize {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn ann_lane(sc: &mut SceneCache, an: &Analysis, hits: &Hits, c: usize, l: usize, vp: &Viewport, g: &Geo, y: f32, h: f32, sel: Option<Sel>) -> usize {
-    let Some(layer) = an.claims.get(c).and_then(|cl| cl.layers.get(l)) else { return 0 };
+fn ann_lane(
+    sc: &mut SceneCache,
+    an: &Analysis,
+    hits: &Hits,
+    c: usize,
+    l: usize,
+    vp: &Viewport,
+    g: &Geo,
+    y: f32,
+    h: f32,
+    sel: Option<Sel>,
+) -> usize {
+    let Some(layer) = an.claims.get(c).and_then(|cl| cl.layers.get(l)) else {
+        return 0;
+    };
     let tr = &layer.track;
     tr.layout(vp, g.char_px, &mut sc.ann);
     let hl = hits.by_layer.get(&(c, l));
@@ -256,7 +305,13 @@ fn ann_lane(sc: &mut SceneCache, an: &Analysis, hits: &Hits, c: usize, l: usize,
     let sel_row = sel.filter(|s| s.claim == c && s.layer == l).map(|s| s.row as u32);
     for s in &sc.ann {
         match *s {
-            AnnShape::Box { x0, x1, idx, fit, status } => {
+            AnnShape::Box {
+                x0,
+                x1,
+                idx,
+                fit,
+                status,
+            } => {
                 let (a, b) = ((px + x0).max(px), (px + x1).min(right));
                 sc.out.rect(a, y0, b, y1, status_color(status), 1.0);
                 sc.out.rect(a, y0, a + 1.0, y1, TEXT, 0.35);
@@ -277,7 +332,8 @@ fn ann_lane(sc: &mut SceneCache, an: &Analysis, hits: &Hits, c: usize, l: usize,
             }
             AnnShape::Busy { x0, x1, n: k, status } => {
                 let (a, b) = ((px + x0).max(px), (px + x1).min(right));
-                sc.out.rect(a, y0 + 3.0, b.max(a + 1.0), y1 - 3.0, status_color(status), 0.85);
+                sc.out
+                    .rect(a, y0 + 3.0, b.max(a + 1.0), y1 - 3.0, status_color(status), 0.85);
                 if b - a > 40.0 {
                     sc.out.label((a + b) / 2.0, (y0 + y1) / 2.0, DIM, &format!("×{k}"));
                 }
@@ -313,7 +369,14 @@ fn minimap(sc: &mut SceneCache, cap: &Capture, an: Option<&Analysis>, hits: &Hit
     for (x, &c) in sc.minimap.iter().enumerate() {
         if c > 0 {
             let hh = (c as f32 / maxc).sqrt().clamp(0.08, 1.0) * (mh - 4.0);
-            sc.out.rect(mx + x as f32, my + mh - 2.0 - hh, mx + x as f32 + 1.0, my + mh - 2.0, LINE, 0.55);
+            sc.out.rect(
+                mx + x as f32,
+                my + mh - 2.0 - hh,
+                mx + x as f32 + 1.0,
+                my + mh - 2.0,
+                LINE,
+                0.55,
+            );
         }
     }
     if let Some(a) = an {
@@ -325,7 +388,14 @@ fn minimap(sc: &mut SceneCache, cap: &Capture, an: Option<&Analysis>, hits: &Hit
                     AnnShape::Busy { x0, x1, status, .. } | AnnShape::Box { x0, x1, status, .. } => (x0, x1, status),
                 };
                 if st >= Status::Warn {
-                    sc.out.rect(mx + x0, my + 1.0, mx + x1.max(x0 + 1.5), my + 7.0, status_color(st), 1.0);
+                    sc.out.rect(
+                        mx + x0,
+                        my + 1.0,
+                        mx + x1.max(x0 + 1.5),
+                        my + 7.0,
+                        status_color(st),
+                        1.0,
+                    );
                 }
             }
         }

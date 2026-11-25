@@ -4,7 +4,9 @@
 
 use crate::app::{App, ListView, Msg, Sel};
 use crate::wave::fmt_time;
-use iced::widget::{Column, button, checkbox, column, container, mouse_area, pick_list, responsive, row, rule, text, vertical_slider};
+use iced::widget::{
+    Column, button, checkbox, column, container, mouse_area, pick_list, responsive, row, rule, text, vertical_slider,
+};
 use iced::{Background, Color, Element, Font, Length, mouse};
 use serde_json::Value;
 use std::cell::Cell;
@@ -34,7 +36,11 @@ pub fn cell(v: &Value, col: &str) -> String {
         Some(Value::Null) => "–".into(),
         Some(x) => {
             let s = x.to_string();
-            if s.chars().count() > 40 { format!("{}…", s.chars().take(40).collect::<String>()) } else { s }
+            if s.chars().count() > 40 {
+                format!("{}…", s.chars().take(40).collect::<String>())
+            } else {
+                s
+            }
         }
     }
 }
@@ -80,7 +86,10 @@ pub fn vlist_vis<'a>(
         for i in top..(top + vis).min(total) {
             let selected = sel == Some(i);
             let bg = if selected {
-                Color { a: 0.35, ..pal.accent() }
+                Color {
+                    a: 0.35,
+                    ..pal.accent()
+                }
             } else if i % 2 == 1 {
                 pal.c[crate::theme::LANE_ALT]
             } else {
@@ -93,11 +102,13 @@ pub fn vlist_vis<'a>(
                     .height(ROW_H)
                     .width(Length::Fill)
                     .style(move |_, status| button::Style {
-                        background: Some(Background::Color(if matches!(status, button::Status::Hovered) && !selected {
-                            Color { a: 0.12, ..pal.text() }
-                        } else {
-                            bg
-                        })),
+                        background: Some(Background::Color(
+                            if matches!(status, button::Status::Hovered) && !selected {
+                                Color { a: 0.12, ..pal.text() }
+                            } else {
+                                bg
+                            },
+                        )),
                         text_color: pal.text(),
                         ..Default::default()
                     }),
@@ -113,11 +124,13 @@ pub fn vlist_vis<'a>(
         });
         let s3 = scroll.clone();
         let bar: Element<'a, Msg> = if max_top > 0 {
-            vertical_slider(0.0..=max_top as f64, (max_top - top) as f64, move |v: f64| s3(max_top - (v.round() as usize).min(max_top)))
-                .step(1.0)
-                .width(12)
-                .height(Length::Fill)
-                .into()
+            vertical_slider(0.0..=max_top as f64, (max_top - top) as f64, move |v: f64| {
+                s3(max_top - (v.round() as usize).min(max_top))
+            })
+            .step(1.0)
+            .width(12)
+            .height(Length::Fill)
+            .into()
         } else {
             iced::widget::space().width(12).into()
         };
@@ -130,33 +143,70 @@ pub fn list_view<'a>(app: &'a App, lv: &'a ListView) -> Element<'a, Msg> {
     let pal = app.pal;
     let id = lv.id;
     let Some(a) = &app.analysis else {
-        let msg = if app.analysis_slot.is_some() { "解析中…（終わると一覧が出ます）" } else { "解析の結果はまだありません" };
-        return container(text(msg).size(13).color(pal.dim())).center(Length::Fill).into();
+        let msg = if app.analysis_slot.is_some() {
+            "解析中…（終わると一覧が出ます）"
+        } else {
+            "解析の結果はまだありません"
+        };
+        return container(text(msg).size(13).color(pal.dim()))
+            .center(Length::Fill)
+            .into();
     };
     if a.claims.is_empty() {
-        return container(text(a.error.clone().unwrap_or("主張なし（読めたバスがない）".into())).size(13)).padding(10).into();
+        return container(text(a.error.clone().unwrap_or("主張なし（読めたバスがない）".into())).size(13))
+            .padding(10)
+            .into();
     }
     let ci = lv.claim.min(a.claims.len() - 1);
     let c = &a.claims[ci];
     let li = lv.layer.min(c.layers.len().saturating_sub(1));
-    let Some(layer) = c.layers.get(li) else { return text("層なし").into() };
-    let claims: Vec<String> = a.claims.iter().enumerate().map(|(i, c)| format!("#{i} {} ({})", c.protocol, c.verdict)).collect();
+    let Some(layer) = c.layers.get(li) else {
+        return text("層なし").into();
+    };
+    let claims: Vec<String> = a
+        .claims
+        .iter()
+        .enumerate()
+        .map(|(i, c)| format!("#{i} {} ({})", c.protocol, c.verdict))
+        .collect();
     let layers: Vec<String> = c.layers.iter().map(|l| format!("{} ({})", l.name, l.len())).collect();
     let cur_c = claims[ci].clone();
     let cur_l = layers[li].clone();
     let claims2 = claims.clone();
     let layers2 = layers.clone();
-    let mut cols_row = row![text("列:").size(11).color(pal.dim())].spacing(8).align_y(iced::Alignment::Center);
+    let mut cols_row = row![text("列:").size(11).color(pal.dim())]
+        .spacing(8)
+        .align_y(iced::Alignment::Center);
     for col in &layer.columns {
         let on = !lv.hidden.contains(col);
         let name = col.clone();
-        cols_row = cols_row.push(checkbox(on).label(col.clone()).size(12).text_size(11).on_toggle(move |v| Msg::ListCol(id, name.clone(), v)));
+        cols_row = cols_row.push(
+            checkbox(on)
+                .label(col.clone())
+                .size(12)
+                .text_size(11)
+                .on_toggle(move |v| Msg::ListCol(id, name.clone(), v)),
+        );
     }
     let head = column![
         row![
-            pick_list(claims, Some(cur_c), move |s: String| Msg::ListClaim(id, claims2.iter().position(|x| *x == s).unwrap_or(0))).text_size(12).padding([3, 8]),
-            pick_list(layers, Some(cur_l), move |s: String| Msg::ListLayer(id, layers2.iter().position(|x| *x == s).unwrap_or(0))).text_size(12).padding([3, 8]),
-            checkbox(lv.follow).label("波形と連動").size(14).text_size(12).on_toggle(move |v| Msg::ListFollow(id, v)),
+            pick_list(claims, Some(cur_c), move |s: String| Msg::ListClaim(
+                id,
+                claims2.iter().position(|x| *x == s).unwrap_or(0)
+            ))
+            .text_size(12)
+            .padding([3, 8]),
+            pick_list(layers, Some(cur_l), move |s: String| Msg::ListLayer(
+                id,
+                layers2.iter().position(|x| *x == s).unwrap_or(0)
+            ))
+            .text_size(12)
+            .padding([3, 8]),
+            checkbox(lv.follow)
+                .label("波形と連動")
+                .size(14)
+                .text_size(12)
+                .on_toggle(move |v| Msg::ListFollow(id, v)),
             iced::widget::space::horizontal(),
             text(format!("{} 行", layer.len())).size(11).color(pal.dim()),
         ]
@@ -184,7 +234,13 @@ pub fn list_view<'a>(app: &'a App, lv: &'a ListView) -> Element<'a, Msg> {
             let it = layer.track.item(i);
             let v = layer.value(i);
             let hit = hits.is_some_and(|h| h.binary_search(&i).is_ok());
-            let color = if hit { pal.accent() } else if it.status >= Status::Note && it.status != Status::Unread { pal.status_text(it.status) } else { pal.text() };
+            let color = if hit {
+                pal.accent()
+            } else if it.status >= Status::Note && it.status != Status::Unread {
+                pal.status_text(it.status)
+            } else {
+                pal.text()
+            };
             let mark = match it.status {
                 Status::Ok => "",
                 Status::Note => "●",
@@ -193,17 +249,41 @@ pub fn list_view<'a>(app: &'a App, lv: &'a ListView) -> Element<'a, Msg> {
                 Status::Unread => "?",
             };
             let mut r = row![
-                text(fmt_time(it.s as f64 / tick_hz)).size(12).font(Font::MONOSPACE).width(120).color(pal.dim()),
+                text(fmt_time(it.s as f64 / tick_hz))
+                    .size(12)
+                    .font(Font::MONOSPACE)
+                    .width(120)
+                    .color(pal.dim()),
                 text(mark).size(11).width(16).color(pal.status_text(it.status)),
             ]
             .spacing(6);
             for c in &shown {
-                r = r.push(text(cell(v.as_ref(), c)).size(12).font(Font::MONOSPACE).width(110).color(color));
+                r = r.push(
+                    text(cell(v.as_ref(), c))
+                        .size(12)
+                        .font(Font::MONOSPACE)
+                        .width(110)
+                        .color(color),
+                );
             }
-            r = r.push(text(layer.track.text(i).to_string()).size(12).color(color));
+            r = r.push(
+                text(layer.track.text(i).replace('\n', " "))
+                    .size(12)
+                    .color(color)
+                    .wrapping(iced::widget::text::Wrapping::None),
+            );
             r.into()
         },
-        move |i| Msg::Select(Sel { claim: ci, layer: li, row: i }, id),
+        move |i| {
+            Msg::Select(
+                Sel {
+                    claim: ci,
+                    layer: li,
+                    row: i,
+                },
+                id,
+            )
+        },
         move |t| Msg::ListScroll(id, t),
         Some(&lv.vis),
     );

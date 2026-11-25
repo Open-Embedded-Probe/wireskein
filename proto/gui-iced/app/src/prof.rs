@@ -151,7 +151,11 @@ pub fn all_between(a: &Totals, b: &Totals) -> Vec<(String, f64, u64)> {
     let mut out: Vec<(String, f64, u64)> = (0..b.secs.len())
         .map(|i| {
             let x = a.secs.get(i).copied().unwrap_or((0.0, 0));
-            (n.names.get(i).cloned().unwrap_or_default(), b.secs[i].0 - x.0, b.secs[i].1 - x.1)
+            (
+                n.names.get(i).cloned().unwrap_or_default(),
+                b.secs[i].0 - x.0,
+                b.secs[i].1 - x.1,
+            )
         })
         .filter(|r| r.2 > 0)
         .collect();

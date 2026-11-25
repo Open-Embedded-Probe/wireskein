@@ -18,11 +18,18 @@ static SPANS: Mutex<Vec<(SystemTime, &'static str, f64)>> = Mutex::new(Vec::new(
 
 /// The beacon server on a free port of this machine (before iced starts: its client reads the address then).
 pub fn start_server() {
-    let port = std::net::TcpListener::bind("127.0.0.1:0").ok().and_then(|l| l.local_addr().ok()).map(|a| a.port()).unwrap_or(9167);
+    let port = std::net::TcpListener::bind("127.0.0.1:0")
+        .ok()
+        .and_then(|l| l.local_addr().ok())
+        .map(|a| a.port())
+        .unwrap_or(9167);
     // SAFETY: set once at the start, before any other thread runs
     unsafe { std::env::set_var("ICED_BEACON_SERVER_ADDRESS", format!("127.0.0.1:{port}")) };
     std::thread::spawn(|| {
-        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
         rt.block_on(async {
             use iced::futures::StreamExt;
             use iced_beacon::span::Span;
@@ -82,11 +89,29 @@ fn spans_between(a: SystemTime, b: SystemTime) -> Vec<(&'static str, f64, usize)
 }
 
 const STAGES: [&str; 15] = [
-    "update", "view", "layout", "interact", "draw", "present", "prep quad", "prep tri", "prep shader", "prep text", "rend quad", "rend tri",
-    "rend shader", "rend text", "rend image",
+    "update",
+    "view",
+    "layout",
+    "interact",
+    "draw",
+    "present",
+    "prep quad",
+    "prep tri",
+    "prep shader",
+    "prep text",
+    "rend quad",
+    "rend tri",
+    "rend shader",
+    "rend text",
+    "rend image",
 ];
 /// wgpu's scopes (prof.rs names)
-const WGPU: [(&str, &str); 4] = [("acquire", "get_current_texture"), ("submit", "Queue::submit"), ("wgpu present", "present"), ("maintain", "Device::maintain")];
+const WGPU: [(&str, &str); 4] = [
+    ("acquire", "get_current_texture"),
+    ("submit", "Queue::submit"),
+    ("wgpu present", "present"),
+    ("maintain", "Device::maintain"),
+];
 
 #[derive(Clone, Copy)]
 pub enum Phase {
@@ -139,7 +164,13 @@ impl Bench {
 
 fn mark(app: &App) -> Mark {
     let p = app.perf.borrow();
-    Mark { wall: Instant::now(), sys: SystemTime::now(), prof: crate::prof::snapshot(), acc: p.acc, counts: p.counts }
+    Mark {
+        wall: Instant::now(),
+        sys: SystemTime::now(),
+        prof: crate::prof::snapshot(),
+        acc: p.acc,
+        counts: p.counts,
+    }
 }
 
 fn header() -> Vec<String> {
@@ -203,9 +234,12 @@ pub fn step(app: &App, b: &mut Bench, dt_ms: f32, width: f32, gpu: &str) -> (Opt
     let Some(cap) = &app.cap else { return (None, false) };
     let n = cap.n_ticks;
     let perf_first = app.perf.borrow().first_paint;
-    let ready = cap.lod_s.lock().unwrap().is_some() && app.analysis_slot.is_none() && perf_first.is_some() && width > 50.0;
+    let ready =
+        cap.lod_s.lock().unwrap().is_some() && app.analysis_slot.is_none() && perf_first.is_some() && width > 50.0;
     const WARM: u32 = 6;
-    let enough = |f: u32, b: &Bench| f >= 95 || f >= WARM + 24 && b.mark.as_ref().is_some_and(|m| m.wall.elapsed().as_secs_f32() > 3.0);
+    let enough = |f: u32, b: &Bench| {
+        f >= 95 || f >= WARM + 24 && b.mark.as_ref().is_some_and(|m| m.wall.elapsed().as_secs_f32() > 3.0)
+    };
     match b.phase {
         Phase::Wait => {
             if ready || b.t0.elapsed().as_secs() > 600 {
@@ -220,10 +254,26 @@ pub fn step(app: &App, b: &mut Bench, dt_ms: f32, width: f32, gpu: &str) -> (Opt
                     cap.lod_s.lock().unwrap().unwrap_or(f64::NAN),
                     app.analysis.as_ref().map(|a| format!("{:.2} s", a.seconds)).unwrap_or("-".into())
                 ));
-                b.lines.push(format!("# window {:.0}x{:.0} (logical px), scale {:.2}, waveform {:.0} px wide", app.win_size.width, app.win_size.height, app.scale, width));
+                let wo = app.perf.borrow().win_opened;
+                b.lines.push(format!(
+                    "# the main window opened {} after the capture (iced's window, wgpu's device and surface); its first paint {} after that",
+                    wo.map(|s| format!("{:.0} ms", s * 1e3)).unwrap_or("-".into()),
+                    match (wo, perf_first) {
+                        (Some(a), Some(b)) => format!("{:.0} ms", (b - a) * 1e3),
+                        _ => "-".into(),
+                    }
+                ));
+                b.lines.push(format!(
+                    "# window {:.0}x{:.0} (logical px), scale {:.2}, waveform {:.0} px wide",
+                    app.win_size.width, app.win_size.height, app.scale, width
+                ));
                 b.lines.push("# gpu: (at the end)".into());
-                b.lines.push(format!("# present: {} (ICED_PRESENT_MODE; vsync off unless --vsync)", std::env::var("ICED_PRESENT_MODE").unwrap_or("no_vsync".into())));
-                b.lines.push("| ticks/px | fps (median) | frame ms p50 / p95 | waveform CPU ms (scene) |".into());
+                b.lines.push(format!(
+                    "# present: {} (ICED_PRESENT_MODE; vsync off unless --vsync)",
+                    std::env::var("ICED_PRESENT_MODE").unwrap_or("no_vsync".into())
+                ));
+                b.lines
+                    .push("| ticks/px | fps (median) | frame ms p50 / p95 | waveform CPU ms (scene) |".into());
                 b.lines.push("|---|---|---|---|".into());
                 b.whole = Some((SystemTime::now(), crate::prof::snapshot()));
                 b.parts = header();
@@ -249,12 +299,24 @@ pub fn step(app: &App, b: &mut Bench, dt_ms: f32, width: f32, gpu: &str) -> (Opt
                 let p = |q: f32| s[((s.len() - 1) as f32 * q) as usize];
                 let wv = b.wave.iter().sum::<f32>() / b.wave.len().max(1) as f32;
                 b.wave.clear();
-                b.lines.push(format!("| {:.3} | {:.0} | {:.1} / {:.1} | {:.2} |", vp.tpp, 1000.0 / p(0.5), p(0.5), p(0.95), wv));
+                b.lines.push(format!(
+                    "| {:.3} | {:.0} | {:.1} / {:.1} | {:.2} |",
+                    vp.tpp,
+                    1000.0 / p(0.5),
+                    p(0.5),
+                    p(0.95),
+                    wv
+                ));
                 if let Some(m) = b.mark.take() {
                     let dt = s.iter().sum::<f32>() as f64 / s.len().max(1) as f64;
-                    b.parts.push(row(&format!("{:.3} t/px", vp.tpp), s.len(), dt, &m, &mark(app)));
+                    b.parts
+                        .push(row(&format!("{:.3} t/px", vp.tpp), s.len(), dt, &m, &mark(app)));
                 }
-                b.phase = if zi + 1 < b.zooms.len() && b.zooms[zi + 1] <= n as f64 * 20.0 / width as f64 { Phase::Zoom(zi + 1, 0) } else { Phase::Sweep(0) };
+                b.phase = if zi + 1 < b.zooms.len() && b.zooms[zi + 1] <= n as f64 * 20.0 / width as f64 {
+                    Phase::Zoom(zi + 1, 0)
+                } else {
+                    Phase::Sweep(0)
+                };
             } else {
                 b.phase = Phase::Zoom(zi, f + 1);
             }
@@ -274,14 +336,24 @@ pub fn step(app: &App, b: &mut Bench, dt_ms: f32, width: f32, gpu: &str) -> (Opt
                 let mut s = std::mem::take(&mut b.samples);
                 s.sort_by(|a, b| a.partial_cmp(b).unwrap());
                 let p = |q: f32| s[((s.len() - 1) as f32 * q) as usize];
-                b.lines.push(format!("zoom sweep (6 %/frame, {} frames): frame ms p50 {:.1}, p95 {:.1}, max {:.1}", s.len(), p(0.5), p(0.95), s[s.len() - 1]));
+                b.lines.push(format!(
+                    "zoom sweep (6 %/frame, {} frames): frame ms p50 {:.1}, p95 {:.1}, max {:.1}",
+                    s.len(),
+                    p(0.5),
+                    p(0.95),
+                    s[s.len() - 1]
+                ));
                 // the spans' last messages arrive a little after the frames
                 std::thread::sleep(Duration::from_millis(300));
                 if let Some(m) = b.mark.take() {
                     let dt = s.iter().sum::<f32>() as f64 / s.len().max(1) as f64;
                     b.parts.push(row("sweep", s.len(), dt, &m, &mark(app)));
                 }
-                b.lines.push(format!("memory: model {:.0} MB, rss {:.0} MB", cap.mem_bytes() as f64 / 1e6, rss_mb().unwrap_or(f64::NAN)));
+                b.lines.push(format!(
+                    "memory: model {:.0} MB, rss {:.0} MB",
+                    cap.mem_bytes() as f64 / 1e6,
+                    rss_mb().unwrap_or(f64::NAN)
+                ));
                 b.lines.push(String::new());
                 b.lines.push(
                     "## the frame's parts (ms a frame, mean; iced's stages from its debug spans, wgpu's scopes, the app's own; gap = dt - (update + view + layout + interact + draw + present))"
@@ -297,12 +369,20 @@ pub fn step(app: &App, b: &mut Bench, dt_ms: f32, width: f32, gpu: &str) -> (Opt
                         b.lines.push(format!("{:9.1} ms {:7}  {k}", s * 1e3, c));
                     }
                     b.lines.push(String::new());
-                    b.lines.push("## every profiling span over the run (ms in all, calls; inclusive, the main thread)".into());
-                    for (name, secs, calls) in crate::prof::all_between(w0, &crate::prof::snapshot()).into_iter().take(40) {
+                    b.lines.push(
+                        "## every profiling span over the run (ms in all, calls; inclusive, the main thread)".into(),
+                    );
+                    for (name, secs, calls) in crate::prof::all_between(w0, &crate::prof::snapshot())
+                        .into_iter()
+                        .take(40)
+                    {
                         b.lines.push(format!("{:9.1} ms {:7}  {name}", secs * 1e3, calls));
                     }
                 }
-                b.lines.push(format!("bench: {:.1} s from the start", app.started.elapsed().as_secs_f64()));
+                b.lines.push(format!(
+                    "bench: {:.1} s from the start",
+                    app.started.elapsed().as_secs_f64()
+                ));
                 for l in b.lines.iter_mut() {
                     if l == "# gpu: (at the end)" {
                         *l = format!("# gpu: {gpu}");

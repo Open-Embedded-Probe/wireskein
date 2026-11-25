@@ -21,7 +21,10 @@ use web_time::Instant;
 pub fn rss_mb() -> Option<f64> {
     #[cfg(target_os = "linux")]
     {
-        std::fs::read_to_string("/proc/self/statm").ok().and_then(|s| s.split_whitespace().nth(1).and_then(|x| x.parse::<f64>().ok())).map(|p| p * 4096.0 / 1e6)
+        std::fs::read_to_string("/proc/self/statm")
+            .ok()
+            .and_then(|s| s.split_whitespace().nth(1).and_then(|x| x.parse::<f64>().ok()))
+            .map(|p| p * 4096.0 / 1e6)
     }
     #[cfg(not(target_os = "linux"))]
     {
@@ -87,7 +90,12 @@ impl Measure {
         if let Some(r) = self.next2 {
             let per = (r - p) as f64 / hz;
             let duty = if self.level == 1 { w / per } else { 1.0 - w / per };
-            s += &format!("\n周期 {} · {} · デューティ {:.1}%", fmt_time(per), fmt_freq(1.0 / per), duty * 100.0);
+            s += &format!(
+                "\n周期 {} · {} · デューティ {:.1}%",
+                fmt_time(per),
+                fmt_freq(1.0 / per),
+                duty * 100.0
+            );
         }
         s
     }
@@ -111,6 +119,8 @@ pub struct Perf {
     pub instances: usize,
     pub labels: usize,
     pub first_paint: Option<f64>,
+    /// the main window opened (s after the capture was opened: iced's window, wgpu's device and surface)
+    pub win_opened: Option<f64>,
     pub acc: [f64; P_N],
     /// instances, labels, shapes, waves drawn (summed, for the bench)
     pub counts: (u64, u64, u64, u64),
@@ -286,7 +296,11 @@ impl App {
             tiles_on: true,
             continuous: args.bench.is_some(),
             panels: BTreeMap::new(),
-            panes: pane_grid::State::new(Pane { tabs: vec![], active: 0 }).0,
+            panes: pane_grid::State::new(Pane {
+                tabs: vec![],
+                active: 0,
+            })
+            .0,
             detached: HashMap::new(),
             main_win,
             layouts: dock::load_saved(),
@@ -306,7 +320,11 @@ impl App {
             zoom_done: false,
             args,
         };
-        let conf = app.layouts.get(&app.layout_name).cloned().unwrap_or_else(|| dock::preset(&app.layout_name));
+        let conf = app
+            .layouts
+            .get(&app.layout_name)
+            .cloned()
+            .unwrap_or_else(|| dock::preset(&app.layout_name));
         dock::apply(&mut app, &conf);
         app.open();
         if let Some(q) = app.args.search.clone() {
@@ -317,9 +335,20 @@ impl App {
             iced::system::information().map(|i| Msg::Gpu(format!("{} ({})", i.graphics_adapter, i.graphics_backend))),
         ];
         if app.args.detach_list {
-            let found = app.panes.iter().find(|(_, p)| p.tabs.iter().any(|&t| app.kind_of(t) == Kind::List)).map(|(a, _)| *a);
+            let found = app
+                .panes
+                .iter()
+                .find(|(_, p)| p.tabs.iter().any(|&t| app.kind_of(t) == Kind::List))
+                .map(|(a, _)| *a);
             if let Some(pane) = found {
-                let k = app.panes.get(pane).unwrap().tabs.iter().position(|&t| app_kind(&app.panels, t) == Kind::List).unwrap_or(0);
+                let k = app
+                    .panes
+                    .get(pane)
+                    .unwrap()
+                    .tabs
+                    .iter()
+                    .position(|&t| app_kind(&app.panels, t) == Kind::List)
+                    .unwrap_or(0);
                 app.panes.get_mut(pane).unwrap().active = k;
                 tasks.push(app.detach(pane));
             }
@@ -364,13 +393,24 @@ impl App {
                     "analysis: {:.2} s, {} claims, {} rows",
                     a.seconds,
                     a.claims.len(),
-                    a.claims.iter().flat_map(|c| c.layers.iter()).map(|l| l.len()).sum::<usize>()
+                    a.claims
+                        .iter()
+                        .flat_map(|c| c.layers.iter())
+                        .map(|l| l.len())
+                        .sum::<usize>()
                 );
                 self.analysis = Some(a);
                 self.analysis_slot = None;
                 crate::panels::run_search(self);
                 if let Some(r) = self.args.select.take() {
-                    self.select(Sel { claim: 0, layer: 0, row: r }, 999_999);
+                    self.select(
+                        Sel {
+                            claim: 0,
+                            layer: 0,
+                            row: r,
+                        },
+                        999_999,
+                    );
                 }
             }
         }
@@ -382,8 +422,23 @@ impl App {
         let id = self.next_id;
         self.next_id += 1;
         let p = match k {
-            Kind::Wave => Panel::Wave(WaveView { id, vp: None, vel: 0.0, scroll_y: 0.0, follow: true, cache: RefCell::new(SceneCache::default()) }),
-            Kind::List => Panel::List(ListView { id, claim: 0, layer: 0, hidden: vec![], follow: true, top: 0, vis: Cell::new(20) }),
+            Kind::Wave => Panel::Wave(WaveView {
+                id,
+                vp: None,
+                vel: 0.0,
+                scroll_y: 0.0,
+                follow: true,
+                cache: RefCell::new(SceneCache::default()),
+            }),
+            Kind::List => Panel::List(ListView {
+                id,
+                claim: 0,
+                layer: 0,
+                hidden: vec![],
+                follow: true,
+                top: 0,
+                vis: Cell::new(20),
+            }),
             k => Panel::Other(k),
         };
         if k == Kind::Wave && self.focus_wave == 0 {
@@ -406,7 +461,9 @@ impl App {
         self.kind_of(id).name()
     }
     fn waves(&self) -> impl Iterator<Item = &WaveView> {
-        self.panels.values().filter_map(|p| if let Panel::Wave(w) = p { Some(w) } else { None })
+        self.panels
+            .values()
+            .filter_map(|p| if let Panel::Wave(w) = p { Some(w) } else { None })
     }
     fn wave_mut(&mut self, id: u32) -> Option<&mut WaveView> {
         match self.panels.get_mut(&id) {
@@ -422,7 +479,12 @@ impl App {
     }
     fn first_wave_id(&self) -> Option<u32> {
         // the first in the grid's order (the bench drives it)
-        let mut ids: Vec<u32> = self.panes.iter().flat_map(|(_, p)| p.tabs.iter().copied()).filter(|&t| self.kind_of(t) == Kind::Wave).collect();
+        let mut ids: Vec<u32> = self
+            .panes
+            .iter()
+            .flat_map(|(_, p)| p.tabs.iter().copied())
+            .filter(|&t| self.kind_of(t) == Kind::Wave)
+            .collect();
         ids.sort();
         ids.first().copied().or_else(|| self.waves().next().map(|w| w.id))
     }
@@ -448,17 +510,30 @@ impl App {
     fn wave_panel<'a>(&'a self, w: &'a WaveView) -> Element<'a, Msg> {
         let pal = self.pal;
         let id = w.id;
-        let b = |s: &'static str, m: Msg| button(text(s).size(12)).padding([2, 8]).on_press(m).style(move |_, st| flat(pal, st));
+        let b = |s: &'static str, m: Msg| {
+            button(text(s).size(12))
+                .padding([2, 8])
+                .on_press(m)
+                .style(move |_, st| flat(pal, st))
+        };
         let bar = row![
             b("全体 F", Msg::WaveFit(id)),
             b("−", Msg::WaveZoom(id, 0.5)),
             b("+", Msg::WaveZoom(id, 2.0)),
             b("◀ 前の誤り", Msg::NextBad(false)),
             b("次の誤り N ▶", Msg::NextBad(true)),
-            checkbox(w.follow).label("一覧と連動").size(14).text_size(12).on_toggle(move |v| Msg::WaveFollow(id, v)),
+            checkbox(w.follow)
+                .label("一覧と連動")
+                .size(14)
+                .text_size(12)
+                .on_toggle(move |v| Msg::WaveFollow(id, v)),
             iced::widget::space::horizontal(),
             text(match (&self.cap, w.vp) {
-                (Some(c), Some(v)) => format!("{} / px · 見ている幅 {}", fmt_time(v.tpp / c.tick_hz), fmt_time(v.tpp * v.width as f64 / c.tick_hz)),
+                (Some(c), Some(v)) => format!(
+                    "{} / px · 見ている幅 {}",
+                    fmt_time(v.tpp / c.tick_hz),
+                    fmt_time(v.tpp * v.width as f64 / c.tick_hz)
+                ),
                 _ => String::new(),
             })
             .size(11)
@@ -492,7 +567,11 @@ impl App {
             }
         }
         // the lists that follow show the row
-        let ids: Vec<u32> = self.panels.values().filter_map(|p| if let Panel::List(l) = p { Some(l.id) } else { None }).collect();
+        let ids: Vec<u32> = self
+            .panels
+            .values()
+            .filter_map(|p| if let Panel::List(l) = p { Some(l.id) } else { None })
+            .collect();
         for id in ids {
             if id == src {
                 continue;
@@ -512,20 +591,34 @@ impl App {
 
     pub fn sel_span(&self) -> Option<(i64, i64)> {
         let s = self.sel?;
-        let it = self.analysis.as_ref()?.claims.get(s.claim)?.layers.get(s.layer)?.track.item(s.row);
+        let it = self
+            .analysis
+            .as_ref()?
+            .claims
+            .get(s.claim)?
+            .layers
+            .get(s.layer)?
+            .track
+            .item(s.row);
         Some((it.s, it.e))
     }
 
     fn jump_bad(&mut self, forward: bool) {
         let Some(a) = &self.analysis else { return };
         let id = self.focus_wave;
-        let Some(vp) = self.waves().find(|w| w.id == id).and_then(|w| w.vp) else { return };
+        let Some(vp) = self.waves().find(|w| w.id == id).and_then(|w| w.vp) else {
+            return;
+        };
         let center = vp.t_of(vp.width / 2.0) as i64;
         let mut best: Option<(i64, Sel)> = None;
         for (ci, c) in a.claims.iter().enumerate() {
             let Some(l) = c.layers.first() else { continue };
             let cur = self.sel.filter(|s| s.claim == ci && s.layer == 0).map(|s| s.row);
-            let got = if forward { l.track.next_bad(cur, center) } else { l.track.prev_bad(cur, center) };
+            let got = if forward {
+                l.track.next_bad(cur, center)
+            } else {
+                l.track.prev_bad(cur, center)
+            };
             if let Some(i) = got {
                 let s = l.track.item(i).s;
                 let better = match best {
@@ -533,21 +626,33 @@ impl App {
                     Some((bs, _)) => (forward && s < bs) || (!forward && s > bs),
                 };
                 if better {
-                    best = Some((s, Sel { claim: ci, layer: 0, row: i }));
+                    best = Some((
+                        s,
+                        Sel {
+                            claim: ci,
+                            layer: 0,
+                            row: i,
+                        },
+                    ));
                 }
             }
         }
         if let Some((s, sel)) = best {
             let span = vp.tpp * vp.width as f64;
             if let Some(w) = self.wave_mut(id) {
-                w.vp = Some(Viewport { t0: s as f64 - span / 2.0, ..vp });
+                w.vp = Some(Viewport {
+                    t0: s as f64 - span / 2.0,
+                    ..vp
+                });
             }
             self.select(sel, 0);
         }
     }
 
     fn detach(&mut self, pane: pane_grid::Pane) -> Task<Msg> {
-        let Some(p) = self.panes.get_mut(pane) else { return Task::none() };
+        let Some(p) = self.panes.get_mut(pane) else {
+            return Task::none();
+        };
         if p.tabs.is_empty() {
             return Task::none();
         }
@@ -567,7 +672,11 @@ impl App {
             Kind::List => Size::new(760.0, 720.0),
             _ => Size::new(520.0, 520.0),
         };
-        let (wid, task) = window::open(window::Settings { size, exit_on_close_request: true, ..window::Settings::default() });
+        let (wid, task) = window::open(window::Settings {
+            size,
+            exit_on_close_request: true,
+            ..window::Settings::default()
+        });
         self.detached.insert(wid, id);
         task.map(Msg::WinOpened)
     }
@@ -575,7 +684,11 @@ impl App {
     /// A panel back from its window: a tab of the first pane of its kind, else a pane split off the first.
     fn redock(&mut self, id: u32) {
         let k = self.kind_of(id);
-        let same = self.panes.iter().find(|(_, p)| p.tabs.iter().any(|&t| self.kind_of(t) == k)).map(|(pn, _)| *pn);
+        let same = self
+            .panes
+            .iter()
+            .find(|(_, p)| p.tabs.iter().any(|&t| self.kind_of(t) == k))
+            .map(|(pn, _)| *pn);
         let to = same.or_else(|| dock::first_pane(self));
         if let Some(pn) = to
             && let Some(p) = self.panes.get_mut(pn)
@@ -639,12 +752,26 @@ impl App {
             Msg::Hover(id, h) => {
                 self.hover = h.map(|(t, lane, p)| Hover { wave: id, t, lane, p });
                 self.measure = None;
-                if let (Some(Hover { t, lane: Some(Lane::Dig(i)), .. }), Some(cap)) = (self.hover, &self.cap) {
+                if let (
+                    Some(Hover {
+                        t,
+                        lane: Some(Lane::Dig(i)),
+                        ..
+                    }),
+                    Some(cap),
+                ) = (self.hover, &self.cap)
+                {
                     let l = &cap.lines[i];
                     let lod = l.lod.read().unwrap();
                     if lod.built_until as f64 > t || l.src.level_before(0).is_some() {
                         let (level, prev, next, next2) = view_core::digital::around(l.src.as_ref(), &lod, t as i64);
-                        self.measure = Some(Measure { line: i, level, prev, next, next2 });
+                        self.measure = Some(Measure {
+                            line: i,
+                            level,
+                            prev,
+                            next,
+                            next2,
+                        });
                     }
                 }
             }
@@ -656,7 +783,14 @@ impl App {
                 {
                     let len = ((b - a) as f64).max(1.0);
                     let tpp = len * 1.4 / v.width as f64;
-                    w.vp = Some(Viewport { t0: a as f64 - len * 0.2, tpp, width: v.width }.clamped(n));
+                    w.vp = Some(
+                        Viewport {
+                            t0: a as f64 - len * 0.2,
+                            tpp,
+                            width: v.width,
+                        }
+                        .clamped(n),
+                    );
                 }
             }
             Msg::MarkerClick(t) => {
@@ -708,7 +842,11 @@ impl App {
             Msg::SearchStep(fwd, id) => {
                 let k = self.search.hits.len();
                 if k > 0 {
-                    self.search.cur = if fwd { (self.search.cur + 1) % k } else { (self.search.cur + k - 1) % k };
+                    self.search.cur = if fwd {
+                        (self.search.cur + 1) % k
+                    } else {
+                        (self.search.cur + k - 1) % k
+                    };
                     let s = self.search.hits[self.search.cur];
                     if self.search.cur < self.search.top || self.search.cur >= self.search.top + 10 {
                         self.search.top = self.search.cur.saturating_sub(3);
@@ -754,7 +892,14 @@ impl App {
                 {
                     let id = pane.tabs.remove(pane.active.min(pane.tabs.len() - 1));
                     pane.active = pane.active.min(pane.tabs.len() - 1);
-                    self.panes.split(pane_grid::Axis::Horizontal, p, Pane { tabs: vec![id], active: 0 });
+                    self.panes.split(
+                        pane_grid::Axis::Horizontal,
+                        p,
+                        Pane {
+                            tabs: vec![id],
+                            active: 0,
+                        },
+                    );
                 }
             }
             Msg::Maximize(p) => {
@@ -768,8 +913,19 @@ impl App {
             Msg::AddPanel(k) => {
                 let id = self.new_panel(k);
                 if let Some(p) = dock::first_pane(self) {
-                    let axis = if k == Kind::Wave { pane_grid::Axis::Horizontal } else { pane_grid::Axis::Vertical };
-                    self.panes.split(axis, p, Pane { tabs: vec![id], active: 0 });
+                    let axis = if k == Kind::Wave {
+                        pane_grid::Axis::Horizontal
+                    } else {
+                        pane_grid::Axis::Vertical
+                    };
+                    self.panes.split(
+                        axis,
+                        p,
+                        Pane {
+                            tabs: vec![id],
+                            active: 0,
+                        },
+                    );
                 }
             }
             Msg::LayoutPick(name) => {
@@ -787,6 +943,9 @@ impl App {
             }
             Msg::WinOpened(id) => {
                 if id == self.main_win {
+                    if let Some(c) = &self.cap {
+                        self.perf.borrow_mut().win_opened = Some(c.opened.elapsed().as_secs_f64());
+                    }
                     return window::scale_factor(id).map(|s| Msg::Info("scale".into(), s));
                 }
             }
@@ -830,7 +989,9 @@ impl App {
         let id = self.focus_wave;
         let n = self.cap.as_ref().map(|c| c.n_ticks).unwrap_or(1);
         let hover_t = self.hover.filter(|h| h.wave == id).map(|h| h.t);
-        let Some(vp) = self.waves().find(|w| w.id == id).and_then(|w| w.vp) else { return Task::none() };
+        let Some(vp) = self.waves().find(|w| w.id == id).and_then(|w| w.vp) else {
+            return Task::none();
+        };
         let set = |app: &mut App, v: Viewport| {
             if let Some(w) = app.wave_mut(id) {
                 w.vp = Some(v.clamped(n));
@@ -841,8 +1002,20 @@ impl App {
             keyboard::Key::Character("f") => set(self, Viewport::fit(n, vp.width)),
             keyboard::Key::Character("+") | keyboard::Key::Character("=") => set(self, vp.zoomed(2.0, vp.width / 2.0)),
             keyboard::Key::Character("-") => set(self, vp.zoomed(0.5, vp.width / 2.0)),
-            keyboard::Key::Named(Named::ArrowLeft) => set(self, Viewport { t0: vp.t0 - vp.tpp * vp.width as f64 * 0.2, ..vp }),
-            keyboard::Key::Named(Named::ArrowRight) => set(self, Viewport { t0: vp.t0 + vp.tpp * vp.width as f64 * 0.2, ..vp }),
+            keyboard::Key::Named(Named::ArrowLeft) => set(
+                self,
+                Viewport {
+                    t0: vp.t0 - vp.tpp * vp.width as f64 * 0.2,
+                    ..vp
+                },
+            ),
+            keyboard::Key::Named(Named::ArrowRight) => set(
+                self,
+                Viewport {
+                    t0: vp.t0 + vp.tpp * vp.width as f64 * 0.2,
+                    ..vp
+                },
+            ),
             keyboard::Key::Character("n") => self.jump_bad(!m.shift()),
             keyboard::Key::Character("N") => self.jump_bad(false),
             keyboard::Key::Character("1") => self.markers[0] = Some(hover_t.unwrap_or(vp.t_of(vp.width / 2.0))),
@@ -864,7 +1037,10 @@ impl App {
 
     fn frame(&mut self, now: Instant) -> Task<Msg> {
         self.poll();
-        let dt_ms = self.last_frame.map(|l| now.duration_since(l).as_secs_f32() * 1e3).unwrap_or(16.7);
+        let dt_ms = self
+            .last_frame
+            .map(|l| now.duration_since(l).as_secs_f32() * 1e3)
+            .unwrap_or(16.7);
         self.last_frame = Some(now);
         {
             let mut p = self.perf.borrow_mut();
@@ -882,7 +1058,13 @@ impl App {
         for id in ids {
             let w = self.wave_mut(id).unwrap();
             if let Some(v) = w.vp {
-                w.vp = Some(Viewport { t0: v.t0 + w.vel * dt, ..v }.clamped(n));
+                w.vp = Some(
+                    Viewport {
+                        t0: v.t0 + w.vel * dt,
+                        ..v
+                    }
+                    .clamped(n),
+                );
                 w.vel *= (-dt * 4.0).exp();
                 if w.vel.abs() < v.tpp * 5.0 {
                     w.vel = 0.0;
@@ -906,7 +1088,11 @@ impl App {
         if let Some(mut b) = self.bench.take() {
             if !b.done() {
                 let fid = self.first_wave_id();
-                let width = fid.and_then(|id| self.waves().find(|w| w.id == id)).and_then(|w| w.vp).map(|v| v.width).unwrap_or(0.0);
+                let width = fid
+                    .and_then(|id| self.waves().find(|w| w.id == id))
+                    .and_then(|w| w.vp)
+                    .map(|v| v.width)
+                    .unwrap_or(0.0);
                 let gpu = self.gpu.borrow().clone();
                 let (vp, ended) = bench::step(self, &mut b, dt_ms, width, &gpu);
                 if let (Some(vp), Some(id)) = (vp, fid)
@@ -958,20 +1144,31 @@ impl App {
         let t = Instant::now();
         let pal = self.pal;
         let e: Element<'_, Msg> = if let Some(&p) = self.detached.get(&id) {
-            container(self.panel_body(p)).width(Length::Fill).height(Length::Fill).style(move |_| container::Style {
-                background: Some(Background::Color(pal.panel)),
+            container(self.panel_body(p))
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .style(move |_| container::Style {
+                    background: Some(Background::Color(pal.panel)),
+                    text_color: Some(pal.text()),
+                    ..Default::default()
+                })
+                .into()
+        } else {
+            column![
+                self.bar(),
+                container(dock::view(self)).padding([4, 6]).height(Length::Fill),
+                self.status()
+            ]
+            .into()
+        };
+        let e = container(e)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .style(move |_| container::Style {
+                background: Some(Background::Color(pal.c[theme::BG])),
                 text_color: Some(pal.text()),
                 ..Default::default()
-            })
-            .into()
-        } else {
-            column![self.bar(), container(dock::view(self)).padding([4, 6]).height(Length::Fill), self.status()].into()
-        };
-        let e = container(e).width(Length::Fill).height(Length::Fill).style(move |_| container::Style {
-            background: Some(Background::Color(pal.c[theme::BG])),
-            text_color: Some(pal.text()),
-            ..Default::default()
-        });
+            });
         self.perf.borrow_mut().acc[P_VIEW] += t.elapsed().as_secs_f64() * 1e3;
         e.into()
     }
@@ -984,18 +1181,40 @@ impl App {
                 names.push(k.clone());
             }
         }
-        let title = self.cap.as_ref().map(|c| format!("{}{}", c.title, if c.n_parts > 1 { format!("（区画 {}/{}）", c.part + 1, c.n_parts) } else { String::new() }));
+        let title = self.cap.as_ref().map(|c| {
+            format!(
+                "{}{}",
+                c.title,
+                if c.n_parts > 1 {
+                    format!("（区画 {}/{}）", c.part + 1, c.n_parts)
+                } else {
+                    String::new()
+                }
+            )
+        });
         let r = row![
             text("WireSkein").size(15),
             text(title.unwrap_or("（記録なし）".into())).size(13).color(pal.dim()),
             iced::widget::space::horizontal(),
             text("パネル").size(12).color(pal.dim()),
-            pick_list(Kind::ALL, None::<Kind>, Msg::AddPanel).placeholder("足す…").text_size(12).padding([3, 8]),
+            pick_list(Kind::ALL, None::<Kind>, Msg::AddPanel)
+                .placeholder("足す…")
+                .text_size(12)
+                .padding([3, 8]),
             text("レイアウト").size(12).color(pal.dim()),
-            pick_list(names, Some(self.layout_name.clone()), Msg::LayoutPick).text_size(12).padding([3, 8]),
-            text_input("名前", &self.layout_name).on_input(Msg::LayoutName).on_submit(Msg::LayoutSave).size(12).padding([3, 6]).width(120),
+            pick_list(names, Some(self.layout_name.clone()), Msg::LayoutPick)
+                .text_size(12)
+                .padding([3, 8]),
+            text_input("名前", &self.layout_name)
+                .on_input(Msg::LayoutName)
+                .on_submit(Msg::LayoutSave)
+                .size(12)
+                .padding([3, 6])
+                .width(120),
             button(text("保存").size(12)).padding([3, 10]).on_press(Msg::LayoutSave),
-            button(text(if pal.dark { "ライトに" } else { "ダークに" }).size(12)).padding([3, 10]).on_press(Msg::Theme),
+            button(text(if pal.dark { "ライトに" } else { "ダークに" }).size(12))
+                .padding([3, 10])
+                .on_press(Msg::Theme),
         ]
         .spacing(8)
         .padding([6, 10])
@@ -1003,7 +1222,11 @@ impl App {
         container(r)
             .style(move |_| container::Style {
                 background: Some(Background::Color(pal.panel)),
-                border: Border { color: pal.border, width: 1.0, radius: 0.0.into() },
+                border: Border {
+                    color: pal.border,
+                    width: 1.0,
+                    radius: 0.0.into(),
+                },
                 ..Default::default()
             })
             .into()
@@ -1014,16 +1237,38 @@ impl App {
         let mut r = row![].spacing(14).padding([3, 10]).align_y(iced::Alignment::Center);
         if let Some(cap) = &self.cap {
             let done = cap.lod_done.load(std::sync::atomic::Ordering::Relaxed);
-            r = r.push(text(format!("{} 本 · {:.1e} の変化 · 要約 {}/{}", cap.lines.len(), cap.total_edges as f64, done, cap.lines.len())).size(11).color(pal.dim()));
+            r = r.push(
+                text(format!(
+                    "{} 本 · {:.1e} の変化 · 要約 {}/{}",
+                    cap.lines.len(),
+                    cap.total_edges as f64,
+                    done,
+                    cap.lines.len()
+                ))
+                .size(11)
+                .color(pal.dim()),
+            );
             if !cap.complete || !cap.lost.is_empty() {
-                r = r.push(text(format!("データ落ち {} 区間（失敗）", cap.lost.len())).size(11).color(pal.status_text(view_core::ann::Status::Error)));
+                r = r.push(
+                    text(format!("データ落ち {} 区間（失敗）", cap.lost.len()))
+                        .size(11)
+                        .color(pal.status_text(view_core::ann::Status::Error)),
+                );
             }
         }
         if self.analysis_slot.is_some() {
             r = r.push(text("解析中…").size(11).color(pal.accent()));
         } else if let Some(a) = &self.analysis {
             let rows: usize = a.claims.iter().flat_map(|c| c.layers.first()).map(|l| l.len()).sum();
-            r = r.push(text(format!("主張 {} · 項目 {rows} · 解析 {:.2} s", a.claims.len(), a.seconds)).size(11).color(pal.dim()));
+            r = r.push(
+                text(format!(
+                    "主張 {} · 項目 {rows} · 解析 {:.2} s",
+                    a.claims.len(),
+                    a.seconds
+                ))
+                .size(11)
+                .color(pal.dim()),
+            );
         }
         let (n, avg, _) = self.perf.borrow().fps();
         r = r.push(text(format!("{n:.0} fps · {avg:.1} ms")).size(11).color(pal.dim()));
@@ -1031,7 +1276,11 @@ impl App {
             r = r.push(text(format!("RSS {m:.0} MB")).size(11).color(pal.dim()));
         }
         if !self.detached.is_empty() {
-            r = r.push(text(format!("別の窓 {}", self.detached.len())).size(11).color(pal.dim()));
+            r = r.push(
+                text(format!("別の窓 {}", self.detached.len()))
+                    .size(11)
+                    .color(pal.dim()),
+            );
         }
         r.into()
     }
@@ -1063,13 +1312,19 @@ fn app_kind(panels: &BTreeMap<u32, Panel>, id: u32) -> Kind {
 
 pub fn flat(pal: Pal, st: button::Status) -> button::Style {
     button::Style {
-        background: Some(Background::Color(if matches!(st, button::Status::Hovered | button::Status::Pressed) {
-            Color { a: 0.14, ..pal.text() }
-        } else {
-            Color { a: 0.05, ..pal.text() }
-        })),
+        background: Some(Background::Color(
+            if matches!(st, button::Status::Hovered | button::Status::Pressed) {
+                Color { a: 0.14, ..pal.text() }
+            } else {
+                Color { a: 0.05, ..pal.text() }
+            },
+        )),
         text_color: pal.text(),
-        border: Border { radius: 4.0.into(), color: pal.border, width: 1.0 },
+        border: Border {
+            radius: 4.0.into(),
+            color: pal.border,
+            width: 1.0,
+        },
         ..Default::default()
     }
 }

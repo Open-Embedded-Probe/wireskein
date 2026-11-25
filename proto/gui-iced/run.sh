@@ -8,10 +8,14 @@ set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 bin=${BIN:-$here/target/release/wsk-iced}
 dn=${DISPLAY_NO:-89}
+# the last run's server gone first (its lock), then a new one, waited for (a busy machine starts it slowly)
+k=0
+while [ -e "/tmp/.X$dn-lock" ] && [ $k -lt 40 ]; do k=$((k + 1)); sleep 0.5; done
 Xvfb ":$dn" -screen 0 1600x960x24 -nolisten tcp >/dev/null 2>&1 &
 xpid=$!
-trap 'kill $xpid 2>/dev/null || true' EXIT
-sleep 1
+trap 'kill $xpid 2>/dev/null || true; wait $xpid 2>/dev/null || true' EXIT
+k=0
+while [ ! -e "/tmp/.X11-unix/X$dn" ] && [ $k -lt 60 ]; do k=$((k + 1)); sleep 0.5; done
 env DISPLAY=":$dn" WAYLAND_DISPLAY= "$bin" "$@" &
 apid=$!
 if [ -n "${XSHOT:-}" ]; then

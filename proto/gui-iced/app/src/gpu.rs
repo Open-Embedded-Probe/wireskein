@@ -70,7 +70,11 @@ impl shader::Pipeline for WavePipeline {
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
                 visibility: wgpu::ShaderStages::VERTEX,
-                ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
                 count: None,
             }],
         });
@@ -80,8 +84,16 @@ impl shader::Pipeline for WavePipeline {
             push_constant_ranges: &[],
         });
         let attrs = [
-            wgpu::VertexAttribute { format: wgpu::VertexFormat::Float32x4, offset: 0, shader_location: 0 },
-            wgpu::VertexAttribute { format: wgpu::VertexFormat::Float32x4, offset: 16, shader_location: 1 },
+            wgpu::VertexAttribute {
+                format: wgpu::VertexFormat::Float32x4,
+                offset: 0,
+                shader_location: 0,
+            },
+            wgpu::VertexAttribute {
+                format: wgpu::VertexFormat::Float32x4,
+                offset: 16,
+                shader_location: 1,
+            },
         ];
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("wsk wave"),
@@ -90,7 +102,11 @@ impl shader::Pipeline for WavePipeline {
                 module: &module,
                 entry_point: Some("vs"),
                 compilation_options: Default::default(),
-                buffers: &[wgpu::VertexBufferLayout { array_stride: 32, step_mode: wgpu::VertexStepMode::Instance, attributes: &attrs }],
+                buffers: &[wgpu::VertexBufferLayout {
+                    array_stride: 32,
+                    step_mode: wgpu::VertexStepMode::Instance,
+                    attributes: &attrs,
+                }],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &module,
@@ -108,7 +124,11 @@ impl shader::Pipeline for WavePipeline {
             multiview: None,
             cache: None,
         });
-        WavePipeline { pipeline, layout, slots: HashMap::new() }
+        WavePipeline {
+            pipeline,
+            layout,
+            slots: HashMap::new(),
+        }
     }
     fn trim(&mut self) {
         // views gone (a pane closed) give their buffers back
@@ -119,7 +139,14 @@ impl shader::Pipeline for WavePipeline {
 impl shader::Primitive for WavePrim {
     type Pipeline = WavePipeline;
 
-    fn prepare(&self, p: &mut WavePipeline, device: &wgpu::Device, queue: &wgpu::Queue, bounds: &Rectangle, _viewport: &Viewport) {
+    fn prepare(
+        &self,
+        p: &mut WavePipeline,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        bounds: &Rectangle,
+        _viewport: &Viewport,
+    ) {
         let bytes: &[u8] = bytemuck::cast_slice(&self.inst[..]);
         let need = (bytes.len() as u64).max(32);
         let make = |cap: u64| {
@@ -138,9 +165,19 @@ impl shader::Primitive for WavePrim {
             let bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("wsk wave"),
                 layout: &p.layout,
-                entries: &[wgpu::BindGroupEntry { binding: 0, resource: uniform.as_entire_binding() }],
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: uniform.as_entire_binding(),
+                }],
             });
-            Slot { uniform, inst, cap, bind, n: 0, used: true }
+            Slot {
+                uniform,
+                inst,
+                cap,
+                bind,
+                n: 0,
+                used: true,
+            }
         };
         if p.slots.get(&self.key).is_none_or(|s| s.cap < need) {
             let cap = need.next_power_of_two().max(1 << 16);

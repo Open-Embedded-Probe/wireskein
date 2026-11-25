@@ -8,12 +8,12 @@ use serde_json::Value;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
-use web_time::Instant;
 use view_core::Tick;
 use view_core::analog::AnalogLine;
 use view_core::ann::{Item, Status, Track};
 use view_core::digital::{EdgeSource, Lod, VecEdges, build_lod_shared, shift_for};
 use view_core::synth;
+use web_time::Instant;
 
 pub struct DLine {
     pub name: String,
@@ -47,7 +47,10 @@ impl Capture {
     }
     pub fn mem_bytes(&self) -> usize {
         use view_core::MemSize;
-        self.lines.iter().map(|l| l.src.mem_bytes() + l.lod.read().unwrap().mem_bytes()).sum::<usize>()
+        self.lines
+            .iter()
+            .map(|l| l.src.mem_bytes() + l.lod.read().unwrap().mem_bytes())
+            .sum::<usize>()
             + self.analog.iter().map(|a| a.mem_bytes()).sum::<usize>()
     }
     /// The summaries of every line built in the background (`threads` at a time).
@@ -79,7 +82,11 @@ impl Capture {
 
 fn dline(name: &str, src: Arc<dyn EdgeSource>) -> DLine {
     let lod = Arc::new(RwLock::new(Lod::new(src.n_ticks(), src.initial(), 0)));
-    DLine { name: name.into(), src, lod }
+    DLine {
+        name: name.into(),
+        src,
+        lod,
+    }
 }
 
 /// Work in the background (native: a thread; the web: at once, there are no threads here).
@@ -94,7 +101,10 @@ pub fn spawn(f: impl FnOnce() + Send + 'static) {
 pub fn open_file(path: &PathBuf, part: usize) -> Result<Capture, String> {
     let opened = Instant::now();
     let cap = wireskein_io::read(path)?;
-    let title = path.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+    let title = path
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default();
     open_capture(cap, title, Some(path.clone()), part, opened)
 }
 
@@ -114,7 +124,11 @@ fn open_capture(
 ) -> Result<Capture, String> {
     let read_s = opened.elapsed().as_secs_f64();
     let n_parts = cap.parts.len();
-    let mut p = cap.parts.into_iter().nth(part).ok_or(format!("part {part} of {n_parts}"))?;
+    let mut p = cap
+        .parts
+        .into_iter()
+        .nth(part)
+        .ok_or(format!("part {part} of {n_parts}"))?;
     let tick_hz = cap.tick_hz.0 as f64 / cap.tick_hz.1 as f64;
     let n = p.ticks;
     let mut lines = vec![];
@@ -125,10 +139,21 @@ fn open_capture(
     }
     let mut analog = vec![];
     for a in &p.analog {
-        let vals: Vec<f32> = a.volts().unwrap_or_else(|| a.values.clone()).iter().map(|&v| v as f32).collect();
+        let vals: Vec<f32> = a
+            .volts()
+            .unwrap_or_else(|| a.values.clone())
+            .iter()
+            .map(|&v| v as f32)
+            .collect();
         let rate = a.rate_hz.0 as f64 / a.rate_hz.1 as f64;
         let t0 = a.t0_ticks.0 as f64 / a.t0_ticks.1 as f64;
-        analog.push(AnalogLine::new(&a.name, if a.volts().is_some() { "V" } else { &a.unit }, t0, tick_hz / rate, vals));
+        analog.push(AnalogLine::new(
+            &a.name,
+            if a.volts().is_some() { "V" } else { &a.unit },
+            t0,
+            tick_hz / rate,
+            vals,
+        ));
     }
     let c = Capture {
         title,
@@ -156,8 +181,11 @@ fn open_capture(
 pub fn open_synth(total: u64) -> Capture {
     let opened = Instant::now();
     let (n, ls) = synth::synth_lines(total, 16);
-    let lines: Vec<DLine> =
-        ls.into_iter().enumerate().map(|(i, l)| dline(&format!("D{i}"), Arc::new(l) as Arc<dyn EdgeSource>)).collect();
+    let lines: Vec<DLine> = ls
+        .into_iter()
+        .enumerate()
+        .map(|(i, l)| dline(&format!("D{i}"), Arc::new(l) as Arc<dyn EdgeSource>))
+        .collect();
     let n_s = 4_000_000usize;
     let dt = n as f64 / n_s as f64;
     let analog = vec![AnalogLine::new("A0", "V", 0.0, dt, synth::synth_analog(n_s, dt))];
@@ -259,7 +287,10 @@ pub fn verdict_status(v: &str) -> Status {
 
 fn status_of(it: &Value) -> Status {
     let f = |k: &str| it.get(k);
-    if f("ok") == Some(&Value::Bool(false)) || f("checksum_ok") == Some(&Value::Bool(false)) || f("error").is_some_and(|e| !e.is_null()) {
+    if f("ok") == Some(&Value::Bool(false))
+        || f("checksum_ok") == Some(&Value::Bool(false))
+        || f("error").is_some_and(|e| !e.is_null())
+    {
         return Status::Error;
     }
     if f("complete") == Some(&Value::Bool(false))
@@ -268,7 +299,10 @@ fn status_of(it: &Value) -> Status {
     {
         return Status::Warn;
     }
-    if f("addr_ack") == Some(&Value::Bool(false)) || f("ack") == Some(&Value::Bool(false)) || f("acked") == Some(&Value::Bool(false)) {
+    if f("addr_ack") == Some(&Value::Bool(false))
+        || f("ack") == Some(&Value::Bool(false))
+        || f("acked") == Some(&Value::Bool(false))
+    {
         return Status::Note;
     }
     Status::Ok
@@ -336,7 +370,12 @@ pub fn item_text(it: &Value) -> (String, String) {
 /// A layer's items as rows: an array of objects, or an object of columns ({"s": [...], ...}).
 fn rows_of(v: &Value) -> Option<Vec<Value>> {
     match v {
-        Value::Array(a) if a.first().is_some_and(|x| x.get("s").is_some_and(|s| s.is_i64() || s.is_f64())) => Some(a.clone()),
+        Value::Array(a)
+            if a.first()
+                .is_some_and(|x| x.get("s").is_some_and(|s| s.is_i64() || s.is_f64())) =>
+        {
+            Some(a.clone())
+        }
         Value::Object(o) if o.get("s").is_some_and(|x| x.is_array()) => {
             let s = o["s"].as_array().unwrap();
             let n = s.len();
@@ -381,17 +420,39 @@ fn layer_of(name: &str, items: Vec<Value>) -> Layer {
     let mut tr = vec![];
     for (i, it) in items.iter().enumerate() {
         let s = starts[i];
-        let e = it.get("e").and_then(|e| e.as_f64()).map(|e| e as i64 + 1).unwrap_or_else(|| {
-            let next = starts.get(i + 1).copied().unwrap_or(s + 1);
-            if next > s { next } else { s + 1 }
-        });
+        let e = it
+            .get("e")
+            .and_then(|e| e.as_f64())
+            .map(|e| e as i64 + 1)
+            .unwrap_or_else(|| {
+                let next = starts.get(i + 1).copied().unwrap_or(s + 1);
+                if next > s { next } else { s + 1 }
+            });
         let (full, short) = item_text(it);
-        tr.push((Item { s, e, status: status_of(it), id: i as u32 }, full, short));
+        tr.push((
+            Item {
+                s,
+                e,
+                status: status_of(it),
+                id: i as u32,
+            },
+            full,
+            short,
+        ));
     }
     let track = Track::new(name, tr);
     let mut items: Vec<Option<Value>> = items.into_iter().map(Some).collect();
-    let rows = track.items().iter().map(|it| items[it.id as usize].take().unwrap_or(Value::Null)).collect();
-    Layer { name: name.into(), rows: Rows::Json(rows), track, columns }
+    let rows = track
+        .items()
+        .iter()
+        .map(|it| items[it.id as usize].take().unwrap_or(Value::Null))
+        .collect();
+    Layer {
+        name: name.into(),
+        rows: Rows::Json(rows),
+        track,
+        columns,
+    }
 }
 
 const DATA_ROLES: [&str; 9] = ["sda", "data", "dio", "mosi", "miso", "rx", "tx", "swdio", "cmd"];
@@ -400,13 +461,21 @@ const DATA_ROLES: [&str; 9] = ["sda", "data", "dio", "mosi", "miso", "rx", "tx",
 pub fn analysis_of(doc: &Value, part: usize, line_names: &[String]) -> Vec<Claim> {
     let mut out = vec![];
     let parts = doc["parts"].as_array().cloned().unwrap_or_default();
-    let Some(p) = parts.iter().find(|p| p["part"].as_u64() == Some(part as u64)).or(parts.first()) else {
+    let Some(p) = parts
+        .iter()
+        .find(|p| p["part"].as_u64() == Some(part as u64))
+        .or(parts.first())
+    else {
         return out;
     };
     for c in p["claims"].as_array().cloned().unwrap_or_default() {
         let roles: Vec<(String, String)> = c["roles"]
             .as_object()
-            .map(|o| o.iter().map(|(k, v)| (k.clone(), scalar(v).unwrap_or_default())).collect())
+            .map(|o| {
+                o.iter()
+                    .map(|(k, v)| (k.clone(), scalar(v).unwrap_or_default()))
+                    .collect()
+            })
             .unwrap_or_default();
         let anchor_name = roles
             .iter()
@@ -438,7 +507,16 @@ pub fn analysis_of(doc: &Value, part: usize, line_names: &[String]) -> Vec<Claim
                     .map(|u| {
                         let s = u["s"].as_i64().unwrap_or(0);
                         let e = u["e"].as_i64().unwrap_or(s) + 1;
-                        (Item { s, e, status: Status::Unread, id: 0 }, format!("unread {} changes", u["edges"]), "?".into())
+                        (
+                            Item {
+                                s,
+                                e,
+                                status: Status::Unread,
+                                id: 0,
+                            },
+                            format!("unread {} changes", u["edges"]),
+                            "?".into(),
+                        )
                     })
                     .collect(),
             )
@@ -458,7 +536,13 @@ pub fn analysis_of(doc: &Value, part: usize, line_names: &[String]) -> Vec<Claim
 }
 
 /// The analysis of a file run in the background (wireskein-analysis, the Rust engine).
-pub fn start_analysis(path: PathBuf, part: usize, n_parts: usize, line_names: Vec<String>, total_edges: u64) -> Arc<Mutex<Option<Analysis>>> {
+pub fn start_analysis(
+    path: PathBuf,
+    part: usize,
+    n_parts: usize,
+    line_names: Vec<String>,
+    total_edges: u64,
+) -> Arc<Mutex<Option<Analysis>>> {
     let slot = Arc::new(Mutex::new(None));
     let s2 = slot.clone();
     spawn(move || {
@@ -469,8 +553,18 @@ pub fn start_analysis(path: PathBuf, part: usize, n_parts: usize, line_names: Ve
         let split = (total_edges > 2_000_000 && want.is_none()).then_some(&opts);
         let r = wireskein_analysis::analyze_file(&path, &serde_json::json!({}), want, "all", None, split);
         let a = match r {
-            Ok(doc) => Analysis { claims: analysis_of(&doc, part, &line_names), seconds: t.elapsed().as_secs_f64(), error: None, fake: false },
-            Err(e) => Analysis { claims: vec![], seconds: t.elapsed().as_secs_f64(), error: Some(e), fake: false },
+            Ok(doc) => Analysis {
+                claims: analysis_of(&doc, part, &line_names),
+                seconds: t.elapsed().as_secs_f64(),
+                error: None,
+                fake: false,
+            },
+            Err(e) => Analysis {
+                claims: vec![],
+                seconds: t.elapsed().as_secs_f64(),
+                error: Some(e),
+                fake: false,
+            },
         };
         *s2.lock().unwrap() = Some(a);
     });
@@ -502,7 +596,10 @@ pub fn start_fake_analysis(n_items: usize, n_ticks: Tick) -> Arc<Mutex<Option<An
             name: "transactions".into(),
             rows: Rows::Json(rows),
             track,
-            columns: ["addr", "rw", "addr_ack", "bytes", "ok"].iter().map(|s| s.to_string()).collect(),
+            columns: ["addr", "rw", "addr_ack", "bytes", "ok"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
         };
         let claim = Claim {
             protocol: "i2c (made up)".into(),
@@ -514,7 +611,12 @@ pub fn start_fake_analysis(n_items: usize, n_ticks: Tick) -> Arc<Mutex<Option<An
             unread: None,
             bus: None,
         };
-        *s2.lock().unwrap() = Some(Analysis { claims: vec![claim], seconds: t.elapsed().as_secs_f64(), error: None, fake: true });
+        *s2.lock().unwrap() = Some(Analysis {
+            claims: vec![claim],
+            seconds: t.elapsed().as_secs_f64(),
+            error: None,
+            fake: true,
+        });
     });
     slot
 }
@@ -535,7 +637,9 @@ pub fn derive_tiers(claim: &mut Claim, cap: &Capture) {
             .find(|(r, _)| roles.contains(&r.as_str()))
             .and_then(|(_, n)| cap.lines.iter().position(|l| l.name == *n))
     };
-    let (Some(ck), Some(dt)) = (find(&CLOCKS), find(&DATA_ROLES)) else { return };
+    let (Some(ck), Some(dt)) = (find(&CLOCKS), find(&DATA_ROLES)) else {
+        return;
+    };
     let (cks, dts) = (&cap.lines[ck].src, &cap.lines[dt].src);
     if cks.level_before(0).is_none() {
         return; // only lines in memory
@@ -550,7 +654,11 @@ pub fn derive_tiers(claim: &mut Claim, cap: &Capture) {
     for it in top.track.items() {
         buf.clear();
         cks.edges_in(it.s, it.e + 1, 1 << 16, &mut buf);
-        let rises: Vec<i64> = buf.iter().copied().filter(|&t| cks.level_before(t + 1) == Some(1)).collect();
+        let rises: Vec<i64> = buf
+            .iter()
+            .copied()
+            .filter(|&t| cks.level_before(t + 1) == Some(1))
+            .collect();
         if rises.len() < 2 || bits.len() > 20_000_000 {
             continue;
         }
@@ -566,7 +674,16 @@ pub fn derive_tiers(claim: &mut Claim, cap: &Capture) {
         let vals: Vec<u8> = rises.iter().map(|&t| dts.level_before(t + 1).unwrap_or(0)).collect();
         for (i, &v) in vals.iter().enumerate() {
             let id = bits.len() as u32;
-            bits.push((Item { s: mid(i), e: mid(i + 1), status: Status::Ok, id }, v.to_string(), v.to_string()));
+            bits.push((
+                Item {
+                    s: mid(i),
+                    e: mid(i + 1),
+                    status: Status::Ok,
+                    id,
+                },
+                v.to_string(),
+                v.to_string(),
+            ));
             bit_rows.push(v);
         }
         for f in 0..rises.len() / per {
@@ -576,17 +693,40 @@ pub fn derive_tiers(claim: &mut Claim, cap: &Capture) {
             let id = frames.len() as u32;
             let status = if ack == 2 { Status::Note } else { Status::Ok };
             let full = format!("0x{byte:02x}{}", ["", " A", " N"][ack as usize]);
-            frames.push((Item { s: mid(k), e: mid(k + per), status, id }, full, format!("{byte:02x}")));
+            frames.push((
+                Item {
+                    s: mid(k),
+                    e: mid(k + per),
+                    status,
+                    id,
+                },
+                full,
+                format!("{byte:02x}"),
+            ));
             frame_rows.push((byte, ack));
         }
     }
     // (in time order already: the track keeps that order, so row i is item i)
     if !frames.is_empty() {
-        let columns = if per == 9 { vec!["byte".into(), "ack".into()] } else { vec!["byte".into()] };
-        claim.layers.push(Layer { name: "frames (GUI)".into(), track: Track::new("frames", frames), rows: Rows::Bytes(frame_rows), columns });
+        let columns = if per == 9 {
+            vec!["byte".into(), "ack".into()]
+        } else {
+            vec!["byte".into()]
+        };
+        claim.layers.push(Layer {
+            name: "frames (GUI)".into(),
+            track: Track::new("frames", frames),
+            rows: Rows::Bytes(frame_rows),
+            columns,
+        });
     }
     if !bits.is_empty() {
-        claim.layers.push(Layer { name: "bits (GUI)".into(), track: Track::new("bits", bits), rows: Rows::Bits(bit_rows), columns: vec!["bit".into()] });
+        claim.layers.push(Layer {
+            name: "bits (GUI)".into(),
+            track: Track::new("bits", bits),
+            rows: Rows::Bits(bit_rows),
+            columns: vec!["bit".into()],
+        });
     }
 }
 
@@ -598,8 +738,11 @@ pub fn analysis_of_bytes(bytes: &[u8], part: usize, line_names: &[String]) -> An
         let cap = wireskein_io::read_bytes(bytes)?;
         let rate = cap.rate();
         let p = cap.parts.get(part).ok_or("no such part")?;
-        let chans: Vec<wireskein_core::Channel> =
-            p.lines.iter().map(|l| wireskein_core::Channel::new(&l.name, l.initial, &l.edges)).collect();
+        let chans: Vec<wireskein_core::Channel> = p
+            .lines
+            .iter()
+            .map(|l| wireskein_core::Channel::new(&l.name, l.initial, &l.edges))
+            .collect();
         let view = wireskein_core::View::new(rate, p.ticks, chans)?;
         let (claims, _) = wireskein_core::analyze_full(&view, &serde_json::json!({}));
         let docs: Vec<Value> = claims
@@ -610,7 +753,17 @@ pub fn analysis_of_bytes(bytes: &[u8], part: usize, line_names: &[String]) -> An
         Ok(analysis_of(&doc, part, line_names))
     };
     match run() {
-        Ok(claims) => Analysis { claims, seconds: t.elapsed().as_secs_f64(), error: None, fake: false },
-        Err(e) => Analysis { claims: vec![], seconds: t.elapsed().as_secs_f64(), error: Some(e), fake: false },
+        Ok(claims) => Analysis {
+            claims,
+            seconds: t.elapsed().as_secs_f64(),
+            error: None,
+            fake: false,
+        },
+        Err(e) => Analysis {
+            claims: vec![],
+            seconds: t.elapsed().as_secs_f64(),
+            error: Some(e),
+            fake: false,
+        },
     }
 }

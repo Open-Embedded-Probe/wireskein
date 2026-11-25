@@ -21,7 +21,11 @@ mod wave;
 use std::path::PathBuf;
 
 fn parse() -> (app::Args, Option<String>, bool) {
-    let mut a = app::Args { synth_items: 500_000, size: (1600.0, 960.0), ..Default::default() };
+    let mut a = app::Args {
+        synth_items: 500_000,
+        size: (1600.0, 960.0),
+        ..Default::default()
+    };
     let mut present = None;
     let mut vsync = false;
     let args: Vec<String> = std::env::args().skip(1).collect();

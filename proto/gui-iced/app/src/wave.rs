@@ -11,9 +11,9 @@ use iced::advanced::renderer::{self, Quad, Renderer as _};
 use iced::advanced::text::{self, Renderer as _};
 use iced::advanced::widget::{self, Widget, tree};
 use iced::advanced::{Clipboard, Shell};
-use iced_wgpu::primitive::Renderer as _;
 use iced::mouse::{self, Button, ScrollDelta};
 use iced::{Color, Element, Event, Font, Length, Pixels, Point, Rectangle, Size, Theme, keyboard};
+use iced_wgpu::primitive::Renderer as _;
 use std::sync::Arc;
 use view_core::Viewport;
 use web_time::Instant;
@@ -123,7 +123,14 @@ pub struct Frame {
 pub fn frame_geo(size: Size) -> Frame {
     let px = LABEL_W;
     let pw = (size.width - LABEL_W - 4.0).max(10.0);
-    Frame { px, pw, top: MM_H + 6.0 + RULER_H, bottom: size.height, mm: [px, 2.0, pw, MM_H], ruler_y: MM_H + 4.0 }
+    Frame {
+        px,
+        pw,
+        top: MM_H + 6.0 + RULER_H,
+        bottom: size.height,
+        mm: [px, 2.0, pw, MM_H],
+        ruler_y: MM_H + 4.0,
+    }
 }
 
 /// The lanes placed: (lane, y, h, alternate).
@@ -162,8 +169,17 @@ pub fn wave<'a>(app: &'a App, wv: &'a WaveView) -> Element<'a, Msg> {
 
 #[derive(Clone, Copy)]
 enum Drag {
-    Pan { x0: f32, t0: f64, last: (f32, Instant), vel: f64, moved: bool },
-    Range { x0: f32, x1: f32 },
+    Pan {
+        x0: f32,
+        t0: f64,
+        last: (f32, Instant),
+        vel: f64,
+        moved: bool,
+    },
+    Range {
+        x0: f32,
+        x1: f32,
+    },
     Minimap,
 }
 
@@ -258,7 +274,13 @@ impl Widget<Msg, Theme, iced::Renderer> for Wave<'_> {
                     Button::Left if p.x >= f.px && st.mods.shift() => st.drag = Some(Drag::Range { x0: p.x, x1: p.x }),
                     Button::Right if p.x >= f.px => st.drag = Some(Drag::Range { x0: p.x, x1: p.x }),
                     Button::Left if p.x >= f.px => {
-                        st.drag = Some(Drag::Pan { x0: p.x, t0: vp.t0, last: (p.x, Instant::now()), vel: 0.0, moved: false });
+                        st.drag = Some(Drag::Pan {
+                            x0: p.x,
+                            t0: vp.t0,
+                            last: (p.x, Instant::now()),
+                            vel: 0.0,
+                            moved: false,
+                        });
                         shell.publish(Msg::WaveFling(self.wv.id, 0.0));
                     }
                     _ => return,
@@ -268,7 +290,16 @@ impl Widget<Msg, Theme, iced::Renderer> for Wave<'_> {
             Event::Mouse(mouse::Event::CursorMoved { .. }) => {
                 let p = cursor.position().map(|q| Point::new(q.x - b.x, q.y - b.y));
                 match (&mut st.drag, p) {
-                    (Some(Drag::Pan { x0, t0, last, vel, moved }), Some(p)) => {
+                    (
+                        Some(Drag::Pan {
+                            x0,
+                            t0,
+                            last,
+                            vel,
+                            moved,
+                        }),
+                        Some(p),
+                    ) => {
                         if (p.x - *x0).abs() > 3.0 {
                             *moved = true;
                         }
@@ -295,7 +326,10 @@ impl Widget<Msg, Theme, iced::Renderer> for Wave<'_> {
                     _ => {
                         let hover = local.filter(|p| p.x >= f.px && p.y >= f.top).map(|p| {
                             let t = vp.t_of(p.x - f.px);
-                            let lane = placed(self.app, self.wv, &f).into_iter().find(|l| p.y >= l.1 && p.y < l.1 + l.2).map(|l| l.0);
+                            let lane = placed(self.app, self.wv, &f)
+                                .into_iter()
+                                .find(|l| p.y >= l.1 && p.y < l.1 + l.2)
+                                .map(|l| l.0);
                             (t, lane, p)
                         });
                         if hover.is_some() || self.app.hover.is_some_and(|h| h.wave == self.wv.id) {
@@ -311,10 +345,14 @@ impl Widget<Msg, Theme, iced::Renderer> for Wave<'_> {
                         // a click: an annotation chosen (twice: zoomed to it)
                         let Some(p) = local else { return };
                         let now = Instant::now();
-                        let double = st.last_click.is_some_and(|(t, x)| now.duration_since(t).as_millis() < 400 && (x - p.x).abs() < 4.0);
+                        let double = st
+                            .last_click
+                            .is_some_and(|(t, x)| now.duration_since(t).as_millis() < 400 && (x - p.x).abs() < 4.0);
                         st.last_click = Some((now, p.x));
                         let t = vp.t_of(p.x - f.px);
-                        if let Some((Lane::Ann { claim, layer }, ..)) = placed(self.app, self.wv, &f).into_iter().find(|l| p.y >= l.1 && p.y < l.1 + l.2)
+                        if let Some((Lane::Ann { claim, layer }, ..)) = placed(self.app, self.wv, &f)
+                            .into_iter()
+                            .find(|l| p.y >= l.1 && p.y < l.1 + l.2)
                             && let Some(a) = &self.app.analysis
                             && let Some(row) = a.claims[claim].layers[layer].track.hit(t as i64)
                         {
@@ -354,7 +392,14 @@ impl Widget<Msg, Theme, iced::Renderer> for Wave<'_> {
         }
     }
 
-    fn mouse_interaction(&self, tree: &widget::Tree, layout: Layout<'_>, cursor: mouse::Cursor, _v: &Rectangle, _r: &iced::Renderer) -> mouse::Interaction {
+    fn mouse_interaction(
+        &self,
+        tree: &widget::Tree,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        _v: &Rectangle,
+        _r: &iced::Renderer,
+    ) -> mouse::Interaction {
         let st = tree.state.downcast_ref::<State>();
         match st.drag {
             Some(Drag::Pan { .. }) => mouse::Interaction::Grabbing,
@@ -379,9 +424,23 @@ impl Widget<Msg, Theme, iced::Renderer> for Wave<'_> {
         let b = layout.bounds();
         let app = self.app;
         let pal = &app.pal;
-        r.fill_quad(Quad { bounds: b, ..Quad::default() }, pal.c[BG]);
+        r.fill_quad(
+            Quad {
+                bounds: b,
+                ..Quad::default()
+            },
+            pal.c[BG],
+        );
         let Some(cap) = &app.cap else {
-            put(r, b, "ファイルを開いてください", Point::new(b.width / 2.0, b.height / 2.0), 14.0, pal.dim(), Center);
+            put(
+                r,
+                b,
+                "ファイルを開いてください",
+                Point::new(b.width / 2.0, b.height / 2.0),
+                14.0,
+                pal.dim(),
+                Center,
+            );
             return;
         };
         let f = frame_geo(b.size());
@@ -404,11 +463,32 @@ impl Widget<Msg, Theme, iced::Renderer> for Wave<'_> {
                 ruler.push((f.px + x, fmt_ruler(s, step)));
             }
         }
-        let geo = Geo { px: f.px, pw: f.pw, top: f.top, bottom: f.bottom, mm: f.mm, char_px: CHAR_PX, tiles: app.tiles_on };
-        let hits = Hits { by_layer: &app.search.by_layer, ticks: &app.search.hit_ticks };
+        let geo = Geo {
+            px: f.px,
+            pw: f.pw,
+            top: f.top,
+            bottom: f.bottom,
+            mm: f.mm,
+            char_px: CHAR_PX,
+            tiles: app.tiles_on,
+        };
+        let hits = Hits {
+            by_layer: &app.search.by_layer,
+            ticks: &app.search.hit_ticks,
+        };
         let mut sc = self.wv.cache.borrow_mut();
         let t_scene = Instant::now();
-        scene::frame(&mut sc, cap, app.analysis.as_ref(), &hits, &lanes, &vp, &geo, app.sel, &grid);
+        scene::frame(
+            &mut sc,
+            cap,
+            app.analysis.as_ref(),
+            &hits,
+            &lanes,
+            &vp,
+            &geo,
+            app.sel,
+            &grid,
+        );
         // the markers, the cursor, a range being chosen
         let out = &mut sc.out;
         out.set_clip(f.px, f.mm[1], f.px + f.pw, f.bottom);
@@ -427,55 +507,122 @@ impl Widget<Msg, Theme, iced::Renderer> for Wave<'_> {
         }
         let n_inst = out.inst.len() / 8;
         let scene_ms = t_scene.elapsed().as_secs_f64() * 1e3;
-        let prim = WavePrim { key: self.wv.id as u64, inst: Arc::new(out.inst.clone()), pal: pal.gpu() };
+        let prim = WavePrim {
+            key: self.wv.id as u64,
+            inst: Arc::new(out.inst.clone()),
+            pal: pal.gpu(),
+        };
         r.draw_primitive(b, prim);
 
         // text above the shapes (iced draws a layer's text after its primitives)
         let t_text = Instant::now();
-        let plot = Rectangle::new(Point::new(b.x + f.px, b.y + f.top), Size::new(f.pw, (f.bottom - f.top).max(0.0)));
+        let plot = Rectangle::new(
+            Point::new(b.x + f.px, b.y + f.top),
+            Size::new(f.pw, (f.bottom - f.top).max(0.0)),
+        );
         for l in &out.labels {
             let txt = out.label_text(l);
-            let clip = if l.y < f.top { Rectangle::new(Point::new(b.x + f.px, b.y), Size::new(f.pw, f.top)) } else { plot };
-            put_clip(r, txt, Point::new(b.x + l.x, b.y + l.y), ANN_FONT, pal.c[l.color], Center, clip);
+            let clip = if l.y < f.top {
+                Rectangle::new(Point::new(b.x + f.px, b.y), Size::new(f.pw, f.top))
+            } else {
+                plot
+            };
+            put_clip(
+                r,
+                txt,
+                Point::new(b.x + l.x, b.y + l.y),
+                ANN_FONT,
+                pal.c[l.color],
+                Center,
+                clip,
+            );
         }
         let n_labels = out.labels.len();
         for (x, s) in &ruler {
-            put(r, b, s, Point::new(x + 3.0, f.ruler_y + RULER_H / 2.0), 10.5, pal.dim(), Left);
+            put(
+                r,
+                b,
+                s,
+                Point::new(x + 3.0, f.ruler_y + RULER_H / 2.0),
+                10.5,
+                pal.dim(),
+                Left,
+            );
         }
         // the lanes' names
-        let names = Rectangle::new(Point::new(b.x, b.y + f.top), Size::new(f.px - 4.0, (f.bottom - f.top).max(0.0)));
+        let names = Rectangle::new(
+            Point::new(b.x, b.y + f.top),
+            Size::new(f.px - 4.0, (f.bottom - f.top).max(0.0)),
+        );
         for &(lane, y, h, _) in &lanes {
             if y + h < f.top || y > f.bottom {
                 continue;
             }
             let (name, color, size) = match lane {
                 Lane::Dig(i) => (cap.lines[i].name.clone(), pal.text(), 12.5),
-                Lane::Ana(i) => (format!("{} ({})", cap.analog[i].name, cap.analog[i].unit), pal.c[ANALOG], 12.0),
+                Lane::Ana(i) => (
+                    format!("{} ({})", cap.analog[i].name, cap.analog[i].unit),
+                    pal.c[ANALOG],
+                    12.0,
+                ),
                 Lane::Ann { claim, layer } => match &app.analysis {
                     Some(a) => {
                         let c = &a.claims[claim];
                         let l = &c.layers[layer];
                         let short = l.name.split(' ').next().unwrap_or("");
-                        (format!("{} {short}", c.protocol), if layer == 0 { pal.verdict(&c.verdict) } else { pal.dim() }, 10.5)
+                        (
+                            format!("{} {short}", c.protocol),
+                            if layer == 0 { pal.verdict(&c.verdict) } else { pal.dim() },
+                            10.5,
+                        )
                     }
                     None => continue,
                 },
                 Lane::Unread { .. } => continue,
             };
-            put_clip(r, &name, Point::new(b.x + 8.0, b.y + y + h / 2.0), size, color, Left, names);
+            put_clip(
+                r,
+                &name,
+                Point::new(b.x + 8.0, b.y + y + h / 2.0),
+                size,
+                color,
+                Left,
+                names,
+            );
         }
         // the summary still being built
         let done = cap.lod_done.load(std::sync::atomic::Ordering::Relaxed);
         if done < cap.lines.len() {
-            let built: f64 = cap.lines.iter().map(|l| l.lod.read().unwrap().built_until as f64).sum::<f64>() / (cap.lines.len().max(1) as f64 * cap.n_ticks.max(1) as f64);
-            put(r, b, &format!("要約 {:.0}%", built * 100.0), Point::new(b.width - 8.0, f.ruler_y + RULER_H / 2.0), 11.0, pal.accent(), Right);
+            let built: f64 = cap
+                .lines
+                .iter()
+                .map(|l| l.lod.read().unwrap().built_until as f64)
+                .sum::<f64>()
+                / (cap.lines.len().max(1) as f64 * cap.n_ticks.max(1) as f64);
+            put(
+                r,
+                b,
+                &format!("要約 {:.0}%", built * 100.0),
+                Point::new(b.width - 8.0, f.ruler_y + RULER_H / 2.0),
+                11.0,
+                pal.accent(),
+                Right,
+            );
         }
         // the markers' labels and their difference
         for (k, m) in app.markers.iter().enumerate() {
             if let Some(t) = m {
                 let x = f.px + vp.x_of(*t);
                 if x >= f.px && x <= f.px + f.pw {
-                    put(r, b, &format!("M{}", k + 1), Point::new(x + 3.0, f.ruler_y + 2.0), 10.5, pal.c[MARKER1 + k], LeftTop);
+                    put(
+                        r,
+                        b,
+                        &format!("M{}", k + 1),
+                        Point::new(x + 3.0, f.ruler_y + 2.0),
+                        10.5,
+                        pal.c[MARKER1 + k],
+                        LeftTop,
+                    );
                 }
             }
         }
@@ -493,7 +640,11 @@ impl Widget<Msg, Theme, iced::Renderer> for Wave<'_> {
                         if let Some(i) = tr.hit(h.t as i64) {
                             let it = tr.item(i);
                             lines.push(tr.text(i).to_string());
-                            lines.push(format!("{} 〜 {}", fmt_time(it.s as f64 / hz), fmt_time(it.e as f64 / hz)));
+                            lines.push(format!(
+                                "{} 〜 {}",
+                                fmt_time(it.s as f64 / hz),
+                                fmt_time(it.e as f64 / hz)
+                            ));
                         }
                     }
                 }
@@ -509,11 +660,27 @@ impl Widget<Msg, Theme, iced::Renderer> for Wave<'_> {
             let bx = Rectangle::new(Point::new(b.x + x, b.y + y), Size::new(w, hh));
             r.with_layer(b, |r| {
                 r.fill_quad(
-                    Quad { bounds: bx, border: iced::Border { color: pal.border, width: 1.0, radius: 6.0.into() }, ..Quad::default() },
+                    Quad {
+                        bounds: bx,
+                        border: iced::Border {
+                            color: pal.border,
+                            width: 1.0,
+                            radius: 6.0.into(),
+                        },
+                        ..Quad::default()
+                    },
                     Color { a: 0.96, ..pal.panel },
                 );
                 for (i, s) in lines.iter().enumerate() {
-                    put(r, b, s, Point::new(x + 8.0, y + 4.0 + i as f32 * 16.0), 12.0, if i == 0 { pal.dim() } else { pal.text() }, LeftTop);
+                    put(
+                        r,
+                        b,
+                        s,
+                        Point::new(x + 8.0, y + 4.0 + i as f32 * 16.0),
+                        12.0,
+                        if i == 0 { pal.dim() } else { pal.text() },
+                        LeftTop,
+                    );
                 }
             });
         }
