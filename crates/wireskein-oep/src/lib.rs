@@ -1,15 +1,17 @@
-//! The part of an OEP client a capture needs (bench/notes/2026-11-24-rust-plan.ja.md §37), in plain Rust: find the
-//! probe (an oep:// address's unit_id as its USB serial, or a TCP address), open it (USB vendor bulk with many IN
-//! transfers queued, or TCP), take its lease, run a logic capture on oep.fixture.logic (one-shot, repeat, stream;
-//! capture format 0 and format 1's reductions) and put it together: the parts with their losses, times and the probe's
-//! facts, as oep-client-python's `acquire` gives them, and as WireSkein's capture (`to_capture`, wireskein-io).
+//! The part of an OEP client a capture needs (bench/notes/2026-11-24-rust-plan.ja.md §37, §40, §42, §47), in plain
+//! Rust: find the probe (an oep:// address's unit_id as its USB serial, else by DNS-SD; a TCP address; a serial port),
+//! open it (USB vendor bulk with many IN transfers queued, HID, its CDC port, TCP, a serial port), take its lease, run
+//! a logic capture on oep.fixture.logic (one-shot, repeat, stream; capture format 0 and format 1's reductions) and put
+//! it together: the parts with their losses, times and the probe's facts, as oep-client-python's `acquire` gives
+//! them, and as WireSkein's capture (`to_capture`, wireskein-io).
 //!
 //! Analog lines go to oep.fixture.analog, alone or with logic in a capture group (started together, or on the group's
-//! trigger source); the session a run before left open is ended first (`kept`); a length-prefixed link that loses its
-//! frame boundaries resyncs (transports §5).
+//! trigger source); a line may be named by its label (S.N, S@P: `labels`); the session a run before left open is
+//! ended first (`kept`); a length-prefixed link that loses its frame boundaries resyncs (transports §5); a UART
+//! bridge's link is raised by port_speed and judged in use as oep-client-python does, with its record (`speed`).
 //!
-//! Not here (oep-client-python's, which wireskein's Python source keeps using for them): HID and CDC routes, DNS-SD,
-//! brokers, a line named by its label (S.N), formats 2-4.
+//! Not here (oep-client-python's, which wireskein's Python source keeps using for them): brokers, a bare `usb`,
+//! tcp://HOST without a port, formats 2-4; HID and CDC off Linux.
 //!
 //! ```no_run
 //! let req = wireskein_oep::Request::new(vec![("A".into(), "GPIO30".into())], 20_000_000, 100_000);
@@ -22,12 +24,16 @@ pub mod assemble;
 pub mod blocks;
 pub mod capture;
 pub mod cobs;
+pub mod discovery;
 pub mod flow;
+pub mod hid;
 pub mod host;
 pub mod kept;
+pub mod labels;
 pub mod link;
 pub mod msg;
 pub mod ratio;
+pub mod speed;
 pub mod transport;
 
 pub use acquire::{Acquired, Address, Mode, Request, capture_at, parse_address};

@@ -90,6 +90,16 @@ fn request(v: &Value) -> PyResult<Request> {
     r.spool_dir = s("spool_dir").map(Into::into);
     r.glitch_filter_ns = u("glitch_filter_ns").map(|x| x as u32);
     r.threshold_v = f("threshold_v");
+    // a UART link's rates (None: the record decides; []: the boot speed)
+    r.fast = match v.get("fast") {
+        None | Some(Value::Null) => None,
+        Some(Value::Array(a)) => Some(
+            a.iter()
+                .map(|x| x.as_u64().map(|x| x as u32).ok_or_else(|| bad("fast: rates")))
+                .collect::<PyResult<Vec<_>>>()?,
+        ),
+        Some(_) => return Err(bad("fast: null or a list of rates")),
+    };
     Ok(r)
 }
 
@@ -247,4 +257,28 @@ pub fn oep_assemble<'py>(
         samples: None,
     };
     Ok(out(py, &a))
+}
+
+/// oep_hid_read(reports) -> (bytes, losses): HID reports (each its payload, the report ID off) read back into the
+/// length-prefixed frames as wireskein-oep's HID transport does (whole frames only; a report found missing or broken
+/// drops the frame begun) - for a test beside oep-client-python's HidReportStream.
+#[pyfunction]
+pub fn oep_hid_read<'py>(py: Python<'py>, reports: Vec<Vec<u8>>) -> (Bound<'py, PyBytes>, u64) {
+    let mut r = wireskein_oep::hid::Reports::default();
+    let out: Vec<u8> = reports.iter().flat_map(|x| r.take(x)).collect();
+    (PyBytes::new(py, &out), r.losses)
+}
+
+/// oep_hid_write(data, output_size) -> [bytes]: length-prefixed frames as the output reports wireskein-oep sends
+/// (count, first, the bytes, zeros).
+#[pyfunction]
+pub fn oep_hid_write<'py>(py: Python<'py>, data: Vec<u8>, output_size: usize) -> PyResult<Vec<Bound<'py, PyBytes>>> {
+    if output_size <= wireskein_oep::hid::HEAD {
+        return Err(PyValueError::new_err("output_size: more than the report's head (4)"));
+    }
+    Ok(wireskein_oep::hid::Writer::default()
+        .reports(&data, output_size)
+        .iter()
+        .map(|r| PyBytes::new(py, r))
+        .collect())
 }

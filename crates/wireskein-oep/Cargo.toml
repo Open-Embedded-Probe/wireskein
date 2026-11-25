@@ -15,4 +15,4 @@ wireskein-capture = { path = "../wireskein-capture" }
 nusb = "0.2.9"
 
 [target.'cfg(unix)'.dependencies]
-rustix = { version = "1", default-features = false, features = ["std", "time", "fs", "termios", "process"] }
+rustix = { version = "1", default-features = false, features = ["std", "time", "fs", "termios", "process", "net"] }

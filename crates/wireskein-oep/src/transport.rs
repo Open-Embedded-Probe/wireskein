@@ -81,7 +81,7 @@ fn deliver(tx: &Sender<Vec<u8>>, chunk: Vec<u8>, flow: &Flow, stats: &Stats, sto
     crate::flow::deliver(tx, chunk, n, flow, &stats.held, stop)
 }
 
-trait Sink: Send {
+pub(crate) trait Sink: Send {
     fn send(&mut self, data: &[u8]) -> Result<()>;
 }
 
@@ -104,9 +104,45 @@ pub struct Transport {
     /// a serial port: its path, and how its line speed is set (the host side of port_speed)
     pub port_path: Option<String>,
     set_baud: Option<Box<dyn FnMut(u32) -> Result<()> + Send>>,
+    /// a stream that hands whole frames only (HID: its reports' first): a resync reads nothing past
+    pub whole_frames: bool,
+    /// HID: reports found missing or broken
+    pub report_losses: Option<Arc<AtomicU64>>,
 }
 
 impl Transport {
+    /// A stream from its parts: what comes in (counted in `flow`), how to write, what stops its reader.
+    pub(crate) fn with_parts(
+        rx: Receiver<Vec<u8>>,
+        flow: Arc<Flow>,
+        out: Box<dyn Sink>,
+        stop: Arc<AtomicBool>,
+        thread: Option<JoinHandle<()>>,
+        reader: &'static str,
+        stats: Arc<Stats>,
+    ) -> Transport {
+        Transport {
+            rx: Incoming {
+                rx,
+                flow: flow.clone(),
+                counted: true,
+            },
+            flow,
+            out,
+            stop,
+            thread,
+            shutdown: None,
+            reader,
+            keeps_boundaries: false,
+            stats,
+            depth: 0,
+            port_path: None,
+            set_baud: None,
+            whole_frames: false,
+            report_losses: None,
+        }
+    }
+
     pub fn write(&mut self, data: &[u8]) -> Result<()> {
         self.out.send(data)
     }
@@ -195,6 +231,8 @@ pub fn open_tcp(host: &str, port: u16) -> Result<Transport> {
         depth: 0,
         port_path: None,
         set_baud: None,
+        whole_frames: false,
+        report_losses: None,
     })
 }
 
@@ -309,6 +347,8 @@ pub fn open_usb(info: &nusb::DeviceInfo, urb: usize, depth: usize) -> Result<Tra
         depth,
         port_path: None,
         set_baud: None,
+        whole_frames: false,
+        report_losses: None,
     })
 }
 
@@ -405,6 +445,8 @@ impl Transport {
             depth: 0,
             port_path: None,
             set_baud: None,
+            whole_frames: false,
+            report_losses: None,
         }
     }
 
@@ -457,6 +499,8 @@ impl Transport {
             depth: 0,
             port_path: None,
             set_baud: None,
+            whole_frames: false,
+            report_losses: None,
         }
     }
 
@@ -482,6 +526,8 @@ impl Transport {
             depth: 0,
             port_path: None,
             set_baud: None,
+            whole_frames: false,
+            report_losses: None,
         }
     }
 }
@@ -500,6 +546,55 @@ impl<F: FnMut(&[u8]) -> Vec<Vec<u8>> + Send> Sink for ScriptSink<F> {
                 .map_err(|_| Error::Io("the scripted probe's reader went".into()))?;
         }
         Ok(())
+    }
+}
+
+// ---------------- a USB device's CDC port ----------------
+
+/// The project's own USB VID:PID (1209:4F45, transports §3): only its CDC ports are taken for an OEP probe's.
+pub const PROJECT_VID_PID: (u16, u16) = (0x1209, 0x4F45);
+
+/// The serial ports (CDC) of the USB device whose serial number is `unit_id`, on the project's VID:PID, as paths
+/// (/dev/ttyACM0): Linux's sysfs under `root` (/sys normally). Elsewhere none (oep-client-python finds them).
+pub fn cdc_ports_in(root: &std::path::Path, unit_id: &str) -> Vec<String> {
+    let mut out = vec![];
+    let Ok(dir) = std::fs::read_dir(root.join("class/tty")) else {
+        return out;
+    };
+    let read = |p: &std::path::Path| std::fs::read_to_string(p).ok().map(|s| s.trim().to_string());
+    let mut names: Vec<String> = dir
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .collect();
+    names.sort();
+    for name in names {
+        // device -> the USB interface; its parent the device with serial, idVendor, idProduct
+        let Ok(intf) = std::fs::canonicalize(root.join("class/tty").join(&name).join("device")) else {
+            continue;
+        };
+        let Some(dev) = intf.parent() else { continue };
+        let (Some(serial), Some(vid), Some(pid)) = (
+            read(&dev.join("serial")),
+            read(&dev.join("idVendor")),
+            read(&dev.join("idProduct")),
+        ) else {
+            continue;
+        };
+        let (Ok(v), Ok(p)) = (u16::from_str_radix(&vid, 16), u16::from_str_radix(&pid, 16)) else {
+            continue;
+        };
+        if (v, p) == PROJECT_VID_PID && serial.eq_ignore_ascii_case(unit_id) {
+            out.push(format!("/dev/{name}"));
+        }
+    }
+    out
+}
+
+pub fn cdc_ports(unit_id: &str) -> Vec<String> {
+    if cfg!(target_os = "linux") {
+        cdc_ports_in(std::path::Path::new("/sys"), unit_id)
+    } else {
+        vec![]
     }
 }
 
@@ -590,6 +685,7 @@ pub fn open_serial(path: &str, baud: u32) -> Result<Transport> {
             }
         })?;
     let setter = f;
+    let closer = setter.try_clone()?;
     Ok(Transport {
         rx: Incoming {
             rx,
@@ -600,13 +696,19 @@ pub fn open_serial(path: &str, baud: u32) -> Result<Transport> {
         out: Box::new(FileSink(w)),
         stop,
         thread: Some(thread),
-        shutdown: None,
+        // the port's exclusive mode off as it closes: a pty's other side may keep it open, and the next host's open
+        // would find it busy (oep-client-python's _exclusive_off)
+        shutdown: Some(Box::new(move || {
+            let _ = rustix::termios::ioctl_tiocnxcl(&closer);
+        })),
         reader: "rust-serial",
         keeps_boundaries: false,
         stats,
         depth: 0,
         port_path: Some(path.to_string()),
         set_baud: Some(Box::new(move |b| termios_at(&setter, b))),
+        whole_frames: false,
+        report_losses: None,
     })
 }
 
@@ -615,4 +717,34 @@ pub fn open_serial(path: &str, _baud: u32) -> Result<Transport> {
     Err(Error::Value(format!(
         "{path}: serial ports are oep-client-python's on this system"
     )))
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+
+    /// A sysfs of two USB devices with the same serial: the probe (1209:4f45) with a CDC tty, another on another
+    /// VID:PID.
+    #[test]
+    fn a_probes_cdc_port_is_found_by_its_serial() {
+        let root = std::env::temp_dir().join(format!("ws-sysfs-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let mk = |dev: &str, vid: &str, pid: &str, tty: &str| {
+            let d = root.join("devices").join(dev);
+            let intf = d.join(format!("{dev}:1.2"));
+            std::fs::create_dir_all(&intf).unwrap();
+            std::fs::write(d.join("serial"), "30EDA0EA068B\n").unwrap();
+            std::fs::write(d.join("idVendor"), format!("{vid}\n")).unwrap();
+            std::fs::write(d.join("idProduct"), format!("{pid}\n")).unwrap();
+            let t = root.join("class/tty").join(tty);
+            std::fs::create_dir_all(&t).unwrap();
+            std::os::unix::fs::symlink(&intf, t.join("device")).unwrap();
+        };
+        mk("3-1", "1209", "4f45", "ttyACM3");
+        mk("3-2", "303a", "1001", "ttyACM4");
+        std::fs::create_dir_all(root.join("class/tty/ttyS0")).unwrap();
+        assert_eq!(cdc_ports_in(&root, "30eda0ea068b"), vec!["/dev/ttyACM3".to_string()]);
+        assert!(cdc_ports_in(&root, "fafe00000003").is_empty());
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }

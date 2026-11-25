@@ -59,17 +59,23 @@ def test_what_the_rust_client_takes(clean):
     assert _rust.captures("oep://30eda0ea068b", logic)
     assert _rust.captures("oep://30eda0ea068b?via=usb", logic) and _rust.captures("tcp://127.0.0.1:7450", logic)
     assert _rust.captures("oep://30eda0ea068b?via=tcp:10.0.0.2:7450", logic)
-    serial = sources.Request([("A", "GPIO30")], 1_000_000, 100, fast=[])
-    assert _rust.captures("/dev/ttyACM0", serial) and _rust.captures("oep://30eda0ea068b?via=tty:/dev/ttyACM0", serial)
-    for target in ("/dev/ttyACM0", "oep://30eda0ea068b?via=hid", "oep://30eda0ea068b?via=cdc",
-                   "oep://30eda0ea068b?via=net", "oep://30eda0ea068b?via=tty:/dev/ttyACM0", "usb", "tcp://host"):
+    # a serial port, its link raised by port_speed (the default, the record's) or at its boot speed
+    for fast in (None, [], [921_600]):
+        serial = sources.Request([("A", "GPIO30")], 1_000_000, 100, fast=fast)
+        assert _rust.captures("/dev/ttyACM0", serial)
+        assert _rust.captures("oep://30eda0ea068b?via=tty:/dev/ttyACM0", serial)
+    assert _rust.captures("oep://30eda0ea068b?via=net", logic) and _rust.captures("oep://30eda0ea068b?via=bulk", logic)
+    on_linux = sys.platform.startswith("linux")
+    for target in ("oep://30eda0ea068b?via=hid", "oep://30eda0ea068b?via=cdc"):
+        assert _rust.captures(target, logic) == on_linux, target
+    for target in ("usb", "tcp://host", "COM3", "oep://30eda0ea068b?via=smoke"):
         assert not _rust.captures(target, logic), target
     analog = sources.Request([("A", "GPIO30")], 1_000_000, 100, analog=[("V", "GPIO17", None)],
                              trigger=("V", "rise", 1.0))
     assert _rust.captures("oep://30eda0ea068b", analog)
     label = sources.Request([("A", "x035.swdio")], 1_000_000, 100)
     alabel = sources.Request([], 1_000_000, 100, analog=[("V", "x035.vdd", None)])
-    assert not _rust.captures("oep://30eda0ea068b", label) and not _rust.captures("oep://30eda0ea068b", alabel)
+    assert _rust.captures("oep://30eda0ea068b", label) and _rust.captures("oep://30eda0ea068b", alabel)
     clean.setenv("OEP_BROKER", "127.0.0.1:7460")
     assert not _rust.captures("oep://30eda0ea068b", logic)
 
@@ -881,3 +887,230 @@ def test_wireskein_rs_chooses_by_the_kind(tmp_path):
     assert r.returncode == 1 and "unknown source 'sigrok' (known: demo, oep)" in r.stderr
     r = subprocess.run([rs, "capture", "--list", "--source", "demo"], capture_output=True, text=True)
     assert r.returncode == 0 and r.stdout.startswith("demo:counter\t")
+
+
+# ---------------- port_speed on a serial port (§47) ----------------
+
+def _speed_meta(path):
+    """meta.probe.link's port_speed part, without what is timing (KB/s, the probe's own answer to the try)."""
+    link = fileformat.read_header(path)["meta"]["probe"]["link"]
+    out = {k: link.get(k) for k in ("asked", "rate", "raised", "why", "skipped", "retried", "capped", "remembered")}
+    # a rate above 500000 is verified for 1 s each way: its frames are as many as the host and the pty moved then
+    out["trials"] = [(t["rate"], t["result"],
+                      [(f["flow"], f["n"], f["frames"] if t["rate"] <= 500_000 else f["frames"] >= 16, f["broken"],
+                        f["lost"], f["passed"]) for f in t["flows"]]) for t in link.get("trials", [])]
+    out["step_downs"] = [(d["from"], d["to"], d["probation"], d["why"].split(":")[0])
+                         for d in link.get("step_downs", [])]
+    out["stepped_down"] = (link.get("stepped_down") or "").split(":")[0] or None
+    return out
+
+
+def _record(cache):
+    """The port_speed record (oep-client-python's speed_record, the same file): port|unit -> rate -> (result, phase),
+    the port's path left out (each run has its own pty)."""
+    import json
+    f = cache / "oep-client" / "link-speed.json"
+    if not f.exists():
+        return {}
+    doc = json.loads(f.read_text())
+    return {k.split("|")[1]: {r: (v["result"], v["phase"]) for r, v in e["rates"].items()} for k, e in doc.items()}
+
+
+SPEED_CASES = {
+    # the default: the record decides (empty here), 1500000 then 921600 tried, the read-back flow verified
+    "default": (None, ()),
+    "named": ([921_600], ()),
+    "boot-speed": ([], ()),
+    # 1500000 breaks on the line: its verify fails, 921600 is committed, the record says both
+    "broken-fastest": (None, ("--broken-rate", "1500000")),
+    # both tried break: at most two a capture (500000 left out), the boot speed
+    "all-broken": (None, ("--broken-rate", "1500000", "--broken-rate", "921600")),
+    # within the ceiling: the 16 frames' verify; every second frame breaks once 12 kB went at the rate, in its
+    # probation (32 KiB): a step down to the boot speed while the capture reads
+    "probation": ([500_000], ("--broken-rate", "500000:after12000:every2")),
+}
+
+
+@both
+@pytest.mark.skipif(sys.platform != "linux", reason="a pty")
+@pytest.mark.parametrize("case", list(SPEED_CASES))
+def test_a_raised_serial_port_is_the_same(case, pty_bench, monkeypatch, tmp_path):
+    """port_speed (oep-if-link §3) on the virtual bench's UART bridge (esp32-v003 on a pty), as oep-client-python 0.0.66
+    raises it for a capture: the same file, the same trials (each flow's frames, broken, lost), the same record."""
+    fast, extra = SPEED_CASES[case]
+    chans = [("A", "GPIO4"), ("B", "GPIO5")]
+    samples = 100_000 if case == "probation" else 2000
+    got = []
+    for rust in (False, True):
+        cache = tmp_path / f"cache-{rust}"
+        monkeypatch.setenv("XDG_CACHE_HOME", str(cache))
+        req = sources.Request(list(chans), 1_000_000, samples, fast=fast)
+        out = _take(monkeypatch, rust, pty_bench(*extra, profile="esp32-v003"), req, tmp_path / f"{case}-{rust}.ws")
+        got.append((_content(out), _speed_meta(out), _record(cache)))
+    (pc, pm, pr), (rc, rm, rr) = got
+    assert rc == pc
+    assert rm == pm
+    assert rr == pr
+    if case == "broken-fastest":
+        assert pm["rate"] == 921_600 and pr["fafe00000003"]["1500000"][0] == "failed"
+    if case == "probation":
+        assert pm["step_downs"] and pm["step_downs"][0][:3] == (500_000, 115_200, True)
+
+
+@both
+@pytest.mark.skipif(sys.platform != "linux", reason="a pty")
+def test_the_record_shapes_the_next_capture(pty_bench, monkeypatch, tmp_path):
+    """The record a run left (1500000 failed, 921600 passed) puts 921600 first and leaves 1500000 out: the second run
+    says so (skipped, remembered) - whichever client wrote the record, the other reads it."""
+    chans = [("A", "GPIO4")]
+    for first, second in ((False, True), (True, False)):
+        cache = tmp_path / f"cache-{first}"
+        monkeypatch.setenv("XDG_CACHE_HOME", str(cache))
+        src = pty_bench("--broken-rate", "1500000", profile="esp32-v003")
+        req = sources.Request(chans, 1_000_000, 500)
+        _take(monkeypatch, first, src, req, tmp_path / f"a-{first}.ws")
+        out = _take(monkeypatch, second, src, req, tmp_path / f"b-{first}.ws")
+        m = _speed_meta(out)
+        assert m["skipped"] == [1_500_000] and m["remembered"] is True and m["rate"] == 921_600
+        assert [t[0] for t in m["trials"]] == [921_600]
+
+
+# ---------------- a line named by its label (host guide §5.3) ----------------
+
+LABELS = ("--label", "10=x035.swdio@pa13", "--label", "11=x035@pb9", "--label", "17=x035.vdd", "--label", "12=other.a")
+
+
+@both
+@pytest.mark.parametrize("lines", [[("A", "x035.swdio"), ("B", "X035@PB9"), ("C", "GPIO12")],
+                                   [("A", "x035.swdio@pa13"), ("B", "other.a")]], ids=["role-pin-name", "full"])
+def test_lines_named_by_their_labels(lines, bench, monkeypatch, tmp_path):
+    got = []
+    for rust in (False, True):
+        req = sources.Request(list(lines), 20_000_000, 1000)
+        out = _take(monkeypatch, rust, bench(*LABELS), req, tmp_path / f"l{rust}.wireskein")
+        got.append((_content(out), fileformat.read_header(out)["meta"]["probe_channels"]))
+    assert got[1] == got[0]
+
+
+@both
+def test_an_analog_line_by_its_label(bench, monkeypatch, tmp_path):
+    got = []
+    for rust in (False, True):
+        req = sources.Request([("A", "x035.swdio")], 20_000_000, 2000, analog=[("V", "x035.vdd", None)],
+                              analog_rate_hz=48_000, analog_samples=64)
+        out = _take(monkeypatch, rust, bench(*LABELS), req, tmp_path / f"a{rust}.wireskein")
+        got.append(_analog_file(out))
+    assert got[1] == got[0]
+
+
+@both
+@pytest.mark.parametrize("line", ["x035.nope", "x035@pz1", "nolabels.a"])
+def test_a_label_no_channel_carries(line, bench, monkeypatch, tmp_path):
+    errs = []
+    for rust in (False, True):
+        with pytest.raises(ValueError) as e:
+            _take(monkeypatch, rust, bench(*LABELS), sources.Request([("A", line)], 1_000_000, 100),
+                  tmp_path / f"e{rust}.wireskein")
+        errs.append(str(e.value))
+    assert errs[1] == errs[0] == f"{line}: no channel carries that label (host guide §5.3)"
+
+
+# ---------------- DNS-SD (an OEP address without a route, not on USB) ----------------
+
+@both
+@pytest.mark.parametrize("route", ["", "?via=net"], ids=["no-route", "net"])
+def test_a_probe_found_by_dns_sd(route, monkeypatch, tmp_path):
+    """The virtual bench on TCP announcing `_oep._tcp` (its minimal mDNS responder) under a unit_id no USB device has:
+    oep://UNIT (not on USB: DNS-SD) and oep://UNIT?via=net find it, verify it (confirm, describe's unit_id) and
+    capture from it as oep-client-python does."""
+    import secrets
+    unit = "fafe" + secrets.token_hex(4)
+    p = subprocess.Popen([sys.executable, "-m", SERVE, "--tcp", "0", "--framing", "length", "--announce",
+                          "--announce-engine", "minimal", "--unit-id", unit], stdin=subprocess.PIPE,
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        p.stdout.readline()
+        got = []
+        for rust in (False, True):
+            req = sources.Request([("A", "GPIO10"), ("B", "GPIO11")], 20_000_000, 500)
+            out = _take(monkeypatch, rust, f"oep:oep://{unit}{route}", req, tmp_path / f"n{rust}.wireskein")
+            head = fileformat.read_header(out)
+            assert head["meta"]["probe"]["unit_id"] == unit
+            got.append(_content(out))
+        assert got[1] == got[0]
+    finally:
+        p.stdin.close()
+        p.wait(5)
+
+
+@rust_only
+def test_no_probe_announced_says_so(clean, tmp_path):
+    clean.setenv(_rust.RUST_ENV, "capture")
+    with pytest.raises(FileNotFoundError, match="no probe with unit_id fafe00dead00 announces _oep._tcp.local"):
+        sources.capture("oep:oep://fafe00dead00?via=net", sources.Request([("A", "GPIO10")], 1_000_000, 10),
+                        tmp_path / "x.wireskein")
+
+
+# ---------------- HID reports (transports §1) ----------------
+
+class _Reports:
+    """A HID backend that gives these reports, then nothing; what is written is kept."""
+
+    def __init__(self, reports):
+        self.reports, self.written = list(reports), []
+
+    def read_report(self, timeout):
+        import time
+        if self.reports:
+            return self.reports.pop(0)
+        time.sleep(timeout)
+        return b""
+
+    def write_report(self, payload):
+        self.written.append(bytes(payload))
+
+    def close(self):
+        pass
+
+
+def _frames(n, seed):
+    rng = np.random.default_rng(seed)
+    out = b""
+    for k in range(n):
+        m = rng.integers(0, 256, int(rng.integers(5, 300)), dtype=np.uint8).tobytes()
+        out += len(m).to_bytes(2, "little") + m
+    return out
+
+
+@both
+@pytest.mark.parametrize("lose", [(), (3,), (0, 7), "garble"], ids=["whole", "one-lost", "two-lost", "broken"])
+def test_hid_reports_read_and_written_as_python_does(lose, clean):
+    """The report framing of HID (count, first, the bytes): frames written as the same reports as oep-client-python's
+    HidReportStream, and reports read back (one missing, a broken one) into the same frames and losses."""
+    import time
+    import wireskein_core
+    from oep_client.hid_stream import HidReportStream
+    data = _frames(40, 7)
+    w = _Reports([])
+    s = HidReportStream(w, 64, 64)
+    s.write(data)
+    s.close()
+    assert [bytes(r) for r in wireskein_core.oep_hid_write(data, 64)] == w.written
+    reports = list(w.written)
+    if lose == "garble":
+        reports[4] = (200).to_bytes(2, "little") + reports[4][2:]        # a count past the report: rule 7
+    else:
+        reports = [r for k, r in enumerate(reports) if k not in lose]
+    s = HidReportStream(_Reports(reports), 64, 64)
+    deadline = time.monotonic() + 3
+    got = b""
+    while time.monotonic() < deadline:
+        chunk = s.read(1 << 16)
+        if not chunk and s.backend.reports == []:
+            time.sleep(0.2)
+            got += s.read(1 << 16)
+            break
+        got += chunk
+    s.close()
+    rs, losses = wireskein_core.oep_hid_read(reports)
+    assert bytes(rs) == got and losses == s.report_losses

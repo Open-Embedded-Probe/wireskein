@@ -24,37 +24,41 @@ const LEASE_MS: u32 = 30_000;
 
 pub use wireskein_capture::parts::Acquired;
 
-/// Where a probe is: an OEP address (oep://UNIT_ID[?via=usb|bulk|tcp:HOST:PORT]) or tcp://HOST:PORT.
+/// How an OEP address's probe is reached (host guide §5.3: `?via=`): `Any` (none named) is the host's choice - its
+/// USB device by its serial (vendor bulk, then HID, then its one CDC port), else DNS-SD.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Via {
+    Any,
+    Usb,
+    Bulk,
+    Hid,
+    Cdc,
+    Net,
+}
+
+/// Where a probe is: an OEP address (oep://UNIT_ID[?via=usb|bulk|hid|cdc|net|tcp:HOST:PORT|tty:PATH]), tcp://HOST:PORT
+/// or a serial port's path.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Address {
-    Usb {
-        unit: String,
-    },
+    /// found by its unit_id: on USB (its serial number) or by DNS-SD
+    Usb { unit: String, via: Via },
     Tcp {
         host: String,
         port: u16,
         unit: Option<String>,
     },
-    /// a serial port (a UART bridge or a CDC port by its path): COBS frames at the boot speed (transports §4)
-    Serial {
-        path: String,
-        unit: Option<String>,
-    },
+    /// a serial port (a UART bridge or a CDC port by its path): COBS frames (transports §4)
+    Serial { path: String, unit: Option<String> },
 }
 
 impl Address {
     /// The probe itself without its route (host guide §5.3), when its unit_id is known.
     pub fn place(&self) -> Option<String> {
-        match self {
-            Address::Usb { unit }
-            | Address::Tcp { unit: Some(unit), .. }
-            | Address::Serial { unit: Some(unit), .. } => Some(format!("oep://{unit}")),
-            _ => None,
-        }
+        self.unit().map(|u| format!("oep://{u}"))
     }
     pub fn unit(&self) -> Option<&str> {
         match self {
-            Address::Usb { unit }
+            Address::Usb { unit, .. }
             | Address::Tcp { unit: Some(unit), .. }
             | Address::Serial { unit: Some(unit), .. } => Some(unit),
             _ => None,
@@ -80,7 +84,7 @@ fn host_port(s: &str, what: &str) -> Result<(String, u16)> {
     ))
 }
 
-/// The addresses this client opens: None for one it does not (a serial port, a HID or CDC route, DNS-SD, a broker:
+/// The addresses this client opens: None for one it does not (a bare `usb`, a short form it does not know:
 /// oep-client-python's).
 pub fn parse_address(text: &str) -> Result<Option<Address>> {
     if let Some(rest) = text.strip_prefix("tcp://") {
@@ -119,9 +123,20 @@ pub fn parse_address(text: &str) -> Result<Option<Address>> {
                 .ok_or_else(|| Error::Value(format!("{text}: the only query is one via=<route> (host guide §5.3)")))?,
         ),
     };
+    let named = |v| {
+        Some(Address::Usb {
+            unit: unit.clone(),
+            via: v,
+        })
+    };
     Ok(match via {
-        None | Some("usb") | Some("bulk") => Some(Address::Usb { unit }),
-        Some(v) if v.starts_with("tcp:") => {
+        None => named(Via::Any),
+        Some("usb") => named(Via::Usb),
+        Some("bulk") => named(Via::Bulk),
+        Some("hid") => named(Via::Hid),
+        Some("cdc") => named(Via::Cdc),
+        Some("net") => named(Via::Net),
+        Some(v) if v.starts_with("tcp:") && v.len() > 4 => {
             let (host, port) = host_port(&v[4..], text)?;
             Some(Address::Tcp {
                 host,
@@ -133,33 +148,28 @@ pub fn parse_address(text: &str) -> Result<Option<Address>> {
             path: v[4..].to_string(),
             unit: Some(unit),
         }),
-        _ => None,
+        Some(v) => {
+            return Err(Error::Value(format!(
+                "{text}: via={v}: a route is one of usb, bulk, hid, cdc, net, tcp:<host>:<port> or tty:<path>"
+            )));
+        }
     })
 }
 
-/// Open the link to the probe at `addr` and confirm it (the probing rule, transports §3); an oep:// address's
-/// unit_id checked against describe's.
-pub fn open(addr: &Address) -> Result<Host> {
-    let t = match addr {
-        Address::Usb { unit } => {
-            let info = transport::find_usb(unit)?;
-            transport::open_usb(&info, transport::URB_SIZE, transport::DEPTH)?
-        }
-        Address::Tcp { host, port, .. } => transport::open_tcp(host, *port)?,
-        Address::Serial { path, .. } => transport::open_serial(path, transport::BASE_BAUD)?,
-    };
-    let serial = matches!(addr, Address::Serial { .. });
-    let quiet = !t.keeps_boundaries && !serial;
+/// The probing rule on a transport just opened (transports §3): confirm first, nothing else until a valid answer;
+/// a serial port's confirms at the boot speed for port_speed_idle_ms + host_wait_add_ms first.
+fn probe_link(t: transport::Transport, serial: bool, tcp: Option<(String, u16)>) -> Result<Host> {
+    let quiet = !t.keeps_boundaries && !serial && !t.whole_frames;
     let mut link = if serial {
         let mut lk = Link::with_framing(t, crate::link::Framing::Cobs);
         lk.baud = Some(transport::BASE_BAUD);
+        lk.judge.base_baud = Some(transport::BASE_BAUD);
         lk
     } else {
         Link::new(t)
     };
-    if let Address::Tcp { host, port, .. } = addr {
+    if let Some((h, p)) = tcp.clone() {
         // transports §5: a connection whose framing broke is closed and opened again
-        let (h, p) = (host.clone(), *port);
         link.reopener = Some(Box::new(move || transport::open_tcp(&h, p)));
     }
     if quiet {
@@ -183,10 +193,93 @@ pub fn open(addr: &Address) -> Result<Host> {
         ))
     })?;
     hst.probing = false;
-    if matches!(addr, Address::Tcp { .. }) {
+    if tcp.is_some() {
         // behind a broker: outlast its own retry towards the probe (oep-client-python's TCP_TIMEOUT)
         hst.link.timeout = Duration::from_secs(15);
     }
+    Ok(hst)
+}
+
+/// A probe found by its unit_id as the USB serial: its ways in by `via` (vendor bulk, then HID, then its one CDC
+/// port - oep-client-python's `_open_address`).
+fn open_usb_ways(unit: &str, via: Via) -> Result<Host> {
+    let info = transport::find_usb(unit)?;
+    let (vid, pid) = (info.vendor_id(), info.product_id());
+    let kinds: &[&str] = match via {
+        Via::Bulk => &["vendor"],
+        Via::Hid => &["hid"],
+        Via::Cdc => &[],
+        _ => &["vendor", "hid"],
+    };
+    let (mut errors, mut probed) = (vec![], false);
+    for &k in kinds {
+        let t = match k {
+            "vendor" => transport::open_usb(&info, transport::URB_SIZE, transport::DEPTH),
+            _ => crate::hid::open_hid(&info),
+        };
+        let t = match t {
+            Ok(t) => t,
+            Err(e) => {
+                errors.push(format!("{k}: {e}"));
+                continue;
+            }
+        };
+        match probe_link(t, false, None) {
+            Ok(h) => return Ok(h),
+            Err(e) => {
+                errors.push(format!("{k}: {e}"));
+                probed = true;
+            }
+        }
+    }
+    if !kinds.is_empty() && (probed || matches!(via, Via::Bulk | Via::Hid)) {
+        let m = format!("no way in to {vid:04x}:{pid:04x}: {}", errors.join("; "));
+        return Err(if probed { Error::Runtime(m) } else { Error::NotFound(m) });
+    }
+    let ports = if (vid, pid) == transport::PROJECT_VID_PID {
+        transport::cdc_ports(unit)
+    } else {
+        vec![]
+    };
+    if ports.len() != 1 {
+        return Err(Error::NotFound(format!(
+            "oep://{unit}: {} CDC port(s) of this USB device to open{}",
+            if ports.is_empty() {
+                "no".to_string()
+            } else {
+                ports.len().to_string()
+            },
+            if ports.is_empty() {
+                ""
+            } else {
+                ": name one with via=tty:<path>"
+            }
+        )));
+    }
+    probe_link(transport::open_serial(&ports[0], transport::BASE_BAUD)?, true, None)
+}
+
+/// Open the link to the probe at `addr` and confirm it (the probing rule, transports §3); an oep:// address's
+/// unit_id checked against describe's.
+pub fn open(addr: &Address) -> Result<Host> {
+    let mut hst = match addr {
+        Address::Usb { unit, via: Via::Net } => {
+            let (h, p) = crate::discovery::find_unit(unit)?;
+            probe_link(transport::open_tcp(&h, p)?, false, Some((h, p)))?
+        }
+        Address::Usb { unit, via } => match open_usb_ways(unit, *via) {
+            // not on USB: the host's next choice is DNS-SD
+            Err(Error::NotFound(_)) if *via == Via::Any && transport::find_usb(unit).is_err() => {
+                let (h, p) = crate::discovery::find_unit(unit)?;
+                probe_link(transport::open_tcp(&h, p)?, false, Some((h, p)))?
+            }
+            r => r?,
+        },
+        Address::Tcp { host, port, .. } => {
+            probe_link(transport::open_tcp(host, *port)?, false, Some((host.clone(), *port)))?
+        }
+        Address::Serial { path, .. } => probe_link(transport::open_serial(path, transport::BASE_BAUD)?, true, None)?,
+    };
     if let Some(unit) = addr.unit() {
         let said = hst
             .describe(host::CORE_FN)?
@@ -207,7 +300,9 @@ fn fold(s: &str) -> String {
     s.to_ascii_lowercase()
 }
 
-/// The probe's channel numbers of lines named by the probe's channel names (fn 0's channel_name, core §7.5).
+/// The probe's channel numbers (valid for this boot) of lines named as kept in scripts: a channel name (fn 0's
+/// channel_name, core §7.5; GPIO47) or a port's line label (host guide §5.3: S.N by its role, x035.swdio; S@P by the
+/// target pin, x035@pb9) - acquire's `_channels`. ASCII case aside.
 fn channel_ids(hst: &mut Host, lines: &[String]) -> Result<Vec<u16>> {
     let mut names: Vec<(String, u16)> = vec![];
     let mut shown = vec![];
@@ -218,8 +313,27 @@ fn channel_ids(hst: &mut Host, lines: &[String]) -> Result<Vec<u16>> {
             shown.push(name);
         }
     }
+    let mut labels: Option<Vec<(u16, String)>> = None;
     let mut out = vec![];
     for line in lines {
+        if let Some((port, role, pin)) = crate::labels::parse_label(line) {
+            if labels.is_none() {
+                labels = Some(crate::labels::labels(hst)?);
+            }
+            let ls = labels.as_deref().unwrap_or_default();
+            let ch = match (role, pin) {
+                (Some(role), _) => crate::labels::line_from_labels(ls, role, port),
+                (None, Some(pin)) => crate::labels::pin_from_labels(ls, pin, port),
+                (None, None) => None,
+            };
+            let Some(ch) = ch else {
+                return Err(Error::Value(format!(
+                    "{line}: no channel carries that label (host guide §5.3)"
+                )));
+            };
+            out.push(ch);
+            continue;
+        }
         let found: Vec<u16> = names
             .iter()
             .filter(|(n, _)| *n == fold(line))
@@ -310,19 +424,30 @@ fn link_info(hst: &Host, open_s: f64, read_bytes: u64, read_s: f64, oneshot: boo
     out.insert("read_s".into(), json!(round3(read_s)));
     let t = &hst.link.t;
     out.insert("reader".into(), json!(t.reader));
-    match hst.link.baud {
-        // nothing tried: the boot speed (port_speed is oep-client-python's)
-        Some(b) => {
-            if oneshot {
-                out.insert("rate".into(), json!(b));
+    // port_speed (acquire's _link_info): what was asked, the rate in force, each trial, what the record skipped
+    let sp = &hst.speed;
+    if !sp.asked.is_empty() {
+        out.insert("asked".into(), json!(sp.asked));
+    }
+    if let Some(r) = &sp.report {
+        r.link_fields(&mut out);
+    }
+    if oneshot {
+        if sp.remembered {
+            out.insert("remembered".into(), json!(true));
+        }
+        if !out.contains_key("rate") {
+            if let Some(b) = hst.link.judge.base_baud {
+                out.insert("rate".into(), json!(b)); // nothing tried: the boot speed
                 out.insert("raised".into(), json!(false));
+            } else if sp.by_record && t.port_path.is_none() {
+                out.insert("rate".into(), json!(0));
+                out.insert("why".into(), json!("the link is not a serial port this host opened"));
             }
-            out.insert("broken".into(), json!(hst.link.corrupt));
         }
-        None => {
-            out.insert("rate".into(), json!(0));
-            out.insert("why".into(), json!("the link is not a serial port this host opened"));
-        }
+    }
+    if hst.link.baud.is_some() {
+        out.insert("broken".into(), json!(hst.link.corrupt));
     }
     if t.depth > 0 {
         let s = &t.stats;
@@ -2225,6 +2350,17 @@ fn capture_on(addr: &Address, target: &str, req: &Request, owner: &str) -> Resul
     res
 }
 
+/// What a probe declares for capturing (`Held::lines`).
+#[derive(Debug, Clone, Default)]
+pub struct Lines {
+    pub logic: Vec<String>,
+    pub analog: Vec<String>,
+    /// the logic capture's fastest clock and its roles (lines at once)
+    pub max_hz: Option<u64>,
+    pub roles: usize,
+    pub analog_max_hz: Option<u64>,
+}
+
 /// A probe opened and its lease taken (the driver's open device): captures run on it until it is let go.
 pub struct Held {
     hst: Option<Host>,
@@ -2265,12 +2401,20 @@ impl Held {
         }
     }
 
-    /// One capture: its plan applied and released.
+    /// One capture: its plan applied and released. The first on the session raises a UART link's speed as `req.fast`
+    /// asks (acquire's: the record decides by default).
     pub fn capture(&mut self, req: &Request, ctl: &wireskein_capture::Ctl) -> Result<Acquired> {
-        let hst = self
+        let mut hst = self
             .hst
             .take()
             .ok_or_else(|| Error::Runtime("the probe was let go".into()))?;
+        let t = Instant::now();
+        let raised = hst.raise_for_capture(req.fast.as_deref());
+        self.open_s += t.elapsed().as_secs_f64();
+        if let Err(e) = raised {
+            self.hst = Some(hst);
+            return Err(e);
+        }
         let (hst, res) = session(hst, self.open_s, self.boot_id, &self.addr, &self.target, req, ctl);
         self.hst = Some(hst);
         res
@@ -2282,6 +2426,64 @@ impl Held {
             Some(h) => probe_info(h, Some(self.boot_id), &self.addr),
             None => Map::new(),
         }
+    }
+
+    /// What the probe declares for capturing (its capture functions' describes): the logic and the analog lines by
+    /// their channel names (role_channels), each function's fastest clock (max_clock_hz) and roles.
+    pub fn lines(&mut self) -> Lines {
+        let mut out = Lines::default();
+        let Some(h) = self.hst.as_mut() else { return out };
+        let names: Vec<(u16, String)> = h
+            .describe(host::CORE_FN)
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|(t, v)| *t == host::TAG_CHANNEL_NAME && v.len() >= 2)
+            .map(|(_, v)| {
+                (
+                    u16::from_le_bytes([v[0], v[1]]),
+                    String::from_utf8_lossy(&v[2..]).to_string(),
+                )
+            })
+            .collect();
+        for (name, analog) in [(capture::NAME, false), (capture::ANALOG_NAME, true)] {
+            let Ok(fn_) = h.find(name, 1) else { continue };
+            let d = h.describe(fn_).unwrap_or_default();
+            let mut chans: Vec<u16> = vec![];
+            let mut roles = 0;
+            for (t, v) in &d {
+                if *t == 0x01 && v.len() >= 3 {
+                    roles += 1;
+                    let base = u16::from_le_bytes([v[1], v[2]]) as usize;
+                    for (i, b) in v[3..].iter().enumerate() {
+                        for k in 0..8 {
+                            if b >> k & 1 == 1 {
+                                chans.push((base + i * 8 + k) as u16);
+                            }
+                        }
+                    }
+                }
+            }
+            chans.sort_unstable();
+            chans.dedup();
+            let ids: Vec<String> = chans
+                .iter()
+                .filter_map(|c| names.iter().find(|(n, _)| n == c).map(|x| x.1.clone()))
+                .collect();
+            let hz = msg::first(&d, 0x02).and_then(|v| match v.len() {
+                4 => Some(u32::from_le_bytes([v[0], v[1], v[2], v[3]]) as u64),
+                8 => Some(u64::from_le_bytes([v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7]])),
+                _ => None,
+            });
+            if analog {
+                out.analog = ids;
+                out.analog_max_hz = hz;
+            } else {
+                out.logic = ids;
+                out.max_hz = hz;
+                out.roles = roles;
+            }
+        }
+        out
     }
 
     /// Let the session go (its lease, plan and subscriptions with it); the link closes when the host is dropped.

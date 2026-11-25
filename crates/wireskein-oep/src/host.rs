@@ -41,7 +41,7 @@ const PUSHES_END: Duration = Duration::from_millis(60_000 + 200);
 /// a held serial port: resends at once after a broken frame, each, while frames keep arriving (host guide §8)
 const BROKEN_RESENDS: u32 = 3;
 /// confirm's request body: magic, the revisions this client handles (1..1)
-const CONFIRM_BODY: &[u8] = b"OEP?\x01\x01";
+pub(crate) const CONFIRM_BODY: &[u8] = b"OEP?\x01\x01";
 /// core's lease_min_ms: the lease of a kept session's open again, ended at once
 const LEASE_MIN_MS: u32 = 1000;
 const WAIT_ADD_MS: u64 = 1000;
@@ -54,6 +54,8 @@ pub struct Limits {
     pub window: usize,
     pub max_inflight: usize,
     pub boot_id: u32,
+    /// the transport this host's requests come in on (confirm's tail, core §7.1)
+    pub transport: Option<u8>,
 }
 
 /// A reading of the probe's clock (core §7.6): the host's monotonic ns just before and after, the probe's uptime.
@@ -128,6 +130,8 @@ pub struct Host {
     moved: bool,
     /// the probing rule's confirm (transports §3): no resync, a failure is the caller's (who closes the link)
     pub probing: bool,
+    /// port_speed on a serial port this host opened (`speed`)
+    pub speed: crate::speed::Speed,
 }
 
 impl Host {
@@ -149,7 +153,14 @@ impl Host {
             subscriptions: vec![],
             moved: false,
             probing: false,
+            speed: crate::speed::Speed::default(),
         }
+    }
+
+    /// The session held now (the link counts a serial port's frames for port_speed while one is).
+    fn set_session(&mut self, sid: Option<u32>) {
+        self.session = sid;
+        self.link.judge.held = sid.is_some();
     }
 
     /// A boot_id seen (confirm, open, the link's own confirm): a change is a reboot (core §6.5).
@@ -162,7 +173,7 @@ impl Host {
         self.boot_id = Some(b);
     }
 
-    fn next_corr(&mut self) -> u16 {
+    pub(crate) fn next_corr(&mut self) -> u16 {
         self.corr = self.corr % 0xFFFF + 1;
         if let Some(k) = self.kept.as_mut() {
             k.sent(self.corr); // the next run must go on past it (kept)
@@ -182,7 +193,7 @@ impl Host {
     }
 
     /// core §4.4: the wait for an answer is at least the request's processing bound + host_wait_add_ms.
-    fn wait_for(&self, fn_: u16, op: u8) -> Duration {
+    pub(crate) fn wait_for(&self, fn_: u16, op: u8) -> Duration {
         let quick =
             fn_ == CORE_FN && [OP_CONFIRM, OP_LIST, OP_DESCRIBE, OP_CLOCK, OP_KEEPALIVE, OP_LOCK_STATE].contains(&op);
         let bound = match self.max_op_ms() {
@@ -239,6 +250,7 @@ impl Host {
     /// Before a request: a failed transport recovered (core §5.1), subscriptions left on a closed transport made
     /// again (core §10.3).
     fn before_request(&mut self) -> Result<()> {
+        self.keep_raised();
         if !self.failed_transport.is_empty() {
             self.recover_transport(3)?;
         }
@@ -259,12 +271,9 @@ impl Host {
     fn send_loop(&mut self, message: &[u8], corr: u16, wait: Duration) -> Result<Vec<u8>> {
         let (mut waited, mut broken) = (0u32, 0u32);
         loop {
-            self.link.write(&[message.to_vec()])?;
-            let deadline = Instant::now() + wait.max(self.link.timeout);
-            let e = match self.link.recv_for(corr, deadline) {
-                Ok(Some(r)) => return Ok(r),
-                Ok(None) => Error::Timeout("no result from the probe".into()),
-                Err(e @ (Error::Framing(_) | Error::Broken(_))) => e,
+            let e = match self.send_once(message, corr, wait) {
+                Ok(r) => return Ok(r),
+                Err(e @ (Error::Timeout(_) | Error::Framing(_) | Error::Broken(_))) => e,
                 Err(e) => return Err(e),
             };
             let corrupt = matches!(e, Error::Broken(_));
@@ -284,6 +293,26 @@ impl Host {
                 return Err(e);
             }
             self.retries += 1;
+        }
+    }
+
+    /// `message` written once and its answer read: at least `wait` (core §4.4's floor) and the link's timeout - at a
+    /// raised port_speed rate in use the floor alone, so the resend reaches the probe before it goes back. An answer
+    /// that does not come is a lost frame (port_speed counts it).
+    pub(crate) fn send_once(&mut self, message: &[u8], corr: u16, wait: Duration) -> Result<Vec<u8>> {
+        self.link.write(&[message.to_vec()])?;
+        let wait = if self.speed_in_use() {
+            wait
+        } else {
+            wait.max(self.link.timeout)
+        };
+        match self.link.recv_for(corr, Instant::now() + wait)? {
+            Some(r) => Ok(r),
+            None => {
+                let baud = self.link.baud;
+                self.link.judge.count(crate::speed::Kind::Lost, baud);
+                Err(Error::Timeout("no result from the probe".into()))
+            }
         }
     }
 
@@ -315,7 +344,7 @@ impl Host {
     /// A request not sent again (resend off: TCP): on TCP whose boundaries held, and on a serial port, the transport
     /// is confirmed before anything else goes out (core §5.1).
     fn given_up(&mut self, e: &Error) {
-        if self.probing {
+        if self.probing || self.speed.own > 0 {
             return;
         }
         if (self.link.keeps_boundaries() && !matches!(e, Error::Framing(_))) || self.link.framing == Framing::Cobs {
@@ -340,7 +369,8 @@ impl Host {
         let limit = if keeps { NOISY } else { NOISY.max(PUSHES_END) };
         let mut reopened = false;
         for _ in 0..tries {
-            while !self.link.discard_until_quiet(RESYNC_QUIET, limit) {
+            // a stream of whole frames (HID) has nothing to read past: no quiet is waited for (transports §5)
+            while !self.link.t.whole_frames && !self.link.discard_until_quiet(RESYNC_QUIET, limit) {
                 if reopened || self.link.reopener.is_none() {
                     return Err(Error::Connection(
                         "resync: the input never went quiet - close the transport and open it again (transports §5)"
@@ -384,7 +414,7 @@ impl Host {
     }
 
     /// A confirm answer read by the link for itself: its max_frame and boot_id.
-    fn confirmed(&mut self, raw: &[u8]) {
+    pub(crate) fn confirmed(&mut self, raw: &[u8]) {
         let Ok(r) = msg::Reply::parse(raw) else { return };
         let p = &r.payload;
         if r.succeeded() && p.len() >= 16 && &p[..4] == b"OEP!" && p[4] >= 1 {
@@ -421,13 +451,16 @@ impl Host {
     /// Read what arrives within `timeout` (pushes and events kept on the link); a lost boundary resyncs (transports
     /// §5) and comes back with what was read.
     pub fn pump(&mut self, timeout: Duration, until_one: bool) -> Result<usize> {
-        match self.link.pump(timeout, until_one) {
+        self.keep_raised(); // a long pump at a raised rate keeps the line alive (oep-if-link §3)
+        let n = match self.link.pump(timeout, until_one) {
             Err(Error::Framing(_)) => {
                 self.resync(3)?;
-                Ok(0)
+                0
             }
-            r => r,
-        }
+            r => r?,
+        };
+        self.step_down_if_due()?;
+        Ok(n)
     }
 
     fn request_as(&mut self, fn_: u16, op: u8, payload: &[u8], sid: u32) -> Result<msg::Reply> {
@@ -435,7 +468,26 @@ impl Host {
         let corr = self.next_corr();
         let m = msg::request(corr, fn_, op, sid, payload);
         let wait = self.wait_for(fn_, op);
-        let raw = self.send_loop(&m, corr, wait)?;
+        let raw = match self.send_loop(&m, corr, wait) {
+            Ok(r) => r,
+            Err(e) if matches!(e, Error::Timeout(_) | Error::Framing(_) | Error::Broken(_)) => {
+                if !self.speed_fallback(&e)? {
+                    return Err(e);
+                }
+                // the fallback confirmed the probe at the boot speed: once more there (a repeat is answered from
+                // what the probe kept)
+                self.failed_transport.clear();
+                self.send_loop(&m, corr, self.wait_for(fn_, op))?
+            }
+            Err(e) => return Err(e),
+        };
+        self.after_answer(&m, &raw)?;
+        if fn_ == CORE_FN && op == OP_OPEN && raw.len() >= 4 && raw[3] == msg::COMPLETED {
+            // a new session: its baseline starts here
+            self.link.judge.base_counts = [0; 3];
+            self.link.judge.window.clear();
+        }
+        self.step_down_if_due()?;
         let r = msg::Reply::parse(&raw)?;
         if r.corr != corr {
             return Err(Error::Protocol(format!(
@@ -445,7 +497,7 @@ impl Host {
         }
         if r.resolution == msg::REJECTED {
             if r.detail == msg::NO_SESSION {
-                self.session = None;
+                self.set_session(None);
             }
             return Err(Error::Rejected(r.detail, r.payload));
         }
@@ -477,9 +529,10 @@ impl Host {
         let (inflight, window) = self
             .limits
             .as_ref()
-            .map(|l| (l.max_inflight, l.window))
+            .map(|l| (self.inflight_for(l), l.window))
             .unwrap_or((1, 0xFFFF));
         let raws = self.exchange(&msgs, inflight, window, wait)?;
+        self.step_down_if_due()?;
         let mut out = vec![];
         for (raw, c) in raws.iter().zip(corrs) {
             let r = msg::Reply::parse(raw)?;
@@ -521,6 +574,10 @@ impl Host {
             if corrupt {
                 self.link.corrupt += 1;
             }
+            if matches!(e, Error::Timeout(_)) {
+                let baud = self.link.baud;
+                self.link.judge.count(crate::speed::Kind::Lost, baud);
+            }
             self.recover(&e)?;
             if !self.link.resend {
                 self.given_up(&e);
@@ -529,7 +586,18 @@ impl Host {
             if corrupt && self.link.framing == Framing::Cobs && broken < BROKEN_RESENDS {
                 broken += 1;
             } else if waited > 0 || broken >= BROKEN_RESENDS {
-                return Err(self.fail_transport(&e));
+                // the resends went unanswered: a raised rate in use falls back first, else every one outstanding fails
+                if !self.speed_fallback(&e)? {
+                    return Err(self.fail_transport(&e));
+                }
+                self.failed_transport.clear();
+                let mut got = vec![];
+                let res = self
+                    .link
+                    .exchange_once(&msgs[replies.len()..], inflight, window, wait, &mut got);
+                replies.extend(got);
+                res?;
+                return Ok(replies);
             } else {
                 waited += 1;
             }
@@ -551,6 +619,10 @@ impl Host {
             )));
         }
         let (max_frame, window, inflight, boot_id) = (rd.u16()?, rd.u32()?, rd.u8()?, rd.u32()?);
+        // the tail: transport (tag 1, u8) - the index this host's requests come in on
+        let transport = msg::split_tlvs(rd.rest())
+            .ok()
+            .and_then(|t| msg::first(&t, 0x01).filter(|v| v.len() == 1).map(|v| v[0]));
         if max_frame < 64 || (window as usize) < max_frame as usize || inflight < 1 {
             return Err(Error::Runtime(format!(
                 "confirm answered max_frame {max_frame}, window {window}, max_inflight {inflight}: outside core §7.1"
@@ -562,6 +634,7 @@ impl Host {
             window: window as usize,
             max_inflight: inflight as usize,
             boot_id,
+            transport,
         };
         self.limits = Some(l.clone());
         self.link.max_frame = l.max_frame; // a length-framed reader bounds frames by it (core §4.4)
@@ -653,7 +726,7 @@ impl Host {
         self.boot_id_seen(boot_id);
         self.subscriptions.clear();
         self.moved = false;
-        self.session = Some(sid);
+        self.set_session(Some(sid));
         self.lease_ms = Some(lease);
         let corr = self.corr;
         if let Some(k) = self.kept.as_mut() {
@@ -748,7 +821,7 @@ impl Host {
             return Ok(());
         }
         let r = self.request(CORE_FN, OP_END, &[], true);
-        self.session = None;
+        self.set_session(None);
         r?;
         if let Some(k) = self.kept.as_mut() {
             k.ended();

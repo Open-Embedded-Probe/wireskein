@@ -67,6 +67,9 @@ pub struct Request {
     pub analog_samples: Option<u64>,
     /// a trigger on an analog channel: the volts it crosses or stays beyond
     pub trigger_volts: Option<f64>,
+    /// a device on a UART link (an OEP probe's serial port): the rates its link is raised to for reading back - None:
+    /// the client's record of this port and device decides; empty: the boot speed
+    pub fast: Option<Vec<u32>>,
 }
 
 impl Request {
@@ -92,6 +95,7 @@ impl Request {
             analog_rate_hz: None,
             analog_samples: None,
             trigger_volts: None,
+            fast: None,
         }
     }
 

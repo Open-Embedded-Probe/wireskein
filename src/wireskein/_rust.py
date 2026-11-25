@@ -49,10 +49,11 @@ The parts:
              attach/NAME by wireskein-io (the data encoded by Python as before)
     capture  the oep source (wireskein.sources.oep, so `wireskein capture --source oep:...`): the probe opened, its
              lease taken (the session a killed run left ended first) and the capture run and put together by
-             wireskein-oep (USB vendor bulk with many IN transfers queued, TCP, or a serial port at its boot speed;
-             logic and analog lines, a capture group) in place of oep-client-python's acquire; a serial port whose
-             link is raised (Request.fast other than []), HID, CDC, DNS-SD, a broker and a line named by its label
-             stay oep-client-python's (an OEP address without a route whose probe is not on USB too); the probe is
+             wireskein-oep (USB vendor bulk with many IN transfers queued, HID, its CDC port, TCP, DNS-SD, or a
+             serial port with its link raised by port_speed and its record as oep-client-python keeps it; logic and
+             analog lines, a line named by its label S.N or S@P, a capture group) in place of oep-client-python's
+             acquire; a broker, tcp://HOST without a port, a bare usb, and HID and CDC off Linux stay
+             oep-client-python's; the probe is
              reached through the driver of the source's kind (wireskein-sources: `oep:` the OEP driver, `demo:` the
              demo device, which has no Python implementation and is Rust's whether or not this is set)
 
@@ -634,9 +635,11 @@ def _broker(unit: str) -> bool:
 
 
 def oep_route(target: str) -> str | None:
-    """How the Rust OEP client reaches `target`: "usb" (an OEP address by its unit_id as the USB serial), "tcp" (a
-    route over TCP), "serial" (a serial port by its path, /dev/... or ?via=tty:PATH), or None when it does not (HID,
-    CDC, DNS-SD, a broker: oep-client-python's)."""
+    """How the Rust OEP client reaches `target`: "any" (an OEP address without a route: its USB device by its serial -
+    vendor bulk, HID, its CDC port - else DNS-SD), "usb" / "bulk" / "hid" / "cdc" / "net" (that route), "tcp" (a route
+    over TCP), "serial" (a serial port by its path, /dev/... or ?via=tty:PATH), or None when it does not (a broker,
+    tcp://HOST without a port, a bare usb, a COM port; HID and CDC off Linux: oep-client-python's)."""
+    import sys
     t = target.strip()
     if t.startswith("tcp://"):
         return "tcp" if ":" in t[len("tcp://"):].rstrip("/") else None
@@ -648,27 +651,25 @@ def oep_route(target: str) -> str | None:
     unit = place.split("/")[0]
     if not unit or _broker(unit):
         return None
-    if not query or query in ("via=usb", "via=bulk"):
-        return "usb"
-    if query.startswith("via=tcp:") and query.count(":") >= 2:
+    if not query:
+        return "any"
+    if not query.startswith("via="):
+        return None
+    via = query[len("via="):]
+    if via in ("usb", "bulk", "net") or (via in ("hid", "cdc") and sys.platform.startswith("linux")):
+        return via
+    if via.startswith("tcp:") and via.count(":") >= 2:
         return "tcp"
-    if query.startswith("via=tty:") and len(query) > len("via=tty:") and os.name == "posix":
+    if via.startswith("tty:") and len(via) > len("tty:") and os.name == "posix":
         return "serial"
     return None
 
 
 def captures(target: str, req) -> bool:
-    """Whether the oep source's capture is Rust's: switched on, and nothing asked the Rust client does not do (a line
-    named by its label, a probe it does not open)."""
+    """Whether the oep source's capture is Rust's: switched on, and the probe on a route the Rust client opens."""
     if not on("capture"):
         return False
-    if any("." in cid or "@" in cid for _, cid in req.channels) or \
-            any("." in cid or "@" in cid for _, cid, *_ in req.analog):
-        return False
-    route = oep_route(target)
-    if route == "serial" and req.fast != []:
-        return False            # port_speed (the link raised for reading back, its record) is oep-client-python's
-    return route is not None
+    return oep_route(target) is not None
 
 
 def _request_doc(req) -> dict:
@@ -678,7 +679,7 @@ def _request_doc(req) -> dict:
            "mode": req.mode, "duration_s": req.duration_s, "segments": req.segments, "on_loss": req.on_loss,
            "spool_dir": req.spool_dir, "glitch_filter_ns": req.glitch_filter_ns,
            "analog": [[n, cid, fe] for n, cid, fe in req.analog], "analog_rate_hz": req.analog_rate_hz,
-           "analog_samples": req.analog_samples}
+           "analog_samples": req.analog_samples, "fast": None if req.fast is None else [int(r) for r in req.fast]}
 
 
 def source_capture(source: str, req) -> tuple[dict, list]:

@@ -60,6 +60,8 @@ pub struct Link {
     pub baud: Option<u32>,
     /// the longest frame last written (core §4.4's transfer time)
     pub tx_len: usize,
+    /// a serial port: how its frames go at a raised port_speed rate (oep-client-python's SerialLink counts)
+    pub judge: crate::speed::Judge,
 }
 
 impl Link {
@@ -89,6 +91,7 @@ impl Link {
             noise: 0,
             baud: None,
             tx_len: 0,
+            judge: crate::speed::Judge::default(),
         }
     }
 
@@ -116,6 +119,9 @@ impl Link {
             }
         }
         self.last_write = Some(Instant::now());
+        if self.framing == Framing::Cobs {
+            self.judge.moved(chunk.len() as u64, self.baud);
+        }
         self.tx_len = messages
             .iter()
             .map(|m| match self.framing {
@@ -180,9 +186,14 @@ impl Link {
                 continue;
             }
             return match cobs::unframe(&raw) {
-                Ok(f) => Ok(Some(f)),
+                Ok(f) => {
+                    self.judge.moved(raw.len() as u64 + 2, self.baud);
+                    self.judge.count(crate::speed::Kind::Good, self.baud);
+                    Ok(Some(f))
+                }
                 Err(why) => {
                     self.noise += raw.len() as u64;
+                    self.judge.count(crate::speed::Kind::Broken, self.baud);
                     Err(Error::Broken(why))
                 }
             };

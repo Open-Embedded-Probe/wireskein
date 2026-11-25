@@ -8,9 +8,9 @@ intervals (`any_high`, `any_low`, `change_latch`), `Analog` as raw values (`anal
 reduced line's last interval may run past the part's end by less than an interval).
 <address> is what the client opens (an OEP address such as oep://30eda0ea068b?via=usb, or a short form: a serial
 port, tcp://HOST:PORT); the rates a UART link is raised to are this source's own option (Request.fast).
-With WIRESKEIN_RUST=capture (wireskein._rust) a capture from a probe on USB, TCP or a serial port at its boot speed
-(logic and analog lines) is wireskein-oep's (the Rust client) in place of oep-client-python's acquire; the result is
-the same kind.
+With WIRESKEIN_RUST=capture (wireskein._rust) a capture from a probe on USB (vendor bulk, HID, CDC), TCP, DNS-SD or a
+serial port (its link raised as Request.fast asks) is wireskein-oep's (the Rust client) in place of oep-client-python's
+acquire; the result is the same kind.
 """
 
 from __future__ import annotations
@@ -25,12 +25,7 @@ from .. import capture as wc
 def capture(target: str, req: Request) -> Result:
     from .. import _rust
     if _rust.captures(target, req):                     # WIRESKEIN_RUST=capture (wireskein._rust): wireskein-oep
-        try:
-            return _from_rust(*_rust.source_capture("oep:" + target, req))
-        except FileNotFoundError:
-            if _rust.oep_route(target) != "usb" or "?" in target:
-                raise
-            # an OEP address without a route whose probe is not on USB: oep-client-python looks for it (DNS-SD)
+        return _from_rust(*_rust.source_capture("oep:" + target, req))
     try:
         from oep_client import acquire
     except ImportError as e:

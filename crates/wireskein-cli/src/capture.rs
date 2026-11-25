@@ -1,9 +1,10 @@
 //! `capture`: logic and analog channels from a device into a WireSkein file (Python's `wireskein capture --source
 //! KIND:ADDRESS`, `cli.capture_cmd`), the kind choosing the driver (wireskein-sources: `oep`, `demo`). An OEP probe
-//! opened by an OEP address on USB (oep://UNIT_ID[?via=usb]), TCP (oep://UNIT_ID?via=tcp:HOST:PORT, tcp://HOST:PORT)
-//! or a serial port at its boot speed (/dev/..., oep://UNIT_ID?via=tty:PATH, with --fast 0); what the Rust client
-//! does not do (a serial port's link raised by port_speed, sigrok, HID, a line label) is refused with a pointer to
-//! `wireskein capture`. `--list` lists the devices that can be seen.
+//! opened by an OEP address on USB (oep://UNIT_ID[?via=usb|bulk|hid|cdc]: vendor bulk, HID, its CDC port), DNS-SD
+//! (oep://UNIT_ID not on USB, ?via=net), TCP (oep://UNIT_ID?via=tcp:HOST:PORT, tcp://HOST:PORT) or a serial port
+//! (/dev/..., oep://UNIT_ID?via=tty:PATH; its link raised as --fast asks, by default as the record of the port and
+//! probe says); its lines by the probe's channel names or their labels (S.N, S@P). What the Rust client does not do
+//! (sigrok, a broker) is refused with a pointer to `wireskein capture`. `--list` lists the devices that can be seen.
 
 use crate::{Args, Takes, usage_error};
 use serde_json::{Map, Value, json};
@@ -14,6 +15,24 @@ use wireskein_io::j::J;
 
 const LOSS_LINES: usize = 3;
 const BUFFER_WARN_MS: f64 = 5.0;
+
+/// --fast (Python's sources.parse_fast): absent or "1": None (the client's record decides); "0": none (the boot
+/// speed); "1500000,921600": those rates, in that order.
+pub fn parse_fast(text: Option<&str>) -> Result<Option<Vec<u32>>, String> {
+    let Some(t) = text else { return Ok(None) };
+    let low = t.to_ascii_lowercase();
+    if ["1", "yes", "on", "true"].contains(&low.as_str()) {
+        return Ok(None);
+    }
+    if ["", "0", "no", "off", "false"].contains(&low.as_str()) {
+        return Ok(Some(vec![]));
+    }
+    t.split(',')
+        .map(|r| r.trim().parse::<u32>())
+        .collect::<Result<Vec<_>, _>>()
+        .map(Some)
+        .map_err(|_| format!("ValueError: --fast {t}: 0, 1, or link rates (1500000,921600)"))
+}
 
 /// "20M", "250k", "1000" -> a count (only k / K, M and G).
 pub fn parse_count(text: &str) -> Result<u64, String> {
@@ -188,19 +207,7 @@ pub fn capture(args: &[String]) -> ExitCode {
             Err(e) => fail(&e),
         };
     }
-    let serial = matches!(
-        wireskein_oep::parse_address(address),
-        Ok(Some(wireskein_oep::Address::Serial { .. }))
-    );
-    let boot_speed = a
-        .get("--fast")
-        .is_some_and(|f| ["", "0", "no", "off", "false"].contains(&f.to_ascii_lowercase().as_str()));
-    if serial && !boot_speed {
-        return fail(&format!(
-            "{source}: a serial port's link raised by port_speed is `wireskein capture`'s (oep-client-python); \
-             --fast 0 keeps the boot speed here"
-        ));
-    }
+    let _ = address;
     match run(&a, source, &registry, Path::new(output)) {
         Ok(code) => code,
         Err(e) => fail(&e),
@@ -251,6 +258,7 @@ fn run(a: &Args, source: &str, registry: &wireskein_capture::Registry, out: &Pat
         samples.map(parse_count).transpose()?.unwrap_or(0),
     );
     req.mode = Mode::parse(mode).map_err(|e| err_text(&e))?;
+    req.fast = parse_fast(a.get("--fast"))?;
     req.duration_s = a.get("--duration").map(seconds).transpose()?;
     req.on_loss_stop = a.get("--on-loss").unwrap_or("stop") == "stop";
     req.segments = a
