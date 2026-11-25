@@ -37,7 +37,10 @@ cargo run --release -j1 --bin wsk-egui -- /tmp/i2c-100k.wireskein
 
 ほかの引数: `--part K`（区画）、`--light`、`--layout 標準|一覧を大きく|波形 2 つ`、`--zoom Z --at F`（全体の 1/Z を位置 F に）、
 `--search 'Q'`、`--select ROW`、`--detach-list`（一覧を最初から別の窓に）、`--no-analysis`、`--size WxH`、
-`--bench OUT.txt`（倍率ごとに 96 フレームずつ流して fps を測り、結果を書いて終わる。vsync を切る）、`--shot OUT.png`（画面の写真を撮って終わる）。
+`--bench OUT.txt`（倍率ごとに最大 96 フレーム流して fps と 1 フレームの内訳を測り、結果を書いて終わる。vsync を切る。下の「--bench の内訳」）、
+`--shot OUT.png`（画面の写真を撮って終わる）、`--present auto|novsync|fifo|immediate|mailbox`（表示の仕方）、`--latency N`（GPU を待たずに
+先に作るフレームの数。既定 1）、`--old-draw`（§9.6 の手直しの前の描き方。同じ機械で前後を比べる）。描画の API は環境変数 `WGPU_BACKEND`
+（`dx12` / `vulkan` / `gl` / `metal`）。
 
 ### 操作
 
@@ -65,6 +68,47 @@ cp egui/web/index.html web-out/ && cd web-out && python3 -m http.server 8000
 ```
 
 web ではファイルを開けない（例を 1 つ中に持つ）。スレッドがないので要約と解析は開くときにその場で作る（1e8 で数秒止まる）。
+
+## --bench の内訳（2026-11-25 に足した。ノート §9.6）
+
+`--bench OUT.txt` の結果は 3 つの表を持つ。
+
+1. 倍率ごとの fps（中央値）、1 フレーム p50 / p95、波形 CPU（今までと同じ）。頭に GPU（アダプタの名前・API・ドライバ）、表示の仕方
+   （present）、フレームの遅れ（latency）、描き方（new / old）を書く。
+2. **1 フレームの内訳**（ms / フレームの平均。倍率ごとと、拡大の掃引）:
+   - `dt`: フレームの間隔。`frame`: eframe の 1 フレームの処理（`run_ui_and_paint`）。`gap = dt - frame`（イベントループなど外の待ち）。
+   - `prepare`: 窓の情報を集める（eframe）。`egui`: egui の組み立て全体（`Context::run`）。
+   - `tessellate`: 三角形にする。`paint`: GPU に渡す全体（egui-wgpu）。その中の `upload`（頂点・添字のバッファの更新）、`texture`、
+     `encode`（描画の命令を作る）、`finish`、`acquire`（次の画面を貰う。垂直同期の待ちはここか present に出る）、`submit`（提出）、
+     `present`（表示）、`maintain`（wgpu が前のフレームの終わりを待つ所。submit の中）。
+   - アプリが自分で測る所: `main CPU`（メインスレッドの CPU 時間。Linux だけ。忙しい機械でも比べやすい）、`App::ui`、パネルごと
+     （`wave` 波形〔ミニマップを含む〕・`minimap`・`list` 一覧・`measure` 測定・`other tabs`）、`bars`（上下の帯）。
+   - 1 フレームを数える: `shapes`（egui の図形）、`vertices` / `triangles`（三角形にした後）、`prims`（描画の単位。だいたい draw call）、
+     `wave vertices`（波形の線の Mesh の頂点）、`tess (own)`（数えるために自分で三角形にした時間。上の時間からは除いてある）。
+3. 流しの間のすべての区間（egui・eframe・egui-wgpu・wgpu の `profiling` の区間。内側を含む合計と回数）。
+
+区間は `profiling` を tracing の後ろで動かし、小さな subscriber で足している（`egui/src/prof.rs`。`--bench` のときだけ入れる）。
+流しの長さ: 倍率ごとに最大 96 フレームだが、24 フレームを超えて 3 秒経てば次へ。掃引は最大 240 フレーム・12 秒。1e9 でも
+要約ができるのを待つ時間（この機械で 16〜18 s）＋ 1 分ほど。
+
+### 利用者の機械で流すコマンド（Windows の PowerShell / cmd でそのまま。`proto\gui` で）
+
+```sh
+cd proto\gui
+cargo run --release -j1 --bin wsk-egui -- --synth 1e8 --bench synth1e8.txt
+cargo run --release -j1 --bin wsk-egui -- --synth 1e8 --old-draw --bench synth1e8-old.txt
+cargo run --release -j1 --bin wsk-egui -- --synth 1e8 --latency 2 --bench synth1e8-lat2.txt
+cargo run --release -j1 --bin wsk-egui -- --synth 1e8 --present immediate --bench synth1e8-immediate.txt
+cargo run --release -j1 --bin wsk-egui -- --synth 1e9 --bench synth1e9.txt
+cargo run --release -j1 --bin wsk-egui -- ../../tests/data/examples/mixed-1.wireskein --bench mixed1.txt
+cargo run --release -j1 --bin wsk-egui -- ../../tests/data/p4x-i1/i2c-controller-400k-nack.vcd --bench vcd.txt
+```
+
+- 1 行目が今の描き方、2 行目が手直しの前（同じ機械で前後を比べる）。3〜4 行目は表示の待ちを変える（`--present immediate` は
+  その GPU・API が対応していないと起動で落ちる。そのときは飛ばしてよい）。
+- API を変えるとき: PowerShell は `$env:WGPU_BACKEND="vulkan"`（戻すのは `Remove-Item Env:WGPU_BACKEND`）、cmd は `set WGPU_BACKEND=vulkan`
+  （戻すのは `set WGPU_BACKEND=`）。どの API で動いたかは結果の頭の `# gpu:` に出る。
+- 窓は流している間そのままにしておく（隠れたり最小化されたりすると描かない）。
 
 ## 測った数字（2026-11-25、Intel N100 系 4 コア、Xvfb）
 

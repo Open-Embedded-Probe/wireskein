@@ -2,12 +2,15 @@
 //!
 //! wsk-egui [FILE] [--part K] [--synth N [--items M]] [--light] [--layout NAME] [--zoom Z --at F] [--search Q]
 //!          [--select ROW] [--no-analysis] [--detach-list] [--bench OUT.txt] [--shot OUT.png] [--size WxH]
+//!          [--present auto|novsync|fifo|immediate|mailbox] [--latency N] [--old-draw]
 
 mod app;
 mod list;
 mod model;
 mod panels;
 mod png;
+#[cfg(not(target_arch = "wasm32"))]
+mod prof;
 mod theme;
 mod wave;
 
@@ -29,6 +32,8 @@ fn parse() -> app::Args {
         no_analysis: false,
         detach_list: false,
         size: (1600.0, 960.0),
+        present: None,
+        latency: None,
     };
     let args: Vec<String> = std::env::args().skip(1).collect();
     let mut i = 0;
@@ -53,6 +58,9 @@ fn parse() -> app::Args {
             "--select" => a.select = next(&mut i).parse().ok(),
             "--no-analysis" => a.no_analysis = true,
             "--detach-list" => a.detach_list = true,
+            "--present" => a.present = Some(next(&mut i)),
+            "--latency" => a.latency = next(&mut i).parse().ok(),
+            "--old-draw" => wave::OLD_DRAW.store(true, std::sync::atomic::Ordering::Relaxed),
             "--size" => {
                 let s = next(&mut i);
                 if let Some((w, h)) = s.split_once('x') {
@@ -63,7 +71,8 @@ fn parse() -> app::Args {
                 println!(
                     "wsk-egui [FILE] [--part K] [--synth N [--items M]] [--light] [--layout 標準|一覧を大きく|波形 2 つ]\n\
                      [--zoom Z --at F] [--search Q] [--select ROW] [--no-analysis] [--detach-list]\n\
-                     [--bench OUT.txt] [--shot OUT.png] [--size WxH]"
+                     [--bench OUT.txt] [--shot OUT.png] [--size WxH] [--present auto|novsync|fifo|immediate|mailbox] [--latency N] [--old-draw]\n\
+                     (the backend: the environment's WGPU_BACKEND=dx12|vulkan|gl|metal)"
                 );
                 std::process::exit(0);
             }
@@ -78,17 +87,34 @@ fn parse() -> app::Args {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+fn present_mode(name: Option<&str>, unthrottled: bool) -> eframe::wgpu::PresentMode {
+    use eframe::wgpu::PresentMode as P;
+    match name {
+        Some("fifo") => P::Fifo,
+        Some("immediate") => P::Immediate,
+        Some("mailbox") => P::Mailbox,
+        Some("auto") => P::AutoVsync,
+        Some("novsync") => P::AutoNoVsync,
+        _ if unthrottled => P::AutoNoVsync,
+        _ => P::AutoVsync,
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
     let args = parse();
     let unthrottled = args.bench.is_some();
+    if unthrottled {
+        prof::install();
+    }
     let opts = eframe::NativeOptions {
-        viewport: eframe::egui::ViewportBuilder::default()
-            .with_inner_size([args.size.0, args.size.1])
-            .with_title("WireSkein 試作 1（egui）"),
+        viewport: eframe::egui::ViewportBuilder::default().with_inner_size([args.size.0, args.size.1]).with_title("WireSkein 試作 1（egui）"),
         wgpu_options: eframe::egui_wgpu::WgpuConfiguration {
             surface: eframe::egui_wgpu::SurfaceConfig {
-                present_mode: if unthrottled { eframe::wgpu::PresentMode::AutoNoVsync } else { eframe::wgpu::PresentMode::AutoVsync },
-                ..eframe::egui_wgpu::SurfaceConfig::LOW_LATENCY
+                present_mode: present_mode(args.present.as_deref(), unthrottled),
+                // 1 (eframe's low latency) by default: the CPU waits for the frame before; 2 lets the next frame be built
+                // while the GPU draws
+                desired_maximum_frame_latency: Some(args.latency.unwrap_or(1)),
             },
             ..Default::default()
         },
@@ -116,9 +142,7 @@ fn main() {
     wasm_bindgen_futures::spawn_local(async move {
         let doc = web_sys::window().unwrap().document().unwrap();
         let canvas = doc.get_element_by_id("wsk").unwrap().dyn_into::<web_sys::HtmlCanvasElement>().unwrap();
-        let r = eframe::WebRunner::new()
-            .start(canvas, eframe::WebOptions::default(), Box::new(move |cc| Ok(Box::new(app::App::new(cc, args)))))
-            .await;
+        let r = eframe::WebRunner::new().start(canvas, eframe::WebOptions::default(), Box::new(move |cc| Ok(Box::new(app::App::new(cc, args))))).await;
         if let Err(e) = r {
             web_sys::console::error_1(&format!("{e:?}").into());
         }

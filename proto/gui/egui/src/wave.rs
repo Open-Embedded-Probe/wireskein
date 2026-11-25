@@ -3,15 +3,15 @@
 
 use crate::app::{Measure, Sel, Shared, TileCacheT};
 use crate::theme::Pal;
-use eframe::egui::{self, Align2, Color32, FontId, Mesh, Pos2, Rect, Sense, Shape, Stroke, Vec2, pos2, vec2};
+use eframe::egui::{self, Align2, Color32, FontId, Mesh, Pos2, Rect, Sense, Shape, Stroke, Vec2, pos2};
 use serde::{Deserialize, Serialize};
-use web_time::Instant;
 use view_core::Viewport;
 use view_core::analog::AnalogView;
 use view_core::ann::{AnnShape, Fit};
 use view_core::digital::{LineView, around, read_view};
 use view_core::shapes::{Seg, digital_segs};
 use view_core::tiles::{placement, tile_viewport, tiles_for};
+use web_time::Instant;
 
 pub const LABEL_W: f32 = 132.0;
 const MINIMAP_H: f32 = 26.0;
@@ -136,36 +136,126 @@ fn rect_x(mesh: &mut Mesh, x0: f32, x1: f32, y0: f32, y1: f32, c: Color32) {
     }
 }
 
+/// `--old-draw`: the drawing as it was before the bench's breakdown (2026-11-25 §9.6), for comparing on one machine:
+/// a rect pair a busy block and a rect an edge, the minimap made every frame, a clip rect a text.
+pub static OLD_DRAW: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+fn old_draw() -> bool {
+    OLD_DRAW.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 /// A line's shapes into the mesh, x = left + off + seg.x * scale, clipped to [cl, cr].
 #[allow(clippy::too_many_arguments)]
 fn draw_segs(mesh: &mut Mesh, segs: &[Seg], left: f32, off: f32, scale: f32, cl: f32, cr: f32, y_hi: f32, y_lo: f32, pal: &Pal) {
     let c = pal.line;
     let th = 1.5;
     let px = |x: f32| (left + off + x * scale).clamp(cl, cr);
+    // Fewer shapes where a pixel holds many changes (the GPU's vertices and egui's tessellation follow the rects):
+    // edges closer than 2 px are one solid block (the short runs between them are inside it), and a stretch of
+    // busy blocks gets its two level lines once, not one pair a block.
+    let merge = !old_draw();
+    let mut edges: Option<(f32, f32, u32)> = None; // (first x, last x, how many)
+    let mut busy: Option<(f32, f32)> = None; // the stretch's (a, b)
+    let flush_edges = |mesh: &mut Mesh, e: &mut Option<(f32, f32, u32)>| {
+        if let Some((a, b, k)) = e.take() {
+            if k == 1 {
+                rect_x(mesh, a - 0.5, a + 0.6, y_hi - th / 2.0, y_lo + th / 2.0, c);
+            } else {
+                rect_x(mesh, a - 0.5, b + 0.6, y_hi - th / 2.0, y_lo + th / 2.0, c);
+            }
+        }
+    };
+    let flush_busy = |mesh: &mut Mesh, s: &mut Option<(f32, f32)>| {
+        if let Some((a, b)) = s.take() {
+            rect_x(mesh, a, b, y_hi - th / 2.0, y_hi + th / 2.0, c);
+            rect_x(mesh, a, b, y_lo - th / 2.0, y_lo + th / 2.0, c);
+        }
+    };
     for s in segs {
         match *s {
             Seg::Run { x0, x1, high } => {
+                let (a, b) = (px(x0), px(x1).max(px(x0) + 0.5));
+                if merge && edges.is_some() && b - a < 2.0 {
+                    continue; // between close edges: inside the block
+                }
+                flush_edges(mesh, &mut edges);
+                flush_busy(mesh, &mut busy);
                 let y = if high { y_hi } else { y_lo };
-                rect_x(mesh, px(x0), px(x1).max(px(x0) + 0.5), y - th / 2.0, y + th / 2.0, c);
+                rect_x(mesh, a, b, y - th / 2.0, y + th / 2.0, c);
             }
             Seg::Edge { x } => {
                 let x = px(x);
                 if x > cl && x < cr {
-                    rect_x(mesh, x - 0.5, x + 0.6, y_hi - th / 2.0, y_lo + th / 2.0, c);
+                    flush_busy(mesh, &mut busy);
+                    edges = match edges {
+                        Some((a, b, k)) if merge && x - b < 2.0 => Some((a, x, k + 1)),
+                        other => {
+                            let mut o = other;
+                            flush_edges(mesh, &mut o);
+                            Some((x, x, 1))
+                        }
+                    };
                 }
             }
             Seg::Busy { x0, x1, density } => {
+                flush_edges(mesh, &mut edges);
                 let (a, b) = (px(x0), px(x1).max(px(x0) + 1.0));
                 let alpha = 0.30 + 0.65 * density;
                 rect_x(mesh, a, b, y_hi, y_lo, c.gamma_multiply(alpha));
-                rect_x(mesh, a, b, y_hi - th / 2.0, y_hi + th / 2.0, c);
-                rect_x(mesh, a, b, y_lo - th / 2.0, y_lo + th / 2.0, c);
+                busy = match busy {
+                    Some((sa, sb)) if merge && a - sb < 0.5 => Some((sa, b.max(sb))),
+                    other => {
+                        let mut o = other;
+                        flush_busy(mesh, &mut o);
+                        Some((a, b))
+                    }
+                };
             }
             Seg::Unknown { x0, x1 } => {
+                flush_edges(mesh, &mut edges);
+                flush_busy(mesh, &mut busy);
                 rect_x(mesh, px(x0), px(x1), y_hi, y_lo, pal.unread.gamma_multiply(0.25));
             }
         }
     }
+    flush_edges(mesh, &mut edges);
+    flush_busy(mesh, &mut busy);
+}
+
+/// The minimap's mesh: the changes a pixel, every claim's bad items, the search's hits.
+fn minimap_mesh(sh: &Shared, mm: Rect, n: i64, fit: &Viewport, w: f32, pal: &Pal) -> Mesh {
+    let act = &sh.minimap;
+    let maxc = act.iter().copied().fold(1u64, u64::max) as f32;
+    let mut mesh = Mesh::default();
+    for (x, &c) in act.iter().enumerate() {
+        if c > 0 {
+            let h = (c as f32 / maxc).sqrt().clamp(0.08, 1.0) * (mm.height() - 4.0);
+            rect_x(&mut mesh, mm.left() + x as f32, mm.left() + x as f32 + 1.0, mm.bottom() - 2.0 - h, mm.bottom() - 2.0, pal.line.gamma_multiply(0.55));
+        }
+    }
+    // the bad items of each claim's coarsest layer, and the search's hits
+    if let Some(a) = &sh.analysis {
+        let mut shapes = vec![];
+        for c in &a.claims {
+            if let Some(l) = c.layers.first() {
+                l.track.layout(fit, 7.0, &mut shapes);
+                for s in &shapes {
+                    let (x0, x1, st) = match *s {
+                        AnnShape::Busy { x0, x1, status, .. } => (x0, x1, status),
+                        AnnShape::Box { x0, x1, status, .. } => (x0, x1, status),
+                    };
+                    if st >= view_core::ann::Status::Warn {
+                        rect_x(&mut mesh, mm.left() + x0, mm.left() + x1.max(x0 + 1.5), mm.top() + 1.0, mm.top() + 7.0, pal.status(st).gamma_multiply(2.0));
+                    }
+                }
+            }
+        }
+    }
+    for hit in sh.search.hit_ticks.iter() {
+        let x = mm.left() + (*hit as f64 / n as f64 * w as f64) as f32;
+        rect_x(&mut mesh, x, x + 1.0, mm.bottom() - 6.0, mm.bottom(), pal.accent);
+    }
+    mesh
 }
 
 /// A new capture: the view and the follow state start over.
@@ -202,12 +292,7 @@ pub fn ui(ui: &mut egui::Ui, tab: &mut WaveTab, sh: &mut Shared, cache: &mut Til
         }
         if let (Some(cap), Some(vp)) = (&sh.cap, &tab.st.vp) {
             ui.label(
-                egui::RichText::new(format!(
-                    "{} / px  ·  幅 {}",
-                    fmt_time(cap.secs(vp.tpp)),
-                    fmt_time(cap.secs(vp.tpp * vp.width as f64))
-                ))
-                .color(pal.dim),
+                egui::RichText::new(format!("{} / px  ·  幅 {}", fmt_time(cap.secs(vp.tpp)), fmt_time(cap.secs(vp.tpp * vp.width as f64)))).color(pal.dim),
             );
         }
     });
@@ -287,9 +372,7 @@ pub fn ui(ui: &mut egui::Ui, tab: &mut WaveTab, sh: &mut Shared, cache: &mut Til
             let t = (p.x - plot_l) as f64 / plot_w as f64 * n as f64;
             vp.t0 = t - span / 2.0;
         }
-    } else if resp.drag_started_by(egui::PointerButton::Secondary)
-        || resp.drag_started_by(egui::PointerButton::Primary) && shift
-    {
+    } else if resp.drag_started_by(egui::PointerButton::Secondary) || resp.drag_started_by(egui::PointerButton::Primary) && shift {
         tab.st.select_from = press.map(|p| p.x - plot_l);
     } else if resp.dragged() && tab.st.select_from.is_none() && in_plot {
         let d = resp.drag_delta().x;
@@ -380,55 +463,35 @@ pub fn ui(ui: &mut egui::Ui, tab: &mut WaveTab, sh: &mut Shared, cache: &mut Til
 
     // ---------------------------------------------------------------- minimap
     painter.rect_filled(mm, 2.0, pal.lane_alt);
+    let t_mm = Instant::now();
     {
         let w = mm.width().max(1.0);
         let fit = Viewport::fit(n, w);
         crate::app::minimap(cap, sh.cgen, &mut sh.minimap_key, &mut sh.minimap, w as usize);
-        let act = &sh.minimap;
-        let maxc = act.iter().copied().fold(1u64, u64::max) as f32;
-        let mut mesh = Mesh::default();
-        for (x, &c) in act.iter().enumerate() {
-            if c > 0 {
-                let h = (c as f32 / maxc).sqrt().clamp(0.08, 1.0) * (mm.height() - 4.0);
-                rect_x(&mut mesh, mm.left() + x as f32, mm.left() + x as f32 + 1.0, mm.bottom() - 2.0 - h, mm.bottom() - 2.0, pal.line.gamma_multiply(0.55));
-            }
+        let key = [
+            sh.minimap_key.0,
+            sh.minimap_key.1 as u64,
+            sh.minimap_key.2 as u64,
+            sh.analysis.as_ref().map(|a| a.seconds.to_bits()).unwrap_or(0),
+            sh.analysis.as_ref().map(|a| a.claims.len() as u64 + 1).unwrap_or(0),
+            sh.search.hit_ticks.len() as u64,
+            sh.search.hit_ticks.first().copied().unwrap_or(-1) as u64,
+            mm.left().to_bits() as u64,
+            mm.top().to_bits() as u64,
+            sh.dark as u64,
+        ];
+        if old_draw() || sh.minimap_mesh.as_ref().is_none_or(|m| m.0 != key) {
+            sh.minimap_mesh = Some((key, std::sync::Arc::new(minimap_mesh(sh, mm, n, &fit, w, &pal))));
         }
-        // the bad items of each claim's coarsest layer, and the search's hits
-        if let Some(a) = &sh.analysis {
-            let mut shapes = vec![];
-            for c in &a.claims {
-                if let Some(l) = c.layers.first() {
-                    l.track.layout(&fit, 7.0, &mut shapes);
-                    for s in &shapes {
-                        let (x0, x1, st) = match *s {
-                            AnnShape::Busy { x0, x1, status, .. } => (x0, x1, status),
-                            AnnShape::Box { x0, x1, status, .. } => (x0, x1, status),
-                        };
-                        if st >= view_core::ann::Status::Warn {
-                            rect_x(&mut mesh, mm.left() + x0, mm.left() + x1.max(x0 + 1.5), mm.top() + 1.0, mm.top() + 7.0, pal.status(st).gamma_multiply(2.0));
-                        }
-                    }
-                }
-            }
-        }
-        for hit in sh.search.hit_ticks.iter() {
-            let x = mm.left() + (*hit as f64 / n as f64 * w as f64) as f32;
-            rect_x(&mut mesh, x, x + 1.0, mm.bottom() - 6.0, mm.bottom(), pal.accent);
-        }
-        painter.add(Shape::mesh(mesh));
+        painter.add(Shape::Mesh(sh.minimap_mesh.as_ref().unwrap().1.clone()));
         let a = mm.left() + (vp.t0 / n as f64 * w as f64) as f32;
         let b = mm.left() + (vp.t1() / n as f64 * w as f64) as f32;
         let r = Rect::from_min_max(pos2(a.max(mm.left()), mm.top()), pos2(b.max(a + 2.0).min(mm.right()), mm.bottom()));
         painter.rect_filled(r, 2.0, pal.accent.gamma_multiply(0.18));
         painter.rect_stroke(r, 2.0, Stroke::new(1.0, pal.accent), egui::StrokeKind::Inside);
     }
-    painter.text(
-        pos2(rect.left() + 6.0, mm.center().y),
-        Align2::LEFT_CENTER,
-        &cap.title,
-        FontId::proportional(12.0),
-        pal.text,
-    );
+    sh.perf.acc[crate::app::P_MINIMAP] += t_mm.elapsed().as_secs_f64() * 1e3;
+    painter.text(pos2(rect.left() + 6.0, mm.center().y), Align2::LEFT_CENTER, &cap.title, FontId::proportional(12.0), pal.text);
 
     // ---------------------------------------------------------------- ruler
     {
@@ -519,12 +582,24 @@ pub fn ui(ui: &mut egui::Ui, tab: &mut WaveTab, sh: &mut Shared, cache: &mut Til
                 }
                 if !complete {
                     let pct = lod.built_until as f64 / n.max(1) as f64 * 100.0;
-                    lane_painter.text(pos2(rect.left() + 8.0, lr.bottom() - 2.0), Align2::LEFT_BOTTOM, format!("要約 {pct:.0}%"), FontId::proportional(9.5), pal.dim);
+                    lane_painter.text(
+                        pos2(rect.left() + 8.0, lr.bottom() - 2.0),
+                        Align2::LEFT_BOTTOM,
+                        format!("要約 {pct:.0}%"),
+                        FontId::proportional(9.5),
+                        pal.dim,
+                    );
                 }
             }
             Lane::Ana(i) => {
                 let a = &cap.analog[i];
-                lane_painter.text(pos2(rect.left() + 8.0, lr.center().y), Align2::LEFT_CENTER, format!("{} [{}]", a.name, a.unit), FontId::proportional(12.5), pal.text);
+                lane_painter.text(
+                    pos2(rect.left() + 8.0, lr.center().y),
+                    Align2::LEFT_CENTER,
+                    format!("{} [{}]", a.name, a.unit),
+                    FontId::proportional(12.5),
+                    pal.text,
+                );
                 let (lo, hi) = (a.min, a.max.max(a.min + 1e-6));
                 let ymap = |v: f32| pr.bottom() - 4.0 - (v - lo) / (hi - lo) * (pr.height() - 8.0);
                 match a.read_view(&vp) {
@@ -548,7 +623,9 @@ pub fn ui(ui: &mut egui::Ui, tab: &mut WaveTab, sh: &mut Shared, cache: &mut Til
                 }
             }
             Lane::Ann { claim, layer } => {
-                let Some(c) = analysis.and_then(|a| a.claims.get(claim)) else { continue };
+                let Some(c) = analysis.and_then(|a| a.claims.get(claim)) else {
+                    continue;
+                };
                 let l = &c.layers[layer];
                 let name = if layer == 0 { format!("{} {}", c.protocol, l.name) } else { format!("  {}", l.name) };
                 lane_painter.text(pos2(rect.left() + 14.0, lr.center().y), Align2::LEFT_CENTER, name, FontId::proportional(11.0), pal.dim);
@@ -597,13 +674,22 @@ pub fn ui(ui: &mut egui::Ui, tab: &mut WaveTab, sh: &mut Shared, cache: &mut Til
                 }
             }
             Lane::Unread { claim } => {
-                let Some(u) = analysis.and_then(|a| a.claims.get(claim)).and_then(|c| c.unread.as_ref()) else { continue };
+                let Some(u) = analysis.and_then(|a| a.claims.get(claim)).and_then(|c| c.unread.as_ref()) else {
+                    continue;
+                };
                 u.layout(&vp, 100.0, &mut ann_shapes);
                 for s in &ann_shapes {
                     let (x0, x1) = match *s {
                         AnnShape::Box { x0, x1, .. } | AnnShape::Busy { x0, x1, .. } => (x0, x1),
                     };
-                    rect_x(&mut mesh, (plot_l + x0).max(plot_l), (plot_l + x1).min(rect.right()).max(plot_l + x0 + 1.0), pr.top() + 1.0, pr.bottom() - 1.0, pal.error.gamma_multiply(0.8));
+                    rect_x(
+                        &mut mesh,
+                        (plot_l + x0).max(plot_l),
+                        (plot_l + x1).min(rect.right()).max(plot_l + x0 + 1.0),
+                        pr.top() + 1.0,
+                        pr.bottom() - 1.0,
+                        pal.error.gamma_multiply(0.8),
+                    );
                 }
                 lane_painter.text(pos2(rect.left() + 14.0, lr.center().y), Align2::LEFT_CENTER, "読めなかった所", FontId::proportional(8.5), pal.dim);
             }
@@ -614,9 +700,19 @@ pub fn ui(ui: &mut egui::Ui, tab: &mut WaveTab, sh: &mut Shared, cache: &mut Til
         let (a, b) = (plot_l + x0.min(p.x - plot_l), plot_l + x0.max(p.x - plot_l));
         rect_x(&mut mesh, a, b, plot.top(), plot.bottom(), pal.accent.gamma_multiply(0.15));
     }
+    sh.perf.wave_vertices = mesh.vertices.len();
     plot_painter.add(Shape::mesh(mesh));
+    // the texts under the plot's one clip (a clip of their own made each one a draw call of its own): a text wider
+    // than its box is not drawn
     for (r, t, c) in texts {
-        plot_painter.with_clip_rect(r.shrink2(vec2(2.0, 0.0)).intersect(plot)).text(r.center(), Align2::CENTER_CENTER, t, font.clone(), c);
+        if old_draw() {
+            plot_painter.with_clip_rect(r.shrink2(Vec2::new(2.0, 0.0)).intersect(plot)).text(r.center(), Align2::CENTER_CENTER, t, font.clone(), c);
+            continue;
+        }
+        let g = plot_painter.layout_no_wrap(t, font.clone(), c);
+        if g.size().x <= r.width() - 2.0 {
+            plot_painter.galley(r.center() - g.size() / 2.0, g, c);
+        }
     }
     painter.line_segment([pos2(plot_l, lanes_top), pos2(plot_l, rect.bottom())], Stroke::new(1.0, pal.grid));
 
@@ -635,7 +731,13 @@ pub fn ui(ui: &mut egui::Ui, tab: &mut WaveTab, sh: &mut Shared, cache: &mut Til
         let yb = ruler.center().y;
         painter.line_segment([pos2(xa, yb), pos2(xb, yb)], Stroke::new(1.0, pal.accent));
         let d = cap.secs((b - a).abs());
-        painter.text(pos2((xa + xb) / 2.0, yb), Align2::CENTER_BOTTOM, format!("Δ {}  ({})", fmt_time(d), fmt_freq(1.0 / d.max(1e-15))), FontId::proportional(11.0), pal.accent);
+        painter.text(
+            pos2((xa + xb) / 2.0, yb),
+            Align2::CENTER_BOTTOM,
+            format!("Δ {}  ({})", fmt_time(d), fmt_freq(1.0 / d.max(1e-15))),
+            FontId::proportional(11.0),
+            pal.accent,
+        );
     }
 
     // the cursor: its line, the pulse under it measured
@@ -725,6 +827,7 @@ pub fn ui(ui: &mut egui::Ui, tab: &mut WaveTab, sh: &mut Shared, cache: &mut Til
         jump_bad(tab, sh, fwd);
     }
     sh.perf.wave(t_start.elapsed().as_secs_f32() * 1e3, n_shapes);
+    sh.perf.acc[crate::app::P_WAVE] += t_start.elapsed().as_secs_f64() * 1e3;
 }
 
 fn jump_bad(tab: &mut WaveTab, sh: &mut Shared, forward: bool) {

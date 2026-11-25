@@ -12,21 +12,18 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use web_time::Instant;
 use view_core::Viewport;
 use view_core::digital::{LineView, read_view};
 use view_core::shapes::Seg;
 use view_core::tiles::TileCache;
+use web_time::Instant;
 
 pub type TileCacheT = TileCache<(u64, usize), Vec<Seg>>;
 
 pub fn rss_mb() -> Option<f64> {
     #[cfg(target_os = "linux")]
     {
-        std::fs::read_to_string("/proc/self/statm")
-            .ok()
-            .and_then(|s| s.split_whitespace().nth(1).and_then(|x| x.parse::<f64>().ok()))
-            .map(|p| p * 4096.0 / 1e6)
+        std::fs::read_to_string("/proc/self/statm").ok().and_then(|s| s.split_whitespace().nth(1).and_then(|x| x.parse::<f64>().ok())).map(|p| p * 4096.0 / 1e6)
     }
     #[cfg(not(target_os = "linux"))]
     {
@@ -73,6 +70,38 @@ pub struct Perf {
     pub shapes: usize,
     pub first_paint: Option<f64>,
     pub tiles: (usize, u64, u64),
+    /// ms spent so far in each part of the frame (`P_*`), added up for the bench's breakdown
+    pub acc: [f64; P_N],
+    /// the waveform's mesh of the last frame: its vertices
+    pub wave_vertices: usize,
+}
+
+/// The parts of a frame timed by the app itself (inside eframe's `App::ui`).
+pub const P_WAVE: usize = 0;
+pub const P_MINIMAP: usize = 1;
+pub const P_LIST: usize = 2;
+pub const P_MEASURE: usize = 3;
+pub const P_OTHER_TABS: usize = 4;
+pub const P_BARS: usize = 5;
+pub const P_DOCK: usize = 6;
+pub const P_APP: usize = 7;
+/// the main thread's CPU time (not the wall clock: a busy machine's other work is not in it; Linux only)
+pub const P_CPU: usize = 8;
+pub const P_N: usize = 9;
+
+/// The CPU time of this thread, ms (Linux; elsewhere NaN).
+pub fn thread_cpu_ms() -> f64 {
+    #[cfg(target_os = "linux")]
+    {
+        let mut t = libc::timespec { tv_sec: 0, tv_nsec: 0 };
+        // SAFETY: a valid timespec to fill
+        unsafe { libc::clock_gettime(libc::CLOCK_THREAD_CPUTIME_ID, &mut t) };
+        t.tv_sec as f64 * 1e3 + t.tv_nsec as f64 / 1e6
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        f64::NAN
+    }
 }
 
 impl Perf {
@@ -122,6 +151,8 @@ pub struct Shared {
     pub force_vp: Option<Viewport>,
     pub minimap_key: (u64, usize, i64),
     pub minimap: Vec<u64>,
+    /// the minimap's mesh, kept while its key (the capture, the summaries, the results, the hits, the place) holds
+    pub minimap_mesh: Option<([u64; 10], std::sync::Arc<egui::Mesh>)>,
 }
 
 /// The changes a pixel over the whole capture, every line together (for the minimap; kept while nothing changes).
@@ -216,11 +247,25 @@ impl TabViewer for Viewer<'_> {
                 }
                 wave::ui(ui, w, self.sh, self.cache)
             }
-            Tab::List(l) => list::ui(ui, l, self.sh),
-            Tab::Measure => panels::measure_ui(ui, self.sh),
-            Tab::Search => panels::search_ui(ui, self.sh, SEARCH_ID),
-            Tab::Info => panels::info_ui(ui, self.sh),
-            Tab::Perf => panels::perf_ui(ui, self.sh),
+            Tab::List(l) => {
+                let t = Instant::now();
+                list::ui(ui, l, self.sh);
+                self.sh.perf.acc[P_LIST] += t.elapsed().as_secs_f64() * 1e3;
+            }
+            Tab::Measure => {
+                let t = Instant::now();
+                panels::measure_ui(ui, self.sh);
+                self.sh.perf.acc[P_MEASURE] += t.elapsed().as_secs_f64() * 1e3;
+            }
+            other => {
+                let t = Instant::now();
+                match other {
+                    Tab::Search => panels::search_ui(ui, self.sh, SEARCH_ID),
+                    Tab::Info => panels::info_ui(ui, self.sh),
+                    _ => panels::perf_ui(ui, self.sh),
+                }
+                self.sh.perf.acc[P_OTHER_TABS] += t.elapsed().as_secs_f64() * 1e3;
+            }
         }
     }
     fn scroll_bars(&self, tab: &Tab) -> [bool; 2] {
@@ -253,6 +298,8 @@ pub struct Args {
     pub no_analysis: bool,
     pub detach_list: bool,
     pub size: (f32, f32),
+    pub present: Option<String>,
+    pub latency: Option<u32>,
 }
 
 enum Phase {
@@ -269,7 +316,121 @@ struct Bench {
     samples: Vec<f32>,
     wave: Vec<f32>,
     lines: Vec<String>,
+    /// the breakdown's rows, printed after the fps table
+    parts: Vec<String>,
     t0: Instant,
+    /// where the phase's timing starts: when, the spans' totals, the app's own parts
+    mark: Option<(Instant, Prof, [f64; P_N])>,
+    /// shapes, meshes' vertices and triangles of one frame of the phase
+    counts: Option<Counts>,
+    /// the spans over the whole run (from the first zoom on)
+    whole: Option<Prof>,
+    /// count the shapes at the end of this frame's App::ui
+    want_count: bool,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+type Prof = crate::prof::Totals;
+#[cfg(target_arch = "wasm32")]
+type Prof = ();
+
+#[derive(Clone, Copy, Default)]
+struct Counts {
+    shapes: usize,
+    vertices: usize,
+    triangles: usize,
+    prims: usize,
+    wave_vertices: usize,
+    tess_ms: f64,
+}
+
+fn prof_now() -> Prof {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        crate::prof::snapshot()
+    }
+}
+
+/// The frame's shapes so far (copied out of egui's layers) tessellated as eframe will: how many shapes, vertices,
+/// triangles. Only on one frame a phase (the copy and the tessellation cost a frame's worth).
+fn count_shapes(ctx: &egui::Context, wave_vertices: usize) -> Counts {
+    let shapes = ctx.graphics(|g| g.clone()).drain(&[], &Default::default());
+    let n = shapes.len();
+    let t = Instant::now();
+    let prims = ctx.tessellate(shapes, ctx.pixels_per_point());
+    let tess_ms = t.elapsed().as_secs_f64() * 1e3;
+    let mut c = Counts { shapes: n, prims: prims.len(), wave_vertices, tess_ms, ..Default::default() };
+    for p in &prims {
+        if let egui::epaint::Primitive::Mesh(m) = &p.primitive {
+            c.vertices += m.vertices.len();
+            c.triangles += m.indices.len() / 3;
+        }
+    }
+    c
+}
+
+/// The spans read for the breakdown (names as `prof` shortens them).
+const SPANS: [(&str, &str); 13] = [
+    ("frame", "WgpuWinitRunning<'_>::run_ui_and_paint"),
+    ("prepare", "Prepare"),
+    ("egui", "Context::run_dyn"),
+    ("tessellate", "Context::tessellate"),
+    ("paint", "Painter::paint_and_update_textures"),
+    ("upload", "Renderer::update_buffers"),
+    ("texture", "Renderer::update_texture"),
+    ("encode", "Renderer::render"),
+    ("finish", "CommandEncoder::finish"),
+    ("acquire", "get_current_texture"),
+    ("submit", "Queue::submit"),
+    ("present", "present"),
+    ("maintain", "Device::maintain"),
+];
+
+fn parts_header() -> Vec<String> {
+    let mut h = String::from("| view | frames | dt | ");
+    for (k, _) in SPANS {
+        h += &format!("{k} | ");
+    }
+    h += "main CPU | App::ui | wave | minimap | list | measure | other tabs | bars | gap | shapes | vertices | triangles | prims | wave vertices | tess (own) |";
+    let n = h.matches('|').count() - 1;
+    vec![h, format!("|{}", "---|".repeat(n))]
+}
+
+#[allow(unused_variables, clippy::too_many_arguments)]
+fn parts_row(label: &str, frames: usize, dt_ms: f64, a: &Prof, b: &Prof, acc0: &[f64; P_N], acc1: &[f64; P_N], c: Option<Counts>) -> String {
+    let f = frames.max(1) as f64;
+    let mut r = format!("| {label} | {frames} | {:.2} | ", dt_ms);
+    let mut frame_ms = 0.0;
+    for (k, name) in SPANS {
+        #[cfg(not(target_arch = "wasm32"))]
+        let ms = crate::prof::between(a, b, name).0 * 1e3 / f;
+        #[cfg(target_arch = "wasm32")]
+        let ms = f64::NAN;
+        if k == "frame" {
+            frame_ms = ms;
+        }
+        // the bench's own tessellation (to count) is not the frame's
+        let ms = if k == "tessellate" { ms - c.map(|c| c.tess_ms).unwrap_or(0.0) / f } else { ms };
+        r += &format!("{ms:.2} | ");
+    }
+    let d = |i: usize| (acc1[i] - acc0[i]) / f;
+    r += &format!(
+        "{:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | ",
+        d(P_CPU),
+        d(P_APP),
+        d(P_WAVE),
+        d(P_MINIMAP),
+        d(P_LIST),
+        d(P_MEASURE),
+        d(P_OTHER_TABS),
+        d(P_BARS),
+        dt_ms - frame_ms
+    );
+    match c {
+        Some(c) => r += &format!("{} | {} | {} | {} | {} | {:.2} |", c.shapes, c.vertices, c.triangles, c.prims, c.wave_vertices, c.tess_ms),
+        None => r += "– | – | – | – | – | – |",
+    }
+    r
 }
 
 pub struct App {
@@ -282,11 +443,14 @@ pub struct App {
     os_lists: Vec<ListTab>,
     started: Instant,
     last_frame: Option<Instant>,
+    last_cpu: Option<f64>,
     args: Args,
     bench: Option<Bench>,
     shot_asked: Option<Instant>,
     shot_done: Arc<Mutex<bool>>,
     font: Option<String>,
+    /// the GPU and the drawing set up (for the bench's header)
+    gpu: String,
     add_kind: u8,
     zoom_done: bool,
     frames: u64,
@@ -328,6 +492,28 @@ impl App {
     pub fn new(cc: &eframe::CreationContext, args: Args) -> Self {
         let ctx = &cc.egui_ctx;
         let font = theme::install_fonts(ctx);
+        #[cfg(not(target_arch = "wasm32"))]
+        let gpu = cc
+            .wgpu_render_state
+            .as_ref()
+            .map(|rs| {
+                let i = rs.adapter.get_info();
+                format!(
+                    "{} ({:?}, {:?}, driver {} {}), target {:?}, present {}, frame latency {}, drawing {}",
+                    i.name,
+                    i.backend,
+                    i.device_type,
+                    i.driver,
+                    i.driver_info,
+                    rs.target_format,
+                    args.present.as_deref().unwrap_or(if args.bench.is_some() { "novsync" } else { "auto" }),
+                    args.latency.unwrap_or(1),
+                    if crate::wave::OLD_DRAW.load(std::sync::atomic::Ordering::Relaxed) { "old (--old-draw)" } else { "new" }
+                )
+            })
+            .unwrap_or_default();
+        #[cfg(target_arch = "wasm32")]
+        let gpu = String::new();
         let dark = !args.light;
         ctx.set_theme(if dark { egui::Theme::Dark } else { egui::Theme::Light });
         let mut layouts = BTreeMap::new();
@@ -366,6 +552,7 @@ impl App {
             force_vp: None,
             minimap_key: (u64::MAX, 0, 0),
             minimap: vec![],
+            minimap_mesh: None,
         };
         let bench = args.bench.clone().map(|out| Bench {
             out,
@@ -374,7 +561,12 @@ impl App {
             samples: vec![],
             wave: vec![],
             lines: vec![],
+            parts: parts_header(),
             t0: Instant::now(),
+            mark: None,
+            counts: None,
+            whole: None,
+            want_count: false,
         });
         let mut app = App {
             sh,
@@ -386,11 +578,13 @@ impl App {
             os_lists: vec![],
             started: Instant::now(),
             last_frame: None,
+            last_cpu: None,
             args,
             bench,
             shot_asked: None,
             shot_done: Arc::new(Mutex::new(false)),
             font,
+            gpu,
             add_kind: 0,
             zoom_done: false,
             frames: 0,
@@ -625,72 +819,123 @@ impl App {
     fn run_bench(&mut self, ui: &egui::Ui, dt_ms: f32) {
         let Some(b) = &mut self.bench else { return };
         let Some(cap) = &self.sh.cap else { return };
-        let ready = cap.lod_s.lock().unwrap().is_some() && self.sh.analysis_slot.is_none();
+        // the first paint too: a small file is read and analyzed before the first frame is over
+        let ready = cap.lod_s.lock().unwrap().is_some() && self.sh.analysis_slot.is_none() && self.sh.perf.first_paint.is_some();
         let n = cap.n_ticks;
         let w = ui.ctx().content_rect().width() * 0.68 - wave::LABEL_W;
+        // the frames of a zoom: at most 96, or 3 s once 24 are in (a slow screen does not make the run long)
+        const WARM: u32 = 6;
+        let enough = |f: u32, b: &Bench| f >= 95 || f >= WARM + 24 && b.mark.as_ref().is_some_and(|m| m.0.elapsed().as_secs_f32() > 3.0);
+        let perf = &self.sh.perf;
         match b.phase {
             Phase::Wait => {
                 if ready || b.t0.elapsed().as_secs() > 600 {
                     b.lines.push(format!(
-                        "# {} ({} lines, {} changes, {} ticks): first paint {:.0} ms, read {:.0} ms, summaries {:.2} s, analysis {}",
+                        "# {} ({} lines, {} changes, {} ticks): first paint {}, read {:.0} ms, summaries {:.2} s, analysis {}",
                         cap.title,
                         cap.lines.len(),
                         cap.total_edges,
                         cap.n_ticks,
-                        self.sh.perf.first_paint.unwrap_or(f64::NAN) * 1e3,
+                        perf.first_paint.map(|s| format!("{:.0} ms", s * 1e3)).unwrap_or("-".into()),
                         cap.read_s * 1e3,
                         cap.lod_s.lock().unwrap().unwrap_or(f64::NAN),
                         self.sh.analysis.as_ref().map(|a| format!("{:.2} s", a.seconds)).unwrap_or("-".into())
                     ));
+                    b.lines.push(format!(
+                        "# window {:.0}x{:.0} pt, {:.2} px/pt, waveform {:.0} pt wide",
+                        ui.ctx().content_rect().width(),
+                        ui.ctx().content_rect().height(),
+                        ui.ctx().pixels_per_point(),
+                        w
+                    ));
+                    b.lines.push(format!("# gpu: {}", self.gpu));
                     b.lines.push("| ticks/px | fps (median) | frame ms p50 / p95 | waveform CPU ms |".into());
                     b.lines.push("|---|---|---|---|".into());
+                    b.whole = Some(prof_now());
                     b.phase = Phase::Zoom(0, 0);
                 }
             }
             Phase::Zoom(zi, f) => {
-                if f > 5 {
+                if f == WARM {
+                    b.mark = Some((Instant::now(), prof_now(), perf.acc));
+                }
+                if f > WARM {
                     b.samples.push(dt_ms);
-                    b.wave.push(self.sh.perf.wave_avg());
+                    b.wave.push(perf.wave_avg());
+                }
+                if f == WARM + 12 {
+                    b.want_count = true;
                 }
                 let fit = Viewport::fit(n, w.max(100.0));
                 let z = b.zooms[zi];
                 let mut vp = fit.zoomed(z, w * 0.37);
                 vp.t0 += f as f64 * 7.0 * vp.tpp;
                 self.sh.force_vp = Some(vp.clamped(n));
-                if f >= 95 {
+                if f > WARM && enough(f, b) {
                     let mut s = std::mem::take(&mut b.samples);
                     s.sort_by(|a, b| a.partial_cmp(b).unwrap());
                     let p = |q: f32| s[((s.len() - 1) as f32 * q) as usize];
                     let wv = b.wave.iter().sum::<f32>() / b.wave.len().max(1) as f32;
                     b.wave.clear();
                     b.lines.push(format!("| {:.3} | {:.0} | {:.1} / {:.1} | {:.2} |", vp.tpp, 1000.0 / p(0.5), p(0.5), p(0.95), wv));
-                    b.phase = if zi + 1 < b.zooms.len() && b.zooms[zi + 1] <= n as f64 * 20.0 / w as f64 {
-                        Phase::Zoom(zi + 1, 0)
-                    } else {
-                        Phase::Sweep(0)
-                    };
+                    // the breakdown over the frames since the mark
+                    if let Some((_, pa, acc0)) = b.mark.take() {
+                        let pb = prof_now();
+                        let dt = s.iter().sum::<f32>() as f64 / s.len().max(1) as f64;
+                        b.parts.push(parts_row(&format!("{:.3} t/px", vp.tpp), s.len(), dt, &pa, &pb, &acc0, &perf.acc, b.counts.take()));
+                    }
+                    b.phase = if zi + 1 < b.zooms.len() && b.zooms[zi + 1] <= n as f64 * 20.0 / w as f64 { Phase::Zoom(zi + 1, 0) } else { Phase::Sweep(0) };
                 } else {
                     b.phase = Phase::Zoom(zi, f + 1);
                 }
             }
             Phase::Sweep(f) => {
                 // a zoom from the whole capture in, 6 % a frame (new tiles all the time)
+                if f == 3 {
+                    b.mark = Some((Instant::now(), prof_now(), perf.acc));
+                }
                 if f > 3 {
                     b.samples.push(dt_ms);
+                }
+                if f == 60 {
+                    b.want_count = true;
                 }
                 let fit = Viewport::fit(n, w.max(100.0));
                 let vp = fit.zoomed(1.06f64.powi(f as i32), w * 0.37);
                 self.sh.force_vp = Some(vp.clamped(n));
-                if f >= 240 || vp.tpp < 0.05 {
+                let long = b.mark.as_ref().is_some_and(|m| m.0.elapsed().as_secs_f32() > 12.0);
+                if f >= 240 || vp.tpp < 0.05 || long && f > 30 {
                     let mut s = std::mem::take(&mut b.samples);
                     s.sort_by(|a, b| a.partial_cmp(b).unwrap());
                     let p = |q: f32| s[((s.len() - 1) as f32 * q) as usize];
-                    b.lines.push(format!("zoom sweep (6 %/frame): frame ms p50 {:.1}, p95 {:.1}, max {:.1}", p(0.5), p(0.95), s[s.len() - 1]));
                     b.lines.push(format!(
-                        "memory: model {:.0} MB, rss {:.0} MB",
-                        cap.mem_bytes() as f64 / 1e6,
-                        rss_mb().unwrap_or(f64::NAN)
+                        "zoom sweep (6 %/frame, {} frames): frame ms p50 {:.1}, p95 {:.1}, max {:.1}",
+                        s.len(),
+                        p(0.5),
+                        p(0.95),
+                        s[s.len() - 1]
                     ));
+                    if let Some((_, pa, acc0)) = b.mark.take() {
+                        let pb = prof_now();
+                        let dt = s.iter().sum::<f32>() as f64 / s.len().max(1) as f64;
+                        b.parts.push(parts_row("sweep", s.len(), dt, &pa, &pb, &acc0, &perf.acc, b.counts.take()));
+                    }
+                    b.lines.push(format!("memory: model {:.0} MB, rss {:.0} MB", cap.mem_bytes() as f64 / 1e6, rss_mb().unwrap_or(f64::NAN)));
+                    b.lines.push(String::new());
+                    b.lines.push(
+                        "## the frame's parts (ms a frame, mean; dt = between frames; gap = dt - frame: the event loop and waits outside eframe's paint)"
+                            .into(),
+                    );
+                    b.lines.append(&mut b.parts);
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if let Some(w0) = &b.whole {
+                        b.lines.push(String::new());
+                        b.lines.push("## every span over the run (ms in all, calls; inclusive, the main thread)".into());
+                        for (name, secs, calls) in crate::prof::all_between(w0, &prof_now()).into_iter().take(60) {
+                            b.lines.push(format!("{:9.1} ms {:7}  {name}", secs * 1e3, calls));
+                        }
+                    }
+                    b.lines.push(format!("bench: {:.1} s from the start", self.started.elapsed().as_secs_f64()));
                     let text = b.lines.join("\n") + "\n";
                     println!("{text}");
                     let _ = std::fs::write(&b.out, text);
@@ -748,6 +993,11 @@ impl App {
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let now = Instant::now();
+        // the main thread's CPU from this frame's start to the next one's
+        let cpu = thread_cpu_ms();
+        if let Some(c0) = self.last_cpu.replace(cpu) {
+            self.sh.perf.acc[P_CPU] += cpu - c0;
+        }
         let dt_ms = self.last_frame.map(|t| (now - t).as_secs_f32() * 1e3).unwrap_or(0.0);
         self.last_frame = Some(now);
         self.frames += 1;
@@ -772,9 +1022,12 @@ impl eframe::App for App {
         }
         self.run_bench(ui, dt_ms);
         self.shot(ui);
+        let t_bars = Instant::now();
         egui::Panel::top("bar").show(ui, |ui| self.bar(ui));
         egui::Panel::bottom("status").show(ui, |ui| self.status(ui));
+        self.sh.perf.acc[P_BARS] += t_bars.elapsed().as_secs_f64() * 1e3;
         let mut add_at = None;
+        let t_dock = Instant::now();
         egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| {
             let mut v = Viewer { sh: &mut self.sh, cache: &mut self.cache, add_at: None };
             DockArea::new(&mut self.dock)
@@ -784,6 +1037,7 @@ impl eframe::App for App {
                 .show_inside(ui, &mut v);
             add_at = v.add_at;
         });
+        self.sh.perf.acc[P_DOCK] += t_dock.elapsed().as_secs_f64() * 1e3;
         let _ = add_at;
         let _ = self.add_kind;
         self.sh.perf.tiles = (self.cache.len(), self.cache.made, self.cache.reused);
@@ -837,6 +1091,13 @@ impl eframe::App for App {
         // keep the progress moving while the summaries and the analysis are made
         if self.sh.analysis_slot.is_some() || self.sh.cap.as_ref().is_some_and(|c| c.lod_s.lock().unwrap().is_none()) {
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
+        }
+        self.sh.perf.acc[P_APP] += now.elapsed().as_secs_f64() * 1e3;
+        // the bench's count of this frame's shapes (after everything is painted; not in the times above)
+        if let Some(b) = &mut self.bench
+            && std::mem::take(&mut b.want_count)
+        {
+            b.counts = Some(count_shapes(&ctx, self.sh.perf.wave_vertices));
         }
     }
 
