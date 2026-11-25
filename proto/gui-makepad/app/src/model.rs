@@ -4,11 +4,11 @@
 //! (Prototype 4: a copy of prototype 3's copy of prototype 1's proto/gui/egui/src/model.rs: the screen polls.)
 #![allow(dead_code)]
 
+use crate::clock::Instant;
 use serde_json::Value;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
-use std::time::Instant;
 use view_core::Tick;
 use view_core::analog::AnalogLine;
 use view_core::ann::{Item, Status, Track};

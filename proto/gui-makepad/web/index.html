@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>WireSkein 試作 4（Makepad, web）</title>
+  <link rel="stylesheet" type="text/css" href="./makepad_platform/full_canvas.css">
+  <style>
+    html, body { background: #16181d; }
+    #msg { position: fixed; left: 12px; top: 10px; color: #9aa3b2; font: 13px sans-serif; z-index: 5; }
+  </style>
+</head>
+<body>
+  <canvas class="full_canvas"></canvas>
+  <div class="canvas_loader"><div id="msg">読み込み中…</div></div>
+  <script type="module">
+    // Prototype 4 (Makepad 1.0) in the browser (bench/notes/2026-11-25-gui-study.ja.md §16). Makepad's web build has
+    // no wasm-bindgen: the page instantiates the wasm with Makepad's own JS (makepad_platform/web_gl.js, copied by
+    // web/build.sh from the crate as cargo-makepad does) and adds a few imports of ours to the same `env` (src/web.rs):
+    // the clock, the URL's arguments, a capture fetched before the start, the bench's text, the time spent in frames.
+    //
+    // ?synth=1e8 [&items=5e5]   a made-up capture (the summaries and the made-up analysis made at the start: it stops)
+    // ?file=files/...           a capture fetched (tools/serve.mjs of proto/gui-web: --files ../../tests/data)
+    // (neither)                 the example mixed-1 carried in the program
+    // &light=1 &layout=... &search=... &zoom=Z&at=F &noanalysis=1 &select=ROW
+    // &bench=1                  prototype 1's bench; its text in window.__bench and the console
+    import { WasmWebGL } from './makepad_platform/web_gl.js';
+
+    // The time the page spends in its requestAnimationFrame callbacks, where Makepad's web.js hands the program its
+    // frames (the frame loop, the draw, the draw lists to WebGL): the page's "main CPU" (src/web_meter.rs). Read
+    // inside a callback it counts the callback so far.
+    // (the window's operations live on the window itself, not on Window.prototype: [Global])
+    const raf = window.requestAnimationFrame;
+    let busy = 0;
+    let frames = 0;
+    let inRaf = null;
+    window.requestAnimationFrame = function (cb) {
+      return raf.call(window, (t) => {
+        const a = performance.now();
+        inRaf = a;
+        try {
+          cb(t);
+        } finally {
+          inRaf = null;
+          busy += performance.now() - a;
+          frames += 1;
+          window.__rafBusy = busy;
+          window.__rafFrames = frames;
+        }
+      });
+    };
+    window.__rafBusy = 0;
+    // what proto/gui-web/web/tools/bench.mjs reads besides __ready and __bench
+    window.__wsk = { scene: { mem_bytes: () => 0 } };
+
+    const msg = document.getElementById('msg');
+    const q = new URLSearchParams(location.search);
+    const enc = new TextEncoder();
+    const dec = new TextDecoder();
+    // what the program asks for by number (src/web.rs: 0 the arguments, 1 the capture, 2 its name, 3 the GPU)
+    const values = [enc.encode([...q].map(([k, v]) => `${k}=${v}`).join('\n')), null, null, null];
+    if (q.get('file')) {
+      const t = performance.now();
+      const r = await fetch(q.get('file'));
+      if (r.ok) {
+        values[1] = new Uint8Array(await r.arrayBuffer());
+        values[2] = enc.encode(q.get('file').split('/').pop());
+        console.log(`${q.get('file')} (${(values[1].length / 1e6).toFixed(1)} MB) fetched in ${(performance.now() - t).toFixed(0)} ms`);
+      } else console.log(`${q.get('file')}: ${r.status}`);
+    }
+    {
+      const gl = document.createElement('canvas').getContext('webgl');
+      const ext = gl && gl.getExtension('WEBGL_debug_renderer_info');
+      const gpu = gl ? `${gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER)}` : 'no WebGL';
+      values[3] = enc.encode(gpu);
+      console.log(`gpu: ${gpu}`);
+    }
+
+    let wasm = null;
+    const mem = () => new Uint8Array(wasm.exports.memory.buffer);
+    const env = {
+      _post_signal: (_) => {},
+      wsk_now: () => performance.now(),
+      wsk_len: (which) => (values[which] ? values[which].length : 0),
+      wsk_copy: (which, ptr) => mem().set(values[which], ptr),
+      wsk_put: (which, ptr, len) => {
+        const s = dec.decode(mem().slice(ptr, ptr + len));
+        if (which === 1) window.__bench = s;
+        if (which === 2) {
+          window.__wskInfo = s;
+          window.__ready = true;
+        }
+        if (which !== 2) console.log(s);
+      },
+      wsk_raf_busy: () => busy + (inRaf !== null ? performance.now() - inRaf : 0),
+    };
+    const t0 = performance.now();
+    const module = await WebAssembly.compileStreaming(fetch('./wsk-makepad.wasm'));
+    console.log(`wasm compiled in ${(performance.now() - t0).toFixed(0)} ms`);
+    wasm = await WasmWebGL.instantiate_wasm(module, undefined, env);
+    if (!(wasm && wasm.exports)) {
+      msg.textContent = `wasm を始められない: ${wasm}`;
+      throw wasm;
+    }
+    const canvas = document.getElementsByClassName('full_canvas')[0];
+    window.__makepad = new WasmWebGL(wasm, { /* dispatch */ }, canvas);
+  </script>
+</body>
+</html>

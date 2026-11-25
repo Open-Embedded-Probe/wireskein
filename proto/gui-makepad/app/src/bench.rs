@@ -7,9 +7,9 @@
 //! handled. What is left of the frame's interval (`gap`) is Makepad's platform layer: the draw lists to the GPU
 //! (OpenGL on Linux, D3D11 on Windows), the swap and the wait for the next frame.
 
+use crate::clock::Instant;
 use crate::state::*;
 use std::path::PathBuf;
-use std::time::Instant;
 use view_core::Viewport;
 
 #[derive(Clone, Copy)]
@@ -250,6 +250,8 @@ pub fn step(st: &St, b: &mut Bench, dt_ms: f32, width: f32) -> (Option<Viewport>
                 ));
                 let text = b.lines.join("\n") + "\n";
                 println!("{text}");
+                #[cfg(target_arch = "wasm32")]
+                crate::web::put_bench(&text);
                 let _ = std::fs::write(&b.out, text);
                 b.phase = Phase::Done;
                 return (Some(vp.clamped(n)), true);

@@ -6,6 +6,7 @@
 //! theme by relinking `theme` and reloading the DSL (live edit).
 
 use crate::bench::{self, Bench};
+use crate::clock::Instant;
 use crate::state::*;
 use crate::theme;
 use makepad_widgets::splitter::{SplitterAlign, SplitterAxis};
@@ -14,7 +15,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::sync::OnceLock;
-use std::time::Instant;
 use view_core::Viewport;
 
 pub static ARGS: OnceLock<Args> = OnceLock::new();
@@ -339,10 +339,23 @@ pub struct App {
     sized: bool,
     #[rust]
     last_draw: Option<Instant>,
+    /// the web: the page told that everything is in (web.rs)
+    #[rust]
+    #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+    web_ready: bool,
 }
 
 impl LiveRegister for App {
     fn live_register(cx: &mut Cx) {
+        // the web: Makepad's web build does not run main; the URL's arguments are read here, before the theme
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = ARGS.set(crate::web_args());
+            crate::web::log(&format!(
+                "wsk-makepad: registering {:.0} ms after the page's navigation",
+                crate::web::now_ms()
+            ));
+        }
         makepad_widgets::live_design(cx);
         crate::theme_light::live_design(cx);
         if ARGS.get().is_some_and(|a| a.light) {
@@ -541,6 +554,11 @@ impl App {
         let Some(k) = self.st.as_ref().and_then(|s| s.panels.get(&id)).map(|p| p.kind()) else {
             return;
         };
+        if cfg!(target_arch = "wasm32") {
+            // the web: one window (the page's canvas; Makepad 1.0's web build draws one)
+            log!("the web build has one window: the panel stays in the Dock");
+            return;
+        }
         let ptr = match k {
             Kind::Wave => self.win_wave,
             Kind::List => self.win_list,
@@ -683,12 +701,20 @@ impl App {
     fn startup(&mut self, cx: &mut Cx) {
         let args = ARGS.get().cloned().unwrap_or_default();
         let mut st = St::new(args.clone());
+        #[cfg(target_arch = "wasm32")]
+        crate::web::log(&format!(
+            "startup {:.0} ms after the page's navigation",
+            crate::web::now_ms()
+        ));
         st.open();
         st.gpu = match cx.os_type() {
             OsType::Windows => "Direct3D 11（Makepad の Windows の描画）".into(),
             OsType::Macos => "Metal".into(),
             OsType::LinuxWindow(_) => "OpenGL（X11、EGL）".into(),
-            OsType::Web(_) => "WebGL2".into(),
+            #[cfg(target_arch = "wasm32")]
+            OsType::Web(_) => format!("{} (WebGL 1 with extensions: Makepad 1.0's web)", crate::web::gpu()),
+            #[cfg(not(target_arch = "wasm32"))]
+            OsType::Web(_) => "WebGL".into(),
             _ => format!("{:?}", cx.os_type()),
         };
         self.st = Some(st);
@@ -737,6 +763,30 @@ impl App {
                 && let Some(c) = &st.cap
             {
                 st.perf.first_paint = Some(c.opened.elapsed().as_secs_f64());
+            }
+            #[cfg(target_arch = "wasm32")]
+            if !self.web_ready
+                && let (Some(fp), Some(c)) = (st.perf.first_paint, &st.cap)
+                && st.analysis_slot.is_none()
+                && c.lod_s.lock().unwrap().is_some()
+            {
+                self.web_ready = true;
+                let info = format!(
+                    "{}: first paint {:.0} ms after it was opened ({:.0} ms after the page's navigation), read {:.0} ms, \
+                     summaries {:.2} s, analysis {}, wasm memory {:.0} MB",
+                    c.title,
+                    fp * 1e3,
+                    crate::web::now_ms(),
+                    c.read_s * 1e3,
+                    c.lod_s.lock().unwrap().unwrap_or(f64::NAN),
+                    st.analysis
+                        .as_ref()
+                        .map(|a| format!("{:.2} s", a.seconds))
+                        .unwrap_or("-".into()),
+                    crate::web::wasm_mb()
+                );
+                crate::web::log(&format!("ready: {info}"));
+                crate::web::ready(&info);
             }
             let cpu = thread_cpu_ms();
             if let Some(c0) = self.last_cpu {
@@ -976,6 +1026,14 @@ impl AppMain for App {
         let st = self.st.as_mut().unwrap();
         let ms = t.elapsed().as_secs_f64() * 1e3;
         if let Event::Draw(_) = event {
+            // the web: where the time before the first picture goes (the draws until it, against the page's clock)
+            #[cfg(target_arch = "wasm32")]
+            if st.perf.first_paint.is_none() {
+                crate::web::log(&format!(
+                    "a draw before the first paint: {ms:.0} ms, ended {:.0} ms after the page's navigation",
+                    crate::web::now_ms()
+                ));
+            }
             st.perf.acc[P_DRAW] += ms;
             st.perf.acc[P_DRAW_CPU] += thread_cpu_ms() - c0;
             // the frame rate as drawn frames (the frame loop may run without drawing)

@@ -4,11 +4,11 @@
 //! (`begin_many_instances`: Makepad appends the instance data to one draw call). Text by Makepad's DrawText above.
 //! The mouse: zoom, pan with a fling, a range to zoom to, the minimap, a click on an annotation, the markers, keys.
 
+use crate::clock::Instant;
 use crate::scene::{self, Geo, Hits, Lane};
 use crate::state::*;
 use crate::theme::*;
 use makepad_widgets::*;
-use std::time::Instant;
 use view_core::Viewport;
 
 live_design! {

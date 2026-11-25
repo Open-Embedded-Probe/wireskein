@@ -16,6 +16,8 @@ bench/notes/2026-11-25-gui-study.ja.md §7 の試作の 4 つ目（案 E2: 宣�
     `load_state` に入れる。どのパネルも別の OS の窓へ（Window をテンプレートから作る。閉じると Dock に戻る）。ダーク / ライト。
   - `state.rs`: 状態（記録・解析・選択・マーカー・検索・パネルごとの状態）。widget には Makepad の `Scope` で渡す。
   - `model.rs` / `scene.rs`: 試作 3 の写し（view-core と本番の crates を path で読むだけ）。`bench.rs`: `--bench`。
+  - `clock.rs`・`web.rs`・`web_meter.rs`: ブラウザ版（下の「ブラウザで開く」）の時計・ページとの受け渡し・測り方。
+- `web/index.html`・`web/build.sh`: ブラウザ版のページと、それを作る手順（`cargo makepad` の代わり）。
 - 本番の workspace（ルートの Cargo.toml）は `proto/` を exclude している。ここは自分の workspace と Cargo.lock を持つ。
 
 ## 起動の仕方
@@ -102,6 +104,47 @@ cargo run --release -j1 --bin wsk-makepad -- ../../tests/data/i2c_bench/h417_slo
   （その前の exe では NaN）。終わりの「main thread CPU over the run」で 2 つの時計が数 % 以内で合うことを見る。
 - 窓は流している間そのままにしておく（隠れたり最小化されたりすると描かない）。
 - Windows では MSVC のツールチェーン（Visual Studio の C++ Build Tools）が要る（Makepad の Windows の層が `windows` crate を使う）。
+
+## ブラウザで開く（wasm、ノート §16）
+
+同じプログラムを wasm32-unknown-unknown にし、Makepad 自身の JS（makepad-platform の `src/os/web`。wasm-bindgen は使わない）と
+ページ（`web/index.html`）で開く。描画は Makepad 1.0 の web の層で、**WebGL 1 と拡張**（WebGL2 でも WebGPU でもない）。ネイティブとの違い:
+
+- 窓は 1 つ（ページのキャンバス）。「別の窓へ」は何もしない。
+- スレッドがないので、要約と解析は開くときにその場で作る（試作 1・3 の web と同じ。1e8 で 2〜3 s 止まってから最初の絵）。
+- ファイルは `?file=URL` でページが取ってから渡す（なければ例 mixed-1 を中に持つ）。ブラウザのファイルの選択・ドロップはまだない。
+- 文字: Makepad が自分のフォント（IBM Plex、日本語は中国語の楷書体 LXGW WenKai で代用）を持つので、ネイティブと同じ字で出る。
+  フォントは crate の `resources/` から写して配る（合わせて約 48 MB。ページの最初に全部取る）。
+- レイアウトの保存は効かない（ファイルがない）。
+- `--bench` は `&bench=1`（結果は `window.__bench` とコンソール。`main CPU` はページの requestAnimationFrame の中の時間）。
+
+### ビルドと配信（Linux。Windows では WSL か Git Bash で `web/build.sh` を流す）
+
+`cargo makepad wasm build`（GitHub の cargo-makepad。nightly と `-Z build-std` とスレッドの wasm を前提にする）は使わず、同じことを
+`web/build.sh` で stable の Rust でする（中身はスクリプトの頭の説明）。要るのは wasm のターゲットと python3 と node だけ。
+
+```sh
+rustup target add wasm32-unknown-unknown
+cd proto/gui-makepad
+web/build.sh            # web-out/ に wasm（8.5 MB、gzip 2.4 MB）・JS・フォント・index.html（初回はこの機械の -j1 で 4〜5 分）
+node ../gui-web/web/tools/serve.mjs --root web-out --files ../../tests/data --port 8080
+```
+
+利用者の Chrome / Edge / Firefox で開く URL（WebGL なので http のままでよく、別の機械からは serve.mjs に `--host 0.0.0.0` を付けて
+この機械の名前で開ける。WebGPU と違って localhost / https でなくてもよい）:
+
+- `http://127.0.0.1:8080/` — 例 mixed-1（中に持っている）
+- `http://127.0.0.1:8080/?file=files/p4x-i1/i2c-controller-400k-nack.vcd` — tests/data の記録をページが取って開く
+- `http://127.0.0.1:8080/?synth=1e8` — 合成 1e8（開くのに数秒止まる）
+- 引数: `&light=1`、`&layout=一覧を大きく`、`&search=0x48 書き込み`、`&zoom=Z&at=F`、`&select=ROW`、`&noanalysis=1`、`&part=K`
+- `&bench=1` — 試作 1・3 と同じベンチ。終わると表が開発者ツールのコンソールに出る。
+
+ヘッドレスの Chrome で流して測る・撮る（proto/gui-web の道具。puppeteer-core が要る: `cd ../gui-web/web && npm ci`）:
+
+```sh
+node ../gui-web/web/tools/bench.mjs 'http://127.0.0.1:8080/?bench=1' --bench makepad-web-mixed1.txt --shot makepad-web-mixed1.png
+node ../gui-web/web/tools/bench.mjs 'http://127.0.0.1:8080/?synth=1e8&bench=1' --bench makepad-web-1e8.txt --shot makepad-web-1e8.png
+```
 
 ## 測った数字（2026-11-25、この機械: 4 コア、Xvfb + Mesa llvmpipe の OpenGL。fps は参考にならない）
 

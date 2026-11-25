@@ -4,6 +4,7 @@
 //! it to draw and change it on events (then everything is redrawn: `cx.redraw_all`, as egui would).
 //! The logic is prototype 3's app.rs / panels.rs (select, follow, next error, the search's words) without iced.
 
+use crate::clock::Instant;
 use crate::model::{self, Analysis, Capture, Rows};
 use crate::scene::{Lane, SceneCache};
 use crate::theme::{self, Pal};
@@ -12,7 +13,6 @@ use serde_json::Value;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
 use view_core::Viewport;
 use view_core::ann::Status;
 
@@ -340,7 +340,9 @@ impl St {
     }
 
     pub fn open(&mut self) {
-        if let Some(total) = self.args.synth {
+        if cfg!(target_arch = "wasm32") && self.args.synth.is_none() {
+            self.open_web();
+        } else if let Some(total) = self.args.synth {
             let c = model::open_synth(total);
             self.analysis_slot = Some(model::start_fake_analysis(self.args.synth_items, c.n_ticks));
             self.cap = Some(c);
@@ -354,6 +356,33 @@ impl St {
                     self.cap = Some(c);
                 }
                 Err(e) => eprintln!("{}: {e}", p.display()),
+            }
+        }
+    }
+
+    /// The web: the capture the page fetched (`?file=`), else the example carried in the program; the summaries and
+    /// the analysis made at once, here (no threads: prototypes 1 and 3 on the web do the same).
+    fn open_web(&mut self) {
+        const EXAMPLE: &[u8] = include_bytes!("../../../../tests/data/examples/mixed-1.wireskein");
+        #[cfg(target_arch = "wasm32")]
+        let fetched = crate::web::file();
+        #[cfg(not(target_arch = "wasm32"))]
+        let fetched: Option<(String, Vec<u8>)> = None;
+        let (name, bytes) = fetched.unwrap_or_else(|| ("mixed-1.wireskein".into(), EXAMPLE.to_vec()));
+        match model::open_bytes(&name, &bytes, self.args.part) {
+            Ok(c) => {
+                if !self.args.no_analysis {
+                    let names: Vec<String> = c.lines.iter().map(|l| l.name.clone()).collect();
+                    let a = model::analysis_of_bytes(&bytes, c.part, &names);
+                    self.analysis_slot = Some(Arc::new(Mutex::new(Some(a))));
+                }
+                self.cap = Some(c);
+            }
+            Err(e) => {
+                let m = format!("{name}: {e}");
+                eprintln!("{m}");
+                #[cfg(target_arch = "wasm32")]
+                crate::web::log(&m);
             }
         }
     }

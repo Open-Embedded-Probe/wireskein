@@ -280,7 +280,7 @@ impl Widget for ListPanel {
     }
 
     fn draw_walk(&mut self, cx: &mut Cx2d, scope: &mut Scope, walk: Walk) -> DrawStep {
-        let t = std::time::Instant::now();
+        let t = crate::clock::Instant::now();
         let ok = self.prepare(cx, scope);
         while let Some(item) = self.view.draw_walk(cx, scope, walk).step() {
             if !ok {
