@@ -13,6 +13,8 @@ bench/notes/2026-11-25-gui-study.ja.md §7 の試作の 3 つ目（案 E2: 宣�
     閉じると戻る）。レイアウトは名前を付けて保存（JSON）・切り替え、既定 3 つ。
   - 結果の一覧（`list.rs`）: 仮想の行（見えている行だけ作る、ホイールと縦のスライダーで場所）。列の選択、主張・層の切り替え、連動の入り切り。
   - 解析・ファイル・要約は試作 1 と同じ（`model.rs` は proto/gui/egui/src/model.rs の写し。view-core と本番の crates を path で読むだけ）。
+  - ブラウザ（wasm、ノート §15）: 同じプログラムを 1 つの窓（ページのキャンバス）で。`web.rs`（ページとの受け渡し）、`web_meter.rs`、
+    `web/index.html`・`web/build.sh`。下の「ブラウザで開く」。
 - 本番の workspace（ルートの Cargo.toml）は `proto/` を exclude している。ここは自分の workspace と Cargo.lock を持つ。
 
 ## 起動の仕方
@@ -56,6 +58,73 @@ Windows（PowerShell / cmd）でも同じコマンド（`\` でも `/` でもよ
   「分ける」「別の窓へ」「最大」「×」。上の帯の「パネル」で同じ種類を足せる（波形 2 つ、一覧 2 つ）。「レイアウト」で切り替え、
   名前を入れて「保存」（Linux は `~/.config/wsk-iced/layouts.json`、Windows は `%APPDATA%\wsk-iced\layouts.json`）。
 - 上の「ライトに / ダークに」。
+
+## ブラウザで開く（wasm、ノート §15）
+
+同じプログラムを wasm32-unknown-unknown にし、wasm-bindgen の JS とページ（`web/index.html`）で開く。描画は wgpu が WebGPU を先に試し、
+なければ WebGL2（Chrome / Edge は WebGPU、ほかは WebGL2）。ネイティブとの違い:
+
+- 窓は 1 つ（ページのキャンバス）。「別の窓へ」は出さない。
+- スレッドがないので、要約と解析は開くときにその場で作る（試作 1 の wasm と同じ。1e8 で 2〜3 s 止まってから最初の絵）。
+- ファイルは `?file=URL` でページが取ってから渡す（なければ例 mixed-1 を中に持つ）。ブラウザのファイルの選択・ドロップはまだない。
+- 文字: web には OS のフォントがないので、`build.sh` が日本語のフォントを `fonts/` に写し、ページが取って iced に渡す（20 MB 前後）。
+- 日本語の入力（IME）は効かない（winit 0.30 の web に IME がない）。検索の言葉は `?search=` で入れる。英数字はキーボードで打てる。
+- `--bench` は `&bench=1`（iced の段の内訳は出ない: iced の区間を受けるサーバは TCP。アプリの段と、ページがはかる 1 フレームの時間）。
+
+### ビルドと配信（Linux）
+
+```sh
+rustup target add wasm32-unknown-unknown
+cargo install --locked wasm-bindgen-cli --version 0.2.130   # Cargo.lock の wasm-bindgen と同じ版
+cd proto/gui-iced
+web/build.sh                       # web-out/ に wsk-iced_bg.wasm（約 12 MB、gzip 3.3 MB）・wsk-iced.js・index.html・fonts/
+# 配信（proto/gui-web の道具。依存なし。COOP / COEP の見出しを付ける。tests/data を /files/ に）
+node ../gui-web/web/tools/serve.mjs --root web-out --files ../../tests/data --port 8080
+```
+
+初回の `cargo build`（`build.sh` の中）は -j1 で 10 分前後（依存が多い）、2 回目からは 20 秒ほど。フォントは `FONT=... FONT_FAMILY=...`
+で選べる（`build.sh` の頭）。
+
+### 自分の Chrome で開く
+
+配信した機械の Chrome で（WebGPU は `localhost` か https でしか使えない。別の機械から `http://192.168...` で開くと WebGL2 になる。
+その時は `ssh -L 8080:127.0.0.1:8080 その機械` で手元の `localhost:8080` に引いて開く）:
+
+```
+http://localhost:8080/                                                    # 例 mixed-1（中に持つもの）
+http://localhost:8080/?file=files/examples/mixed-1.wireskein              # URL で取る
+http://localhost:8080/?file=files/i2c_bench/h417_slow/stream/impl-100000000-g0.wireskein
+http://localhost:8080/?synth=1e8                                          # 合成 1 億の変化（開くときに 2〜3 s 止まる）
+http://localhost:8080/?synth=1e8&search=0x48%20書き込み&zoom=2000&at=0.3   # 日本語の検索
+http://localhost:8080/?synth=1e8&bench=1                                  # ベンチ（結果は DevTools の console と window.__bench）
+http://localhost:8080/?file=files/examples/mixed-1.wireskein&webgl=1      # WebGPU があっても WebGL2 で
+```
+
+ほかの引数: `light=1`、`layout=一覧を大きく`、`select=N`、`noanalysis=1`、`items=1e6`（合成の解析の行）、`shot=1`（フレームを流し続ける:
+ヘッドレスの Chrome で撮るため）。DevTools の console に、フォント・GPU（`gpu: ... (WebGPU)` か `(WebGL2)`）・最初の絵・要約・解析の時間が出る。
+
+Windows でビルドするなら（PowerShell、`proto\gui-iced` で。Git Bash があれば `web/build.sh` もそのまま動く）:
+
+```powershell
+cargo build --release -j1 --target wasm32-unknown-unknown --bin wsk-iced
+wasm-bindgen --target web --no-typescript --out-dir web-out target\wasm32-unknown-unknown\release\wsk-iced.wasm
+copy web\index.html web-out\
+mkdir web-out\fonts; copy C:\Windows\Fonts\YuGothR.ttc web-out\fonts\ja.ttc
+Set-Content web-out\fonts\font.json '{"file": "fonts/ja.ttc", "family": "Yu Gothic", "mono": "Yu Gothic"}'
+node ..\gui-web\web\tools\serve.mjs --root web-out --files ..\..\tests\data --port 8080
+```
+
+### ヘッドレスの Chrome で測る・撮る（proto/gui-web の道具）
+
+```sh
+cd proto/gui-web/web && npm ci          # puppeteer-core（Chrome は機械のもの）
+node tools/bench.mjs "http://127.0.0.1:8080/?synth=1e8&bench=1&shot=1" --bench out.txt --shot out.png
+```
+
+`window.__ready`（最初の絵・要約・解析が済んだ）を待ち、ベンチの結果（`window.__bench`）とページの main thread の時間（CDP の
+TaskDuration をフレームの数で割る）、Chrome のプロセスのメモリを書く。ヘッドレスの Chrome は WebGPU のキャンバスを写さず、iced の
+`window::screenshot` は読み戻しを GPU を待って同期で読む（iced_wgpu 0.14 のコード）のでブラウザでは使えない。`shot=1` の時はページが描いた直後のフレームを読み戻して重ねる（index.html の
+`__gpuShot`）。
 
 ## --bench（試作 1 と同じ形）
 

@@ -117,13 +117,29 @@ for (const k of presses) {
 for (const c of clicks) await page.click(c);
 if (waitMs) await new Promise((r) => setTimeout(r, waitMs));
 console.log(`status: ${await page.evaluate("document.querySelector('.status')?.textContent")}`);
-console.log(`memory: ${await page.evaluate("(() => { const w = window.__wsk; const h = performance.memory; return `scene ${(w.scene.mem_bytes() / 1e6).toFixed(0)} MB, JS heap ${h ? (h.usedJSHeapSize / 1e6).toFixed(0) : '-'} MB`; })()")}`);
+console.log(`memory: ${await page.evaluate("(() => { const w = window.__wsk; const h = performance.memory; return `scene ${w?.scene ? (w.scene.mem_bytes() / 1e6).toFixed(0) : '-'} MB, JS heap ${h ? (h.usedJSHeapSize / 1e6).toFixed(0) : '-'} MB`; })()")}`);
 if (bench) {
+  // the page's main thread over the bench (Chrome's own count of its tasks: CDP Performance.getMetrics), a frame's
+  // share by the page's frame count where it keeps one (window.__rafFrames: proto/gui-iced's web page)
+  const metric = (m, k) => m[k] ?? NaN;
+  const m0 = await page.metrics();
+  const f0 = await page.evaluate('window.__rafFrames ?? null');
   await page.waitForFunction('typeof window.__bench === "string"', { timeout: timeoutS * 1000, polling: 500 });
   const text = await page.evaluate('window.__bench');
+  const m1 = await page.metrics();
+  const f1 = await page.evaluate('window.__rafFrames ?? null');
+  const task = (metric(m1, 'TaskDuration') - metric(m0, 'TaskDuration')) * 1e3;
+  const script = (metric(m1, 'ScriptDuration') - metric(m0, 'ScriptDuration')) * 1e3;
+  const wall = (metric(m1, 'Timestamp') - metric(m0, 'Timestamp')) * 1e3;
+  const n = f0 != null && f1 != null ? f1 - f0 : null;
+  const main =
+    `page main thread over the bench (CDP TaskDuration): ${task.toFixed(0)} ms busy (script ${script.toFixed(0)} ms) ` +
+    `in ${(wall / 1e3).toFixed(1)} s` +
+    (n ? `; ${n} frames (window.__rafFrames): ${(task / n).toFixed(2)} ms busy a frame (script ${(script / n).toFixed(2)})` : '') +
+    '\n';
   const mem = treeRss(browser.process().pid);
   const by = Object.entries(mem.by).map(([k, v]) => `${k} ${v.toFixed(0)}`).join(', ');
-  const all = `${text}Chrome processes RSS ${mem.total.toFixed(0)} MB (${by})\n`;
+  const all = `${text}${main}Chrome processes RSS ${mem.total.toFixed(0)} MB (${by})\n`;
   fs.writeFileSync(bench, all);
   console.log(all);
 }

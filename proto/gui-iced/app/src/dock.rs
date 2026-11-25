@@ -242,7 +242,10 @@ pub fn view(app: &App) -> Element<'_, Msg> {
         if p.tabs.len() > 1 {
             ctl = ctl.push(small_btn("分ける", Msg::SplitOut(pane), pal, false));
         }
-        ctl = ctl.push(small_btn("別の窓へ", Msg::Detach(pane), pal, false));
+        // the web has one window (the page's canvas)
+        if !cfg!(target_arch = "wasm32") {
+            ctl = ctl.push(small_btn("別の窓へ", Msg::Detach(pane), pal, false));
+        }
         ctl = ctl.push(small_btn(
             if maximized { "戻す" } else { "最大" },
             Msg::Maximize(pane),

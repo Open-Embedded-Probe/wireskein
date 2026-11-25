@@ -10,9 +10,9 @@
 use crate::app::{App, P_CPU, P_LIST, P_N, P_SCENE, P_TEXT, P_UPDATE, P_VIEW, P_WAVE, rss_mb};
 use std::path::PathBuf;
 use std::sync::Mutex;
-use std::time::{Duration, SystemTime};
 use view_core::Viewport;
-use web_time::Instant;
+// web_time: std's on the desktop (the beacon's times are std's), the browser's clock on the web (std's panics there)
+use web_time::{Instant, SystemTime};
 
 static SPANS: Mutex<Vec<(SystemTime, &'static str, f64)>> = Mutex::new(Vec::new());
 
@@ -362,7 +362,8 @@ pub fn step(app: &App, b: &mut Bench, dt_ms: f32, width: f32, gpu: &str) -> (Opt
                     s[s.len() - 1]
                 ));
                 // the spans' last messages arrive a little after the frames
-                std::thread::sleep(Duration::from_millis(300));
+                #[cfg(not(target_arch = "wasm32"))]
+                std::thread::sleep(std::time::Duration::from_millis(300));
                 if let Some(m) = b.mark.take() {
                     let dt = s.iter().sum::<f32>() as f64 / s.len().max(1) as f64;
                     b.parts.push(row("sweep", s.len(), dt, &m, &mark(app)));
@@ -422,7 +423,10 @@ pub fn step(app: &App, b: &mut Bench, dt_ms: f32, width: f32, gpu: &str) -> (Opt
                 }
                 let text = b.lines.join("\n") + "\n";
                 println!("{text}");
+                #[cfg(not(target_arch = "wasm32"))]
                 let _ = std::fs::write(&b.out, text);
+                #[cfg(target_arch = "wasm32")]
+                crate::web::put_bench(&text);
                 b.phase = Phase::Done;
                 return (Some(vp.clamped(n)), true);
             }

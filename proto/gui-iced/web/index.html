@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WireSkein 試作 3（iced, web）</title>
+  <style>
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #16181d; }
+    body > canvas { display: block; }
+    #msg { position: fixed; left: 12px; top: 10px; color: #9aa3b2; font: 13px sans-serif; }
+    #shot { position: fixed; inset: 0; width: 100%; height: 100%; display: none; z-index: 10; }
+  </style>
+</head>
+<body>
+  <div id="msg">読み込み中…</div>
+  <img id="shot" alt="">
+  <script type="module">
+    // Prototype 3 (iced) in the browser (bench/notes/2026-11-25-gui-study.ja.md §15). The program has no threads and no
+    // files here: this page fetches what it needs before it starts (the font, a capture named by ?file=) and leaves it
+    // in globals the program reads (src/web.rs).
+    //
+    // ?synth=1e8 [&items=5e5]   a made-up capture (the summaries and the made-up analysis made at the start: it stops)
+    // ?file=files/...           a capture fetched (tools/serve.mjs of proto/gui-web: --files ../../tests/data)
+    // (neither)                 the example mixed-1 carried in the program
+    // &light=1 &layout=... &search=... &zoom=Z&at=F &noanalysis=1
+    // &webgl=1                  WebGL2 even where the browser has WebGPU
+    // &bench=1                  prototype 1's bench; its text in window.__bench and the console
+    // &shot=1                   frames keep coming so that window.__gpuShot() can copy the canvas (headless Chrome)
+
+    // WebGPU's canvas: its context and device kept, its textures made readable (COPY_SRC) for the screenshot
+    let gpuCtx = null;
+    let gpuConf = null;
+    if (window.GPUCanvasContext) {
+      const conf = GPUCanvasContext.prototype.configure;
+      GPUCanvasContext.prototype.configure = function (c) {
+        gpuCtx = this;
+        gpuConf = c;
+        return conf.call(this, { ...c, usage: (c.usage ?? 0x10) | 0x01 });
+      };
+    }
+    async function readGpu() {
+      const tex = gpuCtx.getCurrentTexture();
+      const dev = gpuConf.device;
+      const [w, h] = [tex.width, tex.height];
+      const bpr = Math.ceil((w * 4) / 256) * 256;
+      const buf = dev.createBuffer({ size: bpr * h, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+      const enc = dev.createCommandEncoder();
+      enc.copyTextureToBuffer({ texture: tex }, { buffer: buf, bytesPerRow: bpr }, [w, h]);
+      dev.queue.submit([enc.finish()]);
+      await buf.mapAsync(GPUMapMode.READ);
+      const src = new Uint8Array(buf.getMappedRange());
+      const px = new Uint8ClampedArray(w * h * 4);
+      const bgra = String(gpuConf.format).startsWith('bgra');
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const i = y * bpr + x * 4;
+          const o = (y * w + x) * 4;
+          px[o] = src[i + (bgra ? 2 : 0)];
+          px[o + 1] = src[i + 1];
+          px[o + 2] = src[i + (bgra ? 0 : 2)];
+          px[o + 3] = 255;
+        }
+      }
+      buf.unmap();
+      const out = document.createElement('canvas');
+      [out.width, out.height] = [w, h];
+      out.getContext('2d').putImageData(new ImageData(px, w, h), 0, 0);
+      return out.toDataURL('image/png');
+    }
+
+    // The time the page spends in its requestAnimationFrame callbacks, where winit hands iced its frames (update, view,
+    // layout, draw and the GPU's commands): the page's "main CPU" (src/web_meter.rs).
+    // (the window's operations live on the window itself, not on Window.prototype: [Global])
+    const raf = window.requestAnimationFrame;
+    let busy = 0;
+    let frames = 0;
+    let wantShot = null;
+    window.requestAnimationFrame = function (cb) {
+      return raf.call(window, (t) => {
+        const a = performance.now();
+        try {
+          cb(t);
+        } finally {
+          busy += performance.now() - a;
+          frames += 1;
+          window.__rafBusy = busy;
+          window.__rafFrames = frames;
+          // the canvas copied in the task that drew it (iced's own screenshot blocks on the GPU, which the browser
+          // cannot do; headless Chrome's screenshots leave a WebGPU canvas out): WebGPU's current texture read back,
+          // WebGL2's drawing buffer by toDataURL (still there in this task)
+          if (wantShot) {
+            const c = document.querySelector('body > canvas');
+            const done = wantShot;
+            wantShot = null;
+            if (gpuCtx && gpuCtx.canvas === c) readGpu().then(done, (e) => done(console.log(`screenshot: ${e}`)));
+            else if (c) done(c.toDataURL('image/png'));
+          }
+        }
+      });
+    };
+    window.__rafBusy = 0;
+    // what proto/gui-web/web/tools/bench.mjs reads besides __ready and __bench
+    window.__wsk = { scene: { mem_bytes: () => 0 } };
+    window.__gpuShot = async () => {
+      const url = await Promise.race([
+        new Promise((r) => (wantShot = r)),
+        new Promise((r) => setTimeout(() => r(null), 30000)),
+      ]);
+      if (!url) return console.log(`screenshot: no frame came in 30 s (open with &shot=1; ${frames} frames so far)`);
+      const img = document.getElementById('shot');
+      img.src = url;
+      await img.decode();
+      img.style.display = 'block';
+    };
+
+    const msg = document.getElementById('msg');
+    const q = new URLSearchParams(location.search);
+    try {
+      // the font: build.sh leaves one with Japanese in fonts/ (iced finds no system fonts on the web)
+      const f = await (await fetch(q.get('font') ?? 'fonts/font.json')).json();
+      const t = performance.now();
+      window.__wskFont = new Uint8Array(await (await fetch(f.file)).arrayBuffer());
+      window.__wskFontFamily = f.family;
+      window.__wskFontMono = f.mono ?? f.family;
+      console.log(`font ${f.family} (${(window.__wskFont.length / 1e6).toFixed(1)} MB) in ${(performance.now() - t).toFixed(0)} ms`);
+    } catch (e) {
+      console.log(`no font: ${e}`);
+    }
+    if (q.get('file')) {
+      const t = performance.now();
+      const r = await fetch(q.get('file'));
+      if (r.ok) {
+        window.__wskFile = new Uint8Array(await r.arrayBuffer());
+        window.__wskFileName = q.get('file').split('/').pop();
+        console.log(`${window.__wskFileName} (${(window.__wskFile.length / 1e6).toFixed(1)} MB) fetched in ${(performance.now() - t).toFixed(0)} ms`);
+      } else console.log(`${q.get('file')}: ${r.status}`);
+    }
+    // the adapter, asked the way wgpu asks (WebGPU when an adapter comes, else WebGL2): iced's own system information
+    // runs on a thread, which the web build cannot start
+    // &webgl=1: WebGL2 even where WebGPU is (wgpu looks for navigator.gpu first)
+    if (q.get('webgl')) Object.defineProperty(Navigator.prototype, 'gpu', { get: () => undefined });
+    try {
+      const a = navigator.gpu ? await navigator.gpu.requestAdapter() : null;
+      if (a) {
+        const i = a.info ?? {};
+        window.__wskGpu = `${[i.vendor, i.architecture, i.description].filter(Boolean).join(' ') || 'an adapter'} (WebGPU)`;
+      } else {
+        const gl = document.createElement('canvas').getContext('webgl2');
+        const ext = gl && gl.getExtension('WEBGL_debug_renderer_info');
+        window.__wskGpu = gl ? `${gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER)} (WebGL2)` : 'none';
+      }
+    } catch (e) {
+      window.__wskGpu = `? (${e})`;
+    }
+    console.log(`gpu: ${window.__wskGpu}`);
+    msg.remove();
+    const { default: init } = await import('./wsk-iced.js');
+    await init();
+  </script>
+</body>
+</html>

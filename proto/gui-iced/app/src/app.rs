@@ -261,6 +261,8 @@ pub struct App {
     shot_at: Option<Instant>,
     shot_asked: bool,
     zoom_done: bool,
+    /// the web: `window.__ready` set (the first picture, the summaries and the analysis in)
+    web_ready: bool,
 }
 
 impl App {
@@ -308,6 +310,7 @@ impl App {
             shot_at: None,
             shot_asked: false,
             zoom_done: false,
+            web_ready: false,
             args,
         };
         let conf = app
@@ -320,11 +323,15 @@ impl App {
         if let Some(q) = app.args.search.clone() {
             app.search.query = q;
         }
-        let mut tasks = vec![
-            open.map(Msg::WinOpened),
+        let mut tasks = vec![open.map(Msg::WinOpened)];
+        // (the web: iced asks the system on a thread of its own, which panics there; the page tells the adapter instead)
+        #[cfg(not(target_arch = "wasm32"))]
+        tasks.push(
             iced::system::information().map(|i| Msg::Gpu(format!("{} ({})", i.graphics_adapter, i.graphics_backend))),
-        ];
-        if app.args.detach_list {
+        );
+        #[cfg(target_arch = "wasm32")]
+        app.gpu.replace(crate::web::gpu());
+        if app.args.detach_list && !cfg!(target_arch = "wasm32") {
             let found = app
                 .panes
                 .iter()
@@ -351,6 +358,8 @@ impl App {
             let c = model::open_synth(total);
             self.analysis_slot = Some(model::start_fake_analysis(self.args.synth_items, c.n_ticks));
             self.cap = Some(c);
+        } else if cfg!(target_arch = "wasm32") {
+            self.open_web();
         } else if let Some(p) = self.args.file.clone() {
             match model::open_file(&p, self.args.part) {
                 Ok(c) => {
@@ -362,6 +371,28 @@ impl App {
                 }
                 Err(e) => eprintln!("{}: {e}", p.display()),
             }
+        }
+    }
+
+    /// The web: the capture the page fetched (`?file=`), else the example carried in the program; the summaries and the
+    /// analysis made at once, here (no threads: prototype 1's web build does the same).
+    fn open_web(&mut self) {
+        const EXAMPLE: &[u8] = include_bytes!("../../../../tests/data/examples/mixed-1.wireskein");
+        #[cfg(target_arch = "wasm32")]
+        let fetched = crate::web::file();
+        #[cfg(not(target_arch = "wasm32"))]
+        let fetched: Option<(String, Vec<u8>)> = None;
+        let (name, bytes) = fetched.unwrap_or_else(|| ("mixed-1.wireskein".into(), EXAMPLE.to_vec()));
+        match model::open_bytes(&name, &bytes, self.args.part) {
+            Ok(c) => {
+                if !self.args.no_analysis {
+                    let names: Vec<String> = c.lines.iter().map(|l| l.name.clone()).collect();
+                    let a = model::analysis_of_bytes(&bytes, c.part, &names);
+                    self.analysis_slot = Some(Arc::new(Mutex::new(Some(a))));
+                }
+                self.cap = Some(c);
+            }
+            Err(e) => eprintln!("{name}: {e}"),
         }
     }
 
@@ -640,6 +671,10 @@ impl App {
     }
 
     fn detach(&mut self, pane: pane_grid::Pane) -> Task<Msg> {
+        // the web: one window (the page's canvas); the button is not shown there
+        if cfg!(target_arch = "wasm32") {
+            return Task::none();
+        }
         let Some(p) = self.panes.get_mut(pane) else {
             return Task::none();
         };
@@ -955,6 +990,9 @@ impl App {
             Msg::Theme => self.pal = theme::pal(!self.pal.dark),
             Msg::Tiles(on) => self.tiles_on = on,
             Msg::Continuous(on) => self.continuous = on,
+            #[cfg(target_arch = "wasm32")]
+            Msg::Shot(_) => {}
+            #[cfg(not(target_arch = "wasm32"))]
             Msg::Shot(s) => {
                 if let Some(p) = &self.args.shot {
                     match crate::png::write(p, s.size.width, s.size.height, &s.rgba) {
@@ -1030,6 +1068,9 @@ impl App {
             || self.waves().any(|w| w.vel != 0.0)
             || self.bench.as_ref().is_some_and(|b| !b.done())
             || self.args.shot.is_some()
+            // the first paint is taken at the frame after the capture drew (on the web everything else is in by then)
+            || self.cap.is_some() && self.perf.borrow().first_paint.is_none()
+            || cfg!(target_arch = "wasm32") && self.cap.is_some() && !self.web_ready
     }
 
     fn frame(&mut self, now: Instant) -> Task<Msg> {
@@ -1088,12 +1129,15 @@ impl App {
             w.vp = Some(vp.clamped(n));
             self.zoom_done = true;
         }
+        #[cfg(target_arch = "wasm32")]
+        self.web_check_ready();
         let mut tasks = vec![];
         // the bench, once the capture is drawn: the main window's surface probed (the present mode it gets, the adapter),
         // and iced's system information asked again (asked at the start, it is lost when no window is up yet)
         if self.bench.is_some() && !self.probe_asked && self.perf.borrow().first_paint.is_some() {
             self.probe_asked = true;
             let asked = self.args.present_asked.clone();
+            #[cfg(not(target_arch = "wasm32"))]
             tasks.push(
                 iced::system::information()
                     .map(|i| Msg::Gpu(format!("{} ({})", i.graphics_adapter, i.graphics_backend))),
@@ -1121,7 +1165,7 @@ impl App {
                     w.vp = Some(vp);
                     w.vel = 0.0;
                 }
-                if ended && self.args.shot.is_none() {
+                if ended && self.args.shot.is_none() && !cfg!(target_arch = "wasm32") {
                     tasks.push(iced::exit());
                 }
                 if ended {
@@ -1131,7 +1175,9 @@ impl App {
             self.bench = Some(b);
         }
         // the screenshot: once everything is in (and the bench over), a moment later
-        if self.args.shot.is_some() && !self.shot_asked {
+        // (the web: iced_wgpu reads the frame back by blocking on the GPU, which the browser cannot do; with `?shot=1`
+        // the frames keep coming and the page copies the canvas right after a frame: index.html `__gpuShot`)
+        if self.args.shot.is_some() && !self.shot_asked && !cfg!(target_arch = "wasm32") {
             let ready = self.cap.as_ref().is_none_or(|c| c.lod_s.lock().unwrap().is_some())
                 && self.analysis_slot.is_none()
                 && self.bench.as_ref().is_none_or(|b| b.done());
@@ -1144,6 +1190,42 @@ impl App {
             }
         }
         Task::batch(tasks)
+    }
+
+    /// The web: once the first picture, the summaries and the analysis are in, `window.__ready` and what they took
+    /// (proto/gui-web's tools/bench.mjs waits for it).
+    #[cfg(target_arch = "wasm32")]
+    fn web_check_ready(&mut self) {
+        if self.web_ready {
+            return;
+        }
+        let Some(c) = &self.cap else { return };
+        let Some(first) = self.perf.borrow().first_paint else {
+            return;
+        };
+        if c.lod_s.lock().unwrap().is_none() || self.analysis_slot.is_some() {
+            return;
+        }
+        self.web_ready = true;
+        let info = format!(
+            "{}: {} lines, {} changes; first paint {:.0} ms after the capture was opened ({:.0} ms after the page's \
+             navigation, now), read {:.0} ms, summaries {:.2} s, analysis {}; wasm memory {:.0} MB; gpu {}",
+            c.title,
+            c.lines.len(),
+            c.total_edges,
+            first * 1e3,
+            crate::web::page_ms(),
+            c.read_s * 1e3,
+            c.lod_s.lock().unwrap().unwrap_or(f64::NAN),
+            self.analysis
+                .as_ref()
+                .map(|a| format!("{:.2} s ({} claims)", a.seconds, a.claims.len()))
+                .unwrap_or("-".into()),
+            crate::web::wasm_mb(),
+            self.gpu.borrow()
+        );
+        crate::web::log(&format!("ready: {info}"));
+        crate::web::ready(&info);
     }
 
     // ------------------------------------------------------------------ views

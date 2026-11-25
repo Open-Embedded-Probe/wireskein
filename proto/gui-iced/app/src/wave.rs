@@ -153,6 +153,9 @@ pub fn view_of(app: &App, wv: &WaveView, width: f32) -> Viewport {
     let n = app.cap.as_ref().map(|c| c.n_ticks).unwrap_or(1);
     match wv.vp {
         Some(v) if (v.width - width).abs() < 0.5 => v,
+        // the whole capture stays the whole when the width changes (the web: the page's canvas is laid out after the
+        // first frames, and a view fitted to its first width kept that scale)
+        Some(v) if v.t0 <= 0.0 && v.t0 + v.tpp * v.width as f64 >= n as f64 => Viewport::fit(n, width),
         Some(v) => Viewport { width, ..v },
         None => Viewport::fit(n, width),
     }
