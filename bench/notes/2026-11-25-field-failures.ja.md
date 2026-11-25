@@ -6,6 +6,7 @@
 
 - wireskein の verify が NG か unchecked で、DUT は正しそうに見えるとき（wireskein の読み違いが疑わしいとき）に、run ディレクトリのパスと一行の説明を送ってもらう。
 - 間欠の失敗で、流し直して通ったときも、**流し直す前の失敗した回の run を消さずに残して**、そのパスを送ってもらう。通った回のパスもあれば並べる。
+- [EmbedBench] は、失敗した回の作業ディレクトリを録り直しのときに消さず、collect/failed/ に時刻付きで移すようにした（2026-11-25）。
 - 送ってもらうのはパスと一行だけ。記録を整えたり、正解を別に作ったりは頼まない（[data-repos-stay-simple]）。
 
 ## こちらですること
@@ -21,6 +22,7 @@
 | --- | --- | --- | --- | --- |
 | 2026-11-24 | [core] | v103r8t6-evt/softspi test_shift（11-24_11-42-05） | spi、CS なしで mode 3 vs 0（CPOL の読み違い、間欠） | 直した（verify の CPOL、v0.0.38） |
 | 2026-11-25 | [core] | v203c8t6/signals test_pwm_sequence（v203sig-1125-1） | convert で VCD に書くと TypeError（60 MS/s）。道具の不具合で、読みの問題ではない | 直した（vcdio、v0.0.38） |
+| それ以前 | [EmbedBench] | EmbedBenchDeviceData の sht30-modes | 止めたクロックストレッチの所の 1 バイトの復号が怪しい（パスは改めて聞く） | まだ |
 
 **正しく NG を出した例**（読みが疑わしい側ではない。「NG が正解」の組に使える）:
 
