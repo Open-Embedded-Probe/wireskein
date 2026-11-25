@@ -5,6 +5,7 @@
 //! starts tracks together (at once, or on its trigger source).
 
 use crate::blocks::{self, Blocks};
+use crate::formats;
 use crate::host::Host;
 use crate::msg::{self, Error, Reader, Result};
 use serde_json::Value;
@@ -53,6 +54,10 @@ const A_HYSTERESIS_USED: u8 = 0x11;
 const A_STREAM_BUFFER: u8 = 0x14;
 const A_JUDGE_LATENCY: u8 = 0x15;
 const A_DATA_RATE: u8 = 0x16;
+const A_TIMEBASE: u8 = 0x0F;
+// configure: an external clock (§3.8) and a block's longest (§1.3)
+const T_CLOCK: u8 = 0x0F;
+const T_BLOCK_MAX: u8 = 0x0B;
 
 pub const ONE_SHOT: u8 = 0x01;
 pub const REPEAT: u8 = 0x02;
@@ -117,6 +122,12 @@ pub struct Config {
     pub frontend: BTreeMap<usize, u8>,
     /// analog: (source, mV, measured) - an unknown source or how as its number, shown as it is (core §2.4)
     pub reference: Option<(String, u32, Value)>,
+    /// format 2: role -> (carriage, D) of the channels not packed, as asked
+    pub analog_carriage: BTreeMap<usize, (u8, usize)>,
+    /// format 3: the delta's tick rate (num, den Hz; §3.8)
+    pub timebase: Option<(u64, u64)>,
+    /// sampled on a clock line (actual_rate 0 / 1: no time, §3.8)
+    pub external_clock: bool,
 }
 
 impl Config {
@@ -129,8 +140,21 @@ impl Config {
             positions: self.positions.clone(),
         })
     }
-    /// A segment's bytes in the stream (§1.1 rule 4, §1.3).
+    /// Format 2's configuration (§1.4).
+    pub fn analog_blocks(&self) -> Option<formats::AnalogBlocks> {
+        (self.format == formats::FORMAT_ANALOG_BLOCKS).then(|| formats::AnalogBlocks {
+            order: self.order.clone(),
+            carriage: self.analog_carriage.clone(),
+            block: self.block,
+            bits: self.bits,
+        })
+    }
+    /// A segment's bytes in the stream (§1.1 rule 4, §1.3, §1.4; format 4 as format 0). Format 3's vary with the
+    /// signal (`Logic::read_segment` cuts them by their entries).
     pub fn segment_bytes(&self, samples: u64) -> u64 {
+        if let Some(a) = self.analog_blocks() {
+            return a.segment_bytes(samples as usize) as u64;
+        }
         match self.blocks() {
             Some(b) => b.segment_bytes(samples as usize) as u64,
             None if self.width == 0 && !self.order.is_empty() => samples * (self.order.len() * self.slot / 8) as u64,
@@ -189,6 +213,7 @@ fn parse_config(payload: &[u8], analog: bool) -> Result<Config> {
                 if d != 0 {
                     c.rate = (n, d);
                 }
+                c.external_clock = n == 0;
             }
             (A_LAYOUT, l) if !analog && l >= 2 && l == 2 + v[1] as usize => {
                 c.width = v[0] as usize;
@@ -232,6 +257,10 @@ fn parse_config(payload: &[u8], analog: bool) -> Result<Config> {
             (A_DATA_RATE, 4) => c.data_rate = Some(u32v(&v)),
             (A_GLITCH_USED, 5) if !analog && v[0] == 0 => c.glitch_used = Some(u32v(&v[1..])),
             (A_HYSTERESIS_USED, 1) if !analog => c.hysteresis_used = Some(v[0] != 0),
+            (A_TIMEBASE, 8) if !analog => {
+                let (n, d) = (u32v(&v[..4]), u32v(&v[4..]));
+                c.timebase = (d != 0).then_some((n, d));
+            }
             _ => {}
         }
     }
@@ -361,6 +390,13 @@ pub struct Setting {
     pub input_hysteresis: Option<bool>,
     /// analog: role -> the frontend (input range) it is measured with
     pub frontends: Vec<(u8, u8)>,
+    /// the data format asked (None: format 1 when `carriage` names any, else 0); format 2 takes `carriage` as
+    /// analog_carriage (kind a bit set of formats::PACKED / MINMAX / SUM), format 3 needs `clock`
+    pub data_format: Option<u8>,
+    /// an external clock (§3.8): (clock role, edge 0 rising / 1 falling / 2 both, qualifier role, its level)
+    pub clock: Option<(u8, u8, Option<u8>, u8)>,
+    /// format 1 / 2: the longest block (§3.3)
+    pub block_max: Option<u32>,
 }
 
 /// A capture track (logic or analog): its fn and what it answered.
@@ -485,8 +521,17 @@ impl Logic {
         for (role, fe) in fes {
             b.extend(msg::tlv(T_FRONTEND, &[role, fe]));
         }
-        if !s.carriage.is_empty() {
-            b.extend(msg::tlv(T_FORMAT | msg::TAG_CRITICAL, &[FORMAT_LOGIC_BLOCKS]));
+        match s.data_format {
+            Some(0) => {}
+            Some(f) => b.extend(msg::tlv(T_FORMAT | msg::TAG_CRITICAL, &[f])),
+            None if !s.carriage.is_empty() => b.extend(msg::tlv(T_FORMAT | msg::TAG_CRITICAL, &[FORMAT_LOGIC_BLOCKS])),
+            None => {}
+        }
+        if let Some((role, edge, q, level)) = s.clock {
+            b.extend(msg::tlv(
+                T_CLOCK | msg::TAG_CRITICAL,
+                &[role, edge, q.unwrap_or(0xFF), level],
+            ));
         }
         if let Some(ns) = s.glitch_filter_ns {
             let mut v = vec![0u8];
@@ -503,6 +548,9 @@ impl Logic {
             v.extend((d as u32).to_le_bytes());
             b.extend(msg::tlv(T_CARRIAGE | msg::TAG_CRITICAL, &v));
         }
+        if let Some(n) = s.block_max {
+            b.extend(msg::tlv(T_BLOCK_MAX, &n.to_le_bytes()));
+        }
         if let Some((arm, rearm)) = s.trigger_opts {
             let mut v = vec![arm, rearm, 0];
             v.extend(0u32.to_le_bytes());
@@ -516,7 +564,14 @@ impl Logic {
         let op = if query { OP_QUERY } else { OP_CONFIGURE };
         let r = host.call(self.fn_, op, &Self::body(s), !query)?;
         let mut c = parse_config(&r.payload, self.analog)?;
-        if !s.carriage.is_empty() {
+        if c.format == formats::FORMAT_ANALOG_BLOCKS {
+            c.analog_carriage = s
+                .carriage
+                .iter()
+                .filter(|(_, (k, _))| *k != formats::PACKED)
+                .copied()
+                .collect();
+        } else if !s.carriage.is_empty() {
             c.reduced = s
                 .carriage
                 .iter()
@@ -634,6 +689,29 @@ impl Logic {
             }
         }
         Ok(out)
+    }
+
+    /// A segment's bytes (of its generation). Format 3's length is not in its record (§3.8): it ends where the next
+    /// segment begins, or at write_pos for the last; read at once, then cut by its entries (`capture.read_segment`).
+    pub fn read_segment(&mut self, host: &mut Host, seg: &Segment) -> Result<Vec<u8>> {
+        let g = seg.generation;
+        if self.config.format != formats::FORMAT_STATE_TIMED {
+            let n = self.config.segment_bytes(seg.samples);
+            return self.read(host, seg.position, n, g);
+        }
+        let after = self
+            .segments(host, seg.serial.wrapping_add(1))?
+            .into_iter()
+            .filter(|s| s.generation == g && s.position > seg.position)
+            .map(|s| s.position)
+            .next();
+        let end = match after {
+            Some(p) => p,
+            None => self.status(host)?.write_pos,
+        };
+        let data = self.read(host, seg.position, end.saturating_sub(seg.position), g)?;
+        let n = formats::state_timed_length(&data, seg.samples as usize, self.config.width)?;
+        Ok(data[..n].to_vec())
     }
 
     /// Poll status until the one-shot is done (keepalive every second) -> its segments. A timeout while still

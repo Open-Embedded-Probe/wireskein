@@ -10,8 +10,12 @@
 //! ended first (`kept`); a length-prefixed link that loses its frame boundaries resyncs (transports §5); a UART
 //! bridge's link is raised by port_speed and judged in use as oep-client-python does, with its record (`speed`).
 //!
-//! Not here (oep-client-python's, which wireskein's Python source keeps using for them): brokers, a bare `usb`,
-//! tcp://HOST without a port, formats 2-4; HID and CDC off Linux.
+//! The short forms of an address (tcp://HOST without a port, a bare `usb`, a serial port by any path) open as
+//! oep-client-python's open_host opens them. Formats 2-4 (analog blocks, timed states, the test counter) are read
+//! (`formats`), though no WireSkein request asks for them yet.
+//!
+//! Not here (oep-client-python's, which wireskein's Python source keeps using for them): brokers; HID and CDC off
+//! Linux, serial ports off POSIX.
 //!
 //! ```no_run
 //! let req = wireskein_oep::Request::new(vec![("A".into(), "GPIO30".into())], 20_000_000, 100_000);
@@ -26,6 +30,7 @@ pub mod capture;
 pub mod cobs;
 pub mod discovery;
 pub mod flow;
+pub mod formats;
 pub mod hid;
 pub mod host;
 pub mod kept;

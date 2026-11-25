@@ -21,8 +21,8 @@ impl Driver for Oep {
         "oep"
     }
     fn about(&self) -> &'static str {
-        "an OEP probe: oep:oep://UNIT_ID[?via=usb|bulk|hid|cdc|net|tcp:HOST:PORT|tty:PATH], oep:tcp://HOST:PORT, \
-         oep:/dev/..."
+        "an OEP probe: oep:oep://UNIT_ID[?via=usb|bulk|hid|cdc|net|tcp:HOST:PORT|tty:PATH], oep:tcp://HOST[:PORT], oep:usb, \
+         oep:/dev/... (a serial port by its path)"
     }
     /// The probes on USB: a device with OEP's vendor bulk interface, or any on the project's VID:PID (HID or CDC
     /// only); the serial number is the unit_id, `ways` its ways in (vendor, hid, cdc). Probes on a network (DNS-SD)

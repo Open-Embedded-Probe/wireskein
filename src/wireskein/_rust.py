@@ -637,16 +637,20 @@ def _broker(unit: str) -> bool:
 def oep_route(target: str) -> str | None:
     """How the Rust OEP client reaches `target`: "any" (an OEP address without a route: its USB device by its serial -
     vendor bulk, HID, its CDC port - else DNS-SD), "usb" / "bulk" / "hid" / "cdc" / "net" (that route), "tcp" (a route
-    over TCP), "serial" (a serial port by its path, /dev/... or ?via=tty:PATH), or None when it does not (a broker,
-    tcp://HOST without a port, a bare usb, a COM port; HID and CDC off Linux: oep-client-python's)."""
+    over TCP, or tcp://HOST without a port: the port DNS-SD finds on that host), "bare-usb" (`usb`: the one probe on
+    the project's VID:PID), "serial" (a serial port by its path - /dev/..., anything not another form, or
+    ?via=tty:PATH), or None when it does not (a broker; a serial port off POSIX, as COM3; HID and CDC off Linux: those
+    are oep-client-python's; tcp:... and usb:..., refused there)."""
     import sys
     t = target.strip()
-    if t.startswith("tcp://"):
-        return "tcp" if ":" in t[len("tcp://"):].rstrip("/") else None
-    if t.startswith("/dev/") and os.name == "posix":
-        return "serial"
-    if not t.lower().startswith("oep://"):
+    if not t or t.startswith(("tcp:", "usb:")) and not t.startswith("tcp://"):
         return None
+    if t.startswith("tcp://"):
+        return "tcp"
+    if t == "usb":
+        return "bare-usb"
+    if not t.lower().startswith("oep://"):
+        return "serial" if os.name == "posix" else None
     place, _, query = t[len("oep://"):].partition("?")
     unit = place.split("/")[0]
     if not unit or _broker(unit):

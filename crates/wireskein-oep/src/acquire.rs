@@ -49,6 +49,10 @@ pub enum Address {
     },
     /// a serial port (a UART bridge or a CDC port by its path): COBS frames (transports §4)
     Serial { path: String, unit: Option<String> },
+    /// tcp://HOST without a port (a short form, host guide §5.3): the port of the probe DNS-SD finds on that host
+    TcpFind { host: String, text: String },
+    /// a bare `usb` (a short form): the one probe on the project's VID:PID, whatever its unit_id
+    UsbAny,
 }
 
 impl Address {
@@ -84,25 +88,57 @@ fn host_port(s: &str, what: &str) -> Result<(String, u16)> {
     ))
 }
 
-/// The addresses this client opens: None for one it does not (a bare `usb`, a short form it does not know:
-/// oep-client-python's).
+/// tcp://HOST[:PORT] (oep-client-python's `link.tcp_address`): [v6]:PORT for an IPv6 address; HOST alone (or an
+/// IPv6 address without brackets) has no port; HOST empty is 127.0.0.1.
+fn tcp_short(text: &str) -> Result<Address> {
+    let rest = text["tcp://".len()..].trim_end_matches('/');
+    let (host, port) = if let Some(r) = rest.strip_prefix('[') {
+        let (a, tail) = r.split_once(']').unwrap_or((r, ""));
+        (a, tail.strip_prefix(':').unwrap_or(""))
+    } else if rest.matches(':').count() == 1 {
+        rest.split_once(':').expect("one colon")
+    } else {
+        (rest, "")
+    };
+    let host = if host.is_empty() { "127.0.0.1" } else { host }.to_string();
+    if port.is_empty() {
+        return Ok(Address::TcpFind {
+            host,
+            text: text.to_string(),
+        });
+    }
+    let port = port
+        .parse::<u16>()
+        .map_err(|_| Error::Value(format!("{text}: {port:?} is not a port")))?;
+    Ok(Address::Tcp { host, port, unit: None })
+}
+
+/// An address as oep-client-python's `open_host` takes it: an OEP address (oep://UNIT_ID[?via=...], host guide
+/// §5.3), or a tool's short forms for a probe whose unit_id is not known - tcp://HOST[:PORT] (without a port, the one
+/// DNS-SD finds on that host), a bare `usb` (the one probe on the project's VID:PID) and anything else a serial port by
+/// its path (/dev/ttyACM0; COM3 on Windows, which this client does not open). `tcp:...` and `usb:...` are refused
+/// (an OEP address names them). Some always (the Option is for a form this client may leave to another).
 pub fn parse_address(text: &str) -> Result<Option<Address>> {
-    if let Some(rest) = text.strip_prefix("tcp://") {
-        let (host, port) = host_port(rest.trim_end_matches('/'), text)?;
-        return Ok(Some(Address::Tcp { host, port, unit: None }));
-    }
-    if text.starts_with("/dev/") {
-        return Ok(Some(Address::Serial {
-            path: text.to_string(),
-            unit: None,
-        }));
-    }
     let Some(rest) = text
         .get(..6)
         .filter(|p| p.eq_ignore_ascii_case("oep://"))
         .map(|_| &text[6..])
     else {
-        return Ok(None);
+        if text.starts_with("tcp://") {
+            return tcp_short(text).map(Some);
+        }
+        if text == "usb" {
+            return Ok(Some(Address::UsbAny));
+        }
+        if text.starts_with("tcp:") || text.starts_with("usb:") {
+            return Err(Error::Value(format!(
+                "{text}: name the probe as oep://<unit_id>[?via=net|usb|tcp:<host>:<port>] (host guide §5.3)"
+            )));
+        }
+        return Ok(Some(Address::Serial {
+            path: text.to_string(),
+            unit: None,
+        }));
     };
     let (place, query) = rest.split_once('?').unwrap_or((rest, ""));
     let unit = place.split('/').next().unwrap_or("").to_string();
@@ -259,10 +295,190 @@ fn open_usb_ways(unit: &str, via: Via) -> Result<Host> {
     probe_link(transport::open_serial(&ports[0], transport::BASE_BAUD)?, true, None)
 }
 
+/// One USB device on the project's VID:PID, whatever ways in it has (oep-client-python's `link.UsbProbe`): its USB
+/// serial (the unit_id; None when it could not be read), its ways in (vendor, hid, cdc in that order), its CDC
+/// serial ports and its USB location (bus-ports).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct UsbProbe {
+    pub unit_id: Option<String>,
+    pub ways: Vec<&'static str>,
+    pub ports: Vec<String>,
+    pub location: Option<String>,
+}
+
+impl std::fmt::Display for UsbProbe {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let who = match &self.unit_id {
+            Some(u) => u.clone(),
+            None => format!(
+                "no USB serial (at {})",
+                self.location.as_deref().unwrap_or("an unknown place")
+            ),
+        };
+        let ways: Vec<String> = self
+            .ways
+            .iter()
+            .map(|w| {
+                if *w == "cdc" && !self.ports.is_empty() {
+                    format!("cdc {}", self.ports.join(" "))
+                } else {
+                    w.to_string()
+                }
+            })
+            .collect();
+        let ways = if ways.is_empty() {
+            "no way in".to_string()
+        } else {
+            ways.join(", ")
+        };
+        write!(f, "{who}: {ways}")
+    }
+}
+
+/// Every USB device on the project's VID:PID (`link.usb_probes`), each once, with the device to open it by.
+pub fn usb_probes() -> Result<Vec<(UsbProbe, nusb::DeviceInfo)>> {
+    use nusb::MaybeFuture;
+    let list = nusb::list_devices()
+        .wait()
+        .map_err(|e| Error::Io(format!("USB devices: {e}")))?;
+    let mut out = vec![];
+    for d in list {
+        if (d.vendor_id(), d.product_id()) != transport::PROJECT_VID_PID {
+            continue;
+        }
+        let has = |w: &str| {
+            d.interfaces().any(|i| match w {
+                "vendor" => {
+                    (i.class(), i.subclass(), i.protocol())
+                        == (
+                            transport::VENDOR_CLASS,
+                            transport::VENDOR_SUBCLASS,
+                            transport::VENDOR_PROTOCOL,
+                        )
+                }
+                "hid" => i.class() == 3,
+                _ => i.class() == 2 || i.class() == 0x0A,
+            })
+        };
+        let unit_id = d.serial_number().filter(|s| !s.is_empty()).map(str::to_string);
+        let ports = unit_id.as_deref().map(transport::cdc_ports).unwrap_or_default();
+        #[cfg(target_os = "linux")]
+        let location = (!d.port_chain().is_empty()).then(|| {
+            let chain: Vec<String> = d.port_chain().iter().map(|p| p.to_string()).collect();
+            format!("{}-{}", d.busnum(), chain.join("."))
+        });
+        #[cfg(not(target_os = "linux"))]
+        let location = None;
+        let p = UsbProbe {
+            ways: ["vendor", "hid", "cdc"].into_iter().filter(|w| has(w)).collect(),
+            unit_id,
+            ports,
+            location,
+        };
+        out.push((p, d));
+    }
+    Ok(out)
+}
+
+/// How a bare `usb` opens what `usb_probes` found (`link._open_host`'s): one device with vendor bulk or HID by
+/// those (Some(None): none found, the error says so), one with a CDC port only by that port (Err when it has
+/// none or several), several: refused, not guessed.
+pub fn choose_usb(probes: &[UsbProbe]) -> Result<std::result::Result<Option<usize>, String>> {
+    let (vid, pid) = transport::PROJECT_VID_PID;
+    if probes.len() > 1 {
+        let list: Vec<String> = probes.iter().map(|p| p.to_string()).collect();
+        return Err(Error::Value(format!(
+            "{} probes on {vid:04x}:{pid:04x} ({}); not choosing one: name one as oep://<unit_id>",
+            probes.len(),
+            list.join("; ")
+        )));
+    }
+    let Some(one) = probes.first() else {
+        return Ok(Ok(None));
+    };
+    if one.ways.iter().any(|w| *w == "vendor" || *w == "hid") {
+        return Ok(Ok(Some(0)));
+    }
+    match one.ports.len() {
+        1 => Ok(Err(one.ports[0].clone())),
+        0 => Err(Error::NotFound(format!(
+            "the probe on {vid:04x}:{pid:04x} ({one}) has no serial port this host can open"
+        ))),
+        n => Err(Error::Value(format!(
+            "the probe on {vid:04x}:{pid:04x} ({one}) has {n} serial ports: name one"
+        ))),
+    }
+}
+
+/// A bare `usb` opened (`link._open_host`): the one probe on the project's VID:PID by vendor bulk then HID, else its
+/// one CDC port; none, or several, is said.
+fn open_bare_usb() -> Result<Host> {
+    let (vid, pid) = transport::PROJECT_VID_PID;
+    let found = usb_probes()?;
+    let probes: Vec<UsbProbe> = found.iter().map(|(p, _)| p.clone()).collect();
+    match choose_usb(&probes)? {
+        Ok(None) => Err(Error::NotFound(format!(
+            "no way in to {vid:04x}:{pid:04x}: vendor: no USB device on {vid:04x}:{pid:04x}; hid: no USB device on \
+             {vid:04x}:{pid:04x}; cdc: no serial port on {vid:04x}:{pid:04x}"
+        ))),
+        Ok(Some(k)) => {
+            let (one, info) = &found[k];
+            let mut errors = vec![];
+            let mut probed = false;
+            for kind in ["vendor", "hid"] {
+                let t = match kind {
+                    "vendor" => transport::open_usb(info, transport::URB_SIZE, transport::DEPTH),
+                    _ => crate::hid::open_hid(info),
+                };
+                let t = match t {
+                    Ok(t) => t,
+                    Err(e) => {
+                        errors.push(format!("{kind}: {e}"));
+                        continue;
+                    }
+                };
+                match probe_link(t, false, None) {
+                    Ok(h) => return Ok(h),
+                    Err(e) => {
+                        errors.push(format!("{kind}: {e}"));
+                        probed = true;
+                    }
+                }
+            }
+            let m = format!("no way in to {vid:04x}:{pid:04x}: {}", errors.join("; "));
+            if probed {
+                return Err(Error::Runtime(m));
+            }
+            Err(Error::NotFound(if one.ports.is_empty() {
+                format!("{m}; cdc: no serial port on {vid:04x}:{pid:04x}")
+            } else {
+                // a raw CDC may sit beside vendor bulk / HID: only the one their describe declares is OEP
+                format!(
+                    "{m}; its serial port ({}) is not opened unless named: a CDC beside vendor bulk / HID is OEP only \
+                     when their describe declares it",
+                    one.ports.join(", ")
+                )
+            }))
+        }
+        Err(port) => probe_link(transport::open_serial(&port, transport::BASE_BAUD)?, true, None),
+    }
+}
+
 /// Open the link to the probe at `addr` and confirm it (the probing rule, transports §3); an oep:// address's
 /// unit_id checked against describe's.
 pub fn open(addr: &Address) -> Result<Host> {
     let mut hst = match addr {
+        Address::UsbAny => open_bare_usb()?,
+        Address::TcpFind { host, text } => {
+            let port = crate::discovery::port_of(host, Duration::from_secs(2))?.ok_or_else(|| {
+                Error::NotFound(format!(
+                    "{text}: no port given and no _oep._tcp probe found on {host} by DNS-SD; name it as \
+                     tcp://{host}:PORT (the probe's port: a TCP probe need not advertise, transports §3; the reference \
+                     probe listens on 7450)"
+                ))
+            })?;
+            probe_link(transport::open_tcp(host, port)?, false, Some((host.clone(), port)))?
+        }
         Address::Usb { unit, via: Via::Net } => {
             let (h, p) = crate::discovery::find_unit(unit)?;
             probe_link(transport::open_tcp(&h, p)?, false, Some((h, p)))?
@@ -642,6 +858,7 @@ impl Run<'_> {
             glitch_filter_ns: req.glitch_filter_ns,
             input_hysteresis: req.input_hysteresis,
             frontends: vec![],
+            ..Setting::default()
         }
     }
 
@@ -2313,9 +2530,8 @@ fn make_temp_dir(base: &std::path::Path, prefix: &str) -> Result<PathBuf> {
 pub fn address_of(address: &str) -> Result<Address> {
     parse_address(address)?.ok_or_else(|| {
         Error::Value(format!(
-            "{address}: not an address this client opens (oep://UNIT_ID[?via=usb|bulk|tcp:HOST:PORT] or \
-             tcp://HOST:PORT, a serial port /dev/... or oep://UNIT_ID?via=tty:PATH; HID, CDC, DNS-SD and brokers are \
-             oep-client-python's)"
+            "{address}: not an address this client opens (oep://UNIT_ID[?via=usb|bulk|hid|cdc|net|tcp:HOST:PORT|\
+             tty:PATH], tcp://HOST[:PORT], usb or a serial port's path; brokers are oep-client-python's)"
         ))
     })
 }
@@ -2594,6 +2810,91 @@ fn session(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The short forms as oep-client-python's open_host reads them: tcp://HOST with or without a port ([v6]:PORT, an
+    /// IPv6 address without brackets has none), a bare usb, anything else a serial port by its path; tcp:/usb:
+    /// refused.
+    #[test]
+    fn short_forms_read_as_open_host_reads_them() {
+        let a = |t: &str| parse_address(t).unwrap().unwrap();
+        let tcp = |h: &str, p| Address::Tcp {
+            host: h.into(),
+            port: p,
+            unit: None,
+        };
+        let find = |h: &str, t: &str| Address::TcpFind {
+            host: h.into(),
+            text: t.into(),
+        };
+        let serial = |p: &str| Address::Serial {
+            path: p.into(),
+            unit: None,
+        };
+        assert_eq!(a("tcp://10.0.0.2:7450"), tcp("10.0.0.2", 7450));
+        assert_eq!(a("tcp://:7450/"), tcp("127.0.0.1", 7450));
+        assert_eq!(a("tcp://[fe80::1]:7450"), tcp("fe80::1", 7450));
+        assert_eq!(a("tcp://probe.local"), find("probe.local", "tcp://probe.local"));
+        assert_eq!(a("tcp://probe/"), find("probe", "tcp://probe/"));
+        assert_eq!(a("tcp://[fe80::1]"), find("fe80::1", "tcp://[fe80::1]"));
+        assert_eq!(a("tcp://fe80::1"), find("fe80::1", "tcp://fe80::1"));
+        assert_eq!(a("tcp://"), find("127.0.0.1", "tcp://"));
+        assert_eq!(a("usb"), Address::UsbAny);
+        assert_eq!(a("/dev/ttyACM0"), serial("/dev/ttyACM0"));
+        assert_eq!(a("COM3"), serial("COM3"));
+        assert_eq!(a("ttyV0"), serial("ttyV0"));
+        assert!(a("usb").unit().is_none() && a("tcp://probe").unit().is_none());
+        for t in ["tcp:10.0.0.2:7450", "usb:1209:4f45"] {
+            let e = parse_address(t).unwrap_err().to_string();
+            assert_eq!(
+                e,
+                format!("{t}: name the probe as oep://<unit_id>[?via=net|usb|tcp:<host>:<port>] (host guide §5.3)")
+            );
+        }
+        assert!(
+            parse_address("tcp://h:x")
+                .unwrap_err()
+                .to_string()
+                .contains("is not a port")
+        );
+    }
+
+    /// A bare usb: none (said by the opener), one by vendor bulk / HID, one with only a CDC port by that port (none
+    /// or several of them said), several refused with the list (`link._open_host`'s words).
+    #[test]
+    fn a_bare_usb_chooses_as_open_host_does() {
+        let p = |u: Option<&str>, ways: &[&'static str], ports: &[&str]| UsbProbe {
+            unit_id: u.map(Into::into),
+            ways: ways.to_vec(),
+            ports: ports.iter().map(|s| s.to_string()).collect(),
+            location: Some("1-2".into()),
+        };
+        assert_eq!(choose_usb(&[]).unwrap(), Ok(None));
+        assert_eq!(
+            choose_usb(&[p(Some("ab"), &["vendor", "hid", "cdc"], &["/dev/ttyACM0"])]).unwrap(),
+            Ok(Some(0))
+        );
+        assert_eq!(choose_usb(&[p(Some("ab"), &["hid"], &[])]).unwrap(), Ok(Some(0)));
+        assert_eq!(
+            choose_usb(&[p(Some("ab"), &["cdc"], &["/dev/ttyACM1"])]).unwrap(),
+            Err("/dev/ttyACM1".to_string())
+        );
+        let e = choose_usb(&[p(Some("ab"), &["cdc"], &["/dev/ttyACM1", "/dev/ttyACM2"])]).unwrap_err();
+        assert_eq!(
+            e.to_string(),
+            "the probe on 1209:4f45 (ab: cdc /dev/ttyACM1 /dev/ttyACM2) has 2 serial ports: name one"
+        );
+        let e = choose_usb(&[p(None, &["cdc"], &[])]).unwrap_err();
+        assert!(matches!(e, Error::NotFound(_)));
+        assert_eq!(
+            e.to_string(),
+            "the probe on 1209:4f45 (no USB serial (at 1-2): cdc) has no serial port this host can open"
+        );
+        let e = choose_usb(&[p(Some("ab"), &["vendor"], &[]), p(Some("cd"), &[], &[])]).unwrap_err();
+        assert_eq!(
+            e.to_string(),
+            "2 probes on 1209:4f45 (ab: vendor; cd: no way in); not choosing one: name one as oep://<unit_id>"
+        );
+    }
 
     /// What the reading side takes a second: frames of a 7-line format 0 stream through the link, the collector and
     /// the spool on disk (cargo test --release -p wireskein-oep -- --ignored --nocapture).

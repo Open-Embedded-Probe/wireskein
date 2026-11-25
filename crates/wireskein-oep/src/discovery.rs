@@ -349,6 +349,26 @@ pub fn browse(timeout: Duration) -> Result<Vec<Found>> {
     Ok(b.found())
 }
 
+/// The SRV port of the probe announced on `host` (its host name, with or without .local, or one of its addresses):
+/// oep-client-python's `discovery.port_of`, for tcp://HOST without a port. None when none is found.
+pub fn port_of(host: &str, timeout: Duration) -> Result<Option<u16>> {
+    Ok(port_in(&browse(timeout)?, host))
+}
+
+/// `port_of` over what a browse found.
+pub fn port_in(found: &[Found], host: &str) -> Option<u16> {
+    let want = host.to_ascii_lowercase();
+    let want = want.trim_end_matches('.');
+    found
+        .iter()
+        .find(|f| {
+            let h = f.host.to_ascii_lowercase();
+            let h = h.trim_end_matches('.');
+            want == h || want == h.strip_suffix(".local").unwrap_or(h) || f.addresses.iter().any(|a| a == want)
+        })
+        .and_then(|f| (f.port != 0).then_some(f.port))
+}
+
 /// Whether an instance is an OEP probe (host guide §4.1): a TCP connection, confirm, and describe's unit_id is its
 /// TXT unit_id; then closed (no session). None when it is, else what it said instead.
 pub fn check(f: &Found) -> Option<String> {
@@ -401,6 +421,26 @@ pub fn find_unit(unit: &str) -> Result<(String, u16)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_host_s_port_by_its_name_or_address() {
+        let f = |host: &str, port, addrs: &[&str]| Found {
+            instance: "p".into(),
+            unit_id: Some("ab".into()),
+            host: host.into(),
+            port,
+            addresses: addrs.iter().map(|s| s.to_string()).collect(),
+        };
+        let found = [
+            f("bench.local.", 7450, &["10.0.0.2"]),
+            f("other.local.", 0, &["10.0.0.3"]),
+        ];
+        for h in ["bench", "bench.local", "BENCH.local.", "10.0.0.2"] {
+            assert_eq!(port_in(&found, h), Some(7450), "{h}");
+        }
+        assert_eq!(port_in(&found, "other"), None); // no port: none (the first match decides)
+        assert_eq!(port_in(&found, "elsewhere"), None);
+    }
 
     fn rr(name: &str, t: u16, data: &[u8]) -> Vec<u8> {
         let mut v = encode_name(name);

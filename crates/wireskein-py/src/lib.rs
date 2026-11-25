@@ -906,6 +906,7 @@ fn wireskein_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(oep::oep_assemble, m)?)?;
     m.add_function(wrap_pyfunction!(oep::oep_hid_read, m)?)?;
     m.add_function(wrap_pyfunction!(oep::oep_hid_write, m)?)?;
+    m.add_function(wrap_pyfunction!(oep::oep_take_raw, m)?)?;
     m.add_function(wrap_pyfunction!(oep::capture_source, m)?)?;
     m.add_function(wrap_pyfunction!(oep::source_kinds, m)?)?;
     m.add_function(wrap_pyfunction!(oep::source_list, m)?)?;

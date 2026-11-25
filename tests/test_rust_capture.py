@@ -68,7 +68,11 @@ def test_what_the_rust_client_takes(clean):
     on_linux = sys.platform.startswith("linux")
     for target in ("oep://30eda0ea068b?via=hid", "oep://30eda0ea068b?via=cdc"):
         assert _rust.captures(target, logic) == on_linux, target
-    for target in ("usb", "tcp://host", "COM3", "oep://30eda0ea068b?via=smoke"):
+    # the short forms (§48): tcp://HOST without a port (DNS-SD finds it), a bare usb, any other text a serial port's
+    # path (COM3 too, on POSIX: the path as given)
+    assert _rust.captures("tcp://host", logic) and _rust.captures("usb", logic)
+    assert _rust.captures("COM3", logic) == (sys.platform != "win32")
+    for target in ("", "tcp:host:7450", "usb:1209:4f45", "oep://30eda0ea068b?via=smoke"):
         assert not _rust.captures(target, logic), target
     analog = sources.Request([("A", "GPIO30")], 1_000_000, 100, analog=[("V", "GPIO17", None)],
                              trigger=("V", "rise", 1.0))
@@ -1044,12 +1048,163 @@ def test_a_probe_found_by_dns_sd(route, monkeypatch, tmp_path):
         p.wait(5)
 
 
+@both
+def test_tcp_host_without_a_port_is_found_by_dns_sd(monkeypatch, tmp_path):
+    """tcp://HOST without a port (a short form, §48): the port of the probe DNS-SD finds on that host (its SRV), as
+    oep-client-python's tcp_address. The bench listens on an address of its own in 127/8 (its A record), so another
+    run's bench announcing at the same time is not taken for it."""
+    import secrets
+    host = "127.{}.{}.{}".format(*secrets.token_bytes(3))
+    unit = "fafe" + secrets.token_hex(4)
+    p = subprocess.Popen([sys.executable, "-m", SERVE, "--tcp", "0", "--framing", "length", "--listen", host,
+                          "--announce", "--announce-engine", "minimal", "--unit-id", unit], stdin=subprocess.PIPE,
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        p.stdout.readline()
+        got = []
+        for rust in (False, True):
+            req = sources.Request([("A", "GPIO10"), ("B", "GPIO11")], 20_000_000, 500)
+            out = _take(monkeypatch, rust, f"oep:tcp://{host}", req, tmp_path / f"t{rust}.wireskein")
+            assert fileformat.read_header(out)["meta"]["probe"]["unit_id"] == unit
+            got.append(_content(out))
+        assert got[1] == got[0]
+    finally:
+        p.stdin.close()
+        p.wait(5)
+
+
+@both
+def test_tcp_host_without_a_port_none_announced_says_so(monkeypatch, tmp_path):
+    """No probe announced on the host: the same words (Python's a LookupError, Rust's a FileNotFoundError)."""
+    req = sources.Request([("A", "GPIO10")], 1_000_000, 10)
+    said = []
+    for rust in (False, True):
+        with pytest.raises((LookupError, FileNotFoundError)) as e:
+            _take(monkeypatch, rust, "oep:tcp://127.66.0.1", req, tmp_path / f"x{rust}.wireskein")
+        said.append(str(e.value))
+    assert said[1] == said[0]
+    assert said[0].startswith("tcp://127.66.0.1: no port given and no _oep._tcp probe found on 127.66.0.1 by DNS-SD")
+
+
+@both
+@pytest.mark.skipif(sys.platform != "linux", reason="a pty")
+def test_a_serial_port_by_any_path_is_the_same(pty_bench, monkeypatch, tmp_path):
+    """Any text that is no other form is a serial port's path (§48), as oep-client-python's SerialLink(target): a
+    relative path to the bench's pty gives the same file; a COM port that is not there is refused by both."""
+    path = pty_bench()[len("oep:"):]
+    (tmp_path / "ttyBENCH").symlink_to(path)
+    monkeypatch.chdir(tmp_path)
+    got = []
+    for rust in (False, True):
+        req = sources.Request([("A", "GPIO10"), ("B", "GPIO11")], 20_000_000, 400, fast=[])
+        out = _take(monkeypatch, rust, "oep:ttyBENCH", req, tmp_path / f"s{rust}.wireskein")
+        got.append(_content(out))
+    assert got[1] == got[0]
+    for rust in (False, True):
+        with pytest.raises(OSError) as e:
+            _take(monkeypatch, rust, "oep:COM3", req, tmp_path / "c.wireskein")
+        assert "COM3" in str(e.value)
+
+
 @rust_only
 def test_no_probe_announced_says_so(clean, tmp_path):
     clean.setenv(_rust.RUST_ENV, "capture")
     with pytest.raises(FileNotFoundError, match="no probe with unit_id fafe00dead00 announces _oep._tcp.local"):
         sources.capture("oep:oep://fafe00dead00?via=net", sources.Request([("A", "GPIO10")], 1_000_000, 10),
                         tmp_path / "x.wireskein")
+
+
+# ---------------- capture formats 2-4 (§48) ----------------
+
+# (profile, analog, plan [(role, channel)], setting): format 2 the analog blocks (role 0 packed, 1 minmax and sum, 2
+# sum), format 3 the timed states on an external clock (the ESP32's sampler: role 2 the clock), format 4 the test
+# counter on the logic and the analog track (one-shot: these take their segments when the capture is done)
+FORMATS = {
+    "analog-blocks": ("p4-x035", True, [(0, 16), (1, 17), (2, 18)],
+                      dict(mode=1, rate=10_000, samples=300, data_format=2, carriage=[(1, 0x02 | 0x04, 8), (2, 0x04, 3)])),
+    "analog-blocks-block-max": ("p4-x035", True, [(0, 16), (1, 17)],
+                                dict(mode=1, rate=10_000, samples=100, data_format=2, carriage=[(0, 0x02, 4)],
+                                     block_max=16)),
+    "state-timed": ("esp32-v003", False, [(0, 4), (1, 5), (2, 13)],
+                    dict(mode=1, rate=100_000, samples=120, data_format=3, clock=(2, 0, None, 0))),
+    "state-timed-both-edges": ("esp32-v003", False, [(0, 4), (1, 5), (2, 13)],
+                               dict(mode=1, rate=50_000, samples=64, data_format=3, clock=(2, 2, None, 0))),
+    "test-counter": ("p4-x035", False, [(0, 10), (1, 11), (2, 12)], dict(mode=1, rate=1_000_000, samples=1000,
+                                                                          data_format=4)),
+    "test-counter-analog": ("p4-x035", True, [(0, 16), (1, 17)], dict(mode=1, rate=10_000, samples=300,
+                                                                       data_format=4)),
+}
+
+
+def _python_raw(target, analog, plan, st):
+    """The same capture by oep-client-python's capture layer: (config, [(segment, bytes)])."""
+    from oep_client import capture as oc, core, link
+    hst = link.open_host(target, keep_session=False)
+    core.take(hst, 30_000, owner="wireskein test")
+    try:
+        lc = oc.AnalogCapture(hst) if analog else oc.LogicCapture(hst)
+        core.plan_apply(hst, [(lc.fn, r, ch) for r, ch in plan])
+        kw = dict(rate=st["rate"], mode=st["mode"], samples=st["samples"], segments=st.get("segments"),
+                  data_format=st["data_format"], block_max=st.get("block_max"))
+        if st.get("carriage"):
+            kw["carriage"] = {r: (k, d) for r, k, d in st["carriage"]}
+        if st.get("clock"):
+            kw["options"] = {"clock": st["clock"]}
+        cfg = lc.configure(**kw)
+        lc.start()
+        segs = lc.wait(10)
+        return cfg, [(s, lc.read_segment(s)) for s in segs]
+    finally:
+        hst.end()
+        hst.link.close()                                         # the bench's one connection, for the Rust client
+
+
+@both
+@pytest.mark.parametrize("case", list(FORMATS))
+def test_formats_2_to_4_read_as_capture_blocks_reads_them(case, bench, clean):
+    """Formats 2-4 (oep-if-capture §1.4, §3.8, §1), which no WireSkein request asks yet (neither oep-client-python's
+    acquire nor wireskein-oep's capture): wireskein-oep's capture layer configures them, reads the segments (format
+    3's length by its entries) and reads them; the same configure answer and the same bytes as oep-client-python's
+    capture layer from the same virtual bench, and what it reads the same as capture_blocks reads those bytes."""
+    import json
+    import wireskein_core
+    from oep_client import capture_blocks as cb
+    profile, analog, plan, st = FORMATS[case]
+    target = bench(profile=profile)[len("oep:"):]
+    py_cfg, py_segs = _python_raw(target, analog, plan, st)
+    spec = {"analog": analog, "plan": plan, **st}
+    doc, datas = wireskein_core.oep_take_raw(target, json.dumps(spec))
+    doc = json.loads(doc)
+    c = doc["config"]
+    assert c["format"] == py_cfg.format == st["data_format"]
+    assert (c["block"], c["samples"]) == (py_cfg.block, py_cfg.samples)
+    if analog:
+        assert (c["slot"], c["offset"], c["bits"], c["order"]) == (py_cfg.slot, py_cfg.offset, py_cfg.bits,
+                                                                    py_cfg.order)
+    else:
+        assert (c["width"], c["positions"]) == (py_cfg.width, py_cfg.positions)
+    assert c["external_clock"] == py_cfg.external_clock == ("clock" in st)
+    if st["data_format"] == 3:
+        assert c["timebase"] is not None and c["timebase"][0] / c["timebase"][1] == py_cfg.timebase
+    assert len(doc["segments"]) == len(py_segs) == len(datas) == st.get("segments", 1)
+    for s, data, (ps, pdata) in zip(doc["segments"], datas, py_segs):
+        assert (s["position"], s["samples"]) == (ps.position, ps.samples)
+        assert data == pdata                                   # the virtual bench's data is the samples' own
+        if st["data_format"] == 2:
+            want = cb.read_analog_blocks(data, s["samples"], py_cfg.order, py_cfg.carriage, py_cfg.block,
+                                         py_cfg.bits)
+            assert len(s["blocks"]) == len(want)
+            for b, w in zip(s["blocks"], want):
+                assert (b["first"], b["samples"]) == (w.first, w.samples)
+                assert [k for k, _ in b["channels"]] == list(w.channels)
+                for k, p in b["channels"]:
+                    wc = w.channels[k]
+                    assert (p["kind"], p["d"], p["values"], p["mins"], p["maxs"], p["sums"]) == (
+                        wc.kind, wc.d, wc.values, wc.mins, wc.maxs, wc.sums)
+        elif st["data_format"] == 3:
+            assert [tuple(x) for x in s["states"]] == cb.read_state_timed(data, s["samples"], py_cfg.width)
+        else:
+            assert s["wrong"] == [] and data == bytes((s["position"] + k) & 0xFF for k in range(len(data)))
 
 
 # ---------------- HID reports (transports §1) ----------------

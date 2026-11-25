@@ -282,3 +282,96 @@ pub fn oep_hid_write<'py>(py: Python<'py>, data: Vec<u8>, output_size: usize) ->
         .map(|r| PyBytes::new(py, r))
         .collect())
 }
+
+/// oep_take_raw(address, spec_json) -> (doc_json, [bytes]): a capture whose data a WireSkein file does not hold yet
+/// (formats 2-4, oep-if-capture §1) as wireskein-oep takes and reads it - for a test beside oep-client-python's
+/// capture_blocks. spec: {"analog": bool, "plan": [[role, channel]], "mode", "rate", "samples", "segments",
+/// "data_format", "carriage": [[role, kind, d]], "clock": [role, edge, qualifier role or null, level], "block_max",
+/// "timeout_s"}. The doc: the configure answer (format, block, width, positions, slot, offset, bits, order, rate,
+/// samples, timebase, external_clock) and each segment (position, samples, flags) with its data read: "blocks"
+/// (format 2: first, samples, channels [[role, {kind, d, values, mins, maxs, sums}]]), "states" (format 3: [[ticks,
+/// state]]) or "wrong" (format 4: [[offset, length]] of the bytes not the counter); the segments' bytes in order.
+#[pyfunction]
+pub fn oep_take_raw<'py>(
+    py: Python<'py>,
+    address: &str,
+    spec_json: &str,
+) -> PyResult<(String, Vec<Bound<'py, PyBytes>>)> {
+    use serde_json::json;
+    use wireskein_oep::formats;
+    let v: Value = serde_json::from_str(spec_json).map_err(|e| PyValueError::new_err(format!("spec: {e}")))?;
+    let u = |k: &str| v.get(k).and_then(|x| x.as_u64());
+    let list = |k: &str| -> Vec<Vec<u64>> {
+        v.get(k)
+            .and_then(|x| x.as_array())
+            .map(|a| {
+                a.iter()
+                    .map(|r| {
+                        r.as_array()
+                            .map(|r| r.iter().map(|x| x.as_u64().unwrap_or(0)).collect())
+                            .unwrap_or_default()
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    let plan: Vec<(u8, u16)> = list("plan").iter().map(|r| (r[0] as u8, r[1] as u16)).collect();
+    let mut s = wireskein_oep::capture::Setting {
+        mode: u("mode").unwrap_or(1) as u8,
+        rate: u("rate").ok_or_else(|| bad("rate"))?,
+        samples: u("samples"),
+        segments: u("segments"),
+        data_format: u("data_format").map(|x| x as u8),
+        block_max: u("block_max").map(|x| x as u32),
+        roles: plan.iter().map(|(r, _)| *r as usize).collect(),
+        ..Default::default()
+    };
+    s.carriage = list("carriage")
+        .iter()
+        .map(|r| (r[0] as usize, (r[1] as u8, r[2] as usize)))
+        .collect();
+    if let Some(c) = v.get("clock").and_then(|x| x.as_array()) {
+        let n = |i: usize| c.get(i).and_then(|x| x.as_u64()).map(|x| x as u8);
+        s.clock = Some((n(0).unwrap_or(0), n(1).unwrap_or(0), n(2), n(3).unwrap_or(0)));
+    }
+    let analog = v.get("analog").and_then(|x| x.as_bool()).unwrap_or(false);
+    let timeout = std::time::Duration::from_secs_f64(v.get("timeout_s").and_then(|x| x.as_f64()).unwrap_or(10.0));
+    let (cfg, segs) = py
+        .detach(|| formats::take_raw(address, analog, &plan, &s, "wireskein test", timeout))
+        .map_err(|e| py_err(e.into()))?;
+    let mut docs = vec![];
+    for (seg, data) in &segs {
+        let mut d = json!({"position": seg.position, "samples": seg.samples, "flags": seg.flags});
+        match cfg.format {
+            formats::FORMAT_ANALOG_BLOCKS => {
+                let blocks = cfg.analog_blocks().expect("format 2").read(data, seg.samples as usize);
+                let blocks = blocks.map_err(|e| py_err(e.into()))?;
+                d["blocks"] = blocks
+                    .iter()
+                    .map(|b| {
+                        json!({"first": b.first, "samples": b.samples, "channels": b.channels.iter().map(|(k, p)| {
+                            json!([k, {"kind": p.kind, "d": p.d, "values": p.values, "mins": p.mins, "maxs": p.maxs,
+                                       "sums": p.sums}])
+                        }).collect::<Vec<_>>()})
+                    })
+                    .collect();
+            }
+            formats::FORMAT_STATE_TIMED => {
+                let st =
+                    formats::read_state_timed(data, seg.samples as usize, cfg.width).map_err(|e| py_err(e.into()))?;
+                d["states"] = json!(st);
+            }
+            formats::FORMAT_TEST_COUNTER => d["wrong"] = json!(formats::test_counter_wrong(data, seg.position)),
+            _ => {}
+        }
+        docs.push(d);
+    }
+    let doc = json!({
+        "config": {"format": cfg.format, "block": cfg.block, "width": cfg.width, "positions": cfg.positions,
+                   "slot": cfg.slot, "offset": cfg.offset, "bits": cfg.bits, "order": cfg.order,
+                   "rate": [cfg.rate.0, cfg.rate.1], "samples": cfg.samples, "timebase": cfg.timebase,
+                   "external_clock": cfg.external_clock},
+        "segments": docs,
+    });
+    Ok((doc.to_string(), segs.iter().map(|(_, d)| PyBytes::new(py, d)).collect()))
+}
