@@ -362,6 +362,21 @@ pub fn candidates_of(
     // (an unknown framing has no check of its own: not on a clock put on a grid, which any clock fits - the known
     // framings' checks tell there whether the grid was the clock's)
     let plain: Vec<clocked::Group> = groups.into_iter().filter(|g| g.how != spi::GRIDDED).collect();
+    // (an SPI reading's rival where it explains a part of its bus: as an unknown reading, none where another known
+    // reading - not the SPI of a part of these lines it rivals - explains its lines better)
+    let partial: Vec<Candidate> = spi::partial(&cands)
+        .into_iter()
+        .filter(|u| {
+            let ls = lines(u);
+            let others: Vec<Candidate> = cands
+                .iter()
+                .filter(|k| !(k.protocol == "spi" && lines(k).is_subset(&ls)))
+                .cloned()
+                .collect();
+            !unknown(&others, vec![u.clone()]).is_empty()
+        })
+        .collect();
+    cands.extend(partial);
     cands.extend(unknown(&cands, syncunk::candidates_of(&plain)));
     cands
 }

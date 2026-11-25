@@ -185,6 +185,58 @@ fn level_at(e: &[i64], initial: u8, t: i64) -> u8 {
     initial ^ (e.partition_point(|&x| x <= t) as u8 & 1)
 }
 
+/// How much of the bus a reading leaves unexplained: a line it does not read whose changes gather in its transfers'
+/// windows past chance (the windows' share of the capture) is a line of the same bus - a data line it could not
+/// read, under a neighbour's crosstalk - and the reading is of a part of the bus only. Each such line's changes
+/// counted with its runs shorter than a clock period out (a data bit lasts a period; crosstalk's pulses of a tick or
+/// two do not), its excess over chance weighed by how many changes fall inside (a few gather by chance) and by how it
+/// keeps to the clock as data does (another bus's line, busy while this one is, gathers in the windows too, but at no
+/// phase of this clock); the most such line's, 0..1, and its name.
+fn unexplained<'a>(
+    view: &View<'a>,
+    clk: &Channel,
+    ck: &Clock,
+    cs: Option<&Channel>,
+    datas: &[&Channel],
+    ww: &[(i64, i64)],
+) -> (f64, Option<&'a str>) {
+    let n = view.n_samples;
+    let span: i64 = ww.iter().map(|&(a, b)| (b.min(n) - a.max(0)).max(0)).sum();
+    let chance = span as f64 / n.max(1) as f64;
+    if chance >= 1.0 {
+        return (0.0, None);
+    }
+    let period = ((2.0 * ck.half).round() as i64).max(2);
+    let cc = Channel::new(clk.name, ck.initial, &ck.edges);
+    let mut worst = (0.0, None);
+    for ch in &view.channels {
+        if ch.name == clk.name || cs.is_some_and(|c| c.name == ch.name) || datas.iter().any(|d| d.name == ch.name) {
+            continue;
+        }
+        let e = deglitch(ch.edges, period);
+        if e.is_empty() {
+            continue;
+        }
+        let k = e
+            .iter()
+            .filter(|&&x| {
+                let i = ww.partition_point(|&(a, _)| a <= x);
+                i > 0 && x < ww[i - 1].1
+            })
+            .count();
+        let lift = ((k as f64 / e.len() as f64 - chance) / (1.0 - chance)).max(0.0);
+        if lift == 0.0 {
+            continue;
+        }
+        let keeps = keeping(&e, &cc);
+        let u = lift * (1.0 - (-(k as f64) / SCALE).exp()) * (keeps / DATA_KEEPS).min(1.0);
+        if u > worst.0 {
+            worst = (u, Some(ch.name));
+        }
+    }
+    worst
+}
+
 /// The SPI reading of (clk, cs, data lines), or None.
 fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&Channel]) -> Option<Candidate> {
     let n = view.n_samples;
@@ -447,6 +499,7 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
     } else {
         1.0
     };
+    let (unexplained, left_out) = unexplained(view, clk, ck, cs, datas, &ww);
     let score = whole
         * (covered / 0.9).min(1.0)
         * framed
@@ -490,6 +543,10 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
         evidence.insert(k.into(), json!(x));
     }
     evidence.insert("windows".into(), json!(counts.len()));
+    evidence.insert("unexplained".into(), json!(unexplained));
+    if let Some(l) = left_out {
+        evidence.insert("unexplained_line".into(), json!(l));
+    }
     let layers = crate::claim::raw(serde_json::to_string(&json!({ "transfers": transfers })).unwrap());
     Some(Candidate {
         protocol: "spi".into(),
@@ -689,6 +746,67 @@ pub fn candidates(view: &View) -> Vec<Candidate> {
     }
     let mut out: Vec<Candidate> = best.into_values().collect();
     out.extend(shared(view, &out));
+    out
+}
+
+/// The rival of an SPI reading that explains a part of its bus only (`unexplained`): a clocked bus of unknown framing
+/// on the reading's lines and the line it leaves out, as sure as the reading times how surely that line is the bus's.
+/// Where it is the better explanation of the lines, the clock's bus is told as unknown rather than as an SPI of a part
+/// of it; where the line gathers in the windows only a little, it is no rival (under the claim's cost).
+pub fn partial(cands: &[Candidate]) -> Vec<Candidate> {
+    let mut out: Vec<Candidate> = vec![];
+    for c in cands {
+        if c.protocol != "spi" || c.params.contains_key("targets") {
+            continue;
+        }
+        let (Some(u), Some(line)) = (
+            c.evidence.get("unexplained").and_then(|x| x.as_f64()),
+            c.evidence.get("unexplained_line").and_then(|x| x.as_str()),
+        ) else {
+            continue;
+        };
+        let score = c.score * u;
+        if score <= crate::CLAIM_COST {
+            continue;
+        }
+        let mut roles = c.roles.clone();
+        let k = roles.keys().filter(|r| r.starts_with("data")).count();
+        roles.insert(format!("data{k}"), line.to_string());
+        // (none where an SPI reading reads the line too: that reading explains the bus, this one a part of it)
+        let ls: std::collections::BTreeSet<&String> = roles.values().collect();
+        if cands
+            .iter()
+            .any(|o| o.protocol == "spi" && ls.iter().all(|l| o.roles.values().any(|v| v == *l)))
+        {
+            continue;
+        }
+        let mut params = Map::new();
+        params.insert("sample_edge".into(), c.params["sample_edge"].clone());
+        params.insert(
+            "delimiter".into(),
+            json!(if c.roles.contains_key("cs") { "select" } else { "gap" }),
+        );
+        let mut evidence = Map::new();
+        evidence.insert("part_read_as".into(), json!("spi"));
+        evidence.insert("part_score".into(), json!(c.score));
+        evidence.insert("unexplained".into(), json!(u));
+        evidence.insert("unexplained_line".into(), json!(line));
+        let r = Candidate {
+            protocol: "sync_unknown".into(),
+            roles,
+            score,
+            alt: None,
+            params,
+            evidence,
+            layers: crate::claim::raw(r#"{"summary": {"part_read_as": "spi"}}"#.to_string()),
+        };
+        // (each set of lines once, its best)
+        match out.iter_mut().find(|o| o.roles == r.roles) {
+            Some(o) if o.score >= r.score => {}
+            Some(o) => *o = r,
+            None => out.push(r),
+        }
+    }
     out
 }
 
@@ -1000,6 +1118,89 @@ mod tests {
         let lay: Value = serde_json::from_str(c.layers.get()).unwrap();
         assert_eq!(lay["transfers"][2]["MOSI"], json!("a55a"), "{lay}");
         assert!(c.score > 0.5, "{:?}", c.evidence);
+    }
+
+    #[test]
+    fn a_reading_of_a_part_of_the_bus_has_a_rival() {
+        // a clock of 4 ticks a period and two data lines with no select; the second line takes a noisy neighbour's
+        // crosstalk as pulses of two ticks over the whole capture, so that no reading takes it as data, but its own
+        // changes gather in the transfers as the first's (spivar-36+xtalk:0.3): the SPI reading of the clock and the
+        // first line explains a part of the bus only
+        let (mut clk, mut a, mut b) = (vec![], vec![], vec![]);
+        let (mut la, mut lb, mut t, mut x) = (0u8, 0u8, 100i64, 0x2545_f491u32);
+        let mut next = || {
+            x ^= x << 13;
+            x ^= x >> 17;
+            x ^= x << 5;
+            x
+        };
+        for _ in 0..9 {
+            for _ in 0..32 {
+                let r = next();
+                let (ba, bb) = ((r & 1) as u8, ((r >> 1) & 1) as u8);
+                if ba != la {
+                    a.push(t);
+                    la = ba;
+                }
+                if bb != lb {
+                    b.push(t);
+                    lb = bb;
+                }
+                clk.push(t + 2);
+                clk.push(t + 4);
+                t += 4;
+            }
+            t += 600;
+        }
+        // (the pulses toggle the line: a tick both the line and a pulse change at cancels)
+        let mut toggles: std::collections::BTreeMap<i64, u32> = b.iter().map(|&e| (e, 1)).collect();
+        let mut p = 50i64;
+        while p < t {
+            *toggles.entry(p).or_insert(0) += 1;
+            *toggles.entry(p + 2).or_insert(0) += 1;
+            p += 12 + (next() % 20) as i64;
+        }
+        let bn: Vec<i64> = toggles
+            .into_iter()
+            .filter(|&(_, k)| k % 2 == 1)
+            .map(|(e, _)| e)
+            .collect();
+        let v = View::new(
+            1e6,
+            t + 100,
+            vec![
+                Channel::new("CLK", 0, &clk),
+                Channel::new("A", 0, &a),
+                Channel::new("B", 0, &bn),
+            ],
+        )
+        .unwrap();
+        let cands = crate::candidates(&v);
+        let part = cands
+            .iter()
+            .find(|c| c.protocol == "spi" && c.roles.len() == 2 && c.roles.values().any(|l| l == "A"))
+            .expect("the SPI reading of CLK and A");
+        assert!(
+            cands
+                .iter()
+                .all(|c| c.protocol != "spi" || !c.roles.values().any(|l| l == "B")),
+            "B read as data: the test's line is no line left out"
+        );
+        assert_eq!(part.evidence["unexplained_line"], json!("B"), "{:?}", part.evidence);
+        let rival = cands
+            .iter()
+            .find(|c| c.protocol == "sync_unknown" && c.roles.values().any(|l| l == "B"))
+            .expect("the rival of the part's reading");
+        assert!(rival.score > 0.6, "{:?}", rival);
+        let claims = crate::analyze(&v, &Value::Null);
+        assert!(
+            claims.iter().all(|c| c.protocol != "spi" || c.verdict != "confirmed"),
+            "{:?}",
+            claims
+                .iter()
+                .map(|c| (&c.protocol, &c.verdict, c.score))
+                .collect::<Vec<_>>()
+        );
     }
 
     #[test]
