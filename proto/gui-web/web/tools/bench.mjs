@@ -4,7 +4,7 @@
 // Chrome's processes (RSS of the whole tree: the page, its workers, the GPU process).
 //
 //   node tools/bench.mjs URL [--shot OUT.png] [--bench OUT.txt] [--size 1600x960] [--chrome PATH] [--headful]
-//                            [--wait-ms N] [--click SELECTOR] [--type SELECTOR=TEXT] [--popout OUT2.png]
+//                            [--wait-ms N] [--click SELECTOR] [--type 'SELECTOR=>TEXT'] [--press KEY] [--popout OUT2.png]
 //
 // The machine this was written on has no GPU for Chrome: WebGPU runs on SwiftShader (the CPU), so its fps are not a
 // GPU's. On a screen with a GPU open the same URL with &bench=1 in a normal Chrome and read the speed panel.
@@ -27,6 +27,7 @@ let noReady = false;
 let noGpuShot = false;
 const clicks = [];
 const types = [];
+const presses = [];
 for (let i = 1; i < args.length; i++) {
   const a = args[i];
   const v = () => args[++i];
@@ -38,6 +39,7 @@ for (let i = 1; i < args.length; i++) {
   else if (a === '--wait-ms') waitMs = Number(v());
   else if (a === '--click') clicks.push(v());
   else if (a === '--type') types.push(v());
+  else if (a === '--press') presses.push(v());
   else if (a === '--popout') popoutShot = v();
   else if (a === '--timeout') timeoutS = Number(v());
   else if (a === '--no-ready') noReady = true;
@@ -100,19 +102,24 @@ page.on('console', (m) => console.log(`[page ${((Date.now() - t0) / 1e3).toFixed
 page.on('pageerror', (e) => console.log(`[page error] ${e.message}`));
 await page.goto(url, { waitUntil: 'load' });
 // ready: the first picture, the summaries and the analysis
-if (!noReady) await page.waitForFunction('window.__ready === true', { timeout: 900_000, polling: 250 });
+if (!noReady) await page.waitForFunction('window.__ready === true', { timeout: timeoutS * 1000, polling: 250 });
 const readyS = (Date.now() - t0) / 1e3;
 console.log(`ready after ${readyS.toFixed(1)} s`);
 for (const t of types) {
-  const [sel, text] = t.split(/=(.*)/s);
+  const [sel, text] = t.split(/=>(.*)/s);
   await page.click(sel);
   await page.keyboard.type(text);
+}
+for (const k of presses) {
+  await new Promise((r) => setTimeout(r, 600));
+  await page.keyboard.press(k);
 }
 for (const c of clicks) await page.click(c);
 if (waitMs) await new Promise((r) => setTimeout(r, waitMs));
 console.log(`status: ${await page.evaluate("document.querySelector('.status')?.textContent")}`);
+console.log(`memory: ${await page.evaluate("(() => { const w = window.__wsk; const h = performance.memory; return `scene ${(w.scene.mem_bytes() / 1e6).toFixed(0)} MB, JS heap ${h ? (h.usedJSHeapSize / 1e6).toFixed(0) : '-'} MB`; })()")}`);
 if (bench) {
-  await page.waitForFunction('typeof window.__bench === "string"', { timeout: 900_000, polling: 500 });
+  await page.waitForFunction('typeof window.__bench === "string"', { timeout: timeoutS * 1000, polling: 500 });
   const text = await page.evaluate('window.__bench');
   const mem = treeRss(browser.process().pid);
   const by = Object.entries(mem.by).map(([k, v]) => `${k} ${v.toFixed(0)}`).join(', ');

@@ -247,4 +247,5 @@ export function report(what: string, data: object) {
   },
   cap,
   analysis,
+  sel,
 };

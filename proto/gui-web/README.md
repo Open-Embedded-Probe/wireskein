@@ -113,7 +113,7 @@ http://127.0.0.1:8080/?file=scratch/i2c-100k.wireskein&bench=1
 ```sh
 cd web
 node tools/bench.mjs "http://127.0.0.1:8080/?synth=1e8&bench=1" --bench out.txt --shot out.png
-# --size 1600x960、--chrome /path/to/chrome、--headful、--wait-ms N、--type 'SELECTOR=文字'、--click SELECTOR、--popout out2.png
+# --size 1600x960、--chrome /path/to/chrome、--headful、--wait-ms N、--type 'SELECTOR=>文字'、--click SELECTOR、--popout out2.png
 ```
 
 ヘッドレスの Chrome（SwiftShader）はスクリーンショットに WebGPU のキャンバスを写さない（白くなる）。道具は WebGPU の
