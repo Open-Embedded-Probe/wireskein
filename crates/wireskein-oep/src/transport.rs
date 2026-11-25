@@ -620,8 +620,10 @@ fn termios_at(f: &std::fs::File, baud: u32) -> Result<()> {
     Ok(())
 }
 
+#[cfg(unix)]
 struct FileSink(std::fs::File);
 
+#[cfg(unix)]
 impl Sink for FileSink {
     fn send(&mut self, data: &[u8]) -> Result<()> {
         self.0
