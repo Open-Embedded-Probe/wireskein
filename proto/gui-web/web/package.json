@@ -12,6 +12,7 @@
     "bench": "node tools/bench.mjs"
   },
   "dependencies": {
+    "@tauri-apps/api": "^2.12.5",
     "dockview-core": "^8.9.1",
     "solid-js": "^1.9.20"
   },

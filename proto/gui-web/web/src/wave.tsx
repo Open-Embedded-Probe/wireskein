@@ -3,6 +3,7 @@
 // the mouse and keys. The shapes come from wasm (Scene.frame) and go to the GPU in one draw; text goes on a 2D
 // canvas above (the browser's fonts: Japanese without carrying a font).
 
+import { frameIpc, lastFrame } from './tauri';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 import {
   analysis, addDrawer, cap, capGen, markers, measure, openedAt, pal, palFloats, perf, requestDraw, scene, select,
@@ -196,11 +197,10 @@ export function WavePanel(props: { id: number; params: WaveParams; onParams: (p:
       y += l.h;
     });
     const selArr = s ? [s.c, s.l, s.row] : [];
+    const vpArr = [vp.t0, vp.tpp, plotL, pw, lanesTop, st.h, plotL, 0, pw, MINIMAP_H, st.charPx, tilesOn() ? 1 : 0];
+    if (frameIpc && forced.panel === props.id) lastFrame.args = { vp: vpArr, lanes: arr, sel: selArr, grid };
     const tw = performance.now();
-    const ni = sc.frame(
-      [vp.t0, vp.tpp, plotL, pw, lanesTop, st.h, plotL, 0, pw, MINIMAP_H, st.charPx, tilesOn() ? 1 : 0],
-      arr, selArr, grid,
-    );
+    const ni = sc.frame(vpArr, arr, selArr, grid);
     const wasmMs = performance.now() - tw;
     const inst = new Float32Array(viewMemory!.buffer, sc.inst_ptr(), ni * 8);
     renderer.draw(inst, ni, st.w, st.h, pf);

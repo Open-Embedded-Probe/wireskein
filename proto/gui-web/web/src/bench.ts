@@ -7,6 +7,7 @@
 import { analysis, analyzing, cap, frameLog, lod, onFrame, perf, report, requestDraw, scene, setContinuous, viewMemory } from './state';
 import { type Viewport, fit, zoomed, clamped } from './viewport';
 import { timings } from './engine';
+import { frameIpc, idleProbe, ipcMode, ipcStats, isTauri, nativeEngine, probeFrame, shellMem, takeProbe } from './tauri';
 import { createSignal } from 'solid-js';
 
 /** The view the bench forces on one waveform panel (the first drawn). */
@@ -47,8 +48,15 @@ export function startBench() {
             `read ${timings.readMs?.toFixed(0) ?? '-'} ms + parse ${timings.parseMs?.toFixed(0) ?? '-'} ms, summaries ${((timings.lodMs ?? NaN) / 1e3).toFixed(2)} s, ` +
             `analysis ${analysis() ? (analysis()!.seconds).toFixed(2) + ' s (in the worker; ' + ((timings.analysisMs ?? NaN) / 1e3).toFixed(2) + ' s to the screen)' : '-'}, renderer ${perf.renderer}`,
         );
-        lines.push('| ticks/px | fps (median) | frame ms p50 / p95 | waveform CPU ms (of which wasm) |');
-        lines.push('|---|---|---|---|');
+        if (isTauri)
+          lines.push(
+            `tauri: engine ${nativeEngine ? 'native' : 'wasm'}, ipc ${nativeEngine ? ipcMode : '-'}; IPC on the screen's thread: ${ipcStats.msgs} messages, ` +
+              `${(ipcStats.bytes / 1e6).toFixed(1)} MB, decode ${ipcStats.decodeMs.toFixed(0)} ms (max ${ipcStats.maxDecodeMs.toFixed(1)}), ` +
+              `taken in ${ipcStats.handleMs.toFixed(0)} ms (max ${ipcStats.maxHandleMs.toFixed(1)} on ${ipcStats.maxHandleType || '-'}); ` +
+              `longest frame gap while opening ${stall.max.toFixed(0)} ms`,
+          );
+        lines.push(`| ticks/px | fps (median) | frame ms p50 / p95 | waveform CPU ms (of which wasm) |${frameIpc ? ` native frame by IPC ms round trip (native) size |` : ''}`);
+        lines.push(`|---|---|---|---|${frameIpc ? '---|' : ''}`);
         phase = { k: 'zoom', zi: 0, f: 0 };
         console.log(`bench: ${lines[0]}`);
       }
@@ -60,13 +68,14 @@ export function startBench() {
         samples.push(dt);
         wave.push(lastWave);
         wasm.push(lastWasm);
+        probeFrame();
       }
       const z = zooms[zi];
       let vp = zoomed(fit(n, w), z, w * 0.37);
       vp = { ...vp, t0: vp.t0 + f * 7 * vp.tpp };
       forced.vp = clamped(vp, n);
       if (f >= 95) {
-        lines.push(`| ${vp.tpp.toFixed(3)} | ${(1000 / pct(samples, 0.5)).toFixed(0)} | ${pct(samples, 0.5).toFixed(1)} / ${pct(samples, 0.95).toFixed(1)} | ${avg(wave).toFixed(2)} (${avg(wasm).toFixed(2)}) |`);
+        lines.push(`| ${vp.tpp.toFixed(3)} | ${(1000 / pct(samples, 0.5)).toFixed(0)} | ${pct(samples, 0.5).toFixed(1)} / ${pct(samples, 0.95).toFixed(1)} | ${avg(wave).toFixed(2)} (${avg(wasm).toFixed(2)}) |${frameIpc ? ` ${takeProbe()} |` : ''}`);
         console.log(`bench: ${lines[lines.length - 1]}`);
         samples = [];
         wave = [];
@@ -95,12 +104,30 @@ export function startBench() {
         forced.reset = true;
         phase = { k: 'done' };
         setContinuous(false);
+        finish(lines);
+      } else phase = { k: 'sweep', f: f + 1 };
+    }
+  });
+  async function finish(lines: string[]) {
+        if (frameIpc) lines.push(await idleProbe());
+        if (isTauri) lines.push(`shell: ${await shellMem()}`);
         const text = lines.join('\n') + '\n';
         console.log(text);
         setBenchText(text);
         (window as unknown as { __bench: string }).__bench = text;
         report('bench', { text });
-      } else phase = { k: 'sweep', f: f + 1 };
-    }
-  });
+  }
+}
+
+/** The longest gap between animation frames from the start until the summaries and the analysis are in (the screen's
+ * thread held: taking in what the workers or the shell hand over). */
+export const stall = { max: 0 };
+export function watchStall() {
+  let last = performance.now();
+  const tick = (now: number) => {
+    stall.max = Math.max(stall.max, now - last);
+    last = now;
+    if (lod().ms === null || analyzing() || !cap()) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
 }

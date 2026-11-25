@@ -6,6 +6,7 @@ import { createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import type { Scene } from './wasm-pkg/view/wsk_web_view.js';
 import { DARK, LIGHT, paletteFloats, type Pal } from './gpu';
+import { isTauri, tauriReport } from './tauri';
 
 export interface CapMeta {
   title: string;
@@ -236,6 +237,8 @@ export function onFrame(f: (now: number, dt: number) => void) {
  * of reach. */
 export function report(what: string, data: object) {
   if (params.get('report') !== '1') return;
+  // prototype 2b: printed by the Tauri shell
+  if (isTauri) return tauriReport(what, { webgpu: 'gpu' in navigator, ...data });
   const body = JSON.stringify({ what, ua: navigator.userAgent, webgpu: 'gpu' in navigator, ...data });
   fetch('./report', { method: 'POST', body }).catch(() => {});
 }

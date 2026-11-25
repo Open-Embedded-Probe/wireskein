@@ -15,13 +15,22 @@ import {
 import { open, reopenPart, runSearch, selectWhenReady } from './engine';
 import { PRESETS, addPanel, deleteLayout, loadLayout, mountDock, popout, presetLayout, saveLayout, savedLayouts, dockApi } from './dock';
 import { openListWindow, startChannel } from './channel';
-import { startBench } from './bench';
+import { startBench, watchStall } from './bench';
+import { isTauri, ipcMode, nativeEngine } from './tauri';
 import { mb } from './fmt';
 
 const q = new URLSearchParams(location.search);
 window.addEventListener('error', (e) => report('error', { message: String(e.message), at: `${e.filename}:${e.lineno}` }));
 window.addEventListener('unhandledrejection', (e) => report('error', { message: String(e.reason) }));
 report('start', {});
+// prototype 2b (Tauri): the console printed by the shell too (no console to read under a driver)
+if (isTauri && q.get('report') === '1') {
+  const log = console.log.bind(console);
+  console.log = (...a: unknown[]) => {
+    log(...a);
+    report('log', { text: a.map(String).join(' ') });
+  };
+}
 
 const EXAMPLES: [string, string][] = [
   ['mixed-1（例）', 'files/examples/mixed-1.wireskein'],
@@ -93,7 +102,10 @@ function App() {
     if (q.get('select')) selectWhenReady(Number(q.get('select')));
     if (q.get('synth')) open({ kind: 'synth', total: Number(q.get('synth')), items: Number(q.get('items') ?? 5e5) });
     else if (q.get('file')) open({ kind: 'url', url: q.get('file')! }, Number(q.get('part') ?? 0));
-    if (q.has('bench')) startBench();
+    if (q.has('bench')) {
+      watchStall();
+      startBench();
+    }
     if (q.get('popout') === '1') {
       setTimeout(() => {
         const l = dockApi?.panels.find((p) => p.id.startsWith('list-'));
@@ -106,7 +118,7 @@ function App() {
   return (
     <div class="app">
       <div class="bar">
-        <b>WireSkein 試作 2（web）</b>
+        <b>{isTauri ? `WireSkein 試作 2b（Tauri、${nativeEngine ? `ネイティブ・${ipcMode}` : 'wasm'}）` : 'WireSkein 試作 2（web）'}</b>
         <span class="sep" />
         <button onClick={() => fileIn.click()} title="ファイルを選ぶ（ここへドラッグでも開く）">開く</button>
         <input

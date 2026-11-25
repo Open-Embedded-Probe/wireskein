@@ -1,0 +1,37 @@
+# Prototype 2b (bench/notes/2026-11-25-gui-study.ja.md §11): prototype 2's screens (web/dist) in a Tauri 2 shell. A
+# throwaway. The engine runs either as before (wasm in Web Workers, `?engine=wasm`, the default) or natively here
+# (`?engine=native`: wsk-web-engine and wsk-web-view, the crates the wasm is made of, built natively; wireskein-io /
+# -core / -analysis read by path), what it hands over sent through Tauri's IPC (`?ipc=json|raw|chunk|fetch`).
+# A workspace of its own (the root Cargo.toml excludes proto/), its lock beside it.
+[workspace]
+resolver = "3"
+
+[package]
+name = "wsk-gui-tauri"
+description = "Prototype 2b: prototype 2's screens in a Tauri shell, the engine in wasm workers or native"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT"
+publish = false
+
+[build-dependencies]
+tauri-build = { version = "2.7", features = [] }
+
+[dependencies]
+tauri = { version = "2.12", features = [] }
+serde_json = "1"
+memory-stats = "1"
+wsk-web-engine = { path = "../wasm/engine" }
+wsk-web-view = { path = "../wasm/view" }
+
+[features]
+# the screens embedded in the binary (no dev server): always, there is no `tauri dev` here
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 16
+strip = true

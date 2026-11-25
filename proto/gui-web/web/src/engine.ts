@@ -9,13 +9,19 @@ import {
   requestDraw, search, setSearch, select, setSel, setMeasure,
 } from './state';
 import { batch } from 'solid-js';
+import { NativeWorker, fileHref, frameIpc, nativeEngine } from './tauri';
+import { invoke } from '@tauri-apps/api/core';
 
 export const viewReady = initView();
 
-let workers: Worker[] = [];
-let analysisWorker: Worker | null = null;
-const newWorker = (kind: 'load' | 'analysis') =>
-  kind === 'load'
+type AnyWorker = Worker | NativeWorker;
+let workers: AnyWorker[] = [];
+let analysisWorker: AnyWorker | null = null;
+// prototype 2b (Tauri, ?engine=native): the shell does the workers' work natively
+const newWorker = (kind: 'load' | 'analysis'): Worker =>
+  nativeEngine
+    ? (new NativeWorker(kind) as unknown as Worker)
+    : kind === 'load'
     ? new Worker(new URL('./workers/load.worker.ts', import.meta.url), { type: 'module' })
     : new Worker(new URL('./workers/analysis.worker.ts', import.meta.url), { type: 'module' });
 
@@ -67,7 +73,7 @@ function workerMem(name: string, bytes: number) {
 // ------------------------------------------------------------------------------------------------ files
 
 function openFile(src: Source & { kind: 'file' | 'url' }, part: number) {
-  const s = src.kind === 'file' ? src.file : new URL(src.url, location.href).href;
+  const s = src.kind === 'file' ? src.file : fileHref(src.url);
   const title = src.kind === 'file' ? src.file.name : decodeURIComponent(src.url.split('/').pop() ?? src.url);
   const lw = newWorker('load');
   workers.push(lw);
@@ -135,6 +141,7 @@ function openFile(src: Source & { kind: 'file' | 'url' }, part: number) {
 
 function openSynth(total: number, items: number, src: Source) {
   const plan = synth_plan(total, 16);
+  if (frameIpc) invoke('scene_synth', { total });
   const n = plan[0];
   const sc = new Scene(n);
   const names = [];
