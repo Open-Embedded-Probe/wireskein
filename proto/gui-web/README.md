@@ -119,11 +119,26 @@ node tools/bench.mjs "http://127.0.0.1:8080/?synth=1e8&bench=1" --bench out.txt 
 ヘッドレスの Chrome（SwiftShader）はスクリーンショットに WebGPU のキャンバスを写さない（白くなる）。道具は WebGPU の
 1 フレームを読み戻してキャンバスの上に重ねてから撮る（`window.__gpuShot()`）。
 
+## WebKitGTK（Tauri の Linux の webview）で開く
+
+Tauri の殻はこの機械では作れなかった（webkit2gtk-4.1 / libsoup-3.0 の開発用のヘッダがない）。代わりに同じ WebKitGTK（2.52）の
+MiniBrowser で同じページを開ける（Tauri はこれと同じ webview を使う）:
+
+```sh
+/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/MiniBrowser --features=+WebGPU "http://127.0.0.1:8080/?file=files/examples/mixed-1.wireskein&report=1&bench=1"
+```
+
+`report=1` でページが測った値（描画の種類、最初の絵、ベンチの結果）を `tools/serve.mjs` に送り、配信の側の端末に `[report]` で出る
+（console の見えないブラウザのため）。WebKitGTK 2.52 は WebGPU を「unstable」の機能として持ち、`navigator.gpu` はあるが、
+この機械ではアダプタが出ず WebGL2 で描いた。
+
 ## 書いた量
 
 `wc -l` で数えた（README と lock を除く）。
 
-- wasm/view: 約 520 行、wasm/engine: 約 760 行（試作 1 の model.rs と panels.rs の検索をほぼそのまま移した）。
-- web/src: 約 2,700 行（波形 700、一覧 380、パネル 290、ドック 190、エンジンとの受け渡し 250、GPU 270、Worker 170、CSS 470 …）。
-- web/tools: 約 250 行（配信、ヘッドレスの道具）。
-- view-core に足したのは 34 行（Track::parts / from_parts、Status::from_u8）。試作 1 の egui はそのまま通る。
+- wasm/view: 586 行、wasm/engine: 936 行（試作 1 の model.rs の解析の読み方・フレームとビットの段と panels.rs の検索をほぼそのまま移した）。
+- web/src の TS / TSX: 3,106 行（波形 733、一覧 362、GPU 329、エンジンとの受け渡し 270、状態 251、パネル 247、上の帯 237、ドック 192、
+  Worker 179、ベンチ 110 …）、CSS 402 行。
+- web/tools: 249 行（配信、ヘッドレスの道具）。
+- view-core に足したのは約 60 行（Track::parts / from_parts、Status::from_u8、AnalogLine::levels / from_parts）。どれも足しただけで、
+  試作 1 の使う口は変えていない。
