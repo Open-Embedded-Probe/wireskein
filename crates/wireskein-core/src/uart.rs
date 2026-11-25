@@ -916,6 +916,39 @@ fn read(
     })
 }
 
+/// How well the line reads as the data of another line's windows (its runs away from its first level), its changes
+/// round each of them as an I2C bus's START and STOP round SCL's low while the clock is too slow to read: between two
+/// windows the line changes twice, once nearer the first's end (a STOP) and once nearer the second's start (a START),
+/// and once before the first window and once after the last; inside the windows, as it will. A UART a driver enable
+/// gates is the other way round (idle between the windows: its characters inside them), one beside an unrelated line
+/// changes as it will between them. The windows with their START and STOP over the windows, times the conditions'
+/// quantity (two a window).
+fn enclosing(line: &Channel, other: &Channel) -> f64 {
+    let (e, o) = (line.edges, other.edges);
+    if e.is_empty() || o.len() < 2 {
+        return 0.0;
+    }
+    // (the windows: from an odd change to the next, away from the line's first level)
+    let ws: Vec<(i64, i64)> = o.chunks_exact(2).map(|w| (w[0], w[1])).collect();
+    let between = |a: i64, b: i64| -> &[i64] { &e[e.partition_point(|&x| x <= a)..e.partition_point(|&x| x < b)] };
+    let m = ws.len();
+    // (each window's START before it and STOP after it)
+    let (mut start, mut stop) = (vec![false; m], vec![false; m]);
+    let head = between(i64::MIN, ws[0].0);
+    start[0] = head.len() == 1;
+    let tail = between(ws[m - 1].1, i64::MAX);
+    stop[m - 1] = tail.len() == 1;
+    for k in 0..m - 1 {
+        let (b, a) = (ws[k].1, ws[k + 1].0);
+        if let [s, t] = between(b, a) {
+            stop[k] = s - b < a - s;
+            start[k + 1] = a - t < t - b;
+        }
+    }
+    let round = (0..m).filter(|&k| start[k] && stop[k]).count();
+    round as f64 / m as f64 * q(2.0 * round as f64)
+}
+
 /// The line rests at `level` between characters now and then (`staged._rests_at`).
 fn rests_at(ch: &Channel, n: i64, level: u8, u: f64) -> bool {
     let (_, length, lv) = runs(ch, n);
@@ -1329,18 +1362,32 @@ pub fn candidates_with(view: &View, bauds: &std::collections::BTreeMap<String, f
                 && (a.params["baud"].as_f64().unwrap() / b.params["baud"].as_f64().unwrap() - 1.0).abs()
                     < EQUIVALENT_BAUD
         };
-        let alt = readings
+        let mut alt = readings
             .iter()
             .filter(|r| !same(r, best) && r.score > CLAIM_COST)
             .map(|r| r.score)
             .fold(None, |m: Option<f64>, s| Some(m.map_or(s, |m| m.max(s))));
+        // the line read otherwise: the data of another line's windows, as an I2C bus's SDA whose SCL is too slow to
+        // read (its START and STOP round each of SCL's lows), a rival reading of the line
+        let mut evidence = best.evidence.clone();
+        let enc = view
+            .channels
+            .iter()
+            .enumerate()
+            .filter(|&(j, _)| j != ci)
+            .map(|(_, o)| enclosing(ch, o))
+            .fold(0.0, f64::max);
+        evidence.insert("enclosing".into(), json!(enc));
+        if enc > CLAIM_COST {
+            alt = Some(alt.map_or(enc, |a: f64| a.max(enc)));
+        }
         out.push(crate::Candidate {
             protocol: "uart".into(),
             roles: [("data".to_string(), ch.name.to_string())].into(),
             score: best.score,
             alt,
             params: best.params.clone(),
-            evidence: best.evidence.clone(),
+            evidence,
             layers: layers(best),
         });
     }
@@ -1420,6 +1467,34 @@ mod tests {
         let lay: Value = serde_json::from_str(c.layers.get()).unwrap();
         let hex: String = a.iter().chain(b.iter()).map(|x| format!("{x:02x}")).collect();
         assert_eq!(lay["bytes"]["hex"], json!(hex));
+    }
+
+    #[test]
+    fn a_line_round_another_lines_windows_reads_otherwise() {
+        // an I2C bus's SDA whose SCL is too slow to read (its lows long, its highs short): a START just before each
+        // low, a STOP just after it, the bits inside; read as a UART it has a rival reading as the data of SCL's lows
+        let (mut sda, mut scl) = (vec![], vec![]);
+        for w in 0..6 {
+            let a = 1000 + w * 1240;
+            scl.extend([a, a + 700]);
+            let (bits, _) = uart(&[0x5A + w as u8], 10, a + 20, 0);
+            sda.push(a - 5);
+            sda.extend(bits.iter().filter(|&&x| x < a + 680));
+            sda.push(a + 712);
+        }
+        let sda_ch = Channel::new("SDA", 1, &sda);
+        let scl_ch = Channel::new("SCL", 1, &scl);
+        assert!(enclosing(&sda_ch, &scl_ch) > 0.7, "{}", enclosing(&sda_ch, &scl_ch));
+        // a UART a driver enable gates: the window round its characters, the line idle between: no rival
+        let (mut tx, mut de) = (vec![], vec![]);
+        for w in 0..6 {
+            let a = 1000 + w * 2000;
+            let (bits, end) = uart(b"OK\r\n", 10, a + 30, 1);
+            de.extend([a, end - 150]);
+            tx.extend(bits);
+        }
+        let (tx_ch, de_ch) = (Channel::new("TX", 1, &tx), Channel::new("DE", 0, &de));
+        assert_eq!(enclosing(&tx_ch, &de_ch), 0.0);
     }
 
     #[test]
