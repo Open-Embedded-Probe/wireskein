@@ -120,19 +120,38 @@ pub fn column(data: &[u8], width: usize, pos: usize, n: usize) -> Vec<u8> {
     out
 }
 
+/// An 8 x 8 bit matrix transposed: bit 8i + j to bit 8j + i (Hacker's Delight 7-3).
+fn transpose8(mut x: u64) -> u64 {
+    let t = (x ^ (x >> 7)) & 0x00AA_00AA_00AA_00AA;
+    x ^= t ^ (t << 7);
+    let t = (x ^ (x >> 14)) & 0x0000_CCCC_0000_CCCC;
+    x ^= t ^ (t << 14);
+    let t = (x ^ (x >> 28)) & 0x0000_0000_F0F0_F0F0;
+    x ^ t ^ (t << 28)
+}
+
 /// Every channel's bits of `n` samples of `width` bits (`column` for each position), the samples read once.
 pub fn columns(data: &[u8], width: usize, positions: &[usize], n: usize) -> Vec<Vec<u8>> {
     if width != 8 {
         return positions.iter().map(|&p| column(data, width, p, n)).collect();
     }
-    let mut out: Vec<Vec<u8>> = positions.iter().map(|_| vec![0u8; n.div_ceil(8)]).collect();
     let whole = n / 8;
-    for k in 0..whole {
-        let w = u64::from_le_bytes(data[k * 8..k * 8 + 8].try_into().expect("8"));
-        for (o, &p) in out.iter_mut().zip(positions) {
-            o[k] = ((((w >> p) & 0x0101_0101_0101_0101).wrapping_mul(0x0102_0408_1020_4080)) >> 56) as u8;
-        }
-    }
+    // each 8 samples' bits transposed at once (byte p of the result: bit p of the 8 samples), then each position's
+    // bytes taken out in one pass of its own (a stream's spool spent most of its time here, §42)
+    let t: Vec<u64> = data[..whole * 8]
+        .as_chunks::<8>()
+        .0
+        .iter()
+        .map(|c| transpose8(u64::from_le_bytes(*c)))
+        .collect();
+    let mut out: Vec<Vec<u8>> = positions
+        .iter()
+        .map(|&p| {
+            let mut o: Vec<u8> = t.iter().map(|x| (x >> (8 * p)) as u8).collect();
+            o.resize(n.div_ceil(8), 0);
+            o
+        })
+        .collect();
     for (o, &p) in out.iter_mut().zip(positions) {
         for i in whole * 8..n {
             o[i / 8] |= ((data[i] >> p) & 1) << (i % 8);
@@ -323,9 +342,9 @@ mod tests {
     #[test]
     fn every_column_at_once_is_each_column() {
         let data: Vec<u8> = (0..1000u32).map(|i| (i.wrapping_mul(2654435761) >> 9) as u8).collect();
-        for n in [0, 5, 64, 1000] {
-            let all = columns(&data, 8, &[0, 3, 7], n);
-            for (k, p) in [0, 3, 7].into_iter().enumerate() {
+        for n in [0, 5, 7, 8, 9, 64, 1000] {
+            let all = columns(&data, 8, &[0, 1, 2, 3, 4, 5, 6, 7], n);
+            for (k, p) in (0..8).enumerate() {
                 assert_eq!(all[k], column(&data, 8, p, n));
             }
         }
