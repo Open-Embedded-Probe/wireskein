@@ -199,3 +199,27 @@ def test_the_spi_cpol_without_cs_is_the_level_sck_rests_at_around_the_transfers(
     cap = _cap({"SCK": clk, "MOSI": mosi}, t + 5e-6, 20e6)
     ok, got, why = _judge(cap, spi("SCK", "MOSI", None, None, mode=0, mosi_bytes="3c9ea4"))
     assert ok is True and (got["cpol"], got["cpha"], got["mode"]) == (0, 0, 0), (why, got)
+
+
+def test_an_spi_data_line_of_few_changes_without_cs_is_read_as_named():
+    # shiftOut LSB first of f0 and then ff ff ff ff ff (MOSI held high: a line of two changes), shiftIn on MISO,
+    # no CS: the test names the lines and the mode, so MOSI is read at the mode's sampling edge even where the
+    # decoder's own reading takes MISO alone
+    clk, mosi, miso = gen.Wave(0), gen.Wave(1), gen.Wave(0)
+    out = bytes([0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF])
+    back = bytes([0x48, 0x53, 0x6B, 0xF2, 0x57, 0x06])
+    t = 5e-6
+    for o, i in zip(out, back):
+        for k in range(8):                              # LSB first
+            mosi.set(t, (o >> k) & 1)
+            miso.set(t, (i >> k) & 1)
+            t += 2.9e-6
+            clk.set(t, 1)
+            t += 2.9e-6
+            clk.set(t, 0)
+        t += 20e-6
+    cap = _cap({"SCK": clk, "MOSI": mosi, "MISO": miso}, t + 5e-6, 20e6)
+    x = spi("SCK", "MOSI", "MISO", None, mode=0, mosi_bytes="f0ffffffffff", miso_bytes="48536bf25706",
+            bit_order="lsb")
+    ok, got, why = _judge(cap, x)
+    assert ok is True and got["bytes"]["MOSI"] == "f0ffffffffff", (why, got.get("bytes"))

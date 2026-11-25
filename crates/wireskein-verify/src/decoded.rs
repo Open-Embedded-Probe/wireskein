@@ -1296,6 +1296,17 @@ fn check_spi(cap0: &Cap, x: &J) -> Out {
             }
             h.set(pin, s);
         }
+        // a line the test names that the decoder's reading left out (a data line of few changes, such as one held
+        // high after a few bytes): read at the sampling edge the lines say, else the asked mode's, as given
+        let e = edge.or_else(|| x.get("mode").i().map(mode_edge));
+        let missing: Vec<&Ch> = lines.iter().copied().filter(|l| !h.has(&l.name)).collect();
+        if let Some(e) = e
+            && !missing.is_empty()
+        {
+            for (k, v) in spi_read(clk, &missing, e, cap.n, None, act, lsb).items() {
+                h.set(k, v.clone());
+            }
+        }
         hexes = h;
     } else {
         return out(V::Ng, J::dict(), "nothing decoded as SPI on these pins");

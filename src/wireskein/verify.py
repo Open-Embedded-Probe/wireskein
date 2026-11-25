@@ -710,6 +710,14 @@ def check_spi(cap, x):
     else:
         hexes = {pin: bytes(rev(int(v) & 0xFF) for fr in frs for v in fr).hex()
                  for pin, frs in _spi_lines(n).items()}
+        # a line the test names that the decoder's reading left out (a data line of few changes, such as one held
+        # high after a few bytes): read at the sampling edge the lines say, else the asked mode's, as given
+        if edge is None and x.get("mode") is not None:
+            edge = "rise" if (x["mode"] >> 1) == (x["mode"] & 1) else "fall"
+        missing = [cap.channel(x[r]) for r in ("mosi", "miso") if x.get(r) and x[r] not in hexes]
+        if missing and edge is not None:
+            hexes.update(timing.spi_read(cap.channel(x["clk"]), missing, edge, cap.n_samples,
+                                         lsb=x.get("bit_order", "msb") == "lsb"))
     got = {"mode": n.metrics.get("mode") if n is not None else None, "bytes": hexes,
            "sck_hz": _burst_hz(cap.channel(x["clk"]), cap.rate)}
     if cs_sample_s is not None:
