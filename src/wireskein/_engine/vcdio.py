@@ -59,6 +59,19 @@ def _ids():
         n += 1
 
 
+def _ticks_to_units(e: np.ndarray, per: Fraction) -> np.ndarray:
+    """Ticks as timescale units, each rounded half to even as round(Fraction) does, in integers only (a Fraction array
+    has no rint for np.round: a rate such as 60 MHz whose tick is no whole number of units)."""
+    num, den = per.numerator, per.denominator
+    if den == 1:
+        return e * num
+    if len(e) and int(e.max()) > (2**62) // max(num, 1):     # e * num past int64: Python's integers
+        return np.array([round(Fraction(int(x) * num, den)) for x in e], dtype=np.int64)
+    q, r = np.divmod(e * num, den)
+    up = (2 * r > den) | ((2 * r == den) & (q % 2 == 1))
+    return q + up
+
+
 def write_vcd(path: Path, cap: Capture, **meta) -> Path:
     if _rust.on("write"):                       # WIRESKEIN_RUST=write (wireskein._rust)
         return _rust.write(path, cap, meta, "vcd")
@@ -86,8 +99,7 @@ def write_vcd(path: Path, cap: Capture, **meta) -> Path:
     for vid, c in logic:
         e = c.edges
         lv = c.initial ^ ((np.arange(len(e)) + 1) & 1)
-        times.append(np.round(e.astype(object) * per_tick).astype(np.int64) if per_tick.denominator != 1
-                     else e * int(per_tick))
+        times.append(_ticks_to_units(np.asarray(e, np.int64), per_tick))
         texts.append(np.array([f"{int(x)}{vid}" for x in lv], dtype=object))
     for vid, a, vals, _ in analog:
         t_ticks = float(a.t0_ticks) + np.arange(len(vals)) * float(Fraction(tick) / a.rate_hz)

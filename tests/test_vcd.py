@@ -121,3 +121,16 @@ def test_the_capture_id_survives_conversions(tmp_path):
     import zipfile
     with zipfile.ZipFile(tmp_path / "b.sr") as z:
         assert "wireskein/sr-extra.json" in z.namelist() and "wireskein.json" not in z.namelist()
+
+
+def test_a_rate_whose_tick_is_no_whole_number_of_units(tmp_path):
+    # 60 MHz: a tick is 16.67 ns, 50 / 3 of the timescale's ns. Each change is rounded to the unit (half to even),
+    # and read back to its tick exactly through the tick_hz kept in the $comment
+    bits = np.array([(k // 7) & 1 for k in range(600)], np.uint8)
+    p = tmp_path / "a.wireskein"
+    fileformat.write(p, Fraction(60_000_000), [fileformat.Channel("PA8", fileformat.pack(bits.tobytes()), 600)])
+    r = cli("convert", p, tmp_path / "a.vcd")
+    assert r.returncode == 0, r.stderr
+    back, orig = load(tmp_path / "a.vcd"), fileio.load(p)
+    assert back.n_samples == orig.n_samples
+    assert np.array_equal(back.channel("PA8").edges, orig.channel("PA8").edges)
