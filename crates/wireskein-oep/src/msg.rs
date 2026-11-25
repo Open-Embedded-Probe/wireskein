@@ -40,6 +40,12 @@ pub enum Error {
     Value(String),
     Runtime(String),
     Io(String),
+    /// a length-prefixed link lost its frame boundaries (transports §5: the host resyncs)
+    Framing(String),
+    /// a COBS frame that did not decode (a bad CRC; transports §4)
+    Broken(String),
+    /// the link could not be set right again (ConnectionError)
+    Connection(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -89,7 +95,10 @@ impl fmt::Display for Error {
             | Error::NotFound(s)
             | Error::Value(s)
             | Error::Runtime(s)
-            | Error::Io(s) => f.write_str(s),
+            | Error::Io(s)
+            | Error::Framing(s)
+            | Error::Broken(s)
+            | Error::Connection(s) => f.write_str(s),
         }
     }
 }

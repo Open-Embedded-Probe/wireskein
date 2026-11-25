@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Experimental, `WIRESKEIN_RUST=capture`: the Rust OEP client (`crates/wireskein-oep`) also takes analog lines and a capture group (analog alone or with logic, one-shot or streamed; a logic or analog trigger as the group's trigger source), a serial port at its boot speed (`fast` off), the session a killed run left (ended first, as oep-client-python's kept session), and lost frame boundaries (resynced). `wireskein-rs capture` takes `--analog`, `--analog-rate`, `--analog-samples` and `--trigger NAME:KIND:VOLTS`. A serial port raised to a faster speed, HID, CDC, DNS-SD, brokers and line labels stay oep-client-python's. Unset: as before.
+- (JA) 試し、`WIRESKEIN_RUST=capture`: Rust の OEP クライアント（`crates/wireskein-oep`）で、アナログの線と capture group（アナログだけ・logic と一緒、one-shot・stream、logic かアナログのトリガを group のトリガに）、起動の速さのシリアルポート（`fast` なし）、強制終了した実行が残した session（oep-client-python の kept session と同じく先に終わらせる）、フレームの境の喪失（立て直す）も扱う。`wireskein-rs capture` は `--analog`、`--analog-rate`、`--analog-samples`、`--trigger NAME:KIND:VOLTS` を受け付ける。速さを上げたシリアルポート、HID、CDC、DNS-SD、ブローカー、線のラベルは oep-client-python のまま。未設定なら今までどおり。
 
 ## 0.0.38
 - (EN) Fixed: `wireskein convert` to a VCD stopped with a TypeError (numpy's round on Fractions) when a tick is no whole number of the timescale's units (60 MHz: 50/3 ns). Each change is rounded to the unit in integers, half to even as before.

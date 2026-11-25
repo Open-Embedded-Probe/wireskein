@@ -4,9 +4,12 @@
 //! capture format 0 and format 1's reductions) and put it together: the parts with their losses, times and the probe's
 //! facts, as oep-client-python's `acquire` gives them, and as WireSkein's capture (`to_capture`, wireskein-io).
 //!
-//! Not here (oep-client-python's, which wireskein's Python source keeps using for them): analog channels and the
-//! capture group, serial ports (COBS, port_speed), HID and CDC routes, DNS-SD, brokers, a line named by its label
-//! (S.N), the kept session of a run before.
+//! Analog lines go to oep.fixture.analog, alone or with logic in a capture group (started together, or on the group's
+//! trigger source); the session a run before left open is ended first (`kept`); a length-prefixed link that loses its
+//! frame boundaries resyncs (transports §5).
+//!
+//! Not here (oep-client-python's, which wireskein's Python source keeps using for them): HID and CDC routes, DNS-SD,
+//! brokers, a line named by its label (S.N), formats 2-4.
 //!
 //! ```no_run
 //! let req = wireskein_oep::Request::new(vec![("A".into(), "GPIO30".into())], 20_000_000, 100_000);
@@ -18,13 +21,16 @@ pub mod acquire;
 pub mod assemble;
 pub mod blocks;
 pub mod capture;
+pub mod cobs;
 pub mod host;
+pub mod kept;
 pub mod link;
 pub mod msg;
+pub mod ratio;
 pub mod transport;
 
 pub use acquire::{Acquired, Address, Mode, Request, capture_at, parse_address};
-pub use assemble::{Chan, Data, Loss, Part};
+pub use assemble::{AnalogChan, Chan, Data, Loss, Part};
 pub use msg::{Error, Result};
 
 use serde_json::{Map, Value, json};
@@ -34,10 +40,19 @@ pub fn fmt_g(x: f64) -> String {
     wireskein_io::pyfmt::g(x, 6)
 }
 
-/// A part's length: the probe's (its samples) when a line runs at a coarser step, else its channels' latest end.
-fn part_ticks(p: &Part) -> i64 {
-    let end = p.channels.iter().map(|c| c.end() as i64).max().unwrap_or(0);
-    if p.channels.iter().any(|c| c.step() > 1) {
+/// A part's length: the probe's (its samples) when a line runs at a coarser step, else its channels' latest end
+/// (an analog line's at `tick`).
+fn part_ticks(p: &Part, tick: ratio::Ratio) -> i64 {
+    let end = p
+        .channels
+        .iter()
+        .map(|c| match c {
+            Chan::Analog(a) => a.end_at(tick),
+            c => c.end() as i64,
+        })
+        .max()
+        .unwrap_or(0);
+    if p.channels.iter().any(|c| !c.is_analog() && c.step() > 1) {
         if let Some(s) = p.samples {
             return s as i64;
         }
@@ -60,16 +75,46 @@ pub fn to_capture(a: &Acquired, extra_meta: &Map<String, Value>) -> Result<wires
         meta.insert(k.clone(), v.clone());
     }
     let mut parts = vec![];
+    let tick = ratio::Ratio::from(a.tick_hz);
     for (k, p) in a.all_parts().iter().enumerate() {
         let mut lines = vec![];
         let mut events = vec![];
+        let mut analog = vec![];
         for c in &p.channels {
             let acq: Map<String, Value> = match c {
                 Chan::Bits { pin, .. } | Chan::Reduced { pin, .. } => {
                     [("pin".to_string(), json!(pin))].into_iter().collect()
                 }
+                Chan::Analog(x) => x.acquisition.clone(),
             };
             match c {
+                Chan::Analog(x) => {
+                    let w = (x.width / 8).max(1) as usize;
+                    let values = x
+                        .data
+                        .chunks_exact(w)
+                        .map(|b| {
+                            let mut v = 0u64;
+                            for (j, byte) in b.iter().enumerate() {
+                                v |= (*byte as u64) << (8 * j);
+                            }
+                            v as f64
+                        })
+                        .collect();
+                    analog.push(wireskein_io::Analog {
+                        name: x.name.clone(),
+                        encoding: "analog".into(),
+                        rate_hz: x.rate.pair(),
+                        t0_ticks: x.t0.pair(),
+                        width: x.width as i64,
+                        value_bits: x.value_bits.map(|b| b as i64),
+                        zero: x.zero.map(|z| z as f64),
+                        scale_nv: x.scale_nv.map(|s| s as f64),
+                        unit: "V".into(),
+                        values,
+                        acquisition: acq,
+                    });
+                }
                 Chan::Bits {
                     name, data, n, step, ..
                 } => {
@@ -146,12 +191,12 @@ pub fn to_capture(a: &Acquired, extra_meta: &Map<String, Value>) -> Result<wires
         parts.push(wireskein_io::Part {
             part: k,
             parts: None,
-            ticks: part_ticks(p),
+            ticks: part_ticks(p, tick),
             tick0: p.tick0,
             meta: p.meta.clone(),
             lines,
             events,
-            analog: vec![],
+            analog,
             skipped: vec![],
         });
     }
@@ -208,6 +253,13 @@ pub fn to_doc(a: &Acquired) -> (Value, Vec<Vec<u8>>) {
                     datas.push(data.clone());
                     json!({"kind": "reduced", "reduction": blocks::carriage_name(*kind), "name": name, "n": n,
                            "step": step, "pin": pin, "start_level": start_level, "data": datas.len() - 1})
+                }
+                Chan::Analog(x) => {
+                    datas.push(x.data.clone());
+                    json!({"kind": "analog", "name": x.name, "n": x.n, "rate": [x.rate.num as i64, x.rate.den as i64],
+                           "t0": [x.t0.num as i64, x.t0.den as i64], "width": x.width, "value_bits": x.value_bits,
+                           "zero": x.zero, "scale_nv": x.scale_nv, "acquisition": x.acquisition,
+                           "data": datas.len() - 1})
                 }
             })
             .collect();

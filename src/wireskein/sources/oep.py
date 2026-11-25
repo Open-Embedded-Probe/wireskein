@@ -8,8 +8,9 @@ intervals (`any_high`, `any_low`, `change_latch`), `Analog` as raw values (`anal
 reduced line's last interval may run past the part's end by less than an interval).
 <address> is what the client opens (an OEP address such as oep://30eda0ea068b?via=usb, or a short form: a serial
 port, tcp://HOST:PORT); the rates a UART link is raised to are this source's own option (Request.fast).
-With WIRESKEIN_RUST=capture (wireskein._rust) a logic capture from a probe on USB or TCP is wireskein-oep's (the Rust
-client) in place of oep-client-python's acquire; the result is the same kind.
+With WIRESKEIN_RUST=capture (wireskein._rust) a capture from a probe on USB, TCP or a serial port at its boot speed
+(logic and analog lines) is wireskein-oep's (the Rust client) in place of oep-client-python's acquire; the result is
+the same kind.
 """
 
 from __future__ import annotations
@@ -62,6 +63,10 @@ def _from_rust(doc: dict, datas: list) -> Result:
     tick = Fraction(*doc["tick_hz"])
 
     def chan(c):
+        if c["kind"] == "analog":
+            return fileformat.AnalogChannel(c["name"], datas[c["data"]], c["n"], Fraction(*c["rate"]),
+                                            Fraction(*c["t0"]), "analog", c["width"], c["value_bits"], c["zero"],
+                                            c["scale_nv"], "V", dict(c["acquisition"]))
         acq = {"pin": c["pin"]}
         if c["kind"] == "bits":
             bits = fileformat.OnDisk(c["path"]) if c.get("path") else datas[c["data"]]
@@ -70,7 +75,7 @@ def _from_rust(doc: dict, datas: list) -> Result:
                                          c["start_level"], acq)
 
     def ticks(p):                  # as _ticks: the probe's length when a line runs at a coarser step
-        if not any(c["step"] > 1 for c in p["channels"]):
+        if not any(c["kind"] != "analog" and c["step"] > 1 for c in p["channels"]):
             return None
         if p.get("samples") is not None:
             return int(p["samples"])

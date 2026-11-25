@@ -61,11 +61,22 @@ pub struct Transport {
     pub stats: Arc<Stats>,
     /// the IN transfers queued (USB)
     pub depth: usize,
+    /// a serial port: its path, and how its line speed is set (the host side of port_speed)
+    pub port_path: Option<String>,
+    set_baud: Option<Box<dyn FnMut(u32) -> Result<()> + Send>>,
 }
 
 impl Transport {
     pub fn write(&mut self, data: &[u8]) -> Result<()> {
         self.out.send(data)
+    }
+
+    /// A serial port's host side to `baud` (what was read so far is the caller's to drop).
+    pub fn set_baud(&mut self, baud: u32) -> Result<()> {
+        match self.set_baud.as_mut() {
+            Some(f) => f(baud),
+            None => Err(Error::Value("not a serial port".into())),
+        }
     }
 }
 
@@ -136,6 +147,8 @@ pub fn open_tcp(host: &str, port: u16) -> Result<Transport> {
         keeps_boundaries: true,
         stats,
         depth: 0,
+        port_path: None,
+        set_baud: None,
     })
 }
 
@@ -242,6 +255,8 @@ pub fn open_usb(info: &nusb::DeviceInfo, urb: usize, depth: usize) -> Result<Tra
         keeps_boundaries: false,
         stats,
         depth,
+        port_path: None,
+        set_baud: None,
     })
 }
 
@@ -341,6 +356,152 @@ impl Transport {
             keeps_boundaries: false,
             stats: Arc::new(Stats::default()),
             depth: 0,
+            port_path: None,
+            set_baud: None,
         }
     }
+
+    /// A stream whose writes go to `answer` and whose reads are what it gives back (a scripted probe for tests);
+    /// `keeps_boundaries` as TCP's.
+    pub fn scripted<F: FnMut(&[u8]) -> Vec<Vec<u8>> + Send + 'static>(answer: F, keeps_boundaries: bool) -> Transport {
+        let (tx, rx) = sync_channel::<Vec<u8>>(BACKLOG);
+        Transport {
+            rx,
+            out: Box::new(ScriptSink { answer, tx }),
+            stop: Arc::new(AtomicBool::new(false)),
+            thread: None,
+            shutdown: None,
+            reader: "test",
+            keeps_boundaries,
+            stats: Arc::new(Stats::default()),
+            depth: 0,
+            port_path: None,
+            set_baud: None,
+        }
+    }
+}
+
+/// A stand-in probe for tests: each write handed to `answer`, whose chunks come back as what was read.
+struct ScriptSink<F: FnMut(&[u8]) -> Vec<Vec<u8>> + Send> {
+    answer: F,
+    tx: SyncSender<Vec<u8>>,
+}
+
+impl<F: FnMut(&[u8]) -> Vec<Vec<u8>> + Send> Sink for ScriptSink<F> {
+    fn send(&mut self, data: &[u8]) -> Result<()> {
+        for c in (self.answer)(data) {
+            self.tx
+                .send(c)
+                .map_err(|_| Error::Io("the scripted probe's reader went".into()))?;
+        }
+        Ok(())
+    }
+}
+
+// ---------------- a serial port (transports §4) ----------------
+
+/// The UART bridge's boot speed (transports §4: 115200 8N1).
+pub const BASE_BAUD: u32 = 115_200;
+
+#[cfg(unix)]
+fn termios_at(f: &std::fs::File, baud: u32) -> Result<()> {
+    use rustix::termios::{self, ControlModes, OptionalActions, SpecialCodeIndex};
+    let mut t = termios::tcgetattr(f).map_err(|e| Error::Io(format!("serial port: {e}")))?;
+    t.make_raw();
+    t.control_modes |= ControlModes::CLOCAL | ControlModes::CREAD;
+    t.control_modes -= ControlModes::CRTSCTS | ControlModes::CSTOPB | ControlModes::PARENB;
+    t.special_codes[SpecialCodeIndex::VMIN] = 0;
+    t.special_codes[SpecialCodeIndex::VTIME] = 1; // a read returns after 100 ms with nothing
+    t.set_speed(baud)
+        .map_err(|e| Error::Value(format!("serial port: {baud} baud: {e}")))?;
+    termios::tcsetattr(f, OptionalActions::Now, &t)
+        .map_err(|e| Error::Value(format!("serial port: {baud} baud: {e}")))?;
+    let _ = termios::tcflush(f, termios::QueueSelector::IFlush);
+    Ok(())
+}
+
+struct FileSink(std::fs::File);
+
+impl Sink for FileSink {
+    fn send(&mut self, data: &[u8]) -> Result<()> {
+        self.0
+            .write_all(data)
+            .map_err(|e| Error::Io(format!("serial port write: {e}")))
+    }
+}
+
+/// A serial port opened exclusively (flock and TIOCEXCL: a second open fails), 8N1, no flow control, at `baud`,
+/// read on a thread of its own (oep-client-python's `open_serial`).
+#[cfg(unix)]
+pub fn open_serial(path: &str, baud: u32) -> Result<Transport> {
+    use std::os::unix::fs::OpenOptionsExt;
+    let f = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .custom_flags(rustix::fs::OFlags::NOCTTY.bits() as i32 | rustix::fs::OFlags::NONBLOCK.bits() as i32)
+        .open(path)
+        .map_err(|e| match e.kind() {
+            std::io::ErrorKind::NotFound => Error::NotFound(format!("{path}: {e}")),
+            _ => Error::Io(format!("{path}: {e}")),
+        })?;
+    if rustix::fs::flock(&f, rustix::fs::FlockOperation::NonBlockingLockExclusive).is_err() {
+        return Err(Error::Io(format!(
+            "{path}: the port is in use (another process holds it)"
+        )));
+    }
+    let _ = rustix::termios::ioctl_tiocexcl(&f);
+    // blocking again: reads wait VTIME (100 ms) at the most
+    let flags = rustix::fs::fcntl_getfl(&f).map_err(|e| Error::Io(format!("{path}: {e}")))?;
+    rustix::fs::fcntl_setfl(&f, flags - rustix::fs::OFlags::NONBLOCK).map_err(|e| Error::Io(format!("{path}: {e}")))?;
+    termios_at(&f, baud)?;
+    let mut r = f.try_clone()?;
+    let w = f.try_clone()?;
+    let (tx, rx) = sync_channel::<Vec<u8>>(BACKLOG);
+    let stop = Arc::new(AtomicBool::new(false));
+    let stats = Arc::new(Stats::default());
+    let (st, stats2) = (stop.clone(), stats.clone());
+    let thread = std::thread::Builder::new()
+        .name("oep-serial-in".into())
+        .spawn(move || {
+            let mut buf = vec![0u8; 16 * 1024];
+            while !st.load(Ordering::SeqCst) {
+                match r.read(&mut buf) {
+                    Ok(0) => continue,
+                    Ok(n) => {
+                        stats2.bytes.fetch_add(n as u64, Ordering::Relaxed);
+                        if tx.send(buf[..n].to_vec()).is_err() {
+                            break;
+                        }
+                    }
+                    Err(e)
+                        if e.kind() == std::io::ErrorKind::Interrupted
+                            || e.kind() == std::io::ErrorKind::WouldBlock =>
+                    {
+                        continue;
+                    }
+                    Err(_) => break,
+                }
+            }
+        })?;
+    let setter = f;
+    Ok(Transport {
+        rx,
+        out: Box::new(FileSink(w)),
+        stop,
+        thread: Some(thread),
+        shutdown: None,
+        reader: "rust-serial",
+        keeps_boundaries: false,
+        stats,
+        depth: 0,
+        port_path: Some(path.to_string()),
+        set_baud: Some(Box::new(move |b| termios_at(&setter, b))),
+    })
+}
+
+#[cfg(not(unix))]
+pub fn open_serial(path: &str, _baud: u32) -> Result<Transport> {
+    Err(Error::Value(format!(
+        "{path}: serial ports are oep-client-python's on this system"
+    )))
 }

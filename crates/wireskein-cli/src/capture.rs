@@ -1,7 +1,8 @@
-//! `capture`: logic channels from an OEP probe into a WireSkein file (Python's `wireskein capture --source oep:...`,
-//! `cli.capture_cmd`), through wireskein-oep. The probe opened by an OEP address on USB (oep://UNIT_ID[?via=usb]) or
-//! TCP (oep://UNIT_ID?via=tcp:HOST:PORT, tcp://HOST:PORT); what the Rust client does not do (analog channels, sigrok,
-//! a serial port, HID, a line label) is refused with a pointer to `wireskein capture`.
+//! `capture`: logic and analog channels from an OEP probe into a WireSkein file (Python's `wireskein capture --source
+//! oep:...`, `cli.capture_cmd`), through wireskein-oep. The probe opened by an OEP address on USB
+//! (oep://UNIT_ID[?via=usb]), TCP (oep://UNIT_ID?via=tcp:HOST:PORT, tcp://HOST:PORT) or a serial port at its boot speed
+//! (/dev/..., oep://UNIT_ID?via=tty:PATH, with --fast 0); what the Rust client does not do (a serial port's link
+//! raised by port_speed, sigrok, HID, a line label) is refused with a pointer to `wireskein capture`.
 
 use crate::{Args, Takes, usage_error};
 use serde_json::{Map, Value, json};
@@ -168,10 +169,18 @@ pub fn capture(args: &[String]) -> ExitCode {
             "{source}: the Rust capture takes an OEP probe (oep:<address>); other sources are `wireskein capture`'s"
         ));
     };
-    if a.get("--analog").is_some() {
-        return fail(
-            "--analog: analog channels are `wireskein capture`'s (oep-client-python), not the Rust client's yet",
-        );
+    let serial = matches!(
+        wireskein_oep::parse_address(address),
+        Ok(Some(wireskein_oep::Address::Serial { .. }))
+    );
+    let boot_speed = a
+        .get("--fast")
+        .is_some_and(|f| ["", "0", "no", "off", "false"].contains(&f.to_ascii_lowercase().as_str()));
+    if serial && !boot_speed {
+        return fail(&format!(
+            "{source}: a serial port's link raised by port_speed is `wireskein capture`'s (oep-client-python); \
+             --fast 0 keeps the boot speed here"
+        ));
     }
     match run(&a, source, address, Path::new(output)) {
         Ok(code) => code,
@@ -181,14 +190,23 @@ pub fn capture(args: &[String]) -> ExitCode {
 
 fn run(a: &Args, source: &str, address: &str, out: &Path) -> Result<ExitCode, String> {
     let (chans, resolution) = parse_channels(a.get("--channels").unwrap_or(""))?;
+    let logic = !chans.is_empty();
     let mode = a.get("--mode").unwrap_or("oneshot");
     let stream = mode == "stream";
-    let (rate, samples) = (a.get("--rate"), a.get("--samples"));
+    // analog only: its own rate / samples do
+    let rate = a.get("--rate").or(if logic { None } else { a.get("--analog-rate") });
+    let samples = a
+        .get("--samples")
+        .or(if logic { None } else { a.get("--analog-samples") });
     if stream && (rate.is_none() || a.get("--duration").is_none()) {
         return Err("--mode stream: give --rate and --duration".into());
     }
     if !stream && (rate.is_none() || samples.is_none()) {
-        return Err("give --rate and --samples".into());
+        return Err(if logic {
+            "give --rate and --samples".into()
+        } else {
+            "give --analog-rate (or --rate) and --analog-samples (or --samples)".into()
+        });
     }
     let mut req = Request::new(
         chans,
@@ -205,15 +223,36 @@ fn run(a: &Args, source: &str, address: &str, out: &Path) -> Result<ExitCode, St
                 .map_err(|_| format!("argument --segments: invalid int value: '{s}'"))
         })
         .transpose()?;
+    if let Some(text) = a.get("--analog") {
+        let (list, _) = parse_channels(text)?;
+        for (name, id) in list {
+            let (id, fe) = id.split_once('@').unwrap_or((&id, ""));
+            let fe = if fe.is_empty() {
+                None
+            } else {
+                Some(
+                    fe.parse::<u8>()
+                        .map_err(|_| format!("--analog {text}: @FRONTEND is a number"))?,
+                )
+            };
+            req.analog.push((name.clone(), id.to_string(), fe));
+        }
+    }
+    req.analog_rate_hz = a.get("--analog-rate").map(parse_count).transpose()?;
+    req.analog_samples = a.get("--analog-samples").map(parse_count).transpose()?;
     if let Some(t) = a.get("--trigger") {
         let parts: Vec<&str> = t.split(':').collect();
         if parts.len() == 3 {
-            return Err(format!(
-                "trigger {t}: an analog channel's voltage is `wireskein capture`'s"
-            ));
+            let v = parts[2].trim_end_matches(['V', 'v']).parse::<f64>();
+            let Ok(v) = v else {
+                return Err(format!("trigger {t}: NAME:KIND:VOLTS (VDD:fall:2.9)"));
+            };
+            req.trigger = Some((parts[0].to_string(), parts[1].to_string()));
+            req.trigger_volts = Some(v);
+        } else {
+            let (name, kind) = t.rsplit_once(':').unwrap_or(("", t));
+            req.trigger = Some((name.to_string(), kind.to_string()));
         }
-        let (name, kind) = t.rsplit_once(':').unwrap_or(("", t));
-        req.trigger = Some((name.to_string(), kind.to_string()));
     }
     req.pretrigger = a.get("--pretrigger").map(parse_count).transpose()?;
     req.arm_now = a.get("--arm") == Some("now");
@@ -276,11 +315,20 @@ fn say(out: &Path, req: &Request, got: &wireskein_oep::Acquired, wsk: bool) -> E
             .map(|p| p.get("channels").list().to_vec())
             .unwrap_or_default();
         let coarse = chans.iter().filter(|c| c.get("encoding").s() == Some("events")).count();
+        let n_analog = chans
+            .iter()
+            .filter(|c| c.get("encoding").s().is_some_and(|e| e.starts_with("analog")))
+            .count();
         let what = format!(
-            "{} logic{} channels",
-            chans.len(),
+            "{} logic{}{} channels",
+            chans.len() - n_analog,
             if coarse > 0 {
                 format!(" ({coarse} as changes at a coarser step)")
+            } else {
+                String::new()
+            },
+            if n_analog > 0 {
+                format!(" + {n_analog} analog")
             } else {
                 String::new()
             }
@@ -307,6 +355,15 @@ fn say(out: &Path, req: &Request, got: &wireskein_oep::Acquired, wsk: bool) -> E
         );
         if let Some(p) = parts.first() {
             for c in &p.channels {
+                if let wireskein_oep::Chan::Analog(x) = c {
+                    if let Some(want) = req.analog_samples.filter(|&w| x.n < w) {
+                        println!(
+                            "note: {}: {} samples of the {want} asked (the probe's limit)",
+                            x.name, x.n
+                        );
+                    }
+                    continue;
+                }
                 let end = c.end();
                 if c.step() == 1 && req.samples > 0 && end < req.samples {
                     println!(

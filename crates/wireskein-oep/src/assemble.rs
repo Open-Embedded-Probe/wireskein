@@ -7,6 +7,7 @@
 use crate::blocks::{self, BitBuf, Blocks, Column};
 use crate::capture::SegmentInfo;
 use crate::msg::{Error, Result};
+use crate::ratio::Ratio;
 use serde_json::{Map, Value, json};
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -48,24 +49,56 @@ pub enum Chan {
         start_level: u8,
         pin: u16,
     },
+    /// An analog line's raw values, at its own rate from tick `t0` (acquire.Analog).
+    Analog(Box<AnalogChan>),
+}
+
+/// An analog line's raw values (`width` bits little endian; volts = (raw - zero) x scale_nv x 1e-9): sample k at tick
+/// t0 + k x tick_hz / rate.
+#[derive(Debug, Clone)]
+pub struct AnalogChan {
+    pub name: String,
+    pub data: Vec<u8>,
+    pub n: u64,
+    pub rate: Ratio,
+    pub t0: Ratio,
+    pub width: u32,
+    pub value_bits: Option<u32>,
+    pub zero: Option<i64>,
+    pub scale_nv: Option<i64>,
+    /// pin, frontend, reference, vrefint, start_uncertainty_ns, trigger_index (acquire's `_analog_chans`)
+    pub acquisition: Map<String, Value>,
+}
+
+impl AnalogChan {
+    /// The tick just after its last value: ceil(t0 + n x tick / rate).
+    pub fn end_at(&self, tick: Ratio) -> i64 {
+        (self.t0 + Ratio::int(self.n as i128) * tick / self.rate).ceil() as i64
+    }
 }
 
 impl Chan {
     pub fn name(&self) -> &str {
         match self {
             Chan::Bits { name, .. } | Chan::Reduced { name, .. } => name,
+            Chan::Analog(a) => &a.name,
         }
     }
-    /// The tick just after it (its last sample's or interval's).
+    /// The tick just after it (its last sample's or interval's); an analog line's is `end_at`'s.
     pub fn end(&self) -> u64 {
         match self {
             Chan::Bits { n, step, .. } | Chan::Reduced { n, step, .. } => n * step,
+            Chan::Analog(_) => 0,
         }
     }
     pub fn step(&self) -> u64 {
         match self {
             Chan::Bits { step, .. } | Chan::Reduced { step, .. } => *step,
+            Chan::Analog(_) => 1,
         }
+    }
+    pub fn is_analog(&self) -> bool {
+        matches!(self, Chan::Analog(_))
     }
 }
 

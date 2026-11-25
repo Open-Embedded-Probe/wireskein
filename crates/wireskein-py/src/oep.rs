@@ -1,7 +1,9 @@
 //! The OEP capture for Python (wireskein-oep): `oep_capture` runs one capture as oep-client-python's
 //! `acquire.capture_at` does, `oep_assemble` puts a stream's pushes together (for a test that gives the frames).
 
-use pyo3::exceptions::{PyFileNotFoundError, PyOSError, PyRuntimeError, PyTimeoutError, PyValueError};
+use pyo3::exceptions::{
+    PyConnectionError, PyFileNotFoundError, PyOSError, PyRuntimeError, PyTimeoutError, PyValueError,
+};
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use serde_json::Value;
@@ -16,6 +18,7 @@ fn py_err(e: Error) -> PyErr {
         Error::NotFound(m) => PyFileNotFoundError::new_err(m),
         Error::Timeout(m) => PyTimeoutError::new_err(m),
         Error::Io(m) => PyOSError::new_err(m),
+        Error::Framing(m) | Error::Connection(m) => PyConnectionError::new_err(m),
         e => PyRuntimeError::new_err(e.to_string()),
     }
 }
@@ -50,6 +53,23 @@ fn request(v: &Value) -> PyResult<Request> {
         .filter(|t| !t.is_null())
         .map(|t| pair(t).ok_or_else(|| bad("trigger")))
         .transpose()?;
+    // an analog channel's trigger: (name, kind, volts)
+    r.trigger_volts = v
+        .get("trigger")
+        .and_then(|t| t.as_array())
+        .and_then(|a| a.get(2))
+        .and_then(|x| x.as_f64());
+    if let Some(list) = v.get("analog").and_then(|x| x.as_array()) {
+        for a in list {
+            let a = a.as_array().ok_or_else(|| bad("analog: [name, id, frontend]"))?;
+            let name = a.first().and_then(|x| x.as_str()).ok_or_else(|| bad("analog: name"))?;
+            let id = a.get(1).and_then(|x| x.as_str()).ok_or_else(|| bad("analog: id"))?;
+            let fe = a.get(2).and_then(|x| x.as_u64()).map(|x| x as u8);
+            r.analog.push((name.to_string(), id.to_string(), fe));
+        }
+    }
+    r.analog_rate_hz = u("analog_rate_hz");
+    r.analog_samples = u("analog_samples");
     r.pretrigger = u("pretrigger");
     r.arm_now = s("arm") == Some("now");
     r.timeout_s = f("timeout_s").unwrap_or(10.0);

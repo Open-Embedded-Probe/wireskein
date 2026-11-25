@@ -48,10 +48,11 @@ The parts:
     attach   wireskein._fileformat.attach (`wireskein attach`, an alignment saved, ...): the file stored as
              attach/NAME by wireskein-io (the data encoded by Python as before)
     capture  the oep source (wireskein.sources.oep, so `wireskein capture --source oep:...`): the probe opened, its
-             lease taken and the logic capture run and put together by wireskein-oep (USB vendor bulk with many IN
-             transfers queued, or TCP) in place of oep-client-python's acquire; analog channels, a serial port, HID,
-             CDC, DNS-SD, a broker and a line named by its label stay oep-client-python's (an OEP address without a
-             route whose probe is not on USB too)
+             lease taken (the session a killed run left ended first) and the capture run and put together by
+             wireskein-oep (USB vendor bulk with many IN transfers queued, TCP, or a serial port at its boot speed;
+             logic and analog lines, a capture group) in place of oep-client-python's acquire; a serial port whose
+             link is raised (Request.fast other than []), HID, CDC, DNS-SD, a broker and a line named by its label
+             stay oep-client-python's (an OEP address without a route whose probe is not on USB too)
 
 A part switched on whose Rust cannot do what was asked falls back to Python without a word (the result is the same
 kind); a part switched on without wireskein_core installed is an error."""
@@ -632,10 +633,13 @@ def _broker(unit: str) -> bool:
 
 def oep_route(target: str) -> str | None:
     """How the Rust OEP client reaches `target`: "usb" (an OEP address by its unit_id as the USB serial), "tcp" (a
-    route over TCP), or None when it does not (a serial port, HID, CDC, DNS-SD, a broker: oep-client-python's)."""
+    route over TCP), "serial" (a serial port by its path, /dev/... or ?via=tty:PATH), or None when it does not (HID,
+    CDC, DNS-SD, a broker: oep-client-python's)."""
     t = target.strip()
     if t.startswith("tcp://"):
         return "tcp" if ":" in t[len("tcp://"):].rstrip("/") else None
+    if t.startswith("/dev/") and os.name == "posix":
+        return "serial"
     if not t.lower().startswith("oep://"):
         return None
     place, _, query = t[len("oep://"):].partition("?")
@@ -646,19 +650,23 @@ def oep_route(target: str) -> str | None:
         return "usb"
     if query.startswith("via=tcp:") and query.count(":") >= 2:
         return "tcp"
+    if query.startswith("via=tty:") and len(query) > len("via=tty:") and os.name == "posix":
+        return "serial"
     return None
 
 
 def captures(target: str, req) -> bool:
-    """Whether the oep source's capture is Rust's: switched on, and nothing asked the Rust client does not do (analog
-    channels, an analog trigger, a line named by its label, a probe it does not open)."""
+    """Whether the oep source's capture is Rust's: switched on, and nothing asked the Rust client does not do (a line
+    named by its label, a probe it does not open)."""
     if not on("capture"):
         return False
-    if req.analog or (req.trigger is not None and len(req.trigger) != 2):
+    if any("." in cid or "@" in cid for _, cid in req.channels) or \
+            any("." in cid or "@" in cid for _, cid, *_ in req.analog):
         return False
-    if any("." in cid or "@" in cid for _, cid in req.channels):
-        return False
-    return oep_route(target) is not None
+    route = oep_route(target)
+    if route == "serial" and req.fast != []:
+        return False            # port_speed (the link raised for reading back, its record) is oep-client-python's
+    return route is not None
 
 
 def oep_capture(target: str, req) -> tuple[dict, list]:
@@ -667,6 +675,8 @@ def oep_capture(target: str, req) -> tuple[dict, list]:
            "trigger": list(req.trigger) if req.trigger else None, "pretrigger": req.pretrigger, "arm": req.arm,
            "timeout_s": float(req.timeout_s), "resolution": {k: [m, int(d)] for k, (m, d) in req.resolution.items()},
            "mode": req.mode, "duration_s": req.duration_s, "segments": req.segments, "on_loss": req.on_loss,
-           "spool_dir": req.spool_dir, "glitch_filter_ns": req.glitch_filter_ns}
+           "spool_dir": req.spool_dir, "glitch_filter_ns": req.glitch_filter_ns,
+           "analog": [[n, cid, fe] for n, cid, fe in req.analog], "analog_rate_hz": req.analog_rate_hz,
+           "analog_samples": req.analog_samples}
     text, datas = core().oep_capture(target, json.dumps(doc), "wireskein capture")
     return json.loads(text), datas

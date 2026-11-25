@@ -32,6 +32,12 @@ def clean(monkeypatch):
     return monkeypatch
 
 
+@pytest.fixture(autouse=True)
+def own_sessions(monkeypatch, tmp_path):
+    """Each test's kept sessions (oep-client-python's and the Rust client's) in its own directory."""
+    monkeypatch.setenv("OEP_SESSION_DIR", str(tmp_path / "sessions"))
+
+
 # ---------------- the switch ----------------
 
 def test_unset_never_imports_the_core(clean):
@@ -53,12 +59,17 @@ def test_what_the_rust_client_takes(clean):
     assert _rust.captures("oep://30eda0ea068b", logic)
     assert _rust.captures("oep://30eda0ea068b?via=usb", logic) and _rust.captures("tcp://127.0.0.1:7450", logic)
     assert _rust.captures("oep://30eda0ea068b?via=tcp:10.0.0.2:7450", logic)
+    serial = sources.Request([("A", "GPIO30")], 1_000_000, 100, fast=[])
+    assert _rust.captures("/dev/ttyACM0", serial) and _rust.captures("oep://30eda0ea068b?via=tty:/dev/ttyACM0", serial)
     for target in ("/dev/ttyACM0", "oep://30eda0ea068b?via=hid", "oep://30eda0ea068b?via=cdc",
                    "oep://30eda0ea068b?via=net", "oep://30eda0ea068b?via=tty:/dev/ttyACM0", "usb", "tcp://host"):
         assert not _rust.captures(target, logic), target
-    analog = sources.Request([("A", "GPIO30")], 1_000_000, 100, analog=[("V", "GPIO17", None)])
+    analog = sources.Request([("A", "GPIO30")], 1_000_000, 100, analog=[("V", "GPIO17", None)],
+                             trigger=("V", "rise", 1.0))
+    assert _rust.captures("oep://30eda0ea068b", analog)
     label = sources.Request([("A", "x035.swdio")], 1_000_000, 100)
-    assert not _rust.captures("oep://30eda0ea068b", analog) and not _rust.captures("oep://30eda0ea068b", label)
+    alabel = sources.Request([], 1_000_000, 100, analog=[("V", "x035.vdd", None)])
+    assert not _rust.captures("oep://30eda0ea068b", label) and not _rust.captures("oep://30eda0ea068b", alabel)
     clean.setenv("OEP_BROKER", "127.0.0.1:7460")
     assert not _rust.captures("oep://30eda0ea068b", logic)
 
@@ -432,3 +443,370 @@ def test_the_same_errors(case, bench, monkeypatch, tmp_path):
         assert str(e.value) == str(py)
     except RuntimeError:
         pass
+
+
+# ---------------- analog lines and the capture group (on the virtual bench) ----------------
+
+def _analog_content(c):
+    acq = {k: v for k, v in c.acquisition.items() if k != "vrefint_ns"}       # a time: run to run
+    assert isinstance(c.acquisition.get("vrefint_ns", 0), int)
+    return (c.name, "analog", c.n, c.rate_hz, c.t0_ticks, c.width, c.value_bits, c.zero, c.scale_nv,
+            bytes(c.data), sorted(acq.items(), key=lambda kv: kv[0]))
+
+
+ANALOG_CASES = {
+    "alone": ([], 20_000_000, 512, {"analog": [("SQ", "GPIO16", None), ("SINE", "GPIO17", 3)],
+                                     "analog_rate_hz": 48_000}),
+    "with-logic": ([("A", "GPIO10"), ("B", "GPIO11")], 20_000_000, 2000,
+                   {"analog": [("SQ", "GPIO16", None)], "analog_rate_hz": 48_000}),
+    "logic-trigger": ([("A", "GPIO10"), ("B", "GPIO11")], 20_000_000, 2000,
+                      {"trigger": ("B", "rise"), "pretrigger": 100, "analog": [("SQ", "GPIO16", None)],
+                       "analog_rate_hz": 48_000, "analog_samples": 64}),
+    "analog-trigger": ([("A", "GPIO10")], 20_000_000, 2000,
+                       {"trigger": ("SQ", "rise", 1.0), "pretrigger": 100, "analog": [("SQ", "GPIO16", None)],
+                        "analog_rate_hz": 48_000, "analog_samples": 64}),
+    "analog-only-trigger": ([], 20_000_000, 256,
+                            {"trigger": ("SQ", "fall", 1.0), "pretrigger": 10, "analog": [("SQ", "GPIO16", None)],
+                             "analog_rate_hz": 48_000}),
+}
+
+
+def _analog_file(path):
+    """The file's header (without what differs run to run) and every channel, analog ones included."""
+    head = fileformat.read_header(path)
+    parts = []
+    for k, (h, chans) in enumerate(fileformat.read_parts(path)):
+        cs = []
+        for c in chans:
+            if isinstance(c, fileformat.AnalogChannel):
+                cs.append(_analog_content(c))
+            elif isinstance(c, fileformat.ReducedChannel):
+                cs.append((c.name, c.encoding, c.n, c.step, c.start_level, bytes(c.data)))
+            else:
+                cs.append((c.name, "bits", c.n, c.step, c.phase, bytes(fileformat.unpack(c)[:c.n])))
+        p = head["parts"][k]
+        parts.append((p["ticks"], p.get("tick0"), sorted(p["meta"]), p["meta"].get("trigger_tick"), cs))
+    meta = head["meta"]
+    probe = meta["probe"]
+    return {"tick_hz": head["tick_hz"], "layout": head["layout"], "complete": head["complete"],
+            "lost": head.get("lost"), "channels": meta.get("probe_channels"),
+            "probe": sorted(set(probe) - {"clock"}), "calibration": probe.get("calibration"),
+            "trigger_caps": probe.get("trigger_caps"), "judge": probe.get("judge_latency_ns"),
+            "generation": sorted(probe.get("generation", {})), "parts": parts}
+
+
+@both
+@pytest.mark.parametrize("case", list(ANALOG_CASES))
+def test_analog_lines_from_the_virtual_bench_are_the_same(case, bench, monkeypatch, tmp_path):
+    """Analog lines alone, beside logic in a capture group started at once, and on the group's trigger source (a
+    logic line's edge, an analog line crossing a voltage): every value, its first tick, rate, conversion and what it
+    was taken with (frontend, reference, Vrefint, the start's uncertainty, the trigger's index) as Python's."""
+    chans, rate, samples, kw = ANALOG_CASES[case]
+    got = []
+    for rust in (False, True):
+        req = sources.Request(list(chans), rate, samples, **kw)
+        got.append(_analog_file(_take(monkeypatch, rust, bench(), req, tmp_path / f"{case}-{rust}.wireskein")))
+    py, rs = got
+    assert rs == py
+
+
+@both
+def test_a_refused_pretrigger_together_says_the_same(bench, monkeypatch, tmp_path):
+    """Both tracks asked first (capture §3.3 query): the analog's pretrigger, the logic's counted at the analog rate,
+    is not below its 4 samples - refused, the words as Python's."""
+    req = sources.Request([("A", "GPIO10")], 20_000_000, 2000, trigger=("A", "rise"), pretrigger=1900,
+                          analog=[("SQ", "GPIO16", None)], analog_rate_hz=48_000, analog_samples=4)
+    said = []
+    for rust in (False, True):
+        with pytest.raises(RuntimeError) as e:
+            _take(monkeypatch, rust, bench(), req, tmp_path / f"r{rust}.wireskein")
+        said.append(re.sub(r"tcp://127\.0\.0\.1:\d+", "tcp://BENCH", str(e.value)))
+    assert "each track asked before either was set" in said[1]
+    assert said[1] == said[0]
+
+
+@both
+@pytest.mark.parametrize("logic", [False, True], ids=["analog-alone", "with-logic"])
+def test_an_analog_stream_from_the_virtual_bench(logic, bench, monkeypatch, tmp_path):
+    """--mode stream with analog lines: alone (a timeline at the analog rate) or with logic in one group (each part
+    given the analog samples of its time): complete, the bench's values, the same channels and meta as Python's."""
+    from oep_client.virtual_bench_capture import analog_value
+    chans = [("A", "GPIO10")] if logic else []
+    got = {}
+    for rust in (False, True):
+        req = sources.Request(list(chans), 1_000_000 if logic else 20_000, 0, mode="stream", duration_s=0.3,
+                              analog=[("SQ", "GPIO16", None)], analog_rate_hz=20_000)
+        out = _take(monkeypatch, rust, bench(), req, tmp_path / f"a{rust}.wireskein")
+        head = fileformat.read_header(out)
+        assert head["complete"] is True, head.get("lost")
+        sq = fileformat.read_parts(out)[0][1][-1]
+        assert isinstance(sq, fileformat.AnalogChannel) and sq.n > 1000
+        assert list(sq.values()[:100]) == [analog_value(0, i) for i in range(100)]
+        got[rust] = (head, sq)
+    (ph, psq), (rh, rsq) = got[False], got[True]
+    assert sorted(rh["meta"]["stream"]) == sorted(ph["meta"]["stream"])
+    assert sorted(rh["meta"]["probe"]) == sorted(ph["meta"]["probe"])
+    assert rh["meta"]["probe_channels"] == ph["meta"]["probe_channels"]
+    assert (rsq.rate_hz, rsq.width, rsq.value_bits, rsq.zero, rsq.scale_nv) == \
+        (psq.rate_hz, psq.width, psq.value_bits, psq.zero, psq.scale_nv)
+    assert sorted(rsq.acquisition) == sorted(psq.acquisition)
+    if logic:
+        assert 0 <= rsq.t0_ticks < 1e6 / 20_000 * 2
+
+
+# ---------------- the session a killed run left ----------------
+
+def _session_file(d):
+    files = list(d.glob("*.session"))
+    assert len(files) == 1, files
+    return files[0]
+
+
+@both
+def test_a_session_python_left_is_ended_by_rust(bench, monkeypatch, tmp_path):
+    """oep-client-python's kept session (host guide §5): a run that closed its link without end leaves the session and
+    its lock on the probe (lease 30 s); the Rust client reads the same file, opens that session again and ends it, so
+    it takes the probe at once - not after the lease, nor 'in use'."""
+    import time
+    from oep_client import core, link
+    sessions = tmp_path / "sessions"
+    monkeypatch.setenv("OEP_SESSION_DIR", str(sessions))
+    src = bench()
+    hst = link.open_host(src[len("oep:"):])
+    core.take(hst, 30_000, owner="a killed run")
+    hst.link.close()                                   # no end: the probe keeps the session and its lock
+    sid, corr = _session_file(sessions).read_text().split()
+    assert int(sid, 16) == hst.session and int(corr, 16) > 0
+    t0 = time.monotonic()
+    out = _take(monkeypatch, True, src, sources.Request([("A", "GPIO10")], 1_000_000, 100), tmp_path / "k.wireskein")
+    assert time.monotonic() - t0 < 4 and fileformat.read_header(out)["complete"]
+    assert _session_file(sessions).read_text() == ""   # ended: nothing kept
+
+
+@both
+def test_a_session_rust_left_is_ended_by_python(bench, monkeypatch, tmp_path):
+    """The other way: wireskein-rs killed in a stream leaves its session in the file (the id and a corr reserved
+    ahead); oep-client-python's next run ends it and takes the probe at once."""
+    import os
+    import signal
+    import time
+    rs = _wireskein_rs()
+    if rs is None:
+        pytest.skip("wireskein-rs not built")
+    sessions = tmp_path / "sessions"
+    monkeypatch.setenv("OEP_SESSION_DIR", str(sessions))
+    src = bench()
+    p = subprocess.Popen([rs, "capture", "--source", src, "--channels", "A=GPIO10", "--rate", "1M", "--mode", "stream",
+                          "--duration", "30", "-o", str(tmp_path / "killed.wireskein")],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env={**os.environ})
+    try:
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            files = list(sessions.glob("*.session"))
+            if files and files[0].read_text().strip():
+                break
+            time.sleep(0.05)
+        else:
+            pytest.fail("wireskein-rs kept no session")
+        time.sleep(0.3)
+    finally:
+        p.send_signal(signal.SIGKILL)
+        p.wait(5)
+    assert len(_session_file(sessions).read_text().split()) == 2
+    t0 = time.monotonic()
+    out = _take(monkeypatch, False, src, sources.Request([("A", "GPIO10")], 1_000_000, 100), tmp_path / "p.wireskein")
+    assert time.monotonic() - t0 < 4 and fileformat.read_header(out)["complete"]
+    assert _session_file(sessions).read_text() == ""
+
+
+def _wireskein_rs():
+    import shutil
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1] / "target"
+    for kind in ("release", "debug"):
+        if (root / kind / "wireskein-rs").is_file():
+            return str(root / kind / "wireskein-rs")
+    return shutil.which("wireskein-rs")
+
+
+# ---------------- a lost frame boundary (transports §5) ----------------
+
+class _Proxy:
+    """A TCP proxy in front of the virtual bench: the first connection gets, after `after` data pushes towards the
+    host, a length no frame can have (past max_frame) - the boundaries lost; later connections go through clean."""
+
+    def __init__(self, upstream: str, after: int):
+        import socket
+        import threading
+        host, port = upstream[len("oep:tcp://"):].split(":")
+        self.up = (host, int(port))
+        self.after, self.conns, self.injected = after, 0, False
+        self.srv = socket.socket()
+        self.srv.bind(("127.0.0.1", 0))
+        self.srv.listen(4)
+        self.port = self.srv.getsockname()[1]
+        threading.Thread(target=self._accept, daemon=True).start()
+
+    def _accept(self):
+        import socket
+        import threading
+        while True:
+            try:
+                down, _ = self.srv.accept()
+            except OSError:
+                return
+            up = socket.create_connection(self.up)
+            k = self.conns
+            self.conns += 1
+            threading.Thread(target=self._pipe, args=(down, up, None), daemon=True).start()
+            threading.Thread(target=self._pipe, args=(up, down, k == 0), daemon=True).start()
+
+    def _pipe(self, a, b, inject):
+        import struct
+        buf, pushes = b"", 0
+        try:
+            while True:
+                data = a.recv(65536)
+                if not data:
+                    break
+                if not inject or self.injected:
+                    b.sendall(data)
+                    continue
+                buf += data                            # frame by frame, to put the bad length between two frames
+                while len(buf) >= 2:
+                    n = struct.unpack_from("<H", buf)[0]
+                    if len(buf) < 2 + n:
+                        break
+                    frame, buf = buf[:2 + n], buf[2 + n:]
+                    b.sendall(frame)
+                    if n and frame[2] == 0x04:
+                        pushes += 1
+                        if pushes == self.after:
+                            b.sendall(b"\xff\xff" + bytes(16))
+                            self.injected = True
+                            b.sendall(buf)
+                            buf = b""
+                            break
+        except OSError:
+            pass
+        finally:
+            for s in (a, b):
+                try:
+                    s.close()
+                except OSError:
+                    pass
+
+    def close(self):
+        self.srv.close()
+
+
+@both
+def test_a_lost_boundary_in_a_stream_resyncs_as_python_does(bench, monkeypatch, tmp_path):
+    """transports §5 on TCP: a length past max_frame in the middle of a stream - the connection closed and opened
+    again, confirmed, the stream's subscription made again (core §10.3); the pushes that went to the closed one are
+    a loss. Both clients go on to the end and say the same (on_loss continue)."""
+    got = {}
+    for rust in (False, True):
+        proxy = _Proxy(bench(), after=20)
+        try:
+            req = sources.Request([("A", "GPIO10")], 1_000_000, 0, mode="stream", duration_s=1.5, on_loss="continue")
+            out = _take(monkeypatch, rust, f"oep:tcp://127.0.0.1:{proxy.port}", req, tmp_path / f"f{rust}.wireskein")
+        finally:
+            proxy.close()
+        assert proxy.injected and proxy.conns >= 2           # the connection was opened again
+        head = fileformat.read_header(out)
+        got[rust] = head
+        assert head["complete"] is False and len(head["parts"]) >= 2
+        for (_, chans) in fileformat.read_parts(out):
+            a = chans[0]
+            lv = np.frombuffer(fileformat.unpack(a), np.uint8)[:a.n]
+            d = np.diff(lv.astype(np.int16))
+            assert np.all(d != 0)                            # the bench's counter, bit 0: no sample lost inside a part
+    py, rs = got[False], got[True]
+    assert [x["reason"].split(" - ")[0] for x in rs["lost"]] == [x["reason"].split(" - ")[0] for x in py["lost"]]
+
+
+# ---------------- a serial port (COBS, transports §4) ----------------
+
+@pytest.fixture
+def pty_bench():
+    procs = []
+
+    def start(*extra, profile="p4-x035"):
+        p = subprocess.Popen([sys.executable, "-m", SERVE, "--pty", "--framing", "cobs", "--profile", profile, *extra],
+                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        procs.append(p)
+        path = re.search(r"PTY (\S+)", p.stdout.readline()).group(1)
+        return f"oep:{path}"
+    yield start
+    for p in procs:
+        p.stdin.close()
+        p.wait(5)
+
+
+@both
+@pytest.mark.skipif(sys.platform != "linux", reason="a pty")
+@pytest.mark.parametrize("fault", [(), ("--corrupt", "9"), ("--drop", "9")], ids=["clean", "a-broken-answer",
+                                                                                   "a-lost-answer"])
+@pytest.mark.parametrize("case", ["three", "format-1", "repeat"])
+def test_a_capture_over_a_serial_port_is_the_same(case, fault, pty_bench, monkeypatch, tmp_path):
+    """The virtual bench on a pty, COBS frames at the boot speed (fast=[]: no port_speed): the same file as Python's;
+    a broken answer (a bad CRC) is sent again at once, a lost one after its wait (core §5.1), as Python does."""
+    chans, rate, samples, kw = CASES[case]
+    got = []
+    for rust in (False, True):
+        req = sources.Request(list(chans), rate, samples, fast=[], **kw)
+        got.append(_content(_take(monkeypatch, rust, pty_bench(*fault), req, tmp_path / f"{case}-{rust}.wireskein")))
+    py, rs = got
+    assert rs == py
+
+
+@both
+@pytest.mark.skipif(sys.platform != "linux", reason="a pty")
+def test_a_stream_over_a_serial_port(pty_bench, monkeypatch, tmp_path):
+    chans = [("A", "GPIO10")]
+    got = {}
+    for rust in (False, True):
+        req = sources.Request(chans, 20_000, 0, mode="stream", duration_s=0.3, fast=[])   # under the bench's pty
+        out = _take(monkeypatch, rust, pty_bench(), req, tmp_path / f"s{rust}.wireskein")
+        head = fileformat.read_header(out)
+        assert head["complete"] is True
+        a = fileformat.read_parts(out)[0][1][0]
+        lv = np.frombuffer(fileformat.unpack(a), np.uint8)[:a.n]
+        assert np.array_equal(lv, np.arange(a.n) & 1)
+        got[rust] = head
+    assert "rate" not in got[True]["meta"]["probe"]["link"] and "rate" not in got[False]["meta"]["probe"]["link"]
+    assert sorted(got[True]["meta"]["probe"]) == sorted(got[False]["meta"]["probe"])
+
+
+@both
+def test_wireskein_rs_takes_analog_lines(bench, monkeypatch, tmp_path):
+    """`wireskein-rs capture --analog ... --trigger NAME:KIND:VOLTS` as `wireskein capture`: the same file."""
+    rs = _wireskein_rs()
+    if rs is None:
+        pytest.skip("wireskein-rs not built")
+    monkeypatch.delenv(_rust.RUST_ENV, raising=False)
+    args = ["--channels", "A=GPIO10", "--analog", "SQ=GPIO16,SINE=GPIO17@3", "--analog-rate", "48k",
+            "--analog-samples", "64", "--rate", "20M", "--samples", "2000", "--trigger", "SQ:rise:1.0V",
+            "--pretrigger", "100"]
+    outs = []
+    for cmd in ([sys.executable, "-m", "wireskein"], [rs]):
+        out = tmp_path / f"{len(outs)}.wireskein"
+        r = subprocess.run([*cmd, "capture", "--source", bench(), *args, "-o", str(out)], capture_output=True,
+                           text=True)
+        assert r.returncode == 0, r.stderr
+        outs.append((_analog_file(out), r.stdout.splitlines()[0].split(": ", 1)[1]))
+    (py, py_line), (rs, rs_line) = outs
+    assert rs_line == py_line
+    for k in py:
+        if k != "parts":
+            assert rs[k] == py[k], k
+    # the analog lines the same; a logic line as many samples as Python's and they the same (wireskein-io's line has
+    # no length of its own: written by wireskein-rs it runs to the part's end, the analog's, idle past its samples)
+    (pt, p0, pm, ptr, pc), (rt, r0, rm, rtr, rc) = py["parts"][0], rs["parts"][0]
+    assert (rt, r0, rm, rtr) == (pt, p0, pm, ptr)
+    for a, b in zip(pc, rc):
+        if a[1] == "analog":
+            assert b == a
+        else:
+            assert b[0] == a[0] and b[5][:a[2]] == a[5]
