@@ -24,10 +24,12 @@
 //!                  [--pretrigger N] [--arm pretrigger|now] [--timeout S] [--on-loss stop|continue]
 //!                  [--glitch-filter NS] [--note TEXT] -o OUT
 //!     wireskein-rs --version
+//!     wireskein-rs --definitions DIR ... SUBCOMMAND ...   (a definitions directory's device packs, devices/)
 //!
 //! The analysis is the Rust core's (wireskein-core), the rest wireskein-analysis, wireskein-io and wireskein-verify.
-//! Not here (Python's only, `wireskein`): gui, analyze --devices, --definitions DIR; capture from sigrok, of analog
-//! channels, or from a probe the Rust OEP client does not open (a serial port, HID, a line label).
+//! Not here (Python's only, `wireskein`): gui, a definitions directory with declared protocols (protocols/*.toml)
+//! or marker dialects (markers/*.toml); capture from sigrok, of analog channels, or from a probe the Rust OEP
+//! client does not open (a serial port, HID, a line label).
 
 mod analyze;
 mod capture;
@@ -39,6 +41,86 @@ use std::process::ExitCode;
 
 const PROG: &str = "wireskein-rs";
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// The `devices/` of each definitions directory given (WIRESKEIN_DEFINITIONS, then --definitions), set once by main.
+static DEVICE_DIRS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+
+/// The device pack directories of the definitions directories given (none: WireSkein's packs only).
+pub fn device_dirs() -> &'static [String] {
+    DEVICE_DIRS.get().map(|v| v.as_slice()).unwrap_or(&[])
+}
+
+/// The hints with the definitions directories' device packs (`device_dirs`, read by the Rust core beside
+/// `devices`); the hints as given when there are none (or the hints are not an object).
+pub fn with_device_dirs(hints: &serde_json::Value) -> serde_json::Value {
+    let dirs = device_dirs();
+    match hints {
+        _ if dirs.is_empty() => hints.clone(),
+        serde_json::Value::Null => serde_json::json!({ "device_dirs": dirs }),
+        serde_json::Value::Object(m) => {
+            let mut m = m.clone();
+            m.insert("device_dirs".into(), serde_json::json!(dirs));
+            serde_json::Value::Object(m)
+        }
+        _ => hints.clone(),
+    }
+}
+
+/// What a definitions directory may hold here: device packs (devices/). Python's `plugins.add_definitions` refuses
+/// tables at its top; the declared protocols (protocols/*.toml) and marker dialects (markers/*.toml) are read by
+/// Python's wireskein only (Err((exit code, message))).
+fn definitions(dirs: &[String]) -> Result<Vec<String>, (u8, String)> {
+    let tomls = |d: &std::path::Path| -> Vec<String> {
+        let mut v: Vec<String> = std::fs::read_dir(d)
+            .into_iter()
+            .flatten()
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .filter(|p| p.is_file() && p.extension().is_some_and(|x| x == "toml"))
+            .filter_map(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+            .collect();
+        v.sort();
+        v
+    };
+    let mut out: Vec<String> = vec![];
+    for d in dirs {
+        let p = std::path::Path::new(d);
+        let Ok(p) = p
+            .canonicalize()
+            .map_err(|_| ())
+            .and_then(|p| if p.is_dir() { Ok(p) } else { Err(()) })
+        else {
+            return Err((1, format!("{d}: not a directory")));
+        };
+        let top = tomls(&p);
+        if !top.is_empty() {
+            return Err((
+                1,
+                format!(
+                    "{d}: protocol tables at its top ({}): a protocol on the wire itself is part of WireSkein's \
+                     analysis engine, not an extension point (docs/protocols.md §5)",
+                    top.join(", ")
+                ),
+            ));
+        }
+        for (sub, what) in [("protocols", "declared protocols"), ("markers", "marker dialects")] {
+            if !tomls(&p.join(sub)).is_empty() {
+                return Err((
+                    2,
+                    format!("--definitions {d}: {what} ({sub}/*.toml) are read by Python's wireskein only"),
+                ));
+            }
+        }
+        let dev = p.join("devices");
+        if dev.is_dir() {
+            let dev = dev.to_string_lossy().to_string();
+            if !out.contains(&dev) {
+                out.push(dev);
+            }
+        }
+    }
+    Ok(out)
+}
 
 /// The arguments of a subcommand: its positionals, the options with a value (each time given), the flags, the
 /// options with a list of values (nargs="*" / 2).
@@ -225,7 +307,14 @@ fn help() {
     );
     println!();
     println!("WireSkein's command line in Rust: the subcommands of `wireskein` with the same arguments and output.");
-    println!("Python's only (use `wireskein`): gui, analyze --devices, --definitions; capture of analog or sigrok.");
+    println!(
+        "--definitions DIR (repeatable, before the subcommand; WIRESKEIN_DEFINITIONS too): a definitions directory's \
+         device packs (devices/)."
+    );
+    println!(
+        "Python's only (use `wireskein`): gui, declared protocols and marker dialects of --definitions; capture of \
+         analog or sigrok."
+    );
 }
 
 /// `wireskein verify`: the lines, the summary, the report and JUnit when asked; 1 when the run fails.
@@ -292,7 +381,38 @@ fn verify_cmd(args: &[String]) -> ExitCode {
 }
 
 fn main() -> ExitCode {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    // --definitions DIR before the subcommand (Python's global option), after the environment's directories
+    let mut defs: Vec<String> = std::env::var("WIRESKEIN_DEFINITIONS")
+        .unwrap_or_default()
+        .split(if cfg!(windows) { ';' } else { ':' })
+        .filter(|x| !x.is_empty())
+        .map(String::from)
+        .collect();
+    while let Some(a) = args.first() {
+        if let Some(d) = a.strip_prefix("--definitions=") {
+            defs.push(d.to_string());
+            args.remove(0);
+        } else if a == "--definitions" {
+            if args.len() < 2 || args[1].starts_with('-') {
+                return usage_error("", "argument --definitions: expected one argument");
+            }
+            defs.push(args[1].clone());
+            args.drain(..2);
+        } else {
+            break;
+        }
+    }
+    match definitions(&defs) {
+        Ok(d) => {
+            DEVICE_DIRS.set(d).ok();
+        }
+        Err((2, e)) => return usage_error("", &e),
+        Err((_, e)) => {
+            eprintln!("{PROG}: {e}");
+            return ExitCode::FAILURE;
+        }
+    }
     let Some(cmd) = args.first().map(|s| s.as_str()) else {
         help();
         return ExitCode::from(2);
@@ -307,11 +427,6 @@ fn main() -> ExitCode {
             help();
             ExitCode::SUCCESS
         }
-        "--definitions" => usage_error(
-            "",
-            "--definitions: definitions directories (declared protocols, device packs, marker dialects) are read by \
-             Python's wireskein only",
-        ),
         "analyze" => analyze::analyze(rest),
         "decode" => analyze::decode(rest),
         "segments" => views::segments(rest),

@@ -355,7 +355,7 @@ def test_note_bad_json(tmp_path):
     assert not fileformat.notes(f)
 
 
-def test_errors_and_usage():
+def test_errors_and_usage(env):
     f = EXAMPLES[0].relative_to(ROOT)
     for args in (["survey", "tests/data/examples/missing.wireskein"], ["states", "tests/data/nothing"],
                  ["convert", f, "x.wireskein", "--from", "5"]):
@@ -364,7 +364,14 @@ def test_errors_and_usage():
     for args in (["analyze"], ["survey", f, "--bins", "x"], ["nothing"], ["analyze", f, "--mode", "x"]):
         p, r = py(*args), rs(*args)
         assert p[2] == r[2] == 2, (args, p, r)
-    assert rs("analyze", f, "--devices", "i2c/**")[2] == 2         # Python's only: said so
+    # a definitions directory that is not one: exit 1, said as Python's says it (the environment Python's command
+    # line sets taken back)
+    env.setenv("WIRESKEIN_DEFINITIONS", "")
+    p = py("--definitions", "tests/data/nothing", "info", f)
+    os.environ["WIRESKEIN_DEFINITIONS"] = ""
+    r = rs("--definitions", "tests/data/nothing", "info", f)
+    assert p[2] == r[2] == 1 and p[1].split(": ", 1)[1] == r[1].split(": ", 1)[1], (p, r)
+    assert rs("--definitions")[2] == 2
 
 
 # ---------------- what reads the claims (the Rust engine on both sides) ----------------
@@ -504,3 +511,90 @@ def test_segments_without_markers(env):
     env.setenv(_rust.RUST_ENV, "segments")
     f = (DATA / "examples" / "mixed-0.wireskein").relative_to(ROOT)
     same("segments", f, "--markers", '{"pin": "NOPE"}')
+
+
+# ---------------- device packs picked: --devices, --definitions DIR's devices/ ----------------
+
+DEVICES = [["--devices"], ["--devices", "i2c/**"], ["--devices", "!i2c/sensirion/**"], ["--devices", "spi/**"],
+           ["--devices", "i2c/qst/*", "spi/flash/*"], ["--devices", "!**"],
+           ["--hint", "i2c,spi", "--devices", "spi/**"],
+           ["--hint", '{"devices": ["spi/**"], "protocols": ["i2c", "spi"]}', "--devices", "i2c/**"]]
+
+
+@engine
+@pytest.mark.parametrize("args", DEVICES, ids=" ".join)
+def test_analyze_devices(env, tmp_path, args):
+    """`analyze --devices PATTERN ...` as Python's: the packs picked (none given, every one) raise and tell the
+    buses they identify; the document's hints with devices put as Python's `(hints or {}) | {"devices": ...}`."""
+    from test_rust_parts import device_capture
+    env.setenv(_engines.ENGINE_ENV, "rust")
+    f = device_capture(tmp_path / "dev.wireskein")
+    for more in (["--depth", "device"], ["--depth", "device", "--split", "max_edges=400"], []):
+        same("analyze", f, *more, *args, stdout_json=True)
+    same("analyze", DATA / "examples" / "mixed-0.wireskein", "--depth", "device", *args, stdout_json=True)
+
+
+def _defs_same(env, defs, *args):
+    """`wireskein --definitions DEFS ARGS` and `wireskein-rs --definitions DEFS ARGS` the same (the definitions
+    directory Python's command line adds, and the environment it sets, taken back after it)."""
+    from wireskein import plugins
+    env.setenv("WIRESKEIN_DEFINITIONS", "")
+    try:
+        p = py("--definitions", defs, *args)
+    finally:
+        plugins.remove_definitions(defs)
+        os.environ["WIRESKEIN_DEFINITIONS"] = ""
+    r = rs("--definitions", defs, *args)
+    assert (p[1], p[2]) == (r[1], r[2]), (p[1:], r[1:])
+    # (the device matches of WireSkein's packs and the directory's in another order: test_rust_parts'
+    # packs_in_any_order, §39)
+    from test_rust_parts import packs_in_any_order
+    a, b = packs_in_any_order(_json(p[0])), packs_in_any_order(_json(r[0]))
+    assert _keys(a) == _keys(b), (p[0][:2000], r[0][:2000])
+    return b
+
+
+@engine
+def test_definitions_device_packs(env, tmp_path):
+    """--definitions DIR (and WIRESKEIN_DEFINITIONS) with device packs only: its devices/ read beside WireSkein's
+    packs by analyze, decode and annotate, as Python's; one declaring protocols is Python's only (a usage error)."""
+    from test_rust_parts import _device_spec, _held_devices, definitions_dir, device_capture
+    env.setenv(_engines.ENGINE_ENV, "rust")
+    f = device_capture(tmp_path / "dev.wireskein")
+    d = definitions_dir(tmp_path)
+    for more in ([], ["--devices", "!i2c/sensirion/**"], ["--devices", "i2c/acme/*", "--split", "max_edges=400"]):
+        doc = _defs_same(env, d, "analyze", f, "--depth", "device", *more)
+        assert any("ACME30" in x for x in _held_devices(doc)) and "device_dirs" not in json.dumps(doc["hints"])
+    for devices in (None, ["!i2c/sensirion/**"]):
+        spec = json.dumps(_device_spec(devices))
+        _defs_same(env, d, "decode", f, "--spec", spec)
+        _defs_same(env, d, "decode", f, "--spec", spec, "--split", "max_edges=400")
+    a, b = tmp_path / "a.wireskein", tmp_path / "b.wireskein"
+    shutil.copy(f, a)
+    shutil.copy(f, b)
+    env.setenv("WIRESKEIN_DEFINITIONS", "")
+    from wireskein import plugins
+    try:
+        p = py("--definitions", d, "annotate", a, "--save", "--hint", '{"devices": ["!i2c/sensirion/**"]}')
+    finally:
+        plugins.remove_definitions(d)
+        os.environ["WIRESKEIN_DEFINITIONS"] = ""
+    assert p == rs("--definitions", d, "annotate", b, "--save", "--hint", '{"devices": ["!i2c/sensirion/**"]}')
+    # (only the directory's SHT30 clone left of the two: the matches in the same order)
+    assert json.loads(fileformat.get(a, "decode/annotations.json")) == json.loads(
+        fileformat.get(b, "decode/annotations.json"))
+    # the environment's directories, as Python's (no --definitions)
+    env.setenv("WIRESKEIN_DEFINITIONS", str(d))
+    plugins.load_environment()                  # (read once a process: this one read it before)
+    try:
+        p, r = py("analyze", f, "--depth", "device"), rs("analyze", f, "--depth", "device")
+    finally:
+        plugins.remove_definitions(d)
+    from test_rust_parts import packs_in_any_order
+    assert (p[1], p[2]) == (r[1], r[2]) and "ACME30" in r[0]
+    assert _keys(packs_in_any_order(_json(p[0]))) == _keys(packs_in_any_order(_json(r[0])))
+    env.setenv("WIRESKEIN_DEFINITIONS", "")
+    # declared protocols: Python's only
+    p = definitions_dir(tmp_path / "p", protocols=True)
+    got = rs("--definitions", p, "analyze", f)
+    assert got[2] == 2 and "protocols/*.toml" in got[1] and got[0] == ""

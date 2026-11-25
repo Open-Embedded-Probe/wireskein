@@ -94,9 +94,9 @@ def test_options_rust_does_not_have_stay_python(clean):
     base = dict(hints=None, mode="final", select=None, alternatives=False, depth="protocol", window_s=None,
                 segment=None, markers_hint=None, events=False, thresholds=None, split=None, pins=None, items=None)
     assert _rust.analyzes(f, **base)
-    for k, v in (("hints", {"devices": ["i2c/**"]}), ("depth", "bits")):
+    for k, v in (("depth", "bits"),):
         assert not _rust.analyzes(f, **{**base, k: v}), k
-    for k, v in (("mode", "select"), ("select", ["uart"]), ("alternatives", True), ("depth", "frames"),
+    for k, v in (("hints", {"devices": ["i2c/**"]}), ("mode", "select"), ("select", ["uart"]), ("alternatives", True), ("depth", "frames"),
                  ("depth", "device"), ("segment", "x"), ("markers_hint", {"dialect": "heading"}), ("events", True),
                  ("thresholds", {"A0": 1.5}), ("pins", ["D0"]), ("items", "x.ndjson")):
         assert _rust.analyzes(f, **{**base, k: v}), k
@@ -519,11 +519,11 @@ def test_decode_rvswd_against_the_python_engine(clean):
 
 
 @rust_only
-def test_decode_falls_back_for_device_patterns(clean):
+def test_decode_falls_back_for_a_split_it_cannot_take(clean):
     f = DATA / "examples" / "mixed-0.wireskein"
     spec = _spec_of(f)
     assert _with({"WIRESKEIN_RUST": "decode"}, lambda: _rust.decodes(f, spec, None))
-    assert not _with({"WIRESKEIN_RUST": "decode"}, lambda: _rust.decodes(f, {**spec, "devices": ["i2c/**"]}, None))
+    assert _with({"WIRESKEIN_RUST": "decode"}, lambda: _rust.decodes(f, {**spec, "devices": ["i2c/**"]}, None))
     assert not _with({"WIRESKEIN_RUST": "decode"}, lambda: _rust.decodes(f, spec, 3.5))
 
 
@@ -924,3 +924,192 @@ def test_verify_a_protocol_declared_in_wireskein_is_pythons(clean, tmp_path):
     py = verify.dumps(verify.verify(tmp_path / "run"))
     rs = verify.dumps(_with({"WIRESKEIN_RUST": "verify"}, lambda: verify.verify(tmp_path / "run")))
     assert rs == py and json.loads(py)["results"][0]["status"] == "ok"
+
+
+# ---------------- device packs picked: hints' devices, a definitions directory's devices/ ----------------
+
+def _crc8(data) -> int:
+    c = 0xFF
+    for b in data:
+        c ^= b
+        for _ in range(8):
+            c = ((c << 1) ^ 0x31) & 0xFF if c & 0x80 else (c << 1) & 0xFF
+    return c
+
+
+def device_capture(path) -> Path:
+    """A capture whose buses the device packs identify: an I2C bus (SCL, SDA) with an SHT30 measuring and a QMP6988
+    read for its chip id, an SPI bus (CLK, MOSI, MISO, CS) with an SPI NOR flash's RDID and READs."""
+    from wireskein._engine import gen
+    scl, sda, clk, mosi, miso, cs = gen.Wave(1), gen.Wave(1), gen.Wave(0), gen.Wave(0), gen.Wave(0), gen.Wave(1)
+    txs = []
+    for k in range(6):
+        temp, hum = [0x66, 0x4C + k], [0x5A, 0x10 + 3 * k]
+        txs += [{"addr": 0x44, "rw": "write", "bytes": bytes([0x24, 0x00])},
+                {"addr": 0x44, "rw": "read", "bytes": bytes([*temp, _crc8(temp), *hum, _crc8(hum)])},
+                {"addr": 0x70, "rw": "write", "bytes": bytes([0xD1])},
+                {"addr": 0x70, "rw": "read", "bytes": bytes([0x5C])}]
+    t1 = gen.i2c(scl, sda, 1e-4, txs, 100e3)
+    frames = []
+    for k in range(6):
+        frames += [(bytes([0x9F, 0, 0, 0]), bytes([0xFF, 0xEF, 0x40, 0x18])),
+                   (bytes([0x03, 0x00, 0x10, 0x20 * k, *[0] * 8]),
+                    bytes([0xFF] * 4 + [(17 * k + j) & 0xFF for j in range(8)]))]
+    t2 = gen.spi(clk, mosi, miso, cs, 1.5e-4, frames, 500e3, gap=200e-6)
+    cap = gen.quantize({"SCL": scl, "SDA": sda, "CLK": clk, "MOSI": mosi, "MISO": miso, "CS": cs}, 10e6,
+                       max(t1, t2) + 2e-4, np.random.default_rng(3))
+    return decode._save(path, cap)
+
+
+# hints' devices as `wireskein analyze --devices` gives them: none (every pack), empty (every pack), some picked,
+# some left out, none left
+DEVICES = [None, [], ["i2c/**"], ["!i2c/sensirion/**"], ["spi/**"], ["i2c/qst/*", "spi/flash/*"], ["!**"]]
+
+
+def _held_devices(doc) -> set:
+    return {d["device"] for p in doc["parts"] for c in p.get("claims", []) for d in c.get("devices") or []}
+
+
+def _analyzes(f, hints) -> bool:
+    return _with({"WIRESKEIN_RUST": "analyze"}, lambda: _rust.analyzes(
+        f, hints, "final", None, False, "device", None, None, None, False, None, None, None, None))
+
+
+@rust_only
+@pytest.mark.parametrize("devices", DEVICES, ids=lambda d: "none" if d is None else " ".join(d) or "empty")
+def test_analyze_devices_as_python(clean, tmp_path, devices):
+    """hints' devices (`wireskein analyze --devices`) read by the Rust core (its PackSet picked by the patterns): the
+    document of WIRESKEIN_RUST=analyze is Python's around the Rust engine, whichever packs are picked - the buses
+    they identify raised and told, the others not."""
+    f = device_capture(tmp_path / "dev.wireskein")
+    hints = None if devices is None else {"devices": devices}
+    assert _analyzes(f, hints)
+    for kw in ({"depth": "device"}, {"mode": "all", "depth": "device"}, {}):
+        rs = _adoc({"WIRESKEIN_RUST": "analyze"}, f, hints=hints, **kw)
+        py = _adoc({"WIRESKEIN_ENGINE": "rust"}, f, hints=hints, **kw)
+        if kw.get("mode") == "all":
+            # the evidence's _support is Python's upper stage's (§34); the device packs' matches are a layer of the
+            # Rust upper stage's (registry.toml's i2c_devices: layers ["devices"]), Python's keeps them apart
+            # (Upper.devices, told at depth device only): §39
+            for c in (c for p in py["parts"] for c in p["claims"]):
+                c["evidence"].pop("_support", None)
+            for c in (c for p in rs["parts"] for c in p["claims"]):
+                c["layers"].pop("devices", None)
+        assert _differ(rs, py) == [], kw
+    want = {None: {"SPI NOR flash", "QMP6988", "SHT30"}, "i2c/**": {"QMP6988", "SHT30"}, "spi/**": {"SPI NOR flash"},
+            "!**": set()}
+    key = None if not devices else devices[0]
+    if key in want:
+        assert _held_devices(_adoc({"WIRESKEIN_RUST": "analyze"}, f, hints=hints, depth="device")) == want[key]
+
+
+@rust_only
+@pytest.mark.parametrize("devices", [["i2c/**"], ["!spi/**"], ["!**"]], ids=" ".join)
+def test_analyze_devices_of_the_examples_as_python(clean, devices):
+    for f in EXAMPLES[:2]:
+        for kw in ({"depth": "device"}, {"split": PIECES}):
+            rs = _adoc({"WIRESKEIN_RUST": "analyze"}, f, hints={"devices": devices}, **kw)
+            assert rs == _adoc({"WIRESKEIN_ENGINE": "rust"}, f, hints={"devices": devices}, **kw), (f.name, kw)
+
+
+def _device_spec(devices):
+    return {"buses": [{"protocol": "i2c", "pins": {"scl": "SCL", "sda": "SDA"}},
+                      {"protocol": "spi", "pins": {"clk": "CLK", "mosi": "MOSI", "miso": "MISO", "cs": "CS"}}],
+            **({"devices": devices} if devices is not None else {})}
+
+
+@rust_only
+@pytest.mark.parametrize("split", [None, PIECES])
+@pytest.mark.parametrize("devices", DEVICES, ids=lambda d: "none" if d is None else " ".join(d) or "empty")
+def test_decode_devices_as_python(clean, tmp_path, devices, split):
+    """A decode spec's devices read by the Rust core (wireskein-analysis's decode: upper::stage_with_packs): the
+    same document as Python's around the Rust engine, whole and in pieces."""
+    f = device_capture(tmp_path / "dev.wireskein")
+    spec = _device_spec(devices)
+    assert _with({"WIRESKEIN_RUST": "decode"}, lambda: _rust.decodes(f, spec, split))
+    rs = _decode({"WIRESKEIN_RUST": "decode"}, f, spec, split=split)
+    assert _differ(rs, _decode({"WIRESKEIN_ENGINE": "rust"}, f, spec, split=split)) == []
+    if split is None and devices in (None, ["spi/**"]):
+        got = {d["device"] for b in rs["parts"][0]["buses"] for d in b.get("devices") or []}
+        assert ("SPI NOR flash" in got) and (("QMP6988" in got) == (devices is None)), got
+
+
+@rust_only
+@pytest.mark.parametrize("devices", [["i2c/**"], ["!spi/**"], ["!**"]], ids=" ".join)
+def test_annotations_devices_as_python(clean, tmp_path, devices):
+    from wireskein import annotate
+    f = device_capture(tmp_path / "dev.wireskein")
+
+    def run():
+        return json.loads(json.dumps(annotate.build_file(f, {"devices": devices})))
+    assert _with({"WIRESKEIN_RUST": "annotate"}, lambda: _rust.annotates(f, {"devices": devices}, None))
+    assert _with({"WIRESKEIN_RUST": "annotate"}, run) == _with({"WIRESKEIN_ENGINE": "rust"}, run)
+
+
+def definitions_dir(root: Path, protocols: bool = False) -> Path:
+    """A definitions directory with a device pack of its own (devices/i2c/acme/acme30.toml: the SHT30's under
+    another name), and with a declared protocol too (protocols/demo_cmd.toml) when asked."""
+    decl = ROOT / "src" / "wireskein" / "decl" / "devices"
+    sht = (decl / "i2c" / "sensirion" / "sht30.toml").read_text()
+    d = root / "defs"
+    (d / "devices" / "i2c" / "acme").mkdir(parents=True)
+    (d / "devices" / "i2c" / "acme" / "acme30.toml").write_text(sht.replace('"SHT30"', '"ACME30"', 1))
+    if protocols:
+        (d / "protocols").mkdir()
+        (d / "protocols" / "demo_cmd.toml").write_text((ROOT / "examples" / "protocols" / "demo_cmd.toml").read_text())
+    return d
+
+
+def packs_in_any_order(x):
+    """A document with each list of device matches (and a merged match's packs) sorted: the Rust core tries every
+    pack in the order of its path (WireSkein's and a definitions directory's together), Python's WireSkein's first,
+    then each directory's (§39)."""
+    if isinstance(x, dict):
+        out = {k: packs_in_any_order(v) for k, v in x.items()}
+        if isinstance(out.get("devices"), list) and all(isinstance(m, dict) for m in out["devices"]):
+            out["devices"] = sorted(out["devices"], key=lambda m: json.dumps(m, sort_keys=True))
+        if isinstance(out.get("pack"), list):
+            out["pack"] = sorted(out["pack"])
+        return out
+    if isinstance(x, list):
+        return [packs_in_any_order(v) for v in x]
+    return x
+
+
+@rust_only
+def test_a_definitions_directorys_device_packs_as_python(clean, tmp_path):
+    """A definitions directory with device packs only (plugins.add_definitions): its devices/ given to the Rust core
+    as device_dirs - analyze, decode and annotate the same as Python's around the Rust engine, its pack identifying
+    the bus; the document's hints as given (not the directories). One declaring protocols stays Python's."""
+    from wireskein import annotate, plugins
+    f = device_capture(tmp_path / "dev.wireskein")
+    d = definitions_dir(tmp_path)
+    plugins.add_definitions(d)
+    try:
+        assert _rust._device_dirs() == [str(d.resolve() / "devices")]
+        for hints in (None, {"devices": ["!i2c/sensirion/**"]}, {"devices": ["i2c/acme/*"]}):
+            assert _analyzes(f, hints)
+            rs = packs_in_any_order(_adoc({"WIRESKEIN_RUST": "analyze"}, f, hints=hints, depth="device"))
+            py = packs_in_any_order(_adoc({"WIRESKEIN_ENGINE": "rust"}, f, hints=hints, depth="device"))
+            assert _differ(rs, py) == [], hints
+            assert rs["hints"] == hints and any("ACME30" in x for x in _held_devices(rs))
+            spec = _device_spec((hints or {}).get("devices"))
+            for split in (None, PIECES):
+                assert _differ(packs_in_any_order(_decode({"WIRESKEIN_RUST": "decode"}, f, spec, split=split)),
+                               packs_in_any_order(_decode({"WIRESKEIN_ENGINE": "rust"}, f, spec, split=split))) == [], \
+                    (hints, split)
+
+            def run():
+                return packs_in_any_order(json.loads(json.dumps(annotate.build_file(f, hints))))
+            assert _with({"WIRESKEIN_RUST": "annotate"}, run) == _with({"WIRESKEIN_ENGINE": "rust"}, run)
+    finally:
+        plugins.remove_definitions(d)
+    p = definitions_dir(tmp_path / "p", protocols=True)
+    plugins.add_definitions(p)
+    try:
+        assert _rust._device_dirs() is None
+        assert not _analyzes(f, None)
+        assert not _with({"WIRESKEIN_RUST": "decode"}, lambda: _rust.decodes(f, _device_spec(None), None))
+        assert not _with({"WIRESKEIN_RUST": "annotate"}, lambda: _rust.annotates(f, None, None))
+    finally:
+        plugins.remove_definitions(p)

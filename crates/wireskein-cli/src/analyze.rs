@@ -2,7 +2,7 @@
 //! claim or bus read said on stderr (`_warn_undersampled`).
 
 use crate::{Args, Takes, emit, fail, hint, hint_j, names, thresholds, usage_error};
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::path::Path;
 use std::process::ExitCode;
 use wireskein_analysis::split;
@@ -220,13 +220,6 @@ pub fn analyze(args: &[String]) -> ExitCode {
             ),
         );
     }
-    if a.list("--devices").is_some() {
-        return usage_error(
-            "analyze",
-            "--devices: device patterns are Python's (the Rust core's upper stage reads every device pack it has): \
-             use `wireskein analyze --devices`",
-        );
-    }
     let part = match a.get("--part").map(|v| v.parse::<usize>()) {
         None => None,
         Some(Ok(k)) => Some(k),
@@ -239,10 +232,26 @@ pub fn analyze(args: &[String]) -> ExitCode {
             _ => return usage_error("analyze", "argument --window: not a time"),
         },
     };
-    let hints = match hint(a.get("--hint")) {
+    let mut hints = match hint(a.get("--hint")) {
         Ok(h) => h,
         Err(e) => return fail("analyze", &e),
     };
+    // --devices PATTERN ...: the device packs used (Python's `(hints or {}) | {"devices": args.devices}`; none
+    // given, every pack)
+    let mut hints_doc = hint_j(a.get("--hint"), &hints);
+    if let Some(d) = a.list("--devices") {
+        match &mut hints {
+            Value::Object(m) => {
+                m.insert("devices".into(), json!(d));
+            }
+            Value::Null => hints = json!({ "devices": d }),
+            _ => return fail("analyze", "--devices: the hints are not an object"),
+        }
+        if hints_doc.is_null() {
+            hints_doc = J::dict();
+        }
+        hints_doc.set("devices", wireskein_io::write::j_of(&json!(d)));
+    }
     let ths = match thresholds(&a.all("--threshold")) {
         Ok(t) => t,
         Err(e) => return fail("analyze", &e),
@@ -274,7 +283,7 @@ pub fn analyze(args: &[String]) -> ExitCode {
     let t0 = std::time::Instant::now();
     let doc = match wireskein_analysis::analyze_file_asked(
         Path::new(file),
-        &hints,
+        &crate::with_device_dirs(&hints),
         part,
         mode,
         window,
@@ -284,7 +293,7 @@ pub fn analyze(args: &[String]) -> ExitCode {
         Ok(d) => d,
         Err(e) => return fail("analyze", &e),
     };
-    let mut doc = wireskein_analysis::order::analysis(&doc, Some(&hint_j(a.get("--hint"), &hints)));
+    let mut doc = wireskein_analysis::order::analysis(&doc, Some(&hints_doc));
     doc.set("analysis_seconds", round_n(t0.elapsed().as_secs_f64(), 3));
     let claims: Vec<J> = doc
         .get("parts")
@@ -325,10 +334,11 @@ pub fn decode(args: &[String]) -> ExitCode {
             Err(e) => return fail("decode", &format!("[Errno] {e}: {src:?}")),
         }
     };
-    let spec = match wireskein_analysis::decode::Spec::parse(&text) {
+    let mut spec = match wireskein_analysis::decode::Spec::parse(&text) {
         Ok(v) => v,
         Err(e) => return fail("decode", &e),
     };
+    spec.device_dirs = crate::device_dirs().to_vec();
     let split_opts = match split_of("decode", a.get("--split")) {
         Ok(o) => o,
         Err(c) => return c,

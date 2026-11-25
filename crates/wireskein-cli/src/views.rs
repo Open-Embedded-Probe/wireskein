@@ -346,7 +346,7 @@ pub fn annotate(args: &[String]) -> ExitCode {
         return usage_error("annotate", "give FILE (one)");
     };
     let hints = match hint(a.get("--hint")) {
-        Ok(h) => h,
+        Ok(h) => crate::with_device_dirs(&h),
         Err(e) => return fail("annotate", &e),
     };
     let ths = match thresholds(&a.all("--threshold")) {
@@ -667,7 +667,7 @@ pub fn segments(args: &[String]) -> ExitCode {
         return usage_error("segments", "give CAPTURE (one)");
     };
     let hints = match hint(a.get("--hint")) {
-        Ok(h) => h,
+        Ok(h) => crate::with_device_dirs(&h),
         Err(e) => return fail("segments", &e),
     };
     let ths = match thresholds(&a.all("--threshold")) {

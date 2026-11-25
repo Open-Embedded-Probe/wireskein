@@ -183,6 +183,43 @@ const BUS_JOINED: &[&str] = &[
     "uninterpreted_summary",
 ];
 const FIT: &[&str] = &["score", "claimed", "verdict", "pieces"];
+/// a device pack's match beside a claim or bus at depth device (`export.devices_of`)
+const DEVICE: &[&str] = &["device", "level", "evidence", "messages"];
+/// its evidence (`devices._i2c_command_table`, `_i2c_register_map`, `match_spi`, the candidates of an address,
+/// `_merge_indistinguishable`'s packs)
+const DEVICE_EVIDENCE: &[&str] = &[
+    "known_commands",
+    "unknown_commands",
+    "crc_passed",
+    "crc_failed",
+    "length_consistent",
+    "identity",
+    "command_pin",
+    "identity_hits",
+    "identity_misses",
+    "accesses",
+    "address",
+    "chips",
+    "pack",
+    "indistinguishable",
+];
+/// its messages (the same, a transaction's or an SPI frame's)
+const DEVICE_MESSAGE: &[&str] = &[
+    "s",
+    "frame",
+    "command",
+    "known",
+    "response_to",
+    "bytes",
+    "crc_ok",
+    "write",
+    "read",
+    "value",
+    "length_ok",
+    "address",
+    "jedec_id",
+    "identity",
+];
 /// `decode.reading` (with `noise`, `_shares`, `line_faults`)
 const READING: &[&str] = &[
     "frames",
@@ -359,6 +396,9 @@ fn child(parent: &'static [&'static str], key: &str, cx: &Cx) -> K {
         (_, "doubtful") if parent == SPLIT => K::Own(DOUBTFUL),
         (_, "not_carried") if parent == SPLIT => K::Own(NOT_CARRIED),
         (_, "holds") if parent == DOUBTFUL => K::Own(HOLDS),
+        (_, "devices") if parent == CLAIM || parent == BUS || parent == BUS_JOINED => K::Own(DEVICE),
+        (_, "evidence") if parent == DEVICE => K::Own(DEVICE_EVIDENCE),
+        (_, "messages") if parent == DEVICE => K::Own(DEVICE_MESSAGE),
         (_, "fit") => K::Own(FIT),
         (_, "reading") => K::Own(if cx.joined { READING_JOINED } else { READING }),
         (_, "clock_speeds") => K::Own(SPEED),

@@ -11,6 +11,7 @@ use serde_json::{Map, Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Write;
 use std::path::Path;
+use wireskein_core::devices::PackSet;
 use wireskein_core::{Candidate, Claim};
 use wireskein_io::Line;
 use wireskein_io::j::J;
@@ -51,6 +52,9 @@ pub struct Spec {
     pub lines: Vec<String>,
     pub devices: Value,
     pub depth: String,
+    /// The directories of device packs read beside WireSkein's (each definitions directory's `devices/`: Python's
+    /// `plugins.definitions()`, given by its caller as "device_dirs"); not in the document.
+    pub device_dirs: Vec<String>,
 }
 
 impl Spec {
@@ -107,7 +111,30 @@ impl Spec {
                 .collect(),
             devices: v.get("devices").cloned().unwrap_or(Value::Null),
             depth,
+            device_dirs: v
+                .get("device_dirs")
+                .and_then(|x| x.as_array())
+                .into_iter()
+                .flatten()
+                .filter_map(|x| x.as_str().map(String::from))
+                .collect(),
         })
+    }
+
+    /// The device packs the spec picks (Python's `_upper._device_packs` of `decode._hints`): its `devices`
+    /// patterns (none: every pack) over WireSkein's packs and those under `device_dirs`.
+    pub fn packs(&self) -> wireskein_core::devices::PackSet {
+        wireskein_core::devices::PackSet::from_hints(&json!({"devices": self.devices, "device_dirs": self.device_dirs}))
+    }
+
+    /// The hints a piece is analysed again with (Python's `_engines.analyze(wcap, None)`: every pack, the
+    /// definitions directories' too).
+    fn reanalysis_hints(&self) -> Value {
+        if self.device_dirs.is_empty() {
+            Value::Null
+        } else {
+            json!({"device_dirs": self.device_dirs})
+        }
     }
 
     /// As the document gives it.
@@ -261,10 +288,10 @@ struct Reads {
     others: Vec<Candidate>,
 }
 
-fn read(view: &wireskein_core::View, hints: &Value) -> Reads {
+fn read(view: &wireskein_core::View, hints: &Value, packs: &PackSet) -> Reads {
     let cands = wireskein_core::readings(view, hints);
     let pre = wireskein_core::choose(cands.clone());
-    let (up, _) = wireskein_core::upper::stage_with(pre.clone(), view.rate);
+    let (up, _) = wireskein_core::upper::stage_with_packs(pre.clone(), view.rate, packs);
     let key = |p: &str, r: &BTreeMap<String, String>| (p.to_string(), r.clone());
     let held: BTreeSet<(String, BTreeMap<String, String>)> = pre.iter().map(|c| key(&c.protocol, &c.roles)).collect();
     let mut best: Vec<Candidate> = vec![];
@@ -329,6 +356,7 @@ fn alone(
     score: f64,
     layers: &serde_json::value::RawValue,
     rate: f64,
+    packs: &PackSet,
 ) -> (Map<String, Value>, f64) {
     let c = Claim {
         protocol: protocol.into(),
@@ -343,13 +371,13 @@ fn alone(
         rival: false,
         bus: None,
     };
-    let (up, _) = wireskein_core::upper::stage_with(vec![c], rate);
+    let (up, _) = wireskein_core::upper::stage_with_packs(vec![c], rate, packs);
     let c = &up[0];
     (crate::order::layers(&c.layers), c.total)
 }
 
 /// The decode with exactly the bus's pins, the best one (on the edge it samples on, when there is one).
-fn node(r: &Reads, b: &SpecBus, edge: Option<&str>, rate: f64) -> Option<Node> {
+fn node(r: &Reads, b: &SpecBus, edge: Option<&str>, rate: f64, packs: &PackSet) -> Option<Node> {
     let pins = b.pin_set();
     let has = |p: &str, roles: &BTreeMap<String, String>| {
         p == b.protocol && roles.values().map(|s| s.as_str()).collect::<BTreeSet<_>>() == pins
@@ -389,7 +417,7 @@ fn node(r: &Reads, b: &SpecBus, edge: Option<&str>, rate: f64) -> Option<Node> {
             (crate::order::layers(&c.layers), c.total)
         } else {
             // a target of a bus of several: the upper stage passed it by; read on its own
-            alone(&c.protocol, &c.roles, r.pre[i].total, &r.pre[i].layers, rate)
+            alone(&c.protocol, &c.roles, r.pre[i].total, &r.pre[i].layers, rate, packs)
         };
         Some(Node {
             protocol: c.protocol.clone(),
@@ -401,7 +429,7 @@ fn node(r: &Reads, b: &SpecBus, edge: Option<&str>, rate: f64) -> Option<Node> {
         })
     } else {
         let c = &r.others[i];
-        let (lay, score) = alone(&c.protocol, &c.roles, c.score, &c.layers, rate);
+        let (lay, score) = alone(&c.protocol, &c.roles, c.score, &c.layers, rate, packs);
         Some(Node {
             protocol: c.protocol.clone(),
             roles: c.roles.clone(),
@@ -544,9 +572,10 @@ fn bus(
     b: &SpecBus,
     depth: &str,
     gf: Option<&Value>,
+    packs: &PackSet,
 ) -> Map<String, Value> {
     let edge = sample_edge(lines, n_ticks, b);
-    let mut nd = node(r, b, edge.as_deref(), rate);
+    let mut nd = node(r, b, edge.as_deref(), rate, packs);
     let mut out = Map::new();
     out.insert("protocol".into(), json!(b.protocol));
     out.insert("pins".into(), b.pins_doc());
@@ -865,6 +894,7 @@ pub fn part(
     }
     let view = split::view_of(lines, rate, n)?;
     let groups = apart(&spec.buses);
+    let packs = spec.packs();
     let mut reads = vec![];
     let mut of = vec![0usize; spec.buses.len()];
     for (gi, g) in groups.iter().enumerate() {
@@ -880,7 +910,7 @@ pub fn part(
             ex.sort();
             hints = json!({"protocols": protos, "exclude_pins": ex});
         }
-        reads.push(read(&view, &hints));
+        reads.push(read(&view, &hints, &packs));
         for &i in g {
             of[i] = gi;
         }
@@ -891,7 +921,7 @@ pub fn part(
         .buses
         .iter()
         .enumerate()
-        .map(|(i, b)| bus(&reads[of[i]], lines, rate, n, b, &spec.depth, gf))
+        .map(|(i, b)| bus(&reads[of[i]], lines, rate, n, b, &spec.depth, gf, &packs))
         .collect();
     shared(&mut buses, lines);
     for b in buses.iter_mut() {
@@ -1113,7 +1143,7 @@ pub(crate) fn piece(
         });
     if reanalyze && !whole && p.edges > 0 && sampled && !doubt_why(p, &o).is_empty() {
         let view = split::view_of(w, rate, n)?;
-        let (claims, _) = wireskein_core::analyze_full(&view, &Value::Null);
+        let (claims, _) = wireskein_core::analyze_full(&view, &spec.reanalysis_hints());
         let holds: Vec<Value> = claims
             .iter()
             .filter(|c| c.verdict == "confirmed" || c.verdict == "likely")
@@ -1960,6 +1990,12 @@ mod tests {
         assert!(shares_lines(&[&s.buses[0], &s.buses[1]]) && !shares_lines(&[&s.buses[2]]));
         assert!(Spec::of(&json!({"buses": [{"protocol": "spi"}]})).is_err());
         assert!(Spec::of(&json!({"depth": "bits"})).unwrap_err().starts_with("depth"));
+        // the device packs: the spec's patterns over WireSkein's packs and the directories given (not in the doc)
+        let s = Spec::of(&json!({"buses": [], "devices": ["i2c/**"], "device_dirs": ["/nowhere/devices"]})).unwrap();
+        assert_eq!(s.device_dirs, ["/nowhere/devices"]);
+        assert!(s.doc().get("device_dirs").is_none());
+        assert_eq!(s.packs().len(), 2);
+        assert_eq!(Spec::of(&json!({"buses": []})).unwrap().packs().len(), 4);
     }
 
     #[test]
