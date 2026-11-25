@@ -22,7 +22,20 @@
 | --- | --- | --- | --- | --- |
 | 2026-11-24 | [core] | v103r8t6-evt/softspi test_shift（11-24_11-42-05） | spi、CS なしで mode 3 vs 0（CPOL の読み違い、間欠） | 直した（verify の CPOL、v0.0.38） |
 | 2026-11-25 | [core] | v203c8t6/signals test_pwm_sequence（v203sig-1125-1） | convert で VCD に書くと TypeError（60 MS/s）。道具の不具合で、読みの問題ではない | 直した（vcdio、v0.0.38） |
-| それ以前 | [EmbedBench] | EmbedBenchDeviceData の sht30-modes | 止めたクロックストレッチの所の 1 バイトの復号が怪しい（パスは改めて聞く） | まだ |
+| それ以前 | [EmbedBench] | EmbedBenchDeviceData の sht30-modes（5 件、下） | 止めたクロックストレッチの所の 1 バイトが、版や回ごとに揺れる | まだ |
+
+sht30-modes の 5 件（EmbedBenchDeviceData の runs/ の下。c0001.wireskein が生、c0001.i2c.json が録ったときの復号）:
+
+| run | tx | 録ったとき | 0.0.37 |
+| --- | --- | --- | --- |
+| sht30-modes__i2c-100k__e6e40c831ed37b36 | 25 | 61 | b0 |
+| sht30-modes__i2c-100k__70985ea643366441 | 25 | b0 | 61 |
+| sht30-modes__i2c-100k__77c69e5b20545479 | 25 | b0 | 60 |
+| sht30-modes__i2c-400k__051aec57d17a9ced | 27 | 61 | b0 |
+| sht30-modes__i2c-1000k__dd2f2a0273e041b9 | 28 | 61 | b0 |
+
+- どれも、P4（コントローラ）が約 12 ms で待ちきれずに止めた、High のクロックストレッチの読み出し。ファームウェアはそこで読み出しを止めるので、**その 1 バイトは決まらないのが正しい**（[EmbedBench] の見立て。同意）。
+- 直す方向: そのバイトを確かな値として出さず、「読み切れていない」と印を付ける（止めたストレッチ、途中で切れた語。pending_bits と同じ考え）。Python と Rust の両方のエンジンで。正解は「そのバイトは決まらない」で、値は正解にしない。
 
 **正しく NG を出した例**（読みが疑わしい側ではない。「NG が正解」の組に使える）:
 
