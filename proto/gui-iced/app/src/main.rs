@@ -3,13 +3,15 @@
 //!
 //! wsk-iced [FILE] [--part K] [--synth N [--items M]] [--light] [--layout NAME] [--zoom Z --at F] [--search Q]
 //!          [--select ROW] [--no-analysis] [--detach-list] [--bench OUT.txt] [--shot OUT.png] [--size WxH]
-//!          [--present vsync|no_vsync|immediate|fifo|mailbox] [--vsync]
+//!          [--present vsync|no_vsync|immediate|fifo|mailbox] [--vsync] [--backend dx12|vulkan|gl]
 
 mod app;
 mod bench;
 mod dock;
 mod gpu;
 mod list;
+#[path = "../../../gui/egui/src/meter.rs"]
+mod meter;
 mod model;
 mod panels;
 mod png;
@@ -53,6 +55,9 @@ fn parse() -> (app::Args, Option<String>, bool) {
             "--detach-list" => a.detach_list = true,
             "--present" => present = Some(next(&mut i)),
             "--vsync" => vsync = true,
+            // the same as the environment's WGPU_BACKEND (dx12 / vulkan / gl), for a command line that sets no variable
+            // SAFETY: at the start, before any other thread runs
+            "--backend" => unsafe { std::env::set_var("WGPU_BACKEND", next(&mut i)) },
             "--size" => {
                 let s = next(&mut i);
                 if let Some((w, h)) = s.split_once('x') {
@@ -63,7 +68,7 @@ fn parse() -> (app::Args, Option<String>, bool) {
                 println!(
                     "wsk-iced [FILE] [--part K] [--synth N [--items M]] [--light] [--layout 標準|一覧を大きく|波形 2 つ]\n\
                      [--zoom Z --at F] [--search Q] [--select ROW] [--no-analysis] [--detach-list]\n\
-                     [--bench OUT.txt] [--shot OUT.png] [--size WxH] [--present vsync|no_vsync|immediate|fifo|mailbox] [--vsync]\n\
+                     [--bench OUT.txt] [--shot OUT.png] [--size WxH] [--present vsync|no_vsync|immediate|fifo|mailbox] [--vsync] [--backend dx12|vulkan|gl]\n\
                      (the backend: the environment's WGPU_BACKEND=dx12|vulkan|gl|metal)"
                 );
                 std::process::exit(0);
@@ -79,7 +84,9 @@ fn parse() -> (app::Args, Option<String>, bool) {
 }
 
 fn main() -> iced::Result {
-    let (args, present, vsync) = parse();
+    let (mut args, present, vsync) = parse();
+    // what has to be measured before the frames (meter.rs: Windows' cycle rate)
+    meter::init();
     let bench = args.bench.is_some();
     if bench {
         // iced's stages (its debug spans) to our own beacon server, wgpu's scopes to prof.rs
@@ -98,6 +105,10 @@ fn main() -> iced::Result {
         antialiasing: false,
         ..Default::default()
     };
+    // what iced_wgpu asks of the surface: ICED_PRESENT_MODE (ours from --present, or the environment's) over the settings
+    args.present_asked = std::env::var("ICED_PRESENT_MODE")
+        .ok()
+        .unwrap_or(if settings.vsync { "vsync" } else { "no_vsync" }.into());
     iced::daemon(move || app::App::boot(args.clone()), app::App::update, app::App::view)
         .title(app::App::title)
         .theme(app::App::theme)

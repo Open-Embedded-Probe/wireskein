@@ -689,8 +689,8 @@ impl Widget<Msg, Theme, iced::Renderer> for Wave<'_> {
         perf.acc[P_TEXT] += text_ms;
         perf.acc[P_WAVE] += t_all.elapsed().as_secs_f64() * 1e3;
         perf.wave(scene_ms as f32, sc.shapes, n_inst, n_labels);
-        if perf.first_paint.is_none() {
-            perf.first_paint = Some(cap.opened.elapsed().as_secs_f64());
+        if perf.drawn_at.is_none() {
+            perf.drawn_at = Some(cap.opened.elapsed().as_secs_f64());
         }
     }
 }

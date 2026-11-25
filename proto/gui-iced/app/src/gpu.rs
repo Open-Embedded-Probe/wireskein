@@ -210,3 +210,87 @@ impl shader::Primitive for WavePrim {
         true
     }
 }
+
+/// The bench's probe of the main window's surface (run on the main thread by `window::run`): a second wgpu instance
+/// set up as iced's compositor sets its own (the backends of WGPU_BACKEND, else all; the adapter by WGPU_POWER_PREF,
+/// else high performance, compatible with the window), a second surface on the same window, its present modes, and
+/// the mode wgpu gives the one asked for (the mode itself if the surface has it; AutoVsync: FifoRelaxed, Fifo;
+/// AutoNoVsync: Immediate, Mailbox, Fifo). Returns (the adapter, the line for `# present:`). Not on GL (a second
+/// surface on one window is not safe there).
+#[cfg(not(target_arch = "wasm32"))]
+pub fn probe(w: &dyn iced::window::Window, asked: &str) -> (String, String) {
+    use wgpu::PresentMode as P;
+    let asked_mode = match asked.to_lowercase().as_str() {
+        "vsync" => Some(P::AutoVsync),
+        "no_vsync" => Some(P::AutoNoVsync),
+        "immediate" => Some(P::Immediate),
+        "fifo" => Some(P::Fifo),
+        "fifo_relaxed" => Some(P::FifoRelaxed),
+        "mailbox" => Some(P::Mailbox),
+        _ => None,
+    };
+    let Some(asked_mode) = asked_mode else {
+        return (
+            "?".into(),
+            format!("asked {asked:?}: not a mode iced knows (it keeps its default)"),
+        );
+    };
+    let backends = wgpu::Backends::from_env().unwrap_or(wgpu::Backends::all());
+    if backends == wgpu::Backends::GL {
+        return (
+            "?".into(),
+            format!("asked {asked} ({asked_mode:?}) -> ? (GL: the surface not probed)"),
+        );
+    }
+    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+        backends,
+        ..Default::default()
+    });
+    // SAFETY: the window outlives the surface, dropped at the end of this function
+    let Some(surface) = unsafe { wgpu::SurfaceTargetUnsafe::from_window(&w) }
+        .ok()
+        .and_then(|t| unsafe { instance.create_surface_unsafe(t) }.ok())
+    else {
+        return (
+            "?".into(),
+            format!("asked {asked} ({asked_mode:?}) -> ? (no second surface on the window)"),
+        );
+    };
+    let adapter = iced::futures::executor::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+        power_preference: wgpu::PowerPreference::from_env().unwrap_or(wgpu::PowerPreference::HighPerformance),
+        compatible_surface: Some(&surface),
+        force_fallback_adapter: false,
+    }));
+    let Ok(adapter) = adapter else {
+        return ("?".into(), format!("asked {asked} ({asked_mode:?}) -> ? (no adapter)"));
+    };
+    let i = adapter.get_info();
+    let name = format!(
+        "{} ({:?}, {:?}, driver {} {})",
+        i.name, i.backend, i.device_type, i.driver, i.driver_info
+    );
+    let modes = surface.get_capabilities(&adapter).present_modes;
+    let got = if modes.contains(&asked_mode) {
+        Some(asked_mode)
+    } else {
+        let rule: &[P] = match asked_mode {
+            P::AutoVsync => &[P::FifoRelaxed, P::Fifo],
+            P::AutoNoVsync => &[P::Immediate, P::Mailbox, P::Fifo],
+            _ => &[],
+        };
+        rule.iter().copied().find(|x| modes.contains(x))
+    };
+    let held = match got {
+        Some(P::Fifo | P::FifoRelaxed) => "vsync ON: frames held to the screen's refresh",
+        Some(P::Immediate) => "vsync off, tearing allowed",
+        Some(P::Mailbox) => "vsync off, the newest frame shown without tearing",
+        Some(_) => "?",
+        None => "the surface has no such mode: wgpu cannot configure it",
+    };
+    let line = format!(
+        "asked {asked} ({asked_mode:?}) -> {} ({held}); the surface's modes {modes:?} on {:?}; frame latency 1 (iced's)",
+        got.map(|m| format!("{m:?}")).unwrap_or("none".into()),
+        i.backend
+    );
+    (name, line)
+}

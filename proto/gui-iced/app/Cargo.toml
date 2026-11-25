@@ -22,15 +22,19 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 web-time = "1"
 
-# --bench: iced's stage spans (iced_debug, "enable") received by a beacon server of our own (the protocol of iced's
-# debugger, comet); wgpu's profiling scopes as tracing spans timed by prof.rs (prototype 1's)
-iced_debug = { version = "0.14", features = ["enable"] }
+iced_debug = "0.14"
 # the trait that draws a shader primitive from a widget of our own (iced re-exports it only privately)
 iced_wgpu = "0.14"
-iced_beacon = "0.14"
-tokio = { version = "1", features = ["rt", "net"] }
 profiling = { version = "1", default-features = false, features = ["profile-with-tracing"] }
 tracing-core = { version = "0.1", default-features = false, features = ["std"] }
+
+# --bench: iced's stage spans (iced_debug, "enable") received by a beacon server of our own (the protocol of iced's
+# debugger, comet); wgpu's profiling scopes as tracing spans timed by prof.rs (prototype 1's). Not on the web: the
+# beacon is a TCP server (tokio's net, mio, has no wasm32-unknown-unknown)
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+iced_debug = { version = "0.14", features = ["enable"] }
+iced_beacon = "0.14"
+tokio = { version = "1", features = ["rt", "net"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 libc = "0.2"

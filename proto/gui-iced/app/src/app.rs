@@ -18,34 +18,8 @@ use std::sync::{Arc, Mutex};
 use view_core::Viewport;
 use web_time::Instant;
 
-pub fn rss_mb() -> Option<f64> {
-    #[cfg(target_os = "linux")]
-    {
-        std::fs::read_to_string("/proc/self/statm")
-            .ok()
-            .and_then(|s| s.split_whitespace().nth(1).and_then(|x| x.parse::<f64>().ok()))
-            .map(|p| p * 4096.0 / 1e6)
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        None
-    }
-}
-
-/// The CPU time of this thread, ms (Linux; elsewhere NaN).
-pub fn thread_cpu_ms() -> f64 {
-    #[cfg(target_os = "linux")]
-    {
-        let mut t = libc::timespec { tv_sec: 0, tv_nsec: 0 };
-        // SAFETY: a valid timespec to fill
-        unsafe { libc::clock_gettime(libc::CLOCK_THREAD_CPUTIME_ID, &mut t) };
-        t.tv_sec as f64 * 1e3 + t.tv_nsec as f64 / 1e6
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        f64::NAN
-    }
-}
+/// The process's memory and this thread's CPU time: prototype 1's meter.rs (the same way in every prototype)
+pub use crate::meter::{rss_mb, thread_cpu_ms};
 
 #[derive(Clone, Debug, Default)]
 pub struct Args {
@@ -63,6 +37,8 @@ pub struct Args {
     pub no_analysis: bool,
     pub detach_list: bool,
     pub size: (f32, f32),
+    /// the present mode asked of iced (ICED_PRESENT_MODE, else vsync / no_vsync from the settings)
+    pub present_asked: String,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -118,8 +94,14 @@ pub struct Perf {
     pub shapes: usize,
     pub instances: usize,
     pub labels: usize,
+    /// the first frame with the capture drawn, shown: the frame tick after the one whose waveform drew it (s after the
+    /// capture was opened)
     pub first_paint: Option<f64>,
-    /// the main window opened (s after the capture was opened: iced's window, wgpu's device and surface)
+    /// the waveform first drew the capture (its draw commands queued, not yet shown)
+    pub drawn_at: Option<f64>,
+    /// the main window's first view (s after the capture was opened: iced's window, wgpu's device and surface up)
+    pub first_view: Option<f64>,
+    /// iced's window-opened message handled (s after the capture was opened; it can come after the first frames)
     pub win_opened: Option<f64>,
     pub acc: [f64; P_N],
     /// instances, labels, shapes, waves drawn (summed, for the bench)
@@ -238,6 +220,9 @@ pub enum Msg {
     Shot(window::Screenshot),
     Info(String, f32),
     Gpu(String),
+    /// the probe of the main window's surface (gpu.rs `probe`): the adapter, the present mode it gets
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    Present(String, String),
 }
 
 pub struct App {
@@ -268,6 +253,9 @@ pub struct App {
     pub next_id: u32,
     pub focus_wave: u32,
     pub gpu: RefCell<String>,
+    /// the present mode asked for and the one the surface gets (the bench's header)
+    pub present: RefCell<String>,
+    probe_asked: bool,
     pub win_size: Size,
     pub scale: f32,
     shot_at: Option<Instant>,
@@ -313,6 +301,8 @@ impl App {
             next_id: 1,
             focus_wave: 0,
             gpu: RefCell::new(String::from("?")),
+            present: RefCell::new(String::new()),
+            probe_asked: false,
             win_size: Size::new(args.size.0, args.size.1),
             scale: 1.0,
             shot_at: None,
@@ -975,6 +965,13 @@ impl App {
                 return iced::exit();
             }
             Msg::Gpu(g) => *self.gpu.borrow_mut() = g,
+            Msg::Present(adapter, present) => {
+                // iced's own answer (system::information) first; the probe's adapter where it never came
+                if *self.gpu.borrow() == "?" {
+                    *self.gpu.borrow_mut() = format!("{adapter} (the probe's: iced's system information did not come)");
+                }
+                *self.present.borrow_mut() = present;
+            }
             Msg::Info(k, v) => {
                 if k == "scale" {
                     self.scale = v;
@@ -1044,6 +1041,13 @@ impl App {
         self.last_frame = Some(now);
         {
             let mut p = self.perf.borrow_mut();
+            // the first paint: this tick follows the frame whose waveform drew the capture (that frame presented)
+            if p.first_paint.is_none()
+                && p.drawn_at.is_some()
+                && let Some(c) = &self.cap
+            {
+                p.first_paint = Some(c.opened.elapsed().as_secs_f64());
+            }
             p.frame(self.started.elapsed().as_secs_f64(), dt_ms);
             let cpu = thread_cpu_ms();
             if let Some(c0) = self.last_cpu {
@@ -1085,6 +1089,22 @@ impl App {
             self.zoom_done = true;
         }
         let mut tasks = vec![];
+        // the bench, once the capture is drawn: the main window's surface probed (the present mode it gets, the adapter),
+        // and iced's system information asked again (asked at the start, it is lost when no window is up yet)
+        if self.bench.is_some() && !self.probe_asked && self.perf.borrow().first_paint.is_some() {
+            self.probe_asked = true;
+            let asked = self.args.present_asked.clone();
+            tasks.push(
+                iced::system::information()
+                    .map(|i| Msg::Gpu(format!("{} ({})", i.graphics_adapter, i.graphics_backend))),
+            );
+            #[cfg(not(target_arch = "wasm32"))]
+            tasks.push(
+                window::run(self.main_win, move |w| crate::gpu::probe(w, &asked)).map(|(a, p)| Msg::Present(a, p)),
+            );
+            #[cfg(target_arch = "wasm32")]
+            let _ = asked;
+        }
         if let Some(mut b) = self.bench.take() {
             if !b.done() {
                 let fid = self.first_wave_id();
@@ -1142,6 +1162,15 @@ impl App {
 
     pub fn view(&self, id: window::Id) -> Element<'_, Msg> {
         let t = Instant::now();
+        // the main window's first view: iced asks for it once the window, wgpu's device and its surface are up
+        if id == self.main_win
+            && let Some(c) = &self.cap
+        {
+            let mut p = self.perf.borrow_mut();
+            if p.first_view.is_none() {
+                p.first_view = Some(c.opened.elapsed().as_secs_f64());
+            }
+        }
         let pal = self.pal;
         let e: Element<'_, Msg> = if let Some(&p) = self.detached.get(&id) {
             container(self.panel_body(p))

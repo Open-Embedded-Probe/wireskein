@@ -16,7 +16,12 @@ use web_time::Instant;
 
 static SPANS: Mutex<Vec<(SystemTime, &'static str, f64)>> = Mutex::new(Vec::new());
 
+/// The web: no beacon (no TCP server), iced's stages not counted.
+#[cfg(target_arch = "wasm32")]
+pub fn start_server() {}
+
 /// The beacon server on a free port of this machine (before iced starts: its client reads the address then).
+#[cfg(not(target_arch = "wasm32"))]
 pub fn start_server() {
     let port = std::net::TcpListener::bind("127.0.0.1:0")
         .ok()
@@ -140,6 +145,8 @@ pub struct Bench {
     whole: Option<(SystemTime, crate::prof::Totals)>,
     lines: Vec<String>,
     parts: Vec<String>,
+    /// the main thread's CPU from the first zoom on, by both clocks (meter.rs)
+    cpu_check: Option<crate::meter::Check>,
 }
 
 impl Bench {
@@ -155,6 +162,7 @@ impl Bench {
             whole: None,
             lines: vec![],
             parts: vec![],
+            cpu_check: None,
         }
     }
     pub fn done(&self) -> bool {
@@ -254,24 +262,34 @@ pub fn step(app: &App, b: &mut Bench, dt_ms: f32, width: f32, gpu: &str) -> (Opt
                     cap.lod_s.lock().unwrap().unwrap_or(f64::NAN),
                     app.analysis.as_ref().map(|a| format!("{:.2} s", a.seconds)).unwrap_or("-".into())
                 ));
-                let wo = app.perf.borrow().win_opened;
+                let (fv, wo) = {
+                    let p = app.perf.borrow();
+                    (p.first_view, p.win_opened)
+                };
+                let ms = |s: Option<f64>| s.map(|s| format!("{:.0} ms", s * 1e3)).unwrap_or("-".into());
                 b.lines.push(format!(
-                    "# the main window opened {} after the capture (iced's window, wgpu's device and surface); its first paint {} after that",
-                    wo.map(|s| format!("{:.0} ms", s * 1e3)).unwrap_or("-".into()),
-                    match (wo, perf_first) {
+                    "# the main window's first view {} after the capture was opened (iced's window, wgpu's device and surface up); the first paint {} after that (prototype 1's first paint spans the same: from a window that is up); iced's window-opened message at {}",
+                    ms(fv),
+                    match (fv, perf_first) {
                         (Some(a), Some(b)) => format!("{:.0} ms", (b - a) * 1e3),
                         _ => "-".into(),
-                    }
+                    },
+                    ms(wo)
                 ));
                 b.lines.push(format!(
                     "# window {:.0}x{:.0} (logical px), scale {:.2}, waveform {:.0} px wide",
                     app.win_size.width, app.win_size.height, app.scale, width
                 ));
                 b.lines.push("# gpu: (at the end)".into());
+                // the mode asked for (--present / ICED_PRESENT_MODE, else --vsync or not) and the one the surface gets
+                // (gpu.rs probe, after the first paint), filled in at the end
+                b.lines.push("# present: (at the end)".into());
                 b.lines.push(format!(
-                    "# present: {} (ICED_PRESENT_MODE; vsync off unless --vsync)",
-                    std::env::var("ICED_PRESENT_MODE").unwrap_or("no_vsync".into())
+                    "# meter: {}; this program built {}",
+                    crate::meter::method(),
+                    crate::meter::exe_time()
                 ));
+                b.cpu_check = Some(crate::meter::check());
                 b.lines
                     .push("| ticks/px | fps (median) | frame ms p50 / p95 | waveform CPU ms (scene) |".into());
                 b.lines.push("|---|---|---|---|".into());
@@ -354,6 +372,9 @@ pub fn step(app: &App, b: &mut Bench, dt_ms: f32, width: f32, gpu: &str) -> (Opt
                     cap.mem_bytes() as f64 / 1e6,
                     rss_mb().unwrap_or(f64::NAN)
                 ));
+                if let Some(c) = &b.cpu_check {
+                    b.lines.push(c.report());
+                }
                 b.lines.push(String::new());
                 b.lines.push(
                     "## the frame's parts (ms a frame, mean; iced's stages from its debug spans, wgpu's scopes, the app's own; gap = dt - (update + view + layout + interact + draw + present))"
@@ -383,9 +404,20 @@ pub fn step(app: &App, b: &mut Bench, dt_ms: f32, width: f32, gpu: &str) -> (Opt
                     "bench: {:.1} s from the start",
                     app.started.elapsed().as_secs_f64()
                 ));
+                let present = app.present.borrow().clone();
                 for l in b.lines.iter_mut() {
                     if l == "# gpu: (at the end)" {
                         *l = format!("# gpu: {gpu}");
+                    }
+                    if l == "# present: (at the end)" {
+                        *l = if present.is_empty() {
+                            format!(
+                                "# present: asked {} -> ? (the probe did not come)",
+                                app.args.present_asked
+                            )
+                        } else {
+                            format!("# present: {present}")
+                        };
                     }
                 }
                 let text = b.lines.join("\n") + "\n";
