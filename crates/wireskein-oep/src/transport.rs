@@ -4,18 +4,20 @@
 //! Each has a thread of its own taking what comes in, so a stream is taken while the caller is busy: the USB one keeps
 //! many IN transfers queued in the kernel (oep-client-python's usb-async / UsbProcessStream: the probe ends a transfer
 //! with a short packet, so a transfer holds one frame and the depth is how many frames the host can hold back), and
-//! puts what came in on a bounded queue - past it the transfers are not sent out again, the probe's own buffer fills
-//! and it drops whole frames, which the stream's positions show as a loss (memory stays bounded whatever the host
-//! keeps up with).
+//! puts what came in on a queue the reader takes from. It does not wait for the reader, nor for what the reader hands
+//! on (the spool), while the stream's backlog in bytes is within its budget (`flow`); past it the transfers are not
+//! sent out again, the probe's own buffer fills and it drops whole frames, which the stream's positions show as a
+//! loss (memory stays bounded whatever the host keeps up with).
 
+use crate::flow::Flow;
 use crate::msg::{Error, Result};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, TryRecvError, channel};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// The vendor bulk interface (transports §3).
 pub const VENDOR_CLASS: u8 = 0xFF;
@@ -26,8 +28,7 @@ pub const URB_SIZE: usize = 32 * 1024;
 /// IN transfers kept queued: 480 x 32 KiB is 15 MiB of usbfs_memory_mb's default 16 (a submit refused leaves the depth
 /// at what it took).
 pub const DEPTH: usize = 480;
-/// Chunks waiting for the caller at most (each one transfer's, a frame: about 20 KB at 40 MB/s, at most 32 KiB -
-/// 80 to 128 MiB, as oep-client-python's UsbProcessStream holds in its two processes).
+/// The first shape's bound on the queue to the caller, in chunks (§37; a bench compares it, `Flow::counts`).
 pub const BACKLOG: usize = 4096;
 
 /// What the IN side did (meta.probe.link's reader statistics).
@@ -39,8 +40,61 @@ pub struct Stats {
     pub inflight_min: AtomicU64,
     /// the longest between two completions, in microseconds
     pub gap_max_us: AtomicU64,
-    /// times the queue to the caller was full (the transfer held back until there was room)
+    /// times a chunk was held back (the stream's backlog at its budget) until there was room
     pub held: AtomicU64,
+}
+
+/// What came in, in order, as the reader takes it (the bytes counted out of the stream's backlog).
+pub struct Incoming {
+    rx: Receiver<Vec<u8>>,
+    flow: Arc<Flow>,
+    /// whether what comes was counted in (a test's channel is not)
+    counted: bool,
+}
+
+impl Incoming {
+    fn took(&self, c: &[u8]) {
+        if self.counted {
+            self.flow.unqueue(c.len() as u64);
+        }
+    }
+    pub fn recv_timeout(&self, d: Duration) -> std::result::Result<Vec<u8>, RecvTimeoutError> {
+        let r = self.rx.recv_timeout(d);
+        if let Ok(c) = &r {
+            self.took(c);
+        }
+        r
+    }
+    pub fn try_recv(&self) -> std::result::Result<Vec<u8>, TryRecvError> {
+        let r = self.rx.try_recv();
+        if let Ok(c) = &r {
+            self.took(c);
+        }
+        r
+    }
+}
+
+/// A chunk to the reader: at once while the stream's backlog has room (whatever the reader and the spool are doing);
+/// past its budget it waits there - false: stopped, or nobody reads.
+fn deliver(tx: &Sender<Vec<u8>>, chunk: Vec<u8>, flow: &Flow, stats: &Stats, stop: &AtomicBool) -> bool {
+    let n = chunk.len() as u64;
+    if !flow.room_for(n) {
+        stats.held.fetch_add(1, Ordering::Relaxed);
+        let t = Instant::now();
+        while !flow.room_for(n) {
+            if stop.load(Ordering::SeqCst) {
+                return false;
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        Flow::longest(&flow.held_max_us, t);
+    }
+    flow.queue(n);
+    if tx.send(chunk).is_err() {
+        flow.unqueue(n);
+        return false;
+    }
+    true
 }
 
 trait Sink: Send {
@@ -49,7 +103,7 @@ trait Sink: Send {
 
 /// One open stream: what came in (chunks, in order), how to write, and what reads it.
 pub struct Transport {
-    pub rx: Receiver<Vec<u8>>,
+    pub rx: Incoming,
     out: Box<dyn Sink>,
     stop: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
@@ -59,6 +113,8 @@ pub struct Transport {
     /// a stream that never loses a frame boundary (TCP)
     pub keeps_boundaries: bool,
     pub stats: Arc<Stats>,
+    /// the stream's backlog, shared with what the reader hands on (the spool)
+    pub flow: Arc<Flow>,
     /// the IN transfers queued (USB)
     pub depth: usize,
     /// a serial port: its path, and how its line speed is set (the host side of port_speed)
@@ -117,10 +173,11 @@ pub fn open_tcp(host: &str, port: u16) -> Result<Transport> {
     let _ = s.set_nodelay(true);
     let mut r = s.try_clone()?;
     let closer = s.try_clone()?;
-    let (tx, rx) = sync_channel::<Vec<u8>>(BACKLOG);
+    let (tx, rx) = channel::<Vec<u8>>();
     let stop = Arc::new(AtomicBool::new(false));
     let stats = Arc::new(Stats::default());
-    let (st, stats2) = (stop.clone(), stats.clone());
+    let flow = Arc::new(Flow::default());
+    let (st, stats2, flow2) = (stop.clone(), stats.clone(), flow.clone());
     let thread = std::thread::Builder::new().name("oep-tcp-in".into()).spawn(move || {
         let mut buf = vec![0u8; 64 * 1024];
         while !st.load(Ordering::SeqCst) {
@@ -128,7 +185,7 @@ pub fn open_tcp(host: &str, port: u16) -> Result<Transport> {
                 Ok(0) | Err(_) => break,
                 Ok(n) => {
                     stats2.bytes.fetch_add(n as u64, Ordering::Relaxed);
-                    if tx.send(buf[..n].to_vec()).is_err() {
+                    if !deliver(&tx, buf[..n].to_vec(), &flow2, &stats2, &st) {
                         break;
                     }
                 }
@@ -136,7 +193,12 @@ pub fn open_tcp(host: &str, port: u16) -> Result<Transport> {
         }
     })?;
     Ok(Transport {
-        rx,
+        rx: Incoming {
+            rx,
+            flow: flow.clone(),
+            counted: true,
+        },
+        flow,
         out: Box::new(TcpSink(s)),
         stop,
         thread: Some(thread),
@@ -237,16 +299,22 @@ pub fn open_usb(info: &nusb::DeviceInfo, urb: usize, depth: usize) -> Result<Tra
         let b = rd.allocate(urb);
         rd.submit(b);
     }
-    let (tx, rx) = sync_channel::<Vec<u8>>(BACKLOG);
+    let (tx, rx) = channel::<Vec<u8>>();
     let stop = Arc::new(AtomicBool::new(false));
     let stats = Arc::new(Stats::default());
+    let flow = Arc::new(Flow::default());
     stats.inflight_min.store(depth as u64, Ordering::Relaxed);
-    let (st, stats2) = (stop.clone(), stats.clone());
+    let (st, stats2, flow2) = (stop.clone(), stats.clone(), flow.clone());
     let thread = std::thread::Builder::new()
         .name("oep-usb-in".into())
-        .spawn(move || usb_in(rd, tx, st, stats2, urb))?;
+        .spawn(move || usb_in(rd, tx, st, stats2, flow2, urb))?;
     Ok(Transport {
-        rx,
+        rx: Incoming {
+            rx,
+            flow: flow.clone(),
+            counted: true,
+        },
+        flow,
         out: Box::new(UsbSink { ep: Mutex::new(wr) }),
         stop,
         thread: Some(thread),
@@ -260,16 +328,17 @@ pub fn open_usb(info: &nusb::DeviceInfo, urb: usize, depth: usize) -> Result<Tra
     })
 }
 
-/// The IN thread: every transfer that comes back is copied out and sent out again at once, unless the caller's
-/// queue is full - then it waits there (the kernel takes no more into it meanwhile; the others stay queued).
+/// The IN thread: every transfer that comes back is copied out and sent out again at once, unless the stream's
+/// backlog is at its budget - then it waits there (the kernel takes no more into it meanwhile; the others stay
+/// queued).
 fn usb_in(
     mut ep: nusb::Endpoint<Bulk, In>,
-    tx: SyncSender<Vec<u8>>,
+    tx: Sender<Vec<u8>>,
     stop: Arc<AtomicBool>,
     stats: Arc<Stats>,
+    flow: Arc<Flow>,
     urb: usize,
 ) {
-    use std::sync::mpsc::TrySendError;
     let mut last: Option<std::time::Instant> = None;
     let mut failed_at_start = 0usize;
     let mut got_any = false;
@@ -291,20 +360,8 @@ fn usb_in(
                 if n > 0 {
                     stats.bytes.fetch_add(n as u64, Ordering::Relaxed);
                     stats.transfers.fetch_add(1, Ordering::Relaxed);
-                    let mut chunk = c.buffer[..n].to_vec();
-                    loop {
-                        match tx.try_send(chunk) {
-                            Ok(()) => break,
-                            Err(TrySendError::Full(back)) => {
-                                stats.held.fetch_add(1, Ordering::Relaxed);
-                                if stop.load(Ordering::SeqCst) {
-                                    return;
-                                }
-                                std::thread::sleep(Duration::from_millis(1));
-                                chunk = back;
-                            }
-                            Err(TrySendError::Disconnected(_)) => return,
-                        }
+                    if !deliver(&tx, c.buffer[..n].to_vec(), &flow, &stats, &stop) {
+                        return;
                     }
                 }
                 let mut b = c.buffer;
@@ -346,8 +403,14 @@ impl Sink for NullSink {
 impl Transport {
     /// A stream that only brings what `rx` gives (writes go nowhere): for a test of what reads it.
     pub fn from_rx(rx: Receiver<Vec<u8>>) -> Transport {
+        let flow = Arc::new(Flow::default());
         Transport {
-            rx,
+            rx: Incoming {
+                rx,
+                flow: flow.clone(),
+                counted: false,
+            },
+            flow,
             out: Box::new(NullSink),
             stop: Arc::new(AtomicBool::new(false)),
             thread: None,
@@ -361,12 +424,70 @@ impl Transport {
         }
     }
 
+    /// A stream whose IN side takes what `kernel` gives as the USB one takes its transfers back (a test's or a bench's
+    /// probe: what it cannot put in `kernel` it drops), counted in `flow`; writes go nowhere.
+    pub fn in_side_of(kernel: Receiver<Vec<u8>>, flow: Arc<Flow>) -> Transport {
+        let (tx, rx) = channel::<Vec<u8>>();
+        let stop = Arc::new(AtomicBool::new(false));
+        let stats = Arc::new(Stats::default());
+        let (st, stats2, flow2) = (stop.clone(), stats.clone(), flow.clone());
+        let thread = std::thread::Builder::new()
+            .name("oep-test-in".into())
+            .spawn(move || {
+                let mut last: Option<Instant> = None;
+                while !st.load(Ordering::SeqCst) {
+                    let c = match kernel.recv_timeout(Duration::from_millis(100)) {
+                        Ok(c) => c,
+                        Err(RecvTimeoutError::Timeout) => continue,
+                        Err(RecvTimeoutError::Disconnected) => break,
+                    };
+                    let now = Instant::now();
+                    if let Some(t) = last {
+                        stats2
+                            .gap_max_us
+                            .fetch_max(now.duration_since(t).as_micros() as u64, Ordering::Relaxed);
+                    }
+                    last = Some(now);
+                    stats2.bytes.fetch_add(c.len() as u64, Ordering::Relaxed);
+                    stats2.transfers.fetch_add(1, Ordering::Relaxed);
+                    if !deliver(&tx, c, &flow2, &stats2, &st) {
+                        break;
+                    }
+                }
+            })
+            .expect("a thread");
+        Transport {
+            rx: Incoming {
+                rx,
+                flow: flow.clone(),
+                counted: true,
+            },
+            flow,
+            out: Box::new(NullSink),
+            stop,
+            thread: Some(thread),
+            shutdown: None,
+            reader: "test",
+            keeps_boundaries: false,
+            stats,
+            depth: 0,
+            port_path: None,
+            set_baud: None,
+        }
+    }
+
     /// A stream whose writes go to `answer` and whose reads are what it gives back (a scripted probe for tests);
     /// `keeps_boundaries` as TCP's.
     pub fn scripted<F: FnMut(&[u8]) -> Vec<Vec<u8>> + Send + 'static>(answer: F, keeps_boundaries: bool) -> Transport {
-        let (tx, rx) = sync_channel::<Vec<u8>>(BACKLOG);
+        let (tx, rx) = channel::<Vec<u8>>();
+        let flow = Arc::new(Flow::default());
         Transport {
-            rx,
+            rx: Incoming {
+                rx,
+                flow: flow.clone(),
+                counted: false,
+            },
+            flow,
             out: Box::new(ScriptSink { answer, tx }),
             stop: Arc::new(AtomicBool::new(false)),
             thread: None,
@@ -384,7 +505,7 @@ impl Transport {
 /// A stand-in probe for tests: each write handed to `answer`, whose chunks come back as what was read.
 struct ScriptSink<F: FnMut(&[u8]) -> Vec<Vec<u8>> + Send> {
     answer: F,
-    tx: SyncSender<Vec<u8>>,
+    tx: Sender<Vec<u8>>,
 }
 
 impl<F: FnMut(&[u8]) -> Vec<Vec<u8>> + Send> Sink for ScriptSink<F> {
@@ -456,10 +577,11 @@ pub fn open_serial(path: &str, baud: u32) -> Result<Transport> {
     termios_at(&f, baud)?;
     let mut r = f.try_clone()?;
     let w = f.try_clone()?;
-    let (tx, rx) = sync_channel::<Vec<u8>>(BACKLOG);
+    let (tx, rx) = channel::<Vec<u8>>();
     let stop = Arc::new(AtomicBool::new(false));
     let stats = Arc::new(Stats::default());
-    let (st, stats2) = (stop.clone(), stats.clone());
+    let flow = Arc::new(Flow::default());
+    let (st, stats2, flow2) = (stop.clone(), stats.clone(), flow.clone());
     let thread = std::thread::Builder::new()
         .name("oep-serial-in".into())
         .spawn(move || {
@@ -469,7 +591,7 @@ pub fn open_serial(path: &str, baud: u32) -> Result<Transport> {
                     Ok(0) => continue,
                     Ok(n) => {
                         stats2.bytes.fetch_add(n as u64, Ordering::Relaxed);
-                        if tx.send(buf[..n].to_vec()).is_err() {
+                        if !deliver(&tx, buf[..n].to_vec(), &flow2, &stats2, &st) {
                             break;
                         }
                     }
@@ -485,7 +607,12 @@ pub fn open_serial(path: &str, baud: u32) -> Result<Transport> {
         })?;
     let setter = f;
     Ok(Transport {
-        rx,
+        rx: Incoming {
+            rx,
+            flow: flow.clone(),
+            counted: true,
+        },
+        flow,
         out: Box::new(FileSink(w)),
         stop,
         thread: Some(thread),

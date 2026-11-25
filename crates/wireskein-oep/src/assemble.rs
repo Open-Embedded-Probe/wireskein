@@ -6,12 +6,15 @@
 
 use crate::blocks::{self, BitBuf, Blocks, Column};
 use crate::capture::SegmentInfo;
+use crate::flow::Flow;
 use crate::msg::{Error, Result};
 use crate::ratio::Ratio;
 use serde_json::{Map, Value, json};
 use std::collections::BTreeMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::time::Instant;
 
 /// A channel's bits: in memory, or in a file (a long stream's).
 #[derive(Debug, Clone)]
@@ -165,9 +168,90 @@ pub fn round_div(n: i128, d: i128) -> i128 {
     }
 }
 
+/// A spool's file: each write timed (how long the disk held the spool back, `Flow::write_max_us`).
+struct Timed {
+    f: Arc<std::fs::File>,
+    flow: Option<Arc<Flow>>,
+    /// the writes handed to a thread of their own (`Shape::writer`)
+    writer: Option<Arc<Writer>>,
+}
+
+/// The thread a spool's files are written on (`Shape::writer`): the spool hands each buffer over and goes on putting
+/// together; the bytes it holds count in the stream's backlog (`Flow::writing`).
+struct Writer {
+    tx: std::sync::Mutex<std::sync::mpsc::Sender<(Arc<std::fs::File>, Vec<u8>)>>,
+    failed: Arc<std::sync::Mutex<Option<String>>>,
+}
+
+impl Writer {
+    fn start(flow: Arc<Flow>) -> Writer {
+        use std::sync::atomic::Ordering;
+        let (tx, rx) = std::sync::mpsc::channel::<(Arc<std::fs::File>, Vec<u8>)>();
+        let failed = Arc::new(std::sync::Mutex::new(None));
+        let f2 = failed.clone();
+        std::thread::Builder::new()
+            .name("oep-spool-write".into())
+            .spawn(move || {
+                for (f, d) in rx {
+                    let t = Instant::now();
+                    if let Err(e) = (&*f).write_all(&d) {
+                        f2.lock().expect("failed").get_or_insert(e.to_string());
+                    }
+                    Flow::longest(&flow.write_max_us, t);
+                    flow.writing.fetch_sub(d.len() as u64, Ordering::Relaxed);
+                }
+            })
+            .expect("a thread");
+        Writer {
+            tx: std::sync::Mutex::new(tx),
+            failed,
+        }
+    }
+
+    fn failed(&self) -> std::io::Result<()> {
+        match self.failed.lock().expect("failed").as_ref() {
+            Some(e) => Err(std::io::Error::other(e.clone())),
+            None => Ok(()),
+        }
+    }
+}
+
+impl Write for Timed {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        if let (Some(w), Some(fl)) = (&self.writer, &self.flow) {
+            w.failed()?;
+            fl.writing
+                .fetch_add(buf.len() as u64, std::sync::atomic::Ordering::Relaxed);
+            fl.note_backlog();
+            let sent = w.tx.lock().expect("tx").send((self.f.clone(), buf.to_vec()));
+            if sent.is_err() {
+                return Err(std::io::Error::other("the spool's writer stopped"));
+            }
+            return Ok(buf.len());
+        }
+        let t = Instant::now();
+        let r = (&*self.f).write(buf);
+        if let Some(fl) = &self.flow {
+            Flow::longest(&fl.write_max_us, t);
+        }
+        r
+    }
+    /// Everything handed over written (a writer's queue drained).
+    fn flush(&mut self) -> std::io::Result<()> {
+        if let (Some(w), Some(fl)) = (&self.writer, &self.flow) {
+            while fl.writing.load(std::sync::atomic::Ordering::Relaxed) > 0 {
+                w.failed()?;
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+            w.failed()?;
+        }
+        Ok(())
+    }
+}
+
 enum Sink {
     Mem(BitBuf),
-    File(BitBuf, std::io::BufWriter<std::fs::File>, PathBuf),
+    File(BitBuf, std::io::BufWriter<Timed>, PathBuf),
 }
 
 impl Sink {
@@ -235,6 +319,9 @@ pub struct Spool {
     last_end: Option<u64>,
     /// bytes put together
     pub bytes: u64,
+    /// the stream's counts (a spool on a worker's thread)
+    pub flow: Option<Arc<Flow>>,
+    writer: Option<Arc<Writer>>,
 }
 
 impl Spool {
@@ -266,6 +353,8 @@ impl Spool {
             last_samples: 0,
             last_end: None,
             bytes: 0,
+            flow: None,
+            writer: None,
         }
     }
 
@@ -506,7 +595,25 @@ impl Spool {
                 Some(d) => {
                     let p = d.join(format!("p{k}-{j}.bits"));
                     let f = std::fs::File::create(&p).map_err(|e| Error::Io(format!("{}: {e}", p.display())))?;
-                    Sink::File(BitBuf::default(), std::io::BufWriter::new(f), p)
+                    let cap = self
+                        .flow
+                        .as_ref()
+                        .map(|f| f.shape.file_buffer)
+                        .unwrap_or(crate::flow::FILE_BUFFER);
+                    let writer = match &self.flow {
+                        Some(fl) if fl.shape.writer => Some(
+                            self.writer
+                                .get_or_insert_with(|| Arc::new(Writer::start(fl.clone())))
+                                .clone(),
+                        ),
+                        _ => None,
+                    };
+                    let f = Timed {
+                        f: Arc::new(f),
+                        flow: self.flow.clone(),
+                        writer,
+                    };
+                    Sink::File(BitBuf::default(), std::io::BufWriter::with_capacity(cap, f), p)
                 }
             });
         }
@@ -636,32 +743,56 @@ enum Job {
     Work,
 }
 
-/// A spool on a thread of its own (acquire._Spool's worker): the reader hands the pushes over and goes on reading; a
-/// queue of QUEUE jobs at most (past it the reader waits, the transport's queue fills, the probe drops whole frames,
-/// which the positions show).
+/// A spool on a thread of its own (acquire._Spool's worker): the reader hands the pushes over and goes on reading.
+/// It never waits for the worker (but in the first shape, `Shape::counts`): what the worker has not yet taken counts
+/// in the stream's backlog (`Flow`), which the transport's IN side keeps within its budget.
 pub struct SpoolWorker {
-    tx: Option<std::sync::mpsc::SyncSender<Job>>,
+    tx: Option<std::sync::mpsc::Sender<Job>>,
     thread: Option<std::thread::JoinHandle<Result<Spool>>>,
-    lost: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    lost: Arc<std::sync::atomic::AtomicBool>,
+    flow: Arc<Flow>,
 }
 
 impl SpoolWorker {
-    const QUEUE: usize = 8192;
+    /// A worker with counts of its own (a test's, or a spool apart from a transport).
+    pub fn start(spool: Spool) -> SpoolWorker {
+        SpoolWorker::start_with(spool, Arc::new(Flow::new(crate::flow::Shape::default())))
+    }
 
-    pub fn start(mut spool: Spool) -> SpoolWorker {
+    /// A worker counting in `flow` (the transport's: its IN side sees the whole backlog).
+    pub fn start_with(mut spool: Spool, flow: Arc<Flow>) -> SpoolWorker {
         use std::sync::atomic::Ordering;
-        let (tx, rx) = std::sync::mpsc::sync_channel::<Job>(Self::QUEUE);
-        let lost = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let (tx, rx) = std::sync::mpsc::channel::<Job>();
+        let lost = Arc::new(std::sync::atomic::AtomicBool::new(false));
         let flag = lost.clone();
+        spool.flow = Some(flow.clone());
+        let fl = flow.clone();
         let thread = std::thread::Builder::new()
             .name("oep-spool".into())
             .spawn(move || {
+                crate::flow::nicer(fl.shape.spool_nice);
                 for job in rx {
+                    let t = Instant::now();
                     match job {
                         Job::Segment(i) => spool.segment(i),
-                        Job::Run(p, d) => spool.run(p, &d)?,
-                        Job::Work => spool.work(false, None)?,
+                        Job::Run(p, d) => {
+                            // counted as pending before it leaves `behind`: the backlog is never seen smaller
+                            // than it is
+                            let r = spool.run(p, &d);
+                            fl.pending.store(spool.pending.len() as u64, Ordering::Relaxed);
+                            fl.taken(d.len() as u64);
+                            r?
+                        }
+                        Job::Work => {
+                            #[cfg(test)]
+                            if let Some(d) = fl.stall.lock().expect("stall").take() {
+                                std::thread::sleep(d);
+                            }
+                            spool.work(false, None)?
+                        }
                     }
+                    fl.pending.store(spool.pending.len() as u64, Ordering::Relaxed);
+                    Flow::longest(&fl.work_max_us, t);
                     if spool.lost_any() {
                         flag.store(true, Ordering::SeqCst);
                     }
@@ -673,13 +804,32 @@ impl SpoolWorker {
             tx: Some(tx),
             thread: Some(thread),
             lost,
+            flow,
         }
     }
 
     fn send(&mut self, job: Job) -> Result<()> {
+        if let Job::Run(_, d) = &job {
+            if !self.flow.spool_room() {
+                let t = Instant::now();
+                while !self.flow.spool_room() && self.thread.as_ref().is_some_and(|t| !t.is_finished()) {
+                    std::thread::sleep(std::time::Duration::from_millis(1));
+                }
+                Flow::longest(&self.flow.hand_max_us, t);
+            }
+            self.flow.hand(d.len() as u64);
+        }
         match &self.tx {
-            Some(tx) if tx.send(job).is_ok() => Ok(()),
-            _ => Err(self.stop_err()),
+            Some(tx) => match tx.send(job) {
+                Ok(()) => Ok(()),
+                Err(e) => {
+                    if let Job::Run(_, d) = &e.0 {
+                        self.flow.taken(d.len() as u64);
+                    }
+                    Err(self.stop_err())
+                }
+            },
+            None => Err(self.stop_err()),
         }
     }
 
@@ -701,6 +851,20 @@ impl SpoolWorker {
         };
         spool.finish(write_pos)?;
         Ok(spool.take())
+    }
+}
+
+impl Drop for SpoolWorker {
+    /// Whatever it had not put together leaves the stream's backlog (a worker that stopped in error kept some).
+    fn drop(&mut self) {
+        use std::sync::atomic::Ordering;
+        self.tx = None;
+        if let Some(t) = self.thread.take() {
+            let _ = t.join();
+        }
+        self.flow.behind.store(0, Ordering::Relaxed);
+        self.flow.behind_n.store(0, Ordering::Relaxed);
+        self.flow.pending.store(0, Ordering::Relaxed);
     }
 }
 

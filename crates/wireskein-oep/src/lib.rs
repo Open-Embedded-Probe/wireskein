@@ -22,6 +22,7 @@ pub mod assemble;
 pub mod blocks;
 pub mod capture;
 pub mod cobs;
+pub mod flow;
 pub mod host;
 pub mod kept;
 pub mod link;

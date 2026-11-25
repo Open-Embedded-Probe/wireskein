@@ -14,4 +14,4 @@ wireskein-io = { path = "../wireskein-io" }
 nusb = "0.2.9"
 
 [target.'cfg(unix)'.dependencies]
-rustix = { version = "1", default-features = false, features = ["std", "time", "fs", "termios"] }
+rustix = { version = "1", default-features = false, features = ["std", "time", "fs", "termios", "process"] }

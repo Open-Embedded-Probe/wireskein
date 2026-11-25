@@ -525,6 +525,9 @@ fn link_info(hst: &Host, open_s: f64, read_bytes: u64, read_s: f64, oneshot: boo
                    "held": s.held.load(Relaxed)}),
         );
     }
+    if !oneshot {
+        out.insert("flow".into(), t.flow.report());
+    }
     out
 }
 
@@ -985,14 +988,18 @@ impl Run<'_> {
     fn stream_into(&mut self, cfg: &Config, acfg: Option<&Config>, dir: &std::path::Path) -> Result<Acquired> {
         let req = self.req;
         let dir = dir.to_path_buf();
-        let mut spool = SpoolWorker::start(Spool::new(
-            self.names.clone(),
-            self.ids.clone(),
-            cfg.rate,
-            Self::format(cfg),
-            req.on_loss_stop,
-            Some(&dir),
-        ));
+        // the spool's backlog counted with the transport's: its IN side sees the whole of it
+        let mut spool = SpoolWorker::start_with(
+            Spool::new(
+                self.names.clone(),
+                self.ids.clone(),
+                cfg.rate,
+                Self::format(cfg),
+                req.on_loss_stop,
+                Some(&dir),
+            ),
+            self.hst.link.t.flow.clone(),
+        );
         let mut col = Collector::default();
         let fn_ = self.logic.fn_;
         let mut ag = Received::default();
@@ -2560,5 +2567,280 @@ mod tests {
         producer.join().unwrap();
         let _ = std::fs::remove_dir_all(&dir);
         println!("{:.1} MB/s", total as f64 / s / 1e6);
+    }
+
+    /// What a paced stream through a stand-in probe came to (`paced`).
+    #[derive(Debug)]
+    struct Paced {
+        /// bytes the stand-in probe dropped (its buffer and the kernel's transfers full)
+        dropped: u64,
+        parts: usize,
+        lost: usize,
+        received: u64,
+        held: u64,
+        gap_max_ms: f64,
+        probe_gap_max_ms: f64,
+        flow: Value,
+        /// the process's peak resident memory, kB
+        peak_kb: u64,
+        /// each thread's CPU seconds
+        cpu: Value,
+        /// bits of the first part not as the stand-in made them
+        wrong: u64,
+    }
+
+    /// Each thread's CPU seconds (user + system) by its name, from /proc (ticks of 1/100 s).
+    fn thread_cpu() -> Value {
+        let mut out = Map::new();
+        for e in std::fs::read_dir("/proc/self/task").into_iter().flatten().flatten() {
+            let Ok(st) = std::fs::read_to_string(e.path().join("stat")) else {
+                continue;
+            };
+            let (Some(a), Some(b)) = (st.find('('), st.rfind(')')) else {
+                continue;
+            };
+            let f: Vec<&str> = st[b + 2..].split(' ').collect();
+            let t = |i: usize| f.get(i).and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0);
+            let name = st[a + 1..b].to_string();
+            let prev = out.get(&name).and_then(|v| v.as_f64()).unwrap_or(0.0);
+            out.insert(name, json!(prev + (t(11) + t(12)) / 100.0));
+        }
+        Value::Object(out)
+    }
+
+    fn peak_kb() -> u64 {
+        std::fs::read_to_string("/proc/self/status")
+            .ok()
+            .and_then(|s| {
+                s.lines()
+                    .find(|l| l.starts_with("VmHWM:"))
+                    .and_then(|l| l.split_whitespace().nth(1).and_then(|v| v.parse().ok()))
+            })
+            .unwrap_or(0)
+    }
+
+    /// A 7-line format 0 stream of `rate` bytes a second for `secs` from a stand-in probe: frames of `frame` bytes
+    /// made as time goes, kept in its buffer of `ring` bytes until the kernel's queue of transport::DEPTH transfers
+    /// has room (past it the probe drops whole frames, a skipped position), taken back by the transport's IN side
+    /// (`Transport::in_side_of`) and read, collected and spooled to disk as `stream_into` does, counted in `flow`.
+    fn paced(flow: std::sync::Arc<crate::flow::Flow>, rate: f64, secs: f64, ring: usize, frame: usize) -> Paced {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicU64, Ordering};
+        let (ktx, krx) = std::sync::mpsc::sync_channel::<Vec<u8>>(transport::DEPTH);
+        let dropped = Arc::new(AtomicU64::new(0));
+        let made = Arc::new(AtomicU64::new(0));
+        // the longest the stand-in's own thread slept between two rounds (a host so busy that the stand-in itself
+        // lagged: what the IN side's gap shows then is partly the stand-in's)
+        let late = Arc::new(AtomicU64::new(0));
+        let (dr, md, lt) = (dropped.clone(), made.clone(), late.clone());
+        let probe = std::thread::Builder::new()
+            .name("bench-probe".into())
+            .spawn(move || {
+                let t0 = Instant::now();
+                let (mut pos, mut seq) = (0u64, 0u16);
+                let mut buf: std::collections::VecDeque<Vec<u8>> = Default::default();
+                let mut held = 0usize;
+                let mut last = 0f64;
+                loop {
+                    let t = t0.elapsed().as_secs_f64();
+                    lt.fetch_max(((t - last) * 1e6) as u64, Ordering::Relaxed);
+                    last = t;
+                    let due = (t.min(secs) * rate) as u64;
+                    while pos + frame as u64 <= due {
+                        if held + frame > ring {
+                            dr.fetch_add(frame as u64, Ordering::Relaxed);
+                        } else {
+                            let mut f = vec![msg::ROLE_DATA];
+                            f.extend(5u16.to_le_bytes());
+                            f.extend(seq.to_le_bytes());
+                            f.extend(pos.to_le_bytes());
+                            f.extend((frame as u16).to_le_bytes());
+                            f.extend((0..frame).map(|i| ((pos as usize + i) / 3) as u8));
+                            let mut w = (f.len() as u16).to_le_bytes().to_vec();
+                            w.extend(f);
+                            held += frame;
+                            buf.push_back(w);
+                        }
+                        // each frame into a free transfer as it is made (the stand-in's thread may have slept: the
+                        // probe's frames went on meanwhile)
+                        while let Some(f) = buf.pop_front() {
+                            match ktx.try_send(f) {
+                                Ok(()) => held -= frame,
+                                Err(std::sync::mpsc::TrySendError::Full(f)) => {
+                                    buf.push_front(f);
+                                    break;
+                                }
+                                Err(_) => return,
+                            }
+                        }
+                        seq = seq.wrapping_add(1);
+                        pos += frame as u64;
+                    }
+                    while let Some(f) = buf.pop_front() {
+                        match ktx.try_send(f) {
+                            Ok(()) => held -= frame,
+                            Err(std::sync::mpsc::TrySendError::Full(f)) => {
+                                buf.push_front(f);
+                                break;
+                            }
+                            Err(_) => return,
+                        }
+                    }
+                    if t >= secs && buf.is_empty() {
+                        md.store(pos, Ordering::SeqCst);
+                        // the kernel's queue stays open until the reader is done
+                        std::thread::sleep(Duration::from_secs(600));
+                        return;
+                    }
+                    std::thread::sleep(Duration::from_micros(250));
+                }
+            })
+            .unwrap();
+        let t = transport::Transport::in_side_of(krx, flow.clone());
+        let stats = t.stats.clone();
+        let mut link = Link::new(t);
+        let base = std::env::var_os("WIRESKEIN_BENCH_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(std::env::temp_dir);
+        let dir = make_temp_dir(&base, ".oep-bench-").unwrap();
+        let names: Vec<String> = (0..7).map(|k| format!("D{k}")).collect();
+        let fmt = Format::Zero {
+            width: 8,
+            positions: (0..7).collect(),
+        };
+        let mut spool = SpoolWorker::start_with(
+            Spool::new(names, (0..7).collect(), (40_000_000, 1), fmt, false, Some(&dir)),
+            flow.clone(),
+        );
+        let mut col = Collector::default();
+        let t0 = Instant::now();
+        let mut last = Instant::now();
+        loop {
+            let m = made.load(Ordering::SeqCst);
+            if m > 0 && col.end.unwrap_or(0) + dropped.load(Ordering::SeqCst).min(m) >= m {
+                break;
+            }
+            if m > 0 && col.end.is_some_and(|e| e >= m) {
+                break;
+            }
+            if t0.elapsed().as_secs_f64() > secs + 60.0 {
+                break;
+            }
+            link.pump(Duration::from_millis(20), true).unwrap();
+            col.take(&mut link, 5, None, &mut spool).unwrap();
+            if last.elapsed() >= STREAM_POLL {
+                Feed::work(&mut spool).unwrap();
+                last = Instant::now();
+            }
+        }
+        let cpu = thread_cpu();
+        let (parts, lost) = spool.finish(None).unwrap();
+        // the first part's lines as the stand-in made them (byte q of the stream: q / 3), its first 2M samples
+        let mut wrong = 0u64;
+        if let Some(p) = parts.first() {
+            let q0 = p.tick0.unwrap_or(0) as u64;
+            for (k, c) in p.channels.iter().enumerate() {
+                if let Chan::Bits { data, n, .. } = c {
+                    let bits = data.bytes().unwrap();
+                    for i in 0..(*n).min(2_000_000) {
+                        let want = (((q0 + i) / 3) as u8 >> k) & 1;
+                        if (bits[(i / 8) as usize] >> (i % 8)) & 1 != want {
+                            wrong += 1;
+                        }
+                    }
+                }
+            }
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+        drop(link);
+        drop(probe); // detached: it sleeps until the test process ends
+        Paced {
+            dropped: dropped.load(Ordering::SeqCst),
+            parts: parts.len(),
+            lost: lost.len(),
+            received: col.bytes,
+            held: stats.held.load(Ordering::Relaxed),
+            gap_max_ms: stats.gap_max_us.load(Ordering::Relaxed) as f64 / 1000.0,
+            probe_gap_max_ms: late.load(Ordering::Relaxed) as f64 / 1000.0,
+            flow: flow.report(),
+            peak_kb: peak_kb(),
+            cpu,
+            wrong,
+        }
+    }
+
+    /// A spool held back (the disk's write-back) leaves the IN side taking transfers: the stream's bytes wait in the
+    /// backlog and the spool catches up, nothing dropped.
+    #[test]
+    fn a_stalled_spool_does_not_stop_the_in_side() {
+        stalled_spool(false);
+    }
+
+    /// The same with the spool's files written on a thread of their own (`Shape::writer`).
+    #[test]
+    fn a_stalled_spool_with_its_own_writer_does_not_stop_the_in_side() {
+        stalled_spool(true);
+    }
+
+    fn stalled_spool(writer: bool) {
+        use crate::flow::{Flow, Shape};
+        let shape = Shape {
+            budget: 64 << 20,
+            writer,
+            ..Shape::default()
+        };
+        let flow = std::sync::Arc::new(Flow::new(shape));
+        *flow.stall.lock().unwrap() = Some(Duration::from_millis(800));
+        let got = paced(flow, 8e6, 1.5, 256 << 10, 16_384);
+        assert_eq!(got.dropped, 0, "{got:?}");
+        assert_eq!((got.parts, got.lost, got.held), (1, 0, 0), "{got:?}");
+        assert_eq!(got.wrong, 0, "{got:?}");
+        assert_eq!(got.received, 12_000_000 / 16_384 * 16_384, "{got:?}");
+        let most = got.flow["backlog_max"].as_u64().unwrap();
+        assert!(most > 4_000_000, "the stall's bytes waited in the backlog: {got:?}");
+        assert!(got.flow["work_max_ms"].as_f64().unwrap() >= 800.0, "{got:?}");
+    }
+
+    /// The same stall past the budget: the IN side holds back, the probe drops whole frames and the positions show it
+    /// as a loss (memory stays bounded).
+    #[test]
+    fn a_stall_past_the_budget_is_a_loss() {
+        use crate::flow::{Flow, Shape};
+        let shape = Shape {
+            budget: 2 << 20,
+            ..Shape::default()
+        };
+        let flow = std::sync::Arc::new(Flow::new(shape));
+        // longer than the kernel's transfers and the probe's buffer hold (480 x 16 KiB + 256 KiB at 8 MB/s: 1 s)
+        *flow.stall.lock().unwrap() = Some(Duration::from_millis(1600));
+        let got = paced(flow, 8e6, 2.0, 256 << 10, 16_384);
+        assert!(got.dropped > 0, "{got:?}");
+        assert!(got.held > 0 && got.lost > 0 && got.parts > 1, "{got:?}");
+        // the budget, and what the reader took into its own buffer at most (Link::recv: 8 MiB)
+        assert!(
+            got.flow["backlog_max"].as_u64().unwrap() <= (10 << 20) + 16_384 + 64,
+            "{got:?}"
+        );
+    }
+
+    /// The flow under a busy host: a paced 7-line stream through the stand-in probe, the shape from
+    /// WIRESKEIN_OEP_FLOW, BENCH_SECS (30) at BENCH_MBPS (40); one JSON line (bench/notes §42:
+    /// cargo test --release -p wireskein-oep -- --ignored --nocapture paced_bench).
+    #[test]
+    #[ignore]
+    fn paced_bench() {
+        let num = |k: &str, d: f64| std::env::var(k).ok().and_then(|v| v.parse().ok()).unwrap_or(d);
+        let flow = std::sync::Arc::new(crate::flow::Flow::default());
+        let shape = format!("{:?}", flow.shape);
+        let secs = num("BENCH_SECS", 30.0);
+        // the P4's ring at 40 MB/s holds about 26 ms (oep-client-python's usb_stream)
+        let got = paced(flow, num("BENCH_MBPS", 40.0) * 1e6, secs, 1 << 20, 19_456);
+        println!(
+            "{}",
+            json!({"shape": shape, "secs": secs, "dropped": got.dropped, "parts": got.parts, "lost": got.lost,
+                   "received": got.received, "held": got.held, "gap_max_ms": got.gap_max_ms,
+                   "probe_gap_max_ms": got.probe_gap_max_ms, "flow": got.flow,
+                   "peak_kb": got.peak_kb, "cpu": got.cpu, "wrong": got.wrong})
+        );
     }
 }
