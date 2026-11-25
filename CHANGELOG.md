@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Fixed: `wireskein capture` ended with `KeyError: 'frames'` after writing a stream whose link failed part way (oep-client-python 0.0.65 returns what was taken, its meta.stream without frames or read time): the file was kept but INCOMPLETE and the losses were not said. The summary says the bytes and why the link failed, then the losses, and exits 1.
+- (JA) 直した: link が途中で失敗した流し取り（oep-client-python 0.0.65 は取れた所を返す。その meta.stream に frames と read_s がない）を書いた後、`wireskein capture` が `KeyError: 'frames'` で終わっていた。ファイルは残るが、INCOMPLETE と損失が出なかった。要約に、バイト数と link の失敗の理由、損失を出し、終了コード 1 で終わる。
 
 ## 0.0.39
 - (EN) `--mode all` has a bus's device pack matches as its layer `devices` on I2C and SPI (`device`, `level`, `evidence`, and `messages` but for `address_only`), as the other upper readings (`sd`, `dm`) and as the registry says (`i2c_devices`; `spi_devices` added). They were told only at `--depth device` (final), which is unchanged.

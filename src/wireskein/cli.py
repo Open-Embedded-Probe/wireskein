@@ -471,9 +471,14 @@ def capture_cmd(args) -> None:
                  if ms < BUFFER_WARN_MS else ""))
     st = meta.get("stream")
     if st:
-        kb = st["bytes"] / 1000
-        print(f"stream: {kb:.1f} KB in {st['frames']} frames over {st['read_s']:.2f} s"
-              + (f" ({kb / st['read_s']:.1f} KB/s)" if st["read_s"] > 0 else ""))
+        # (a stream whose link failed part way has what was taken, without its frames and read time)
+        kb = st.get("bytes", 0) / 1000
+        frames, read_s = st.get("frames"), st.get("read_s")
+        print(f"stream: {kb:.1f} KB"
+              + (f" in {frames} frames" if frames is not None else "")
+              + (f" over {read_s:.2f} s" if read_s is not None else "")
+              + (f" ({kb / read_s:.1f} KB/s)" if read_s else "")
+              + (f"; the link failed: {st['failed']}" if st.get("failed") else ""))
     odd = ((raw or {}).get("meta", {}).get("repeat") or {}).get("without_trigger")
     if odd:                                      # the probe's: rearm 1 asks a trigger for every segment (capture §2.1)
         print(f"note: {len(odd)} of the {len(raw['parts'])} acquisitions came without a trigger (parts "

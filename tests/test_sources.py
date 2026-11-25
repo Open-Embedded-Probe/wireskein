@@ -199,3 +199,25 @@ def test_a_reduced_line_keeps_its_part_to_the_probes_length(tmp_path):
     capture.write(out, cap)
     got = capture.read(out)
     assert got.parts[0].ticks == 10 and got.parts[0].channel("CS").changes()[1].tolist() == [4, 8]
+
+
+def test_a_stream_whose_link_failed_part_way_is_said_and_kept(monkeypatch, tmp_path, capsys):
+    """oep-client-python 0.0.65 returns what a stream took before its link failed: meta.stream has no frames or
+    read time then, only the bytes and why it failed. The summary says it, keeps the file and fails (exit 1)."""
+    out = tmp_path / "s.wireskein"
+
+    def took(source, req, output):
+        fileformat.write(out, 1000, [fileformat.Channel("A", fileformat.pack(bytes(64)), 64)],
+                         lost=[{"after_part": 0, "reason": "link failed: ShortPayload", "stopped": True}],
+                         stream={"bytes": 8000, "failed": "ShortPayload: TLV 0x24: truncated value"})
+        return out
+    monkeypatch.setattr(sources, "capture", took)
+    from wireskein import cli
+    monkeypatch.setattr(sys, "argv", ["wireskein", "capture", "--source", "oep:/dev/null", "--channels", "A=0",
+                                      "--rate", "1k", "--mode", "stream", "--duration", "1", "-o", str(out)])
+    with pytest.raises(SystemExit) as e:
+        cli.main()
+    assert e.value.code == 1
+    got = capsys.readouterr()
+    assert "stream: 8.0 KB; the link failed: ShortPayload" in got.out
+    assert "kept what was taken; the capture failed" in got.err
