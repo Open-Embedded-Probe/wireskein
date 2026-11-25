@@ -239,3 +239,12 @@ export function report(what: string, data: object) {
   const body = JSON.stringify({ what, ua: navigator.userAgent, webgpu: 'gpu' in navigator, ...data });
   fetch('./report', { method: 'POST', body }).catch(() => {});
 }
+
+// for profiling from a driver (tools/ and the console)
+(window as unknown as { __wsk: object }).__wsk = {
+  get scene() {
+    return scene;
+  },
+  cap,
+  analysis,
+};

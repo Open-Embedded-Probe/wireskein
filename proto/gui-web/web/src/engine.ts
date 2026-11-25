@@ -124,6 +124,8 @@ function openFile(src: Source & { kind: 'file' | 'url' }, part: number) {
     } else if (m.type === 'lod-done') {
       timings.lodMs = m.ms;
       setLod({ done: nLines, total: nLines, ms: m.ms });
+      // its wasm memory (the file's bytes and lines, never given back) let go
+      setTimeout(() => lw.terminate(), 1500);
       requestDraw();
     }
   };
