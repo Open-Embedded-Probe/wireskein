@@ -20,4 +20,10 @@
 | 日付 | 送り元 | run | 一行 | 直したか |
 | --- | --- | --- | --- | --- |
 | 2026-11-24 | [core] | v103r8t6-evt/softspi test_shift（11-24_11-42-05） | spi、CS なしで mode 3 vs 0（CPOL の読み違い、間欠） | 直した（verify の CPOL、v0.0.38） |
-| 2026-11-25 | [core] | v203c8t6/signals test_pwm_sequence（v203sig-1125-1） | convert で VCD に書くと TypeError（60 MS/s） | 直した（vcdio、v0.0.38） |
+| 2026-11-25 | [core] | v203c8t6/signals test_pwm_sequence（v203sig-1125-1） | convert で VCD に書くと TypeError（60 MS/s）。道具の不具合で、読みの問題ではない | 直した（vcdio、v0.0.38） |
+
+**正しく NG を出した例**（読みが疑わしい側ではない。「NG が正解」の組に使える）:
+
+| 日付 | 送り元 | run | 中身 |
+| --- | --- | --- | --- |
+| 2026-11-25 | [core] | v203c8t6/signals test_pwm_sequence（v203sig-1125-1） | DUT の不具合（CH32RVPwmSequence の play() がデータの前に余分な 1 周期を出す。PA8 は 49 パルス、ArduinoCore-CH32RV cfba6c60 で直した）。期待値 102030a5c30f に対して NG が正解 |
