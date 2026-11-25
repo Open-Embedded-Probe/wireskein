@@ -53,3 +53,11 @@
 - 合成（tests/test_i2c_lost_clock.py、正解は合成の側）: 書き込み・待ちのある read・Sr・書き込み。諦めたコントローラ（待ちの後 9 回、最初の High が短い）と待ちきったコントローラ（10 回）を 2 / 10 / 50 MS/s で。諦めた方は 1 バイト目でも 2 バイト目でも、Python・WIRESKEIN_ENGINE=rust・WIRESKEIN_RUST=decode で `complete: false`、`pending_bits` がターゲットの 8 ビットと 1、`clock_lost` が待ちの始まり。待ちきった方は今までどおり `5a61`。verify は unchecked / 前の違いは ng / `complete: False` を期待すれば ok / 待ちきった方は ok を、Python・ENGINE=rust・RUST=verify で。
 - 5 件（確かめだけ）: Python と Rust（WIRESKEIN_ENGINE=rust）で 5 件とも、その取引だけが `bytes: ""`、`complete: false`、`clock_lost`、`pending_bits` が `0 1 1 0 0 0 0 1 1`（77c69e5b は `0 1 1 0 0 0 0 0 1`）、`end_cond: Sr` に変わった。ほかの取引（45〜50 本）は前と同じで、Python と Rust で同じ。
 - ベンチ: e2e、-j 1 で 1 組ずつ。直す前（HEAD dd40095 の src とそこから作った wireskein_core）と後を、同じ機械で wireskein（Python）と engine.rust の両方。組は real-i2c（h417_slow/stream、61）、real-i2c-tune（h417_slow/noise、326）、real-ebdd（35）、ebdd-50m（15 × 5）、ebdd-50m-holdout（30 × 5）。ok、decode の和、各例の行（outcomes・false_*）がすべて同じ。違ったのは Python の real-i2c の fexp2-50000000-g75 の 1 件だけで、直した後の回で 60 s の時間切れ（前は missed）。その 1 件を単独で前と後で流すと、どちらも CPU 約 27 s・主張なしで同じ: 同時に走らせた Rust のビルドで遅れたもの。台帳には入れていない（WSBENCH_RESULTS を scratch に）。
+
+### 0.0.39 での確かめ（[EmbedBench]、2026-11-25）
+
+- 82 の run を 0.0.39 で復号し直し、変わったのは sht30-modes の 10 件全部。どれも止めたストレッチの取引 1 つだけが complete: false（bytes ""、acks []、pending_bits、clock_lost）。ほかの取引は 0.0.38 と同じ。
+- 前の 5 件の pending_bits: e6e40c83・70985ea6・051aec57・dd2f2a02 が 011000011、77c69e5b が 011000001。
+- **ほかの 5 件**（5a14ce7f、85b6b552、ebba71d7、2cd5e8ba、441df8c3。EmbedBenchDeviceData の runs/ の下）も同じ形。これまでは 5e と揺れずに読めていたが、コントローラが諦めた後のバイトであることは同じで、決まらないのが正しい（揺れなかったのは、補ったクロックの位置がたまたま同じ値に当たっていただけ）。pending_bits は 010111101。
+- e6e40c83・051aec57・dd2f2a02 は scl_waits の始まりが 1 ビット前（bit 1 → 0）に移り、restored がなくなった。放した時刻（s + ticks）は前と同じで、[EmbedBench] の tools/measure.py の時間の窓は 10 件とも変わらない。
+
