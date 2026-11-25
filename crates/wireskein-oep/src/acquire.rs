@@ -2722,7 +2722,17 @@ mod tests {
     /// made as time goes, kept in its buffer of `ring` bytes until the kernel's queue of transport::DEPTH transfers
     /// has room (past it the probe drops whole frames, a skipped position), taken back by the transport's IN side
     /// (`Transport::in_side_of`) and read, collected and spooled to disk as `stream_into` does, counted in `flow`.
-    fn paced(flow: std::sync::Arc<crate::flow::Flow>, rate: f64, secs: f64, ring: usize, frame: usize) -> Paced {
+    /// `after_drop`: a test of a loss - the spool stalls from its first job until the probe has dropped a frame (and
+    /// the IN side held back), and the probe goes on past `secs` until it has made this many bytes since its last
+    /// drop, so the loss always has data after it whatever the host's pace (`secs` + 30 s at most).
+    fn paced(
+        flow: std::sync::Arc<crate::flow::Flow>,
+        rate: f64,
+        secs: f64,
+        ring: usize,
+        frame: usize,
+        after_drop: Option<u64>,
+    ) -> Paced {
         use std::sync::Arc;
         use std::sync::atomic::{AtomicU64, Ordering};
         let (ktx, krx) = std::sync::mpsc::sync_channel::<Vec<u8>>(transport::DEPTH);
@@ -2740,14 +2750,30 @@ mod tests {
                 let mut buf: std::collections::VecDeque<Vec<u8>> = Default::default();
                 let mut held = 0usize;
                 let mut last = 0f64;
+                // the stream position just past the last frame dropped (None: none yet)
+                let mut drop_end: Option<u64> = None;
+                let last_t = secs + if after_drop.is_some() { 30.0 } else { 0.0 };
+                // whether the stream is long enough: `secs` of it, and with `after_drop` that many bytes since a drop
+                let enough = |pos: u64, t: f64, drop_end: Option<u64>| {
+                    t >= last_t || (t >= secs && after_drop.is_none_or(|n| drop_end.is_some_and(|d| pos >= d + n)))
+                };
                 loop {
                     let t = t0.elapsed().as_secs_f64();
                     lt.fetch_max(((t - last) * 1e6) as u64, Ordering::Relaxed);
                     last = t;
-                    let due = (t.min(secs) * rate) as u64;
+                    let due = if after_drop.is_some() {
+                        if enough(pos, t, drop_end) {
+                            pos
+                        } else {
+                            (t * rate) as u64
+                        }
+                    } else {
+                        (t.min(secs) * rate) as u64
+                    };
                     while pos + frame as u64 <= due {
                         if held + frame > ring {
                             dr.fetch_add(frame as u64, Ordering::Relaxed);
+                            drop_end = Some(pos + frame as u64);
                         } else {
                             let mut f = vec![msg::ROLE_DATA];
                             f.extend(5u16.to_le_bytes());
@@ -2785,7 +2811,7 @@ mod tests {
                             Err(_) => return,
                         }
                     }
-                    if t >= secs && buf.is_empty() {
+                    if enough(pos, t, drop_end) && buf.is_empty() {
                         md.store(pos, Ordering::SeqCst);
                         // the kernel's queue stays open until the reader is done
                         std::thread::sleep(Duration::from_secs(600));
@@ -2797,6 +2823,12 @@ mod tests {
             .unwrap();
         let t = transport::Transport::in_side_of(krx, flow.clone());
         let stats = t.stats.clone();
+        if after_drop.is_some() {
+            let (dr, st) = (dropped.clone(), stats.clone());
+            *flow.stall.lock().unwrap() = Some(crate::flow::Stall::until(move |_| {
+                dr.load(Ordering::SeqCst) > 0 && st.held.load(Ordering::Relaxed) > 0
+            }));
+        }
         let mut link = Link::new(t);
         let base = std::env::var_os("WIRESKEIN_BENCH_DIR")
             .map(PathBuf::from)
@@ -2822,7 +2854,7 @@ mod tests {
             if m > 0 && col.end.is_some_and(|e| e >= m) {
                 break;
             }
-            if t0.elapsed().as_secs_f64() > secs + 60.0 {
+            if t0.elapsed().as_secs_f64() > secs + 90.0 {
                 break;
             }
             link.pump(Duration::from_millis(20), true).unwrap();
@@ -2889,15 +2921,18 @@ mod tests {
             ..Shape::default()
         };
         let flow = std::sync::Arc::new(Flow::new(shape));
-        *flow.stall.lock().unwrap() = Some(Duration::from_millis(800));
-        let got = paced(flow, 8e6, 1.5, 256 << 10, 16_384);
+        // the spool held from its first job until 4 MB wait behind it (not a time: on a busy host a time's stall
+        // may have held little of the stream)
+        *flow.stall.lock().unwrap() = Some(crate::flow::Stall::until(|f| f.backlog() >= 4_000_000));
+        // the stand-in's own buffer holds the whole stream: a host too busy to run the IN side for a while does not
+        // make it drop (what is tried is the IN side's holding back, `held`, which only the budget decides)
+        let got = paced(flow, 8e6, 1.5, 64 << 20, 16_384, None);
         assert_eq!(got.dropped, 0, "{got:?}");
         assert_eq!((got.parts, got.lost, got.held), (1, 0, 0), "{got:?}");
         assert_eq!(got.wrong, 0, "{got:?}");
         assert_eq!(got.received, 12_000_000 / 16_384 * 16_384, "{got:?}");
         let most = got.flow["backlog_max"].as_u64().unwrap();
-        assert!(most > 4_000_000, "the stall's bytes waited in the backlog: {got:?}");
-        assert!(got.flow["work_max_ms"].as_f64().unwrap() >= 800.0, "{got:?}");
+        assert!(most >= 4_000_000, "the stall's bytes waited in the backlog: {got:?}");
     }
 
     /// The same stall past the budget: the IN side holds back, the probe drops whole frames and the positions show it
@@ -2910,9 +2945,10 @@ mod tests {
             ..Shape::default()
         };
         let flow = std::sync::Arc::new(Flow::new(shape));
-        // longer than the kernel's transfers and the probe's buffer hold (480 x 16 KiB + 256 KiB at 8 MB/s: 1 s)
-        *flow.stall.lock().unwrap() = Some(Duration::from_millis(1600));
-        let got = paced(flow, 8e6, 2.0, 256 << 10, 16_384);
+        // the spool held from its first job until the probe dropped a frame, and 1 MB made after the last drop: the
+        // loss is always followed by data (a time's stall that began late let the probe drop only the stream's tail,
+        // which no later position shows: dropped, and no loss)
+        let got = paced(flow, 8e6, 2.0, 256 << 10, 16_384, Some(1 << 20));
         assert!(got.dropped > 0, "{got:?}");
         assert!(got.held > 0 && got.lost > 0 && got.parts > 1, "{got:?}");
         // the budget, and what the reader took into its own buffer at most (Link::recv: 8 MiB)
@@ -2933,7 +2969,7 @@ mod tests {
         let shape = format!("{:?}", flow.shape);
         let secs = num("BENCH_SECS", 30.0);
         // the P4's ring at 40 MB/s holds about 26 ms (oep-client-python's usb_stream)
-        let got = paced(flow, num("BENCH_MBPS", 40.0) * 1e6, secs, 1 << 20, 19_456);
+        let got = paced(flow, num("BENCH_MBPS", 40.0) * 1e6, secs, 1 << 20, 19_456, None);
         println!(
             "{}",
             json!({"shape": shape, "secs": secs, "dropped": got.dropped, "parts": got.parts, "lost": got.lost,

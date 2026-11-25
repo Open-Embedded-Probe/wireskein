@@ -863,7 +863,8 @@ def test_the_demo_source_through_python(clean, tmp_path):
     stream = sources.Request([("A", "D1")], 2_000_000, 0, mode="stream", duration_s=0.5)
     out = sources.capture("demo:?lines=8", stream, tmp_path / "d.wireskein")
     head, n = _counter_lines(out, [1])
-    assert head["complete"] and n > 500_000
+    # all that came is kept (how much comes in the stream's 0.5 s is the host's: a busy host's device thread sends less)
+    assert head["complete"] and n == head["meta"]["stream"]["bytes"] > 0
     assert not list(tmp_path.glob(".wireskein-demo-stream-*"))      # the stream's files removed once written
 
 

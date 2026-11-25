@@ -30,7 +30,7 @@ WireSkein は、機材の種類ごとの **ドライバ** を通して取り込�
 
 ## 2. ドライバの足し方
 
-手本は試しの機材（`crates/wireskein-capture/src/demo.rs`）: 実機なしで、カウンタ（線 Dk はサンプル番号のビット k）を詰めたサンプルで送る機材。選択肢で共通の流れの振る舞いを見せられる: `type=stream|memory`、`pace=real|fast`、`drop=K`（K 番目の塊を落とす: 損失）、`stall=MS`（spool が止まる: 上限の中で待つ）、`fail=K`（機材が誤りで止まる）、`budget=MIB`、`firmware=FILE`。
+手本は試しの機材（`crates/wireskein-capture/src/demo.rs`）: 実機なしで、カウンタ（線 Dk はサンプル番号のビット k）を詰めたサンプルで送る機材。選択肢で共通の流れの振る舞いを見せられる: `type=stream|memory`、`pace=real|fast`、`drop=K`（K 番目の塊を落とす: 損失）、`stall=MS`（spool が止まる: 上限の中で待つ。`stall=drop` は機材が塊を落とすまで、`stall=backlog:BYTES` は未処理がその量になるまで: 時間でなく出来事で終わる止まりなので、試験の結果が host の速さで変わらない）、`fail=K`（機材が誤りで止まる）、`budget=MIB`、`firmware=FILE`。
 
 ```
 wireskein-rs capture --source 'demo:counter?lines=16' --channels A=D0,B=D5 --rate 1M --samples 100k -o demo.wireskein

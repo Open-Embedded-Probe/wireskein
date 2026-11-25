@@ -674,6 +674,12 @@ impl SpoolWorker {
                 crate::flow::nicer(fl.shape.spool_nice);
                 for job in rx {
                     let t = Instant::now();
+                    // a test's stall, on the first job whatever it is (a run, as soon as the first bytes came: where
+                    // the stream is when the stall starts does not hang on when the reader first asks for work)
+                    let stall = fl.stall.lock().expect("stall").take();
+                    if let Some(s) = stall {
+                        s.hold(&fl);
+                    }
                     match job {
                         Job::Segment(i) => spool.segment(i),
                         Job::Run(p, d) => {
@@ -684,12 +690,7 @@ impl SpoolWorker {
                             fl.taken(d.len() as u64);
                             r?
                         }
-                        Job::Work => {
-                            if let Some(d) = fl.stall.lock().expect("stall").take() {
-                                std::thread::sleep(d);
-                            }
-                            spool.work(false, None)?
-                        }
+                        Job::Work => spool.work(false, None)?,
                     }
                     fl.pending.store(spool.pending.len() as u64, Ordering::Relaxed);
                     Flow::longest(&fl.work_max_us, t);

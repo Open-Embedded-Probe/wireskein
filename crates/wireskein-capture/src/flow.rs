@@ -110,9 +110,51 @@ pub struct Flow {
     /// chunks in the transport's queue, and pieces handed to the spool
     pub queued_n: AtomicU64,
     pub behind_n: AtomicU64,
-    /// a test's stall: the spool's next piece of work waits this long first (a disk that held it back; the demo
-    /// device's `stall=`)
-    pub stall: std::sync::Mutex<Option<std::time::Duration>>,
+    /// a test's stall: the spool's first job waits first (a disk that held it back; the demo device's `stall=`)
+    pub stall: std::sync::Mutex<Option<Stall>>,
+}
+
+/// How long a test's stall holds the spool (`Flow::stall`).
+#[derive(Clone)]
+pub enum Stall {
+    /// this long (how much the stream moved meanwhile depends on the host: a bench's stall)
+    For(Duration),
+    /// until this holds of the flow (polled each millisecond, `STALL_CAP` at most): a stall that ends on what
+    /// happened - the device dropped a chunk, the backlog reached a size - whatever the host's pace, so a test's
+    /// outcome does not change with how busy the host is
+    Until(std::sync::Arc<dyn Fn(&Flow) -> bool + Send + Sync>),
+}
+
+/// The longest a `Stall::Until` holds (a condition that never came: the stream goes on rather than hang).
+pub const STALL_CAP: Duration = Duration::from_secs(60);
+
+impl std::fmt::Debug for Stall {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Stall::For(d) => write!(f, "Stall::For({d:?})"),
+            Stall::Until(_) => write!(f, "Stall::Until(..)"),
+        }
+    }
+}
+
+impl Stall {
+    /// Until `cond` holds of the flow.
+    pub fn until(cond: impl Fn(&Flow) -> bool + Send + Sync + 'static) -> Stall {
+        Stall::Until(std::sync::Arc::new(cond))
+    }
+
+    /// Hold the calling thread (the spool's) as this stall says.
+    pub fn hold(&self, flow: &Flow) {
+        match self {
+            Stall::For(d) => std::thread::sleep(*d),
+            Stall::Until(cond) => {
+                let t = Instant::now();
+                while !cond(flow) && t.elapsed() < STALL_CAP {
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+            }
+        }
+    }
 }
 
 impl Default for Flow {

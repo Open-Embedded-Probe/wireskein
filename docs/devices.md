@@ -30,7 +30,7 @@ The shared flow (modules `flow`, `stream`, `spool`, `packed`):
 
 ## 2. Adding a driver
 
-The demo device (`crates/wireskein-capture/src/demo.rs`) is the example to follow: a device with no hardware that sends a counter (line Dk is bit k of the sample's index) as packed samples. Its options make the shared flow show what it does: `type=stream|memory`, `pace=real|fast`, `drop=K` (drop chunk K: a loss), `stall=MS` (the spool stands still: the budget holds it), `fail=K` (the device stops in error), `budget=MIB`, `firmware=FILE`.
+The demo device (`crates/wireskein-capture/src/demo.rs`) is the example to follow: a device with no hardware that sends a counter (line Dk is bit k of the sample's index) as packed samples. Its options make the shared flow show what it does: `type=stream|memory`, `pace=real|fast`, `drop=K` (drop chunk K: a loss), `stall=MS` (the spool stands still: the budget holds it; `stall=drop` until the device drops a chunk, `stall=backlog:BYTES` until the backlog comes to that - a stall that ends on an event, so a test does not change with the host's pace), `fail=K` (the device stops in error), `budget=MIB`, `firmware=FILE`.
 
 ```
 wireskein-rs capture --source 'demo:counter?lines=16' --channels A=D0,B=D5 --rate 1M --samples 100k -o demo.wireskein

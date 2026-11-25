@@ -14,8 +14,9 @@
 //! - `pace=real` (the default: samples come at the rate asked) or `pace=fast` (as fast as the host takes them),
 //!   `read=BYTES_A_SECOND` (a memory read out this fast; 0, the default: as fast as the host takes it)
 //! - `chunk=BYTES` (64k): what one transfer brings
-//! - on purpose: `drop=K[,K...]` the device drops those chunks (a loss), `stall=MS` the spool's first piece of work
-//!   held that long (a disk that stood still), `fail=K` the device stops in error after chunk K,
+//! - on purpose: `drop=K[,K...]` the device drops those chunks (a loss), `stall=MS` the spool's first job held
+//!   that long (a disk that stood still), `stall=drop` held until the device dropped a chunk and `stall=backlog:BYTES`
+//!   until the stream's backlog came to that (a stall that ends on what happened, not on the host's pace: a test's), `fail=K` the device stops in error after chunk K,
 //!   `firmware=FILE` the device needs FILE sent at each open (found as a vendor's file would be: `find_firmware`),
 //!   `budget=MIB` the stream's budget (else `WIRESKEIN_CAPTURE_FLOW`'s)
 
@@ -24,7 +25,7 @@ use crate::driver::{
     StreamCaps, Thresholds,
 };
 use crate::error::{Error, Result};
-use crate::flow::{Flow, Shape};
+use crate::flow::{Flow, Shape, Stall};
 use crate::packed::Packing;
 use crate::parts::{Acquired, Loss, Part};
 use crate::request::{Mode, Request};
@@ -34,10 +35,21 @@ use serde_json::{Map, Value, json};
 use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 pub struct Demo;
+
+/// How long the demo device's `stall=` holds the spool's first job.
+#[derive(Debug, Clone, PartialEq)]
+pub enum DemoStall {
+    /// this many milliseconds
+    Ms(u64),
+    /// until the device has dropped a chunk
+    Drop,
+    /// until the stream's backlog has come to this many bytes
+    Backlog(u64),
+}
 
 /// How the demo device is set (its address's options).
 #[derive(Debug, Clone, PartialEq)]
@@ -53,7 +65,7 @@ pub struct Options {
     pub read: u64,
     pub chunk: usize,
     pub drop: Vec<u64>,
-    pub stall_ms: Option<u64>,
+    pub stall: Option<DemoStall>,
     pub fail: Option<u64>,
     pub firmware: Option<String>,
     /// the stream's budget in MiB (None: WIRESKEIN_CAPTURE_FLOW's or the default)
@@ -74,7 +86,7 @@ impl Default for Options {
             read: 0,
             chunk: 64 << 10,
             drop: vec![],
-            stall_ms: None,
+            stall: None,
             fail: None,
             firmware: None,
             budget_mib: None,
@@ -133,7 +145,16 @@ impl Options {
                 "read" => o.read = count(k, v)?,
                 "chunk" => o.chunk = count(k, v)?.max(64) as usize,
                 "drop" => o.drop = v.split(',').map(|x| count(k, x)).collect::<Result<Vec<_>>>()?,
-                "stall" => o.stall_ms = Some(count(k, v)?),
+                "stall" => {
+                    o.stall = Some(match v.split_once(':') {
+                        _ if v == "drop" => DemoStall::Drop,
+                        Some(("backlog", n)) => DemoStall::Backlog(count(k, n)?),
+                        _ => DemoStall::Ms(
+                            count(k, v)
+                                .map_err(|_| Error::Value(format!("demo: stall={v}: MS, drop or backlog:BYTES")))?,
+                        ),
+                    })
+                }
                 "fail" => o.fail = Some(count(k, v)?),
                 "firmware" => o.firmware = Some(v.to_string()),
                 "budget" => o.budget_mib = Some(count(k, v)?),
@@ -252,7 +273,7 @@ impl Driver for Demo {
     }
     fn about(&self) -> &'static str {
         "a logic analyser with no hardware sending a counter as packed samples: demo:[counter][?lines=16&type=stream|\
-         memory&pace=real|fast&drop=K&stall=MS&fail=K&firmware=FILE...]"
+         memory&pace=real|fast&drop=K&stall=MS|drop|backlog:N&fail=K&firmware=FILE...]"
     }
     fn list(&self) -> Result<Vec<Found>> {
         let mut facts = Map::new();
@@ -293,6 +314,8 @@ type Taken = (Vec<Part>, Vec<Loss>, Sent, Arc<Flow>, u64);
 struct Sent {
     dropped_bytes: u64,
     dropped_chunks: u64,
+    /// where the last chunk it dropped began
+    last_drop_at: Option<u64>,
     failed_at: Option<u64>,
     held_most: usize,
     /// what the reader took, and how long it read
@@ -308,22 +331,38 @@ impl DemoDevice {
             .collect()
     }
 
-    fn flow(&self) -> Arc<Flow> {
+    /// The stream's flow (`drops`: the chunks the device dropped, which `stall=drop` waits for).
+    fn flow(&self, drops: &Arc<AtomicU64>) -> Arc<Flow> {
         let mut shape = Shape::from_env();
         if let Some(m) = self.o.budget_mib {
             shape.budget = m << 20;
         }
         let flow = Arc::new(Flow::new(shape));
-        if let Some(ms) = self.o.stall_ms {
-            *flow.stall.lock().expect("stall") = Some(Duration::from_millis(ms));
-        }
+        let stall = match self.o.stall {
+            None => None,
+            Some(DemoStall::Ms(ms)) => Some(Stall::For(Duration::from_millis(ms))),
+            Some(DemoStall::Drop) => {
+                let d = drops.clone();
+                Some(Stall::until(move |_| d.load(Ordering::SeqCst) > 0))
+            }
+            Some(DemoStall::Backlog(n)) => Some(Stall::until(move |f| f.backlog() >= n)),
+        };
+        *flow.stall.lock().expect("stall") = stall;
         flow
     }
 
     /// The IN side of a device sending `total` bytes (None: until stopped) from sample `first`, as it takes them:
     /// at the rate asked (pace real) through its own buffer, dropping what does not fit; a memory read out waits for
     /// the host instead.
-    fn send(&self, inlet: Inlet, first: u64, total: Option<u64>, bytes_per_s: f64, waits: bool) -> Sent {
+    fn send(
+        &self,
+        inlet: Inlet,
+        first: u64,
+        total: Option<u64>,
+        bytes_per_s: f64,
+        waits: bool,
+        drops: Arc<AtomicU64>,
+    ) -> Sent {
         let b = self.o.packing().width / 8;
         let chunk = self.o.chunk / b * b;
         let mut buf: VecDeque<Chunk> = VecDeque::new();
@@ -356,6 +395,8 @@ impl DemoDevice {
             if self.o.drop.contains(&k) {
                 sent.dropped_bytes += n as u64;
                 sent.dropped_chunks += 1;
+                sent.last_drop_at = Some(at - n as u64);
+                drops.fetch_add(1, Ordering::SeqCst);
             } else if waits {
                 if !inlet.put(c) {
                     break;
@@ -364,6 +405,8 @@ impl DemoDevice {
                 // no room on the device: dropped whole (the next position shows the gap)
                 sent.dropped_bytes += n as u64;
                 sent.dropped_chunks += 1;
+                sent.last_drop_at = Some(at - n as u64);
+                drops.fetch_add(1, Ordering::SeqCst);
             } else {
                 in_buf += n as u64;
                 buf.push_back(c);
@@ -423,7 +466,8 @@ impl DemoDevice {
     fn take(&self, req: &Request, ctl: &Ctl, first: u64, samples: u64) -> Result<Taken> {
         let p = self.o.packing();
         let total = p.bytes(samples);
-        let flow = self.flow();
+        let drops = Arc::new(AtomicU64::new(0));
+        let flow = self.flow(&drops);
         let (inlet, outlet) = stream::pipe(flow.clone());
         let held = inlet.held.clone();
         let spool = SpoolWorker::start_with(
@@ -454,7 +498,7 @@ impl DemoDevice {
             owner: self.owner.clone(),
             firmware: self.firmware.clone(),
         };
-        let th = std::thread::spawn(move || me.send(inlet, first, Some(total), pace, waits));
+        let th = std::thread::spawn(move || me.send(inlet, first, Some(total), pace, waits, drops));
         let until = Until {
             deadline: None,
             of_bytes: Some(total),
@@ -637,7 +681,8 @@ impl DemoDevice {
     }
 
     fn stream_into(&self, req: &Request, ctl: &Ctl, p: &Packing, dir: &std::path::Path) -> Result<Acquired> {
-        let flow = self.flow();
+        let drops = Arc::new(AtomicU64::new(0));
+        let flow = self.flow(&drops);
         let (inlet, outlet) = stream::pipe(flow.clone());
         let held = inlet.held.clone();
         let spool = SpoolWorker::start_with(
@@ -669,13 +714,14 @@ impl DemoDevice {
             firmware: self.firmware.clone(),
         };
         let waits = !self.o.real_pace;
-        let th = std::thread::spawn(move || me.send(inlet, 0, total, pace, waits));
+        let of_bytes = p.bytes((duration * req.rate_hz as f64) as u64);
+        let th = std::thread::spawn(move || me.send(inlet, 0, total, pace, waits, drops));
         let until = Until {
             deadline: self
                 .o
                 .real_pace
                 .then(|| Instant::now() + Duration::from_secs_f64(duration)),
-            of_bytes: Some(p.bytes((duration * req.rate_hz as f64) as u64)),
+            of_bytes: Some(of_bytes),
             stage: Stage::Taking,
             on_loss_stop: req.on_loss_stop,
         };
@@ -703,6 +749,16 @@ impl DemoDevice {
                 got.parts.len() as i64 - 1,
                 format!("the device stopped in error after {at} bytes (fail=)"),
                 true,
+            ));
+        } else if let Some(at) = sent
+            .last_drop_at
+            .filter(|a| *a < of_bytes && *a >= got.end.unwrap_or(0))
+        {
+            // dropped in the stream's time after the last chunk that came: no later position shows it
+            lost.push(Loss::new(
+                got.parts.len() as i64 - 1,
+                format!("the device dropped the stream's tail from byte {at} (no room to send)"),
+                req.on_loss_stop,
             ));
         }
         let mut meta = self.base_meta(req, &flow, held.load(Ordering::Relaxed), &sent);
@@ -957,17 +1013,21 @@ mod tests {
 
     #[test]
     fn a_stalled_spool_does_not_stop_the_in_side() {
-        // 8 MB/s for 1.5 s; the spool's first piece of work held 0.8 s: within the budget nothing is dropped
+        // 8 MB/s for 1.5 s; the spool's first job held until 4 MiB waited behind it (not a time: on a busy host a
+        // time's stall may have held little): within the budget nothing is dropped
         let dir = scratch("stall");
         let r = stream_req(&[0, 3, 7], 8_000_000, 1.5, &dir);
-        let a = cap("demo:?lines=8&stall=800&budget=64", &r).unwrap();
+        let a = cap("demo:?lines=8&stall=backlog:4194304&budget=64", &r).unwrap();
         assert!(a.lost.is_empty(), "{:?}", a.lost);
         assert_eq!(drops(&a), 0);
+        assert_eq!(a.meta["probe"]["link"]["held"], 0);
         let flow = &a.meta["probe"]["link"]["flow"];
-        assert!(flow["backlog_max"].as_u64().unwrap() > 4 << 20, "{flow}");
-        assert!(flow["work_max_ms"].as_f64().unwrap() >= 800.0, "{flow}");
+        assert!(flow["backlog_max"].as_u64().unwrap() >= 4 << 20, "{flow}");
+        // everything that came is kept (how much came in the stream's 1.5 s is the host's: a device thread that got
+        // no CPU for a while sent less), and at least what the stall held back
         let n = check_counter(&a, &[0, 3, 7]);
-        assert!(n > 10_000_000, "{n}");
+        assert_eq!(n, a.meta["stream"]["bytes"].as_u64().unwrap());
+        assert!(n >= 4 << 20, "{n}");
         // written out and read back: the counter's changes
         let out = dir.join("s.wireskein");
         crate::save::save(&a, &out, &Map::new()).unwrap();
@@ -981,19 +1041,34 @@ mod tests {
 
     #[test]
     fn a_stall_past_the_budget_is_a_loss_and_memory_stays_bounded() {
+        // the spool's first job held until the device dropped a chunk (not a time: a time's stall that began late,
+        // on a busy host, let the device drop only the stream's tail, or nothing); one-shot and stream
         let dir = scratch("past");
-        let r = stream_req(&[2], 8_000_000, 2.0, &dir);
-        let a = cap("demo:?lines=8&stall=1200&budget=2&buffer=1M", &r).unwrap();
-        assert!(!a.lost.is_empty());
-        assert!(drops(&a) > 0);
-        assert!(a.meta["probe"]["link"]["held"].as_u64().unwrap() > 0);
-        assert!(a.meta["probe"]["link"]["flow"]["backlog_max"].as_u64().unwrap() <= 3 << 20);
-        // what was kept is right where it was put
-        check_counter(&a, &[2]);
-        if let Some(d) = &a.temp_dir {
-            let _ = std::fs::remove_dir_all(d);
+        let mut one = req(&[2], 8_000_000, 16_000_000);
+        one.on_loss_stop = false;
+        for r in [stream_req(&[2], 8_000_000, 2.0, &dir), one] {
+            let a = cap("demo:?lines=8&stall=drop&budget=2&buffer=1M", &r).unwrap();
+            assert!(!a.lost.is_empty(), "{:?}", r.mode);
+            assert!(drops(&a) > 0);
+            assert!(a.meta["probe"]["link"]["held"].as_u64().unwrap() > 0);
+            assert!(a.meta["probe"]["link"]["flow"]["backlog_max"].as_u64().unwrap() <= 3 << 20);
+            // what was kept is right where it was put
+            check_counter(&a, &[2]);
+            if let Some(d) = &a.temp_dir {
+                let _ = std::fs::remove_dir_all(d);
+            }
         }
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_stall_is_a_time_or_an_event() {
+        let o = |a: &str| Options::parse(a).unwrap().stall;
+        assert_eq!(o("?stall=800"), Some(DemoStall::Ms(800)));
+        assert_eq!(o("?stall=drop"), Some(DemoStall::Drop));
+        assert_eq!(o("?stall=backlog:4M"), Some(DemoStall::Backlog(4_000_000)));
+        let e = Options::parse("?stall=later").unwrap_err().to_string();
+        assert!(e.contains("MS, drop or backlog:BYTES"), "{e}");
     }
 
     #[test]
