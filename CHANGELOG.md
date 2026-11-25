@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 0.0.38
 - (EN) Fixed: `wireskein convert` to a VCD stopped with a TypeError (numpy's round on Fractions) when a tick is no whole number of the timescale's units (60 MHz: 50/3 ns). Each change is rounded to the unit in integers, half to even as before.
 - (JA) 直した: 1 tick が timescale の単位の整数倍にならない記録（60 MHz: 50/3 ns）を `wireskein convert` で VCD にすると、TypeError（numpy の round が Fraction を扱えない）で止まっていた。変化の時刻を整数だけで単位に丸める（今までどおり偶数丸め）。
 - (EN) Fixed: verify's `spi` without CS took SCK's idle level (CPOL) from its longest pause inside the window, so a bit-banged clock (Arduino's shiftOut / shiftIn) held high longer than it rests low between bytes read as CPOL 1, and mode 0 failed as "mode 3 vs 0" now and then with every byte right. Without CS, CPOL is SCK's level before its first edge and after its last where the two agree (the longest pause as before where they do not).
