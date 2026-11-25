@@ -134,7 +134,10 @@ pub const P_LIST: usize = 5;
 pub const P_CPU: usize = 6;
 pub const P_EVENTS: usize = 7;
 pub const P_INST: usize = 8;
-pub const P_N: usize = 9;
+/// the same, as this thread's CPU time (the machine may be busy: wall time then counts the waits)
+pub const P_SCENE_CPU: usize = 9;
+pub const P_DRAW_CPU: usize = 10;
+pub const P_N: usize = 11;
 
 #[derive(Default)]
 pub struct Perf {

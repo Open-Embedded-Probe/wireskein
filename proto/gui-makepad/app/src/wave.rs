@@ -335,6 +335,7 @@ impl Widget for WaveView {
             tiles: st.tiles_on,
         };
         let t_scene = Instant::now();
+        let c_scene = thread_cpu_ms();
         let mut sc = match st.panels.get_mut(&id) {
             Some(Panel::Wave(w)) => std::mem::take(&mut w.cache),
             _ => return DrawStep::done(),
@@ -381,6 +382,7 @@ impl Widget for WaveView {
             );
         }
         let scene_ms = t_scene.elapsed().as_secs_f64() * 1e3;
+        let scene_cpu = thread_cpu_ms() - c_scene;
         // the instances: one batch of DrawSeg
         let t_inst = Instant::now();
         let n_inst = out.inst.len() / 8;
@@ -587,6 +589,7 @@ impl Widget for WaveView {
         };
         let p = &mut st.perf;
         p.acc[P_SCENE] += scene_ms;
+        p.acc[P_SCENE_CPU] += scene_cpu;
         p.acc[P_INST] += inst_ms;
         p.acc[P_TEXT] += text_ms;
         p.acc[P_WAVE] += t_all.elapsed().as_secs_f64() * 1e3;

@@ -66,7 +66,7 @@ fn mark(st: &St) -> Mark {
 }
 
 fn header() -> Vec<String> {
-    let h = "| view | frames | dt | main CPU | events | frame loop | draw | wave draw | scene | instances push | text | list draw | gap | instances | labels | shapes |";
+    let h = "| view | frames | dt | main CPU | events | frame loop | draw | draw CPU | wave draw | scene | scene CPU | instances push | text | list draw | platform CPU | gap | instances | labels | shapes | waves drawn / frame |";
     let n = h.matches('|').count() - 1;
     vec![h.to_string(), format!("|{}", "---|".repeat(n))]
 }
@@ -83,21 +83,26 @@ fn row(label: &str, frames: usize, dt_ms: f64, a: &Mark, b: &Mark) -> String {
         let n = (b.counts.3 - a.counts.3).max(1);
         (y - x) / n
     };
+    let waves = (b.counts.3 - a.counts.3) as f64 / f;
     format!(
-        "| {label} | {frames} | {dt_ms:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {} | {} | {} |",
+        "| {label} | {frames} | {dt_ms:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {} | {} | {} | {:.2} |",
         d(P_CPU),
         d(P_EVENTS),
         d(P_FRAME),
         d(P_DRAW),
+        d(P_DRAW_CPU),
         d(P_WAVE),
         d(P_SCENE),
+        d(P_SCENE_CPU),
         d(P_INST),
         d(P_TEXT),
         d(P_LIST),
+        d(P_CPU) - d(P_EVENTS),
         dt_ms - d(P_EVENTS),
         c(0),
         c(1),
-        c(2)
+        c(2),
+        waves
     )
 }
 
@@ -213,7 +218,7 @@ pub fn step(st: &St, b: &mut Bench, dt_ms: f32, width: f32) -> (Option<Viewport>
                 ));
                 b.lines.push(String::new());
                 b.lines.push(
-                    "## the frame's parts (ms a frame, mean; events = all the app's event handling (frame loop + draw + the rest); gap = dt - events: Makepad's platform layer, the GPU, the swap, the wait)"
+                    "## the frame's parts (ms a frame, mean; draw CPU / scene CPU: this thread's CPU time (the rest are wall time: on a busy machine they count the waits too); events = all the app's event handling (frame loop + draw + the rest); platform CPU = main CPU - events: Makepad's platform layer on the main thread (the draw lists to the GPU API, the swap, X11); gap = dt - events: that and the GPU, the wait)"
                         .into(),
                 );
                 b.lines.append(&mut b.parts);

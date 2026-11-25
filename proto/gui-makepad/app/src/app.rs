@@ -729,6 +729,7 @@ impl App {
             let st = self.st.as_mut().unwrap();
             if st.poll() {
                 redraw = true;
+                self.status_at = f64::NEG_INFINITY;
             }
             let cpu = thread_cpu_ms();
             if let Some(c0) = self.last_cpu {
@@ -797,7 +798,9 @@ impl App {
         if st.animating() || st.started.elapsed().as_secs_f64() < 3.0 {
             self.next_frame = cx.new_next_frame();
         } else {
+            // the frames stop: the status line once more as things are now
             self.last_frame = None;
+            self.update_status(cx);
         }
     }
 }
@@ -898,6 +901,11 @@ impl MatchEvent for App {
 impl AppMain for App {
     fn handle_event(&mut self, cx: &mut Cx, event: &Event) {
         let t = Instant::now();
+        let c0 = if matches!(event, Event::Draw(_)) {
+            thread_cpu_ms()
+        } else {
+            0.0
+        };
         if let Event::Startup = event {
             self.startup(cx);
         }
@@ -962,6 +970,7 @@ impl AppMain for App {
         let ms = t.elapsed().as_secs_f64() * 1e3;
         if let Event::Draw(_) = event {
             st.perf.acc[P_DRAW] += ms;
+            st.perf.acc[P_DRAW_CPU] += thread_cpu_ms() - c0;
             // the frame rate as drawn frames (the frame loop may run without drawing)
             let now = Instant::now();
             if let Some(l) = self.last_draw {
