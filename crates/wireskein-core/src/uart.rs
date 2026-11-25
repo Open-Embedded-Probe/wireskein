@@ -929,7 +929,7 @@ fn enclosing(line: &Channel, other: &Channel) -> f64 {
         return 0.0;
     }
     // (the windows: from an odd change to the next, away from the line's first level)
-    let ws: Vec<(i64, i64)> = o.chunks_exact(2).map(|w| (w[0], w[1])).collect();
+    let ws: Vec<(i64, i64)> = o.as_chunks::<2>().0.iter().map(|w| (w[0], w[1])).collect();
     let between = |a: i64, b: i64| -> &[i64] { &e[e.partition_point(|&x| x <= a)..e.partition_point(|&x| x < b)] };
     let m = ws.len();
     // (each window's START before it and STOP after it)

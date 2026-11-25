@@ -492,7 +492,10 @@ mod tests {
         );
         // the indistinguishable match's packs in the order tried
         assert!(
-            both[0].layers.get().contains("[\"i2c/sensirion/sht30.toml\",\"i2c/acme/sht30_clone.toml\"]"),
+            both[0]
+                .layers
+                .get()
+                .contains("[\"i2c/sensirion/sht30.toml\",\"i2c/acme/sht30_clone.toml\"]"),
             "{}",
             both[0].layers.get()
         );
