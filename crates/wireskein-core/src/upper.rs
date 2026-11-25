@@ -476,7 +476,26 @@ mod tests {
             only.names()
         );
         let out = stage_with_packs(vec![sht30_claim()], 1e6, &only).0;
+        // every pack: WireSkein's first, then the directory's (Python's PackSets), not all of them by their paths
+        let every = PackSet::from_hints(&json!({"device_dirs": [d]}));
+        let both = stage_with_packs(vec![sht30_claim()], 1e6, &every).0;
         std::fs::remove_dir_all(&dir).ok();
+        assert_eq!(
+            every.names(),
+            [
+                "i2c/qst/qmp6988.toml",
+                "i2c/sensirion/sht30.toml",
+                "spi/flash/spi_nor.toml",
+                "spi/radio/cc1101.toml",
+                "i2c/acme/sht30_clone.toml"
+            ]
+        );
+        // the indistinguishable match's packs in the order tried
+        assert!(
+            both[0].layers.get().contains("[\"i2c/sensirion/sht30.toml\",\"i2c/acme/sht30_clone.toml\"]"),
+            "{}",
+            both[0].layers.get()
+        );
         assert!(
             out[0].total > 0.8 && out[0].layers.get().contains("ACME30"),
             "{}",

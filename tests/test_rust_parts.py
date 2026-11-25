@@ -1061,9 +1061,9 @@ def definitions_dir(root: Path, protocols: bool = False) -> Path:
 
 
 def packs_in_any_order(x):
-    """A document with each list of device matches (and a merged match's packs) sorted: the Rust core tries every
-    pack in the order of its path (WireSkein's and a definitions directory's together), Python's WireSkein's first,
-    then each directory's (§39)."""
+    """A document with each list of device matches (and a merged match's packs) sorted (§39: the Rust core tried
+    WireSkein's packs and a definitions directory's together by their paths; since §41 it tries them as Python's,
+    WireSkein's first, and test_a_definitions_directorys_device_packs_as_python compares them unsorted)."""
     if isinstance(x, dict):
         out = {k: packs_in_any_order(v) for k, v in x.items()}
         if isinstance(out.get("devices"), list) and all(isinstance(m, dict) for m in out["devices"]):
@@ -1089,18 +1089,23 @@ def test_a_definitions_directorys_device_packs_as_python(clean, tmp_path):
         assert _rust._device_dirs() == [str(d.resolve() / "devices")]
         for hints in (None, {"devices": ["!i2c/sensirion/**"]}, {"devices": ["i2c/acme/*"]}):
             assert _analyzes(f, hints)
-            rs = packs_in_any_order(_adoc({"WIRESKEIN_RUST": "analyze"}, f, hints=hints, depth="device"))
-            py = packs_in_any_order(_adoc({"WIRESKEIN_ENGINE": "rust"}, f, hints=hints, depth="device"))
+            rs = _adoc({"WIRESKEIN_RUST": "analyze"}, f, hints=hints, depth="device")
+            py = _adoc({"WIRESKEIN_ENGINE": "rust"}, f, hints=hints, depth="device")
             assert _differ(rs, py) == [], hints
             assert rs["hints"] == hints and any("ACME30" in x for x in _held_devices(rs))
+            if hints is None:
+                # the packs tried as Python's PackSets: WireSkein's first, then the directory's (not by their paths:
+                # i2c/acme/ before i2c/qst/), in the matches' order and in the indistinguishable match's packs
+                i2c = [c for p in rs["parts"] for c in p["claims"] if c["protocol"] == "i2c"][0]["devices"]
+                assert [m["device"] for m in i2c] == ["QMP6988", "ACME30 | SHT30"], i2c
+                assert i2c[1]["evidence"]["pack"] == ["i2c/sensirion/sht30.toml", "i2c/acme/acme30.toml"]
             spec = _device_spec((hints or {}).get("devices"))
             for split in (None, PIECES):
-                assert _differ(packs_in_any_order(_decode({"WIRESKEIN_RUST": "decode"}, f, spec, split=split)),
-                               packs_in_any_order(_decode({"WIRESKEIN_ENGINE": "rust"}, f, spec, split=split))) == [], \
-                    (hints, split)
+                assert _differ(_decode({"WIRESKEIN_RUST": "decode"}, f, spec, split=split),
+                               _decode({"WIRESKEIN_ENGINE": "rust"}, f, spec, split=split)) == [], (hints, split)
 
             def run():
-                return packs_in_any_order(json.loads(json.dumps(annotate.build_file(f, hints))))
+                return json.loads(json.dumps(annotate.build_file(f, hints)))
             assert _with({"WIRESKEIN_RUST": "annotate"}, run) == _with({"WIRESKEIN_ENGINE": "rust"}, run)
     finally:
         plugins.remove_definitions(d)

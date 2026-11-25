@@ -148,6 +148,13 @@ impl PackSet {
                 })
             })
             .collect();
+        PackSet::in_order(entries)
+    }
+
+    /// One root's packs in the order Python's `PackSet` tries them: by their paths, folder by folder (Python's
+    /// `sorted` of `Path`s: "i2c/a/x.toml" before "i2c/a-b/x.toml").
+    fn in_order(mut entries: Vec<Entry>) -> PackSet {
+        entries.sort_by(|a, b| a.rel.split('/').cmp(b.rel.split('/')));
         PackSet {
             entries,
             full: Default::default(),
@@ -186,15 +193,13 @@ impl PackSet {
                 })
             })
             .collect();
-        PackSet {
-            entries,
-            full: Default::default(),
-        }
+        PackSet::in_order(entries)
     }
 
     /// The packs a caller picks (Python's `_upper._device_packs`): WireSkein's own and those under each directory
     /// (a definitions directory's `devices/`), all selected by the same patterns; no patterns (or none given) is
-    /// "**", every pack.
+    /// "**", every pack. They are tried as Python's `PackSets` tries them: WireSkein's first, then each directory's
+    /// in the order given, each root's by its paths.
     pub fn chosen<P: AsRef<Path>>(select: &[String], dirs: &[P]) -> PackSet {
         let all = ["**".to_string()];
         let select = if select.is_empty() { &all[..] } else { select };
@@ -245,7 +250,7 @@ impl PackSet {
         Some(t)
     }
 
-    /// The I2C packs of any of these addresses.
+    /// The I2C packs of any of these addresses, in the order the packs are tried.
     fn i2c(&self, addresses: &BTreeSet<i64>) -> Vec<toml::Table> {
         self.entries
             .iter()
@@ -516,9 +521,7 @@ pub fn match_i2c(txs: &[Tx], packs: &PackSet) -> Vec<Match> {
     let seen: BTreeSet<i64> = txs.iter().filter(|t| t.ack).map(|t| t.addr).collect();
     let mut claims = vec![];
     let mut cands: BTreeMap<i64, BTreeSet<String>> = seen.iter().map(|&a| (a, BTreeSet::new())).collect();
-    let mut ps = packs.i2c(&seen);
-    ps.sort_by(|a, b| a["_file"].as_str().cmp(&b["_file"].as_str()));
-    for p in ps {
+    for p in packs.i2c(&seen) {
         let d = device(&p);
         let kind = d.get("kind").and_then(|v| v.as_str()).unwrap_or("");
         let m = if kind == "command_table" {
