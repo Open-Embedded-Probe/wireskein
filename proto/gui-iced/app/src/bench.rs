@@ -105,11 +105,11 @@ const STAGES: [&str; 15] = [
     "rend text",
     "rend image",
 ];
-/// wgpu's scopes (prof.rs names)
+/// wgpu's scopes (prof.rs names: wgpu's own, not egui-wgpu's as in prototype 1)
 const WGPU: [(&str, &str); 4] = [
-    ("acquire", "get_current_texture"),
+    ("acquire", "Surface::get_current_texture"),
     ("submit", "Queue::submit"),
-    ("wgpu present", "present"),
+    ("wgpu present", "Surface::present"),
     ("maintain", "Device::maintain"),
 ];
 
