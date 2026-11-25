@@ -119,10 +119,87 @@ node tools/bench.mjs "http://127.0.0.1:8080/?synth=1e8&bench=1" --bench out.txt 
 ヘッドレスの Chrome（SwiftShader）はスクリーンショットに WebGPU のキャンバスを写さない（白くなる）。道具は WebGPU の
 1 フレームを読み戻してキャンバスの上に重ねてから撮る（`window.__gpuShot()`）。
 
+## Tauri で包む（試作 2b、`tauri/`）
+
+同じ画面（web/dist）を Tauri 2（2.12）の殻に入れたもの。数字と分かったことはノートの §11。Linux は WebKitGTK、Windows は
+WebView2（Chromium）で描く。エンジンの動かし方を URL の引数で選べる:
+
+- `engine=wasm`（既定）: 今までどおり wasm の Web Worker。ファイルは殻の `wskfile` の scheme から読む（`--files` / `--mount` の所）。
+- `engine=native`: Worker の代わりに殻の Rust の側（ネイティブ）で読む・要約・解析・検索をする。`wasm/engine` と `wasm/view` の
+  crate（本番の wireskein-io / -core / -analysis を path で読む）をそのままネイティブでビルドして使う。画面の側は
+  `src/tauri.ts` の `NativeWorker` が Worker と同じ口（postMessage / onmessage / terminate）で受け渡す（engine.ts は Worker を
+  作る所だけ変えた）。殻の側の「Worker」はキューを持つスレッド。
+- `ipc=`（`engine=native` のとき）: 大きなデータの渡し方。`chunk`（既定。下の raw のバイト列を 1 MiB ずつ。§11 で開く間の画面の止まりが
+  いちばん短かった）、`raw`（JSON の頭と型付き配列を 1 つのバイト列で、画面は
+  コピーせずに型付き配列で見る）、`json`（配列も JSON の数の列）、`fetch`（channel では
+  知らせだけ、バイト列は画面が `wskblob` の scheme から fetch）。
+- `frameipc=1`（`engine=native` のとき）: 殻の側にもネイティブの Scene を持ち、ベンチの間、同じフレームの図形の列を IPC で
+  取り寄せて往復の時間を測る（描くのは今までどおり画面の wasm）。終わりに、何もしていない時に 40 回続けて raw と JSON で測る。
+- `report=1`: ページが測った値と console.log を殻が `[report 経過 ms, rss MB] ...` で出す。`exit=1` でベンチの後に終わる。
+
+### Linux で作る・動かす
+
+要るもの: 上の wasm の道具に加えて、WebKitGTK 4.1 の開発用（Debian / Ubuntu: `libwebkit2gtk-4.1-dev libsoup-3.0-dev
+libjavascriptcoregtk-4.1-dev libgtk-3-dev librsvg2-dev libssl-dev libxdo-dev`）。Tauri の CLI は要らない（`cargo build` で
+画面を埋め込んだ 1 つの実行ファイルができる。`custom-protocol` を既定の feature にした）。
+
+```sh
+cd proto/gui-web
+./build.sh                                   # wasm と web/dist（殻はこれを埋め込む。画面を変えたら先にこれ）
+cd tauri
+cargo build --release -j1                    # 初回 -j1 で約 40 分（依存 280 個ほど）、2 回目からは 10 分ほど（thin LTO と埋め込み）
+cd ../web                                    # files/ の既定は上の階層の tests/data
+../tauri/target/release/wsk-gui-tauri "file=files/examples/mixed-1.wireskein&engine=native"
+../tauri/target/release/wsk-gui-tauri --mount scratch=/path/to/dir "file=scratch/i2c-100k.wireskein&engine=native&ipc=raw&bench=1&report=1&exit=1"
+```
+
+殻の引数: `--files DIR`、`--mount NAME=DIR`、`--size WxH`（既定 1600x960）、`--log FILE`（報告をファイルにも）、最後にページの
+URL の引数（`?` は要らない）。画面のない所では `tauri/bench.sh '引数' out.png`（Xvfb の上で動かし、`SHOT` 秒後に撮る）。
+
+### Windows で作る・動かす（ユーザーの機械で fps を取る）
+
+Windows の Tauri は WebView2（Edge の Chromium）なので WebGPU が使える見込み（Iris Xe）。
+
+1. 要るもの: Rust（MSVC。`rustup default stable-msvc`、`rustup target add wasm32-unknown-unknown`）、Visual Studio Build Tools の
+   「C++ によるデスクトップ開発」、Node.js 20 以上、WebView2 ランタイム（Windows 11 は入っている）、
+   `cargo install --locked wasm-bindgen-cli --version 0.2.130`。
+2. 画面を作る（PowerShell、build.sh と同じこと）:
+
+   ```powershell
+   cd proto\gui-web\wasm
+   cargo build --release --target wasm32-unknown-unknown
+   foreach ($c in 'view','engine') { wasm-bindgen --target web --out-dir ..\web\src\wasm-pkg\$c target\wasm32-unknown-unknown\release\wsk_web_$c.wasm }
+   cd ..\web
+   npm ci
+   npm run build
+   ```
+
+3. 殻を作る: `cd ..\tauri; cargo build --release`（`-j1` は要らない。初回は 10〜20 分）。できるのは
+   `tauri\target\release\wsk-gui-tauri.exe`（画面を埋め込んだ 1 つの exe）。
+4. 流す（`web` の所から。リリースの exe は端末に出さないので `--log` に書く。終わると窓が閉じる）:
+
+   ```powershell
+   cd ..\web
+   $exe = '..\tauri\target\release\wsk-gui-tauri.exe'
+   $B = 'bench=1&report=1&exit=1'
+   & $exe --log tauri-bench.txt "file=files/examples/mixed-1.wireskein&$B" | Out-Null
+   & $exe --log tauri-bench.txt "file=files/examples/mixed-1.wireskein&engine=native&frameipc=1&$B" | Out-Null
+   & $exe --log tauri-bench.txt "synth=1e8&$B" | Out-Null
+   & $exe --log tauri-bench.txt "synth=1e8&engine=native&frameipc=1&$B" | Out-Null
+   & $exe --log tauri-bench.txt "synth=1e9&items=1e6&engine=native&$B" | Out-Null
+   & $exe --log tauri-bench.txt "file=files/i2c_bench/h417_slow/stream/impl-100000000-g0.wireskein&engine=native&$B" | Out-Null
+   # 合成の I2C 10 万（proto/gui の wsk_synth で作ったもの）を C:\wsk に置いたなら
+   & $exe --log tauri-bench.txt --mount scratch=C:\wsk "file=scratch/i2c-100k.wireskein&engine=native&$B" | Out-Null
+   & $exe --log tauri-bench.txt --mount scratch=C:\wsk "file=scratch/i2c-100k.wireskein&engine=native&ipc=json&$B" | Out-Null
+   ```
+
+   `tauri-bench.txt` の `bench` の行に、表（倍率ごとの fps・1 フレームの時間・波形の CPU）、IPC（渡した量、画面のスレッドで
+   受け取るのにかかった時間、開く間の最も長いフレームの間）、`renderer`（`WebGPU (…)` か `WebGL2`）、メモリが出る。
+   Windows のメモリは殻のプロセスだけ（WebView2 のプロセスはタスクマネージャーで見る）。
+
 ## WebKitGTK（Tauri の Linux の webview）で開く
 
-Tauri の殻はこの機械では作れなかった（webkit2gtk-4.1 / libsoup-3.0 の開発用のヘッダがない）。代わりに同じ WebKitGTK（2.52）の
-MiniBrowser で同じページを開ける（Tauri はこれと同じ webview を使う）:
+殻を作らなくても、同じ WebKitGTK（2.52）の MiniBrowser で同じページを開ける（Tauri はこれと同じ webview を使う）:
 
 ```sh
 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/MiniBrowser --features=+WebGPU "http://127.0.0.1:8080/?file=files/examples/mixed-1.wireskein&report=1&bench=1"
