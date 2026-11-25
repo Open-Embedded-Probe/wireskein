@@ -725,13 +725,15 @@ fn read(
     let n = view.n_samples;
     let (start, length, level) = runs(ch, n);
     let inner = length.len().saturating_sub(2);
-    // the line's blocks, each at its own bit time (a bit time given, a hint's baud, replaces the estimate)
+    // the line's blocks, each at its own bit time (a bit time given, a hint's baud, replaces the estimate). The bit
+    // time is the line's, whichever level a reading takes for idle: measured on the runs away from the line's own
+    // idle level (as Python's `typed.async_segments`), the other idle's reading read at it too
     let spans: Vec<(i64, i64, f64)> = if let Some(u) = given {
         vec![(0, n, u)]
     } else if inner < 40 {
         vec![(0, n, f.units.first()?.samples)]
     } else {
-        segments(&start, &length, &level, idle, n, f.units.first().map(|x| x.samples))
+        segments(&start, &length, &level, f.idle, n, f.units.first().map(|x| x.samples))
     };
     let mut blocks: Vec<(i64, i64, f64, Chars)> = vec![];
     for (s0, s1, u0) in spans {
@@ -1502,5 +1504,41 @@ mod tests {
         let e: Vec<i64> = (1..2000).map(|i| i * 7).collect();
         let v = View::new(1e6, 15000, vec![Channel::new("C", 0, &e)]).unwrap();
         assert!(crate::choose(candidates(&v)).iter().all(|c| c.verdict != "confirmed"));
+    }
+
+    #[test]
+    fn the_other_idle_is_read_at_the_lines_bit_time() {
+        // a debug probe's attach pulses on a one-wire debug line (idle high, 160 MS/s), the same group of pulses over
+        // and over before any frame (as a LinkE's before its first SWIO frame): read with the line's low as idle at
+        // the bit time of its highs (three of the line's), the group made characters of 7E1 again and again (0.62,
+        // a UART likely on the bench's record); read at the line's own bit time, the time its lows' runs are whole
+        // numbers of, neither idle level frames characters
+        let group = [
+            651, 498, 1326, 492, 1495, 504, 7950, 995, 2485, 498, 1492, 494, 2485, 15240,
+        ];
+        let (mut e, mut t) = (vec![], 400_000i64);
+        // (first lows of a few hundred ns with the line's glitches between, then a long high)
+        for k in 0..25i64 {
+            e.extend([t, t + 137]);
+            t += 139 + k % 2;
+        }
+        t += 368_011;
+        for k in 0..80i64 {
+            for (i, &w) in group.iter().enumerate() {
+                e.push(t);
+                t += w + (k * 7 + i as i64 * 3) % 5 - 2;
+            }
+        }
+        let n = t + 400_000;
+        let ch = Channel::new("SWIO", 1, &e);
+        let v = View::new(160e6, n, vec![ch]).unwrap();
+        let f = features(&ch, n);
+        assert_eq!(f.idle, 1);
+        // the reading under the other idle level at the line's bit time, not at its highs' (three of the line's)
+        let r = read(&v, &ch, &f, 0, 0, 0.0, 0.0, 0.0, None).expect("a reading");
+        let u = f.units[0].samples;
+        assert!((r.unit / u - 1.0).abs() < 0.1, "{} against {u}", r.unit);
+        let cs = crate::choose(candidates(&v));
+        assert!(cs.iter().all(|c| c.protocol != "uart"), "{cs:?}");
     }
 }
