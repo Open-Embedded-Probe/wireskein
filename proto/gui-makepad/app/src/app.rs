@@ -731,6 +731,13 @@ impl App {
                 redraw = true;
                 self.status_at = f64::NEG_INFINITY;
             }
+            // the first paint: this frame follows the draw whose waveform drew the capture (that draw presented)
+            if st.perf.first_paint.is_none()
+                && st.perf.drawn_at.is_some()
+                && let Some(c) = &st.cap
+            {
+                st.perf.first_paint = Some(c.opened.elapsed().as_secs_f64());
+            }
             let cpu = thread_cpu_ms();
             if let Some(c0) = self.last_cpu {
                 st.perf.acc[P_CPU] += cpu - c0;

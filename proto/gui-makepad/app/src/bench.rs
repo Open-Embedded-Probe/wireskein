@@ -36,6 +36,8 @@ pub struct Bench {
     mark: Option<Mark>,
     lines: Vec<String>,
     parts: Vec<String>,
+    /// the main thread's CPU from the first zoom on, by both clocks (meter.rs)
+    cpu_check: Option<crate::meter::Check>,
 }
 
 impl Bench {
@@ -50,6 +52,7 @@ impl Bench {
             mark: None,
             lines: vec![],
             parts: vec![],
+            cpu_check: None,
         }
     }
     pub fn done(&self) -> bool {
@@ -135,8 +138,24 @@ pub fn step(st: &St, b: &mut Bench, dt_ms: f32, width: f32) -> (Option<Viewport>
                     "# window {:.0}x{:.0} (logical px), dpi factor {:.2}, waveform {:.0} px wide",
                     st.win_size.x, st.win_size.y, st.dpi, width
                 ));
-                b.lines
-                    .push(format!("# gpu: {} (Makepad 1.0; vsync as Makepad sets it)", st.gpu));
+                b.lines.push(format!("# gpu: {} (Makepad 1.0)", st.gpu));
+                // Makepad 1.0 has no setting for it (read in makepad-platform 1.0.0: os/windows/d3d11.rs, os/linux)
+                b.lines.push(
+                    if cfg!(windows) {
+                        "# present: Makepad's own, not asked: D3D11 flip-discard swap chain, Present(0, 0) (vsync off, no tearing flag)"
+                    } else if cfg!(target_os = "linux") {
+                        "# present: Makepad's own, not asked: EGL with no eglSwapInterval (the driver's default: vsync on most drivers, none on Xvfb)"
+                    } else {
+                        "# present: Makepad's own, not asked"
+                    }
+                    .into(),
+                );
+                b.lines.push(format!(
+                    "# meter: {}; this program built {}",
+                    crate::meter::method(),
+                    crate::meter::exe_time()
+                ));
+                b.cpu_check = Some(crate::meter::check());
                 b.lines
                     .push("| ticks/px | fps (median) | frame ms p50 / p95 | waveform CPU ms (scene) |".into());
                 b.lines.push("|---|---|---|---|".into());
@@ -216,6 +235,9 @@ pub fn step(st: &St, b: &mut Bench, dt_ms: f32, width: f32) -> (Option<Viewport>
                     cap.mem_bytes() as f64 / 1e6,
                     rss_mb().unwrap_or(f64::NAN)
                 ));
+                if let Some(c) = &b.cpu_check {
+                    b.lines.push(c.report());
+                }
                 b.lines.push(String::new());
                 b.lines.push(
                     "## the frame's parts (ms a frame, mean; draw CPU / scene CPU: this thread's CPU time (the rest are wall time: on a busy machine they count the waits too); events = all the app's event handling (frame loop + draw + the rest); platform CPU = main CPU - events: Makepad's platform layer on the main thread (the draw lists to the GPU API, the swap, X11); gap = dt - events: that and the GPU, the wait)"

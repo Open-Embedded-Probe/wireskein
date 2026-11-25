@@ -16,34 +16,8 @@ use std::time::Instant;
 use view_core::Viewport;
 use view_core::ann::Status;
 
-pub fn rss_mb() -> Option<f64> {
-    #[cfg(target_os = "linux")]
-    {
-        std::fs::read_to_string("/proc/self/statm")
-            .ok()
-            .and_then(|s| s.split_whitespace().nth(1).and_then(|x| x.parse::<f64>().ok()))
-            .map(|p| p * 4096.0 / 1e6)
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        None
-    }
-}
-
-/// The CPU time of this thread, ms (Linux; elsewhere NaN).
-pub fn thread_cpu_ms() -> f64 {
-    #[cfg(target_os = "linux")]
-    {
-        let mut t = libc::timespec { tv_sec: 0, tv_nsec: 0 };
-        // SAFETY: a valid timespec to fill
-        unsafe { libc::clock_gettime(libc::CLOCK_THREAD_CPUTIME_ID, &mut t) };
-        t.tv_sec as f64 * 1e3 + t.tv_nsec as f64 / 1e6
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        f64::NAN
-    }
-}
+/// The process's memory and this thread's CPU time: prototype 1's meter.rs (the same way in every prototype)
+pub use crate::meter::{rss_mb, thread_cpu_ms};
 
 #[derive(Clone, Debug, Default)]
 pub struct Args {
@@ -146,7 +120,11 @@ pub struct Perf {
     pub shapes: usize,
     pub instances: usize,
     pub labels: usize,
+    /// the first frame with the capture drawn, shown: the frame tick after the draw whose waveform drew it (s after the
+    /// capture was opened)
     pub first_paint: Option<f64>,
+    /// the waveform first drew the capture (its draw list built, not yet shown)
+    pub drawn_at: Option<f64>,
     pub acc: [f64; P_N],
     /// instances, labels, shapes, waves drawn (summed, for the bench)
     pub counts: (u64, u64, u64, u64),

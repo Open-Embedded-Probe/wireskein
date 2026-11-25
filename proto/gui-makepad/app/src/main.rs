@@ -6,6 +6,8 @@
 mod app;
 mod bench;
 mod list;
+#[path = "../../../gui/egui/src/meter.rs"]
+mod meter;
 mod model;
 mod panels;
 mod scene;
@@ -72,5 +74,7 @@ fn parse() -> state::Args {
 
 fn main() {
     let _ = app::ARGS.set(parse());
+    // what has to be measured before the frames (meter.rs: Windows' cycle rate)
+    meter::init();
     app::app_main();
 }

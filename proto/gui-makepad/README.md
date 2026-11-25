@@ -75,7 +75,9 @@ Windows は Direct3D 11、macOS は Metal）。wgpu は使わない。
 
 1. 倍率ごとの fps（中央値）、1 フレーム p50 / p95、波形 CPU（scene: 図形の列を作る時間）。頭に描画の API と窓の大きさ。
 2. **1 フレームの内訳**（ms / フレームの平均）。Makepad には iced の beacon や egui の profiling のような区間がないので、アプリが自分で測る:
-   - `main CPU`: メインスレッドの CPU 時間（Linux だけ。Windows では NaN）。
+   - `main CPU`: メインスレッドの CPU 時間（試作 1 の `proto/gui/egui/src/meter.rs` を同じに使う: Linux は `clock_gettime`、Windows は
+     `QueryThreadCycleTime` を起動時に測った速さで時間に直す。RSS も同じ所で、Windows は working set）。頭の `# meter:` に取り方と
+     この exe を作った時刻、終わりに流しの全体のメインスレッドの CPU を 2 つの時計（Windows は `GetThreadTimes` と並べる）で出す。
    - `events`: アプリが 1 フレームの間に扱ったイベントの合計（下の 3 つとマウスなど）。`frame loop`（NextFrame: 解析を見に行く・慣性・ベンチ）、
      `draw`（Event::Draw: すべての widget が draw list を作る）、その中の `wave draw`（波形の widget 全体）、`scene`（図形の列）、
      `instances push`（図形を DrawSeg のインスタンスに詰める）、`text`（文字を積む）、`list draw`（一覧のパネル）。
@@ -83,7 +85,7 @@ Windows は Direct3D 11、macOS は Metal）。wgpu は使わない。
    - `gap` = dt − events: platform CPU に加えて GPU の待ち・次のフレームまでの待ち。
    - 1 フレームを数える: `instances`（DrawSeg のインスタンス）、`labels`（注釈の文字の数）、`shapes`（view-core の図形）。
    - 垂直同期: Makepad 1.0 は Windows（D3D11）では常に切っている（`Present(0, 0)`）。Linux の EGL は設定していない（ドライバの既定）。
-     切り替える引数はない。
+     切り替える引数はない。結果の頭の `# present:` にこれを書く。
 
 ### 利用者の機械で流すコマンド（Windows の PowerShell / cmd でそのまま。`proto\gui-makepad` で）
 
@@ -96,8 +98,8 @@ cargo run --release -j1 --bin wsk-makepad -- ../../tests/data/p4x-i1/i2c-control
 cargo run --release -j1 --bin wsk-makepad -- ../../tests/data/i2c_bench/h417_slow/stream/impl-100000000-g0.wireskein --bench makepad-h417.txt
 ```
 
-- 1〜5 行目が試作 1・3 の表と並べるもの。Windows では `main CPU` と `platform CPU` が NaN になる（メインスレッドの CPU 時間を Linux でしか
-  取っていない）。`gap` は出る。
+- 1〜5 行目が試作 1・3 の表と並べるもの。2026-11-25 の 2 回目（ノート §14）から Windows でも `main CPU`・`platform CPU`・rss が出る
+  （その前の exe では NaN）。終わりの「main thread CPU over the run」で 2 つの時計が数 % 以内で合うことを見る。
 - 窓は流している間そのままにしておく（隠れたり最小化されたりすると描かない）。
 - Windows では MSVC のツールチェーン（Visual Studio の C++ Build Tools）が要る（Makepad の Windows の層が `windows` crate を使う）。
 

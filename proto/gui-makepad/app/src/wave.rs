@@ -594,8 +594,8 @@ impl Widget for WaveView {
         p.acc[P_TEXT] += text_ms;
         p.acc[P_WAVE] += t_all.elapsed().as_secs_f64() * 1e3;
         p.wave(scene_ms as f32, shapes, n_inst, n_labels);
-        if p.first_paint.is_none() {
-            p.first_paint = st.cap.as_ref().map(|c| c.opened.elapsed().as_secs_f64());
+        if p.drawn_at.is_none() {
+            p.drawn_at = st.cap.as_ref().map(|c| c.opened.elapsed().as_secs_f64());
         }
         DrawStep::done()
     }
