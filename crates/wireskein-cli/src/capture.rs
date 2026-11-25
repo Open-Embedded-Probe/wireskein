@@ -1,15 +1,16 @@
-//! `capture`: logic and analog channels from an OEP probe into a WireSkein file (Python's `wireskein capture --source
-//! oep:...`, `cli.capture_cmd`), through wireskein-oep. The probe opened by an OEP address on USB
-//! (oep://UNIT_ID[?via=usb]), TCP (oep://UNIT_ID?via=tcp:HOST:PORT, tcp://HOST:PORT) or a serial port at its boot speed
-//! (/dev/..., oep://UNIT_ID?via=tty:PATH, with --fast 0); what the Rust client does not do (a serial port's link
-//! raised by port_speed, sigrok, HID, a line label) is refused with a pointer to `wireskein capture`.
+//! `capture`: logic and analog channels from a device into a WireSkein file (Python's `wireskein capture --source
+//! KIND:ADDRESS`, `cli.capture_cmd`), the kind choosing the driver (wireskein-sources: `oep`, `demo`). An OEP probe
+//! opened by an OEP address on USB (oep://UNIT_ID[?via=usb]), TCP (oep://UNIT_ID?via=tcp:HOST:PORT, tcp://HOST:PORT)
+//! or a serial port at its boot speed (/dev/..., oep://UNIT_ID?via=tty:PATH, with --fast 0); what the Rust client
+//! does not do (a serial port's link raised by port_speed, sigrok, HID, a line label) is refused with a pointer to
+//! `wireskein capture`. `--list` lists the devices that can be seen.
 
 use crate::{Args, Takes, usage_error};
 use serde_json::{Map, Value, json};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use wireskein_capture::{Acquired, Error, Mode, Request};
 use wireskein_io::j::J;
-use wireskein_oep::{Error, Mode, Request};
 
 const LOSS_LINES: usize = 3;
 const BUFFER_WARN_MS: f64 = 5.0;
@@ -75,14 +76,14 @@ fn parse_channels(text: &str) -> Result<(Vec<(String, String)>, Vec<(String, (St
         let how = how.trim();
         if !how.is_empty() {
             let (mode, d) = how.split_once(':').unwrap_or((how, ""));
-            let ok = wireskein_oep::acquire::REDUCTIONS
+            let ok = wireskein_capture::request::REDUCTIONS
                 .contains(&mode)
                 .then(|| parse_count(d).ok())
                 .flatten();
             let Some(d) = ok else {
                 return Err(format!(
                     "{name}=.../{how}: the resolution is MODE:D, MODE one of {}, D samples (CS=5/any_low:8)",
-                    wireskein_oep::acquire::REDUCTIONS.join(", ")
+                    wireskein_capture::request::REDUCTIONS.join(", ")
                 ));
             };
             res.push((name.to_string(), (mode.to_string(), d)));
@@ -126,11 +127,12 @@ pub fn capture(args: &[String]) -> ExitCode {
             "--pretrigger",
             "--arm",
             "--timeout",
+            "--threshold",
             "--note",
             "-o",
             "--output",
         ],
-        flags: &[],
+        flags: &["--list"],
         lists: &[],
     };
     let a = match Args::parse(args, &takes) {
@@ -139,6 +141,9 @@ pub fn capture(args: &[String]) -> ExitCode {
     };
     if !a.pos.is_empty() {
         return usage_error("capture", &format!("unrecognized arguments: {}", a.pos.join(" ")));
+    }
+    if a.has("--list") {
+        return list(a.get("--source"));
     }
     let Some(source) = a.get("--source") else {
         return usage_error("capture", "the following arguments are required: --source, -o/--output");
@@ -164,11 +169,25 @@ pub fn capture(args: &[String]) -> ExitCode {
             );
         }
     }
-    let Some(address) = source.strip_prefix("oep:") else {
-        return fail(&format!(
-            "{source}: the Rust capture takes an OEP probe (oep:<address>); other sources are `wireskein capture`'s"
-        ));
+    let registry = wireskein_sources::builtin();
+    let (kind, address) = match wireskein_capture::source::split(source).and_then(|(k, a)| {
+        registry.driver(k)?;
+        Ok((k, a))
+    }) {
+        Ok(x) => x,
+        Err(e) => {
+            return fail(&format!(
+                "{source}: {}; other sources (sigrok) are `wireskein capture`'s",
+                err_text(&e)
+            ));
+        }
     };
+    if kind != "oep" {
+        return match run(&a, source, &registry, Path::new(output)) {
+            Ok(code) => code,
+            Err(e) => fail(&e),
+        };
+    }
     let serial = matches!(
         wireskein_oep::parse_address(address),
         Ok(Some(wireskein_oep::Address::Serial { .. }))
@@ -182,13 +201,31 @@ pub fn capture(args: &[String]) -> ExitCode {
              --fast 0 keeps the boot speed here"
         ));
     }
-    match run(&a, source, address, Path::new(output)) {
+    match run(&a, source, &registry, Path::new(output)) {
         Ok(code) => code,
         Err(e) => fail(&e),
     }
 }
 
-fn run(a: &Args, source: &str, address: &str, out: &Path) -> Result<ExitCode, String> {
+/// The devices that can be seen, of every kind or of `--source KIND`, one a line: its source, then its label.
+fn list(kind: Option<&str>) -> ExitCode {
+    let registry = wireskein_sources::builtin();
+    let kind = kind.map(|k| k.split(':').next().unwrap_or(k));
+    match registry.list(kind) {
+        Ok((found, failed)) => {
+            for f in found {
+                println!("{}\t{}", f.source, f.label);
+            }
+            for (k, e) in failed {
+                eprintln!("{k}: {}", err_text(&e));
+            }
+            ExitCode::SUCCESS
+        }
+        Err(e) => fail(&err_text(&e)),
+    }
+}
+
+fn run(a: &Args, source: &str, registry: &wireskein_capture::Registry, out: &Path) -> Result<ExitCode, String> {
     let (chans, resolution) = parse_channels(a.get("--channels").unwrap_or(""))?;
     let logic = !chans.is_empty();
     let mode = a.get("--mode").unwrap_or("oneshot");
@@ -265,6 +302,14 @@ fn run(a: &Args, source: &str, address: &str, out: &Path) -> Result<ExitCode, St
         .transpose()?
         .unwrap_or(10.0);
     req.resolution = resolution;
+    req.threshold_v = a
+        .get("--threshold")
+        .map(|s| {
+            s.trim_end_matches(['V', 'v'])
+                .parse::<f64>()
+                .map_err(|_| format!("argument --threshold: invalid volts: '{s}'"))
+        })
+        .transpose()?;
     req.glitch_filter_ns = a
         .get("--glitch-filter")
         .map(|s| {
@@ -276,11 +321,18 @@ fn run(a: &Args, source: &str, address: &str, out: &Path) -> Result<ExitCode, St
         let full = std::path::absolute(out).map_err(|e| e.to_string())?;
         req.spool_dir = full.parent().map(PathBuf::from);
     }
-    let got = wireskein_oep::capture_at(address, &req, "wireskein capture").map_err(|e| err_text(&e))?;
+    let got = registry
+        .capture(
+            source,
+            &req,
+            &wireskein_capture::Open::new("wireskein capture"),
+            &wireskein_capture::Ctl::new(),
+        )
+        .map_err(|e| err_text(&e))?;
     let mut extra = Map::new();
     extra.insert("source".into(), json!(source));
     extra.insert("requested_rate".into(), json!(req.rate_hz));
-    let written = wireskein_oep::to_capture(&got, &extra)
+    let written = wireskein_capture::to_capture(&got, &extra)
         .map_err(|e| err_text(&e))
         .and_then(|cap| wireskein_io::write::write(out, &cap, &[]));
     if let Some(d) = &got.temp_dir {
@@ -304,7 +356,7 @@ fn num(v: &J) -> f64 {
 }
 
 /// What was taken, how the link went, the losses (Python's capture_cmd lines). Exit 1 when data was lost.
-fn say(out: &Path, req: &Request, got: &wireskein_oep::Acquired, wsk: bool) -> ExitCode {
+fn say(out: &Path, req: &Request, got: &Acquired, wsk: bool) -> ExitCode {
     let shown = out.display();
     let rate = got.tick_hz.0 as f64 / got.tick_hz.1 as f64;
     let parts = got.all_parts();
@@ -340,7 +392,7 @@ fn say(out: &Path, req: &Request, got: &wireskein_oep::Acquired, wsk: bool) -> E
         let total = parts.iter().map(|p| p.samples.unwrap_or(0) as i64).sum();
         (format!("{n} logic channels"), parts.len(), total)
     };
-    let g = |x: f64| wireskein_oep::fmt_g(x);
+    let g = |x: f64| wireskein_capture::fmt_g(x);
     if n_parts > 1 {
         println!(
             "{shown}: {what}, {n_parts} parts, {total} ticks taken at {} Hz ({} s)",
@@ -355,7 +407,7 @@ fn say(out: &Path, req: &Request, got: &wireskein_oep::Acquired, wsk: bool) -> E
         );
         if let Some(p) = parts.first() {
             for c in &p.channels {
-                if let wireskein_oep::Chan::Analog(x) = c {
+                if let wireskein_capture::Chan::Analog(x) = c {
                     if let Some(want) = req.analog_samples.filter(|&w| x.n < w) {
                         println!(
                             "note: {}: {} samples of the {want} asked (the probe's limit)",
@@ -482,7 +534,7 @@ fn say(out: &Path, req: &Request, got: &wireskein_oep::Acquired, wsk: bool) -> E
                 wireskein_io::pyfmt::g(ticks as f64 / (ticks + total) as f64 * 100.0, 2)
             );
         }
-        let mut shown_: Vec<&wireskein_oep::Loss> = lost.iter().take(LOSS_LINES).collect();
+        let mut shown_: Vec<&wireskein_capture::Loss> = lost.iter().take(LOSS_LINES).collect();
         if lost.len() > LOSS_LINES {
             shown_.push(lost.last().expect("a loss"));
         }

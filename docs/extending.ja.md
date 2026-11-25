@@ -22,7 +22,8 @@ WireSkein は、記録を、読み手が要るもの（そこにあるバス、�
 | 1 つの試験だけの判断 | `wireskein.verify.sections(run)`、区間の分析、`rec.result(...)` | [ガイド](capture-test-guide.ja.md) §3.3 |
 | WireSkein が読まない形式の記録 | `wireskein.capture`（`logic`、`analog_volts`、`Part`、`Capture`、`write`）で WireSkein のファイルに変換する | [ファイルの形式](wireskein-format.ja.md) |
 | 判定でなく、見るためのもの | Python で記録を読み（`wireskein.capture`、`wireskein.decode`）、見つけたものをファイルに入れる（§3） | [ファイルの形式](wireskein-format.ja.md) §5 |
-| WireSkein に無いバス、線の符号、検査の種類、取り込み元 | 拡張点ではない | 提案してください |
+| WireSkein に無い種類の取り込み機材 | WireSkein 本体に足すドライバ（Rust）。差し込みではない | [取り込み機材を足すには](devices.ja.md) |
+| WireSkein に無いバス、線の符号、検査の種類 | 拡張点ではない | 提案してください |
 
 これらは重なります: 分析がバスを見つけ、プロトコルの表・機器パック・マーカーの方言がその上を読み、試験の `protocol(...)` がそれを判定し、メッセージは注釈とマーカーとしてファイルに入ります。
 

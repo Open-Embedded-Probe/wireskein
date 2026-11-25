@@ -26,7 +26,7 @@ def capture(target: str, req: Request) -> Result:
     from .. import _rust
     if _rust.captures(target, req):                     # WIRESKEIN_RUST=capture (wireskein._rust): wireskein-oep
         try:
-            return _from_rust(*_rust.oep_capture(target, req))
+            return _from_rust(*_rust.source_capture("oep:" + target, req))
         except FileNotFoundError:
             if _rust.oep_route(target) != "usb" or "?" in target:
                 raise
@@ -58,8 +58,8 @@ def capture(target: str, req: Request) -> Result:
 
 
 def _from_rust(doc: dict, datas: list) -> Result:
-    """wireskein-oep's capture (wireskein._rust.oep_capture) as the source's Result, as capture() makes it of
-    oep-client-python's: the same channels, parts, losses and meta."""
+    """A Rust driver's capture (wireskein._rust.source_capture: wireskein-oep's, the demo device's) as the source's
+    Result, as capture() makes it of oep-client-python's: the same channels, parts, losses and meta."""
     tick = Fraction(*doc["tick_hz"])
 
     def chan(c):

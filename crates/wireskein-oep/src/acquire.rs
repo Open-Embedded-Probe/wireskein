@@ -15,205 +15,14 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-pub const REDUCTIONS: [&str; 4] = ["sample", "any_high", "any_low", "change_latch"];
-pub const TRIGGERS: [&str; 5] = ["high", "low", "rise", "fall", "both"];
-pub const ANALOG_TRIGGERS: [&str; 4] = ["high", "low", "rise", "fall"];
+pub use wireskein_capture::request::{ANALOG_TRIGGERS, Mode, REDUCTIONS, Request, TRIGGERS};
 /// a stream's notifications: at least this much a frame, or after this long (core §10.3)
 const STREAM_MIN_BYTES: u16 = 16384;
 const STREAM_MAX_DELAY_MS: u32 = 20;
 const STREAM_POLL: Duration = Duration::from_millis(200);
 const LEASE_MS: u32 = 30_000;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Mode {
-    OneShot,
-    Stream,
-    Repeat,
-}
-
-impl Mode {
-    pub fn parse(s: &str) -> Result<Mode> {
-        Ok(match s {
-            "oneshot" => Mode::OneShot,
-            "stream" => Mode::Stream,
-            "repeat" => Mode::Repeat,
-            _ => return Err(Error::Value(format!("mode {s:?}: oneshot, stream or repeat"))),
-        })
-    }
-}
-
-/// What to capture (acquire.Request's logic part).
-#[derive(Debug, Clone)]
-pub struct Request {
-    /// (name to record, the probe's channel name)
-    pub channels: Vec<(String, String)>,
-    pub rate_hz: u64,
-    pub samples: u64,
-    /// (logic channel, one of TRIGGERS)
-    pub trigger: Option<(String, String)>,
-    pub pretrigger: Option<u64>,
-    /// trigger_opts arm 0: the trigger looked for at once
-    pub arm_now: bool,
-    pub timeout_s: f64,
-    /// name -> (reduction, D)
-    pub resolution: Vec<(String, (String, u64))>,
-    pub mode: Mode,
-    pub duration_s: Option<f64>,
-    pub segments: Option<u64>,
-    /// stream: stop at the first loss (else go on to the end)
-    pub on_loss_stop: bool,
-    /// stream: where its channels are put together on disk while it runs (None: the system's temporary directory)
-    pub spool_dir: Option<PathBuf>,
-    pub glitch_filter_ns: Option<u32>,
-    pub input_hysteresis: Option<bool>,
-    /// analog: (name to record, the probe's channel name, frontend)
-    pub analog: Vec<(String, String, Option<u8>)>,
-    /// analog samples a second (None: `rate_hz`) and how many (None: as long as the logic capture)
-    pub analog_rate_hz: Option<u64>,
-    pub analog_samples: Option<u64>,
-    /// a trigger on an analog channel: the volts it crosses or stays beyond
-    pub trigger_volts: Option<f64>,
-}
-
-impl Request {
-    pub fn new(channels: Vec<(String, String)>, rate_hz: u64, samples: u64) -> Request {
-        Request {
-            channels,
-            rate_hz,
-            samples,
-            trigger: None,
-            pretrigger: None,
-            arm_now: false,
-            timeout_s: 10.0,
-            resolution: vec![],
-            mode: Mode::OneShot,
-            duration_s: None,
-            segments: None,
-            on_loss_stop: true,
-            spool_dir: None,
-            glitch_filter_ns: None,
-            input_hysteresis: None,
-            analog: vec![],
-            analog_rate_hz: None,
-            analog_samples: None,
-            trigger_volts: None,
-        }
-    }
-
-    fn analog_names(&self) -> Vec<&str> {
-        self.analog.iter().map(|(n, _, _)| n.as_str()).collect()
-    }
-
-    /// acquire.Request's checks.
-    pub fn check(&self) -> Result<()> {
-        let names: Vec<&str> = self.channels.iter().map(|(n, _)| n.as_str()).collect();
-        let anames = self.analog_names();
-        let mut all: Vec<&str> = names.iter().chain(anames.iter()).copied().collect();
-        let given = all.clone();
-        all.sort();
-        all.dedup();
-        if given.is_empty() || all.len() != given.len() {
-            return Err(Error::Value(format!(
-                "channel names must be given and differ: {given:?}"
-            )));
-        }
-        if let Some((name, kind)) = &self.trigger {
-            if anames.contains(&name.as_str()) {
-                if !ANALOG_TRIGGERS.contains(&kind.as_str()) || self.trigger_volts.is_none() {
-                    return Err(Error::Value(format!(
-                        "trigger {name}:{kind}: an analog channel takes {} and the volts it crosses or stays beyond \
-                         ({name}:fall:2.9)",
-                        ANALOG_TRIGGERS.join("/")
-                    )));
-                }
-            } else if !names.contains(&name.as_str())
-                || !TRIGGERS.contains(&kind.as_str())
-                || self.trigger_volts.is_some()
-            {
-                return Err(Error::Value(format!(
-                    "trigger {name}:{kind}: the channel must be one captured, the kind one of {} (volts only for an \
-                     analog channel)",
-                    TRIGGERS.join(", ")
-                )));
-            }
-        }
-        if self.mode == Mode::Repeat
-            && !self.analog.is_empty()
-            && self.segments.is_some_and(|s| s >= 1)
-            && self.samples > 0
-        {
-            return Err(Error::Value("repeat: logic channels only".into()));
-        }
-        match self.mode {
-            Mode::Repeat if !self.segments.is_some_and(|s| s >= 1) || self.samples == 0 => {
-                return Err(Error::Value(
-                    "repeat needs samples and segments (how many acquisitions, 1 or more)".into(),
-                ));
-            }
-            Mode::OneShot | Mode::Stream if self.segments.is_some() => {
-                return Err(Error::Value("segments is for repeat only".into()));
-            }
-            Mode::Stream if !self.duration_s.is_some_and(|d| d > 0.0) => {
-                return Err(Error::Value("a stream needs duration_s (how long)".into()));
-            }
-            Mode::Stream if self.trigger.is_some() => {
-                return Err(Error::Value("a stream is started at once: no trigger".into()));
-            }
-            _ => {}
-        }
-        if self.glitch_filter_ns == Some(0) {
-            return Err(Error::Value("glitch_filter_ns 0: 1 or more (None: no filter)".into()));
-        }
-        for (name, (mode, d)) in &self.resolution {
-            if !names.contains(&name.as_str()) || !REDUCTIONS.contains(&mode.as_str()) || *d < 2 {
-                return Err(Error::Value(format!(
-                    "{name}=({mode:?}, {d}): a resolution is for a logic channel captured, (one of {}, 2 or more \
-                     samples)",
-                    REDUCTIONS.join(", ")
-                )));
-            }
-        }
-        Ok(())
-    }
-}
-
-/// A capture put together: one part (`parts` None: its `channels`, `meta` and `samples`) or several.
-#[derive(Debug, Clone)]
-pub struct Acquired {
-    pub tick_hz: (u64, u64),
-    pub channels: Vec<Chan>,
-    /// the first part's facts and "probe": the probe's
-    pub meta: Map<String, Value>,
-    pub parts: Option<Vec<Part>>,
-    pub lost: Vec<Loss>,
-    pub layout: String,
-    /// where a stream's bits are kept on disk: the caller removes it once written
-    pub temp_dir: Option<PathBuf>,
-    pub samples: Option<u64>,
-}
-
-impl Acquired {
-    /// The parts, the one part made of `channels` and `meta` when it came in one.
-    pub fn all_parts(&self) -> Vec<Part> {
-        match &self.parts {
-            Some(p) => p.clone(),
-            None => {
-                let meta = self
-                    .meta
-                    .iter()
-                    .filter(|(k, _)| *k != "probe")
-                    .map(|(k, v)| (k.clone(), v.clone()))
-                    .collect();
-                vec![Part {
-                    channels: self.channels.clone(),
-                    meta,
-                    tick0: Some(0),
-                    samples: self.samples,
-                }]
-            }
-        }
-    }
-}
+pub use wireskein_capture::parts::Acquired;
 
 /// Where a probe is: an OEP address (oep://UNIT_ID[?via=usb|bulk|tcp:HOST:PORT]) or tcp://HOST:PORT.
 #[derive(Debug, Clone, PartialEq)]
@@ -650,6 +459,8 @@ struct Run<'a> {
     clock_before: Option<ClockReading>,
     /// the analog describe's frontends: number -> its measurable range
     frontends: BTreeMap<u8, Value>,
+    /// the caller's: a stream stopped early, how it goes heard
+    ctl: wireskein_capture::Ctl,
 }
 
 impl Run<'_> {
@@ -711,8 +522,8 @@ impl Run<'_> {
 
     fn format(c: &Config) -> Format {
         match c.blocks() {
-            Some(b) => Format::One(b),
-            None => Format::Zero {
+            Some(b) => Format::Blocks(std::sync::Arc::new(b)),
+            None => Format::Packed {
                 width: c.width,
                 positions: c.positions.clone(),
             },
@@ -794,7 +605,7 @@ impl Run<'_> {
         }
         let fmt = Self::format(&cfg);
         let chans = assemble::segment_channels(&fmt, &data, seg.samples, &self.names, &self.ids)?;
-        if let Format::One(b) = &fmt {
+        if let Some(b) = cfg.blocks() {
             self.probe.insert(
                 "data".into(),
                 json!({"format": cfg.format, "block": cfg.block, "bytes": data.len(),
@@ -1045,7 +856,18 @@ impl Run<'_> {
                     }
                 }
                 spool.work()?;
+                self.ctl.tell(&wireskein_capture::Progress {
+                    stage: wireskein_capture::driver::Stage::Taking,
+                    elapsed_s: t_read.elapsed().as_secs_f64(),
+                    bytes: col.bytes,
+                    of_bytes: None,
+                    backlog: self.hst.link.t.flow.backlog(),
+                    losses: spool.lost_any() as usize,
+                });
                 if req.on_loss_stop && (spool.lost_any() || ag.lost()) {
+                    break;
+                }
+                if self.ctl.stopped() {
                     break;
                 }
             }
@@ -1944,7 +1766,7 @@ impl Run<'_> {
                 tick = cfg.rate.into();
                 let fmt = Self::format(cfg);
                 chans = assemble::segment_channels(&fmt, data, seg.samples, &self.names, &self.ids)?;
-                if let Format::One(b) = &fmt {
+                if let Some(b) = cfg.blocks() {
                     self.probe.insert(
                         "data".into(),
                         json!({"format": cfg.format, "block": cfg.block, "bytes": data.len(),
@@ -2362,17 +2184,20 @@ fn make_temp_dir(base: &std::path::Path, prefix: &str) -> Result<PathBuf> {
     Err(Error::Io(format!("{}: no new directory", base.display())))
 }
 
-/// Open the probe at `address`, take its lease, run one capture and let it all go (acquire.capture_at).
-pub fn capture_at(address: &str, req: &Request, owner: &str) -> Result<Acquired> {
-    req.check()?;
-    let addr = parse_address(address)?.ok_or_else(|| {
+/// `address` as this client opens it (Error::Value naming the forms when it does not).
+pub fn address_of(address: &str) -> Result<Address> {
+    parse_address(address)?.ok_or_else(|| {
         Error::Value(format!(
             "{address}: not an address this client opens (oep://UNIT_ID[?via=usb|bulk|tcp:HOST:PORT] or \
              tcp://HOST:PORT, a serial port /dev/... or oep://UNIT_ID?via=tty:PATH; HID, CDC, DNS-SD and brokers are \
              oep-client-python's)"
         ))
-    })?;
-    let wrap = |e: Error| match e {
+    })
+}
+
+/// The probe's refusals and failures as the caller sees them: the probe at `address` named.
+pub fn probe_error(address: &str, e: Error) -> Error {
+    match e {
         Error::Rejected(..) | Error::Failed(_) | Error::Protocol(_) => {
             let s = e.to_string();
             let hint = if s.contains("(storage)") {
@@ -2383,29 +2208,108 @@ pub fn capture_at(address: &str, req: &Request, owner: &str) -> Result<Acquired>
             Error::Runtime(format!("probe {address}: {s}{hint}"))
         }
         e => e,
-    };
-    capture_on(&addr, address, req, owner).map_err(wrap)
+    }
+}
+
+/// Open the probe at `address`, take its lease, run one capture and let it all go (acquire.capture_at).
+pub fn capture_at(address: &str, req: &Request, owner: &str) -> Result<Acquired> {
+    req.check()?;
+    let addr = address_of(address)?;
+    capture_on(&addr, address, req, owner).map_err(|e| probe_error(address, e))
 }
 
 fn capture_on(addr: &Address, target: &str, req: &Request, owner: &str) -> Result<Acquired> {
-    let t_open = Instant::now();
-    let mut hst = open(addr)?;
-    // the session kept per probe: a run killed half way does not leave its lock to the next (host guide §5)
-    hst.kept = Some(crate::kept::KeptSession::new(None));
-    let (mut hst, res) = session(hst, t_open, addr, target, req, owner);
-    // let the session go (its plan and subscriptions with it); the link closes when the host is dropped
-    let _ = hst.end();
+    let mut held = Held::open(addr, target, owner)?;
+    let res = held.capture(req, &wireskein_capture::Ctl::new());
+    held.end();
     res
 }
 
-/// The capture on an open link: the lease taken, the plan applied and released. -> the host back, and the capture.
+/// A probe opened and its lease taken (the driver's open device): captures run on it until it is let go.
+pub struct Held {
+    hst: Option<Host>,
+    pub addr: Address,
+    pub target: String,
+    pub owner: String,
+    pub boot_id: u32,
+    pub open_s: f64,
+}
+
+impl Held {
+    /// The probe at `addr` opened, the session a run before left ended, its lease taken for `owner` (waiting up to
+    /// 5 s for one who holds it).
+    pub fn open(addr: &Address, target: &str, owner: &str) -> Result<Held> {
+        let t_open = Instant::now();
+        let mut hst = open(addr)?;
+        // the session kept per probe: a run killed half way does not leave its lock to the next (host guide §5)
+        hst.kept = Some(crate::kept::KeptSession::new(None));
+        let taken = hst
+            .take(LEASE_MS, Some(owner), Duration::from_secs(5))
+            .map_err(|e| match e {
+                Error::Runtime(s) => Error::Failed(s),
+                e => e,
+            });
+        match taken {
+            Ok((_, boot_id)) => Ok(Held {
+                hst: Some(hst),
+                addr: addr.clone(),
+                target: target.into(),
+                owner: owner.into(),
+                boot_id,
+                open_s: t_open.elapsed().as_secs_f64(),
+            }),
+            Err(e) => {
+                let _ = hst.end();
+                Err(e)
+            }
+        }
+    }
+
+    /// One capture: its plan applied and released.
+    pub fn capture(&mut self, req: &Request, ctl: &wireskein_capture::Ctl) -> Result<Acquired> {
+        let hst = self
+            .hst
+            .take()
+            .ok_or_else(|| Error::Runtime("the probe was let go".into()))?;
+        let (hst, res) = session(hst, self.open_s, self.boot_id, &self.addr, &self.target, req, ctl);
+        self.hst = Some(hst);
+        res
+    }
+
+    /// The probe's facts as a capture's meta.probe has them (asks it).
+    pub fn facts(&mut self) -> Map<String, Value> {
+        match self.hst.as_mut() {
+            Some(h) => probe_info(h, Some(self.boot_id), &self.addr),
+            None => Map::new(),
+        }
+    }
+
+    /// Let the session go (its lease, plan and subscriptions with it); the link closes when the host is dropped.
+    pub fn end(mut self) {
+        if let Some(mut h) = self.hst.take() {
+            let _ = h.end();
+        }
+    }
+}
+
+impl Drop for Held {
+    fn drop(&mut self) {
+        if let Some(mut h) = self.hst.take() {
+            let _ = h.end();
+        }
+    }
+}
+
+/// The capture on an open link whose lease is taken: the plan applied and released. -> the host back, and the
+/// capture.
 fn session(
     mut hst: Host,
-    t_open: Instant,
+    open_s: f64,
+    boot_id: u32,
     addr: &Address,
     target: &str,
     req: &Request,
-    owner: &str,
+    ctl: &wireskein_capture::Ctl,
 ) -> (Host, Result<Acquired>) {
     macro_rules! tri {
         ($e:expr) => {
@@ -2415,14 +2319,6 @@ fn session(
             }
         };
     }
-    let (_, boot_id) = tri!(
-        hst.take(LEASE_MS, Some(owner), Duration::from_secs(5))
-            .map_err(|e| match e {
-                Error::Runtime(s) => Error::Failed(s),
-                e => e,
-            })
-    );
-    let open_s = t_open.elapsed().as_secs_f64();
     let clock_before = hst.clock_best(4).ok();
     let probe = probe_info(&mut hst, Some(boot_id), addr);
     let lines: Vec<String> = req.channels.iter().map(|(_, c)| c.clone()).collect();
@@ -2479,6 +2375,7 @@ fn session(
         probe,
         open_s,
         clock_before,
+        ctl: ctl.clone(),
     };
     let out = match (req.mode, run.an.is_some(), run.names.is_empty()) {
         (Mode::OneShot, false, _) => run.oneshot(),
@@ -2535,7 +2432,7 @@ mod tests {
             names,
             (0..7).collect(),
             (40_000_000, 1),
-            Format::Zero {
+            Format::Packed {
                 width: 8,
                 positions: (0..7).collect(),
             },
@@ -2704,7 +2601,7 @@ mod tests {
             .unwrap_or_else(std::env::temp_dir);
         let dir = make_temp_dir(&base, ".oep-bench-").unwrap();
         let names: Vec<String> = (0..7).map(|k| format!("D{k}")).collect();
-        let fmt = Format::Zero {
+        let fmt = Format::Packed {
             width: 8,
             positions: (0..7).collect(),
         };

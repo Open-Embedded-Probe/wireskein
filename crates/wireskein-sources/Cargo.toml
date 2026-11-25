@@ -1,0 +1,13 @@
+[package]
+name = "wireskein-sources"
+description = "WireSkein's built-in kinds of capture device (oep, demo), each by its driver (wireskein-capture's interface): a source `<kind>:<address>` opened and captured from"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+wireskein-capture = { path = "../wireskein-capture" }
+wireskein-oep = { path = "../wireskein-oep" }

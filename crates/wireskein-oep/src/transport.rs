@@ -78,23 +78,7 @@ impl Incoming {
 /// past its budget it waits there - false: stopped, or nobody reads.
 fn deliver(tx: &Sender<Vec<u8>>, chunk: Vec<u8>, flow: &Flow, stats: &Stats, stop: &AtomicBool) -> bool {
     let n = chunk.len() as u64;
-    if !flow.room_for(n) {
-        stats.held.fetch_add(1, Ordering::Relaxed);
-        let t = Instant::now();
-        while !flow.room_for(n) {
-            if stop.load(Ordering::SeqCst) {
-                return false;
-            }
-            std::thread::sleep(Duration::from_millis(1));
-        }
-        Flow::longest(&flow.held_max_us, t);
-    }
-    flow.queue(n);
-    if tx.send(chunk).is_err() {
-        flow.unqueue(n);
-        return false;
-    }
-    true
+    crate::flow::deliver(tx, chunk, n, flow, &stats.held, stop)
 }
 
 trait Sink: Send {

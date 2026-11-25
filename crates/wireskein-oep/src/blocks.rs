@@ -1,164 +1,18 @@
 //! A capture's data (oep-if-capture §1): format 0, samples of w bits with each channel at its bit (§1.1), and format 1,
 //! the logic blocks (§1.3: blocks of L samples, each channel raw or reduced over intervals of D) - oep-client-python's
-//! `acquire.from_interleaved` / `_samples_at_once` and `capture_blocks.segment_columns`.
+//! `acquire.from_interleaved` / `_samples_at_once` and `capture_blocks.segment_columns`. Format 0 is packed samples,
+//! read by wireskein-capture's `packed` as every device's are; format 1 is read here, as a block layout of the
+//! spool's.
 //!
 //! Bits are packed one a sample, sample i at bit i % 8 of byte i / 8.
 
 use crate::msg::{Error, Result};
 
-/// Format 1's carriages (capture §1.3).
-pub const RAW: u8 = 0;
-pub const SAMPLE: u8 = 1;
-pub const ANY_HIGH: u8 = 2;
-pub const ANY_LOW: u8 = 3;
-pub const CHANGE_LATCH: u8 = 4;
-
-pub fn carriage_name(kind: u8) -> &'static str {
-    match kind {
-        SAMPLE => "sample",
-        ANY_HIGH => "any_high",
-        ANY_LOW => "any_low",
-        CHANGE_LATCH => "change_latch",
-        _ => "raw",
-    }
-}
-
-pub fn carriage_of(name: &str) -> Option<u8> {
-    Some(match name {
-        "sample" => SAMPLE,
-        "any_high" => ANY_HIGH,
-        "any_low" => ANY_LOW,
-        "change_latch" => CHANGE_LATCH,
-        _ => return None,
-    })
-}
-
-/// An interval's bits for a reduction.
-pub fn value_bits(kind: u8) -> usize {
-    if kind == CHANGE_LATCH { 2 } else { 1 }
-}
-
-/// Bits appended one after another (a part's channel joined from its segments: a segment need not end on a byte).
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct BitBuf {
-    pub bytes: Vec<u8>,
-    pub nbits: usize,
-}
-
-impl BitBuf {
-    /// `n` bits of `src` (packed from bit 0).
-    pub fn append(&mut self, src: &[u8], n: usize) {
-        if n == 0 {
-            return;
-        }
-        let nb = n.div_ceil(8);
-        let sh = self.nbits % 8;
-        if sh == 0 {
-            self.bytes.extend_from_slice(&src[..nb]);
-        } else {
-            for &b in &src[..nb] {
-                *self.bytes.last_mut().expect("a partial byte") |= b << sh;
-                self.bytes.push(b >> (8 - sh));
-            }
-        }
-        self.nbits += n;
-        self.bytes.truncate(self.nbits.div_ceil(8));
-        if !self.nbits.is_multiple_of(8) {
-            let m = (1u8 << (self.nbits % 8)) - 1;
-            if let Some(b) = self.bytes.last_mut() {
-                *b &= m;
-            }
-        }
-    }
-
-    /// The whole bytes, taken off the front (the bits of a last partial byte stay).
-    pub fn take_whole(&mut self) -> Vec<u8> {
-        let whole = self.nbits / 8;
-        let out: Vec<u8> = self.bytes.drain(..whole).collect();
-        self.nbits -= whole * 8;
-        out
-    }
-}
-
-/// Bit `j` of packed `data`.
-#[inline]
-pub fn bit(data: &[u8], j: usize) -> u8 {
-    (data[j >> 3] >> (j & 7)) & 1
-}
-
-/// One channel's bits of `n` samples of `width` bits each, the channel at bit `pos` of a sample (§1.1: stream bit j
-/// is bit j % 8 of byte j / 8; a sample may cross a byte).
-pub fn column(data: &[u8], width: usize, pos: usize, n: usize) -> Vec<u8> {
-    let mut out = vec![0u8; n.div_ceil(8)];
-    if width.is_multiple_of(8) && width > 0 {
-        let b = width / 8;
-        let (byte, sh) = (pos / 8, (pos % 8) as u32);
-        let whole = n / 8;
-        if b == 1 {
-            // 8 samples a 64-bit word: the channel's bits gathered into a byte by one multiply
-            for (k, o) in out.iter_mut().enumerate().take(whole) {
-                let w = u64::from_le_bytes(data[k * 8..k * 8 + 8].try_into().expect("8"));
-                *o = ((((w >> sh) & 0x0101_0101_0101_0101).wrapping_mul(0x0102_0408_1020_4080)) >> 56) as u8;
-            }
-        } else {
-            for (k, o) in out.iter_mut().enumerate().take(whole) {
-                let mut v = 0u8;
-                for i in 0..8 {
-                    v |= ((data[(k * 8 + i) * b + byte] >> sh) & 1) << i;
-                }
-                *o = v;
-            }
-        }
-        for i in whole * 8..n {
-            out[i / 8] |= ((data[i * b + byte] >> sh) & 1) << (i % 8);
-        }
-    } else {
-        for i in 0..n {
-            out[i / 8] |= bit(data, i * width + pos) << (i % 8);
-        }
-    }
-    out
-}
-
-/// An 8 x 8 bit matrix transposed: bit 8i + j to bit 8j + i (Hacker's Delight 7-3).
-fn transpose8(mut x: u64) -> u64 {
-    let t = (x ^ (x >> 7)) & 0x00AA_00AA_00AA_00AA;
-    x ^= t ^ (t << 7);
-    let t = (x ^ (x >> 14)) & 0x0000_CCCC_0000_CCCC;
-    x ^= t ^ (t << 14);
-    let t = (x ^ (x >> 28)) & 0x0000_0000_F0F0_F0F0;
-    x ^ t ^ (t << 28)
-}
-
-/// Every channel's bits of `n` samples of `width` bits (`column` for each position), the samples read once.
-pub fn columns(data: &[u8], width: usize, positions: &[usize], n: usize) -> Vec<Vec<u8>> {
-    if width != 8 {
-        return positions.iter().map(|&p| column(data, width, p, n)).collect();
-    }
-    let whole = n / 8;
-    // each 8 samples' bits transposed at once (byte p of the result: bit p of the 8 samples), then each position's
-    // bytes taken out in one pass of its own (a stream's spool spent most of its time here, §42)
-    let t: Vec<u64> = data[..whole * 8]
-        .as_chunks::<8>()
-        .0
-        .iter()
-        .map(|c| transpose8(u64::from_le_bytes(*c)))
-        .collect();
-    let mut out: Vec<Vec<u8>> = positions
-        .iter()
-        .map(|&p| {
-            let mut o: Vec<u8> = t.iter().map(|x| (x >> (8 * p)) as u8).collect();
-            o.resize(n.div_ceil(8), 0);
-            o
-        })
-        .collect();
-    for (o, &p) in out.iter_mut().zip(positions) {
-        for i in whole * 8..n {
-            o[i / 8] |= ((data[i] >> p) & 1) << (i % 8);
-        }
-    }
-    out
-}
+pub use wireskein_capture::packed::{BitBuf, bit, column, columns};
+pub use wireskein_capture::parts::{
+    ANY_HIGH, ANY_LOW, CHANGE_LATCH, RAW, SAMPLE, carriage_name, carriage_of, value_bits,
+};
+pub use wireskein_capture::spool::{Column, ReducedColumn};
 
 /// A format 1 configuration (§1.3, as configured and answered): the raw channels' roles, the reduced ones'
 /// (carriage, D), the block's L and the layout (w, the raw channels' bit positions).
@@ -169,23 +23,6 @@ pub struct Blocks {
     pub block: usize,
     pub width: usize,
     pub positions: Vec<usize>,
-}
-
-/// A reduced channel over a segment: its carriage and D, the values packed as on the wire, how many, and change_latch's
-/// level before the first.
-#[derive(Debug, Clone, PartialEq)]
-pub struct ReducedColumn {
-    pub kind: u8,
-    pub d: usize,
-    pub data: Vec<u8>,
-    pub n: usize,
-    pub start_level: u8,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Column {
-    Raw(Vec<u8>),
-    Reduced(ReducedColumn),
 }
 
 impl Blocks {
@@ -311,56 +148,28 @@ impl Blocks {
     }
 }
 
+/// Format 1 as the spool reads it (wireskein-capture's block layout).
+impl wireskein_capture::spool::BlockLayout for Blocks {
+    fn block(&self) -> usize {
+        self.block
+    }
+    fn width(&self) -> usize {
+        self.width
+    }
+    fn intervals(&self) -> Vec<usize> {
+        self.reduced.iter().map(|(_, (_, d))| *d).collect()
+    }
+    fn columns(&self, data: &[u8], samples: usize) -> wireskein_capture::Result<Vec<Column>> {
+        Ok(Blocks::columns(self, data, samples)?
+            .into_iter()
+            .map(|(_, c)| c)
+            .collect())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn naive(data: &[u8], width: usize, pos: usize, n: usize) -> Vec<u8> {
-        let mut out = vec![0u8; n.div_ceil(8)];
-        for i in 0..n {
-            out[i / 8] |= bit(data, i * width + pos) << (i % 8);
-        }
-        out
-    }
-
-    #[test]
-    fn columns_of_every_width_agree_with_the_bit_by_bit_reading() {
-        let data: Vec<u8> = (0..4096u32).map(|i| (i.wrapping_mul(2654435761) >> 13) as u8).collect();
-        for width in [1, 3, 4, 8, 16, 24] {
-            for pos in [0, width - 1, width / 2] {
-                for n in [0, 1, 7, 8, 9, 63, 64, 100] {
-                    assert_eq!(
-                        column(&data, width, pos, n),
-                        naive(&data, width, pos, n),
-                        "{width} {pos} {n}"
-                    );
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn every_column_at_once_is_each_column() {
-        let data: Vec<u8> = (0..1000u32).map(|i| (i.wrapping_mul(2654435761) >> 9) as u8).collect();
-        for n in [0, 5, 7, 8, 9, 64, 1000] {
-            let all = columns(&data, 8, &[0, 1, 2, 3, 4, 5, 6, 7], n);
-            for (k, p) in (0..8).enumerate() {
-                assert_eq!(all[k], column(&data, 8, p, n));
-            }
-        }
-    }
-
-    #[test]
-    fn bits_append_across_bytes() {
-        let mut b = BitBuf::default();
-        b.append(&[0b101], 3);
-        b.append(&[0xFF, 0x01], 9);
-        b.append(&[0x00], 2);
-        assert_eq!(b.nbits, 14);
-        let want: Vec<u8> = [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0].to_vec();
-        assert_eq!((0..14).map(|j| bit(&b.bytes, j)).collect::<Vec<_>>(), want);
-        assert_eq!(b.bytes.len(), 2);
-    }
 
     #[test]
     fn a_format_1_segment_of_a_raw_and_a_change_latch_channel() {

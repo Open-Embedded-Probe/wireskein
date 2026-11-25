@@ -904,6 +904,9 @@ fn wireskein_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(attach, m)?)?;
     m.add_function(wrap_pyfunction!(oep::oep_capture, m)?)?;
     m.add_function(wrap_pyfunction!(oep::oep_assemble, m)?)?;
+    m.add_function(wrap_pyfunction!(oep::capture_source, m)?)?;
+    m.add_function(wrap_pyfunction!(oep::source_kinds, m)?)?;
+    m.add_function(wrap_pyfunction!(oep::source_list, m)?)?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_function(wrap_pyfunction!(read_file, m)?)?;
     m.add_function(wrap_pyfunction!(verify, m)?)?;

@@ -11,6 +11,7 @@ repository.workspace = true
 [dependencies]
 serde_json = "1"
 wireskein-io = { path = "../wireskein-io" }
+wireskein-capture = { path = "../wireskein-capture" }
 nusb = "0.2.9"
 
 [target.'cfg(unix)'.dependencies]

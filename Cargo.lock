@@ -926,14 +926,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "wireskein-capture"
+version = "0.0.39"
+dependencies = [
+ "rustix",
+ "serde_json",
+ "wireskein-io",
+]
+
+[[package]]
 name = "wireskein-cli"
 version = "0.0.39"
 dependencies = [
  "serde_json",
  "wireskein-analysis",
+ "wireskein-capture",
  "wireskein-core",
  "wireskein-io",
  "wireskein-oep",
+ "wireskein-sources",
  "wireskein-verify",
 ]
 
@@ -964,6 +975,7 @@ dependencies = [
  "nusb",
  "rustix",
  "serde_json",
+ "wireskein-capture",
  "wireskein-io",
 ]
 
@@ -975,10 +987,20 @@ dependencies = [
  "pyo3",
  "serde_json",
  "wireskein-analysis",
+ "wireskein-capture",
  "wireskein-core",
  "wireskein-io",
  "wireskein-oep",
+ "wireskein-sources",
  "wireskein-verify",
+]
+
+[[package]]
+name = "wireskein-sources"
+version = "0.0.39"
+dependencies = [
+ "wireskein-capture",
+ "wireskein-oep",
 ]
 
 [[package]]

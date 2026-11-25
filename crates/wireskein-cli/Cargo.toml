@@ -19,3 +19,5 @@ wireskein-verify = { path = "../wireskein-verify" }
 serde_json = "1"
 wireskein-analysis = { path = "../wireskein-analysis" }
 wireskein-oep = { path = "../wireskein-oep" }
+wireskein-capture = { path = "../wireskein-capture" }
+wireskein-sources = { path = "../wireskein-sources" }

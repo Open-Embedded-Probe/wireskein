@@ -1,0 +1,16 @@
+[package]
+name = "wireskein-capture"
+description = "What every capture device of WireSkein shares, in plain Rust: the driver's interface (find, open and hold, ask what it can do, capture, stop, close), the request, the flow of received bytes within one budget, the spool that puts them together (gaps as losses), packed samples into lines, the capture written out; and a demo device"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde_json = "1"
+wireskein-io = { path = "../wireskein-io" }
+
+[target.'cfg(unix)'.dependencies]
+rustix = { version = "1", default-features = false, features = ["std", "process"] }

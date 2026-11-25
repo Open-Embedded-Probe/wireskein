@@ -15,4 +15,5 @@ The repository's [README](../README.md) gives an overview of using WireSkein. Th
 | [Protocols of your own](protocols.md) | Adding a protocol to the analysis and the checks: one that rides on UART, SPI or I2C (Python), or one on the wire itself (a TOML definition), each with an example |
 | [Markers](markers.md) | Heading markers and the segment rules |
 | [Checking captures in tests](capture-test-guide.md) | How to record a test run, capture windows, the list of checks, how to choose tolerances |
+| [Adding a capture device](devices.md) | The drivers' interface (find, open and hold, what a device can do, capture, stop), adding a driver with the demo device as the example, devices that keep samples in their memory or need firmware sent, writing a protocol by watching the device (usbmon, Wireshark) without reading GPL code |
 | [WeAct's U3 logic analyzer](instruments/weact-u3-logic-analyzer.md) | What was found out about WeAct's CH32H417 analyzer and its application: the source and licence, the USB protocol, the `.sr` it saves, and the ways to use it with WireSkein |

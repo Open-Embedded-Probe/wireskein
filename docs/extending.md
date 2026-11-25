@@ -22,7 +22,8 @@ What neither covers (a bus WireSkein does not read, a line coding, a check kind,
 | A judgement only one test makes | `wireskein.verify.sections(run)`, an analysis of the segment, `rec.result(...)` | [Guide](capture-test-guide.md) §3.3 |
 | Captures in a file format WireSkein does not read | Convert them to a WireSkein file with `wireskein.capture` (`logic`, `analog_volts`, `Part`, `Capture`, `write`) | [File format](wireskein-format.md) |
 | Something to look at, not to judge | Read the capture in Python (`wireskein.capture`, `wireskein.decode`) and put what you find in the file (§3) | [File format](wireskein-format.md) §5 |
-| A bus, a line coding, a check kind, a capture source WireSkein does not have | Not an extension point | Propose it |
+| A kind of capture device WireSkein does not have | A driver added to WireSkein itself (Rust), not a plug-in | [Adding a capture device](devices.md) |
+| A bus, a line coding, a check kind WireSkein does not have | Not an extension point | Propose it |
 
 The ways stack: the analysis finds the buses, a protocol table, a device pack or a marker dialect reads what rides on them, a test's `protocol(...)` check judges it, and its messages end up as annotations and markers in the file.
 

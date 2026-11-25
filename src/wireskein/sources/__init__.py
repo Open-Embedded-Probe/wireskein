@@ -8,6 +8,12 @@ built-in sources:
                       opens it: oep://UNIT_ID[?via=ROUTE], a serial port, tcp://HOST:PORT
     sigrok:<driver>   a device sigrok supports, through sigrok-cli (e.g. sigrok:fx2lafw, sigrok:demo,
                       sigrok:dreamsourcelab-dslogic:conn=1.6)
+    demo:<options>    the demo device: a counter sent as packed samples, with no hardware (wireskein-capture's demo,
+                      so it needs wireskein_core: pip install ./crates/wireskein-py), e.g. demo:counter?lines=16,
+                      demo:?type=memory (docs/devices.md)
+
+The source's kind (before the first ":") chooses its module; with WIRESKEIN_RUST=capture a kind with a Rust driver
+(oep) is captured by it (wireskein._rust.source_capture).
 
     from wireskein import sources
     req = sources.Request([("SDA", "GPIO47"), ("SCL", "x035.scl")], rate_hz=20_000_000, samples=200_000)
@@ -26,7 +32,7 @@ from .. import _fileformat as fileformat
 
 __all__ = ["Request", "Result", "capture", "run"]
 
-BUILTIN = {"oep": "wireskein.sources.oep", "sigrok": "wireskein.sources.sigrok"}
+BUILTIN = {"oep": "wireskein.sources.oep", "sigrok": "wireskein.sources.sigrok", "demo": "wireskein.sources.demo"}
 TRIGGERS = ("rise", "fall", "both", "high", "low")
 ANALOG_TRIGGERS = ("rise", "fall", "high", "low")   # crossing up / down, staying above / below a voltage
 

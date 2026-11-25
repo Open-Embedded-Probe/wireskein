@@ -1,5 +1,7 @@
-//! The OEP capture for Python (wireskein-oep): `oep_capture` runs one capture as oep-client-python's
-//! `acquire.capture_at` does, `oep_assemble` puts a stream's pushes together (for a test that gives the frames).
+//! Capturing for Python: `capture_source` runs one capture from a source `<kind>:<address>` by its kind's driver
+//! (wireskein-sources: `oep`, `demo`), `oep_capture` one from an OEP probe as oep-client-python's `acquire.capture_at`
+//! does, `source_list` the devices that can be seen, `oep_assemble` puts a stream's pushes together (for a test that
+//! gives the frames).
 
 use pyo3::exceptions::{
     PyConnectionError, PyFileNotFoundError, PyOSError, PyRuntimeError, PyTimeoutError, PyValueError,
@@ -7,7 +9,7 @@ use pyo3::exceptions::{
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use serde_json::Value;
-use wireskein_oep::{Error, Mode, Request};
+use wireskein_capture::{Error, Mode, Request};
 
 /// A data push as a test gives it: (position, data, (segment position, samples, start_ns, uncertainty) or None).
 type Push = (u64, Vec<u8>, Option<(u64, u64, u64, u64)>);
@@ -18,7 +20,7 @@ fn py_err(e: Error) -> PyErr {
         Error::NotFound(m) => PyFileNotFoundError::new_err(m),
         Error::Timeout(m) => PyTimeoutError::new_err(m),
         Error::Io(m) => PyOSError::new_err(m),
-        Error::Framing(m) | Error::Connection(m) => PyConnectionError::new_err(m),
+        Error::Connection(m) => PyConnectionError::new_err(m),
         e => PyRuntimeError::new_err(e.to_string()),
     }
 }
@@ -27,7 +29,7 @@ fn bad(what: &str) -> PyErr {
     PyValueError::new_err(format!("request: {what}"))
 }
 
-/// wireskein.sources.Request (as JSON) -> wireskein_oep::Request.
+/// wireskein.sources.Request (as JSON) -> wireskein_capture::Request.
 fn request(v: &Value) -> PyResult<Request> {
     let s = |k: &str| v.get(k).and_then(|x| x.as_str());
     let u = |k: &str| v.get(k).and_then(|x| x.as_u64());
@@ -87,11 +89,12 @@ fn request(v: &Value) -> PyResult<Request> {
     r.on_loss_stop = s("on_loss").unwrap_or("stop") == "stop";
     r.spool_dir = s("spool_dir").map(Into::into);
     r.glitch_filter_ns = u("glitch_filter_ns").map(|x| x as u32);
+    r.threshold_v = f("threshold_v");
     Ok(r)
 }
 
-fn out<'py>(py: Python<'py>, a: &wireskein_oep::Acquired) -> (String, Vec<Bound<'py, PyBytes>>) {
-    let (doc, datas) = wireskein_oep::to_doc(a);
+fn out<'py>(py: Python<'py>, a: &wireskein_capture::Acquired) -> (String, Vec<Bound<'py, PyBytes>>) {
+    let (doc, datas) = wireskein_capture::to_doc(a);
     (doc.to_string(), datas.iter().map(|d| PyBytes::new(py, d)).collect())
 }
 
@@ -110,8 +113,48 @@ pub fn oep_capture<'py>(
     let req = request(&v)?;
     let got = py
         .detach(|| wireskein_oep::capture_at(address, &req, owner))
+        .map_err(|e| py_err(e.into()))?;
+    Ok(out(py, &got))
+}
+
+/// capture_source(source, request_json, owner) -> (doc_json, [bytes]): one capture from `source` (`<kind>:<address>`,
+/// the kind choosing the driver: oep, demo), held as `owner`; the doc as oep_capture's.
+#[pyfunction]
+pub fn capture_source<'py>(
+    py: Python<'py>,
+    source: &str,
+    request_json: &str,
+    owner: &str,
+) -> PyResult<(String, Vec<Bound<'py, PyBytes>>)> {
+    let v: Value = serde_json::from_str(request_json).map_err(|e| bad(&e.to_string()))?;
+    let req = request(&v)?;
+    let got = py
+        .detach(|| wireskein_sources::capture(source, &req, owner, &wireskein_capture::Ctl::new()))
         .map_err(py_err)?;
     Ok(out(py, &got))
+}
+
+/// source_kinds() -> [kind]: the kinds of device known (each a driver).
+#[pyfunction]
+pub fn source_kinds() -> Vec<String> {
+    wireskein_sources::builtin()
+        .kinds()
+        .iter()
+        .map(|k| k.to_string())
+        .collect()
+}
+
+/// source_list(kind=None) -> JSON: {"found": [{source, label, facts}], "failed": [[kind, why]]}, the devices that
+/// can be seen now.
+#[pyfunction]
+#[pyo3(signature = (kind=None))]
+pub fn source_list(py: Python<'_>, kind: Option<&str>) -> PyResult<String> {
+    let (found, failed) = py.detach(|| wireskein_sources::builtin().list(kind)).map_err(py_err)?;
+    let doc = serde_json::json!({
+        "found": found.iter().map(|f| f.to_json()).collect::<Vec<_>>(),
+        "failed": failed.iter().map(|(k, e)| serde_json::json!([k, e.to_string()])).collect::<Vec<_>>(),
+    });
+    Ok(doc.to_string())
 }
 
 /// oep_assemble(config_json, pushes, write_pos=None) -> (doc_json, [bytes]): a stream's data pushes put together as
@@ -126,7 +169,7 @@ pub fn oep_assemble<'py>(
     pushes: Vec<Push>,
     write_pos: Option<u64>,
 ) -> PyResult<(String, Vec<Bound<'py, PyBytes>>)> {
-    use wireskein_oep::assemble::Format;
+    use wireskein_capture::spool::Format;
     use wireskein_oep::blocks::Blocks;
     let c: Value = serde_json::from_str(config_json).map_err(|e| bad(&e.to_string()))?;
     let list = |k: &str| -> Vec<u64> {
@@ -161,15 +204,15 @@ pub fn oep_assemble<'py>(
                     .collect()
             })
             .unwrap_or_default();
-        Format::One(Blocks {
+        Format::Blocks(std::sync::Arc::new(Blocks {
             raw_roles: list("raw_roles").into_iter().map(|x| x as usize).collect(),
             reduced,
             block: c.get("block").and_then(|x| x.as_u64()).unwrap_or(0) as usize,
             width,
             positions,
-        })
+        }))
     } else {
-        Format::Zero { width, positions }
+        Format::Packed { width, positions }
     };
     let stop = c.get("on_loss").and_then(|x| x.as_str()).unwrap_or("stop") == "stop";
     let pushes: Vec<_> = pushes
@@ -179,7 +222,7 @@ pub fn oep_assemble<'py>(
                 p,
                 d,
                 i.map(
-                    |(position, samples, start_ns, unc)| wireskein_oep::capture::SegmentInfo {
+                    |(position, samples, start_ns, unc)| wireskein_capture::spool::SegmentInfo {
                         position,
                         samples,
                         start_ns,
@@ -190,10 +233,10 @@ pub fn oep_assemble<'py>(
         })
         .collect();
     let (parts, lost) = py
-        .detach(|| wireskein_oep::assemble_pushes(names, ids, rate, format, stop, &pushes, write_pos))
+        .detach(|| wireskein_capture::save::assemble_pushes(names, ids, rate, format, stop, &pushes, write_pos))
         .map_err(py_err)?;
     let channels = parts.first().map(|p| p.channels.clone()).unwrap_or_default();
-    let a = wireskein_oep::Acquired {
+    let a = wireskein_capture::Acquired {
         tick_hz: rate,
         channels,
         meta: Default::default(),

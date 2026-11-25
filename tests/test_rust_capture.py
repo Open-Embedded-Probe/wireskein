@@ -810,3 +810,74 @@ def test_wireskein_rs_takes_analog_lines(bench, monkeypatch, tmp_path):
             assert b == a
         else:
             assert b[0] == a[0] and b[5][:a[2]] == a[5]
+
+
+# ---------------- a source by its kind: the demo device (§45) ----------------
+
+def _counter_lines(path, ids):
+    """Each part's lines against the demo's counter (line Dk: bit k of the sample's index from the part's tick0): its
+    first level and its changes, as the file keeps them (bits, or changes for a quiet line)."""
+    from wireskein._engine import fileio
+    head = fileformat.read_header(path)
+    taken = 0
+    for k, cap in enumerate(fileio.load_parts(path)):
+        n = head["parts"][k]["ticks"]
+        t0 = head["parts"][k].get("tick0", 0) + head["meta"].get("counter_start", 0)
+        for c, bit in zip(cap.channels, ids):
+            i = np.arange(1, n, dtype=np.int64)
+            want = i[((t0 + i) % (1 << bit)) == 0]
+            assert int(c.initial) == (t0 >> bit) & 1 and np.array_equal(np.asarray(c.edges), want), (c.name, k)
+        taken += n
+    return head, taken
+
+
+@rust_only
+def test_the_kinds_the_rust_drivers_know(clean):
+    assert {"demo", "oep"} <= set(_rust.source_kinds())
+    with pytest.raises(ValueError, match="unknown source 'nope'"):
+        _rust.source_capture("nope:x", sources.Request([("A", "D0")], 1000, 10))
+
+
+@rust_only
+def test_the_demo_source_through_python(clean, tmp_path):
+    """`demo:` chosen by its kind in Python (sources.BUILTIN) and captured by the Rust driver: the counter's lines in
+    two bytes a sample; a dropped chunk is a loss, kept and failed; a memory device's trigger and pretrigger."""
+    req = sources.Request([("A", "D0"), ("B", "D9"), ("C", "D15")], 1_000_000, 50_000)
+    out = sources.capture("demo:counter?lines=16&pace=fast", req, tmp_path / "a.wireskein")
+    head, n = _counter_lines(out, [0, 9, 15])
+    assert head["complete"] and n == 50_000
+    lossy = sources.Request([("A", "D3")], 1_000_000, 64 * 1024, on_loss="continue")
+    out = sources.capture("demo:?lines=8&pace=fast&chunk=4096&drop=2", lossy, tmp_path / "b.wireskein")
+    head, n = _counter_lines(out, [3])
+    assert not head["complete"] and len(head["lost"]) == 1 and n == 64 * 1024 - 4096
+    trig = sources.Request([("A", "D4")], 1_000_000, 1000, trigger=("A", "rise"), pretrigger=20)
+    out = sources.capture("demo:?type=memory&lines=8", trig, tmp_path / "c.wireskein")
+    head, _ = _counter_lines(out, [4])
+    assert head["meta"]["trigger_sample"] == 20
+    stream = sources.Request([("A", "D1")], 2_000_000, 0, mode="stream", duration_s=0.5)
+    out = sources.capture("demo:?lines=8", stream, tmp_path / "d.wireskein")
+    head, n = _counter_lines(out, [1])
+    assert head["complete"] and n > 500_000
+    assert not list(tmp_path.glob(".wireskein-demo-stream-*"))      # the stream's files removed once written
+
+
+def test_wireskein_rs_chooses_by_the_kind(tmp_path):
+    rs = _wireskein_rs()
+    if rs is None:
+        pytest.skip("wireskein-rs not built")
+    out = tmp_path / "a.wireskein"
+    r = subprocess.run([rs, "capture", "--source", "demo:counter?lines=8&pace=fast", "--channels", "A=D2,B=D7",
+                        "--rate", "1M", "--samples", "20k", "-o", str(out)], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.startswith(f"{out}: 2 logic") and "20000 ticks at 1e+06 Hz" in r.stdout
+    _, n = _counter_lines(out, [2, 7])
+    assert n == 20_000
+    r = subprocess.run([rs, "capture", "--source", "demo:?lines=8&pace=fast&chunk=4096&drop=1", "--channels", "A=D0",
+                        "--rate", "1M", "--samples", "20k", "--on-loss", "continue", "-o", str(out)],
+                       capture_output=True, text=True)
+    assert r.returncode == 1 and "INCOMPLETE: 1 loss" in r.stderr and "kept what was taken" in r.stderr
+    r = subprocess.run([rs, "capture", "--source", "sigrok:fx2lafw", "--channels", "A=0", "--rate", "1M",
+                        "--samples", "10", "-o", str(out)], capture_output=True, text=True)
+    assert r.returncode == 1 and "unknown source 'sigrok' (known: demo, oep)" in r.stderr
+    r = subprocess.run([rs, "capture", "--list", "--source", "demo"], capture_output=True, text=True)
+    assert r.returncode == 0 and r.stdout.startswith("demo:counter\t")

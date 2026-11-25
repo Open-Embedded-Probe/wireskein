@@ -105,6 +105,39 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
+impl From<wireskein_capture::Error> for Error {
+    fn from(e: wireskein_capture::Error) -> Error {
+        use wireskein_capture::Error as C;
+        match e {
+            C::Value(s) => Error::Value(s),
+            C::NotFound(s) => Error::NotFound(s),
+            C::Timeout(s) => Error::Timeout(s),
+            C::Io(s) => Error::Io(s),
+            C::Connection(s) => Error::Connection(s),
+            C::Protocol(s) => Error::Protocol(s),
+            C::Runtime(s) => Error::Runtime(s),
+        }
+    }
+}
+
+/// As every device's error (the kinds a caller tells apart kept: a link that could not be set right again is a
+/// `Connection`, the rest of the probe's failures `Runtime`).
+impl From<Error> for wireskein_capture::Error {
+    fn from(e: Error) -> wireskein_capture::Error {
+        use wireskein_capture::Error as C;
+        match e {
+            Error::Value(s) => C::Value(s),
+            Error::NotFound(s) => C::NotFound(s),
+            Error::Timeout(s) => C::Timeout(s),
+            Error::Io(s) => C::Io(s),
+            Error::Framing(s) | Error::Connection(s) => C::Connection(s),
+            Error::Protocol(s) => C::Protocol(s),
+            Error::Runtime(s) => C::Runtime(s),
+            e => C::Runtime(e.to_string()),
+        }
+    }
+}
+
 impl From<std::io::Error> for Error {
     fn from(e: std::io::Error) -> Error {
         Error::Io(e.to_string())

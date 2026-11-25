@@ -755,9 +755,10 @@ def main() -> None:
     cv.add_argument("--part", type=int, default=None,
                     help="of a capture in parts (wireskein-format §3.4): write this one (from 0) on its own; .sr and "
                          "VCD hold one gapless run")
-    cp = sub.add_parser("capture", help="capture logic channels from a device into a .wireskein (sources: oep, sigrok)")
+    cp = sub.add_parser("capture", help="capture logic channels from a device into a .wireskein (sources: oep, sigrok, demo)")
     cp.add_argument("--source", required=True, help="oep:<address> (oep://UNIT_ID[?via=usb|cdc|net|tcp:HOST:PORT|"
-                         "tty:PATH], a serial port, tcp://HOST:PORT) or sigrok:<driver>")
+                         "tty:PATH], a serial port, tcp://HOST:PORT), sigrok:<driver> or demo:<options> (the demo "
+                         "device, no hardware: wireskein_core's)")
     cp.add_argument("--fast", default=None, help="oep: the rates a UART probe's link is raised to for reading back "
                          "(default: 1.5M / 921600 / 500000 as the client's record of this port and probe says; 0 keeps "
                          "the boot speed; RATE,RATE tries those)")

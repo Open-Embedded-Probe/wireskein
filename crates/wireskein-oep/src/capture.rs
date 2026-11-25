@@ -299,14 +299,8 @@ impl Status {
     }
 }
 
-/// A streaming data frame's segment_info (§3.4).
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct SegmentInfo {
-    pub position: u64,
-    pub samples: u64,
-    pub start_ns: u64,
-    pub start_uncertainty_ns: u64,
-}
+/// A streaming data frame's segment_info (§3.4): the spool's segment record.
+pub use wireskein_capture::spool::SegmentInfo;
 
 /// A data push (core §10.2): fn seq position data, its generation and segment_info.
 #[derive(Debug, Clone)]

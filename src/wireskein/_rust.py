@@ -52,7 +52,9 @@ The parts:
              wireskein-oep (USB vendor bulk with many IN transfers queued, TCP, or a serial port at its boot speed;
              logic and analog lines, a capture group) in place of oep-client-python's acquire; a serial port whose
              link is raised (Request.fast other than []), HID, CDC, DNS-SD, a broker and a line named by its label
-             stay oep-client-python's (an OEP address without a route whose probe is not on USB too)
+             stay oep-client-python's (an OEP address without a route whose probe is not on USB too); the probe is
+             reached through the driver of the source's kind (wireskein-sources: `oep:` the OEP driver, `demo:` the
+             demo device, which has no Python implementation and is Rust's whether or not this is set)
 
 A part switched on whose Rust cannot do what was asked falls back to Python without a word (the result is the same
 kind); a part switched on without wireskein_core installed is an error."""
@@ -669,14 +671,29 @@ def captures(target: str, req) -> bool:
     return route is not None
 
 
-def oep_capture(target: str, req) -> tuple[dict, list]:
-    """One capture by wireskein-oep (as oep-client-python's acquire.capture_at): (the document, the channels' data)."""
-    doc = {"channels": [list(c) for c in req.channels], "rate_hz": int(req.rate_hz), "samples": int(req.samples or 0),
+def _request_doc(req) -> dict:
+    return {"channels": [list(c) for c in req.channels], "rate_hz": int(req.rate_hz), "samples": int(req.samples or 0),
            "trigger": list(req.trigger) if req.trigger else None, "pretrigger": req.pretrigger, "arm": req.arm,
            "timeout_s": float(req.timeout_s), "resolution": {k: [m, int(d)] for k, (m, d) in req.resolution.items()},
            "mode": req.mode, "duration_s": req.duration_s, "segments": req.segments, "on_loss": req.on_loss,
            "spool_dir": req.spool_dir, "glitch_filter_ns": req.glitch_filter_ns,
            "analog": [[n, cid, fe] for n, cid, fe in req.analog], "analog_rate_hz": req.analog_rate_hz,
            "analog_samples": req.analog_samples}
-    text, datas = core().oep_capture(target, json.dumps(doc), "wireskein capture")
+
+
+def source_capture(source: str, req) -> tuple[dict, list]:
+    """One capture from `source` ("<kind>:<address>") by the Rust driver of its kind (wireskein-sources: oep,
+    demo): (the document, the channels' data)."""
+    text, datas = core().capture_source(source, json.dumps(_request_doc(req)), "wireskein capture")
     return json.loads(text), datas
+
+
+def oep_capture(target: str, req) -> tuple[dict, list]:
+    """One capture from an OEP probe by wireskein-oep (as oep-client-python's acquire.capture_at), the oep kind's
+    driver: (the document, the channels' data)."""
+    return source_capture("oep:" + target, req)
+
+
+def source_kinds() -> list[str]:
+    """The kinds of device the Rust drivers know."""
+    return list(core().source_kinds())

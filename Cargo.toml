@@ -8,7 +8,8 @@
 [workspace]
 resolver = "3"
 members = ["crates/wireskein-core", "crates/wireskein-py", "crates/wireskein-io", "crates/wireskein-analysis",
-           "crates/wireskein-cli", "crates/wireskein-verify", "crates/wireskein-oep"]
+           "crates/wireskein-cli", "crates/wireskein-verify", "crates/wireskein-oep", "crates/wireskein-capture",
+           "crates/wireskein-sources"]
 # throwaway prototypes (proto/gui: the app's screens compared) keep a workspace of their own, out of CI
 exclude = ["proto"]
 
