@@ -1,0 +1,41 @@
+[package]
+name = "proto-iced"
+description = "Prototype 3 of the app's screens: iced (wgpu, a shader widget for the waveform, pane_grid, several windows)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "wsk-iced"
+path = "src/main.rs"
+
+[dependencies]
+view-core = { path = "../../gui/view-core" }
+wireskein-io = { path = "../../../crates/wireskein-io" }
+wireskein-analysis = { path = "../../../crates/wireskein-analysis" }
+wireskein-core = { path = "../../../crates/wireskein-core" }
+iced = { version = "0.14", default-features = false, features = ["wgpu", "x11", "wayland", "advanced", "thread-pool", "crisp", "web-colors", "sysinfo"] }
+bytemuck = { version = "1", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+web-time = "1"
+
+# --bench: iced's stage spans (iced_debug, "enable") received by a beacon server of our own (the protocol of iced's
+# debugger, comet); wgpu's profiling scopes as tracing spans timed by prof.rs (prototype 1's)
+iced_debug = { version = "0.14", features = ["enable"] }
+# the trait that draws a shader primitive from a widget of our own (iced re-exports it only privately)
+iced_wgpu = "0.14"
+iced_beacon = "0.14"
+tokio = { version = "1", features = ["rt", "net"] }
+profiling = { version = "1", default-features = false, features = ["profile-with-tracing"] }
+tracing-core = { version = "0.1", default-features = false, features = ["std"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
+
+# the made-up I2C capture (prototype 1's tool, the same file)
+[[bin]]
+name = "wsk_synth"
+path = "../../gui/egui/src/bin/wsk_synth.rs"
