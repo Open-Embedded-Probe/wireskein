@@ -86,7 +86,19 @@ impl Out {
         if x0.max(x1) < cx0 || x0.min(x1) > cx1 || y0.max(y1) < cy0 || y0.min(y1) > cy1 {
             return;
         }
-        self.inst.extend_from_slice(&[x0, y0, x1, y1, color, alpha, 1.0, w]);
+        // cut at the clip's left and right (an analog line's points reach past the view)
+        let (mut a, mut b) = ((x0, y0), (x1, y1));
+        if a.0 > b.0 {
+            std::mem::swap(&mut a, &mut b);
+        }
+        let at = |p: (f32, f32), q: (f32, f32), x: f32| (x, p.1 + (q.1 - p.1) * (x - p.0) / (q.0 - p.0));
+        if a.0 < cx0 {
+            a = at(a, b, cx0);
+        }
+        if b.0 > cx1 {
+            b = at(a, b, cx1);
+        }
+        self.inst.extend_from_slice(&[a.0, a.1, b.0, b.1, color, alpha, 1.0, w]);
     }
     /// A frame `w` px wide inside the rectangle.
     fn outline(&mut self, x0: f32, y0: f32, x1: f32, y1: f32, color: f32, w: f32) {

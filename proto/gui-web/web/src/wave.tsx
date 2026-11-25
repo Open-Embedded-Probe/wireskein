@@ -159,6 +159,10 @@ export function WavePanel(props: { id: number; params: WaveParams; onParams: (p:
       if (Math.abs(st.vel / vp.tpp) < 5) st.vel = 0;
     }
     if (forced.panel === props.id && forced.vp) vp = { ...forced.vp, width: pw };
+    if (forced.panel === props.id && forced.reset) {
+      forced.reset = false;
+      vp = fit(n, pw);
+    }
     vp = clamped(vp, n);
     st.vp = vp;
     if (forced.panel === null) forced.panel = props.id;

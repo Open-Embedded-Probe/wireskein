@@ -10,7 +10,7 @@ import { timings } from './engine';
 import { createSignal } from 'solid-js';
 
 /** The view the bench forces on one waveform panel (the first drawn). */
-export const forced = { panel: null as number | null, vp: null as Viewport | null, width: 1000 };
+export const forced = { panel: null as number | null, vp: null as Viewport | null, width: 1000, reset: false };
 
 export const [benchText, setBenchText] = createSignal('');
 
@@ -92,6 +92,7 @@ export function startBench() {
             `workers' wasm MB: ${wm || '-'}, JS heap ${heap ? (heap / 1e6).toFixed(0) + ' MB' : '-'}`,
         );
         forced.vp = null;
+        forced.reset = true;
         phase = { k: 'done' };
         setContinuous(false);
         const text = lines.join('\n') + '\n';
