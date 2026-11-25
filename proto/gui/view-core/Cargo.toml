@@ -1,0 +1,14 @@
+[package]
+name = "view-core"
+description = "Prototype: the waveform's summary layers, the annotations' time index and the shapes of a view (no GUI, wasm too)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+
+[[bin]]
+name = "view-bench"
+path = "src/bin/view_bench.rs"

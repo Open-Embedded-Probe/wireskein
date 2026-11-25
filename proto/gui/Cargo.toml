@@ -1,0 +1,23 @@
+# A throwaway prototype of the app's screens (bench/notes/2026-11-25-gui-study.ja.md §7, §9): a workspace of its own,
+# out of the product's (the root Cargo.toml excludes proto/), its lock beside it. Not to be shipped as it is.
+#   view-core: the rendering parts that do not depend on the screens (§3), plain Rust, builds for wasm too
+#   egui:      prototype 1, egui (eframe, wgpu)
+[workspace]
+resolver = "3"
+members = ["view-core", "egui"]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT"
+publish = false
+
+[profile.release]
+debug = false
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 2
