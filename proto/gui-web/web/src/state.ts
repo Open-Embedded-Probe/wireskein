@@ -231,3 +231,11 @@ export function addDrawer(f: Drawer) {
 export function onFrame(f: (now: number, dt: number) => void) {
   frameHooks.push(f);
 }
+
+/** `?report=1`: what the page measured sent to tools/serve.mjs (POST /report), for browsers whose console is out
+ * of reach. */
+export function report(what: string, data: object) {
+  if (params.get('report') !== '1') return;
+  const body = JSON.stringify({ what, ua: navigator.userAgent, webgpu: 'gpu' in navigator, ...data });
+  fetch('./report', { method: 'POST', body }).catch(() => {});
+}

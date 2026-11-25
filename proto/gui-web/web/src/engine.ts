@@ -109,7 +109,7 @@ function openFile(src: Source & { kind: 'file' | 'url' }, part: number) {
       requestDraw();
     } else if (m.type === 'analog') {
       const a = pendingAnalog[m.i];
-      sc!.add_analog(a.name, a.unit, a.t0, a.dt, m.values);
+      sc!.add_analog_parts(a.name, a.unit, a.t0, a.dt, m.values, m.levels, m.lens);
       if (m.i === pendingAnalog.length - 1 && got === nLines) setScene(sc, null);
       requestDraw();
     } else if (m.type === 'lod-begin') {
@@ -181,14 +181,22 @@ function openSynth(total: number, items: number, src: Source) {
     give(w);
   }
   setLod({ done: 0, total: 16, ms: null });
-  // the analog line made on the screen's thread after the first picture (made-up: no data to move)
-  setTimeout(() => {
-    if (scene !== sc) return;
-    const t = performance.now();
-    sc.add_synth_analog('A0', 'V', dt, nS);
-    console.log(`analog made here: ${(performance.now() - t).toFixed(0)} ms (the screen's thread)`);
-    requestDraw();
-  }, 50);
+  // the analog line and its summary made in a worker of its own, the arrays taken here
+  const aw = newWorker('load');
+  workers.push(aw);
+  aw.onmessage = (ev) => {
+    const m = ev.data;
+    if (m.type === 'analog' && scene === sc) {
+      const t = performance.now();
+      sc.add_analog_parts('A0', 'V', 0, dt, m.values, m.levels, m.lens);
+      console.log(`analog: taken in ${(performance.now() - t).toFixed(0)} ms on the screen's thread`);
+      requestDraw();
+    } else if (m.type === 'analog-ms') {
+      console.log(`analog: made in ${m.ms.toFixed(0)} ms in a worker`);
+      aw.terminate();
+    }
+  };
+  aw.postMessage({ type: 'synth-analog', n: nS, dt });
 }
 
 // ------------------------------------------------------------------------------------------------ the analysis

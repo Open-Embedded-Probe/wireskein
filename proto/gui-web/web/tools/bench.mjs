@@ -76,6 +76,7 @@ function treeRss(pid) {
 const browser = await puppeteer.launch({
   executablePath: chrome,
   headless: !headful,
+  protocolTimeout: 1_800_000,
   defaultViewport: { width: size[0], height: size[1] },
   args: [
     `--window-size=${size[0]},${size[1]}`,

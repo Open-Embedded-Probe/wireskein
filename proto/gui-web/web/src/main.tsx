@@ -10,7 +10,7 @@ import { render } from 'solid-js/web';
 import { For, Show, createEffect, createSignal, onMount } from 'solid-js';
 import './style.css';
 import {
-  analysis, analyzing, cap, dark, lod, pal, perf, setDark, requestDraw, search,
+  analysis, analyzing, cap, dark, lod, pal, perf, setDark, requestDraw, search, report,
 } from './state';
 import { open, reopenPart, runSearch, selectWhenReady } from './engine';
 import { PRESETS, addPanel, deleteLayout, loadLayout, mountDock, popout, presetLayout, saveLayout, savedLayouts, dockApi } from './dock';
@@ -57,8 +57,17 @@ function App() {
     requestDraw();
   });
   // for tools/bench.mjs: the first picture, the summaries and the analysis done
+  let reported = false;
   createEffect(() => {
-    (window as unknown as { __ready: boolean }).__ready = !!cap() && perf.firstPaint !== null && lod().ms !== null && !analyzing();
+    const ready = !!cap() && perf.firstPaint !== null && lod().ms !== null && !analyzing();
+    (window as unknown as { __ready: boolean }).__ready = ready;
+    if (ready && !reported) {
+      reported = true;
+      report('ready', {
+        renderer: perf.renderer, firstPaintMs: perf.firstPaint, lodMs: lod().ms, analysisS: analysis()?.seconds,
+        sinceLoadMs: performance.now(),
+      });
+    }
   });
 
   onMount(() => {

@@ -181,10 +181,22 @@ impl Scene {
         self.analog.push(AnalogLine::new(name, unit, t0, dt, values));
         self.analog.len() - 1
     }
-    /// A made-up analog line of `n` samples made here (view-core's synth_analog), `dt` ticks a sample.
-    pub fn add_synth_analog(&mut self, name: &str, unit: &str, dt: f64, n: u32) -> usize {
-        let v = view_core::synth::synth_analog(n as usize, dt);
-        self.analog.push(AnalogLine::new(name, unit, 0.0, dt, v));
+    /// An analog line whose summary a worker built (the engine's AnalogParts: bands flat, min / max / mean each).
+    #[allow(clippy::too_many_arguments)]
+    pub fn add_analog_parts(&mut self, name: &str, unit: &str, t0: f64, dt: f64, values: Vec<f32>, levels: &[f32], lens: &[u32]) -> usize {
+        let mut out = vec![];
+        let mut k = 0;
+        for &n in lens {
+            let n = n as usize;
+            out.push(
+                levels[k..k + 3 * n]
+                    .chunks_exact(3)
+                    .map(|b| view_core::analog::Band { min: b[0], max: b[1], mean: b[2] })
+                    .collect(),
+            );
+            k += 3 * n;
+        }
+        self.analog.push(AnalogLine::from_parts(name, unit, t0, dt, values, out));
         self.analog.len() - 1
     }
     pub fn n_lines(&self) -> usize {

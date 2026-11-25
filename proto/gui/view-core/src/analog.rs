@@ -56,6 +56,29 @@ impl AnalogLine {
         AnalogLine { name: name.into(), unit: unit.into(), t0, dt, values, levels, min: lo, max: hi }
     }
 
+    /// The summary's levels, to move the line to another thread or wasm instance (`from_parts` makes it again
+    /// without building them): level k's bands of 4^(k+1) samples.
+    pub fn levels(&self) -> &[Vec<Band>] {
+        &self.levels
+    }
+    /// A line from its samples and the levels `levels` gave.
+    pub fn from_parts(name: &str, unit: &str, t0: f64, dt: f64, values: Vec<f32>, levels: Vec<Vec<Band>>) -> Self {
+        let (mut lo, mut hi) = (f32::INFINITY, f32::NEG_INFINITY);
+        for b in levels.last().map(|l| &l[..]).unwrap_or(&[]) {
+            lo = lo.min(b.min);
+            hi = hi.max(b.max);
+        }
+        if levels.is_empty() {
+            for &v in &values {
+                if v.is_finite() {
+                    lo = lo.min(v);
+                    hi = hi.max(v);
+                }
+            }
+        }
+        AnalogLine { name: name.into(), unit: unit.into(), t0, dt, values, levels, min: lo, max: hi }
+    }
+
     pub fn end_tick(&self) -> Tick {
         (self.t0 + self.dt * self.values.len() as f64).ceil() as Tick
     }

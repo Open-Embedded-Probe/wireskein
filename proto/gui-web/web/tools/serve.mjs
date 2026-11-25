@@ -61,6 +61,17 @@ function resolve(urlPath) {
 }
 
 const server = http.createServer((req, res) => {
+  // ?report=1: the page sends what it measured (a browser whose console is out of reach, e.g. WebKitGTK's MiniBrowser)
+  if (req.method === 'POST' && req.url === '/report') {
+    let body = '';
+    req.on('data', (c) => (body += c));
+    req.on('end', () => {
+      console.log(`[report] ${body}`);
+      res.writeHead(204);
+      res.end();
+    });
+    return;
+  }
   let f = resolve(req.url ?? '/');
   if (f && fs.existsSync(f) && fs.statSync(f).isDirectory()) f = path.join(f, 'index.html');
   const headers = {

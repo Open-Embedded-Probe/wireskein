@@ -239,9 +239,42 @@ pub fn synth_plan(total: f64, n_lines: u32) -> Vec<f64> {
     v
 }
 
+/// An analog line's samples and its summary built here (view-core's AnalogLine), handed to the screen's thread
+/// flat: the levels' bands one after another (min, max, mean each) and each level's length.
 #[wasm_bindgen]
-pub fn synth_analog(n: u32, dt: f64) -> Vec<f32> {
-    synth::synth_analog(n as usize, dt)
+pub struct AnalogParts {
+    values: Vec<f32>,
+    levels: Vec<f32>,
+    lens: Vec<u32>,
+}
+
+#[wasm_bindgen]
+impl AnalogParts {
+    /// A made-up line of `n` samples (view-core's synth_analog), `dt` ticks a sample.
+    pub fn synth(n: u32, dt: f64) -> AnalogParts {
+        AnalogParts::of(synth::synth_analog(n as usize, dt))
+    }
+    pub fn of(values: Vec<f32>) -> AnalogParts {
+        let a = view_core::analog::AnalogLine::new("", "", 0.0, 1.0, values);
+        let mut levels = vec![];
+        let mut lens = vec![];
+        for l in a.levels() {
+            lens.push(l.len() as u32);
+            for b in l {
+                levels.extend_from_slice(&[b.min, b.max, b.mean]);
+            }
+        }
+        AnalogParts { values: a.values, levels, lens }
+    }
+    pub fn take_values(&mut self) -> Vec<f32> {
+        std::mem::take(&mut self.values)
+    }
+    pub fn take_levels(&mut self) -> Vec<f32> {
+        std::mem::take(&mut self.levels)
+    }
+    pub fn lens(&self) -> Vec<u32> {
+        self.lens.clone()
+    }
 }
 
 // ---------------------------------------------------------------------------------------------------------------

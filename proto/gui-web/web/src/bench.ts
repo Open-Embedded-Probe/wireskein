@@ -4,7 +4,7 @@
 // 60 Hz screen); "waveform CPU" is the time to make and submit a frame (wasm + GPU commands + the text canvas).
 // The result: shown in the speed panel, logged, and in window.__bench (tools/bench.mjs reads it).
 
-import { analysis, analyzing, cap, frameLog, lod, onFrame, perf, requestDraw, scene, setContinuous, viewMemory } from './state';
+import { analysis, analyzing, cap, frameLog, lod, onFrame, perf, report, requestDraw, scene, setContinuous, viewMemory } from './state';
 import { type Viewport, fit, zoomed, clamped } from './viewport';
 import { timings } from './engine';
 import { createSignal } from 'solid-js';
@@ -50,6 +50,7 @@ export function startBench() {
         lines.push('| ticks/px | fps (median) | frame ms p50 / p95 | waveform CPU ms (of which wasm) |');
         lines.push('|---|---|---|---|');
         phase = { k: 'zoom', zi: 0, f: 0 };
+        console.log(`bench: ${lines[0]}`);
       }
       return;
     }
@@ -66,6 +67,7 @@ export function startBench() {
       forced.vp = clamped(vp, n);
       if (f >= 95) {
         lines.push(`| ${vp.tpp.toFixed(3)} | ${(1000 / pct(samples, 0.5)).toFixed(0)} | ${pct(samples, 0.5).toFixed(1)} / ${pct(samples, 0.95).toFixed(1)} | ${avg(wave).toFixed(2)} (${avg(wasm).toFixed(2)}) |`);
+        console.log(`bench: ${lines[lines.length - 1]}`);
         samples = [];
         wave = [];
         wasm = [];
@@ -96,6 +98,7 @@ export function startBench() {
         console.log(text);
         setBenchText(text);
         (window as unknown as { __bench: string }).__bench = text;
+        report('bench', { text });
       } else phase = { k: 'sweep', f: f + 1 };
     }
   });
