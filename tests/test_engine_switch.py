@@ -1,6 +1,6 @@
-"""WIRESKEIN_ENGINE: the Python engine by default (nothing changes for anyone who does not set it), the Rust core
-(wireskein-core, installed apart) when it names it - its claims through the same upper stage and export. The Rust
-tests run only where wireskein_core is installed. Waveforms made here."""
+"""WIRESKEIN_ENGINE: the Rust core (wireskein._core, built into the wheel) by default - its claims through the same
+upper stage and export - and the Python engine when it names it. The Rust tests run only where the Rust core is
+built. Waveforms made here."""
 import importlib.util
 
 import numpy as np
@@ -10,8 +10,8 @@ from wireskein import _engines, decode
 from wireskein._engine import gen, staged
 
 RATE = 1e6
-HAS_CORE = importlib.util.find_spec("wireskein_core") is not None
-rust_only = pytest.mark.skipif(not HAS_CORE, reason="wireskein_core (crates/wireskein-py) not installed")
+HAS_CORE = importlib.util.find_spec("wireskein._core") is not None
+rust_only = pytest.mark.skipif(not HAS_CORE, reason="the Rust core (wireskein._core) not built")
 
 
 @pytest.fixture(autouse=True)
@@ -28,15 +28,20 @@ def _uart(text: bytes = b"hello, engines\r\nsecond line\r\n" * 4):
     return gen.quantize({"TX": w}, RATE, end + 200e-6, np.random.default_rng(0))
 
 
-def test_default_is_python(monkeypatch):
+@rust_only
+def test_default_is_rust(monkeypatch):
     monkeypatch.delenv(_engines.ENGINE_ENV, raising=False)
-    monkeypatch.setattr(_engines, "rust", lambda *a, **k: pytest.fail("the Rust core read by default"))
+    assert _engines.engine() == "rust"
+    assert isinstance(decode.analyze(_uart()), _engines.ForeignResult)
+
+
+def test_python_named_is_python(monkeypatch):
+    monkeypatch.setenv(_engines.ENGINE_ENV, "python")
+    monkeypatch.setattr(_engines, "rust", lambda *a, **k: pytest.fail("the Rust core read under python"))
     assert _engines.engine() == "python"
     res = decode.analyze(_uart())
     assert not isinstance(res, _engines.ForeignResult)
     assert all(isinstance(c, staged.Claim) and not hasattr(c.node, "own_layers") for c in res.claims)
-    monkeypatch.setenv(_engines.ENGINE_ENV, "python")
-    assert _engines.engine() == "python"
 
 
 def test_an_unknown_engine_is_refused(monkeypatch):
@@ -46,16 +51,12 @@ def test_an_unknown_engine_is_refused(monkeypatch):
 
 
 def test_rust_without_its_package_names_it(monkeypatch):
+    import sys
+    import wireskein
     monkeypatch.setenv(_engines.ENGINE_ENV, "rust")
-    import builtins
-    real = builtins.__import__
-
-    def no_core(name, *a, **k):
-        if name == "wireskein_core":
-            raise ImportError("no module named wireskein_core")
-        return real(name, *a, **k)
-    monkeypatch.setattr(builtins, "__import__", no_core)
-    with pytest.raises(RuntimeError, match="wireskein-core"):
+    monkeypatch.setitem(sys.modules, "wireskein._core", None)
+    monkeypatch.delattr(wireskein, "_core", raising=False)
+    with pytest.raises(RuntimeError, match=r"wireskein\._core"):
         decode.analyze(_uart())
 
 

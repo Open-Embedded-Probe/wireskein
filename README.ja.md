@@ -53,7 +53,9 @@ WireSkein は、ロジックアナライザのキャプチャを**テストと�
 pip install wireskein              # または uv add wireskein
 ```
 
-Python 3.11 以上が要ります。依存は numpy だけです。
+Python 3.11 以上が要ります。依存は numpy だけです。wheel には Rust で書いた WireSkein のエンジンが入っています（Linux の x86_64・arm64、macOS の arm64・x86_64、Windows の x86_64）。ほかの環境では、pip が sdist からビルドするので Rust が要ります。`WIRESKEIN_ENGINE=python` で Python の実装で動きます。
+
+Rust だけで動くコマンド `wireskein-rs`（Python 不要）を、同じ環境ぶん GitHub のリリースに付けています。
 
 ## テストの記録を照合する
 
@@ -355,9 +357,14 @@ tools/                  ビューアの取得とリリースのスクリプト
 
 ## 開発
 
+uv のほかに Rust（stable。`rust-version` は Cargo.toml）が要ります。`uv sync` が Rust のコアを `src/wireskein/` にビルドします（git では無視）。Rust を変えたときはビルドし直します。
+
 ```sh
-uv run pytest
-uv build
+uv sync                          # Rust のコア（wireskein._core）をビルド
+uv run pytest                    # 既定: 全部の部分を Rust のコアで
+WIRESKEIN_RUST=none uv run pytest   # Python の実装で
+cargo test --workspace --exclude wireskein-py
+uv build                         # sdist と、この機械の wheel
 ```
 
 ## リリース
@@ -369,8 +376,11 @@ pytest-embedded-arduino-cli と同じく、GitHub Actions で出します。
 3. 残りは workflow が行います。
    - `pyproject.toml` と `src/wireskein/__init__.py` の版を書き換える
    - 変更履歴を新しい版の見出しの下へ移す
-   - テストとビルドを行い、コミットして `v<版>` のタグを付ける
-   - GitHub Release を作り、PyPI に出す
+   - Rust の crate の版も書き換える
+   - テストを行い、コミットして `v<版>` のタグを付ける
+   - タグからビルドする（`build.yml`: 5 つの環境の wheel と sdist、`wireskein-rs` の圧縮ファイル）
+   - GitHub Release を作って圧縮ファイルを付け、wheel と sdist を PyPI に出す
+   - ビルドしたものは git に入れない
 
 PyPI への公開は Trusted Publishing で行います。
 

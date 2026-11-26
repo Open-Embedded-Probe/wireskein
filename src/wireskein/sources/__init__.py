@@ -9,7 +9,7 @@ built-in sources:
     sigrok:<driver>   a device sigrok supports, through sigrok-cli (e.g. sigrok:fx2lafw, sigrok:demo,
                       sigrok:dreamsourcelab-dslogic:conn=1.6)
     demo:<options>    the demo device: a counter sent as packed samples, with no hardware (wireskein-capture's demo,
-                      so it needs wireskein_core: pip install ./crates/wireskein-py), e.g. demo:counter?lines=16,
+                      so it needs the Rust core, wireskein._core, built into the wheel), e.g. demo:counter?lines=16,
                       demo:?type=memory (docs/devices.md)
 
 The source's kind (before the first ":") chooses its module; with WIRESKEIN_RUST=capture a kind with a Rust driver

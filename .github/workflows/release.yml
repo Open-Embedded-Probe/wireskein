@@ -1,5 +1,10 @@
 name: Release
 
+# One release for everything (bench/notes/2026-11-24-rust-plan.ja.md §51): the version bumped and tagged (prepare),
+# then built from that tag (build.yml: the wheels with the Rust core built in and the sdist, the app's archives),
+# the GitHub release with the app's archives, and PyPI with the wheels and the sdist. An app unchanged since the last
+# release is released again under the new version.
+
 on:
   workflow_dispatch:
     inputs:
@@ -54,11 +59,9 @@ jobs:
       - name: Fetch the viewer (wireskein-web, pinned in tools/web.json)
         run: python tools/fetch_web.py
 
+      # (uv run builds the Rust core in place first)
       - name: Run tests
         run: uv run pytest tests
-
-      - name: Build package
-        run: uv build
 
       - name: Commit release changes
         run: |
@@ -75,9 +78,15 @@ jobs:
           git push origin HEAD
           git push origin "v${{ steps.prepare.outputs.version }}"
 
+  build:
+    needs: prepare
+    uses: ./.github/workflows/build.yml
+    with:
+      ref: "v${{ needs.prepare.outputs.version }}"
+
   create_github_release:
     runs-on: ubuntu-latest
-    needs: prepare
+    needs: [prepare, build]
     permissions:
       contents: write
 
@@ -140,41 +149,44 @@ jobs:
           Path("release_body.md").write_text(body + "\n", encoding="utf-8")
           PY
 
+      - name: Fetch the app's archives
+        uses: actions/download-artifact@v8
+        with:
+          pattern: app-*
+          merge-multiple: true
+          path: app
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: "v${{ needs.prepare.outputs.version }}"
           body_path: release_body.md
+          files: app/*
+          fail_on_unmatched_files: true
           generate_release_notes: false
           prerelease: ${{ contains(needs.prepare.outputs.version, 'a') || contains(needs.prepare.outputs.version, 'b') || contains(needs.prepare.outputs.version, 'rc') }}
 
   publish_pypi:
     runs-on: ubuntu-latest
-    needs: prepare
+    needs: [prepare, build]
     if: ${{ github.event.inputs.publish_pypi == 'true' }}
     permissions:
       id-token: write
       contents: read
 
     steps:
-      - name: Checkout tag
-        uses: actions/checkout@v7
+      - name: Fetch the wheels
+        uses: actions/download-artifact@v8
         with:
-          ref: "v${{ needs.prepare.outputs.version }}"
+          pattern: wheel-*
+          merge-multiple: true
+          path: dist
 
-      - name: Setup Python
-        uses: actions/setup-python@v7
+      - name: Fetch the sdist
+        uses: actions/download-artifact@v8
         with:
-          python-version-file: ".python-version"
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v10.3.3   # no floating major tag since v8: the full version
-
-      - name: Fetch the viewer (wireskein-web, pinned in tools/web.json)
-        run: python tools/fetch_web.py
-
-      - name: Build package
-        run: uv build
+          name: sdist
+          path: dist
 
       - name: Publish to PyPI (Trusted Publishing)
         uses: pypa/gh-action-pypi-publish@release/v1

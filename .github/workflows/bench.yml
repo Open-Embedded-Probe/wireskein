@@ -62,7 +62,6 @@ jobs:
       shards: ${{ steps.plan.outputs.shards }}
       n: ${{ steps.plan.outputs.n }}
       run_id: ${{ steps.plan.outputs.run_id }}
-      rust: ${{ steps.plan.outputs.rust }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -74,31 +73,24 @@ jobs:
           ALGOS: ${{ inputs.algos }}
           OTHER: ${{ inputs.other }}
         run: |
-          # the Rust core (crates/) is built where an engine may run (bench/engines/rust.py): any engine, rust, or
-          # algorithms chosen by status
-          a="$ALGOS"
-          if [ "$a" = "(other)" ]; then a="${OTHER#*|}"; fi
-          case "$a" in "(status "*|*engine*|*rust*) echo "rust=true" >> "$GITHUB_OUTPUT";; *) echo "rust=false" >> "$GITHUB_OUTPUT";; esac
           n=$(python3 -c 'import os; print(max(1, min(20, int(os.environ["SHARDS"]))))')
           echo "n=$n" >> "$GITHUB_OUTPUT"
           echo "shards=$(python3 -c "print(list(range($n)))")" >> "$GITHUB_OUTPUT"
           echo "run_id=$(date -u +%Y%m%dT%H%M%SZ)-$(git rev-parse --short=7 HEAD)-gh${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
 
       - name: Install uv
-        if: steps.plan.outputs.rust == 'true'
         uses: astral-sh/setup-uv@v10.3.3   # no floating major tag since v8: the full version
 
-      # once for the whole run: the gate and every shard install this wheel (this commit's Rust, not a released one)
-      - name: Build the Rust core
-        if: steps.plan.outputs.rust == 'true'
-        run: uv build --python 3.13 --wheel crates/wireskein-py --out-dir rust-wheel
+      # once for the whole run: wireskein's wheel with this commit's Rust core built in (bench/notes/
+      # 2026-11-24-rust-plan.ja.md §51); every job runs the bench on it (uv run --no-project), none builds again
+      - name: Build the wheel
+        run: uv build --python 3.13 --wheel --out-dir wheel
 
-      - name: Keep the Rust core's wheel
-        if: steps.plan.outputs.rust == 'true'
+      - name: Keep the wheel
         uses: actions/upload-artifact@v7
         with:
-          name: rust-wheel
-          path: rust-wheel/*.whl
+          name: wheel
+          path: wheel/*.whl
           retention-days: 1
 
   gate:
@@ -114,12 +106,11 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v10.3.3   # no floating major tag since v8: the full version
 
-      - name: Fetch the Rust core's wheel
-        if: needs.plan.outputs.rust == 'true'
+      - name: Fetch the wheel
         uses: actions/download-artifact@v8
         with:
-          name: rust-wheel
-          path: rust-wheel
+          name: wheel
+          path: wheel
 
       - name: Cost run and gate
         id: gate
@@ -136,22 +127,22 @@ jobs:
           elif [ "$ALGOS" = "(other)" ]; then ALGOS="$OTHER"; fi
           STATUS="main,trial"
           case "$ALGOS" in "(status "*) STATUS="${ALGOS#(status }"; STATUS="${STATUS%)}"; ALGOS="";; esac
-          # the Rust core's wheel the plan built, where it built one (bench/engines/rust.py)
-          RUSTW=()
-          if [ -d rust-wheel ]; then RUSTW=(--with "$(ls rust-wheel/*.whl)"); fi
+          # wireskein's wheel the plan built (the bench's processes keep Python's parts unless an engine names
+          # Rust's: bench/run.py, WIRESKEIN_RUST=none)
+          UVR=(--no-project --python 3.13 --with "$(ls wheel/*.whl)" --with-requirements bench/requirements.txt)
           args=()
           for s in $STAGES; do args+=(--stage "$s"); done
           for a in $ALGOS; do args+=(--algo "$a"); done
           # the gate leaves out only algorithms other than a stage's main one: a run of main ones alone (e2e of
           # wireskein, the check of a commit on main) needs no cost run, which took 22 minutes before the shards
           rc=0
-          uv run --python 3.13 "${RUSTW[@]}" --with-requirements bench/requirements.txt python bench/run.py "${args[@]}" \
+          uv run "${UVR[@]}" python bench/run.py "${args[@]}" \
             --suite scale --status "$STATUS" --has-trials || rc=$?
           if [ "$rc" -gt 1 ]; then exit "$rc"; fi
           if [ "$rc" -eq 0 ]; then
-            uv run --python 3.13 "${RUSTW[@]}" --with-requirements bench/requirements.txt python bench/run.py "${args[@]}" \
+            uv run "${UVR[@]}" python bench/run.py "${args[@]}" \
               --suite scale --status "$STATUS" --timeout 120 --note "gate" -j "$(nproc)"
-            uv run --python 3.13 --with-requirements bench/requirements.txt python bench/gate.py --out skip.json
+            uv run "${UVR[@]}" python bench/gate.py --out skip.json
           else
             echo '{"run": null, "skip": [], "why": {}}' > skip.json
             echo "no algorithm but the main ones: no cost run, nothing left out" >> "$GITHUB_STEP_SUMMARY"
@@ -180,12 +171,11 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v10.3.3   # no floating major tag since v8: the full version
 
-      - name: Fetch the Rust core's wheel
-        if: needs.plan.outputs.rust == 'true'
+      - name: Fetch the wheel
         uses: actions/download-artifact@v8
         with:
-          name: rust-wheel
-          path: rust-wheel
+          name: wheel
+          path: wheel
 
       - name: Run the shard
         env:
@@ -208,16 +198,16 @@ jobs:
           elif [ "$ALGOS" = "(other)" ]; then ALGOS="$OTHER"; fi
           STATUS="main,trial"
           case "$ALGOS" in "(status "*) STATUS="${ALGOS#(status }"; STATUS="${STATUS%)}"; ALGOS="";; esac
-          # the Rust core's wheel the plan built, where it built one (bench/engines/rust.py)
-          RUSTW=()
-          if [ -d rust-wheel ]; then RUSTW=(--with "$(ls rust-wheel/*.whl)"); fi
+          # wireskein's wheel the plan built (the bench's processes keep Python's parts unless an engine names
+          # Rust's: bench/run.py, WIRESKEIN_RUST=none)
+          UVR=(--no-project --python 3.13 --with "$(ls wheel/*.whl)" --with-requirements bench/requirements.txt)
           args=()
           for s in $STAGES; do args+=(--stage "$s"); done
           for s in $SUITES; do args+=(--suite "$s"); done
           for a in $ALGOS; do args+=(--algo "$a"); done
           if [ "$MEMORY" = "true" ]; then args+=(--memory); fi
           if [ -n "$SKIP" ]; then printf '%s' "$SKIP" > "$RUNNER_TEMP/skip.json"; args+=(--skip-from "$RUNNER_TEMP/skip.json"); fi
-          uv run --python 3.13 "${RUSTW[@]}" --with-requirements bench/requirements.txt python bench/run.py "${args[@]}" \
+          uv run "${UVR[@]}" python bench/run.py "${args[@]}" \
             --status "$STATUS" --note "$NOTE" --shard "$SHARD/$N" --run-id "$RUN_ID" --timeout "$TIMEOUT" -j "$(nproc)"
 
       - name: Keep the shard's items
@@ -234,13 +224,18 @@ jobs:
       contents: write      # to commit the ledger's new lines
     env:
       RUN_ID: ${{ needs.plan.outputs.run_id }}
-      UV_PY: "--python 3.13 --with-requirements bench/requirements.txt"
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
       - name: Install uv
         uses: astral-sh/setup-uv@v10.3.3   # no floating major tag since v8: the full version
+
+      - name: Fetch the wheel
+        uses: actions/download-artifact@v8
+        with:
+          name: wheel
+          path: wheel
 
       - name: Fetch the shards
         uses: actions/download-artifact@v8
@@ -253,12 +248,13 @@ jobs:
         env:
           WSBENCH_RESULTS: ${{ runner.temp }}/results
         run: |
-          uv run $UV_PY python bench/merge.py "$RUN_ID" --out "$WSBENCH_RESULTS/runs"
+          UVR=(--no-project --python 3.13 --with "$(ls wheel/*.whl)" --with-requirements bench/requirements.txt)
+          uv run "${UVR[@]}" python bench/merge.py "$RUN_ID" --out "$WSBENCH_RESULTS/runs"
           {
             echo "### Bench run $RUN_ID"
             echo
             echo '```'
-            uv run $UV_PY python bench/report.py --run "$RUN_ID"
+            uv run "${UVR[@]}" python bench/report.py --run "$RUN_ID"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -279,10 +275,11 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           # the ledger only grows: on the branch as it is now, add this run's lines again and push; again if another
           # push came first
+          UVR=(--no-project --python 3.13 --with "$(ls wheel/*.whl)" --with-requirements bench/requirements.txt)
           for attempt in 1 2 3 4 5; do
             git fetch --quiet origin "$BRANCH"
             git reset --quiet --hard "origin/$BRANCH"
-            uv run $UV_PY python bench/merge.py --import "$RUNNER_TEMP/results/runs"
+            uv run "${UVR[@]}" python bench/merge.py --import "$RUNNER_TEMP/results/runs"
             git add bench/results/ledger.jsonl bench/results/runs.jsonl
             if git diff --cached --quiet; then
               echo "nothing new to commit"

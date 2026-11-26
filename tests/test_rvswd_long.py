@@ -141,8 +141,10 @@ def test_short_frames_read_by_decode_from_a_sr(name):
     assert all("e" in x and x["e"] > x["s"] for x in dmi)
 
 
-def test_a_frame_no_layout_reads_is_uninterpreted():
-    # frames left out of the framing (as a framing that missed them would) are said as unread, not left out
+def test_a_frame_no_layout_reads_is_uninterpreted(monkeypatch):
+    # frames left out of the framing (as a framing that missed them would) are said as unread, not left out (Python's
+    # decode, whose framing is stood in for here)
+    monkeypatch.setenv("WIRESKEIN_RUST", "none")
     from wireskein._engine import rvswd
     from wireskein.decode import decode_file
     truth = json.loads((D / "linke_l103_target_info.truth.json").read_text())

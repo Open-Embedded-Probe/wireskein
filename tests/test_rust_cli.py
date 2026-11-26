@@ -1,7 +1,7 @@
 """`wireskein-rs` (crates/wireskein-cli) against `wireskein` (src/wireskein/cli.py): the same subcommands run side by
 side on the repository's examples, recorded runs and synthetic captures, their stdout, stderr, exit codes and the files
 they write compared (bench/notes/2026-11-24-rust-plan.ja.md §34). Skipped where wireskein-rs is not built (cargo build
--p wireskein-cli; WIRESKEIN_RS names the binary); the subcommands that analyze run only where wireskein_core is
+-p wireskein-cli; WIRESKEIN_RS names the binary); the subcommands that analyze run only where the Rust core (wireskein._core) is
 installed too (Python's side reads with the Rust engine there, WIRESKEIN_ENGINE=rust).
 
 A JSON document on stdout is compared as data and in its keys' order (the Rust command line writes them as Python
@@ -27,7 +27,7 @@ from wireskein.decode import _load
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "tests" / "data"
 EXAMPLES = sorted((DATA / "examples").glob("*.wireskein")) + sorted((ROOT / "examples" / "protocols").glob("*.wireskein"))
-HAS_CORE = importlib.util.find_spec("wireskein_core") is not None
+HAS_CORE = importlib.util.find_spec("wireskein._core") is not None
 
 
 def _binary() -> str | None:
@@ -43,7 +43,7 @@ def _binary() -> str | None:
 
 RS = _binary()
 pytestmark = pytest.mark.skipif(RS is None, reason="wireskein-rs not built (cargo build -p wireskein-cli)")
-engine = pytest.mark.skipif(not HAS_CORE, reason="wireskein_core (crates/wireskein-py) not installed")
+engine = pytest.mark.skipif(not HAS_CORE, reason="the Rust core (wireskein._core) not built")
 CMDS = ("analyze", "decode", "segments", "survey", "states", "convert", "info", "annotate", "align", "note", "attach")
 
 

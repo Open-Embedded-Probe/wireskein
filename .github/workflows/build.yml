@@ -1,0 +1,167 @@
+# Everything a release ships, built from source (bench/notes/2026-11-24-rust-plan.ja.md §51), nothing kept in git:
+#   - wireskein's wheels, its Rust core built in (abi3, CPython 3.11 and later), one per target, and the sdist
+#   - the app (for now the Rust CLI, wireskein-rs), an archive per target with its sha256
+# The targets are ch32rv's, on GitHub's hosted runners; the x86_64 macOS ones are cross-built on Apple Silicon and
+# not run here. Called by the release workflow on its tag; run by hand to check the builds (the artifacts only).
+name: Build
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "The commit or tag to build"
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "The commit or tag to build (empty: this branch)"
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  wheels:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # smoke: what is built runs on this runner, so it is installed and called
+          - { os: ubuntu-24.04,     target: x86_64-unknown-linux-gnu,  manylinux: auto, smoke: true }
+          - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, manylinux: auto, smoke: true }
+          - { os: macos-15,         target: aarch64-apple-darwin,      smoke: true }
+          - { os: macos-15,         target: x86_64-apple-darwin }   # cross-built on Apple Silicon: not run here
+          - { os: windows-latest,   target: x86_64-pc-windows-msvc,    smoke: true }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"   # the oldest the abi3 wheel serves
+
+      - name: Fetch the viewer (wireskein-web, pinned in tools/web.json)
+        run: python tools/fetch_web.py
+
+      - name: Build the wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.manylinux }}
+          args: --release --locked --out dist
+
+      - name: Smoke test (install, the Rust core the default, the CLI)
+        if: matrix.smoke
+        shell: bash
+        run: |
+          python -m venv .smoke
+          if [ "$RUNNER_OS" = Windows ]; then B=.smoke/Scripts; else B=.smoke/bin; fi
+          "$B/python" -m pip install --upgrade pip
+          "$B/python" -m pip install dist/*.whl
+          cd "$RUNNER_TEMP"
+          "$GITHUB_WORKSPACE/$B/python" -c "import wireskein, wireskein._core as c; from wireskein import _engines, _rust; print(wireskein.__version__, c.__version__, c.__file__); assert c.__version__ == wireskein.__version__; assert _engines.engine() == 'rust' and _rust.parts() == set(_rust.PARTS)"
+          "$GITHUB_WORKSPACE/$B/wireskein" --help > /dev/null
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wheel-${{ matrix.target }}
+          path: dist/*.whl
+          if-no-files-found: error
+
+  sdist:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Fetch the viewer (wireskein-web, pinned in tools/web.json)
+        run: python tools/fetch_web.py
+
+      - name: Build the sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist
+
+      # the sdist builds the Rust core itself (Rust is on the runner)
+      - name: Build and import from the sdist
+        run: |
+          python -m venv .smoke
+          .smoke/bin/python -m pip install dist/*.tar.gz
+          cd "$RUNNER_TEMP"
+          "$GITHUB_WORKSPACE/.smoke/bin/python" -c "import wireskein, wireskein._core as c; print(wireskein.__version__, c.__version__)"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  app:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04,     target: x86_64-unknown-linux-gnu,  smoke: true }
+          - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, smoke: true }
+          - { os: macos-15,         target: aarch64-apple-darwin,      smoke: true }
+          - { os: macos-15,         target: x86_64-apple-darwin }   # cross-built on Apple Silicon: not run here
+          - { os: windows-latest,   target: x86_64-pc-windows-msvc,    smoke: true }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Build
+        shell: bash
+        run: |
+          rustup target add ${{ matrix.target }}
+          cargo build --release --locked -p wireskein-cli --bin wireskein-rs --target ${{ matrix.target }}
+
+      # the binary starts and says the version of this commit (a bad link, a missing runtime, a stale lock)
+      - name: Smoke test
+        if: matrix.smoke
+        shell: bash
+        run: |
+          want=$(python3 -c "import tomllib; print(tomllib.load(open('Cargo.toml', 'rb'))['workspace']['package']['version'])")
+          got=$(target/${{ matrix.target }}/release/wireskein-rs --version)
+          echo "$got"
+          case "$got" in *"$want"*) ;; *) echo "wireskein-rs --version says '$got', want $want"; exit 1;; esac
+
+      # an archive per target with explicit names (wireskein-rs-VERSION-TARGET), and its sha256
+      - name: Package
+        shell: bash
+        run: |
+          ver=$(python3 -c "import tomllib; print(tomllib.load(open('Cargo.toml', 'rb'))['workspace']['package']['version'])")
+          name="wireskein-rs-$ver-${{ matrix.target }}"
+          mkdir -p "app/$name"
+          cp README.md LICENSE "app/$name/"
+          cd app
+          if [ "$RUNNER_OS" = Windows ]; then
+            cp "../target/${{ matrix.target }}/release/wireskein-rs.exe" "$name/"
+            7z a -tzip -bd "$name.zip" "$name" > /dev/null
+            sha256sum "$name.zip" > "$name.zip.sha256"
+          else
+            cp "../target/${{ matrix.target }}/release/wireskein-rs" "$name/"
+            tar czf "$name.tar.gz" "$name"
+            if command -v sha256sum > /dev/null; then sha256sum "$name.tar.gz"; else shasum -a 256 "$name.tar.gz"; fi > "$name.tar.gz.sha256"
+          fi
+          rm -r "$name"
+          ls -l
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: app-${{ matrix.target }}
+          path: app/*
+          if-no-files-found: error

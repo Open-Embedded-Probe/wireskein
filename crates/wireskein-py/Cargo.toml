@@ -1,6 +1,6 @@
 [package]
 name = "wireskein-py"
-description = "The Python module wireskein_core over wireskein-core"
+description = "The Python module wireskein._core (WireSkein's Rust core, built into the wireskein wheel) over wireskein-core"
 publish = false
 version.workspace = true
 edition.workspace = true
@@ -9,7 +9,7 @@ license.workspace = true
 repository.workspace = true
 
 [lib]
-name = "wireskein_core"
+name = "_core"
 crate-type = ["cdylib"]
 
 [dependencies]

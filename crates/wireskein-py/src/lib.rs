@@ -1,14 +1,14 @@
-//! `wireskein_core`: WireSkein's Rust core for Python (PyO3, abi3 for CPython 3.11 and later).
+//! `wireskein._core`: WireSkein's Rust core for Python (PyO3, abi3 for CPython 3.11 and later), built into the
+//! wireskein wheel (the repository's pyproject.toml, maturin; bench/notes/2026-11-24-rust-plan.ja.md §51).
 //!
-//! Built up beside the Python engine (bench/notes/2026-11-24-rust-plan.ja.md): the bench calls it as one engine of
-//! its portfolio, and nothing in the product imports it until a part of it is made the default. The changes of each
-//! line are read in place (a C-contiguous int64 array borrowed as a slice; another copied once); the claims come back
-//! as the analysis format's JSON. Beside the engine, the parts around it: a capture file read (`read_file`), a recorded
-//! run verified (`verify`), a capture file's analysis document (`analyze_file`), a line's states (`states_of_line`), a
-//! capture's overview (`survey_file`), a capture written (`write_file`), a file's annotations (`annotations_file`),
-//! a decode spec's document (`decode_file`), a part's lines a block at a time (`file_blocks`, `sr_blocks`), verify's
-//! markers written (`mark`), a note or an attachment stored (`note`, `attach`), a capture from an OEP probe
-//! (`oep_capture`, wireskein-oep), each switched on in the wireskein package by WIRESKEIN_RUST (src/wireskein/_rust.py).
+//! The default engine and parts of the wireskein package (src/wireskein/_rust.py: WIRESKEIN_ENGINE=python or
+//! WIRESKEIN_RUST=none for Python's). The changes of each line are read in place (a C-contiguous int64 array
+//! borrowed as a slice; another copied once); the claims come back as the analysis format's JSON. Beside the engine,
+//! the parts around it: a capture file read (`read_file`), a recorded run verified (`verify`), a capture file's
+//! analysis document (`analyze_file`), a line's states (`states_of_line`), a capture's overview (`survey_file`), a
+//! capture written (`write_file`), a file's annotations (`annotations_file`), a decode spec's document
+//! (`decode_file`), a part's lines a block at a time (`file_blocks`, `sr_blocks`), verify's markers written (`mark`),
+//! a note or an attachment stored (`note`, `attach`), a capture from an OEP probe (`oep_capture`, wireskein-oep).
 
 mod oep;
 
@@ -898,7 +898,7 @@ fn attach(py: Python<'_>, path: std::path::PathBuf, name: &str, data: &[u8], rep
         .map_err(|e| file_error(py, e))
 }
 
-#[pymodule]
+#[pymodule(name = "_core")]
 fn wireskein_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(note, m)?)?;
     m.add_function(wrap_pyfunction!(attach, m)?)?;

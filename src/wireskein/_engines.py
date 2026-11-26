@@ -1,8 +1,9 @@
 """The analysis: WireSkein's engine reads the buses, then the upper stage (wireskein._upper) reads what rides on the
 claims it chose (bench/notes/2026-11-23-extension-spec.ja.md).
 
-The engine is Python's unless WIRESKEIN_ENGINE=rust (or WIRESKEIN_RUST=engine, wireskein._rust) names the Rust core (the package wireskein-core, module
-wireskein_core, installed apart: bench/notes/2026-11-24-rust-plan.ja.md §2), to compare the two and as a way out. The
+The engine is the Rust core's (wireskein._core, built into the wheel: bench/notes/2026-11-24-rust-plan.ja.md §51)
+unless WIRESKEIN_ENGINE=python names Python's (kept to compare the two and as a way out), or WIRESKEIN_RUST names
+parts without the engine (wireskein._rust), or the Rust core was not built (a source tree without `uv sync`). The
 Rust core's claims, in the analysis format, go through the same upper stage; what needs the Python engine's own
 readings (a decode spec's buses, segments, verify's I2C / SPI / UART checks) stays Python's, said once on stderr."""
 from __future__ import annotations
@@ -20,16 +21,21 @@ ENGINES = ("python", "rust")
 
 
 def engine() -> str:
-    """The engine WIRESKEIN_ENGINE names: "python" (the default) or "rust"; WIRESKEIN_RUST=engine (one of the parts
-    wireskein._rust switches) is the same as WIRESKEIN_ENGINE=rust, and contradicts WIRESKEIN_ENGINE=python."""
+    """The engine: "rust" (the default) or "python", as WIRESKEIN_ENGINE names it; without it, Rust's when the engine
+    is one of the Rust parts (wireskein._rust: every part by default, or WIRESKEIN_RUST=engine), else Python's.
+    WIRESKEIN_ENGINE=python contradicts WIRESKEIN_RUST naming the engine, and WIRESKEIN_ENGINE=rust WIRESKEIN_RUST
+    naming parts without it."""
     v = os.environ.get(ENGINE_ENV, "").strip().lower()
     if v and v not in ENGINES:
         raise ValueError(f"{ENGINE_ENV}={v!r}: one of {', '.join(ENGINES)}")
-    if _rust.on("engine"):
-        if v == "python":
+    if _rust.named():
+        if v == "python" and _rust.on("engine"):
             raise ValueError(f"{ENGINE_ENV}=python and {_rust.RUST_ENV}=engine: name one engine")
-        return "rust"
-    return v or "python"
+        if v == "rust" and not _rust.on("engine") and _rust.parts():
+            raise ValueError(f"{ENGINE_ENV}=rust and {_rust.RUST_ENV} without engine: name one engine")
+    if v:
+        return v
+    return "rust" if _rust.on("engine") else "python"
 
 
 def analyze(view, hints: dict | None = None, readings: bool = False):
@@ -62,8 +68,10 @@ _told: set = set()
 
 
 def python_only(what: str) -> None:
-    """Under WIRESKEIN_ENGINE=rust, say once that `what` is read by the Python engine (it needs its readings)."""
-    if engine() == "rust" and what not in _told:
+    """Under WIRESKEIN_ENGINE=rust or WIRESKEIN_RUST naming the engine (asked for, not the default), say once that
+    `what` is read by the Python engine (it needs its readings)."""
+    asked = os.environ.get(ENGINE_ENV, "").strip().lower() == "rust" or _rust.named()
+    if asked and engine() == "rust" and what not in _told:
         _told.add(what)
         print(f"wireskein: {ENGINE_ENV}=rust: {what} read by the Python engine", file=sys.stderr)
 
@@ -102,15 +110,15 @@ _RANK = {"ambiguous": 0, "likely": 1, "confirmed": 2}
 
 def _core():
     try:
-        import wireskein_core
+        from . import _core as core
     except ImportError as e:
-        raise RuntimeError(f"{ENGINE_ENV}=rust needs the package wireskein-core (module wireskein_core), built from "
-                           f"crates/wireskein-py (pip install ./crates/wireskein-py): {e}") from None
-    return wireskein_core
+        raise RuntimeError(f"{ENGINE_ENV}=rust needs the Rust core (wireskein._core), built into the wheel (from a "
+                           f"source tree: uv sync, or pip install .): {e}") from None
+    return core
 
 
 def rust(view, hints: dict | None = None, readings: bool = False) -> ForeignResult:
-    """The Rust core's claims (wireskein_core.analyze, the analysis format), then the upper stage on them as main
+    """The Rust core's claims (wireskein._core.analyze, the analysis format), then the upper stage on them as main
     does: each claim's score raised by its upper readings, its margin as much, its verdict made again by the same rule
     (never lowered: the Rust core's rival readings are not told), the UART pairs' relations."""
     import numpy as np

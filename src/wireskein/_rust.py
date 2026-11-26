@@ -1,9 +1,11 @@
-"""WireSkein's parts in Rust, switched on a part at a time (bench/notes/2026-11-24-rust-plan.ja.md §28): the package
-wireskein-core (module wireskein_core, built from crates/wireskein-py, installed apart) used in place of the Python
-implementation of a part, to compare the two and to try the Rust parts before any is made the default.
+"""WireSkein's parts in Rust (bench/notes/2026-11-24-rust-plan.ja.md §28, §51): the module wireskein._core, built
+into the wheel from crates/wireskein-py, used in place of the Python implementation of a part. Every part is Rust's
+by default; the Python implementations stay, chosen by name, to compare the two and as a way out.
 
-    WIRESKEIN_RUST=io,verify     (comma-separated; "all" for every part; unset or empty: none, the Python package as
-                                  it always is - nothing imports wireskein_core)
+    WIRESKEIN_RUST=io,verify     (comma-separated: only these parts Rust's; "all" for every part; "none" for none,
+                                  the Python package as it was - nothing imports wireskein._core)
+    unset or empty               every part Rust's, unless WIRESKEIN_ENGINE=python (then none, as "none"); where
+                                  wireskein._core was not built (the sources run without `uv sync`) none, said once
 
 The parts:
     engine   the engine (the claims): the same as WIRESKEIN_ENGINE=rust (wireskein._engines), which stays
@@ -58,7 +60,7 @@ The parts:
              demo device, which has no Python implementation and is Rust's whether or not this is set)
 
 A part switched on whose Rust cannot do what was asked falls back to Python without a word (the result is the same
-kind); a part switched on without wireskein_core installed is an error."""
+kind); a part named in WIRESKEIN_RUST without wireskein._core built is an error."""
 from __future__ import annotations
 
 import json
@@ -72,33 +74,59 @@ PARTS = ("engine", "io", "write", "verify", "analyze", "decode", "split", "mark"
 
 
 def parts() -> frozenset:
-    """The parts WIRESKEIN_RUST switches to Rust (none when it is unset or empty)."""
+    """The parts that are Rust's: those WIRESKEIN_RUST names, or every part when it is unset or empty (none under
+    WIRESKEIN_ENGINE=python, or where wireskein._core was not built)."""
     v = os.environ.get(RUST_ENV, "").strip().lower()
     if not v:
-        return frozenset()
+        if os.environ.get("WIRESKEIN_ENGINE", "").strip().lower() == "python" or not built():
+            return frozenset()
+        return frozenset(PARTS)
     names = {x.strip() for x in v.split(",") if x.strip()}
+    if names == {"none"}:
+        return frozenset()
     if "all" in names:
         names = (names - {"all"}) | set(PARTS)
     bad = sorted(names - set(PARTS))
     if bad:
-        raise ValueError(f"{RUST_ENV}={v!r}: {', '.join(bad)}: parts are {', '.join(PARTS)} (or all)")
+        raise ValueError(f"{RUST_ENV}={v!r}: {', '.join(bad)}: parts are {', '.join(PARTS)} (or all, or none)")
     return frozenset(names)
 
 
+def named() -> bool:
+    """Whether WIRESKEIN_RUST names the parts (rather than the default)."""
+    return bool(os.environ.get(RUST_ENV, "").strip())
+
+
 def on(part: str) -> bool:
-    """Whether WIRESKEIN_RUST switches `part` to Rust."""
+    """Whether `part` is Rust's (WIRESKEIN_RUST, or the default: every part)."""
     return part in parts()
 
 
+_built: bool | None = None
+
+
+def built() -> bool:
+    """Whether wireskein._core is there (built into the wheel; in a source tree, by `uv sync`). Where it is not, the
+    default is Python's for every part, said once on stderr."""
+    global _built
+    if _built is None:
+        import importlib.util
+        _built = importlib.util.find_spec("wireskein._core") is not None
+        if not _built:
+            import sys
+            print("wireskein: the Rust core (wireskein._core) is not built here (uv sync builds it): every part is "
+                  "Python's", file=sys.stderr)
+    return _built
+
+
 def core():
-    """The module wireskein_core (an error that says how to get it when it is not installed)."""
+    """The module wireskein._core (an error that says how to get it when it is not built)."""
     try:
-        import wireskein_core
+        from . import _core
     except ImportError as e:
-        raise RuntimeError(f"{RUST_ENV}={os.environ.get(RUST_ENV, '')} needs the package wireskein-core (module "
-                           f"wireskein_core), built from crates/wireskein-py (pip install ./crates/wireskein-py): {e}"
-                           ) from None
-    return wireskein_core
+        raise RuntimeError(f"{RUST_ENV}={os.environ.get(RUST_ENV, '')} needs the Rust core (wireskein._core), built "
+                           f"into the wheel (from a source tree: uv sync, or pip install .): {e}") from None
+    return _core
 
 
 # ---------------- io ----------------
@@ -288,7 +316,7 @@ def decode_file(path, spec: dict, split, pins, items) -> dict:
 # ---------------- split: the sources read a block at a time ----------------
 
 def _source(make, first, rate: float, meta: dict):
-    """A wireskein.split.Source over wireskein_core's Blocks (`first`; made again by `make` for each read after)."""
+    """A wireskein.split.Source over wireskein._core's Blocks (`first`; made again by `make` for each read after)."""
     from . import split
 
     class RustSource(split.Source):

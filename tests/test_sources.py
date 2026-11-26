@@ -75,6 +75,7 @@ def _client_with_reductions():
 
 
 def test_oep_source_writes_the_clients_result_one_to_one(tmp_path, monkeypatch):
+    monkeypatch.setenv("WIRESKEIN_RUST", "none")      # oep-client-python's acquire (stood in for here), not the Rust client
     acq = _client_with_reductions()
     a = acq.Bits("SDA", acq.pack(bytes([0, 1, 1, 0, 1])), 5, acquisition={"pin": 47})
     # SCL 0 1 1 0 0 in intervals of 2 (the last cut at the part's 5 ticks): changed to 1, changed to 0, still 0

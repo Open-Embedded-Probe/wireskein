@@ -12,6 +12,10 @@ dist/
 uv.lock
 .pytest_cache/
 
+# the Rust core built in place by `uv sync` (maturin's editable install; in the wheel, not in git)
+src/wireskein/_core*.so
+src/wireskein/_core*.pyd
+
 # the viewer, fetched by tools/fetch_web.py (in the wheel, not in git)
 src/wireskein/web/
 

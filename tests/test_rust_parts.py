@@ -1,6 +1,6 @@
 """WIRESKEIN_RUST: the parts around the engine switched to Rust one at a time (wireskein._rust). Unset, nothing
-changes and wireskein_core is never imported; the comparisons of Python's and Rust's answers run only where
-wireskein_core (crates/wireskein-py) is installed, over the repository's examples and recorded runs."""
+changes and wireskein._core is never imported; the comparisons of Python's and Rust's answers run only where
+the Rust core (wireskein._core) is built, over the repository's examples and recorded runs."""
 import builtins
 import importlib.util
 import json
@@ -16,28 +16,31 @@ from wireskein._engine.export import dumps
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "tests" / "data"
 EXAMPLES = sorted((DATA / "examples").glob("*.wireskein")) + sorted((ROOT / "examples" / "protocols").glob("*.wireskein"))
-HAS_CORE = importlib.util.find_spec("wireskein_core") is not None
-rust_only = pytest.mark.skipif(not HAS_CORE, reason="wireskein_core (crates/wireskein-py) not installed")
+HAS_CORE = importlib.util.find_spec("wireskein._core") is not None
+rust_only = pytest.mark.skipif(not HAS_CORE, reason="the Rust core (wireskein._core) not built")
 
 
 @pytest.fixture
 def clean(monkeypatch):
-    for k in (_rust.RUST_ENV, _engines.ENGINE_ENV):
-        monkeypatch.delenv(k, raising=False)
+    """Python's for every part (WIRESKEIN_RUST=none) to compare against; a test names the parts it switches."""
+    monkeypatch.delenv(_engines.ENGINE_ENV, raising=False)
+    monkeypatch.setenv(_rust.RUST_ENV, "none")
     return monkeypatch
+
+
+def _no_core(mp):
+    """wireskein._core made unimportable (as where it was not built)."""
+    import sys
+    import wireskein
+    mp.setitem(sys.modules, "wireskein._core", None)
+    mp.delattr(wireskein, "_core", raising=False)
 
 
 # ---------------- the switch ----------------
 
-def test_unset_is_python_and_never_imports_the_core(clean, tmp_path):
-    real = builtins.__import__
-
-    def no_core(name, *a, **k):
-        if name == "wireskein_core":
-            pytest.fail("wireskein_core imported with WIRESKEIN_RUST unset")
-        return real(name, *a, **k)
-
-    clean.setattr(builtins, "__import__", no_core)
+def test_none_is_python_and_never_imports_the_core(clean, tmp_path):
+    _no_core(clean)
+    clean.setenv(_rust.RUST_ENV, "none")
     assert _rust.parts() == frozenset() and not _rust.on("io")
     f = DATA / "examples" / "mixed-0.wireskein"
     assert fileio.load_parts(f) and fileio.load(f)
@@ -50,12 +53,32 @@ def test_unset_is_python_and_never_imports_the_core(clean, tmp_path):
         assert decode._load(decode._save(tmp_path / f"c{suffix}", fileio.load(f))).channels
 
 
+def test_engine_python_alone_is_no_part(clean):
+    clean.delenv(_rust.RUST_ENV)
+    clean.setenv(_engines.ENGINE_ENV, "python")
+    assert _rust.parts() == frozenset() and _engines.engine() == "python"
+
+
+@rust_only
+def test_unset_is_every_part(clean):
+    clean.delenv(_rust.RUST_ENV)
+    assert _rust.parts() == set(_rust.PARTS) and _engines.engine() == "rust"
+    clean.setenv(_rust.RUST_ENV, "")
+    assert _rust.parts() == set(_rust.PARTS)
+
+
+def test_unset_without_the_core_is_python(clean):
+    clean.delenv(_rust.RUST_ENV)
+    clean.setattr(_rust, "_built", False)
+    assert _rust.parts() == frozenset() and _engines.engine() == "python"
+
+
 def test_parts_named(clean):
     clean.setenv(_rust.RUST_ENV, " IO , verify")
     assert _rust.parts() == {"io", "verify"}
     clean.setenv(_rust.RUST_ENV, "all")
     assert _rust.parts() == set(_rust.PARTS)
-    clean.setenv(_rust.RUST_ENV, "")
+    clean.setenv(_rust.RUST_ENV, "none")
     assert _rust.parts() == frozenset()
     clean.setenv(_rust.RUST_ENV, "io,gui")
     with pytest.raises(ValueError, match="gui"):
@@ -75,16 +98,9 @@ def test_engine_part_is_the_rust_engine(clean):
 
 
 def test_a_part_without_the_core_names_it(clean):
-    real = builtins.__import__
-
-    def no_core(name, *a, **k):
-        if name == "wireskein_core":
-            raise ImportError("no module named wireskein_core")
-        return real(name, *a, **k)
-
-    clean.setattr(builtins, "__import__", no_core)
+    _no_core(clean)
     clean.setenv(_rust.RUST_ENV, "io")
-    with pytest.raises(RuntimeError, match="crates/wireskein-py"):
+    with pytest.raises(RuntimeError, match=r"wireskein\._core"):
         fileio.load_parts(DATA / "examples" / "mixed-0.wireskein")
 
 
@@ -153,7 +169,7 @@ def test_io_reads_as_python(clean, f):
 @pytest.mark.parametrize("suffix", [".sr", ".vcd"])
 def test_read_file_of_sr_and_vcd(clean, tmp_path, f, suffix):
     """read_file of a .sr and a VCD written by Python: each line's changes as Python's readers read them."""
-    import wireskein_core
+    from wireskein import _core as wireskein_core
     out = decode._save(tmp_path / (f.stem + suffix), fileio.load(f))
     py = decode._load(out)
     got = wireskein_core.read_file(str(out))
@@ -178,15 +194,7 @@ def test_verify_reports_as_python(clean, run):
 
 
 def _doc(f, **env):
-    import os
-    for k in (_rust.RUST_ENV, _engines.ENGINE_ENV):
-        os.environ.pop(k, None)
-    os.environ.update(env)
-    try:
-        d = json.loads(dumps(decode.analyze_file(f)))
-    finally:
-        for k in env:
-            os.environ.pop(k, None)
+    d = _with(env, lambda: json.loads(dumps(decode.analyze_file(f))))
     assert isinstance(d.pop("analysis_seconds"), float)
     return d
 
@@ -219,10 +227,11 @@ def test_analyze_claims_the_truth_as_python(clean, f):
 # ---------------- this round's parts: states, survey, write, io of a .sr / VCD, annotate ----------------
 
 def _with(env: dict, fn):
-    """fn() with WIRESKEIN_RUST / WIRESKEIN_ENGINE as env says (both cleared first), put back after."""
+    """fn() with WIRESKEIN_RUST / WIRESKEIN_ENGINE as env says (both cleared first; no part named: WIRESKEIN_RUST=none,
+    Python's for every part), put back after."""
     import os
     keep = {k: os.environ.pop(k, None) for k in (_rust.RUST_ENV, _engines.ENGINE_ENV)}
-    os.environ.update(env)
+    os.environ.update({_rust.RUST_ENV: "none", **env})
     try:
         return fn()
     finally:
@@ -918,7 +927,7 @@ def test_verify_a_protocol_declared_in_wireskein_is_pythons(clean, tmp_path):
     with rec.section(1, "t", expect=[protocol("i2c", None, {"scl": "SCL", "sda": "SDA"})]):
         rec.capture(rec.armed(), 50e6, interleaved=lv.tobytes(), names=["SCL", "SDA"])
     rec.close()
-    import wireskein_core
+    from wireskein import _core as wireskein_core
     raw = json.loads(wireskein_core.verify(str(tmp_path / "run")))
     assert raw["results"][0]["status"] == "unchecked" and _rust.left_to_python(raw)
     py = verify.dumps(verify.verify(tmp_path / "run"))

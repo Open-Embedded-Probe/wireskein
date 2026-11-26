@@ -2,7 +2,7 @@
 is bit k of the sample's index), streaming or kept in its memory and read out (wireskein-capture's demo; the options
 in docs/devices.md: lines=N, type=stream|memory, pace=real|fast, drop=K, stall=MS, fail=K, firmware=FILE, ...).
 
-It has no Python implementation: it is the Rust driver's (wireskein_core, pip install ./crates/wireskein-py) whether
+It has no Python implementation: it is the Rust driver's (wireskein._core, built into the wheel) whether
 or not WIRESKEIN_RUST is set.
 """
 

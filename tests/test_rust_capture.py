@@ -3,12 +3,12 @@ acquire (bench/notes/2026-11-24-rust-plan.ja.md §37).
 
 Two kinds of comparison, both without a probe:
 - a stream's data pushes given as frames (positions, gaps, segment records, format 0 and format 1) put together by
-  both: wireskein_core.oep_assemble against acquire._Spool (and _stream_parts) - the parts, their ticks and times,
+  both: wireskein._core.oep_assemble against acquire._Spool (and _stream_parts) - the parts, their ticks and times,
   each channel's bits or values, the losses;
 - whole captures from oep-client-python's virtual bench (virtual_bench_serve, on TCP), the same request through
   `wireskein capture` with and without WIRESKEIN_RUST=capture: the files' header, channels and data.
 
-Each runs only where its pieces are installed (wireskein_core, oep-client-python)."""
+Each runs only where its pieces are there (the Rust core wireskein._core, oep-client-python)."""
 import builtins
 import importlib.util
 import re
@@ -20,15 +20,16 @@ import pytest
 
 from wireskein import _fileformat as fileformat, _rust, sources
 
-HAS_CORE = importlib.util.find_spec("wireskein_core") is not None
+HAS_CORE = importlib.util.find_spec("wireskein._core") is not None
 HAS_CLIENT = importlib.util.find_spec("oep_client") is not None
-rust_only = pytest.mark.skipif(not HAS_CORE, reason="wireskein_core (crates/wireskein-py) not installed")
-both = pytest.mark.skipif(not (HAS_CORE and HAS_CLIENT), reason="wireskein_core and oep-client-python needed")
+rust_only = pytest.mark.skipif(not HAS_CORE, reason="the Rust core (wireskein._core) not built")
+both = pytest.mark.skipif(not (HAS_CORE and HAS_CLIENT), reason="the Rust core and oep-client-python needed")
 
 
 @pytest.fixture
 def clean(monkeypatch):
-    monkeypatch.delenv(_rust.RUST_ENV, raising=False)
+    """Python's for every part (WIRESKEIN_RUST=none); a test names the parts it switches."""
+    monkeypatch.setenv(_rust.RUST_ENV, "none")
     return monkeypatch
 
 
@@ -38,17 +39,19 @@ def own_sessions(monkeypatch, tmp_path):
     monkeypatch.setenv("OEP_SESSION_DIR", str(tmp_path / "sessions"))
 
 
+def _no_core(mp):
+    """wireskein._core made unimportable (as where it was not built)."""
+    import sys
+    import wireskein
+    mp.setitem(sys.modules, "wireskein._core", None)
+    mp.delattr(wireskein, "_core", raising=False)
+
+
 # ---------------- the switch ----------------
 
-def test_unset_never_imports_the_core(clean):
-    real = builtins.__import__
-
-    def no_core(name, *a, **k):
-        if name == "wireskein_core":
-            pytest.fail("wireskein_core imported with WIRESKEIN_RUST unset")
-        return real(name, *a, **k)
-
-    clean.setattr(builtins, "__import__", no_core)
+def test_none_never_imports_the_core(clean):
+    _no_core(clean)
+    clean.setenv(_rust.RUST_ENV, "none")
     req = sources.Request([("A", "GPIO30")], 1_000_000, 100)
     assert not _rust.captures("oep://30eda0ea068b", req)
 
@@ -158,7 +161,7 @@ def _py_parts(parts):
 
 def _rust_parts(cfg_doc, pushes, on_loss, write_pos=None):
     import json
-    import wireskein_core
+    from wireskein import _core as wireskein_core
     text, datas = wireskein_core.oep_assemble(json.dumps({**cfg_doc, "on_loss": on_loss}), pushes, write_pos)
     doc = json.loads(text)
     out = []
@@ -1167,7 +1170,7 @@ def test_formats_2_to_4_read_as_capture_blocks_reads_them(case, bench, clean):
     3's length by its entries) and reads them; the same configure answer and the same bytes as oep-client-python's
     capture layer from the same virtual bench, and what it reads the same as capture_blocks reads those bytes."""
     import json
-    import wireskein_core
+    from wireskein import _core as wireskein_core
     from oep_client import capture_blocks as cb
     profile, analog, plan, st = FORMATS[case]
     target = bench(profile=profile)[len("oep:"):]
@@ -1244,7 +1247,7 @@ def test_hid_reports_read_and_written_as_python_does(lose, clean):
     """The report framing of HID (count, first, the bytes): frames written as the same reports as oep-client-python's
     HidReportStream, and reports read back (one missing, a broken one) into the same frames and losses."""
     import time
-    import wireskein_core
+    from wireskein import _core as wireskein_core
     from oep_client.hid_stream import HidReportStream
     data = _frames(40, 7)
     w = _Reports([])

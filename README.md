@@ -53,7 +53,9 @@ A logic analyzer is essential in embedded work, but the usual tools are built ar
 pip install wireskein              # or: uv add wireskein
 ```
 
-Python 3.11 or newer. The only dependency is numpy.
+Python 3.11 or newer. The only dependency is numpy. The wheel has WireSkein's engine in Rust built in (Linux x86_64 and arm64, macOS arm64 and x86_64, Windows x86_64); on other platforms pip builds it from the sdist, which needs Rust. `WIRESKEIN_ENGINE=python` runs the Python implementation instead.
+
+The command-line tool in Rust alone, `wireskein-rs` (no Python), is attached to each GitHub release for the same platforms.
 
 ## Checking a test run
 
@@ -324,9 +326,14 @@ To measure the inference: `uv sync`, then `cd eval && uv run python evaluate.py 
 
 ## Development
 
+Needs Rust (stable; `rust-version` in Cargo.toml) as well as uv: `uv sync` builds the Rust core into `src/wireskein/` (ignored by git), again when the Rust changes.
+
 ```sh
-uv run pytest
-uv build
+uv sync                          # builds the Rust core (wireskein._core)
+uv run pytest                    # the default: the Rust core for every part
+WIRESKEIN_RUST=none uv run pytest   # Python's parts
+cargo test --workspace --exclude wireskein-py
+uv build                         # the sdist and a wheel for this machine
 ```
 
 ## Release
@@ -335,7 +342,7 @@ Releases use GitHub Actions, the same way as pytest-embedded-arduino-cli.
 
 1. Update the `## Unreleased` section of `CHANGELOG.md`.
 2. Run the `Release` workflow manually and enter the version (`X.Y.Z`).
-3. The workflow does the rest. It updates the version in `pyproject.toml` and `src/wireskein/__init__.py`, moves the changelog entries under the new version, runs the tests, builds, commits, tags `v<version>`, creates a GitHub Release, and publishes to PyPI.
+3. The workflow does the rest. It updates the version in `pyproject.toml`, `src/wireskein/__init__.py` and the Rust crates, moves the changelog entries under the new version, runs the tests, commits, tags `v<version>`, then builds from the tag (`build.yml`: the wheels for five platforms and the sdist, the `wireskein-rs` archives), creates a GitHub Release with the archives, and publishes the wheels and the sdist to PyPI. Nothing built is kept in git.
 
 PyPI publishing uses Trusted Publishing.
 

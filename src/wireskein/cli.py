@@ -758,7 +758,7 @@ def main() -> None:
     cp = sub.add_parser("capture", help="capture logic channels from a device into a .wireskein (sources: oep, sigrok, demo)")
     cp.add_argument("--source", required=True, help="oep:<address> (oep://UNIT_ID[?via=usb|cdc|net|tcp:HOST:PORT|"
                          "tty:PATH], a serial port, tcp://HOST:PORT), sigrok:<driver> or demo:<options> (the demo "
-                         "device, no hardware: wireskein_core's)")
+                         "device, no hardware: the Rust core's)")
     cp.add_argument("--fast", default=None, help="oep: the rates a UART probe's link is raised to for reading back "
                          "(default: 1.5M / 921600 / 500000 as the client's record of this port and probe says; 0 keeps "
                          "the boot speed; RATE,RATE tries those)")

@@ -1,6 +1,9 @@
 [build-system]
-requires = ["hatchling>=1.27"]
-build-backend = "hatchling.build"
+# One package, WireSkein's Rust core built in (bench/notes/2026-11-24-rust-plan.ja.md §51): the wheels of the release
+# are built from source by the release workflow (one per target, nothing built kept in git); here `uv sync` builds it
+# (again when the Rust changes: tool.uv.cache-keys)
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
 
 [project]
 name = "wireskein"
@@ -38,14 +41,18 @@ Repository = "https://github.com/Open-Embedded-Probe/wireskein"
 # tools/knowledge_decl.py reads EmbedBenchDeviceData's knowledge
 dev = ["pytest>=8", "oep-client-python[usb-async]>=0.0.66", "pyyaml>=6"]
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/wireskein"]
-artifacts = ["src/wireskein/web/**"]      # the viewer: not in git, fetched by tools/fetch_web.py
+[tool.maturin]
+manifest-path = "crates/wireskein-py/Cargo.toml"
+python-source = "src"
+module-name = "wireskein._core"
+features = ["pyo3/extension-module"]
+# the viewer: not in git (so not picked up by maturin, which follows .gitignore), fetched by tools/fetch_web.py
+include = [{ path = "src/wireskein/web/**/*", format = ["wheel", "sdist"] }]
 
-[tool.hatch.build.targets.sdist]
-only-include = ["src/wireskein", "tests", "README.md", "README.ja.md", "CHANGELOG.md", "LICENSE", "pyproject.toml"]
-exclude = ["tests/data/i2c_bench/h417_slow"]   # 9 MB of bench captures kept in git, not shipped (their tests skip)
-artifacts = ["src/wireskein/web/**"]
+[tool.uv]
+# the Rust core rebuilt when the Rust changes (uv keeps an editable build until one of these does)
+cache-keys = [{ file = "pyproject.toml" }, { file = "Cargo.toml" }, { file = "Cargo.lock" },
+              { file = "crates/*/Cargo.toml" }, { file = "crates/*/src/**/*.rs" }]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

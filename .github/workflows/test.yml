@@ -47,8 +47,17 @@ jobs:
       - name: Fetch the viewer (wireskein-web, pinned in tools/web.json)
         run: python tools/fetch_web.py
 
+      # (uv run builds the Rust core in place first: the package's default for every part)
       - name: Run tests
         run: uv run --python ${{ matrix.python }} pytest tests
 
+      # the Python parts kept as the way out (WIRESKEIN_RUST=none: nothing imports the Rust core)
+      - name: Run tests with Python's parts
+        if: matrix.python == '3.13'
+        env:
+          WIRESKEIN_RUST: none
+        run: uv run --python ${{ matrix.python }} pytest tests
+
       - name: Build package
+        if: matrix.python == '3.13'
         run: uv build

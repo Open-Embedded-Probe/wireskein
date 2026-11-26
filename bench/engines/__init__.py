@@ -21,7 +21,7 @@ engine is (bench/algos/e2e/engines.py registers them as trials).
 - light_main_<protocol>: light with WireSkein's own engine as its reader of that protocol (the candidates light's)
 - cascade:  light_open first, WireSkein's own engine where it leaves an active line without a confirmed claim
 - views_upper: the views engine's claims through WireSkein's upper stage (wireskein._upper), as the main engine's
-- rust:     WireSkein's core in Rust (crates/), built up a part at a time (rust.py; needs wireskein_core)
+- rust:     WireSkein's core in Rust (crates/), built up a part at a time (rust.py; needs the Rust core, wireskein._core)
 - open:     the views engine with shapes that explain a line without naming a protocol (a pulse code) among the
             candidates: they take lines and are not shown (shapes.py)
 """

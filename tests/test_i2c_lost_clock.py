@@ -15,9 +15,9 @@ from wireskein._engine import gen
 from wireskein.decode import decode_file
 from wireskein.runlog import Recorder, i2c
 
-HAS_CORE = importlib.util.find_spec("wireskein_core") is not None
-ENGINES = [{}] + ([{"WIRESKEIN_ENGINE": "rust"}, {"WIRESKEIN_RUST": "decode"}] if HAS_CORE else [])
-VERIFIERS = [{}] + ([{"WIRESKEIN_ENGINE": "rust"}, {"WIRESKEIN_RUST": "verify"}] if HAS_CORE else [])
+HAS_CORE = importlib.util.find_spec("wireskein._core") is not None
+ENGINES = [{"WIRESKEIN_RUST": "none"}] + ([{"WIRESKEIN_ENGINE": "rust"}, {"WIRESKEIN_RUST": "decode"}] if HAS_CORE else [])
+VERIFIERS = [{"WIRESKEIN_RUST": "none"}] + ([{"WIRESKEIN_ENGINE": "rust"}, {"WIRESKEIN_RUST": "verify"}] if HAS_CORE else [])
 ADDR, TARGET_BYTE = 0x44, 0x61
 
 
