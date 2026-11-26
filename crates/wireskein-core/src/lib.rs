@@ -133,7 +133,9 @@ fn pack(cands: &[Candidate], order: &[usize], vals: &[f64]) -> Vec<usize> {
 /// times its score past the claim's cost; `pack`); each claim's margin over the best rival (another reading on some of its
 /// lines, not the same protocol on fewer of them), its verdict from the two.
 pub fn choose(mut cands: Vec<Candidate>) -> Vec<Claim> {
-    cands.retain(|c| c.score > CLAIM_COST);
+    // (a reading only - its evidence `reading_only`: one whose lines hold no framing of their own, read where a
+    // caller names them, a test's or a spec's pins, never put up as a claim)
+    cands.retain(|c| c.score > CLAIM_COST && c.evidence.get("reading_only") != Some(&serde_json::Value::Bool(true)));
     let value = |c: &Candidate| c.roles.len() as f64 * (c.score - CLAIM_COST);
     let mut order: Vec<usize> = (0..cands.len()).collect();
     order.sort_by(|&a, &b| value(&cands[b]).partial_cmp(&value(&cands[a])).unwrap().then(a.cmp(&b)));

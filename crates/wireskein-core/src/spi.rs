@@ -17,7 +17,9 @@ pub const CS_FEWER: usize = 8; // a select changes this many times less than the
 pub const SELECT_USED: f64 = 0.5; // a select's windows holding the clock, this share for a whole score
 pub const SINGLE_WINDOW: f64 = 0.5; // a select of a single window, standing alone, weighs this much
 /// A lone burst of the clock without a select (its framing the gap alone, one frame): Python's single_frame_penalty
-/// (0.5) times the chance one frame fits "8n" by itself (1 - 1/8, its count_frames) - read, weakly, not refused
+/// (0.5) times the chance one frame fits "8n" by itself (1 - 1/8, its count_frames) - read, weakly, not refused; a
+/// reading only (`reading_only`): with no framing of its own it is any clocked bus's burst (an I2S's, a cropped
+/// capture's), so it is read where pins are named for it (a test's, a spec's) and never claimed
 pub const SINGLE_BURST: f64 = 0.5 * (1.0 - 1.0 / 8.0);
 pub const SNUG_FREE: f64 = 0.25; // a select's margin before its first transfer this share of the transfer, whole snug
 pub const SELECTED: f64 = 0.95; // a line changing inside a select's windows this share or more is its data too ...
@@ -548,6 +550,9 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
     ] {
         evidence.insert(k.into(), json!(x));
     }
+    if cs.is_none() && counts.len() < 2 {
+        evidence.insert("reading_only".into(), json!(true));
+    }
     evidence.insert("windows".into(), json!(counts.len()));
     evidence.insert("unexplained".into(), json!(unexplained));
     if let Some(l) = left_out {
@@ -762,7 +767,8 @@ pub fn candidates(view: &View) -> Vec<Candidate> {
 pub fn partial(cands: &[Candidate]) -> Vec<Candidate> {
     let mut out: Vec<Candidate> = vec![];
     for c in cands {
-        if c.protocol != "spi" || c.params.contains_key("targets") {
+        // (a reading only has no rival: it is never claimed)
+        if c.protocol != "spi" || c.params.contains_key("targets") || c.evidence.contains_key("reading_only") {
             continue;
         }
         let (Some(u), Some(line)) = (
