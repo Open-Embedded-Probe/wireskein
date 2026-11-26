@@ -16,6 +16,9 @@ pub const SCALE: f64 = 5.0; // the words of whole-byte windows counted as 1 - ex
 pub const CS_FEWER: usize = 8; // a select changes this many times less than the clock at least
 pub const SELECT_USED: f64 = 0.5; // a select's windows holding the clock, this share for a whole score
 pub const SINGLE_WINDOW: f64 = 0.5; // a select of a single window, standing alone, weighs this much
+/// A lone burst of the clock without a select (its framing the gap alone, one frame): Python's single_frame_penalty
+/// (0.5) times the chance one frame fits "8n" by itself (1 - 1/8, its count_frames) - read, weakly, not refused
+pub const SINGLE_BURST: f64 = 0.5 * (1.0 - 1.0 / 8.0);
 pub const SNUG_FREE: f64 = 0.25; // a select's margin before its first transfer this share of the transfer, whole snug
 pub const SELECTED: f64 = 0.95; // a line changing inside a select's windows this share or more is its data too ...
 pub const SELECTED_MIN: usize = 8; // ... with this many changes at least, ...
@@ -362,8 +365,9 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
         transfers.push(Value::Object(tr));
     }
     // (a select's single window is a target's one transfer: a member of a shared bus, its own reading weighed by
-    // the select's framing; without a select, two bursts at least)
-    if counts.len() < if cs.is_some() { 1 } else { 2 } {
+    // the select's framing; without a select, a lone burst is read too, weighed by SINGLE_BURST below - a bus read
+    // by a test's named pins, a capture of one transfer)
+    if counts.is_empty() {
         return None;
     }
     // (whole bytes counted in the windows the capture holds whole, where there are any)
@@ -496,6 +500,8 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
             _ => 0.0,
         };
         SINGLE_WINDOW + (1.0 - SINGLE_WINDOW) * both
+    } else if cs.is_none() && counts.len() < 2 {
+        SINGLE_BURST
     } else {
         1.0
     };
