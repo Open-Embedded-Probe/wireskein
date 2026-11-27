@@ -7,7 +7,7 @@ build-backend = "maturin"
 
 [project]
 name = "wireskein"
-version = "0.1.0"
+version = "0.1.1"
 description = "Logic-analyzer captures to protocol decodes, and waveform checks of recorded hardware test runs"
 readme = "README.md"
 license = "MIT"
