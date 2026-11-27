@@ -179,6 +179,45 @@ fn rests_high(scl: &Channel, n: i64) -> bool {
 
 pub const SCL_WAIT: f64 = 4.0; // an SCL low longer than this many times the frame's median low is a wait
 
+/// A frame's rises as Python's frames hold their times (`fr.source.t[a:b]`): every rise, the extra clock before a STOP
+/// or a repeated START too (its words leave it out, its times do not).
+fn sampled(f: &Frame) -> &[i64] {
+    &f.rises
+}
+
+/// (the median SCL low, the lows longer than SCL_WAIT times it) inside a frame's sampling rises `t` (Python's
+/// `typed._scl_waits`): each (the word it comes after, -1 inside the first; its bit in the next word, 0 between
+/// words; its ticks; its start). A target holding SCL (a stretch) and a controller pausing look alike: not named.
+#[allow(clippy::type_complexity)]
+fn scl_waits(scl: &Channel, t: &[i64]) -> (Option<f64>, Vec<(i64, usize, i64, i64)>) {
+    if t.len() < 2 {
+        return (None, vec![]);
+    }
+    let e = scl.edges;
+    let (a, b) = (
+        e.partition_point(|&x| x <= t[0]),
+        e.partition_point(|&x| x < t[t.len() - 1]),
+    );
+    // SCL's falls strictly inside, each with the edge after it
+    let lows: Vec<(i64, i64)> = (a..b)
+        .filter(|&q| scl.initial ^ (((q + 1) & 1) as u8) == 0)
+        .map(|q| (e[q], e[(q + 1).min(e.len() - 1)] - e[q]))
+        .collect();
+    if lows.is_empty() {
+        return (None, vec![]);
+    }
+    let med = median(&lows.iter().map(|&(_, n)| n as f64).collect::<Vec<_>>());
+    let waits = lows
+        .iter()
+        .filter(|&&(_, n)| n as f64 > SCL_WAIT * med)
+        .map(|&(s, n)| {
+            let k = t.partition_point(|&x| x < s); // the sampling rises before it
+            (k as i64 / 9 - 1, k % 9, n, s)
+        })
+        .collect();
+    (Some(med), waits)
+}
+
 /// A frame a clock short (9n bits, one short of the 9n + 1 its STOP or repeated START makes) with an SCL wait in it
 /// (Python's `typed._lost_in_wait`): a controller that gave up waiting for a target stretching the clock clocks on
 /// while SCL is held, that clock not on the lines and where in the wait not seen, so from the word the first wait
@@ -187,21 +226,9 @@ fn lost_in_wait(scl: &Channel, f: &Frame) -> Option<(usize, i64)> {
     if f.end_cond.is_none() || f.bits.is_empty() || !f.bits.len().is_multiple_of(9) || f.rises.len() < 2 {
         return None;
     }
-    let (r0, r1) = (f.rises[0], f.rises[f.rises.len() - 1]);
-    let e = scl.edges;
-    let (a, b) = (e.partition_point(|&x| x <= r0), e.partition_point(|&x| x < r1));
-    // SCL's falls strictly inside the frame's rises, each with the rise after it
-    let lows: Vec<(i64, i64)> = (a..b)
-        .filter(|&q| scl.initial ^ (((q + 1) & 1) as u8) == 0)
-        .map(|q| (e[q], e[(q + 1).min(e.len() - 1)] - e[q]))
-        .collect();
-    if lows.is_empty() {
-        return None;
-    }
-    let med = median(&lows.iter().map(|&(_, n)| n as f64).collect::<Vec<_>>());
-    let &(s, _) = lows.iter().find(|&&(_, n)| n as f64 > SCL_WAIT * med)?;
-    // (the sampling rises before it: its word is the next after the last whole one)
-    Some((f.rises.partition_point(|&x| x < s) / 9, s))
+    let (_, waits) = scl_waits(scl, sampled(f));
+    let &(after, _, _, s) = waits.first()?;
+    Some(((after + 1) as usize, s))
 }
 
 fn fits(n: usize) -> bool {
@@ -257,9 +284,15 @@ pub fn read(view: &View, scl: &Channel, sda: &Channel) -> Option<Candidate> {
             .collect();
         let acks: Vec<bool> = (0..words).map(|w| f.bits[w * 9 + 8] == 0).collect();
         values.extend(bytes.iter().map(|&b| b as i64));
+        // (as Python's: a closed frame without a whole word is no transaction; its times the first and the last
+        // rise of SCL in it, the extra clock before a STOP too - the conditions a clock and less around them)
+        if words == 0 && f.end_cond.is_some() && lost.is_none() {
+            continue;
+        }
+        let ts = sampled(f);
         let mut t = Map::new();
-        t.insert("s".into(), json!(f.s));
-        t.insert("e".into(), json!(f.e));
+        t.insert("s".into(), json!(ts.first().copied().unwrap_or(f.s)));
+        t.insert("e".into(), json!(ts.last().copied().unwrap_or(f.e)));
         if let Some(&b0) = bytes.first() {
             t.insert("addr".into(), json!(b0 >> 1));
             t.insert("rw".into(), json!(if b0 & 1 == 1 { "read" } else { "write" }));
@@ -285,6 +318,17 @@ pub fn read(view: &View, scl: &Channel, sda: &Channel) -> Option<Candidate> {
         if let Some((_, s)) = lost {
             t.insert("clock_lost".into(), json!(s));
         }
+        let (med, waits) = scl_waits(scl, ts);
+        t.insert("scl_low_ticks".into(), med.map_or(Value::Null, |m| json!(m)));
+        t.insert(
+            "scl_waits".into(),
+            json!(
+                waits
+                    .iter()
+                    .map(|&(after, bit, ticks, s)| json!({"after_word": after, "bit": bit, "ticks": ticks, "s": s}))
+                    .collect::<Vec<_>>()
+            ),
+        );
         txs.push(Value::Object(t));
     }
     // SDA saying one thing again and again is no data
