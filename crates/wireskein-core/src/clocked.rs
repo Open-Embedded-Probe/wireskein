@@ -31,6 +31,8 @@ pub struct Group<'a> {
     pub rises: Vec<i64>,
     pub falls: Vec<i64>,
     pub half: f64,
+    /// the width the lines were settled by (`spi::width`)
+    pub width: i64,
     pub lines: Vec<Line<'a>>,
 }
 
@@ -131,6 +133,7 @@ pub fn groups<'a>(view: &View<'a>) -> Vec<Group<'a>> {
                 rises: ck.rises,
                 falls: ck.falls,
                 half: ck.half,
+                width: k,
                 lines,
             });
         }

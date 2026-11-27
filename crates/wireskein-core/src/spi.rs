@@ -6,6 +6,7 @@
 
 use crate::Candidate;
 use crate::kernels::{deglitch, median};
+use crate::sampled::Sampled;
 use crate::sync::{edges_to, keeping};
 use crate::view::{Channel, View};
 use serde_json::{Map, Value, json};
@@ -242,8 +243,113 @@ fn unexplained<'a>(
     worst
 }
 
+/// What a reading keeps beside it until it is kept: its frames and sampling edge, the data lines as it read them
+/// (its bits and modes are read from them, `bits_of` and `modes`), the clock's idle level and the select's active
+/// level.
+struct Pending {
+    /// the transfers' frames: [a, b) of the sampling edges
+    frames: Vec<(usize, usize)>,
+    rise: bool,
+    des: Vec<Vec<i64>>,
+    cpol: u8,
+    active: Option<u8>,
+}
+
+/// The modes a receiver could read the lines in (Python's `timing.spi_modes` and `modes_ok`, its `modes` and
+/// `modes_ok` layers): the two modes of the clock's idle level (the reading's), each readable where no data line
+/// changes on its sampling edges inside the select's windows (setup and hold of a sample or more) and the bytes it
+/// reads - each line just before each sampling edge, per window, its leftover bits dropped. JSON members.
+fn modes(ck: &Clock, cs: &Channel, datas: &[&Channel], p: &Pending, n: i64) -> String {
+    let act = p.active.unwrap_or(0);
+    let cs_bounds: Vec<i64> = std::iter::once(0).chain(cs.edges.iter().copied()).chain([n]).collect();
+    let win = |x: i64| cs_bounds.partition_point(|&b| b <= x);
+    let mut rows = vec![];
+    let mut ok_modes = vec![];
+    for h in 0..2u8 {
+        let mode = p.cpol * 2 + h;
+        let edges = if p.cpol == h { &ck.rises } else { &ck.falls };
+        let t: Vec<i64> = edges
+            .iter()
+            .copied()
+            .filter(|&x| level_at(cs.edges, cs.initial, x) == act)
+            .collect();
+        // (a change at or after each edge: its hold, a sample at least; the one before, its setup, is by its place)
+        let readable = p.des.iter().all(|de| {
+            t.iter().all(|&x| {
+                let j = de.partition_point(|&y| y < x);
+                j >= de.len() || de[j] > x
+            })
+        });
+        // (by the lines' names, as the transfers give them: a dict keyed by the lines is written in one order whatever
+        // order a reading takes them in, the documents' key orders being learned by their keys)
+        let mut bytes = Map::new();
+        for (d, de) in datas.iter().zip(&p.des) {
+            let mut out = String::new();
+            let mut i = 0;
+            while i < t.len() {
+                let w = win(t[i]);
+                let j = i + t[i..].partition_point(|&x| win(x) == w);
+                let bits: Vec<u8> = t[i..j]
+                    .iter()
+                    .map(|&x| level_at(de, d.initial, (x - 1).max(0)))
+                    .collect();
+                for c in bits.as_chunks::<8>().0 {
+                    out.push_str(&format!("{:02x}", c.iter().fold(0u8, |a, &b| (a << 1) | b)));
+                }
+                i = j;
+            }
+            bytes.insert(d.name.to_string(), json!(out));
+        }
+        rows.push(format!(
+            "{{\"mode\":{mode},\"readable\":{readable},\"bytes\":{}}}",
+            Value::Object(bytes)
+        ));
+        if readable {
+            ok_modes.push(mode);
+        }
+    }
+    format!("\"modes\":[{}],\"modes_ok\":{}", rows.join(","), json!(ok_modes))
+}
+
+/// The bits a reading sampled: every sampling edge of the clock as its view takes it, each data line there (as
+/// the transfers read it), the transfers' frames over them.
+fn bits_of(clk: &Channel, ck: &Clock, datas: &[&Channel], p: Pending, deglitch: i64) -> Sampled {
+    let take = if p.rise { &ck.rises } else { &ck.falls };
+    Sampled {
+        clock: clk.name.to_string(),
+        data: datas.iter().map(|d| d.name.to_string()).collect(),
+        sample_edge: if p.rise { "rise" } else { "fall" },
+        deglitch,
+        t: take.clone(),
+        values: datas
+            .iter()
+            .zip(&p.des)
+            .map(|(d, de)| {
+                let mut j = 0usize;
+                take.iter()
+                    .map(|&x| {
+                        while j < de.len() && de[j] <= x {
+                            j += 1;
+                        }
+                        d.initial ^ (j as u8 & 1)
+                    })
+                    .collect()
+            })
+            .collect(),
+        frames: p.frames,
+        conditions: vec![],
+        word: 8,
+    }
+}
+
 /// The SPI reading of (clk, cs, data lines), or None.
-fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&Channel]) -> Option<Candidate> {
+fn read(
+    view: &View,
+    clk: &Channel,
+    ck: &Clock,
+    cs: Option<&Channel>,
+    datas: &[&Channel],
+) -> Option<(Candidate, Pending)> {
     let n = view.n_samples;
     let (w, active) = windows(ck, cs, n)?;
     if w.is_empty() {
@@ -321,6 +427,7 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
     let mut single = 0usize; // sampling edges in a select's windows of one
     let mut cut_windows = 0usize; // of those windows, the ones the capture starts or ends in
     let mut values = vec![];
+    let mut frames = vec![];
     for (&(a, b), &(pa, pb)) in w.iter().zip(&ww) {
         let lo = take.partition_point(|&x| x < pa);
         let hi = take.partition_point(|&x| x < pb);
@@ -342,6 +449,7 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
             continue;
         }
         let t = &take[lo..hi];
+        frames.push((lo, hi));
         counts.push(t.len());
         // (a window the capture starts or ends in: its transfer cut, its bits no count of a transfer's - a select's
         // window from the capture's start or to its end, a burst of the clock nearer either than its gaps)
@@ -559,21 +667,33 @@ fn read(view: &View, clk: &Channel, ck: &Clock, cs: Option<&Channel>, datas: &[&
         evidence.insert("unexplained_line".into(), json!(l));
     }
     let layers = crate::claim::raw(serde_json::to_string(&json!({ "transfers": transfers })).unwrap());
-    Some(Candidate {
-        protocol: "spi".into(),
-        roles,
-        score,
-        alt: None,
-        params,
-        evidence,
-        layers,
-    })
+    // the bits sampled: every sampling edge of the clock as this view takes it, each data line there (as the
+    // transfers read it), the transfers' frames over them
+    Some((
+        Candidate {
+            protocol: "spi".into(),
+            roles,
+            score,
+            alt: None,
+            params,
+            evidence,
+            layers,
+        },
+        Pending {
+            frames,
+            rise,
+            des,
+            cpol,
+            active,
+        },
+    ))
 }
 
 /// The SPI readings of a part: each clock with no select or each line changing far less, and the one or two lines
 /// keeping to it best as data (each read alone and the two together).
 pub fn candidates(view: &View) -> Vec<Candidate> {
-    let mut best: std::collections::BTreeMap<Vec<(String, String)>, Candidate> = Default::default();
+    // (each reading kept with its bits and its modes' members, written as JSON for the readings kept only)
+    let mut best: std::collections::BTreeMap<Vec<(String, String)>, (Candidate, Sampled, String)> = Default::default();
     let act: Vec<&Channel> = view.channels.iter().filter(|c| c.edges.len() >= 4).collect();
     let once: Vec<Channel> = view
         .channels
@@ -744,18 +864,27 @@ pub fn candidates(view: &View) -> Vec<Candidate> {
                     sets.push(ds.clone());
                 }
                 for set in sets {
-                    if let Some(mut c) = read(view, clk, ck, cs, &set) {
+                    if let Some((mut c, p)) = read(view, clk, ck, cs, &set) {
                         c.params.insert("clean".into(), json!(CLEAN_NAMES[how]));
                         let key: Vec<(String, String)> = c.roles.clone().into_iter().collect();
-                        if best.get(&key).is_none_or(|b| c.score > b.score) {
-                            best.insert(key, c);
+                        if best.get(&key).is_none_or(|b| c.score > b.0.score) {
+                            // (the modes where a select frames the transfers, as Python's)
+                            let m = cs.map(|cs| modes(ck, cs, &set, &p, view.n_samples)).unwrap_or_default();
+                            let bits = bits_of(clk, ck, &set, p, width(how, ck.half));
+                            best.insert(key, (c, bits, m));
                         }
                     }
                 }
             }
         }
     }
-    let mut out: Vec<Candidate> = best.into_values().collect();
+    let mut out: Vec<Candidate> = best
+        .into_values()
+        .map(|(mut c, bits, m)| {
+            c.layers = crate::sampled::joined(&c.layers, &bits.members(), &m);
+            c
+        })
+        .collect();
     out.extend(shared(view, &out));
     out
 }
@@ -764,7 +893,62 @@ pub fn candidates(view: &View) -> Vec<Candidate> {
 /// on the reading's lines and the line it leaves out, as sure as the reading times how surely that line is the bus's.
 /// Where it is the better explanation of the lines, the clock's bus is told as unknown rather than as an SPI of a part
 /// of it; where the line gathers in the windows only a little, it is no rival (under the claim's cost).
-pub fn partial(cands: &[Candidate]) -> Vec<Candidate> {
+/// The bits of a reading's rival of unknown framing (`partial`): the SPI reading's sampling edges and frames, its
+/// lines' bits there, and the line it leaves out sampled at them as it is (JSON members).
+fn partial_bits(view: &View, c: &Candidate, line: &str) -> String {
+    let lay: Value = serde_json::from_str(c.layers.get()).unwrap_or(Value::Null);
+    let b = &lay["bits"];
+    let Some(t) = b["t"].as_array() else {
+        return String::new();
+    };
+    let t: Vec<i64> = t.iter().filter_map(|x| x.as_i64()).collect();
+    let mut data: Vec<String> = b["data"]
+        .as_array()
+        .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+        .unwrap_or_default();
+    let mut values: Vec<Vec<u8>> = b["values"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .map(|r| {
+                    r.as_array()
+                        .map(|r| r.iter().map(|x| x.as_u64().unwrap_or(0) as u8).collect())
+                        .unwrap_or_default()
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    if let Some(ch) = view.channel(line) {
+        data.push(line.to_string());
+        values.push(t.iter().map(|&x| ch.level_at(x)).collect());
+    }
+    let frames = lay["frames"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|f| {
+                    let s0 = f["s"].as_i64()?;
+                    let k = t.partition_point(|&x| x < s0);
+                    Some((k, k + f["bits"].as_u64()? as usize))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    Sampled {
+        clock: b["clock"].as_str().unwrap_or_default().to_string(),
+        data,
+        sample_edge: if b["sample_edge"] == "fall" { "fall" } else { "rise" },
+        deglitch: b["deglitch"].as_i64().unwrap_or(0),
+        t,
+        values,
+        frames,
+        conditions: vec![],
+        word: 0,
+    }
+    .members()
+}
+
+pub fn partial(view: &View, cands: &[Candidate]) -> Vec<Candidate> {
     let mut out: Vec<Candidate> = vec![];
     for c in cands {
         // (a reading only has no rival: it is never claimed)
@@ -812,11 +996,16 @@ pub fn partial(cands: &[Candidate]) -> Vec<Candidate> {
             evidence,
             layers: crate::claim::raw(r#"{"summary": {"part_read_as": "spi"}}"#.to_string()),
         };
+        let with_bits = |mut r: Candidate| {
+            r.layers = crate::sampled::joined(&r.layers, &partial_bits(view, c, line), "");
+            r
+        };
         // (each set of lines once, its best)
         match out.iter_mut().find(|o| o.roles == r.roles) {
             Some(o) if o.score >= r.score => {}
-            Some(o) => *o = r,
-            None => out.push(r),
+            // (its bits written for the one kept only)
+            Some(o) => *o = with_bits(r),
+            None => out.push(with_bits(r)),
         }
     }
     out
@@ -1130,6 +1319,85 @@ mod tests {
         let lay: Value = serde_json::from_str(c.layers.get()).unwrap();
         assert_eq!(lay["transfers"][2]["MOSI"], json!("a55a"), "{lay}");
         assert!(c.score > 0.5, "{:?}", c.evidence);
+    }
+
+    #[test]
+    fn its_bits_frames_words_and_modes() {
+        // 3 transfers of 2 bytes, mode 0 (data set on the falls), CS low around each
+        let (mut clk, mut mosi, mut cs) = (vec![], vec![], vec![]);
+        let (mut ld, mut t) = (0u8, 100i64);
+        for m in [[0x9fu8, 0x00], [0x03, 0x10], [0xa5, 0x5a]] {
+            cs.push(t);
+            t += 10;
+            for b in m {
+                for k in 0..8 {
+                    let x = (b >> (7 - k)) & 1;
+                    if x != ld {
+                        mosi.push(t);
+                        ld = x;
+                    }
+                    t += 5;
+                    clk.push(t);
+                    t += 5;
+                    clk.push(t);
+                }
+            }
+            t += 10;
+            cs.push(t);
+            t += 50;
+        }
+        let v = View::new(
+            1e6,
+            t + 100,
+            vec![
+                Channel::new("SCK", 0, &clk),
+                Channel::new("MOSI", 0, &mosi),
+                Channel::new("CS", 1, &cs),
+            ],
+        )
+        .unwrap();
+        let cands = candidates(&v);
+        let c = cands
+            .iter()
+            .filter(|c| c.roles.contains_key("cs"))
+            .max_by(|a, b| a.score.partial_cmp(&b.score).unwrap())
+            .unwrap();
+        let lay: Value = serde_json::from_str(c.layers.get()).unwrap();
+        assert_eq!(lay["bits"]["sample_edge"], json!("rise"));
+        assert_eq!(lay["bits"]["t"].as_array().unwrap().len(), 48);
+        let fr = lay["frames"].as_array().unwrap();
+        assert_eq!(fr.len(), 3);
+        assert!(fr.iter().all(|f| f["bits"] == json!(16)));
+        let w: Vec<i64> = lay["words"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|x| x["value"].as_i64().unwrap())
+            .collect();
+        assert_eq!(w, [0x9f, 0x00, 0x03, 0x10, 0xa5, 0x5a]);
+        assert_eq!(lay["words"][2]["s"], fr[1]["s"]);
+        assert_eq!(lay["words"][0]["pin"], json!("MOSI"));
+        // the data changing on the falls: read on the rises only (mode 0), the bytes it reads per mode
+        assert_eq!(lay["modes_ok"], json!([0]));
+        assert_eq!(
+            lay["modes"][0],
+            json!({"mode": 0, "readable": true, "bytes": {"MOSI": "9f000310a55a"}})
+        );
+        assert_eq!(lay["modes"][1]["readable"], json!(false));
+        // (the layers in Python's order)
+        let raw = c.layers.get();
+        let at: Vec<usize> = [
+            "\"bits\"",
+            "\"frames\"",
+            "\"words\"",
+            "\"transfers\"",
+            "\"modes\"",
+            "\"modes_ok\"",
+        ]
+        .iter()
+        .map(|k| raw.find(k).unwrap())
+        .collect();
+        assert!(at.windows(2).all(|w| w[0] < w[1]), "{at:?}");
     }
 
     #[test]

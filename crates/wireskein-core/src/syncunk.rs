@@ -3,7 +3,8 @@
 //! never as a known protocol, and only where no known reading explains its lines better (`crate::candidates`).
 
 use crate::Candidate;
-use crate::clocked::{Group, keep_best};
+use crate::clocked::Group;
+use crate::sampled::Sampled;
 use serde_json::{Map, json};
 
 pub const CHANGES: f64 = 0.1; // data changes a bit, the quietest line's, for a whole score
@@ -55,6 +56,40 @@ fn startstop_lengths(clock: &crate::view::Channel, data: &crate::clocked::Line, 
     out
 }
 
+/// The START / STOP framing's frames over the ticks (Python's `typed.frames_startstop`, whose lengths
+/// `startstop_lengths` counts): a frame from each START-like event (data falling while the clock is high) to the next
+/// event of either kind, one the capture ends in to its last tick; and every event ("S", "Sr" after an open START,
+/// "P"; its tick).
+type Startstop = (Vec<(usize, usize)>, Vec<(&'static str, i64)>);
+fn startstop_frames(clock: &crate::view::Channel, data: &crate::clocked::Line, t: &[i64]) -> Startstop {
+    let (mut frames, mut events) = (vec![], vec![]);
+    let mut open: Option<usize> = None;
+    let mut lv = data.initial;
+    for &x in &data.edges {
+        lv ^= 1;
+        if clock.level_at(x) != 1 {
+            continue;
+        }
+        let pos = t.partition_point(|&y| y < x);
+        events.push((
+            match (lv, open.is_some()) {
+                (0, true) => "Sr",
+                (0, false) => "S",
+                _ => "P",
+            },
+            x,
+        ));
+        if let Some(p) = open {
+            frames.push((p, pos));
+        }
+        open = (lv == 0).then_some(pos);
+    }
+    if let Some(p) = open.filter(|&p| p < t.len()) {
+        frames.push((p, t.len()));
+    }
+    (frames, events)
+}
+
 /// The mean distance of the data lines' changes to the nearest of the ticks.
 fn distance(lines: &[&crate::clocked::Line], t: &[i64]) -> f64 {
     let mut v = vec![];
@@ -99,11 +134,10 @@ fn known_fit(lens: &[usize], startstop: bool) -> f64 {
     ((fit - chance) / (1.0 - chance)).max(0.0)
 }
 
-fn read(
-    g: &Group,
-    lines: &[&crate::clocked::Line],
-    out: &mut std::collections::BTreeMap<Vec<(String, String)>, Candidate>,
-) {
+/// The readings kept, by their roles, each with the bits it sampled.
+type Kept = std::collections::BTreeMap<Vec<(String, String)>, (Candidate, Sampled)>;
+
+fn read(g: &Group, lines: &[&crate::clocked::Line], out: &mut Kept) {
     let rise = distance(lines, &g.rises) >= distance(lines, &g.falls);
     let t = if rise { &g.rises } else { &g.falls };
     if t.len() < 8 {
@@ -159,24 +193,47 @@ fn read(
         let layers = crate::claim::raw(
             serde_json::to_string(&json!({ "summary": { "frame_bits": top4, "delimiter": delim } })).unwrap(),
         );
-        keep_best(
-            out,
-            Candidate {
-                protocol: "sync_unknown".into(),
-                roles,
-                score,
-                alt: None,
-                params,
-                evidence,
-                layers,
-            },
-        );
+        let c = Candidate {
+            protocol: "sync_unknown".into(),
+            roles,
+            score,
+            alt: None,
+            params,
+            evidence,
+            layers,
+        };
+        // (as `clocked::keep_best`: where it reads its roles better than one kept before)
+        let key: Vec<(String, String)> = c.roles.clone().into_iter().collect();
+        if out.get(&key).is_some_and(|b| c.score <= b.0.score) {
+            continue;
+        }
+        // the bits sampled: every sampling edge of the clock, each line there, the frames of the framing read (gap:
+        // every burst; start and stop: its frames and their conditions)
+        let (frames, conditions) = if delim == "gap" {
+            let mut b = burst_split(t, GAP);
+            b.push(t.len());
+            (b.windows(2).map(|w| (w[0], w[1])).collect(), vec![])
+        } else {
+            startstop_frames(&cc, lines[0], t)
+        };
+        let s = Sampled {
+            clock: g.clock.to_string(),
+            data: lines.iter().map(|l| l.name.to_string()).collect(),
+            sample_edge: if rise { "rise" } else { "fall" },
+            deglitch: g.width,
+            t: t.clone(),
+            values: bits.clone(),
+            frames,
+            conditions,
+            word: 0,
+        };
+        out.insert(key, (c, s));
     }
 }
 
 /// The unknown clocked readings of the groups: each clock with its best data line, and with its best two.
 pub fn candidates_of(gs: &[Group]) -> Vec<Candidate> {
-    let mut best = Default::default();
+    let mut best: Kept = Default::default();
     for g in gs {
         let ls: Vec<&crate::clocked::Line> = g.lines.iter().take(2).collect();
         if ls.is_empty() {
@@ -187,7 +244,12 @@ pub fn candidates_of(gs: &[Group]) -> Vec<Candidate> {
             read(g, &ls, &mut best);
         }
     }
-    best.into_values().collect()
+    best.into_values()
+        .map(|(mut c, s)| {
+            c.layers = crate::sampled::joined(&c.layers, &s.members(), "");
+            c
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -225,5 +287,14 @@ mod tests {
             .expect("an unknown reading");
         assert_eq!(c.evidence["frame_bits"][0][0], json!(12), "{:?}", c.evidence);
         assert!(c.score > 0.5, "{:?}", c.evidence);
+        // its bits and frames: every sampling edge, the bursts of 12 over them
+        let lay: serde_json::Value = serde_json::from_str(c.layers.get()).unwrap();
+        assert_eq!(lay["bits"]["t"].as_array().unwrap().len(), 120);
+        assert_eq!(lay["bits"]["data"], json!(["D"]));
+        let fr = lay["frames"].as_array().unwrap();
+        assert_eq!(fr.len(), 10);
+        assert!(fr.iter().all(|f| f["bits"] == json!(12)), "{fr:?}");
+        assert!(lay.get("words").is_none() && lay.get("conditions").is_none());
+        assert_eq!(lay["summary"]["delimiter"], json!("gap"));
     }
 }

@@ -622,9 +622,10 @@ fn read(view: &View, clk: &Channel, dio: &Channel) -> Option<Candidate> {
     let (bits, de) = sample(dio, &rises, &falls);
     let ss = startstop(clk, &de, dio.initial, &rises, &falls, &bits, rate);
     // START and STOP seen: the frames are theirs; else the cuts at the clock's gaps
-    let (reading, inside) = if !ss.is_empty() {
+    let (reading, inside, framed) = if !ss.is_empty() {
         let inside: usize = ss.iter().map(|f| f.b - f.a).sum();
-        (read_frames(&ss, true, &bits, &rises, rate, dio), inside)
+        let framed: Vec<(usize, usize)> = ss.iter().map(|f| (f.a, f.b)).collect();
+        (read_frames(&ss, true, &bits, &rises, rate, dio), inside, framed)
     } else {
         // no START or STOP: the cuts at the clock's gaps, on a line keeping to the clock as data only (as the survey
         // pairs a clock's data lines; a free clock beside lines that rarely change reads frames whose parities hold
@@ -637,7 +638,7 @@ fn read(view: &View, clk: &Channel, dio: &Channel) -> Option<Candidate> {
         if r.passed == 0 {
             return None;
         }
-        (r, rises.len())
+        (r, rises.len(), g.iter().map(|f| (f.a, f.b)).collect())
     };
     if reading.matched < 2 {
         return None;
@@ -675,13 +676,22 @@ fn read(view: &View, clk: &Channel, dio: &Channel) -> Option<Candidate> {
         &reading.recs,
         0,
     );
-    // the sampling edges and DIO at each (Python's `bits` layer: to time the clock inside a frame)
-    let lay = json!({
-        "dmi": reading.recs,
-        "bits": {"clock": clk.name, "data": [dio.name], "sample_edge": "rise", "t": rises, "values": [bits],
-                 "deglitch": 0},
-    });
-    c.layers = crate::claim::raw(serde_json::to_string(&lay).unwrap());
+    // the sampling edges and DIO at each (Python's `bits` layer: to time the clock inside a frame), and the frames read
+    // over them (START to STOP, or the cuts at the clock's gaps; a frame's dropped and restored clocks not told here:
+    // its access's `bits` and `restored` tell them)
+    let sampled = crate::sampled::Sampled {
+        clock: clk.name.to_string(),
+        data: vec![dio.name.to_string()],
+        sample_edge: "rise",
+        deglitch: 0,
+        t: rises,
+        values: vec![bits],
+        frames: framed,
+        conditions: vec![],
+        word: 0,
+    };
+    let dmi = format!("\"dmi\":{}", serde_json::to_string(&reading.recs).unwrap());
+    c.layers = crate::claim::raw(format!("{{{},{dmi}}}", sampled.members()));
     Some(c)
 }
 
@@ -771,5 +781,19 @@ mod tests {
         );
         assert_eq!(dmi[1]["data"], 0x0038_2c82);
         assert!(dmi.iter().all(|x| x["ok"] == json!(true)));
+        // the frames read, START to STOP, over the sampling edges: one an access, each around its access's span
+        let frames = lay["frames"].as_array().unwrap();
+        assert_eq!(frames.len(), 3, "{frames:?}");
+        for (f, x) in frames.iter().zip(dmi) {
+            assert!(
+                f["s"].as_i64() <= x["s"].as_i64() && x["s"].as_i64() <= f["e"].as_i64(),
+                "{f} {x}"
+            );
+        }
+        assert_eq!(frames[0]["bits"], json!(53), "{frames:?}");
+        assert_eq!(
+            lay["bits"]["values"][0].as_array().unwrap().len(),
+            lay["bits"]["t"].as_array().unwrap().len()
+        );
     }
 }

@@ -66,6 +66,25 @@ fn windowed(lay: Map<String, Value>, s0: i64, s1: i64) -> Map<String, Value> {
                 Value::Array(a) if a.first().is_some_and(|x| x.get("s").is_some()) => {
                     Value::Array(a.into_iter().filter(|x| x.get("s").is_some_and(inside)).collect())
                 }
+                // (a clocked reading's bits: its sampling edges `t`, each data line's row of `values` alike)
+                Value::Object(mut o) if o.get("t").is_some_and(|x| x.is_array()) => {
+                    let sel: Vec<bool> = o["t"].as_array().unwrap().iter().map(inside).collect();
+                    let keep = |a: &mut Vec<Value>| {
+                        let mut k = sel.iter();
+                        a.retain(|_| k.next().copied().unwrap_or(false));
+                    };
+                    if let Some(Value::Array(t)) = o.get_mut("t") {
+                        keep(t);
+                    }
+                    if let Some(Value::Array(rows)) = o.get_mut("values") {
+                        for r in rows.iter_mut() {
+                            if let Value::Array(r) = r {
+                                keep(r);
+                            }
+                        }
+                    }
+                    Value::Object(o)
+                }
                 Value::Object(o) if o.get("s").is_some_and(|x| x.is_array()) => {
                     let sel: Vec<bool> = o["s"].as_array().unwrap().iter().map(inside).collect();
                     let n = sel.len();
@@ -193,7 +212,12 @@ pub fn claim_doc_shaped(
     out.insert("score".into(), json!(c.score));
     out.insert("margin".into(), json!(c.margin));
     out.insert("params".into(), Value::Object(c.params.clone()));
-    let mut lay: Map<String, Value> = order::layers(&c.layers);
+    // (a final document gives none of a clocked reading's sampled layers: left unread)
+    let mut lay: Map<String, Value> = if matches!(shape.mode, "all" | "select") {
+        order::layers(&c.layers)
+    } else {
+        order::layers_without(&c.layers, order::sampled_layers(&c.protocol))
+    };
     let notes = if notes {
         note(c, &mut lay, lines, rate, n)
     } else {
@@ -701,4 +725,36 @@ pub fn seconds(t: &str) -> Option<f64> {
         _ => return None,
     };
     Some(t[..k].parse::<f64>().ok()? * mult)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_window_keeps_the_bits_inside_it() {
+        // (Python's `export._window`: a clocked reading's `t` and each row of `values` alike)
+        let lay: Map<String, Value> = serde_json::from_value(json!({
+            "bits": {"clock": "SCL", "data": ["SDA"], "t": [5, 10, 15, 20], "values": [[1, 0, 1, 1]], "deglitch": 0},
+            "frames": [{"s": 5, "e": 10, "bits": 2}, {"s": 15, "e": 20, "bits": 2}],
+        }))
+        .unwrap();
+        let w = windowed(lay, 10, 20);
+        assert_eq!(w["bits"]["t"], json!([10, 15]));
+        assert_eq!(w["bits"]["values"], json!([[0, 1]]));
+        assert_eq!(w["bits"]["clock"], json!("SCL"));
+        assert_eq!(w["frames"], json!([{"s": 15, "e": 20, "bits": 2}]));
+    }
+
+    #[test]
+    fn a_final_document_leaves_the_sampled_layers_unread() {
+        let raw = wireskein_core::claim::raw(
+            r#"{"bits":{"t":[1,2]},"frames":[{"s":1,"e":2,"bits":2}],"words":[],"transactions":[{"s":0,"e":3}],"devices":[]}"#
+                .into(),
+        );
+        let lay = order::layers_without(&raw, order::sampled_layers("i2c"));
+        assert_eq!(lay.keys().collect::<Vec<_>>(), ["devices", "transactions"]);
+        assert_eq!(lay["transactions"], json!([{"s": 0, "e": 3}]));
+        assert_eq!(order::layers_without(&raw, &[]).len(), 5);
+    }
 }

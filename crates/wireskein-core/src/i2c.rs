@@ -5,6 +5,7 @@
 
 use crate::Candidate;
 use crate::kernels::median;
+use crate::sampled::Sampled;
 use crate::view::{Channel, View};
 use serde_json::{Map, Value, json};
 
@@ -53,8 +54,18 @@ fn soft(x: f64) -> f64 {
 
 /// The frames on (scl, sda), and the side measures: (frames, conditions clear of SCL's edges, conditions, SCL lows
 /// with at most two SDA changes, SCL lows inside frames, SDA's changes while SCL is low inside frames, conditions near
-/// SCL's edges where the clock's half is wide enough in samples to tell).
-type Framed = (Vec<Frame>, usize, usize, usize, usize, usize, usize);
+/// SCL's edges where the clock's half is wide enough in samples to tell, the conditions themselves - every change of
+/// SDA while SCL is high, "S" / "Sr" / "P" and its tick).
+type Framed = (
+    Vec<Frame>,
+    usize,
+    usize,
+    usize,
+    usize,
+    usize,
+    usize,
+    Vec<(&'static str, i64)>,
+);
 fn frames(scl: &Channel, sda: &Channel) -> Framed {
     let (ce, de) = (scl.edges, sda.edges);
     let (mut i, mut j) = (0usize, 0usize);
@@ -65,6 +76,7 @@ fn frames(scl: &Channel, sda: &Channel) -> Framed {
     let mut sda_in_low = 0usize;
     let mut moved = 0usize;
     let mut near_told = 0usize;
+    let mut events: Vec<(&'static str, i64)> = vec![];
     let near = |t: i64| -> (bool, bool) {
         // nearer one of SCL's edges than CLEAR of the clock's local half, or than a sample (Python's
         // startstop_clearance: a clock of a few samples a period has its conditions a sample from its edges)
@@ -112,6 +124,12 @@ fn frames(scl: &Channel, sda: &Channel) -> Framed {
                     (true, true) => near_told += 1,
                     _ => {}
                 }
+                let kind = match (ld, cur.is_some()) {
+                    (0, true) => "Sr",
+                    (0, false) => "S",
+                    _ => "P",
+                };
+                events.push((kind, t));
                 if ld == 0 {
                     let sr = cur.is_some();
                     if let Some(mut f) = cur.take() {
@@ -144,7 +162,7 @@ fn frames(scl: &Channel, sda: &Channel) -> Framed {
     if let Some(f) = cur.take() {
         out.push(f);
     }
-    (out, clear, conds, quiet, lows, moved, near_told)
+    (out, clear, conds, quiet, lows, moved, near_told, events)
 }
 
 pub const BUS_FREE_ALLOW: usize = 2; // SCL's changes after a STOP before the next START, at most (a spike)
@@ -237,7 +255,63 @@ fn fits(n: usize) -> bool {
 
 /// The I2C reading of (scl, sda), or None where nothing frames.
 pub fn read(view: &View, scl: &Channel, sda: &Channel) -> Option<Candidate> {
-    let (frs, clear, conds, quiet, lows, moved, near_told) = frames(scl, sda);
+    let (frs, clear, conds, quiet, lows, moved, near_told, _) = frames(scl, sda);
+    read_frames(view, scl, sda, frs, (clear, conds, quiet, lows, moved, near_told))
+}
+
+/// The bits a reading of (scl, sda) sampled, its lines settled by `deglitch` (framed again: for the reading kept
+/// only).
+fn bits_of(scl: &Channel, sda: &Channel, deglitch: i64) -> Sampled {
+    let (frs, .., events) = frames(scl, sda);
+    let mut s = sampled_bits(scl, sda, &frs, events);
+    s.deglitch = deglitch;
+    s
+}
+
+/// The bits the reading sampled (Python's `bits`, `frames`, `conditions` and `words` of 9 bits): SCL's every rise,
+/// SDA's level there (as `frames` reads it: SDA changing at a rise's own tick, after it), the frames' rises.
+fn sampled_bits(scl: &Channel, sda: &Channel, frs: &[Frame], events: Vec<(&'static str, i64)>) -> Sampled {
+    let t = crate::sync::edges_to(scl, 1);
+    let mut j = 0usize;
+    let values: Vec<u8> = t
+        .iter()
+        .map(|&x| {
+            while j < sda.edges.len() && sda.edges[j] < x {
+                j += 1;
+            }
+            sda.initial ^ (j as u8 & 1)
+        })
+        .collect();
+    let frames = frs
+        .iter()
+        .filter_map(|f| {
+            let ts = sampled(f);
+            let r0 = *ts.first()?;
+            let a = t.partition_point(|&x| x < r0);
+            Some((a, a + ts.len()))
+        })
+        .collect();
+    Sampled {
+        clock: scl.name.to_string(),
+        data: vec![sda.name.to_string()],
+        sample_edge: "rise",
+        deglitch: 0,
+        t,
+        values: vec![values],
+        frames,
+        conditions: events,
+        word: 9,
+    }
+}
+
+/// The I2C reading of (scl, sda) from its frames and side measures (`frames`).
+fn read_frames(
+    view: &View,
+    scl: &Channel,
+    sda: &Channel,
+    frs: Vec<Frame>,
+    (clear, conds, quiet, lows, moved, near_told): (usize, usize, usize, usize, usize, usize),
+) -> Option<Candidate> {
     // every frame counts, a START and a STOP with no clock between too: SDA moves while SCL is high only for its
     // conditions on I2C, where another line idling beside SCL makes them by the hundred
     let used: Vec<&Frame> = frs.iter().collect();
@@ -538,37 +612,47 @@ pub fn candidates(view: &View) -> Vec<Candidate> {
             if ia == ib || fewer || !high(ia, a) || !high(ib, b) {
                 continue;
             }
-            let mut best: Option<Candidate> = None;
+            // (the best reading with the lines it read them on and their settling: its bits sampled at the end)
+            let mut best: Option<(Candidate, Vec<i64>, Vec<i64>, i64)> = None;
             for (k, ea, eb) in views(a, b) {
                 let (ca, cb) = (
                     Channel::new(a.name, a.initial, &ea),
                     Channel::new(b.name, b.initial, &eb),
                 );
                 if let Some(mut c) = read(view, &ca, &cb)
-                    && best.as_ref().is_none_or(|x| c.score > x.score)
+                    && best.as_ref().is_none_or(|x| c.score > x.0.score)
                 {
                     c.params.insert("deglitch".into(), json!(k));
-                    best = Some(c);
+                    best = Some((c, ea, eb, k));
                 }
             }
             // SCL rebuilt from its period, SDA's bounces merged (Python's rebuilt views of a group, SPI's here): a
             // clock of a few samples a half bouncing through it has no width a filter tells from its own runs (read
             // only where the width views read the pair under REBUILD_BELOW, as Python's)
-            let below = best.as_ref().is_none_or(|x| x.score < REBUILD_BELOW);
+            let below = best.as_ref().is_none_or(|x| x.0.score < REBUILD_BELOW);
             for (name, ea) in rebuilt[ia].iter().filter(|_| below) {
                 let (ca, cb) = (
                     Channel::new(a.name, a.initial, ea),
                     Channel::new(b.name, b.initial, &merged[ib]),
                 );
                 if let Some(mut c) = read(view, &ca, &cb)
-                    && best.as_ref().is_none_or(|x| c.score > x.score)
+                    && best.as_ref().is_none_or(|x| c.score > x.0.score)
                 {
                     c.params.insert("deglitch".into(), json!(crate::spi::REBUILD_DATA));
                     c.params.insert("clean".into(), json!(name));
-                    best = Some(c);
+                    best = Some((c, ea.clone(), merged[ib].clone(), crate::spi::REBUILD_DATA));
                 }
             }
-            out.extend(best);
+            // (the bits written for the reading kept only: a long capture's rises are millions)
+            out.extend(best.map(|(mut c, ea, eb, k)| {
+                let s = bits_of(
+                    &Channel::new(a.name, a.initial, &ea),
+                    &Channel::new(b.name, b.initial, &eb),
+                    k,
+                );
+                c.layers = crate::sampled::joined(&c.layers, &s.members(), "");
+                c
+            }));
         }
     }
     out
@@ -633,5 +717,78 @@ mod tests {
         let lay: Value = serde_json::from_str(c.layers.get()).unwrap();
         assert_eq!(lay["transactions"][0]["addr"], json!(0x50));
         assert_eq!(lay["transactions"][2]["bytes"], json!("aa55"));
+    }
+
+    #[test]
+    fn its_bits_frames_conditions_and_words() {
+        let (scl, sda, n) = i2c(&[(0x50, &[1, 2, 3]), (0x50, &[4]), (0x1d, &[0xaa, 0x55])], 10);
+        let v = View::new(2e6, n, vec![Channel::new("SCL", 1, &scl), Channel::new("SDA", 1, &sda)]).unwrap();
+        let c = candidates(&v).into_iter().find(|c| c.roles["scl"] == "SCL").unwrap();
+        let lay: Value = serde_json::from_str(c.layers.get()).unwrap();
+        // every rise of SCL, SDA there (each transfer's words and the rise before its STOP: 9n + 1 bits)
+        let t = lay["bits"]["t"].as_array().unwrap();
+        assert_eq!(t.len(), scl.len() / 2);
+        assert_eq!(lay["bits"]["clock"], json!("SCL"));
+        assert_eq!(lay["bits"]["data"], json!(["SDA"]));
+        assert_eq!(lay["bits"]["values"][0].as_array().unwrap().len(), t.len());
+        let bits: Vec<u64> = lay["frames"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|f| f["bits"].as_u64().unwrap())
+            .collect();
+        assert_eq!(bits, vec![37, 19, 28]);
+        // the frames from their first rise to their last, as their transactions
+        for (f, x) in lay["frames"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .zip(lay["transactions"].as_array().unwrap())
+        {
+            assert_eq!((&f["s"], &f["e"]), (&x["s"], &x["e"]));
+        }
+        let kinds: Vec<&str> = lay["conditions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|x| x["kind"].as_str().unwrap())
+            .collect();
+        assert_eq!(kinds, ["S", "P", "S", "P", "S", "P"]);
+        // words of 9 bits: the byte and its acknowledge (0: acknowledged)
+        let w = lay["words"].as_array().unwrap();
+        assert_eq!(w.len(), 4 + 2 + 3);
+        assert_eq!(w[0]["value"], json!(0x50 << 2));
+        assert_eq!(w[1]["value"], json!(1 << 1));
+        assert_eq!(w[8]["value"], json!(0x55 << 1));
+        assert_eq!(w[0]["s"], lay["frames"][0]["s"]);
+        // the transactions' SCL lows (h = 10: lows of 10 ticks), no wait among them
+        assert_eq!(lay["transactions"][0]["scl_low_ticks"], json!(10.0));
+        assert_eq!(lay["transactions"][0]["scl_waits"], json!([]));
+    }
+
+    #[test]
+    fn an_scl_wait_is_told() {
+        // SCL held low 100 ticks longer after its 11th fall (in the first word after the address: its second bit)
+        let (mut scl, mut sda, n) = i2c(&[(0x50, &[1, 2, 3])], 10);
+        let at = scl[20];
+        for e in scl.iter_mut().chain(sda.iter_mut()) {
+            if *e > at {
+                *e += 100;
+            }
+        }
+        let v = View::new(
+            2e6,
+            n + 100,
+            vec![Channel::new("SCL", 1, &scl), Channel::new("SDA", 1, &sda)],
+        )
+        .unwrap();
+        let c = candidates(&v).into_iter().find(|c| c.roles["scl"] == "SCL").unwrap();
+        let lay: Value = serde_json::from_str(c.layers.get()).unwrap();
+        let tx = &lay["transactions"][0];
+        assert_eq!(tx["scl_low_ticks"], json!(10.0));
+        assert_eq!(
+            tx["scl_waits"],
+            json!([{"after_word": 0, "bit": 1, "ticks": 110, "s": at}])
+        );
     }
 }

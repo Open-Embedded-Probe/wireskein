@@ -31,6 +31,7 @@ pub mod rebuild;
 pub mod rgbled;
 pub mod riscv_dm;
 pub mod rvswd;
+pub mod sampled;
 pub mod sdmmc;
 pub mod sdspi;
 pub mod sent;
@@ -366,7 +367,7 @@ pub fn candidates_of(
     let plain: Vec<clocked::Group> = groups.into_iter().filter(|g| g.how != spi::GRIDDED).collect();
     // (an SPI reading's rival where it explains a part of its bus: as an unknown reading, none where another known
     // reading - not the SPI of a part of these lines it rivals - explains its lines better)
-    let partial: Vec<Candidate> = spi::partial(&cands)
+    let partial: Vec<Candidate> = spi::partial(view, &cands)
         .into_iter()
         .filter(|u| {
             let ls = lines(u);

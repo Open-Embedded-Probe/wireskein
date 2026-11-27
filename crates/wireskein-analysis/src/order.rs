@@ -30,6 +30,40 @@ pub fn layers(raw: &serde_json::value::RawValue) -> Map<String, Value> {
     serde_json::from_str(raw.get()).unwrap_or_default()
 }
 
+/// The sampled layers of a clocked reading (`wireskein_core::sampled`): its bits, frames, conditions, words and modes,
+/// which a final document does not give (none of them a final or lower layer of these protocols).
+pub fn sampled_layers(protocol: &str) -> &'static [&'static str] {
+    match protocol {
+        "i2c" | "spi" | "sync_unknown" => &["bits", "frames", "conditions", "words", "modes", "modes_ok"],
+        "rvswd" => &["bits", "frames"],
+        _ => &[],
+    }
+}
+
+/// A claim's layers as `layers` reads them, those named in `skip` left unread (a long capture's sampling edges are
+/// millions: a final document reads none of them).
+pub fn layers_without(raw: &serde_json::value::RawValue, skip: &[&str]) -> Map<String, Value> {
+    use serde_json::value::RawValue;
+    if skip.is_empty() {
+        return layers(raw);
+    }
+    let Ok(m) = serde_json::from_str::<std::collections::BTreeMap<String, &RawValue>>(raw.get()) else {
+        return layers(raw);
+    };
+    // (in the order the core wrote them: each value's place in the text)
+    let mut entries: Vec<(String, &RawValue)> = m.into_iter().collect();
+    entries.sort_by_key(|(_, v)| v.get().as_ptr() as usize);
+    if !entries.iter().any(|(k, _)| skip.contains(&k.as_str())) {
+        return layers(raw);
+    }
+    let kept: Vec<String> = entries
+        .iter()
+        .filter(|(k, _)| !skip.contains(&k.as_str()))
+        .map(|(k, v)| format!("{}:{}", Value::String(k.clone()), v.get()))
+        .collect();
+    layers(&wireskein_core::claim::raw(format!("{{{}}}", kept.join(","))))
+}
+
 fn learn(j: &J, out: &mut Vec<(Vec<String>, Vec<String>)>) {
     match j {
         J::Dict(kv) => {

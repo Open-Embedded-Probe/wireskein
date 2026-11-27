@@ -357,6 +357,7 @@ fn alone(
     layers: &serde_json::value::RawValue,
     rate: f64,
     packs: &PackSet,
+    skip: &[&str],
 ) -> (Map<String, Value>, f64) {
     let c = Claim {
         protocol: protocol.into(),
@@ -373,7 +374,7 @@ fn alone(
     };
     let (up, _) = wireskein_core::upper::stage_with_packs(vec![c], rate, packs);
     let c = &up[0];
-    (crate::order::layers(&c.layers), c.total)
+    (crate::order::layers_without(&c.layers, skip), c.total)
 }
 
 /// The decode with exactly the bus's pins, the best one (on the edge it samples on, when there is one).
@@ -411,13 +412,27 @@ fn node(r: &Reads, b: &SpecBus, edge: Option<&str>, rate: f64, packs: &PackSet) 
         }
     }
     let (i, claimed, _) = best?;
+    // (a clocked reading's sampled layers read only where the bus asks for layers by name)
+    let skip = if b.layers.is_some() {
+        &[][..]
+    } else {
+        crate::order::sampled_layers(&b.protocol)
+    };
     if claimed {
         let c = &r.up[i];
         let (lay, score) = if c.bus.is_none() {
-            (crate::order::layers(&c.layers), c.total)
+            (crate::order::layers_without(&c.layers, skip), c.total)
         } else {
             // a target of a bus of several: the upper stage passed it by; read on its own
-            alone(&c.protocol, &c.roles, r.pre[i].total, &r.pre[i].layers, rate, packs)
+            alone(
+                &c.protocol,
+                &c.roles,
+                r.pre[i].total,
+                &r.pre[i].layers,
+                rate,
+                packs,
+                skip,
+            )
         };
         Some(Node {
             protocol: c.protocol.clone(),
@@ -429,7 +444,7 @@ fn node(r: &Reads, b: &SpecBus, edge: Option<&str>, rate: f64, packs: &PackSet) 
         })
     } else {
         let c = &r.others[i];
-        let (lay, score) = alone(&c.protocol, &c.roles, c.score, &c.layers, rate, packs);
+        let (lay, score) = alone(&c.protocol, &c.roles, c.score, &c.layers, rate, packs, skip);
         Some(Node {
             protocol: c.protocol.clone(),
             roles: c.roles.clone(),
